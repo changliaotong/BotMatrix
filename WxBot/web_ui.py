@@ -79,7 +79,7 @@ LOGIN_TEMPLATE = r"""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>微信扫码登录 - WXBot</title>
+    <title>微信扫码登录 - BotMatrix</title>
     <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { 
@@ -300,7 +300,7 @@ HTML_TEMPLATE = r"""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WXBot 管理后台</title>
+    <title>BotMatrix 管理后台</title>
     <!-- Use BootCDN for better stability in China -->
     <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -499,7 +499,7 @@ HTML_TEMPLATE = r"""
 
     <div class="sidebar">
         <div class="px-3 mb-4">
-            <h4>🤖 WXBot</h4>
+            <h4>🤖 BotMatrix</h4>
             <small class="text-muted">管理后台 Next</small>
         </div>
         <div class="px-3 mb-3">
