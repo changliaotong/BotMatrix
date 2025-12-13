@@ -1,0 +1,71 @@
+name: Deploy to Private Server
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    # 关键：因为服务器 IP (192.168.0.167) 是内网地址，
+    # 必须使用自托管 Runner (Self-hosted Runner) 才能访问。
+    # 如果没有配置自托管 Runner，请将其改为 'ubuntu-latest' 并确保服务器有公网 IP。
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 1. 生成配置文件 (因为 config.json 被 gitignore 了)
+      # 需要在 GitHub 仓库 Settings -> Secrets 中配置以下变量
+      - name: Generate config.json
+        run: |
+          cp WxBot/config.sample.json WxBot/config.json
+          # 这里使用简单的 sed 替换，或者使用 jq (如果 Runner 上安装了)
+          # 注意：Windows Runner 和 Linux Runner 的命令可能不同
+          # 这里假设 Runner 是 Linux 环境 (通常建议将 Runner 安装在目标 Linux 服务器上)
+          sed -i 's/"server": ".*"/"server": "${{ secrets.DB_SERVER }}"/' WxBot/config.json
+          sed -i 's/"name": ".*"/"name": "${{ secrets.DB_NAME }}"/' WxBot/config.json
+          sed -i 's/"user": ".*"/"user": "${{ secrets.DB_USER }}"/' WxBot/config.json
+          sed -i 's/"password": ".*"/"password": "${{ secrets.DB_PASSWORD }}"/' WxBot/config.json
+        shell: bash
+
+      # 2. 部署到目标目录
+      # 如果 Runner 直接安装在目标服务器上，可以直接 copy
+      # 如果 Runner 在局域网其他机器上，需要使用 SCP
+      - name: Deploy files
+        run: |
+          # 目标目录
+          TARGET_DIR="/opt/BotMatrix"
+          
+          echo "Deploying to $TARGET_DIR..."
+          
+          # 确保目录存在
+          sudo mkdir -p $TARGET_DIR
+          sudo chown -R $USER:$USER $TARGET_DIR
+          
+          # 同步文件 (排除 .git 等)
+          # 使用 rsync 可以增量更新
+          rsync -av --exclude='.git' --exclude='.github' --exclude='venv' . $TARGET_DIR/
+          
+        shell: bash
+
+      # 3. 重启服务
+      - name: Restart Services
+        run: |
+          cd /opt/BotMatrix
+          
+          echo "Restarting services..."
+          
+          # 确保网络存在
+          sudo docker network create botmatrix_net || true
+          
+          # 重启 WxBot Worker
+          # 使用 docker-compose.wxbot.yml
+          sudo docker-compose -f docker-compose.wxbot.yml up -d --build
+          
+          # 如果需要重启 Manager，取消下面注释
+          # sudo docker-compose -f docker-compose.manager.yml up -d --build
+          
+          echo "Deployment Done!"
+        shell: bash
