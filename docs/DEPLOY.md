@@ -70,30 +70,7 @@ python deploy.py
   sudo docker-compose logs -f --tail=100
   ```
 
-## 7. GitHub Actions 自动部署 (可选)
-
-如果你希望在每次 `git push` 到 `main` 分支时自动部署，可以使用项目自带的 Workflow。
-
-### 前置条件：配置 Self-hosted Runner
-由于目标服务器 IP (`192.168.0.167`) 是内网地址，GitHub 无法直接访问，因此需要将目标服务器配置为 GitHub 的 Self-hosted Runner。
-
-1.  进入 GitHub 仓库页面 -> **Settings** -> **Actions** -> **Runners**。
-2.  点击 **New self-hosted runner**。
-3.  选择 **Linux**，按照页面提示在服务器 (`192.168.0.167`) 上执行安装命令。
-4.  安装完成后，确保 Runner 处于 `Idle` (空闲) 状态。
-
-### 配置 Secrets
-在 GitHub 仓库 **Settings** -> **Secrets and variables** -> **Actions** 中添加以下 Secrets (用于生成 `config.json`)：
-
-- `DB_SERVER`: 数据库 IP (如 192.168.0.114)
-- `DB_NAME`: 数据库名 (如 sz84_robot)
-- `DB_USER`: 数据库用户名
-- `DB_PASSWORD`: 数据库密码
-
-### 启用
-配置完成后，每次推送代码到 `main` 分支，服务器上的 Runner 会自动拉取代码、生成配置并重启 Docker 服务。
-
-## 常见问题
+## 7. 常见问题
 
 **Q: 无法连接数据库？**
 A: 请检查服务器是否能 ping 通数据库 IP。如果数据库在本地 Windows 电脑上，Linux 服务器在云端，你需要配置 VPN 或将数据库暴露到公网（不推荐）。
