@@ -36,7 +36,7 @@ class MockWXBot:
 sys.modules['wxbot'].WXBot = MockWXBot
 
 # Add project root to path
-sys.path.append('d:\\projects\\wxBot3')
+sys.path.append('d:\\projects\\BotMatrix')
 
 # Now import onebot
 from onebot import onebot

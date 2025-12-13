@@ -32,9 +32,9 @@ BotMatrix/
 
 ## 📖 Introduction
 
-**wxBot3** is a high-performance, event-driven middleware designed to bridge the gap between WeChat clients and modern automation workflows. Built on the **OneBot v11** standard, it provides a robust WebSocket gateway, a powerful plugin system, and a beautiful web-based dashboard for real-time monitoring and management.
+**BotMatrix** is a high-performance, event-driven middleware designed to bridge the gap between WeChat clients and modern automation workflows. Built on the **OneBot v11** standard, it provides a robust WebSocket gateway, a powerful plugin system, and a beautiful web-based dashboard for real-time monitoring and management.
 
-wxBot3 是一个高性能、事件驱动的中间件，旨在连接微信客户端与现代自动化工作流。基于 **OneBot v11** 标准构建，它提供了稳健的 WebSocket 网关、强大的插件系统以及美观的 Web 仪表盘，用于实时监控和管理。
+BotMatrix 是一个高性能、事件驱动的中间件，旨在连接微信客户端与现代自动化工作流。基于 **OneBot v11** 标准构建，它提供了稳健的 WebSocket 网关、强大的插件系统以及美观的 Web 仪表盘，用于实时监控和管理。
 
 ## 🚀 Features
 
