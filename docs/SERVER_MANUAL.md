@@ -116,7 +116,7 @@
 ### 6.2 机器人掉线处理
 1.  访问 Web 控制台 `http://IP:5000/login`。
 2.  查看是否有二维码。
-3.  若无二维码，尝试在群里发送 `#reload` 指令，或在服务器执行 `docker restart botmatrix-worker-wx`。
+3.  若无二维码，尝试在群里发送 `#reload` 指令，或在服务器执行 `docker restart wxbot`。
 
 ### 6.3 数据库连接失败
 - 检查 `config.json` 中的数据库连接字符串。

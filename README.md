@@ -130,9 +130,9 @@ The easiest way to deploy is using Docker Compose, which automatically sets up t
    Open http://localhost:5000 in your browser.
 
 3. **Scan QR Code**
-   Check the logs of the `wxbot-worker` container to scan the QR code:
+   Check the logs of the `wxbot` container to scan the QR code:
    ```bash
-   docker logs -f wxbot-worker
+   docker logs -f wxbot
    ```
 
 ## 🎮 Admin Commands

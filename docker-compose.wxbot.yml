@@ -7,10 +7,10 @@ networks:
 
 services:
   # 2. 微信机器人 Worker
-  wxbot-worker:
+  wxbot:
     build: 
       context: ./WxBot
-    container_name: botmatrix-worker-wx
+    container_name: wxbot
     restart: always
     ports:
       - "3111:3001" # Expose Positive WebSocket Port

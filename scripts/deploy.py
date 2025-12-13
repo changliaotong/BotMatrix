@@ -112,15 +112,15 @@ def main():
              deploy_cmds.extend([
                 f"echo '--> [WxBot] Fast Update Mode'",
                 f"echo '--> [WxBot] Copying updated files to container...'",
-                f"sudo docker cp {REMOTE_DEPLOY_DIR}/WxBot/. botmatrix-worker-wx:/app/",
+                f"sudo docker cp {REMOTE_DEPLOY_DIR}/WxBot/. wxbot:/app/",
                 f"echo '--> [WxBot] Restarting container...'",
-                f"sudo docker restart botmatrix-worker-wx",
+                f"sudo docker restart wxbot",
             ])
         else:
             deploy_cmds.extend([
                 f"echo '--> [WxBot] Stopping existing container...'",
-                f"sudo docker stop botmatrix-worker-wx || true",
-                f"sudo docker rm botmatrix-worker-wx || true",
+                f"sudo docker stop wxbot || true",
+                f"sudo docker rm wxbot || true",
                 
                 f"echo '--> [WxBot] Checking and freeing port 3111...'",
                 f"sudo fuser -k -9 3111/tcp || true",

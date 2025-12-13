@@ -17,7 +17,7 @@ def main():
 
     # 1. Check if container is running
     print("1. Checking Container Status:")
-    run_ssh_cmd("sudo docker ps -a | grep botmatrix-worker-wx")
+    run_ssh_cmd("sudo docker ps -a | grep wxbot")
     print("\n")
 
     # 2. Check if port is listening
@@ -27,7 +27,7 @@ def main():
 
     # 3. Check logs
     print("3. Checking Container Logs (Last 50 lines):")
-    run_ssh_cmd("sudo docker logs --tail 50 botmatrix-worker-wx")
+    run_ssh_cmd("sudo docker logs --tail 50 wxbot")
     print("\n")
 
 if __name__ == "__main__":

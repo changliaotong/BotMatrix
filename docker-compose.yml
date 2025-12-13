@@ -24,10 +24,10 @@ services:
   #   ...
 
   # 2. 微信机器人 Worker
-  wxbot-worker:
+  wxbot:
     build: 
       context: ./WxBot
-    container_name: botmatrix-worker-wx
+    container_name: wxbot
     restart: always
     depends_on:
       - bot-manager
