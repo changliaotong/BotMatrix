@@ -1,79 +1,75 @@
-# Linux 服务器部署指南
+# Server Deployment Guide (Ubuntu/Linux)
 
-本指南将帮助你将微信机器人部署到 Linux 服务器上，并使用 Docker 进行管理。
+This guide describes how to deploy the **BotMatrix** system (BotNexus + WxBot) to an Ubuntu server using Docker.
 
-## 1. 准备工作
+## 1. Prerequisites
 
-在开始之前，请确保你的 Linux 服务器满足以下条件：
-- 已安装 Docker
-- 已安装 Docker Compose
-- **重要**：服务器能够访问到你的 SQL Server 数据库（默认配置 IP 为 `192.168.0.114`）。如果数据库在内网，请确保服务器与数据库在同一网络，或修改配置连接到可访问的数据库地址。
+Ensure your server has:
+*   **Docker** installed (`curl -fsSL https://get.docker.com | bash`)
+*   **Docker Compose** installed.
+*   **Network Access**:
+    *   Access to an external **Redis** server (optional but recommended for persistence).
+    *   Ports `3111` (WebSocket) and `5000` (Web UI) open in the firewall.
 
-## 2. 上传文件
+## 2. File Upload
 
-将项目目录下的所有文件上传到 Linux 服务器的一个目录中，例如 `/opt/BotMatrix`。
+Upload the entire project directory to your server (e.g., `/opt/BotMatrix`).
+Required files/directories:
+*   `BotNexus/`
+*   `WxBot/`
+*   `docker-compose.yml`
 
-必须包含的文件：
-- `Dockerfile`
-- `docker-compose.yml`
-- `requirements.txt`
-- `config.json`
-- `*.py` (所有 Python 源代码文件)
+## 3. Configuration
 
-## 3. 修改配置
+### Environment Variables
+Check `docker-compose.yml` for default values. You can override them by creating a `.env` file or modifying `docker-compose.yml` directly.
 
-### 修改数据库连接
-打开 `docker-compose.yml`，在 `environment` 部分修改数据库连接信息：
+Key variables:
+*   `REDIS_ADDR`: Address of your Redis server (default: `192.168.0.126:6379`).
+*   `REDIS_PWD`: Redis password.
+*   `BOT_SELF_ID`: The QQ/Wx ID of your bot (default: `1098299491`).
 
-```yaml
-    environment:
-      - DB_SERVER=你的数据库IP  # 如果是 192.168.0.114 请确保服务器能访问
-      - DB_NAME=sz84_robot
-      - DB_USER=derlin
-      - DB_PASSWORD=fkueiqiq461686
+### Port Mapping
+By default:
+*   **Web Dashboard**: `http://<server-ip>:5000`
+*   **WebSocket Gateway**: `ws://<server-ip>:3111`
+
+If these ports are occupied, modify the `ports` section in `docker-compose.yml`.
+
+## 4. Deployment
+
+Run the following command in the project root:
+
+```bash
+# Build and start services in background
+sudo docker-compose up -d --build
 ```
 
-### 修改机器人端口配置
-如果需要调整端口，请修改 `config.json` 和 `docker-compose.yml`。
-
-## 4. 自动化部署 (推荐)
-
-在本地 Windows 终端直接运行：
-```powershell
-python deploy.py
+To stop:
+```bash
+sudo docker-compose down
 ```
-该脚本会自动打包、上传并重启远程服务。
 
-## 5. 登录机器人
+## 5. Verification & Login
 
-部署成功后，服务会自动启动。
+1.  **Check Logs**:
+    ```bash
+    sudo docker-compose logs -f
+    ```
+    Ensure `bot-manager` starts successfully and `wxbot` connects to it.
 
-1.  **扫码登录**: 
-    访问管理后台：`http://192.168.0.167:5000`
-    如果页面未显示二维码，可访问 API 直接获取：`http://192.168.0.167:5000/api/qr_code?bot_id=YOUR_BOT_ID`
+2.  **Login**:
+    *   Open `http://<server-ip>:5000` in your browser.
+    *   You should see the dashboard.
+    *   Check the logs or dashboard for the Login QR Code from `wxbot`.
+    *   Scan the code with your WeChat mobile app.
 
-2.  **连接机器人**:
-    机器人 WebSocket 服务已映射到以下端口：
-    - **Port 3111** (对应容器内 3001)
-    - **Port 3112** (对应容器内 3002)
-    - **Port 3113** (对应容器内 3003)
-    
-    客户端连接地址示例：`ws://192.168.0.167:3111`
+3.  **Client Connection**:
+    *   Connect your C# clients or other OneBot tools to `ws://<server-ip>:3111`.
+    *   BotNexus will route messages between your clients and the WxBot.
 
-## 6. 常用命令
+## 6. Troubleshooting
 
-登录服务器 (`ssh derlin@192.168.0.167`) 后执行：
-
-- **查看实时日志**: 
-  ```bash
-  cd /opt/BotMatrix
-  sudo docker-compose logs -f --tail=100
-  ```
-
-## 7. 常见问题
-
-**Q: 无法连接数据库？**
-A: 请检查服务器是否能 ping 通数据库 IP。如果数据库在本地 Windows 电脑上，Linux 服务器在云端，你需要配置 VPN 或将数据库暴露到公网（不推荐）。
-
-**Q: 扫码后没有反应？**
-A: 查看日志 `docker-compose logs -f`，确认是否有报错信息。
+*   **Connection Refused**: Check firewall settings (`ufw allow 5000`, `ufw allow 3111`).
+*   **Redis Error**: Ensure the Redis address in `docker-compose.yml` is reachable from within the Docker container.
+*   **WxBot Disconnected**: Check `docker-compose logs wxbot`. Ensure `MANAGER_URL` is correct (`ws://bot-manager:3001`).

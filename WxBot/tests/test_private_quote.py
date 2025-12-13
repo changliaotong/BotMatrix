@@ -14,10 +14,6 @@ sys.modules['SQLConn'] = MagicMock()
 sys.modules['color'] = MagicMock()
 sys.modules['msg'] = MagicMock()
 sys.modules['web_ui'] = MagicMock()
-sys.modules['wxwork_bot'] = MagicMock()
-sys.modules['dingtalk_bot'] = MagicMock()
-sys.modules['feishu_bot'] = MagicMock()
-sys.modules['telegram_bot'] = MagicMock()
 
 # Mock WXBot class specifically
 class MockWXBot:

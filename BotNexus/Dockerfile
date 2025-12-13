@@ -1,6 +1,9 @@
 # Build Stage
 FROM golang:alpine AS builder
 
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev
+
 WORKDIR /build
 
 # Copy dependency files

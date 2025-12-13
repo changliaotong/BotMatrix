@@ -155,7 +155,10 @@
     <div class="sidebar" id="sidebar">
         <div class="px-3 mb-4">
             <h4>🚀 BotMatrix</h4>
-            <small class="text-muted">Enterprise Bot Manager</small>
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted">Enterprise Bot Manager</small>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.0</span>
+            </div>
         </div>
         
         <!-- Bot Selector -->
@@ -181,8 +184,8 @@
         <!-- Dashboard Tab -->
         <div id="tab-dashboard" class="tab-content">
             <h2 class="mb-4">仪表盘</h2>
-            <div class="row">
-                <div class="col-md-4">
+            <div class="row g-3">
+                <div class="col-md-3">
                     <div class="card p-3">
                         <div class="d-flex align-items-center">
                             <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary me-3">
@@ -195,11 +198,24 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="card p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning me-3">
+                                <i class="bi bi-cpu-fill fs-2"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small">CPU 使用率</div>
+                                <div class="fs-2 fw-bold" id="metric-cpu">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="card p-3">
                         <div class="d-flex align-items-center">
                             <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success me-3">
-                                <i class="bi bi-cpu fs-2"></i>
+                                <i class="bi bi-memory fs-2"></i>
                             </div>
                             <div>
                                 <div class="text-muted small">系统内存</div>
@@ -208,7 +224,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card p-3">
                         <div class="d-flex align-items-center">
                             <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info me-3">
@@ -225,12 +241,52 @@
             
             <div class="row mt-4">
                 <div class="col-md-8">
-                     <div class="card mb-4">
-                        <div class="card-header">
-                            内存趋势
+                     <!-- Charts Row -->
+                     <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-header py-2 small fw-bold">CPU 趋势</div>
+                                <div class="card-body p-2">
+                                    <canvas id="cpuChart" height="150"></canvas>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <canvas id="memChart" height="100"></canvas>
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-header py-2 small fw-bold">内存趋势</div>
+                                <div class="card-body p-2">
+                                    <canvas id="memChart" height="150"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-header py-2 small fw-bold">消息吞吐 (QPS)</div>
+                                <div class="card-body p-2">
+                                    <canvas id="msgChart" height="150"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                     </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            🔥 高占用进程 (Top 10)
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>PID</th>
+                                        <th>进程名</th>
+                                        <th>CPU %</th>
+                                        <th>内存 (MB)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="process-list">
+                                    <tr><td colspan="4" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -404,9 +460,35 @@
 
         <!-- Bots Tab -->
         <div id="tab-bots" style="display:none;">
-            <h4 class="mb-4">机器人列表</h4>
-            <div class="row" id="bot-list-container">
-                <!-- Bot Cards -->
+            <ul class="nav nav-tabs mb-4">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#view-bots">接入端 (Bots)</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers()">处理端 (Workers)</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="view-bots">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3>在线机器人</h3>
+                        <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()">刷新</button>
+                    </div>
+                    <div class="row" id="bot-list-container">
+                        <!-- Bot Cards -->
+                    </div>
+                </div>
+                
+                <div class="tab-pane fade" id="view-workers">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3>业务处理节点</h3>
+                        <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()">刷新</button>
+                    </div>
+                    <div class="row" id="worker-list-container">
+                        <!-- Worker Cards -->
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -502,13 +584,59 @@
             initWebSocket();
             // Load initial data
             updateStats();
+            updateSystemStats();
             fetchBots();
+            fetchWorkers();
             updateChatStats();
             
             // Start Timers
             setInterval(updateStats, 2000);
+            setInterval(updateSystemStats, 2000);
             setInterval(updateChatStats, 5000);
             setInterval(updateBots, 5000);
+            setInterval(fetchWorkers, 5000);
+        }
+
+        function updateSystemStats() {
+            if (!authToken) return;
+            fetch('/api/system/stats', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (document.getElementById('metric-cpu')) {
+                    document.getElementById('metric-cpu').innerText = data.cpu_usage.toFixed(1) + '%';
+                }
+                
+                // Update CPU Chart
+                if (cpuChart) {
+                    const now = new Date().toLocaleTimeString();
+                    if (cpuChart.data.labels.length > 20) {
+                        cpuChart.data.labels.shift();
+                        cpuChart.data.datasets[0].data.shift();
+                    }
+                    cpuChart.data.labels.push(now);
+                    cpuChart.data.datasets[0].data.push(data.cpu_usage);
+                    cpuChart.update();
+                }
+
+                const procBody = document.getElementById('process-list');
+                if (procBody && data.processes) {
+                    if (data.processes.length === 0) {
+                        procBody.innerHTML = '<tr><td colspan="4" class="text-center">暂无数据</td></tr>';
+                    } else {
+                        procBody.innerHTML = data.processes.map(p => `
+                            <tr>
+                                <td>${p.pid}</td>
+                                <td class="text-truncate" style="max-width: 150px;" title="${p.name}">${p.name}</td>
+                                <td>${p.cpu.toFixed(1)}%</td>
+                                <td>${(p.memory / 1024 / 1024).toFixed(1)}</td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            })
+            .catch(e => console.error("Update system stats error:", e));
         }
 
         // Handle Login Submit
@@ -574,7 +702,10 @@
             document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`).classList.add('active');
             
             if (tabId === 'logs') fetchLogs();
-            if (tabId === 'bots') fetchBots();
+            if (tabId === 'bots') {
+                fetchBots();
+                fetchWorkers();
+            }
 
             // Close sidebar on mobile
             if (window.innerWidth <= 768) {
@@ -587,32 +718,104 @@
 
         // --- Dashboard & Stats ---
         let memChart = null;
-        try {
-            const ctx = document.getElementById('memChart');
-            if (ctx) {
-                memChart = new Chart(ctx.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: [],
-                        datasets: [{
-                            label: 'Memory Alloc (MB)',
-                            data: [],
-                            borderColor: '#0d6efd',
-                            tension: 0.4,
-                            fill: true,
-                            backgroundColor: 'rgba(13, 110, 253, 0.1)'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        animation: false,
-                        scales: { y: { beginAtZero: true } }
-                    }
-                });
+        let cpuChart = null;
+        let msgChart = null;
+        let lastMsgCount = 0;
+
+        function initCharts() {
+            try {
+                // Memory Chart
+                const ctxMem = document.getElementById('memChart');
+                if (ctxMem) {
+                    memChart = new Chart(ctxMem.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: 'Memory Alloc (MB)',
+                                data: [],
+                                borderColor: '#0d6efd',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(13, 110, 253, 0.1)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            animation: false,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { 
+                                y: { beginAtZero: true, grid: { display: true, drawBorder: false } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // CPU Chart
+                const ctxCpu = document.getElementById('cpuChart');
+                if (ctxCpu) {
+                    cpuChart = new Chart(ctxCpu.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: 'CPU Usage (%)',
+                                data: [],
+                                borderColor: '#ffc107',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(255, 193, 7, 0.1)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            animation: false,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { 
+                                y: { beginAtZero: true, max: 100, grid: { display: true, drawBorder: false } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // Message Chart
+                const ctxMsg = document.getElementById('msgChart');
+                if (ctxMsg) {
+                    msgChart = new Chart(ctxMsg.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: 'Messages',
+                                data: [],
+                                borderColor: '#198754',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(25, 135, 84, 0.1)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            animation: false,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { 
+                                y: { beginAtZero: true, grid: { display: true, drawBorder: false } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Chart init error:", e);
             }
-        } catch (e) {
-            console.error("Chart init error:", e);
         }
+        
+        initCharts();
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -639,9 +842,10 @@
                         document.getElementById('metric-bots').innerText = data.bot_count;
                     }
 
-                    // Update Chart
+                    const now = new Date().toLocaleTimeString();
+
+                    // Update Memory Chart
                     if (memChart) {
-                        const now = new Date().toLocaleTimeString();
                         if (memChart.data.labels.length > 20) {
                             memChart.data.labels.shift();
                             memChart.data.datasets[0].data.shift();
@@ -650,12 +854,48 @@
                         memChart.data.datasets[0].data.push(data.memory_alloc / 1024 / 1024);
                         memChart.update();
                     }
+                    
+                    // Update Message Chart
+                    if (msgChart) {
+                        const currentCount = data.message_count || 0;
+                        const diff = currentCount - lastMsgCount;
+                        // Avoid spike on first load
+                        const val = lastMsgCount === 0 ? 0 : diff;
+                        
+                        lastMsgCount = currentCount;
+
+                        if (msgChart.data.labels.length > 20) {
+                            msgChart.data.labels.shift();
+                            msgChart.data.datasets[0].data.shift();
+                        }
+                        msgChart.data.labels.push(now);
+                        msgChart.data.datasets[0].data.push(val);
+                        msgChart.update();
+                    }
                 })
                 .catch(e => console.error("Update stats error:", e));
         }
-        setInterval(updateStats, 2000);
+        
+        // --- Bots & Workers ---
+        function timeAgo(date) {
+            const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+            let interval = seconds / 31536000;
+            if (interval > 1) return Math.floor(interval) + "年前";
+            interval = seconds / 2592000;
+            if (interval > 1) return Math.floor(interval) + "月前";
+            interval = seconds / 86400;
+            if (interval > 1) return Math.floor(interval) + "天前";
+            interval = seconds / 3600;
+            if (interval > 1) return Math.floor(interval) + "小时前";
+            interval = seconds / 60;
+            if (interval > 1) return Math.floor(interval) + "分钟前";
+            return Math.floor(seconds) + "秒前";
+        }
 
-        // --- Bots ---
+        function updateBots() {
+            fetchBots();
+        }
+
         function fetchBots() {
             if (!authToken) return;
             fetch('/api/bots', {
@@ -665,28 +905,117 @@
                 .then(bots => {
                     const container = document.getElementById('bot-list-container');
                     if (bots.length === 0) {
-                        container.innerHTML = '<div class="col-12"><div class="alert alert-warning">暂无连接的机器人</div></div>';
-                        return;
-                    }
-                    container.innerHTML = bots.map(bot => `
-                        <div class="col-md-6 col-lg-4">
-                            <div class="card p-3">
+                        container.innerHTML = '<div class="col-12 text-center text-muted">暂无在线机器人</div>';
+                    } else {
+                        container.innerHTML = bots.map(bot => {
+                            const connDate = new Date(bot.connected);
+                            const timeStr = timeAgo(bot.connected);
+                            return `
+                        <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                            <div class="card p-2 h-100 shadow-sm">
                                 <div class="d-flex align-items-center mb-2">
-                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
-                                        <i class="bi bi-robot fs-4"></i>
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
+                                        <i class="bi bi-robot fs-5"></i>
                                     </div>
-                                    <div>
-                                        <h5 class="mb-0">${bot.nickname || bot.self_id}</h5>
-                                        <small class="text-muted">ID: ${bot.self_id}</small>
+                                    <div class="overflow-hidden w-100">
+                                        <div class="fw-bold text-truncate" title="${bot.nickname || bot.self_id}" style="font-size: 0.9rem;">${bot.nickname || bot.self_id}</div>
+                                        <div class="text-muted text-truncate" style="font-size: 0.7rem;">ID: ${bot.self_id}</div>
                                     </div>
                                 </div>
-                                <div class="border-top pt-2 mt-2 text-muted small">
-                                    <div>Remote: ${bot.remote_addr}</div>
-                                    <div>Status: <span class="text-success">Online</span></div>
+                                <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">IP:</span>
+                                        <span class="text-truncate" style="max-width: 80px;" title="${bot.remote_addr}">${bot.remote_addr.split(':')[0]}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">连接:</span>
+                                        <span title="${connDate.toLocaleString()}">${timeStr}</span>
+                                    </div>
+                                    ${bot.owner ? `
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">所有者:</span>
+                                        <span>${bot.owner}</span>
+                                    </div>` : ''}
+                                </div>
+                                <div class="mt-auto">
+                                    <button class="btn btn-sm btn-outline-primary w-100 py-1" style="font-size: 0.8rem;" onclick="setGlobalBot('${bot.self_id}')">管理</button>
                                 </div>
                             </div>
                         </div>
-                    `).join('');
+                    `}).join('');
+                    }
+
+                    // Update Metrics
+                    if (document.getElementById('metric-bots')) {
+                        document.getElementById('metric-bots').innerText = bots.length;
+                    }
+
+                    // Update Global Selector
+                    const selector = document.getElementById('global-bot-selector');
+                    const currentVal = selector.value;
+                    
+                    if (bots.length === 0) {
+                        selector.innerHTML = '<option value="" disabled selected>无在线机器人</option>';
+                    } else {
+                        selector.innerHTML = bots.map(bot => 
+                            `<option value="${bot.self_id}">${bot.nickname || 'Bot'} (${bot.self_id})</option>`
+                        ).join('');
+                        
+                        // Restore selection or select first
+                        if (currentVal && bots.find(b => b.self_id === currentVal)) {
+                            selector.value = currentVal;
+                        } else {
+                            selector.value = bots[0].self_id;
+                            currentBotId = bots[0].self_id;
+                        }
+                    }
+                });
+        }
+
+        function fetchWorkers() {
+            if (!authToken) return;
+            fetch('/api/workers', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+                .then(r => r.json())
+                .then(workers => {
+                    const container = document.getElementById('worker-list-container');
+                    if (workers.length === 0) {
+                        container.innerHTML = '<div class="col-12 text-center text-muted">暂无在线 Worker</div>';
+                        return;
+                    }
+                    container.innerHTML = workers.map(w => {
+                        const connDate = new Date(w.connected);
+                        const timeStr = timeAgo(w.connected);
+                        return `
+                        <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                            <div class="card p-2 h-100 shadow-sm">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
+                                        <i class="bi bi-gear-wide-connected fs-5"></i>
+                                    </div>
+                                    <div class="overflow-hidden w-100">
+                                        <div class="fw-bold text-truncate" style="font-size: 0.9rem;">业务节点</div>
+                                        <div class="text-muted text-truncate" style="font-size: 0.7rem;">Worker Node</div>
+                                    </div>
+                                </div>
+                                <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">IP:</span>
+                                        <span class="text-truncate" style="max-width: 80px;" title="${w.remote_addr}">${w.remote_addr.split(':')[0]}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">连接:</span>
+                                        <span title="${connDate.toLocaleString()}">${timeStr}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">状态:</span>
+                                        <span class="text-success">${w.status}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `}).join('');
                 });
         }
 
@@ -756,7 +1085,13 @@
 
         function initWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            let wsUrl = `${protocol}//${window.location.hostname}:3001/?role=subscriber`;
+            // Use the same port as the page (external mapped port) instead of hardcoded 3001
+            // Because docker maps 3005:3001, we should connect to window.location.port (which is 3005 if accessing via 3005, or whatever nginx sets)
+            // But wait, the web dashboard is served on 5000.
+            // The user accesses dashboard via 5000.
+            // The WS is on 3005 (external) / 3001 (internal).
+            // We must explicitly use 3005 for WS connection from browser.
+            let wsUrl = `${protocol}//${window.location.hostname}:3005/?role=subscriber`;
             if (authToken) {
                 wsUrl += `&token=${encodeURIComponent(authToken)}`;
             }
@@ -850,8 +1185,8 @@
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     pendingRequests.delete(result.echo);
-                    reject(new Error("Request timed out (10s)"));
-                }, 10000);
+                    reject(new Error("Request timed out (30s)"));
+                }, 30000);
                 
                 pendingRequests.set(result.echo, { resolve, reject, timeout });
             });
@@ -869,82 +1204,7 @@
             setTimeout(refreshGroupList, 500);
         }
 
-        function updateBots() {
-            const headers = {};
-            if (authToken) {
-                headers['Authorization'] = `Bearer ${authToken}`;
-            }
 
-            fetch('/api/bots', { headers })
-                .then(r => {
-                    if (r.status === 401) {
-                        localStorage.removeItem('wxbot_token');
-                        location.reload();
-                        return [];
-                    }
-                    return r.json();
-                })
-                .then(data => {
-                    // Update metrics
-                    if (document.getElementById('metric-bots')) {
-                        document.getElementById('metric-bots').innerText = data.length;
-                    }
-
-                    // Update Bot List Table (if exists, might be different ID in bots tab)
-                    const container = document.getElementById('bot-list-container');
-                    if (container) {
-                        if (data.length === 0) {
-                            container.innerHTML = '<div class="col-12"><div class="alert alert-warning">暂无连接的机器人</div></div>';
-                        } else {
-                            container.innerHTML = data.map(bot => `
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="card p-3">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
-                                                <i class="bi bi-robot fs-4"></i>
-                                            </div>
-                                            <div>
-                                                <h5 class="mb-0">${bot.nickname || bot.self_id}</h5>
-                                                <small class="text-muted">ID: ${bot.self_id}</small>
-                                            </div>
-                                        </div>
-                                        <div class="border-top pt-2 mt-2 text-muted small">
-                                            <div>Remote: ${bot.remote_addr}</div>
-                                            <div>Status: <span class="text-success">Online</span></div>
-                                        </div>
-                                        <div class="mt-2 text-end">
-                                            <button class="btn btn-sm btn-outline-primary" onclick="setGlobalBot('${bot.self_id}')">管理此机器人</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('');
-                        }
-                    }
-
-                    // Update Global Selector
-                    const selector = document.getElementById('global-bot-selector');
-                    const currentVal = selector.value;
-                    
-                    if (data.length === 0) {
-                        selector.innerHTML = '<option value="" disabled selected>无在线机器人</option>';
-                    } else {
-                        selector.innerHTML = data.map(bot => 
-                            `<option value="${bot.self_id}">${bot.nickname || 'Bot'} (${bot.self_id})</option>`
-                        ).join('');
-                        
-                        // Restore selection or select first
-                        if (currentVal && data.find(b => b.self_id === currentVal)) {
-                            selector.value = currentVal;
-                        } else {
-                            // If currentVal is not in the list (e.g. initial empty string or disconnected bot)
-                            // We select the first one by default
-                            selector.value = data[0].self_id;
-                            currentBotId = data[0].self_id;
-                        }
-                    }
-                })
-                .catch(e => console.error("Update bots error:", e));
-        }
         
         function setGlobalBot(id) {
             const selector = document.getElementById('global-bot-selector');

@@ -60,86 +60,67 @@ def main():
     # 3. 远程部署
     print("\n[Step 3/3] Executing remote deployment commands...")
     
-    # 公共初始化命令
-    init_cmds = [
-        f"echo '--> Creating directory {REMOTE_DEPLOY_DIR}...'",
+    remote_cmds = [
+        # 1. 创建目录
+        f"echo '--> Creating directory {REMOTE_DEPLOY_DIR} ...'",
         f"sudo mkdir -p {REMOTE_DEPLOY_DIR}",
         
+        # 2. 解压
         f"echo '--> Unzipping files...'",
         f"sudo unzip -o {REMOTE_TMP_PATH} -d {REMOTE_DEPLOY_DIR}",
         
+        # 3. 清理 zip
         f"echo '--> Cleaning up temporary zip...'",
         f"sudo rm {REMOTE_TMP_PATH}",
         
+        # 4. 进入目录
         f"echo '--> Switching directory...'",
         f"cd {REMOTE_DEPLOY_DIR}",
 
-        f"echo '--> Ensuring network botmatrix_net exists...'",
-        f"sudo docker network create botmatrix_net || true",
+        # 5. Docker Compose 部署
+        f"echo '--> Starting services with Docker Compose...'",
     ]
 
-    deploy_cmds = []
-
-    # Deploy Manager
-    if TARGET in ['manager', 'all']:
-        if FAST_MODE:
-             deploy_cmds.extend([
-                f"echo '--> [Manager] Fast Update Mode'",
-                f"echo '--> [Manager] Copying updated files to container...'",
-                # Manager 是 Go 编译的，Fast Update 只能更新静态文件，或者我们需要重新编译
-                # 这里假设我们只更新静态资源
-                f"sudo docker cp {REMOTE_DEPLOY_DIR}/BotNexus/. botmatrix-manager:/app/",
-                f"echo '--> [Manager] Restarting container...'",
-                f"sudo docker restart botmatrix-manager",
-            ])
+    docker_cmd = ""
+    if FAST_MODE:
+        # Fast Mode: No build, just restart to pick up mounted code changes
+        if TARGET == 'manager':
+            docker_cmd = "sudo docker-compose restart bot-manager"
+        elif TARGET == 'wxbot':
+            docker_cmd = "sudo docker-compose restart wxbot"
         else:
-            deploy_cmds.extend([
-                f"echo '--> [Manager] Stopping existing container...'",
-                f"sudo docker stop botmatrix-manager || true",
-                f"sudo docker rm botmatrix-manager || true",
-                
-                f"echo '--> [Manager] Checking and freeing port 3005...'",
-                f"sudo fuser -k -9 3005/tcp || true",
-
-                f"echo '--> [Manager] Building and starting...'",
-                # Ensure we use the manager compose file
-                f"sudo WS_PORT=3005 docker-compose -f docker-compose.manager.yml up -d --build",
-            ])
-
-    # Deploy WxBot
-    if TARGET in ['wxbot', 'all']:
-        if FAST_MODE:
-             deploy_cmds.extend([
-                f"echo '--> [WxBot] Fast Update Mode'",
-                f"echo '--> [WxBot] Copying updated files to container...'",
-                f"sudo docker cp {REMOTE_DEPLOY_DIR}/WxBot/. wxbot:/app/",
-                f"echo '--> [WxBot] Restarting container...'",
-                f"sudo docker restart wxbot",
-            ])
+            docker_cmd = "sudo docker-compose up -d --remove-orphans && sudo docker-compose restart wxbot"
+    else:
+        # Full Mode: Rebuild images
+        if TARGET == 'manager':
+            docker_cmd = "sudo docker-compose up -d --build --no-deps bot-manager"
+        elif TARGET == 'wxbot':
+            docker_cmd = "sudo docker-compose up -d --build --no-deps wxbot"
         else:
-            deploy_cmds.extend([
-                f"echo '--> [WxBot] Stopping existing container...'",
-                f"sudo docker stop wxbot || true",
-                f"sudo docker rm wxbot || true",
-                
-                f"echo '--> [WxBot] Checking and freeing port 3111...'",
-                f"sudo fuser -k -9 3111/tcp || true",
-                
-                f"echo '--> [WxBot] Building and starting...'",
-                # Ensure we use the wxbot compose file
-                f"sudo WXBOT_PORT=3111 docker-compose -f docker-compose.wxbot.yml up -d --build",
-            ])
+            docker_cmd = "sudo docker-compose up -d --build --remove-orphans"
 
-    final_msg = [f"echo '--> Deployment ({TARGET}) SUCCESS!'"]
+    remote_cmds.append(docker_cmd)
+    
+    remote_cmds.extend([
+        # 6. 显示状态
+        f"echo '--> Deployment finished. Checking status...'",
+        f"sudo docker-compose ps",
+        f"echo '--> Logs (tail 20):'",
+        f"sudo docker-compose logs --tail=20"
+    ])
 
-    # Combine all commands
-    remote_cmds = init_cmds + deploy_cmds + final_msg
-    
-    remote_cmd_str = " && ".join(remote_cmds)
-    
-    ssh_cmd = f'ssh -t {USERNAME}@{SERVER_IP} "{remote_cmd_str}"'
+    full_cmd = " && ".join(remote_cmds)
+    # 使用 -t 强制分配伪终端，以便 sudo 可以提示输入密码
+    ssh_cmd = f"ssh -t {USERNAME}@{SERVER_IP} \"{full_cmd}\""
     
     run_command(ssh_cmd)
+    
+    print("\n========================================")
+    print("   Deployment Successful!")
+    print(f"   Dashboard: http://{SERVER_IP}:5000")
+    print(f"   WxBot WebUI: http://{SERVER_IP}:5001")
+    print(f"   Gateway:   ws://{SERVER_IP}:3111")
+    print("========================================")
 
 if __name__ == "__main__":
     main()

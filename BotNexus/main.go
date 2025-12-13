@@ -8,11 +8,14 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // Config
@@ -78,11 +81,12 @@ type Manager struct {
 	rdb *redis.Client
 
 	// Chat Stats
-	statsMutex sync.RWMutex
-	UserStats  map[int64]int64  `json:"user_stats"`  // UserID -> Count
-	GroupStats map[int64]int64  `json:"group_stats"` // GroupID -> Count
-	UserNames  map[int64]string `json:"-"`           // Cache names
-	GroupNames map[int64]string `json:"-"`           // Cache names
+	statsMutex    sync.RWMutex
+	TotalMessages int64            `json:"total_messages"` // Global counter
+	UserStats     map[int64]int64  `json:"user_stats"`     // UserID -> Count
+	GroupStats    map[int64]int64  `json:"group_stats"`    // GroupID -> Count
+	UserNames     map[int64]string `json:"-"`              // Cache names
+	GroupNames    map[int64]string `json:"-"`              // Cache names
 }
 
 type LogEntry struct {
@@ -256,9 +260,11 @@ func main() {
 
 	// API Endpoints
 	uiMux.HandleFunc("/api/bots", manager.handleGetBots)
+	uiMux.HandleFunc("/api/workers", manager.handleGetWorkers)
 	uiMux.HandleFunc("/api/logs", manager.handleGetLogs)
 	uiMux.HandleFunc("/api/stats", manager.handleGetStats)
 	uiMux.HandleFunc("/api/stats/chat", manager.handleGetChatStats)
+	uiMux.HandleFunc("/api/system/stats", manager.handleSystemStats)
 	uiMux.HandleFunc("/api/action", manager.handleAction)
 
 	// Auth API
@@ -314,41 +320,8 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 	}
 
 	// 2. Load Balance to Workers (Business Logic)
-	// Only for message events (or maybe all events? usually all events need processing)
-	// But heartbeats should probably be ignored or broadcast?
-	// For now, we distribute everything.
+	// ... (Existing Worker Logic) ...
 	if len(m.workers) > 0 {
-		// Round-Robin
-		// Note: We need to upgrade lock to Write if we modify workerIndex?
-		// But here we are in RLock. We can use atomic or just ignore race condition for index as it's not critical.
-		// Or better: use a separate mutex for load balancing index, or just pick random?
-		// Random is easier and stateless for this lock scope.
-		// Let's use simple modification of index assuming single threaded dispatch or acceptable race.
-		// Actually, let's just pick one.
-
-		// To do strict Round-Robin safely:
-		// We can't modify m.workerIndex under RLock.
-		// Let's assume we want to avoid WLock for every message.
-		// We can use a local counter or random.
-		// Let's use Random for now, it's good enough for load balancing.
-		// Or upgrade to Lock just for the index update? No, too heavy.
-		// Let's use a try-lock or just iterate and find first available?
-		// "Competition" means we just need to send to ONE worker.
-
-		// Implementation: Send to m.workers[m.workerIndex % len]
-		// We will cast RLock to Lock momentarily? No.
-		// Let's just use a global atomic counter?
-		// For simplicity in this pair programming session:
-		// We'll iterate until we find a worker that accepts the write.
-
-		// IMPROVED STRATEGY:
-		// Since we are in RLock, we can't modify m.workerIndex.
-		// Let's just pick based on time (random-ish) or a separate atomic counter.
-		// But actually, we need to handle potential dead workers here too.
-
-		// Simple approach: Try the first one, if fails, try next.
-		// But we want LB.
-		// Let's select one worker based on a hash of something or random.
 		targetIndex := int(time.Now().UnixNano()) % len(m.workers)
 		worker := m.workers[targetIndex]
 
@@ -357,15 +330,9 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 		worker.Mutex.Unlock()
 
 		if err != nil {
-			// This worker is dead. We need to remove it.
-			// But we are in RLock.
-			// We can spawn a goroutine to remove it, and try sending to another worker?
-			// For now, let's just trigger cleanup.
 			go func(w *WorkerClient) {
 				m.removeWorker(w)
 			}(worker)
-
-			// Fallback: try to send to ANY other worker
 			for i, w := range m.workers {
 				if i == targetIndex {
 					continue
@@ -374,9 +341,49 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 				e := w.Conn.WriteJSON(data)
 				w.Mutex.Unlock()
 				if e == nil {
-					break // Sent successfully
+					break
 				}
 			}
+		}
+	}
+
+	// 3. Broadcast to other Bots (Universal Clients / Controllers)
+	// This allows C# clients connecting as standard Bots (without role=worker) to receive events.
+	// We act as a message broker/router here.
+
+	// FIX: Don't send logs or meta_events to other bots to avoid infinite loops with OneBot implementations (like NapCat)
+	// that might treat incoming JSON as API requests and error out (triggering more logs).
+	// ALSO: Don't send API Responses (which have no post_type) to other bots, as they might be confused.
+	// We ONLY want to broadcast "message", "notice", or "request" events to other bots (like C# clients).
+	shouldBroadcastToBots := false
+	if msgMap, ok := data.(map[string]interface{}); ok {
+		if pt, ok := msgMap["post_type"].(string); ok {
+			// Allow message, notice, request
+			if pt == "message" || pt == "notice" || pt == "request" {
+				shouldBroadcastToBots = true
+			}
+		}
+	}
+
+	if !shouldBroadcastToBots {
+		return
+	}
+
+	for id, bot := range m.bots {
+		// Don't send back to self (sender)
+		if selfID != "" && id == selfID {
+			continue
+		}
+
+		// Avoid sending to unauthenticated bots if strictly required?
+		// For now, trust internal network.
+
+		bot.Mutex.Lock()
+		err := bot.Conn.WriteJSON(data)
+		bot.Mutex.Unlock()
+		if err != nil {
+			// Just log, don't remove from map here (Read Loop will handle disconnect)
+			// log.Printf("Error broadcasting to bot %s: %v", id, err)
 		}
 	}
 }
@@ -461,75 +468,94 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 
 		// Try to parse message to update SelfID if it's a lifecycle event
 		var msgMap map[string]interface{}
-		if err := json.Unmarshal(message, &msgMap); err == nil {
-			// Update SelfID if needed
-			if id, ok := msgMap["self_id"]; ok {
-				var newID string
-				switch v := id.(type) {
-				case float64:
-					newID = fmt.Sprintf("%.0f", v)
-				case string:
-					newID = v
-				default:
-					newID = fmt.Sprintf("%v", v)
-				}
-
-				if newID != "" && newID != "0" && newID != selfID {
-					m.mutex.Lock()
-					// Check if we are renaming or just updating
-					// If selfID is unknown-..., we remove it and add new key
-					// But we need to make sure we don't overwrite an existing connection if duplicate?
-					// For now simple rename logic:
-					delete(m.bots, selfID)
-
-					selfID = newID
-					client.SelfID = selfID
-					m.bots[selfID] = client
-					m.mutex.Unlock()
-					m.AddLog("INFO", fmt.Sprintf("Client identified as: %s", selfID))
-
-					// Update Redis
-					if m.rdb != nil {
-						ctx := context.Background()
-						m.rdb.SAdd(ctx, "bots:online", selfID)
-						m.rdb.HSet(ctx, fmt.Sprintf("bot:info:%s", selfID), map[string]interface{}{
-							"connected_at": client.Connected.Format(time.RFC3339),
-							"remote_addr":  client.Conn.RemoteAddr().String(),
-						})
-					}
-
-					// Trigger get_login_info to fetch nickname
-					go func() {
-						req := map[string]interface{}{
-							"action": "get_login_info",
-							"echo":   "internal_get_login_info",
-						}
-						client.Mutex.Lock()
-						client.Conn.WriteJSON(req)
-						client.Mutex.Unlock()
-					}()
-				}
-			}
-
-			// Update Nickname from get_login_info response or event
-			if echo, ok := msgMap["echo"].(string); ok && echo == "internal_get_login_info" {
-				if data, ok := msgMap["data"].(map[string]interface{}); ok {
-					if nick, ok := data["nickname"].(string); ok {
-						client.Nickname = nick
-					}
-				}
-			}
-			// Fallback: check lifecycle meta_event for nickname? (OneBot 11 doesn't specify it usually)
-
-			// Broadcast to subscribers
-			m.broadcastToSubscribers(msgMap)
-
-			// Record Stats
-			go m.recordStats(msgMap)
+		if err := json.Unmarshal(message, &msgMap); err != nil {
+			m.AddLog("ERROR", fmt.Sprintf("Failed to parse message from %s: %v | Content: %s", selfID, err, string(message)))
+			continue
 		}
 
+		// Update SelfID if needed
+		if id, ok := msgMap["self_id"]; ok {
+			var newID string
+			switch v := id.(type) {
+			case float64:
+				newID = fmt.Sprintf("%.0f", v)
+			case string:
+				newID = v
+			default:
+				newID = fmt.Sprintf("%v", v)
+			}
+
+			if newID != "" && newID != "0" && newID != selfID {
+				m.mutex.Lock()
+				// Check if we are renaming or just updating
+				// If selfID is unknown-..., we remove it and add new key
+				// But we need to make sure we don't overwrite an existing connection if duplicate?
+				// For now simple rename logic:
+				delete(m.bots, selfID)
+
+				selfID = newID
+				client.SelfID = selfID
+				m.bots[selfID] = client
+				m.mutex.Unlock()
+				m.AddLog("INFO", fmt.Sprintf("Client identified as: %s", selfID))
+
+				// Update Redis
+				if m.rdb != nil {
+					ctx := context.Background()
+					m.rdb.SAdd(ctx, "bots:online", selfID)
+					m.rdb.HSet(ctx, fmt.Sprintf("bot:info:%s", selfID), map[string]interface{}{
+						"connected_at": client.Connected.Format(time.RFC3339),
+						"remote_addr":  client.Conn.RemoteAddr().String(),
+					})
+				}
+
+				// Trigger get_login_info to fetch nickname
+				go func() {
+					req := map[string]interface{}{
+						"action": "get_login_info",
+						"echo":   "internal_get_login_info",
+					}
+					client.Mutex.Lock()
+					client.Conn.WriteJSON(req)
+					client.Mutex.Unlock()
+				}()
+			}
+		}
+
+		// Update Nickname from get_login_info response or event
+		if echo, ok := msgMap["echo"].(string); ok && echo == "internal_get_login_info" {
+			if data, ok := msgMap["data"].(map[string]interface{}); ok {
+				if nick, ok := data["nickname"].(string); ok {
+					client.Nickname = nick
+				}
+			}
+		}
+		// Fallback: check lifecycle meta_event for nickname? (OneBot 11 doesn't specify it usually)
+
+		// Broadcast to subscribers
+		m.broadcastToSubscribers(msgMap)
+
+		// Log API response
+		if _, ok := msgMap["echo"]; ok {
+			// Don't log internal login info echo to avoid clutter if frequent? Actually it's once.
+			m.AddLog("DEBUG", fmt.Sprintf("Recv API Resp from %s: %s", selfID, string(message)))
+		}
+
+		// Record Stats
+		go m.recordStats(msgMap)
+
 		// Log heartbeat only occasionally or filter it
-		// m.AddLog("DEBUG", fmt.Sprintf("Recv from %s: %s", selfID, string(message)))
+		if msgMap != nil {
+			if pt, ok := msgMap["post_type"].(string); !ok || pt != "meta_event" {
+				// Don't log full content of huge messages (like get_group_list response)
+				// But do log that we received SOMETHING
+				msgStr := string(message)
+				if len(msgStr) > 1000 {
+					msgStr = msgStr[:1000] + "...(truncated)"
+				}
+				m.AddLog("DEBUG", fmt.Sprintf("Recv from %s: %s", selfID, msgStr))
+			}
+		}
 	}
 }
 
@@ -722,6 +748,8 @@ func (m *Manager) recordStats(msg map[string]interface{}) {
 	// Update Stats
 	m.statsMutex.Lock()
 	defer m.statsMutex.Unlock()
+
+	m.TotalMessages++
 
 	if m.rdb != nil {
 		ctx := context.Background()
@@ -939,6 +967,28 @@ func (m *Manager) handleGetBots(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(botList)
 }
 
+func (m *Manager) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
+	if m.authenticate(r) == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	workerList := make([]map[string]interface{}, 0)
+	for _, w := range m.workers {
+		workerList = append(workerList, map[string]interface{}{
+			"remote_addr": w.Conn.RemoteAddr().String(),
+			"connected":   w.Connected.Format(time.RFC3339),
+			"status":      "active",
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(workerList)
+}
+
 func (m *Manager) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	if m.authenticate(r) == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -961,6 +1011,10 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	subCount := len(m.subscribers)
 	m.mutex.RUnlock()
 
+	m.statsMutex.RLock()
+	totalMsgs := m.TotalMessages
+	m.statsMutex.RUnlock()
+
 	stats := map[string]interface{}{
 		"goroutines":       runtime.NumGoroutine(),
 		"memory_alloc":     mem.Alloc,
@@ -968,6 +1022,7 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		"uptime":           "N/A", // TODO: Implement uptime
 		"bot_count":        botCount,
 		"subscriber_count": subCount,
+		"message_count":    totalMsgs,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1028,6 +1083,11 @@ func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.Action == "" {
+		http.Error(w, "Action is required", http.StatusBadRequest)
+		return
+	}
+
 	m.mutex.RLock()
 	client, ok := m.bots[req.BotID]
 	m.mutex.RUnlock()
@@ -1047,6 +1107,10 @@ func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.Params == nil {
+		req.Params = make(map[string]interface{})
+	}
+
 	// Construct OneBot Action Frame
 	actionFrame := map[string]interface{}{
 		"action": req.Action,
@@ -1058,6 +1122,8 @@ func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 	err := client.Conn.WriteJSON(actionFrame)
 	client.Mutex.Unlock()
 
+	m.AddLog("DEBUG", fmt.Sprintf("Sent API to %s: %s (echo: %s)", req.BotID, req.Action, actionFrame["echo"]))
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1065,4 +1131,83 @@ func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "echo": actionFrame["echo"].(string)})
+}
+
+type SystemStats struct {
+	CPUUsage  float64       `json:"cpu_usage"`
+	Processes []ProcessInfo `json:"processes"`
+}
+
+type ProcessInfo struct {
+	PID    int32   `json:"pid"`
+	Name   string  `json:"name"`
+	CPU    float64 `json:"cpu"`
+	Memory uint64  `json:"memory"` // RSS in bytes
+}
+
+func (m *Manager) handleSystemStats(w http.ResponseWriter, r *http.Request) {
+	if m.authenticate(r) == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 1. Get total CPU usage
+	cpuPercent, err := cpu.Percent(time.Second, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Get processes
+	procs, err := process.Processes()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var procInfos []ProcessInfo
+	for _, p := range procs {
+		n, err := p.Name()
+		if err != nil {
+			continue
+		}
+
+		c, err := p.CPUPercent()
+		if err != nil {
+			continue
+		}
+
+		m, err := p.MemoryInfo()
+		if err != nil {
+			continue
+		}
+
+		// Filter: only show processes with > 0.1% CPU or specific interest
+		if c > 0.1 {
+			procInfos = append(procInfos, ProcessInfo{
+				PID:    p.Pid,
+				Name:   n,
+				CPU:    c,
+				Memory: m.RSS,
+			})
+		}
+	}
+
+	// Sort by CPU desc
+	sort.Slice(procInfos, func(i, j int) bool {
+		return procInfos[i].CPU > procInfos[j].CPU
+	})
+
+	// Limit to top 10
+	if len(procInfos) > 10 {
+		procInfos = procInfos[:10]
+	}
+
+	resp := SystemStats{
+		CPUUsage:  cpuPercent[0],
+		Processes: procInfos,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }

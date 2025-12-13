@@ -23,26 +23,6 @@
         {
             "type": "wechat",
             "self_id": 123456789
-        },
-        {
-            "type": "wxwork",
-            "corpid": "YOUR_CORP_ID",
-            "corpsecret": "YOUR_CORP_SECRET",
-            "agentid": 1000001
-        },
-        {
-            "type": "dingtalk",
-            "access_token": "YOUR_DINGTALK_ACCESS_TOKEN",
-            "secret": "YOUR_DINGTALK_SECRET_OR_EMPTY"
-        },
-        {
-            "type": "feishu",
-            "webhook_url": "YOUR_FEISHU_WEBHOOK_URL",
-            "secret": "YOUR_FEISHU_SECRET_OR_EMPTY"
-        },
-        {
-            "type": "telegram",
-            "token": "YOUR_TELEGRAM_BOT_TOKEN"
         }
     ]
 }

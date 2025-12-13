@@ -187,6 +187,9 @@ class OneBotDriver:
                 send_tasks = []
                 for ws in list(self.clients):
                     try:
+                        # Log sending (truncated)
+                        evt_type = event.get('post_type', 'unknown')
+                        print(f"[Driver] Push {evt_type} to {getattr(ws, 'remote_address', 'unknown')}")
                         send_tasks.append(asyncio.create_task(ws.send(message)))
                     except Exception as e:
                         print(f"[Driver] Error preparing send: {e}")
@@ -194,6 +197,9 @@ class OneBotDriver:
                 
                 if send_tasks:
                     await asyncio.gather(*send_tasks, return_exceptions=True)
+            else:
+                 # Log if no clients connected
+                 print(f"[Driver] Event dropped (No clients): {event.get('post_type')}")
             
             self._event_queue.task_done()
 
@@ -202,6 +208,9 @@ class OneBotDriver:
         try:
             async for msg in ws:
                 try:
+                    # Log received message
+                    print(f"[Driver] Recv from {getattr(ws, 'remote_address', 'unknown')}: {str(msg)[:200]}")
+                    
                     data = json.loads(msg)
                     if "action" in data:
                         # Execute Action

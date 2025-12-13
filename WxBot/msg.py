@@ -129,6 +129,7 @@ class msg():
     def replace_face_qq(m):
         return msg.get_face_wx(m.group(1))
     
+    @staticmethod
     def cq_to_wx_face(text: str) -> str:
         # 构建编号 -> 微信名称 映射
         face_map = {f[0]: f[2][1:] for f in msg.qq_face_value}
