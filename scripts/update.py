@@ -11,11 +11,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 配置信息 (与 deploy.py 保持一致)
 SERVER_IP = "192.168.0.167"
 USERNAME = "derlin"
-REMOTE_DEPLOY_DIR = "/opt/wxbot"
+REMOTE_DEPLOY_DIR = "/opt/BotMatrix"
 REMOTE_TMP_DIR = "/tmp"
 
 # 是否使用 sudo
-USE_SUDO = False
+USE_SUDO = True
 SUDO_CMD = "sudo " if USE_SUDO else ""
 
 def run_command(cmd):
@@ -42,21 +42,15 @@ def main():
     files_to_upload = args.files
     if not files_to_upload:
         print("No files specified. Auto-detecting project files...")
-        # 获取根目录下的所有 .py 文件
-        files_to_upload = [f for f in os.listdir('.') if f.endswith('.py')]
         
-        # 添加关键目录和配置文件
+        # 主要项目目录和文件
         additional_items = [
-            'bots', 
-            'plugins', 
-            'tools', 
-            'scripts',
-            'docs',
-            'sql',
-            'Dockerfile', 
+            'WxBot',        # Python Worker & Core
+            'BotNexus',     # Go Manager
+            'scripts',      # 运维脚本
+            'docs',         # 文档
             'docker-compose.yml', 
-            'requirements.txt', 
-            'config.json'
+            'README.md'
         ]
         
         for item in additional_items:
@@ -109,6 +103,12 @@ def main():
 
     # 4. 服务器端解压并部署
     print("\n[Step 3/4] Extracting on server...")
+    
+    # 确保远程目录存在
+    ensure_dir_cmd = f"sudo mkdir -p {REMOTE_DEPLOY_DIR} && sudo chown {USERNAME}:{USERNAME} {REMOTE_DEPLOY_DIR}"
+    # 这里我们直接执行，如果需要输入密码，-t 会处理
+    run_command(f'ssh -t {USERNAME}@{SERVER_IP} "{ensure_dir_cmd}"')
+
     # 命令逻辑：解压到临时目录 -> 移动/覆盖到部署目录 -> 设置权限 -> 清理压缩包
     # 使用 tar -mxzf 覆盖解压
     remote_cmds = [
@@ -126,8 +126,10 @@ def main():
 
     # 5. 重启容器
     if args.restart:
-        print("\n[Step 4/4] Restarting wxbot container...")
-        restart_cmd = f'ssh -t {USERNAME}@{SERVER_IP} "cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose restart wxbot"'
+        print("\n[Step 4/4] Rebuilding and Restarting containers...")
+        # 因为代码被打包进镜像，必须重新构建才能生效
+        # 使用 up -d --build 可以智能构建并重启
+        restart_cmd = f'ssh -t {USERNAME}@{SERVER_IP} "cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose up -d --build"'
         run_command(restart_cmd)
         print("\nUpdate and Restart SUCCESS!")
     else:
