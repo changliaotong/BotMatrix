@@ -1,0 +1,35 @@
+version: '3.8'
+
+networks:
+  default:
+    external:
+      name: botmatrix_net
+
+services:
+  # 2. 微信机器人 Worker
+  wxbot-worker:
+    build: 
+      context: ./WxBot
+    container_name: botmatrix-worker-wx
+    restart: always
+    ports:
+      - "3111:3001" # Expose Positive WebSocket Port
+      - "5005:5000" # WebUI Port
+    volumes:
+      - ./WxBot/temp:/app/temp # 保存登录session和二维码
+    environment:
+      - TZ=Asia/Shanghai
+      # Reverse WS: Connect to Manager(s)
+      # Can be single URL or comma-separated list
+      # Default: Try to connect to BotNexus Manager
+      - MANAGER_URL=${MANAGER_URL:-ws://botmatrix-manager:3001}
+      # - WS_URLS=["ws://192.168.0.100:8080"] # Alternative for multiple upstreams
+      
+      # Positive WS: Listen for connections
+      - WS_ENABLE=${WS_ENABLE:-true}
+      - WS_HOST=0.0.0.0
+      - WS_PORT=3001
+      
+      - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
+      - WX_QR_MODE=tty # Enable terminal QR code for docker logs
+    command: ["python", "driver.py"]

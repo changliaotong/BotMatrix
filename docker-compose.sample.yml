@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  wxbot:
+    build: .
+    container_name: wxbot
+    restart: unless-stopped
+    ports:
+      # 映射需要的端口，根据 config.json 中的配置调整
+      # 改用 3111-3113
+      - "3111:3001"
+      - "3112:3002"
+      - "3113:3003"
+      # WebUI 管理后台端口 (用于扫码登录)
+      - "5000:5000"
+    volumes:
+      # 挂载当前目录代码到容器 /app，方便热更和调试
+      - ./:/app
+      # 挂载配置文件 (其实已被上面的 ./:/app 包含，但保留也无妨)
+      - ./config.json:/app/config.json
+    environment:
+      # 数据库配置
+      - DB_SERVER=${DB_SERVER:-127.0.0.1}
+      - DB_NAME=${DB_NAME:-wxbot}
+      - DB_USER=${DB_USER:-sa}
+      - DB_PASSWORD=${DB_PASSWORD:-your_password}
+      # 设置时区
+      - TZ=Asia/Shanghai
+    # 如果数据库在宿主机上，可能需要 host 网络模式或使用 host.docker.internal
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

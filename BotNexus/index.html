@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WXBot Manager (Go)</title>
+    <!-- Use Staticfile CDN (Reliable in China) -->
+    <link href="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.staticfile.org/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
+    <script src="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.staticfile.org/Chart.js/3.7.1/chart.min.js"></script>
+    <style>
+        :root {
+            --bg-body: #f8f9fa;
+            --bg-sidebar: #ffffff;
+            --bg-card: #ffffff;
+            --text-main: #212529;
+            --text-muted: #6c757d;
+            --border-color: #dee2e6;
+            --primary-color: #0d6efd;
+        }
+        body { background-color: var(--bg-body); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; }
+        .sidebar { height: 100vh; position: fixed; top: 0; left: 0; width: 250px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); padding-top: 20px; z-index: 1000; }
+        .sidebar a { color: var(--text-muted); padding: 12px 24px; display: block; text-decoration: none; border-left: 3px solid transparent; }
+        .sidebar a:hover, .sidebar a.active { color: var(--primary-color); background-color: rgba(13, 110, 253, 0.1); border-left-color: var(--primary-color); font-weight: 500; }
+        .main-content { margin-left: 250px; padding: 25px; }
+        .card { background-color: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 24px; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); border-radius: 0.75rem; }
+        .metric-value { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
+        .metric-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .log-box { background-color: #1e1e1e; color: #d4d4d4; font-family: monospace; padding: 15px; height: 500px; overflow-y: auto; border-radius: 0.5rem; font-size: 0.85rem; }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px; }
+        .log-time { color: #569cd6; margin-right: 10px; }
+        .log-level-INFO { color: #4ec9b0; }
+        .log-level-ERROR { color: #f44747; }
+        .log-level-DEBUG { color: #dcdcaa; }
+
+        /* Mobile Responsive */
+        .mobile-nav { display: none; }
+        .overlay { display: none; }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+                box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding-top: 80px; /* Space for navbar */
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            .mobile-nav {
+                display: flex;
+                position: fixed;
+                top: 0; left: 0; right: 0;
+                height: 60px;
+                background: #fff;
+                border-bottom: 1px solid var(--border-color);
+                z-index: 900;
+                align-items: center;
+                padding: 0 15px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            .overlay {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+            }
+            .overlay.show {
+                display: block;
+            }
+            
+            /* Group Management Mobile */
+            .group-manage-container {
+                height: auto !important;
+            }
+            .group-manage-col {
+                height: 70vh !important;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">System Login</h5>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="loginUser" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" id="loginPass" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Login</button>
+                        </div>
+                    </form>
+                    <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Nav -->
+    <div class="mobile-nav">
+        <button class="btn btn-outline-secondary me-3" onclick="toggleSidebar()">
+            <i class="bi bi-list fs-4"></i>
+        </button>
+        <h5 class="m-0">WXBot Go</h5>
+    </div>
+    
+    <!-- Overlay -->
+    <div class="overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Stats Modal -->
+    <div class="modal fade" id="statsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="statsModalTitle">统计详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-light sticky-top" style="top: 0">
+                            <tr>
+                                <th scope="col" width="60">#</th>
+                                <th scope="col" id="statsModalNameHeader">名称</th>
+                                <th scope="col" width="100" class="text-end">数量</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statsModalBody">
+                            <!-- Data -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="px-3 mb-4">
+            <h4>🚀 WXBot Go</h4>
+            <small class="text-muted">High Performance Manager</small>
+        </div>
+        
+        <!-- Bot Selector -->
+        <div class="px-3 mb-3">
+            <label class="text-muted small mb-2">当前操作机器人</label>
+            <select class="form-select form-select-sm bg-dark text-white border-secondary" id="global-bot-selector" onchange="onBotChange()">
+                <option value="" disabled selected>等待连接...</option>
+            </select>
+        </div>
+
+        <nav class="nav flex-column">
+            <a href="#dashboard" class="nav-link active" onclick="showTab('dashboard')"><i class="bi bi-speedometer2"></i> 仪表盘</a>
+            <a href="#groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> 群组管理</a>
+            <a href="#bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> 机器人列表</a>
+            <a href="#events" class="nav-link" onclick="showTab('events')"><i class="bi bi-chat-dots"></i> 实时消息</a>
+            <a href="#logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> 系统日志</a>
+            <a href="#debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> 接口调试</a>
+            <a href="javascript:void(0)" class="nav-link text-danger mt-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i> 退出登录</a>
+        </nav>
+    </div>
+
+    <div class="main-content">
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content">
+            <h2 class="mb-4">仪表盘</h2>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary me-3">
+                                <i class="bi bi-robot fs-2"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small">在线机器人</div>
+                                <div class="fs-2 fw-bold" id="metric-bots">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success me-3">
+                                <i class="bi bi-cpu fs-2"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small">系统内存</div>
+                                <div class="fs-2 fw-bold" id="metric-mem">0 MB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info me-3">
+                                <i class="bi bi-activity fs-2"></i>
+                            </div>
+                            <div>
+                                <div class="text-muted small">Goroutines</div>
+                                <div class="fs-2 fw-bold" id="metric-goroutines">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-8">
+                     <div class="card mb-4">
+                        <div class="card-header">
+                            内存趋势
+                        </div>
+                        <div class="card-body">
+                            <canvas id="memChart" height="100"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span>🏆 今日活跃群组</span>
+                                    <div>
+                                        <button class="btn btn-sm btn-link text-decoration-none p-0 me-2" onclick="showAllStats('Group')">更多</button>
+                                        <span class="badge bg-primary rounded-pill">Top 5</span>
+                                    </div>
+                                </div>
+                                <ul class="list-group list-group-flush" id="top-groups">
+                                    <li class="list-group-item text-muted text-center">暂无数据</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span>🗣️ 今日龙王</span>
+                                    <div>
+                                        <button class="btn btn-sm btn-link text-decoration-none p-0 me-2" onclick="showAllStats('User')">更多</button>
+                                        <span class="badge bg-warning text-dark rounded-pill">Top 5</span>
+                                    </div>
+                                </div>
+                                <ul class="list-group list-group-flush" id="top-users">
+                                    <li class="list-group-item text-muted text-center">暂无数据</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            快捷操作
+                        </div>
+                        <div class="card-body">
+                            <button class="btn btn-outline-primary me-2" onclick="callSystemAction('reload_plugins')">
+                                <i class="bi bi-arrow-repeat"></i> 重载插件
+                            </button>
+                            <button class="btn btn-outline-secondary me-2" onclick="callSystemAction('clean_logs')">
+                                <i class="bi bi-trash"></i> 清理日志
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            最近活动
+                        </div>
+                        <div class="card-body">
+                            <div id="recent-logs" class="log-box" style="height: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Groups Tab -->
+        <div id="tab-groups" class="tab-content" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>群组管理</h2>
+                <button class="btn btn-primary" onclick="refreshGroupList()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新列表
+                </button>
+            </div>
+            
+            <div class="row group-manage-container" style="height: calc(100vh - 150px);">
+                <!-- Left: Group List -->
+                <div class="col-md-4 h-100 group-manage-col">
+                    <div class="card h-100 d-flex flex-column">
+                        <div class="card-header bg-white">
+                            <input type="text" class="form-control mb-2" id="group-search" placeholder="搜索群组..." onkeyup="filterGroups()">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">排序:</small>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-secondary active" onclick="sortGroups('name')" id="btn-sort-group-name">名称</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortGroups('count')" id="btn-sort-group-count">人数</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortGroups('id')" id="btn-sort-group-id">ID</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0" style="overflow-y: auto;">
+                            <div class="list-group list-group-flush" id="group-list">
+                                <div class="text-center p-4 text-muted">请先选择机器人并刷新</div>
+                            </div>
+                        </div>
+                        <div class="card-footer text-muted small" id="group-count">
+                            共 0 个群组
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Group Details -->
+                <div class="col-md-8 h-100 group-manage-col">
+                    <div class="card h-100" id="group-detail-empty">
+                        <div class="card-body d-flex align-items-center justify-content-center text-muted">
+                            <div class="text-center">
+                                <i class="bi bi-chat-square-text fs-1"></i>
+                                <p class="mt-2">请从左侧选择一个群组查看详情</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card h-100 d-flex flex-column" id="group-detail-content" style="display: none !important;">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0" id="current-group-name">群组名称</h5>
+                            <span class="badge bg-secondary" id="current-group-id">123456</span>
+                        </div>
+                        
+                        <!-- Chat/Members Area -->
+                        <div class="card-body d-flex flex-column p-0" style="overflow: hidden;">
+                            <ul class="nav nav-tabs nav-justified" id="group-tabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members-view" type="button">成员列表</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions-view" type="button">快捷操作</button>
+                                </li>
+                            </ul>
+                            
+                            <div class="tab-content flex-grow-1" style="overflow-y: auto;">
+                                <!-- Members View -->
+                                <div class="tab-pane fade show active p-0" id="members-view">
+                                    <div class="p-2 border-bottom bg-light">
+                                        <input type="text" class="form-control form-control-sm" id="member-search" placeholder="搜索成员(昵称/名片/ID)..." onkeyup="renderMembers()">
+                                    </div>
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th style="cursor: pointer;" onclick="sortMembers('card')">昵称/群名片 <i class="bi bi-sort-alpha-down" id="sort-icon-card"></i></th>
+                                                <th style="cursor: pointer;" onclick="sortMembers('id')">QQ/WXID <i class="bi" id="sort-icon-id"></i></th>
+                                                <th style="cursor: pointer;" onclick="sortMembers('role')">角色 <i class="bi" id="sort-icon-role"></i></th>
+                                                <th style="cursor: pointer;" onclick="sortMembers('time')">最后发言 <i class="bi" id="sort-icon-time"></i></th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="member-list-body">
+                                            <!-- Members here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Actions View -->
+                                <div class="tab-pane fade p-3" id="actions-view">
+                                    <div class="mb-3">
+                                        <label class="form-label">发送群消息</label>
+                                        <textarea class="form-control" id="group-msg-input" rows="4" placeholder="在此输入消息内容..."></textarea>
+                                        <button class="btn btn-primary mt-2" onclick="sendGroupMsg()">
+                                            <i class="bi bi-send"></i> 发送
+                                        </button>
+                                    </div>
+                                    <hr>
+                                    <div class="mb-3">
+                                        <label class="form-label text-danger">危险操作</label>
+                                        <div>
+                                            <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()">退出该群</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bots Tab -->
+        <div id="tab-bots" style="display:none;">
+            <h4 class="mb-4">机器人列表</h4>
+            <div class="row" id="bot-list-container">
+                <!-- Bot Cards -->
+            </div>
+        </div>
+
+        <!-- Real-time Events -->
+        <div id="tab-events" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0">实时消息监控</h4>
+                <div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="clearEvents()">清空</button>
+                    <div class="form-check form-switch d-inline-block ms-2">
+                        <input class="form-check-input" type="checkbox" id="auto-scroll-events" checked>
+                        <label class="form-check-label" for="auto-scroll-events">自动滚动</label>
+                    </div>
+                    <span id="ws-status" class="badge bg-secondary ms-2">Disconnected</span>
+                </div>
+            </div>
+            <div class="log-box" id="event-container" style="background-color: #2b2b2b; height: 600px;">
+                <!-- Events -->
+                <div class="text-muted text-center mt-5">等待事件连接...</div>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div id="tab-logs" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0">系统日志</h4>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogs()">刷新</button>
+                    <div class="form-check form-switch d-inline-block ms-2">
+                        <input class="form-check-input" type="checkbox" id="auto-refresh-logs" checked>
+                        <label class="form-check-label" for="auto-refresh-logs">自动刷新</label>
+                    </div>
+                </div>
+            </div>
+            <div class="log-box" id="log-container">
+                <!-- Logs -->
+            </div>
+        </div>
+
+        <!-- Debug -->
+        <div id="tab-debug" style="display:none;">
+            <h4 class="mb-4">接口调试</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">发送 Action</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Bot ID</label>
+                                <input type="text" class="form-control" id="action-bot-id" placeholder="留空则随机选择">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Action Name</label>
+                                <input type="text" class="form-control" id="action-name" value="send_group_msg">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Params (JSON)</label>
+                                <textarea class="form-control font-monospace" id="action-params" rows="5">{"group_id": 123456, "message": "Hello from Go Manager"}</textarea>
+                            </div>
+                            <button class="btn btn-primary" onclick="sendAction()">发送请求</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">响应结果</div>
+                        <div class="card-body bg-light">
+                            <pre id="action-result" class="mb-0">等待请求...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Auth & Login ---
+        let authToken = localStorage.getItem('wxbot_token');
+        let authRole = localStorage.getItem('wxbot_role');
+        let currentBotId = '';
+
+        // Check Auth on Load
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!authToken) {
+                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                loginModal.show();
+            } else {
+                startApp();
+            }
+        });
+
+        function startApp() {
+            initWebSocket();
+            // Load initial data
+            updateStats();
+            fetchBots();
+            updateChatStats();
+            
+            // Start Timers
+            setInterval(updateStats, 2000);
+            setInterval(updateChatStats, 5000);
+            setInterval(updateBots, 5000);
+        }
+
+        // Handle Login Submit
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUser').value;
+            const password = document.getElementById('loginPass').value;
+            const errorBox = document.getElementById('loginError');
+            
+            errorBox.classList.add('d-none');
+            
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                
+                if (!res.ok) {
+                    throw new Error('Login failed: ' + res.statusText);
+                }
+                
+                const data = await res.json();
+                authToken = data.token;
+                authRole = data.role;
+                localStorage.setItem('wxbot_token', authToken);
+                localStorage.setItem('wxbot_role', authRole);
+                
+                // Hide Modal
+                const loginModalEl = document.getElementById('loginModal');
+                const modal = bootstrap.Modal.getInstance(loginModalEl);
+                modal.hide();
+                
+                // Init
+                startApp();
+                
+            } catch (err) {
+                errorBox.innerText = err.message;
+                errorBox.classList.remove('d-none');
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('wxbot_token');
+            localStorage.removeItem('wxbot_role');
+            location.reload();
+        }
+
+        // --- Navigation ---
+        // Toggle Sidebar for Mobile
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            sidebar.classList.toggle('show');
+            overlay.classList.toggle('show');
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.main-content > div[id^="tab-"]').forEach(el => el.style.display = 'none');
+            document.getElementById('tab-' + tabId).style.display = 'block';
+            document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`).classList.add('active');
+            
+            if (tabId === 'logs') fetchLogs();
+            if (tabId === 'bots') fetchBots();
+
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('sidebar-overlay');
+                sidebar.classList.remove('show');
+                overlay.classList.remove('show');
+            }
+        }
+
+        // --- Dashboard & Stats ---
+        let memChart = null;
+        try {
+            const ctx = document.getElementById('memChart');
+            if (ctx) {
+                memChart = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Memory Alloc (MB)',
+                            data: [],
+                            borderColor: '#0d6efd',
+                            tension: 0.4,
+                            fill: true,
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Chart init error:", e);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function updateStats() {
+            if (!authToken) return;
+            fetch('/api/stats', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (document.getElementById('metric-goroutines')) {
+                        document.getElementById('metric-goroutines').innerText = data.goroutines;
+                    }
+                    if (document.getElementById('metric-mem')) {
+                        document.getElementById('metric-mem').innerText = formatBytes(data.memory_alloc);
+                    }
+                    if (document.getElementById('metric-bots')) {
+                        document.getElementById('metric-bots').innerText = data.bot_count;
+                    }
+
+                    // Update Chart
+                    if (memChart) {
+                        const now = new Date().toLocaleTimeString();
+                        if (memChart.data.labels.length > 20) {
+                            memChart.data.labels.shift();
+                            memChart.data.datasets[0].data.shift();
+                        }
+                        memChart.data.labels.push(now);
+                        memChart.data.datasets[0].data.push(data.memory_alloc / 1024 / 1024);
+                        memChart.update();
+                    }
+                })
+                .catch(e => console.error("Update stats error:", e));
+        }
+        setInterval(updateStats, 2000);
+
+        // --- Bots ---
+        function fetchBots() {
+            if (!authToken) return;
+            fetch('/api/bots', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+                .then(r => r.json())
+                .then(bots => {
+                    const container = document.getElementById('bot-list-container');
+                    if (bots.length === 0) {
+                        container.innerHTML = '<div class="col-12"><div class="alert alert-warning">暂无连接的机器人</div></div>';
+                        return;
+                    }
+                    container.innerHTML = bots.map(bot => `
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card p-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                                        <i class="bi bi-robot fs-4"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-0">${bot.nickname || bot.self_id}</h5>
+                                        <small class="text-muted">ID: ${bot.self_id}</small>
+                                    </div>
+                                </div>
+                                <div class="border-top pt-2 mt-2 text-muted small">
+                                    <div>Remote: ${bot.remote_addr}</div>
+                                    <div>Status: <span class="text-success">Online</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                });
+        }
+
+        // --- Logs ---
+        function fetchLogs() {
+            if (!authToken) return;
+            fetch('/api/logs', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+                .then(r => r.json())
+                .then(logs => {
+                    const container = document.getElementById('log-container');
+                    container.innerHTML = logs.map(log => `
+                        <div class="log-entry">
+                            <span class="log-time">[${log.time}]</span>
+                            <span class="log-level-${log.level}">${log.level}</span>: 
+                            ${log.message}
+                        </div>
+                    `).join('');
+                    // Scroll to bottom
+                    container.scrollTop = container.scrollHeight;
+                });
+        }
+        setInterval(() => {
+            if (document.getElementById('tab-logs').style.display !== 'none' && 
+                document.getElementById('auto-refresh-logs').checked) {
+                fetchLogs();
+            }
+        }, 2000);
+
+        // --- Debug/Actions ---
+        function sendAction() {
+            const botId = document.getElementById('action-bot-id').value;
+            const action = document.getElementById('action-name').value;
+            let params = {};
+            try {
+                params = JSON.parse(document.getElementById('action-params').value);
+            } catch (e) {
+                alert('Params JSON 格式错误');
+                return;
+            }
+
+            fetch('/api/action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({
+                    bot_id: botId,
+                    action: action,
+                    params: params
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                document.getElementById('action-result').innerText = JSON.stringify(res, null, 2);
+            })
+            .catch(err => {
+                document.getElementById('action-result').innerText = 'Error: ' + err;
+            });
+        }
+
+        // --- WebSocket Subscriber ---
+        let wsSubscriber = null;
+        const pendingRequests = new Map(); // echo -> {resolve, reject, timeout}
+
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            let wsUrl = `${protocol}//${window.location.hostname}:3001/?role=subscriber`;
+            if (authToken) {
+                wsUrl += `&token=${encodeURIComponent(authToken)}`;
+            }
+            
+            wsSubscriber = new WebSocket(wsUrl);
+            
+            wsSubscriber.onopen = () => {
+                document.getElementById('ws-status').className = 'badge bg-success ms-2';
+                document.getElementById('ws-status').innerText = 'Connected';
+                addEventLog({type: 'system', message: 'WebSocket 连接成功'});
+                
+                // Refresh bots when connected
+                updateBots();
+            };
+            
+            wsSubscriber.onclose = () => {
+                document.getElementById('ws-status').className = 'badge bg-danger ms-2';
+                document.getElementById('ws-status').innerText = 'Disconnected';
+                addEventLog({type: 'system', message: 'WebSocket 连接断开，3秒后重连...'});
+                setTimeout(initWebSocket, 3000);
+            };
+            
+            wsSubscriber.onmessage = (evt) => {
+                try {
+                    const data = JSON.parse(evt.data);
+                    
+                    // Handle API Responses
+                    if (data.echo && pendingRequests.has(data.echo)) {
+                        const req = pendingRequests.get(data.echo);
+                        clearTimeout(req.timeout);
+                        pendingRequests.delete(data.echo);
+                        req.resolve(data);
+                        // Optional: Don't log API responses to event log to reduce noise
+                        // return; 
+                    }
+
+                    // Auto-refresh bot list on connection/nickname update
+                    if (data.echo === 'internal_get_login_info' || 
+                        (data.post_type === 'meta_event' && data.meta_event_type === 'lifecycle')) {
+                        setTimeout(updateBots, 500); // Wait a bit for state to settle
+                    }
+
+                    if (data.post_type === 'log') {
+                        return;
+                    }
+                    addEventLog(data);
+                } catch (e) {
+                    console.error('WS Parse Error', e);
+                }
+            };
+        }
+
+        // --- API Helper ---
+        async function callBotApi(action, params = {}) {
+            if (!currentBotId) {
+                const selector = document.getElementById('global-bot-selector');
+                if (selector.value) {
+                    currentBotId = selector.value;
+                } else {
+                    throw new Error("请先选择一个机器人");
+                }
+            }
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const res = await fetch('/api/action', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    bot_id: currentBotId,
+                    action: action,
+                    params: params
+                })
+            });
+            
+            if (res.status === 401) {
+                localStorage.removeItem('wxbot_token');
+                location.reload();
+                throw new Error("Unauthorized");
+            }
+
+            const result = await res.json();
+            if (result.error) throw new Error(result.error);
+            if (!result.echo) return result; 
+
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    pendingRequests.delete(result.echo);
+                    reject(new Error("Request timed out (10s)"));
+                }, 10000);
+                
+                pendingRequests.set(result.echo, { resolve, reject, timeout });
+            });
+        }
+
+        // --- Global Bot Selector ---
+        function onBotChange() {
+            currentBotId = document.getElementById('global-bot-selector').value;
+            // Clear group view
+            document.getElementById('group-list').innerHTML = '<div class="text-center p-4 text-muted">切换机器人中...</div>';
+            document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
+            document.getElementById('group-detail-empty').style.display = 'block';
+            
+            // Auto refresh groups
+            setTimeout(refreshGroupList, 500);
+        }
+
+        function updateBots() {
+            const headers = {};
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            fetch('/api/bots', { headers })
+                .then(r => {
+                    if (r.status === 401) {
+                        localStorage.removeItem('wxbot_token');
+                        location.reload();
+                        return [];
+                    }
+                    return r.json();
+                })
+                .then(data => {
+                    // Update metrics
+                    if (document.getElementById('metric-bots')) {
+                        document.getElementById('metric-bots').innerText = data.length;
+                    }
+
+                    // Update Bot List Table (if exists, might be different ID in bots tab)
+                    const container = document.getElementById('bot-list-container');
+                    if (container) {
+                        if (data.length === 0) {
+                            container.innerHTML = '<div class="col-12"><div class="alert alert-warning">暂无连接的机器人</div></div>';
+                        } else {
+                            container.innerHTML = data.map(bot => `
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="card p-3">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                                                <i class="bi bi-robot fs-4"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="mb-0">${bot.nickname || bot.self_id}</h5>
+                                                <small class="text-muted">ID: ${bot.self_id}</small>
+                                            </div>
+                                        </div>
+                                        <div class="border-top pt-2 mt-2 text-muted small">
+                                            <div>Remote: ${bot.remote_addr}</div>
+                                            <div>Status: <span class="text-success">Online</span></div>
+                                        </div>
+                                        <div class="mt-2 text-end">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="setGlobalBot('${bot.self_id}')">管理此机器人</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('');
+                        }
+                    }
+
+                    // Update Global Selector
+                    const selector = document.getElementById('global-bot-selector');
+                    const currentVal = selector.value;
+                    
+                    if (data.length === 0) {
+                        selector.innerHTML = '<option value="" disabled selected>无在线机器人</option>';
+                    } else {
+                        selector.innerHTML = data.map(bot => 
+                            `<option value="${bot.self_id}">${bot.nickname || 'Bot'} (${bot.self_id})</option>`
+                        ).join('');
+                        
+                        // Restore selection or select first
+                        if (currentVal && data.find(b => b.self_id === currentVal)) {
+                            selector.value = currentVal;
+                        } else {
+                            // If currentVal is not in the list (e.g. initial empty string or disconnected bot)
+                            // We select the first one by default
+                            selector.value = data[0].self_id;
+                            currentBotId = data[0].self_id;
+                        }
+                    }
+                })
+                .catch(e => console.error("Update bots error:", e));
+        }
+        
+        function setGlobalBot(id) {
+            const selector = document.getElementById('global-bot-selector');
+            selector.value = id;
+            onBotChange();
+            showTab('groups'); // Jump to groups tab
+        }
+
+        // --- Group Management ---
+        let currentGroups = [];
+        let currentGroupId = 0;
+        let groupSortBy = 'name'; // name, count, id
+        let groupSortAsc = true;
+
+        let currentMembers = [];
+        let memberSortBy = 'card'; // card, id, role, time
+        let memberSortAsc = true;
+
+        async function refreshGroupList() {
+            const listEl = document.getElementById('group-list');
+            listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+            
+            try {
+                const response = await callBotApi('get_group_list');
+                const groups = response.data || [];
+                currentGroups = groups;
+                renderGroups(groups);
+                document.getElementById('group-count').innerText = `共 ${groups.length} 个群组`;
+            } catch (e) {
+                listEl.innerHTML = `<div class="text-center p-4 text-danger">获取失败: ${e.message}</div>`;
+            }
+        }
+
+        function sortGroups(field) {
+            if (groupSortBy === field) {
+                groupSortAsc = !groupSortAsc;
+            } else {
+                groupSortBy = field;
+                groupSortAsc = true; // Default asc for new field
+                if (field === 'count') groupSortAsc = false; // Default desc for count
+            }
+            
+            // Update UI buttons
+            ['name', 'count', 'id'].forEach(f => {
+                const btn = document.getElementById(`btn-sort-group-${f}`);
+                if (f === groupSortBy) {
+                    btn.classList.add('active');
+                    btn.innerHTML = (f === 'name' ? '名称' : (f === 'count' ? '人数' : 'ID')) + (groupSortAsc ? ' ↑' : ' ↓');
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerHTML = (f === 'name' ? '名称' : (f === 'count' ? '人数' : 'ID'));
+                }
+            });
+
+            filterGroups(); // Re-render with sort
+        }
+
+        function renderGroups(groups) {
+            const listEl = document.getElementById('group-list');
+            if (groups.length === 0) {
+                listEl.innerHTML = '<div class="text-center p-4 text-muted">暂无群组</div>';
+                return;
+            }
+
+            // Sort logic
+            const sortedGroups = [...groups].sort((a, b) => {
+                let res = 0;
+                if (groupSortBy === 'name') {
+                    res = a.group_name.localeCompare(b.group_name, 'zh-CN');
+                } else if (groupSortBy === 'count') {
+                    res = a.member_count - b.member_count;
+                } else if (groupSortBy === 'id') {
+                    res = a.group_id - b.group_id;
+                }
+                return groupSortAsc ? res : -res;
+            });
+            
+            listEl.innerHTML = sortedGroups.map(g => `
+                <button class="list-group-item list-group-item-action ${g.group_id == currentGroupId ? 'active' : ''}" onclick="selectGroup(${g.group_id}, '${g.group_name}')">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1 text-truncate" style="max-width: 200px;">${g.group_name}</h6>
+                        <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">${g.member_count}人</small>
+                    </div>
+                    <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">ID: ${g.group_id}</small>
+                </button>
+            `).join('');
+        }
+
+        function filterGroups() {
+            const keyword = document.getElementById('group-search').value.toLowerCase();
+            const filtered = currentGroups.filter(g => 
+                g.group_name.toLowerCase().includes(keyword) || 
+                String(g.group_id).includes(keyword)
+            );
+            renderGroups(filtered);
+        }
+
+        async function selectGroup(groupId, groupName) {
+            currentGroupId = groupId;
+            document.getElementById('current-group-name').innerText = groupName;
+            document.getElementById('current-group-id').innerText = groupId;
+            
+            document.getElementById('group-detail-empty').style.display = 'none';
+            document.getElementById('group-detail-content').style.setProperty('display', 'flex', 'important');
+            
+            // Highlight selection
+            renderGroups(currentGroups.filter(g => {
+                const keyword = document.getElementById('group-search').value.toLowerCase();
+                return g.group_name.toLowerCase().includes(keyword) || String(g.group_id).includes(keyword);
+            }));
+
+            // Load members
+            loadGroupMembers(groupId);
+        }
+
+        async function loadGroupMembers(groupId) {
+            const tbody = document.getElementById('member-list-body');
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">加载中...</td></tr>';
+            
+            try {
+                const response = await callBotApi('get_group_member_list', { group_id: groupId });
+                currentMembers = response.data || [];
+                renderMembers();
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">加载失败: ${e.message}</td></tr>`;
+            }
+        }
+
+        function sortMembers(field) {
+            if (memberSortBy === field) {
+                memberSortAsc = !memberSortAsc;
+            } else {
+                memberSortBy = field;
+                memberSortAsc = true;
+                if (field === 'time') memberSortAsc = false; // Default desc for time
+            }
+
+            // Update Icons
+            ['card', 'id', 'role', 'time'].forEach(f => {
+                const icon = document.getElementById(`sort-icon-${f}`);
+                if (f === memberSortBy) {
+                    icon.className = memberSortAsc ? 'bi bi-sort-alpha-down' : 'bi bi-sort-alpha-down-alt';
+                    if (f === 'id' || f === 'time') icon.className = memberSortAsc ? 'bi bi-sort-numeric-down' : 'bi bi-sort-numeric-down-alt';
+                } else {
+                    icon.className = 'bi';
+                }
+            });
+
+            renderMembers();
+        }
+
+        function renderMembers() {
+            const tbody = document.getElementById('member-list-body');
+            const searchInput = document.getElementById('member-search');
+            const keyword = searchInput ? searchInput.value.toLowerCase() : '';
+
+            if (!currentMembers || currentMembers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">暂无成员</td></tr>';
+                return;
+            }
+
+            // Filter
+            const filteredMembers = currentMembers.filter(m => {
+                if (!keyword) return true;
+                const card = (m.card || '').toLowerCase();
+                const nick = (m.nickname || '').toLowerCase();
+                const uid = String(m.user_id);
+                return card.includes(keyword) || nick.includes(keyword) || uid.includes(keyword);
+            });
+            
+            if (filteredMembers.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="5" class="text-center">未找到匹配成员</td></tr>';
+                 return;
+            }
+
+            // Sort
+            const sortedMembers = [...filteredMembers].sort((a, b) => {
+                let res = 0;
+                if (memberSortBy === 'card') {
+                    const nameA = a.card || a.nickname || '';
+                    const nameB = b.card || b.nickname || '';
+                    res = nameA.localeCompare(nameB, 'zh-CN');
+                } else if (memberSortBy === 'id') {
+                    res = a.user_id - b.user_id;
+                } else if (memberSortBy === 'role') {
+                    const roleWeight = { 'owner': 3, 'admin': 2, 'member': 1 };
+                    res = (roleWeight[a.role] || 0) - (roleWeight[b.role] || 0);
+                } else if (memberSortBy === 'time') {
+                    res = (a.last_sent_time || 0) - (b.last_sent_time || 0);
+                }
+                return memberSortAsc ? res : -res;
+            });
+
+            tbody.innerHTML = sortedMembers.map(m => `
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <img src="https://q1.qlogo.cn/g?b=qq&nk=${m.user_id}&s=100" 
+                                 class="rounded-circle me-2" 
+                                 width="32" height="32" 
+                                 onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.card || m.nickname)}&background=random'"
+                                 alt="Avatar">
+                            <div>
+                                <div>${m.card || m.nickname}</div>
+                                ${m.card && m.card !== m.nickname ? `<small class="text-muted">${m.nickname}</small>` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td>${m.user_id}</td>
+                    <td>
+                        <span class="badge bg-${m.role === 'owner' ? 'warning' : (m.role === 'admin' ? 'success' : 'secondary')}">
+                            ${m.role}
+                        </span>
+                    </td>
+                    <td>
+                        <small class="text-muted">${m.last_sent_time ? new Date(m.last_sent_time * 1000).toLocaleString() : '-'}</small>
+                    </td>
+                    <td>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                操作
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="setCard(${currentGroupId}, ${m.user_id}, '${m.card || m.nickname}')">修改名片</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="banMember(${currentGroupId}, ${m.user_id})">禁言</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="unbanMember(${currentGroupId}, ${m.user_id})">解除禁言</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="kickMember(${currentGroupId}, ${m.user_id})">移除成员</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- Member Actions ---
+        function banMember(groupId, userId) {
+            const duration = prompt("请输入禁言时长(分钟)，0为解除禁言", "30");
+            if (duration === null) return;
+            const minutes = parseInt(duration);
+            if (isNaN(minutes)) {
+                alert("请输入有效的数字");
+                return;
+            }
+
+            callBotApi('set_group_ban', {
+                group_id: groupId,
+                user_id: userId,
+                duration: minutes * 60
+            }).then(() => {
+                alert(minutes > 0 ? '已禁言' : '已解除禁言');
+            }).catch(e => alert('操作失败: ' + e.message));
+        }
+
+        function unbanMember(groupId, userId) {
+            callBotApi('set_group_ban', {
+                group_id: groupId,
+                user_id: userId,
+                duration: 0
+            }).then(() => {
+                alert('已解除禁言');
+            }).catch(e => alert('操作失败: ' + e.message));
+        }
+
+        function setCard(groupId, userId, currentCard) {
+            const newCard = prompt("请输入新的群名片", currentCard);
+            if (newCard === null) return;
+
+            callBotApi('set_group_card', {
+                group_id: groupId,
+                user_id: userId,
+                card: newCard
+            }).then(() => {
+                alert('已修改名片');
+                loadGroupMembers(groupId); // Reload to show change
+            }).catch(e => alert('操作失败: ' + e.message));
+        }
+
+        async function sendGroupMsg() {
+            const input = document.getElementById('group-msg-input');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            try {
+                await callBotApi('send_group_msg', {
+                    group_id: currentGroupId,
+                    message: msg
+                });
+                alert('发送成功');
+                input.value = '';
+                addEventLog({type: 'system', message: `发送群消息到 [${currentGroupId}]: ${msg}`});
+            } catch (e) {
+                alert('发送失败: ' + e.message);
+            }
+        }
+        
+        function kickMember(groupId, userId) {
+            if (!confirm(`确定要移除成员 ${userId} 吗？`)) return;
+            callBotApi('set_group_kick', {
+                group_id: groupId,
+                user_id: userId
+            }).then(() => {
+                alert('已移除');
+                loadGroupMembers(groupId);
+            }).catch(e => alert('操作失败: ' + e.message));
+        }
+        
+        function leaveGroup() {
+            if (!confirm(`确定要退出群组 ${currentGroupId} 吗？此操作不可逆！`)) return;
+             callBotApi('set_group_leave', {
+                group_id: currentGroupId
+            }).then(() => {
+                alert('已退出');
+                refreshGroupList();
+                document.getElementById('group-detail-empty').style.display = 'block';
+                document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
+            }).catch(e => alert('操作失败: ' + e.message));
+        }
+
+        // --- System Actions ---
+        async function callSystemAction(action) {
+            if (action === 'clean_logs') {
+                document.getElementById('recent-logs').innerHTML = '';
+                addEventLog({type: 'system', message: '前端日志已清理'});
+                return;
+            }
+            
+            try {
+                const res = await callBotApi(action);
+                alert('操作成功: ' + JSON.stringify(res.data));
+            } catch (e) {
+                alert('操作失败: ' + e.message);
+            }
+        }
+
+        function addEventLog(data) {
+            const container = document.getElementById('event-container');
+            if (container.children.length === 1 && container.children[0].classList.contains('text-muted')) {
+                container.innerHTML = '';
+            }
+            
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.style.borderBottom = '1px solid #444';
+            div.style.padding = '8px 0';
+            
+            const time = new Date().toLocaleTimeString();
+            
+            // Format Content
+            let content = '';
+            if (data.type === 'system') {
+                content = `<span class="text-info">[SYSTEM]</span> ${data.message}`;
+            } else if (data.post_type === 'message' || data.post_type === 'message_sent') {
+                const sender = data.sender ? (data.sender.nickname || data.sender.card || data.user_id) : data.user_id;
+                const group = data.group_id ? `[群:${data.group_id}] ` : '[私聊] ';
+                let msg = data.message;
+                if (typeof msg !== 'string') {
+                    msg = JSON.stringify(msg);
+                }
+                content = `<span class="text-success">[MSG]</span> ${group}<span class="fw-bold text-warning">${sender}</span>: ${msg}`;
+            } else if (data.post_type === 'meta_event') {
+                if (data.meta_event_type === 'heartbeat') return; // Ignore heartbeat
+                content = `<span class="text-secondary">[META]</span> ${data.meta_event_type}`;
+            } else {
+                content = `<span class="text-muted">[EVENT]</span> <pre class="d-inline m-0" style="font-size:0.8em">${JSON.stringify(data)}</pre>`;
+            }
+            
+            div.innerHTML = `<span class="log-time">${time}</span> ${content}`;
+            container.appendChild(div);
+            
+            // Limit entries
+            if (container.children.length > 200) {
+                container.removeChild(container.firstChild);
+            }
+            
+            if (document.getElementById('auto-scroll-events').checked) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function clearEvents() {
+            document.getElementById('event-container').innerHTML = '<div class="text-muted text-center mt-5">等待事件连接...</div>';
+        }
+
+        // --- Periodic Updates ---
+        // Moved to startApp()
+        
+        let latestChatStats = {
+            group_stats: {},
+            user_stats: {},
+            group_names: {},
+            user_names: {}
+        };
+
+        function updateChatStats() {
+            if (!authToken) return;
+            fetch('/api/stats/chat', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+                .then(r => r.json())
+                .then(data => {
+                    latestChatStats = data;
+                    renderTopList('top-groups', data.group_stats, data.group_names, 'Group');
+                    renderTopList('top-users', data.user_stats, data.user_names, 'User');
+                })
+                .catch(e => console.error("Update chat stats error:", e));
+        }
+
+        function getDisplayName(id, names, type) {
+             if (names && names[id]) return names[id];
+             if (type === 'Group') {
+                 // Try to find in currentGroups loaded from bot
+                 const g = currentGroups.find(x => x.group_id == id);
+                 if (g) return g.group_name;
+             }
+             return `${type} ${id}`;
+        }
+
+        function renderTopList(elementId, stats, names, type) {
+            const list = document.getElementById(elementId);
+            if (!stats || Object.keys(stats).length === 0) {
+                list.innerHTML = '<li class="list-group-item text-muted text-center">暂无数据</li>';
+                return;
+            }
+
+            const sorted = Object.entries(stats)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5);
+
+            list.innerHTML = sorted.map(([id, count], index) => {
+                const name = getDisplayName(id, names, type);
+                // Optional: Fetch avatar if User
+                let avatar = '';
+                if (type === 'User') {
+                     avatar = `<img src="https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100" class="rounded-circle me-2" width="20" height="20" onerror="this.style.display='none'">`;
+                }
+
+                return `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div class="text-truncate" style="max-width: 70%;">
+                            <span class="badge bg-light text-dark me-2">#${index + 1}</span>
+                            ${avatar}
+                            <span title="${id}">${name}</span>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">${count}</span>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function showAllStats(type) {
+            const stats = type === 'Group' ? latestChatStats.group_stats : latestChatStats.user_stats;
+            const names = type === 'Group' ? latestChatStats.group_names : latestChatStats.user_names;
+            
+            document.getElementById('statsModalTitle').innerText = type === 'Group' ? '群组活跃统计' : '用户发言统计';
+            document.getElementById('statsModalNameHeader').innerText = type === 'Group' ? '群组名称' : '用户昵称';
+            
+            const tbody = document.getElementById('statsModalBody');
+            if (!stats || Object.keys(stats).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4">暂无数据</td></tr>';
+            } else {
+                const sorted = Object.entries(stats).sort(([, a], [, b]) => b - a);
+                tbody.innerHTML = sorted.map(([id, count], index) => {
+                    const name = getDisplayName(id, names, type);
+                    return `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td class="text-truncate" style="max-width: 300px;" title="${id}">${name} <small class="text-muted ms-1">(${id})</small></td>
+                            <td class="text-end">${count}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+            
+            new bootstrap.Modal(document.getElementById('statsModal')).show();
+        }
+    </script>
+</body>
+</html>

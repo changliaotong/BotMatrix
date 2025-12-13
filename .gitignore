@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+temp/
+.vs/
+.vscode/
+*.log
+
+# Configuration files (contain secrets)
+config.json
+.env
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+wxbot_deploy.zip
+botmatrix_deploy.zip
+
+# Go Binaries
+*.exe
+*.dll
+go_manager/manager
+BotNexus/manager

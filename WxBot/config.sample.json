@@ -1,0 +1,48 @@
+{
+    "admins": [
+        "wxid_placeholder_1"
+    ],
+    "database": {
+        "server": "127.0.0.1",
+        "name": "sz84_robot",
+        "user": "sa",
+        "password": "your_password"
+    },
+    "network": {
+        "ws_server": {
+            "name": "test",
+            "host": "0.0.0.0",
+            "port": 3001,
+            "heartbeat_interval": 5000,
+            "message_format": "string",
+            "report_self_message": true,
+            "force_push_event": true
+        }
+    },
+    "bots": [
+        {
+            "type": "wechat",
+            "self_id": 123456789
+        },
+        {
+            "type": "wxwork",
+            "corpid": "YOUR_CORP_ID",
+            "corpsecret": "YOUR_CORP_SECRET",
+            "agentid": 1000001
+        },
+        {
+            "type": "dingtalk",
+            "access_token": "YOUR_DINGTALK_ACCESS_TOKEN",
+            "secret": "YOUR_DINGTALK_SECRET_OR_EMPTY"
+        },
+        {
+            "type": "feishu",
+            "webhook_url": "YOUR_FEISHU_WEBHOOK_URL",
+            "secret": "YOUR_FEISHU_SECRET_OR_EMPTY"
+        },
+        {
+            "type": "telegram",
+            "token": "YOUR_TELEGRAM_BOT_TOKEN"
+        }
+    ]
+}
