@@ -8,7 +8,7 @@ import argparse
 DEFAULT_SERVER_IP = "192.168.0.167"
 DEFAULT_USERNAME = "derlin"
 REMOTE_TMP_PATH = "/tmp/botmatrix_deploy.zip"
-REMOTE_DEPLOY_DIR = "/opt/botmatrix"
+REMOTE_DEPLOY_DIR = "/opt/BotMatrix"
 
 def run_command(cmd):
     """运行系统命令并检查错误"""
@@ -86,7 +86,9 @@ def main():
              deploy_cmds.extend([
                 f"echo '--> [Manager] Fast Update Mode'",
                 f"echo '--> [Manager] Copying updated files to container...'",
-                f"sudo docker cp {REMOTE_DEPLOY_DIR}/WxBot/. botmatrix-manager:/app/",
+                # Manager 是 Go 编译的，Fast Update 只能更新静态文件，或者我们需要重新编译
+                # 这里假设我们只更新静态资源
+                f"sudo docker cp {REMOTE_DEPLOY_DIR}/BotNexus/. botmatrix-manager:/app/",
                 f"echo '--> [Manager] Restarting container...'",
                 f"sudo docker restart botmatrix-manager",
             ])

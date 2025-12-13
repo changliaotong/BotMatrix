@@ -12,7 +12,7 @@ RUN go mod download
 COPY main.go ./
 
 # Build the application
-RUN go build -o manager main.go
+RUN go build -o BotNexus main.go
 
 # Runtime Stage
 FROM alpine:latest
@@ -20,7 +20,7 @@ FROM alpine:latest
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /build/manager ./
+COPY --from=builder /build/BotNexus ./
 
 # Copy static files (HTML)
 COPY index.html ./
@@ -37,4 +37,4 @@ ENV REDIS_ADDR=192.168.0.126:6379
 ENV REDIS_PWD=redis_zsYik8
 
 # Run the application
-CMD ["./manager"]
+CMD ["./BotNexus"]
