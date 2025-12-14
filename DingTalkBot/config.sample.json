@@ -1,0 +1,7 @@
+{
+    "access_token": "",
+    "secret": "",
+    "client_id": "",
+    "client_secret": "",
+    "nexus_addr": "ws://bot-manager:3005"
+}

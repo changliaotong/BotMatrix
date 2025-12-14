@@ -53,3 +53,21 @@ services:
       - MANAGER_URL=ws://bot-manager:3001
       - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
     command: ["python", "onebot.py"]
+
+  # 3. DingTalkBot: DingTalk Webhook Worker
+  # dingtalk-bot:
+  #   build:
+  #     context: ./DingTalkBot
+  #   container_name: dingtalk-bot
+  #   restart: always
+  #   depends_on:
+  #     - bot-manager
+  #   volumes:
+  #     - ./DingTalkBot/config.json:/app/config.json
+  #   environment:
+  #     - TZ=Asia/Shanghai
+  #     - NEXUS_ADDR=ws://bot-manager:3005
+  #     # - DINGTALK_TOKEN=your_token_here
+  #     # - DINGTALK_SECRET=your_secret_here
+
+networks:
