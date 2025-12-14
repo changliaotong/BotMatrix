@@ -9,6 +9,7 @@
     <link href="https://cdn.staticfile.org/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.staticfile.org/Chart.js/3.7.1/chart.min.js"></script>
+    <script src="locales.js"></script>
     <style>
         :root {
             --bg-body: #f8f9fa;
@@ -253,20 +254,20 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">系统登录</h5>
+                    <h5 class="modal-title" data-i18n="login_title">系统登录</h5>
                 </div>
                 <div class="modal-body">
                     <form id="loginForm">
                         <div class="mb-3">
-                            <label class="form-label">用户名</label>
+                            <label class="form-label" data-i18n="username">用户名</label>
                             <input type="text" class="form-control" id="loginUser" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">密码</label>
+                            <label class="form-label" data-i18n="password">密码</label>
                             <input type="password" class="form-control" id="loginPass" required>
                         </div>
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">登录</button>
+                            <button type="submit" class="btn btn-primary" data-i18n="login_btn">登录</button>
                         </div>
                     </form>
                     <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
@@ -291,7 +292,7 @@
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="statsModalTitle">统计详情</h5>
+                    <h5 class="modal-title" id="statsModalTitle" data-i18n="modal_stats_title">统计详情</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-0">
@@ -299,8 +300,8 @@
                         <thead class="table-light sticky-top" style="top: 0">
                             <tr>
                                 <th scope="col" width="60">#</th>
-                                <th scope="col" id="statsModalNameHeader">名称</th>
-                                <th scope="col" width="100" class="text-end">数量</th>
+                                <th scope="col" id="statsModalNameHeader" data-i18n="modal_col_name">名称</th>
+                                <th scope="col" width="100" class="text-end" data-i18n="modal_col_count">数量</th>
                             </tr>
                         </thead>
                         <tbody id="statsModalBody">
@@ -316,7 +317,7 @@
         <div class="px-3 mb-4">
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
-                <small class="text-muted">Enterprise Bot Manager</small>
+                <small class="text-muted" data-i18n="sidebar_subtitle">Enterprise Bot Manager</small>
                 <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.11</span>
             </div>
         </div>
@@ -324,19 +325,31 @@
         <!-- Bot Selector Removed -->
         
         <nav class="nav flex-column">
-            <a href="#dashboard" id="nav-dashboard" class="nav-link active" onclick="showTab('dashboard')"><i class="bi bi-speedometer2"></i> 运行状态</a>
-            <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> 云端矩阵</a>
-            <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> 群组好友</a>
-            <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> 系统监控</a>
-            <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> 调试测试</a>
-            <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> 系统设置</a>
-            <a href="javascript:void(0)" class="nav-link text-danger mt-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i> 退出登录</a>
+            <a href="#dashboard" id="nav-dashboard" class="nav-link active" onclick="showTab('dashboard')"><i class="bi bi-speedometer2"></i> <span data-i18n="sidebar_dashboard">运行状态</span></a>
+            <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> <span data-i18n="sidebar_bots">云端矩阵</span></a>
+            <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> <span data-i18n="sidebar_groups">群组好友</span></a>
+            <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
+            <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> <span data-i18n="sidebar_debug">调试测试</span></a>
+            <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> <span data-i18n="sidebar_settings">系统设置</span></a>
+            <a href="javascript:void(0)" class="nav-link text-danger mt-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i> <span data-i18n="sidebar_logout">退出登录</span></a>
         </nav>
 
         <div class="mt-auto p-3 border-top d-flex justify-content-around align-items-center">
-             <button class="btn btn-outline-secondary rounded-circle theme-toggle-btn-sidebar" onclick="toggleTheme()" title="切换深色/浅色模式" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+             <button class="btn btn-outline-secondary rounded-circle theme-toggle-btn-sidebar" onclick="toggleTheme()" title="Toggle Theme" data-i18n-title="theme_toggle" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
                 <i class="bi bi-moon-stars"></i>
             </button>
+            
+            <div class="dropup">
+                <button class="btn btn-outline-secondary rounded-circle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Language" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+                    <i class="bi bi-translate"></i>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="setLanguage('zh-CN')">简体中文</a></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="setLanguage('zh-TW')">繁體中文</a></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="setLanguage('en')">English</a></li>
+                </ul>
+            </div>
+
             <a href="https://github.com/changliaotong/BotMatrix" target="_blank" class="btn btn-outline-secondary rounded-circle github-btn-sidebar" title="View on GitHub" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0;">
                 <i class="bi bi-github"></i>
             </a>
@@ -354,7 +367,7 @@
                         <i class="bi bi-robot"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label">机器人 (在线/离线/总数)</div>
+                        <div class="stat-label" data-i18n="stat_bots">机器人 (在线/离线/总数)</div>
                         <div class="stat-value">
                             <span id="metric-bots">0</span>
                             <span class="text-muted fs-6 fw-normal">/</span>
@@ -386,7 +399,7 @@
                         <i class="bi bi-pc-display"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label">主机系统</div>
+                        <div class="stat-label" data-i18n="stat_os">主机系统</div>
                         <div class="stat-value" style="font-size: 0.9rem;" id="metric-os-plat">alpine 3.23.0</div>
                         <div class="d-flex justify-content-between mt-1" style="font-size: 0.65rem; color: var(--text-muted);">
                              <span id="metric-os-ver">内核: 6.8.0-86-generic</span>
@@ -401,7 +414,7 @@
                         <i class="bi bi-memory"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label">系统内存</div>
+                        <div class="stat-label" data-i18n="stat_mem">系统内存</div>
                         <div class="stat-value">
                             <span id="metric-mem">0 MB</span>
                             <span id="metric-mem-total" class="text-muted fs-6 fw-normal ms-1">0 GB</span>
@@ -415,7 +428,7 @@
                         <i class="bi bi-activity"></i>
                     </div>
                     <div class="stat-info">
-                        <div class="stat-label">Goroutines</div>
+                        <div class="stat-label" data-i18n="stat_goroutines">Goroutines</div>
                         <div class="stat-value" id="metric-goroutines">0</div>
                     </div>
                 </div>
@@ -426,7 +439,7 @@
                         <i class="bi bi-people"></i>
                     </div>
                     <div class="stat-info">
-                        <div class="stat-label">活跃群组 (今日/总计)</div>
+                        <div class="stat-label" data-i18n="stat_active_groups">活跃群组 (今日/总计)</div>
                         <div class="stat-value">
                             <span id="metric-groups-today">0</span> <span class="text-muted fs-6 fw-normal">/</span> <span id="metric-groups-total" class="text-muted fs-6 fw-normal">0</span>
                         </div>
@@ -439,7 +452,7 @@
                         <i class="bi bi-person"></i>
                     </div>
                     <div class="stat-info">
-                        <div class="stat-label">活跃用户 (今日/总计)</div>
+                        <div class="stat-label" data-i18n="stat_active_users">活跃用户 (今日/总计)</div>
                         <div class="stat-value">
                              <span id="metric-users-today">0</span> <span class="text-muted fs-6 fw-normal">/</span> <span id="metric-users-total" class="text-muted fs-6 fw-normal">0</span>
                         </div>
@@ -452,7 +465,7 @@
                         <i class="bi bi-chat-text"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label">消息统计 (接收/发送)</div>
+                        <div class="stat-label" data-i18n="stat_messages">消息统计 (接收/发送)</div>
                         <div class="stat-value">
                             <span id="metric-msgs-total">0</span>
                             <span class="text-muted fs-6 fw-normal">/</span>
@@ -469,7 +482,7 @@
                         <div class="col-md-4">
                             <div class="card h-100" style="cursor: pointer;" onclick="showSystemDetails('cpu')">
                                 <div class="card-header py-2 small fw-bold d-flex justify-content-between align-items-center">
-                                    <span>CPU 趋势</span>
+                                    <span data-i18n="chart_cpu_trend">CPU 趋势</span>
                                     <i class="bi bi-arrows-angle-expand text-muted"></i>
                                 </div>
                                 <div class="card-body p-2" style="height: 200px; position: relative;">
@@ -480,7 +493,7 @@
                         <div class="col-md-4">
                             <div class="card h-100" style="cursor: pointer;" onclick="showSystemDetails('mem')">
                                 <div class="card-header py-2 small fw-bold d-flex justify-content-between align-items-center">
-                                    <span>内存趋势</span>
+                                    <span data-i18n="chart_mem_trend">内存趋势</span>
                                     <i class="bi bi-arrows-angle-expand text-muted"></i>
                                 </div>
                                 <div class="card-body p-2" style="height: 200px; position: relative;">
@@ -491,7 +504,7 @@
                         <div class="col-md-4">
                             <div class="card h-100" style="cursor: pointer;" onclick="showSystemDetails('msg')">
                                 <div class="card-header py-2 small fw-bold d-flex justify-content-between align-items-center">
-                                    <span>消息吞吐 (Msg/Min)</span>
+                                    <span data-i18n="chart_msg_throughput">消息吞吐 (Msg/Min)</span>
                                     <i class="bi bi-arrows-angle-expand text-muted"></i>
                                 </div>
                         <div class="card-body p-2" style="height: 200px; position: relative;">
@@ -505,64 +518,64 @@
                         <div class="col-md-6">
                             <div class="card mb-4">
                                 <div class="card-header d-flex justify-content-between align-items-center">
-                                    <span>🏆 今日活跃群组</span>
+                                    <span data-i18n="top_active_groups">🏆 今日活跃群组</span>
                                     <div>
-                                        <button class="btn btn-sm btn-link text-decoration-none p-0 me-2" onclick="showAllStats('Group')">更多</button>
+                                        <button class="btn btn-sm btn-link text-decoration-none p-0 me-2" onclick="showAllStats('Group')" data-i18n="more">更多</button>
                                         <span class="badge bg-primary rounded-pill">Top 5</span>
                                     </div>
                                 </div>
                                 <ul class="list-group list-group-flush" id="top-groups">
-                                    <li class="list-group-item text-muted text-center">暂无数据</li>
+                                    <li class="list-group-item text-muted text-center" data-i18n="no_data">暂无数据</li>
                                 </ul>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="card mb-4">
                                 <div class="card-header d-flex justify-content-between align-items-center">
-                                    <span>🗣️ 今日龙王</span>
+                                    <span data-i18n="top_active_users">🗣️ 今日龙王</span>
                                     <div>
-                                        <button class="btn btn-sm btn-link text-decoration-none p-0 me-2" onclick="showAllStats('User')">更多</button>
+                                        <button class="btn btn-sm btn-link text-decoration-none p-0 me-2" onclick="showAllStats('User')" data-i18n="more">更多</button>
                                         <span class="badge bg-warning text-dark rounded-pill">Top 5</span>
                                     </div>
                                 </div>
                                 <ul class="list-group list-group-flush" id="top-users">
-                                    <li class="list-group-item text-muted text-center">暂无数据</li>
+                                    <li class="list-group-item text-muted text-center" data-i18n="no_data">暂无数据</li>
                                 </ul>
                             </div>
                         </div>
                     </div>
  
                     <div class="card mb-4" id="dash-process-card">
-                        <div class="card-header">
+                        <div class="card-header" data-i18n="top_processes">
                             🔥 高占用进程 (Top 10)
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm table-striped mb-0">
                                 <thead>
                                     <tr>
-                                        <th>PID</th>
-                                        <th>进程名</th>
-                                        <th>CPU %</th>
-                                        <th>内存 (MB)</th>
+                                        <th data-i18n="col_pid">PID</th>
+                                        <th data-i18n="col_process">进程名</th>
+                                        <th data-i18n="col_cpu">CPU %</th>
+                                        <th data-i18n="col_mem">内存 (MB)</th>
                                     </tr>
                                 </thead>
                                 <tbody id="process-list">
-                                    <tr><td colspan="4" class="text-center">加载中...</td></tr>
+                                    <tr><td colspan="4" class="text-center" data-i18n="loading">加载中...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="card mb-4" id="dash-actions-card">
-                        <div class="card-header">
+                        <div class="card-header" data-i18n="quick_actions">
                             快捷操作
                         </div>
                         <div class="card-body">
                             <button class="btn btn-outline-primary me-2" onclick="callSystemAction('reload_plugins')">
-                                <i class="bi bi-arrow-repeat"></i> 重载插件
+                                <i class="bi bi-arrow-repeat"></i> <span data-i18n="action_reload_plugins">重载插件</span>
                             </button>
                             <button class="btn btn-outline-secondary me-2" onclick="callSystemAction('clean_logs')">
-                                <i class="bi bi-trash"></i> 清理日志
+                                <i class="bi bi-trash"></i> <span data-i18n="action_clean_logs">清理日志</span>
                             </button>
                         </div>
                     </div>
@@ -570,7 +583,7 @@
  
                 <div class="col-md-4">
                     <div class="card h-100" id="dash-logs-card" style="background-color: var(--bg-card); border-color: var(--border-color);">
-                        <div class="card-header">
+                        <div class="card-header" data-i18n="recent_activity">
                             最近活动
                         </div>
                         <div class="card-body d-flex flex-column">
@@ -584,16 +597,16 @@
         <!-- System Details View -->
         <div id="tab-view-system-details" class="content-section" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class="mb-0"><i class="bi bi-graph-up"></i> 系统资源详情</h4>
+                <h4 class="mb-0"><i class="bi bi-graph-up"></i> <span data-i18n="system_resource_details">系统资源详情</span></h4>
                 <div>
                     <div class="btn-group me-2">
-                        <button class="btn btn-outline-secondary btn-sm active" onclick="updateDetailTimeRange('1h')">1小时</button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('24h')">24小时</button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('7d')">7天</button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('30d')">30天</button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('1y')">全年</button>
+                        <button class="btn btn-outline-secondary btn-sm active" onclick="updateDetailTimeRange('1h')" data-i18n="time_1h">1小时</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('24h')" data-i18n="time_24h">24小时</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('7d')" data-i18n="time_7d">7天</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('30d')" data-i18n="time_30d">30天</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('1y')" data-i18n="time_1y">全年</button>
                     </div>
-                    <button class="btn btn-secondary btn-sm" onclick="showTab('#dashboard')">返回仪表盘</button>
+                    <button class="btn btn-secondary btn-sm" onclick="showTab('#dashboard')" data-i18n="back_to_dashboard">返回仪表盘</button>
                 </div>
             </div>
 
@@ -603,19 +616,19 @@
                         <div class="card-header">
                             <ul class="nav nav-tabs card-header-tabs" id="system-detail-tabs">
                                 <li class="nav-item">
-                                    <a class="nav-link active" href="#" onclick="switchDetailTab('cpu', event)">CPU & 负载</a>
+                                    <a class="nav-link active" href="#" onclick="switchDetailTab('cpu', event)" data-i18n="tab_cpu_load">CPU & 负载</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="switchDetailTab('mem', event)">内存使用</a>
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('mem', event)" data-i18n="tab_mem_usage">内存使用</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="switchDetailTab('msg', event)">消息吞吐</a>
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('msg', event)" data-i18n="tab_msg_throughput">消息吞吐</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="switchDetailTab('disk', event)">磁盘 & I/O</a>
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('disk', event)" data-i18n="tab_disk_io">磁盘 & I/O</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="switchDetailTab('net', event)">网络流量</a>
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('net', event)" data-i18n="tab_net_traffic">网络流量</a>
                                 </li>
                             </ul>
                         </div>
@@ -638,28 +651,28 @@
         <!-- Groups & Friends Tab -->
         <div id="tab-groups" class="tab-content" style="display: none;">
             <div class="d-flex justify-content-start align-items-center mb-3 gap-2">
-                    <div class="dropdown">
-                        <button class="btn btn-outline-secondary dropdown-toggle d-flex align-items-center" type="button" id="global-bot-dropdown" data-bs-toggle="dropdown" aria-expanded="false" style="min-width: 220px;">
-                             <i class="bi bi-robot me-2"></i>
-                             <span id="global-bot-selected-content" class="text-truncate" style="max-width: 160px;">选择机器人...</span>
-                        </button>
-                        <ul class="dropdown-menu shadow-lg" id="global-bot-list" aria-labelledby="global-bot-dropdown" style="max-height: 400px; overflow-y: auto; width: 320px;">
-                            <!-- Items populated by JS -->
-                        </ul>
-                    </div>
-                    <input type="hidden" id="global-bot-selector" value="">
-                    
-                    <button class="btn btn-primary" onclick="refreshCurrentTabList()">
-                        <i class="bi bi-arrow-clockwise"></i> 刷新列表
-                    </button>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle d-flex align-items-center justify-content-start" type="button" id="global-bot-dropdown" data-bs-toggle="dropdown" aria-expanded="false" style="min-width: 220px;">
+                     <i class="bi bi-robot me-2"></i>
+                     <span id="global-bot-selected-content" class="text-truncate text-start" style="max-width: 160px;" data-i18n="select_bot_placeholder">选择机器人...</span>
+                </button>
+                <ul class="dropdown-menu shadow-lg" id="global-bot-list" aria-labelledby="global-bot-dropdown" style="max-height: 400px; overflow-y: auto; width: 320px;">
+                    <!-- Items populated by JS -->
+                </ul>
             </div>
+            <input type="hidden" id="global-bot-selector" value="">
+            
+            <button class="btn btn-primary" onclick="refreshCurrentTabList()" title="刷新列表" data-i18n-title="refresh_list">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+    </div>
 
             <ul class="nav nav-tabs mb-3" id="relation-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="tab-groups-list-tab" data-bs-toggle="tab" data-bs-target="#tab-pane-groups" type="button" role="tab" aria-selected="true">群组列表</button>
+                    <button class="nav-link active" id="tab-groups-list-tab" data-bs-toggle="tab" data-bs-target="#tab-pane-groups" type="button" role="tab" aria-selected="true" data-i18n="group_list_title">群组列表</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="tab-friends-list-tab" data-bs-toggle="tab" data-bs-target="#tab-pane-friends" type="button" role="tab" aria-selected="false" onclick="ensureFriendListLoaded()">好友列表</button>
+                    <button class="nav-link" id="tab-friends-list-tab" data-bs-toggle="tab" data-bs-target="#tab-pane-friends" type="button" role="tab" aria-selected="false" onclick="ensureFriendListLoaded()" data-i18n="friend_list_title">好友列表</button>
                 </li>
             </ul>
             
@@ -671,24 +684,24 @@
                         <div class="col-md-4 h-100 group-manage-col">
                             <div class="card h-100 d-flex flex-column">
                                 <div class="card-header">
-                                    <input type="text" class="form-control mb-2" id="group-search" placeholder="搜索群组..." onkeyup="filterGroups()">
+                                    <input type="text" class="form-control mb-2" id="group-search" placeholder="搜索群组..." data-i18n="search_groups_placeholder" onkeyup="filterGroups()">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <small class="text-muted">排序:</small>
+                                        <small class="text-muted"><span data-i18n="sort_by">排序:</span></small>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <button class="btn btn-outline-secondary active" onclick="sortGroups('name')" id="btn-sort-group-name">名称</button>
-                                            <button class="btn btn-outline-secondary" onclick="sortGroups('count')" id="btn-sort-group-count">人数</button>
-                                            <button class="btn btn-outline-secondary" onclick="sortGroups('msg_today')" id="btn-sort-group-msg_today">今日</button>
-                                            <button class="btn btn-outline-secondary" onclick="sortGroups('id')" id="btn-sort-group-id">ID</button>
+                                            <button class="btn btn-outline-secondary active" onclick="sortGroups('name')" id="btn-sort-group-name" data-i18n="sort_name">名称</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortGroups('count')" id="btn-sort-group-count" data-i18n="sort_count">人数</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortGroups('msg_today')" id="btn-sort-group-msg_today" data-i18n="sort_today">今日</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortGroups('id')" id="btn-sort-group-id" data-i18n="sort_id">ID</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="card-body p-0" style="overflow-y: auto;">
                                     <div class="list-group list-group-flush" id="group-list">
-                                        <div class="text-center p-4 text-muted">请先选择机器人并刷新</div>
+                                        <div class="text-center p-4 text-muted" data-i18n="select_bot_first">请先选择机器人并刷新</div>
                                     </div>
                                 </div>
                                 <div class="card-footer text-muted small" id="group-count">
-                                    共 0 个群组
+                                    <span data-i18n="total_groups_count">共 0 个群组</span>
                                 </div>
                             </div>
                         </div>
@@ -699,7 +712,7 @@
                                 <div class="card-body d-flex align-items-center justify-content-center text-muted">
                                     <div class="text-center">
                                         <i class="bi bi-chat-square-text fs-1"></i>
-                                        <p class="mt-2">请从左侧选择一个群组查看详情</p>
+                                        <p class="mt-2" data-i18n="select_group_to_view">请从左侧选择一个群组查看详情</p>
                                     </div>
                                 </div>
                             </div>
@@ -709,8 +722,8 @@
                                     <div class="d-flex align-items-center">
                                         <img id="current-group-avatar" src="" class="rounded-circle me-2" style="width: 32px; height: 32px; display: none;">
                                         <div class="d-flex flex-column">
-                                            <h5 class="mb-0" id="current-group-name">群组名称</h5>
-                                            <small class="text-muted" id="current-group-stats" style="font-size: 0.75rem;">今日: 0 / 总计: 0</small>
+                                            <h5 class="mb-0" id="current-group-name" data-i18n="group_name_default">群组名称</h5>
+                                            <small class="text-muted" id="current-group-stats" style="font-size: 0.75rem;" data-i18n="group_stats_default">今日: 0 / 总计: 0</small>
                                         </div>
                                     </div>
                                     <span class="badge bg-secondary" id="current-group-id">123456</span>
@@ -720,10 +733,10 @@
                                 <div class="card-body d-flex flex-column p-0" style="overflow: hidden;">
                                     <ul class="nav nav-tabs nav-justified" id="group-tabs" role="tablist">
                                         <li class="nav-item" role="presentation">
-                                            <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members-view" type="button">成员列表</button>
+                                            <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members-view" type="button" data-i18n="tab_members">成员列表</button>
                                         </li>
                                         <li class="nav-item" role="presentation">
-                                            <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions-view" type="button">快捷操作</button>
+                                            <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions-view" type="button" data-i18n="tab_actions">快捷操作</button>
                                         </li>
                                     </ul>
                                     
@@ -731,17 +744,17 @@
                                         <!-- Members View -->
                                         <div class="tab-pane fade show active p-0" id="members-view">
                                             <div class="p-2 border-bottom bg-light">
-                                                <input type="text" class="form-control form-control-sm" id="member-search" placeholder="搜索成员(昵称/名片/ID)..." onkeyup="renderMembers()">
+                                                <input type="text" class="form-control form-control-sm" id="member-search" placeholder="搜索成员(昵称/名片/ID)..." data-i18n="search_members_placeholder" onkeyup="renderMembers()">
                                             </div>
                                             <table class="table table-hover mb-0">
                                                 <thead class="table-light sticky-top">
                                                     <tr>
-                                                        <th style="cursor: pointer;" onclick="sortMembers('card')">昵称/群名片 <i class="bi bi-sort-alpha-down" id="sort-icon-card"></i></th>
-                                                        <th style="cursor: pointer;" onclick="sortMembers('id')">QQ/WXID <i class="bi" id="sort-icon-id"></i></th>
-                                                        <th style="cursor: pointer;" onclick="sortMembers('role')">角色 <i class="bi" id="sort-icon-role"></i></th>
-                                                        <th style="cursor: pointer;" onclick="sortMembers('msg_today')">今日/总计 (全群) <i class="bi" id="sort-icon-msg_today"></i></th>
-                                                        <th style="cursor: pointer;" onclick="sortMembers('time')">最后发言 <i class="bi" id="sort-icon-time"></i></th>
-                                                        <th>操作</th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('card')"><span data-i18n="col_member_name">昵称/群名片</span> <i class="bi bi-sort-alpha-down" id="sort-icon-card"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('id')"><span data-i18n="col_member_id">QQ/WXID</span> <i class="bi" id="sort-icon-id"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('role')"><span data-i18n="col_member_role">角色</span> <i class="bi" id="sort-icon-role"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('msg_today')"><span data-i18n="col_member_msg">今日/总计 (全群)</span> <i class="bi" id="sort-icon-msg_today"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('time')"><span data-i18n="col_member_last_seen">最后发言</span> <i class="bi" id="sort-icon-time"></i></th>
+                                                        <th data-i18n="col_action">操作</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="member-list-body">
@@ -753,17 +766,17 @@
                                         <!-- Actions View -->
                                         <div class="tab-pane fade p-3" id="actions-view">
                                             <div class="mb-3">
-                                                <label class="form-label">发送群消息</label>
-                                                <textarea class="form-control" id="group-msg-input" rows="4" placeholder="在此输入消息内容..."></textarea>
+                                                <label class="form-label" data-i18n="send_group_msg">发送群消息</label>
+                                                <textarea class="form-control" id="group-msg-input" rows="4" placeholder="在此输入消息内容..." data-i18n="enter_msg_placeholder"></textarea>
                                                 <button class="btn btn-primary mt-2" onclick="sendGroupMsg()">
-                                                    <i class="bi bi-send"></i> 发送
+                                                    <i class="bi bi-send"></i> <span data-i18n="btn_send">发送</span>
                                                 </button>
                                             </div>
                                             <hr>
                                             <div class="mb-3">
-                                                <label class="form-label text-danger">危险操作</label>
+                                                <label class="form-label text-danger" data-i18n="danger_zone">危险操作</label>
                                                 <div>
-                                                    <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()">退出该群</button>
+                                                    <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()" data-i18n="btn_leave_group">退出该群</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -781,22 +794,22 @@
                         <div class="col-md-4 h-100">
                             <div class="card h-100 d-flex flex-column">
                                 <div class="card-header bg-white">
-                                    <input type="text" class="form-control mb-2" id="friend-search" placeholder="搜索好友..." onkeyup="filterFriends()">
+                                    <input type="text" class="form-control mb-2" id="friend-search" placeholder="搜索好友..." data-i18n="search_friends_placeholder" onkeyup="filterFriends()">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <small class="text-muted">排序:</small>
+                                        <small class="text-muted"><span data-i18n="sort_by">排序:</span></small>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <button class="btn btn-outline-secondary active" onclick="sortFriends('name')" id="btn-sort-friend-name">名称</button>
-                                            <button class="btn btn-outline-secondary" onclick="sortFriends('id')" id="btn-sort-friend-id">ID</button>
+                                            <button class="btn btn-outline-secondary active" onclick="sortFriends('name')" id="btn-sort-friend-name" data-i18n="sort_name">名称</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortFriends('id')" id="btn-sort-friend-id" data-i18n="sort_id">ID</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="card-body p-0" style="overflow-y: auto;">
                                     <div class="list-group list-group-flush" id="friend-list">
-                                        <div class="text-center p-4 text-muted">请先选择机器人并刷新</div>
+                                        <div class="text-center p-4 text-muted" data-i18n="select_bot_first">请先选择机器人并刷新</div>
                                     </div>
                                 </div>
                                 <div class="card-footer text-muted small" id="friend-count">
-                                    共 0 个好友
+                                    <span data-i18n="total_friends_count_default">共 0 个好友</span>
                                 </div>
                             </div>
                         </div>
@@ -807,23 +820,23 @@
                                 <div class="card-body d-flex align-items-center justify-content-center text-muted">
                                     <div class="text-center">
                                         <i class="bi bi-person fs-1"></i>
-                                        <p class="mt-2">请从左侧选择一个好友查看详情</p>
+                                        <p class="mt-2" data-i18n="select_friend_to_view">请从左侧选择一个好友查看详情</p>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="card h-100 d-flex flex-column" id="friend-detail-content" style="display: none !important;">
                                 <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h5 class="mb-0" id="current-friend-name">好友名称</h5>
+                                    <h5 class="mb-0" id="current-friend-name" data-i18n="friend_name_default">好友名称</h5>
                                     <span class="badge bg-secondary" id="current-friend-id">123456</span>
                                 </div>
                                 
                                 <div class="card-body p-3">
                                     <div class="mb-3">
-                                        <label class="form-label">发送私聊消息</label>
-                                        <textarea class="form-control" id="friend-msg-input" rows="4" placeholder="在此输入消息内容..."></textarea>
+                                        <label class="form-label" data-i18n="send_private_msg">发送私聊消息</label>
+                                        <textarea class="form-control" id="friend-msg-input" rows="4" placeholder="在此输入消息内容..." data-i18n-placeholder="input_message_content"></textarea>
                                         <button class="btn btn-primary mt-2" onclick="sendFriendMsg()">
-                                            <i class="bi bi-send"></i> 发送
+                                            <i class="bi bi-send"></i> <span data-i18n="send">发送</span>
                                         </button>
                                     </div>
                                 </div>
@@ -839,12 +852,12 @@
             <ul class="nav nav-tabs mb-4">
                 <li class="nav-item">
                     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#view-bots">
-                        接入端 (Bots) <span id="badge-bots" class="badge bg-secondary ms-1">0</span>
+                        <span data-i18n="tab_access_bots">接入端 (Bots)</span> <span id="badge-bots" class="badge bg-secondary ms-1">0</span>
                     </button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers()">
-                        处理端 (Workers) <span id="badge-workers" class="badge bg-secondary ms-1">0</span>
+                        <span data-i18n="tab_process_workers">处理端 (Workers)</span> <span id="badge-workers" class="badge bg-secondary ms-1">0</span>
                     </button>
                 </li>
             </ul>
@@ -853,20 +866,20 @@
                 <div class="tab-pane fade show active" id="view-bots">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="d-flex gap-2 align-items-center w-100">
-                            <input type="text" class="form-control form-control-sm" placeholder="搜索机器人..." style="width: 200px;" onkeyup="filterBots(this.value)">
+                            <input type="text" class="form-control form-control-sm" placeholder="搜索机器人..." data-i18n-placeholder="search_bots_placeholder" style="width: 200px;" onkeyup="filterBots(this.value)">
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary" onclick="sortBots('name')" id="btn-sort-bot-name">名称</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('id')" id="btn-sort-bot-id">ID</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('platform')" id="btn-sort-bot-platform">协议</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('count')" id="btn-sort-bot-count">群数</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('msg')" id="btn-sort-bot-msg">消息</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('time')" id="btn-sort-bot-time">时间</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('name')" id="btn-sort-bot-name" data-i18n="sort_name">名称</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('id')" id="btn-sort-bot-id" data-i18n="sort_id">ID</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('platform')" id="btn-sort-bot-platform" data-i18n="sort_protocol">协议</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('count')" id="btn-sort-bot-count" data-i18n="sort_group_count">群数</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('msg')" id="btn-sort-bot-msg" data-i18n="sort_messages">消息</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('time')" id="btn-sort-bot-time" data-i18n="sort_time">时间</button>
                             </div>
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary active" id="btn-bot-view-detail" onclick="setBotViewMode('detail')" title="详细模式"><i class="bi bi-card-text"></i></button>
-                                <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式"><i class="bi bi-grid-fill"></i></button>
+                                <button class="btn btn-outline-secondary active" id="btn-bot-view-detail" onclick="setBotViewMode('detail')" title="详细模式" data-i18n-title="view_mode_detail"><i class="bi bi-card-text"></i></button>
+                                <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()">刷新</button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()" data-i18n="refresh">刷新</button>
                         </div>
                     </div>
                     <div class="row" id="bot-list-container">
@@ -877,18 +890,18 @@
                 <div class="tab-pane fade" id="view-workers">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="d-flex gap-2 align-items-center w-100">
-                            <input type="text" class="form-control form-control-sm" placeholder="搜索Worker..." style="width: 200px;" onkeyup="filterWorkers(this.value)">
+                            <input type="text" class="form-control form-control-sm" placeholder="搜索Worker..." data-i18n-placeholder="search_workers_placeholder" style="width: 200px;" onkeyup="filterWorkers(this.value)">
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('addr')" id="btn-sort-worker-addr">地址</button>
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('time')" id="btn-sort-worker-time">时间</button>
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('msg')" id="btn-sort-worker-msg">处理</button>
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('status')" id="btn-sort-worker-status">状态</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('addr')" id="btn-sort-worker-addr" data-i18n="sort_address">地址</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('time')" id="btn-sort-worker-time" data-i18n="sort_time">时间</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('msg')" id="btn-sort-worker-msg" data-i18n="sort_processed">处理</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('status')" id="btn-sort-worker-status" data-i18n="sort_status">状态</button>
                             </div>
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary active" id="btn-worker-view-detail" onclick="setWorkerViewMode('detail')" title="详细模式"><i class="bi bi-card-text"></i></button>
-                                <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式"><i class="bi bi-grid-fill"></i></button>
+                                <button class="btn btn-outline-secondary active" id="btn-worker-view-detail" onclick="setWorkerViewMode('detail')" title="详细模式" data-i18n-title="view_mode_detail"><i class="bi bi-card-text"></i></button>
+                                <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()">刷新</button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()" data-i18n="refresh">刷新</button>
                         </div>
                     </div>
                     <div class="row" id="worker-list-container">
@@ -902,10 +915,10 @@
         <div id="tab-monitor" class="tab-content" style="display:none; height: calc(100vh - 80px);">
             <ul class="nav nav-tabs mb-3" id="monitor-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="monitor-events-tab" data-bs-toggle="tab" data-bs-target="#view-events" type="button" role="tab">实时消息</button>
+                    <button class="nav-link active" id="monitor-events-tab" data-bs-toggle="tab" data-bs-target="#view-events" type="button" role="tab" data-i18n="monitor_events">实时消息</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="monitor-logs-tab" data-bs-toggle="tab" data-bs-target="#view-logs" type="button" role="tab" onclick="fetchLogs()">系统日志</button>
+                    <button class="nav-link" id="monitor-logs-tab" data-bs-toggle="tab" data-bs-target="#view-logs" type="button" role="tab" onclick="fetchLogs()" data-i18n="monitor_logs">系统日志</button>
                 </li>
             </ul>
             
@@ -913,30 +926,30 @@
                 <!-- Real-time Events -->
                 <div class="tab-pane fade show active h-100" id="view-events" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="mb-0">实时消息监控</h5>
+                        <h5 class="mb-0" data-i18n="monitor_events_title">实时消息监控</h5>
                         <div>
-                            <button class="btn btn-sm btn-outline-danger" onclick="clearEvents()">清空</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearEvents()" data-i18n="clear">清空</button>
                             <div class="form-check form-switch d-inline-block ms-2">
                                 <input class="form-check-input" type="checkbox" id="auto-scroll-events" checked>
-                                <label class="form-check-label" for="auto-scroll-events">自动滚动</label>
+                                <label class="form-check-label" for="auto-scroll-events" data-i18n="auto_scroll">自动滚动</label>
                             </div>
                             <span id="ws-status" class="badge bg-secondary ms-2">Disconnected</span>
                         </div>
                     </div>
                     <div class="log-box" id="event-container" style="height: calc(100% - 60px);">
-                        <div class="text-muted text-center mt-5">等待事件连接...</div>
+                        <div class="text-muted text-center mt-5" data-i18n="waiting_events_connection">等待事件连接...</div>
                     </div>
                 </div>
 
                 <!-- Logs -->
                 <div class="tab-pane fade h-100" id="view-logs" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="mb-0">系统日志</h5>
+                        <h5 class="mb-0" data-i18n="system_logs_title">系统日志</h5>
                         <div>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogs()">刷新</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogs()" data-i18n="refresh">刷新</button>
                             <div class="form-check form-switch d-inline-block ms-2">
                                 <input class="form-check-input" type="checkbox" id="auto-refresh-logs" checked>
-                                <label class="form-check-label" for="auto-refresh-logs">自动刷新</label>
+                                <label class="form-check-label" for="auto-refresh-logs" data-i18n="auto_refresh">自动刷新</label>
                             </div>
                         </div>
                     </div>
@@ -950,14 +963,14 @@
 
         <!-- Debug & Test (Merged) -->
         <div id="tab-debug" style="display:none;">
-            <h4 class="mb-4">调试测试</h4>
+            <h4 class="mb-4" data-i18n="debug_test_title">调试测试</h4>
             
             <ul class="nav nav-tabs mb-3" id="debug-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="debug-visual-tab" data-bs-toggle="tab" data-bs-target="#debug-visual" type="button" role="tab">消息构造</button>
+                    <button class="nav-link active" id="debug-visual-tab" data-bs-toggle="tab" data-bs-target="#debug-visual" type="button" role="tab" data-i18n="debug_msg_builder">消息构造</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="debug-raw-tab" data-bs-toggle="tab" data-bs-target="#debug-raw" type="button" role="tab">接口调试</button>
+                    <button class="nav-link" id="debug-raw-tab" data-bs-toggle="tab" data-bs-target="#debug-raw" type="button" role="tab" data-i18n="debug_api_test">接口调试</button>
                 </li>
             </ul>
 
@@ -967,84 +980,84 @@
                     <div class="row">
                         <div class="col-md-7">
                             <div class="card mb-3">
-                                <div class="card-header">发送消息</div>
+                                <div class="card-header" data-i18n="send_message_card_title">发送消息</div>
                                 <div class="card-body">
                                     <form id="msg-test-form" onsubmit="return false;">
                                         <div class="mb-3">
-                                            <label class="form-label">目标用户/群组 UID</label>
+                                            <label class="form-label" data-i18n="target_uid_label">目标用户/群组 UID</label>
                                             <div class="input-group mb-2">
                                                 <select class="form-select" id="mt-group-select" onchange="onTestGroupSelectChange()">
-                                                    <option value="">-- 选择群组 (或手动输入 UID) --</option>
+                                                    <option value="" data-i18n="select_group_placeholder">-- 选择群组 (或手动输入 UID) --</option>
                                                 </select>
                                                 <button class="btn btn-outline-secondary" type="button" onclick="loadTestGroups()" title="刷新群组列表"><i class="bi bi-arrow-clockwise"></i></button>
                                             </div>
                                             <div class="input-group">
-                                                <input type="text" class="form-control" id="mt-target" placeholder="群号 (Group ID) 或 QQ号 (User ID)" oninput="updateCodePreview()">
-                                                <button class="btn btn-outline-secondary" type="button" onclick="pasteTargetUid()">粘贴选中</button>
+                                                <input type="text" class="form-control" id="mt-target" placeholder="群号 (Group ID) 或 QQ号 (User ID)" data-i18n-placeholder="target_uid_placeholder" oninput="updateCodePreview()">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="pasteTargetUid()" data-i18n="paste_selected">粘贴选中</button>
                                             </div>
                                         </div>
                                         
                                         <div class="mb-3">
-                                            <label class="form-label">消息类型</label>
+                                            <label class="form-label" data-i18n="message_type_label">消息类型</label>
                                             <select class="form-select" id="mt-type" onchange="updateMsgForm(); updateCodePreview()">
-                                                <option value="text">文本 (Text / CQ Code)</option>
-                                                <option value="image">图片 (Image)</option>
-                                                <option value="record">语音 (Record)</option>
-                                                <option value="video">视频 (Video)</option>
-                                                <option value="music">音乐分享 (Music)</option>
-                                                <option value="share">链接分享 (Share)</option>
-                                                <option value="poke">戳一戳 (Poke)</option>
-                                                <option value="json">JSON 卡片</option>
-                                                <option value="xml">XML 卡片</option>
+                                                <option value="text" data-i18n="msg_type_text">文本 (Text / CQ Code)</option>
+                                                <option value="image" data-i18n="msg_type_image">图片 (Image)</option>
+                                                <option value="record" data-i18n="msg_type_record">语音 (Record)</option>
+                                                <option value="video" data-i18n="msg_type_video">视频 (Video)</option>
+                                                <option value="music" data-i18n="msg_type_music">音乐分享 (Music)</option>
+                                                <option value="share" data-i18n="msg_type_share">链接分享 (Share)</option>
+                                                <option value="poke" data-i18n="msg_type_poke">戳一戳 (Poke)</option>
+                                                <option value="json" data-i18n="msg_type_json">JSON 卡片</option>
+                                                <option value="xml" data-i18n="msg_type_xml">XML 卡片</option>
                                             </select>
                                         </div>
                                         
                                         <!-- Text Input -->
                                         <div id="mt-group-text" class="mb-3">
-                                            <label class="form-label">内容</label>
-                                            <textarea class="form-control" id="mt-content" rows="3" placeholder="输入文本内容..." oninput="updateCodePreview()"></textarea>
+                                            <label class="form-label" data-i18n="message_content_label">内容</label>
+                                            <textarea class="form-control" id="mt-content" rows="3" placeholder="输入文本内容..." data-i18n-placeholder="enter_text_content_placeholder" oninput="updateCodePreview()"></textarea>
                                         </div>
                                         
                                         <!-- File/Image Input -->
                                         <div id="mt-group-file" class="mb-3" style="display:none;">
-                                            <label class="form-label" id="mt-file-label">文件/图片 URL</label>
-                                            <input type="text" class="form-control" id="mt-file-path" placeholder="http://... or file://..." oninput="updateCodePreview()">
+                                            <label class="form-label" id="mt-file-label" data-i18n="file_image_url_label">文件/图片 URL</label>
+                                            <input type="text" class="form-control" id="mt-file-path" placeholder="http://... or file://..." data-i18n-placeholder="file_url_placeholder" oninput="updateCodePreview()">
                                         </div>
         
                                         <!-- Music Input -->
-                                        <div id="mt-group-music" class="mb-3" style="display:none;">
-                                            <label class="form-label">音乐分享</label>
-                                            <div class="input-group mb-2">
-                                                <span class="input-group-text">平台</span>
-                                                <select class="form-select" id="mt-music-type" onchange="updateCodePreview()">
-                                                    <option value="qq">QQ音乐</option>
-                                                    <option value="163">网易云音乐</option>
-                                                    <option value="migu">咪咕音乐</option>
-                                                </select>
-                                            </div>
-                                            <div class="input-group">
-                                                <span class="input-group-text">歌曲ID</span>
-                                                <input type="text" class="form-control" id="mt-music-id" placeholder="例如: 123456" oninput="updateCodePreview()">
-                                            </div>
-                                        </div>
+                                <div id="mt-group-music" class="mb-3" style="display:none;">
+                                    <label class="form-label" data-i18n="music_share_label">音乐分享</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text" data-i18n="platform_label">平台</span>
+                                        <select class="form-select" id="mt-music-type" onchange="updateCodePreview()">
+                                            <option value="qq" data-i18n="platform_qq">QQ音乐</option>
+                                            <option value="163" data-i18n="platform_163">网易云音乐</option>
+                                            <option value="migu" data-i18n="platform_migu">咪咕音乐</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group">
+                                        <span class="input-group-text" data-i18n="song_id_label">歌曲ID</span>
+                                        <input type="text" class="form-control" id="mt-music-id" placeholder="例如: 123456" oninput="updateCodePreview()">
+                                    </div>
+                                </div>
         
                                         <!-- Share Input -->
                                         <div id="mt-group-share" class="mb-3" style="display:none;">
-                                            <label class="form-label">链接分享</label>
-                                            <input type="text" class="form-control mb-2" id="mt-share-url" placeholder="跳转 URL" oninput="updateCodePreview()">
-                                            <input type="text" class="form-control mb-2" id="mt-share-title" placeholder="标题" oninput="updateCodePreview()">
-                                            <input type="text" class="form-control mb-2" id="mt-share-content" placeholder="内容描述" oninput="updateCodePreview()">
-                                            <input type="text" class="form-control" id="mt-share-image" placeholder="封面图片 URL" oninput="updateCodePreview()">
+                                            <label class="form-label" data-i18n="link_share_label">链接分享</label>
+                                            <input type="text" class="form-control mb-2" id="mt-share-url" placeholder="跳转 URL" data-i18n-placeholder="redirect_url_placeholder" oninput="updateCodePreview()">
+                                            <input type="text" class="form-control mb-2" id="mt-share-title" placeholder="标题" data-i18n-placeholder="title_placeholder" oninput="updateCodePreview()">
+                                            <input type="text" class="form-control mb-2" id="mt-share-content" placeholder="内容描述" data-i18n-placeholder="content_desc_placeholder" oninput="updateCodePreview()">
+                                            <input type="text" class="form-control" id="mt-share-image" placeholder="封面图片 URL" data-i18n-placeholder="cover_image_url_placeholder" oninput="updateCodePreview()">
                                         </div>
                                         
                                         <!-- JSON/XML Input -->
                                         <div id="mt-group-raw" class="mb-3" style="display:none;">
-                                            <label class="form-label" id="mt-raw-label">内容</label>
+                                            <label class="form-label" id="mt-raw-label" data-i18n="raw_content_label">内容</label>
                                             <textarea class="form-control font-monospace" id="mt-raw-content" rows="5" placeholder='{"app":"com.tencent.miniapp", ...}' oninput="updateCodePreview()"></textarea>
                                         </div>
                                         
                                         <div class="d-grid">
-                                            <button class="btn btn-primary" onclick="submitTestMsg()">发送消息</button>
+                                            <button class="btn btn-primary" onclick="submitTestMsg()" data-i18n="send_msg">发送消息</button>
                                         </div>
                                     </form>
                                 </div>
@@ -1053,23 +1066,23 @@
                         <div class="col-md-5">
                             <div class="card mb-3">
                                 <div class="card-header d-flex justify-content-between align-items-center">
-                                    <span>代码预览 (JSON)</span>
-                                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="copyCodePreview()">复制</button>
+                                    <span data-i18n="code_preview_title">代码预览 (JSON)</span>
+                                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="copyCodePreview()" data-i18n="copy">复制</button>
                                 </div>
                                 <div class="card-body bg-light p-0 position-relative">
                                     <pre id="code-preview" class="p-3 mb-0" style="white-space: pre-wrap; font-size: 0.8rem; color: #d63384; max-height: 300px; overflow-y: auto;">{}</pre>
                                 </div>
                             </div>
                             <div class="card">
-                                <div class="card-header">发送结果</div>
+                                <div class="card-header" data-i18n="send_result_title">发送结果</div>
                                 <div class="card-body p-3">
                                      <div id="mt-result" class="alert alert-secondary mb-0" role="alert" style="display:none;"></div>
                                 </div>
                             </div>
                             <div class="mt-3 text-muted small">
                                 <ul>
-                                    <li>在此页面可视化的构造消息，并实时查看对应的 JSON 数据结构。</li>
-                                    <li>支持 OneBot 11 标准消息类型。</li>
+                                    <li data-i18n="debug_help_1">在此页面可视化的构造消息，并实时查看对应的 JSON 数据结构。</li>
+                                    <li data-i18n="debug_help_2">支持 OneBot 11 标准消息类型。</li>
                                 </ul>
                             </div>
                         </div>
@@ -1081,29 +1094,29 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="card">
-                                <div class="card-header">发送 Action</div>
+                                <div class="card-header" data-i18n="send_action_title">发送 Action</div>
                                 <div class="card-body">
                                     <div class="mb-3">
-                                        <label class="form-label">Bot ID</label>
-                                        <input type="text" class="form-control" id="action-bot-id" placeholder="留空则随机选择">
+                                        <label class="form-label" data-i18n="bot_id_label">Bot ID</label>
+                                        <input type="text" class="form-control" id="action-bot-id" placeholder="留空则随机选择" data-i18n-placeholder="action_bot_id_placeholder">
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">Action Name</label>
+                                        <label class="form-label" data-i18n="action_name_label">Action Name</label>
                                         <input type="text" class="form-control" id="action-name" value="send_group_msg">
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">Params (JSON)</label>
+                                        <label class="form-label" data-i18n="action_params_label">Params (JSON)</label>
                                         <textarea class="form-control font-monospace" id="action-params" rows="5">{"group_id": 123456, "message": "Hello from Go Manager"}</textarea>
                                     </div>
-                                    <button class="btn btn-primary" onclick="sendAction()">发送请求</button>
+                                    <button class="btn btn-primary" onclick="sendAction()" data-i18n="send_request_btn">发送请求</button>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="card">
-                                <div class="card-header">响应结果</div>
+                                <div class="card-header" data-i18n="response_result_title">响应结果</div>
                                 <div class="card-body bg-light">
-                                    <pre id="action-result" class="mb-0">等待请求...</pre>
+                                    <pre id="action-result" class="mb-0" data-i18n="waiting_request">等待请求...</pre>
                                 </div>
                             </div>
                         </div>
@@ -1115,36 +1128,36 @@
 
         <!-- Settings -->
         <div id="tab-settings" style="display:none;">
-            <h4 class="mb-4">系统设置</h4>
+            <h4 class="mb-4" data-i18n="settings_title">系统设置</h4>
             
             <div class="row">
                 <!-- Common Settings -->
                 <div class="col-md-6">
                     <div class="card mb-4">
-                        <div class="card-header">常用设置</div>
+                        <div class="card-header" data-i18n="common_settings_title">常用设置</div>
                         <div class="card-body">
                             <form>
                                 <div class="mb-3">
-                                    <label class="form-label">界面主题</label>
+                                    <label class="form-label" data-i18n="theme_label">界面主题</label>
                                     <select class="form-select" onchange="setTheme(this.value)">
-                                        <option value="light">浅色 (Light)</option>
-                                        <option value="dark">深色 (Dark)</option>
-                                        <option value="auto">跟随系统 (Auto)</option>
+                                        <option value="light" data-i18n="theme_light">浅色 (Light)</option>
+                                        <option value="dark" data-i18n="theme_dark">深色 (Dark)</option>
+                                        <option value="auto" data-i18n="theme_auto">跟随系统 (Auto)</option>
                                     </select>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">数据刷新频率</label>
+                                    <label class="form-label" data-i18n="refresh_rate_label">数据刷新频率</label>
                                     <select class="form-select">
-                                        <option value="2000">2 秒 (快速)</option>
-                                        <option value="5000">5 秒 (正常)</option>
-                                        <option value="10000">10 秒 (省流)</option>
+                                        <option value="2000" data-i18n="rate_fast">2 秒 (快速)</option>
+                                        <option value="5000" data-i18n="rate_normal">5 秒 (正常)</option>
+                                        <option value="10000" data-i18n="rate_slow">10 秒 (省流)</option>
                                     </select>
                                 </div>
                                 <div class="form-check form-switch mb-3">
                                     <input class="form-check-input" type="checkbox" id="setting-notify" checked>
-                                    <label class="form-check-label" for="setting-notify">启用桌面通知</label>
+                                    <label class="form-check-label" for="setting-notify" data-i18n="enable_notification_label">启用桌面通知</label>
                                 </div>
-                                <button type="button" class="btn btn-primary">保存常用设置</button>
+                                <button type="button" class="btn btn-primary" data-i18n="save_common_settings_btn">保存常用设置</button>
                             </form>
                         </div>
                     </div>
@@ -1153,29 +1166,29 @@
                 <!-- Personal Preferences -->
                 <div class="col-md-6">
                     <div class="card mb-4">
-                        <div class="card-header">个人偏好设置</div>
+                        <div class="card-header" data-i18n="personal_settings_title">个人偏好设置</div>
                         <div class="card-body">
                              <form>
                                 <div class="mb-3">
-                                    <label class="form-label">默认首页</label>
+                                    <label class="form-label" data-i18n="default_home_label">默认首页</label>
                                     <select class="form-select">
-                                        <option value="dashboard">仪表盘</option>
-                                        <option value="bots">机器人列表</option>
-                                        <option value="groups">群组管理</option>
+                                        <option value="dashboard" data-i18n="dashboard_label">仪表盘</option>
+                                        <option value="bots" data-i18n="bot_list_label">机器人列表</option>
+                                        <option value="groups" data-i18n="group_manage_label">群组管理</option>
                                     </select>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">每页显示条数</label>
+                                    <label class="form-label" data-i18n="items_per_page_label">每页显示条数</label>
                                     <input type="number" class="form-control" value="20">
                                 </div>
                                 <hr>
                                 <div class="mb-3">
-                                    <label class="form-label">修改密码</label>
-                                    <input type="password" id="pwd-current" class="form-control mb-2" placeholder="当前密码">
-                                    <input type="password" id="pwd-new" class="form-control mb-2" placeholder="新密码">
-                                    <input type="password" id="pwd-confirm" class="form-control" placeholder="确认新密码">
+                                    <label class="form-label" data-i18n="change_password_label">修改密码</label>
+                                    <input type="password" id="pwd-current" class="form-control mb-2" placeholder="当前密码" data-i18n-placeholder="current_pwd_placeholder">
+                                    <input type="password" id="pwd-new" class="form-control mb-2" placeholder="新密码" data-i18n-placeholder="new_pwd_placeholder">
+                                    <input type="password" id="pwd-confirm" class="form-control" placeholder="确认新密码" data-i18n-placeholder="confirm_pwd_placeholder">
                                 </div>
-                                <button type="button" class="btn btn-primary" onclick="updatePassword()">保存个人设置</button>
+                                <button type="button" class="btn btn-primary" onclick="updatePassword()" data-i18n="save_personal_settings_btn">保存个人设置</button>
                             </form>
                         </div>
                     </div>
@@ -1185,6 +1198,50 @@
     </div>
 
     <script>
+        // --- Language Management ---
+        let currentLang = 'zh-CN';
+
+        function initLanguage() {
+            const savedLang = localStorage.getItem('language') || 'zh-CN';
+            setLanguage(savedLang);
+        }
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('language', lang);
+            
+            if (typeof translations === 'undefined') return;
+
+            // Update document title
+            if (translations[lang] && translations[lang].app_title) {
+                document.title = translations[lang].app_title;
+            }
+
+            // Update elements with data-i18n (innerText)
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang] && translations[lang][key]) {
+                     el.innerText = translations[lang][key];
+                }
+            });
+
+            // Update elements with data-i18n-placeholder
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (translations[lang] && translations[lang][key]) {
+                     el.placeholder = translations[lang][key];
+                }
+            });
+            
+             // Update elements with data-i18n-title
+            document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                const key = el.getAttribute('data-i18n-title');
+                if (translations[lang] && translations[lang][key]) {
+                    el.title = translations[lang][key];
+                }
+            });
+        }
+
         // --- Theme Management ---
         let themeListener = null;
 
@@ -1257,9 +1314,11 @@
             const newPwd = document.getElementById('pwd-new').value;
             const confirmPwd = document.getElementById('pwd-confirm').value;
 
-            if (!newPwd) return alert('请输入新密码');
-            if (newPwd !== confirmPwd) return alert('两次输入的密码不一致');
-            if (!oldPwd) return alert('请输入当前密码');
+            const t = translations[currentLang] || translations['zh-CN'];
+
+            if (!newPwd) return alert(t.enter_new_pwd || '请输入新密码');
+            if (newPwd !== confirmPwd) return alert(t.pwd_mismatch || '两次输入的密码不一致');
+            if (!oldPwd) return alert(t.enter_current_pwd || '请输入当前密码');
 
             try {
                 const res = await fetch('/api/user/password', {
@@ -1276,12 +1335,12 @@
                     throw new Error(txt);
                 }
 
-                alert('密码修改成功');
+                alert(t.password_change_success || '密码修改成功');
                 document.getElementById('pwd-current').value = '';
                 document.getElementById('pwd-new').value = '';
                 document.getElementById('pwd-confirm').value = '';
             } catch (e) {
-                alert('修改失败: ' + e.message);
+                alert((t.password_change_fail || '修改失败: ') + e.message);
             }
         }
 
@@ -1293,6 +1352,7 @@
         // Check Auth on Load
         document.addEventListener('DOMContentLoaded', () => {
             initTheme(); // Initialize theme
+            initLanguage(); // Initialize language
 
             // Check for Magic Link
             const urlParams = new URLSearchParams(window.location.search);
@@ -1322,7 +1382,8 @@
                 })
                 .catch(err => {
                     console.error(err);
-                    alert('免密码登录失败，链接可能已过期。请重新获取或使用密码登录。');
+                    const t = translations[currentLang] || translations['zh-CN'];
+                    alert(t.magic_login_fail || '免密码登录失败，链接可能已过期。请重新获取或使用密码登录。');
                     // Clean URL
                     window.history.replaceState({}, document.title, window.location.pathname);
                     // Show login
@@ -1986,18 +2047,19 @@
         }
 
         function timeAgo(date) {
+            const t = translations[currentLang] || translations['zh-CN'];
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
             let interval = seconds / 31536000;
-            if (interval > 1) return Math.floor(interval) + "年前";
+            if (interval > 1) return Math.floor(interval) + t.time_ago_year;
             interval = seconds / 2592000;
-            if (interval > 1) return Math.floor(interval) + "月前";
+            if (interval > 1) return Math.floor(interval) + t.time_ago_month;
             interval = seconds / 86400;
-            if (interval > 1) return Math.floor(interval) + "天前";
+            if (interval > 1) return Math.floor(interval) + t.time_ago_day;
             interval = seconds / 3600;
-            if (interval > 1) return Math.floor(interval) + "小时前";
+            if (interval > 1) return Math.floor(interval) + t.time_ago_hour;
             interval = seconds / 60;
-            if (interval > 1) return Math.floor(interval) + "分钟前";
-            return Math.floor(seconds) + "秒前";
+            if (interval > 1) return Math.floor(interval) + t.time_ago_minute;
+            return Math.floor(seconds) + t.time_ago_second;
         }
 
         function updateBots() {
@@ -2006,6 +2068,7 @@
 
         function fetchBots() {
             if (!authToken) return;
+            const t = translations[currentLang] || translations['zh-CN'];
             fetch('/api/bots', {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             })
@@ -2029,17 +2092,17 @@
                     const currentVal = selectorInput.value;
                     
                     if (bots.length === 0) {
-                        dropdownList.innerHTML = '<li><span class="dropdown-item disabled">无机器人数据</span></li>';
-                        document.getElementById('global-bot-selected-content').innerHTML = '无机器人数据';
+                        dropdownList.innerHTML = `<li><span class="dropdown-item disabled">${t.no_bot_data_simple}</span></li>`;
+                        document.getElementById('global-bot-selected-content').innerHTML = t.no_bot_data_simple;
                     } else {
                         dropdownList.innerHTML = bots.map(bot => {
                             const isOffline = !bot.is_alive;
                             const statusClass = isOffline ? 'text-muted' : 'text-success fw-bold';
-                            const badge = isOffline ? '<span class="badge bg-secondary ms-auto">离线</span>' : '<span class="badge bg-success ms-auto">在线</span>';
+                            const badge = isOffline ? `<span class="badge bg-secondary ms-auto">${t.bot_status_offline}</span>` : `<span class="badge bg-success ms-auto">${t.bot_status_online}</span>`;
                             const platform = bot.platform || 'QQ';
                             let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
                             if (platform === 'QQ') {
-                                avatarUrl = `http://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
+                                avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
                             }
                             
                             return `
@@ -2095,6 +2158,8 @@
                 if (field === 'count' || field === 'time' || field === 'msg') botSortAsc = false;
             }
 
+            const t = translations[currentLang] || translations['zh-CN'];
+
             // Update UI
             ['name', 'id', 'platform', 'count', 'time', 'msg'].forEach(f => {
                 const btn = document.getElementById(`btn-sort-bot-${f}`);
@@ -2102,24 +2167,24 @@
                     btn.classList.add('active');
                     let label = '';
                     switch(f) {
-                        case 'name': label = '名称'; break;
-                        case 'id': label = 'ID'; break;
-                        case 'platform': label = '协议'; break;
-                        case 'count': label = '群数'; break;
-                        case 'time': label = '时间'; break;
-                        case 'msg': label = '消息'; break;
+                        case 'name': label = t.sort_name; break;
+                        case 'id': label = t.sort_id; break;
+                        case 'platform': label = t.sort_platform; break;
+                        case 'count': label = t.sort_group_count; break;
+                        case 'time': label = t.sort_time; break;
+                        case 'msg': label = t.sort_msg_count; break;
                     }
                     btn.innerHTML = label + (botSortAsc ? ' ↑' : ' ↓');
                 } else {
                     btn.classList.remove('active');
                     let label = '';
                     switch(f) {
-                        case 'name': label = '名称'; break;
-                        case 'id': label = 'ID'; break;
-                        case 'platform': label = '协议'; break;
-                        case 'count': label = '群数'; break;
-                        case 'time': label = '时间'; break;
-                        case 'msg': label = '消息'; break;
+                        case 'name': label = t.sort_name; break;
+                        case 'id': label = t.sort_id; break;
+                        case 'platform': label = t.sort_platform; break;
+                        case 'count': label = t.sort_group_count; break;
+                        case 'time': label = t.sort_time; break;
+                        case 'msg': label = t.sort_msg_count; break;
                     }
                     btn.innerHTML = label;
                 }
@@ -2168,20 +2233,21 @@
                 return (a.self_id || '').localeCompare(b.self_id || '');
             });
 
+            const t = translations[currentLang] || translations['zh-CN'];
             if (bots.length === 0) {
-                container.innerHTML = '<div class="col-12 text-center text-muted">暂无机器人数据</div>';
+                container.innerHTML = `<div class="col-12 text-center text-muted">${t.no_bot_data}</div>`;
             } else {
                 container.innerHTML = bots.map(bot => {
                     const connDate = new Date(bot.connected);
                     const timeStr = timeAgo(bot.connected);
                     const isOffline = !bot.is_alive;
                     const cardStyle = isOffline ? 'filter: grayscale(100%); opacity: 0.8;' : '';
-                    const statusBadge = isOffline ? '<span class="badge bg-secondary ms-2">离线</span>' : '<span class="badge bg-success ms-2">在线</span>';
-                    const timeLabel = isOffline ? '离线于:' : '已连接:';
+                    const statusBadge = isOffline ? `<span class="badge bg-secondary ms-2">${t.bot_status_offline}</span>` : `<span class="badge bg-success ms-2">${t.bot_status_online}</span>`;
+                    const timeLabel = isOffline ? t.card_status_offline_since : t.card_status_connected_at;
                     const platform = bot.platform || 'QQ';
                     let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
                     if (platform === 'QQ') {
-                        avatarUrl = `http://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`;
+                        avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`;
                     }
                     const platformBadge = `<span class="badge bg-info ms-1">${platform}</span>`;
 
@@ -2203,16 +2269,16 @@
                                 </div>
                                 <div class="rounded p-1 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                                      <div class="d-flex justify-content-between">
-                                        <span class="text-muted">群: ${bot.group_count || 0}</span>
-                                        <span class="text-muted">友: ${bot.friend_count || 0}</span>
+                                        <span class="text-muted">${t.card_label_groups}: ${bot.group_count || 0}</span>
+                                        <span class="text-muted">${t.card_label_friends}: ${bot.friend_count || 0}</span>
                                     </div>
                                     <div class="d-flex justify-content-between">
-                                        <span class="text-muted">消息:</span>
+                                        <span class="text-muted">${t.card_label_msgs}:</span>
                                         <span class="text-primary fw-bold">${bot.msg_count || 0}</span>
                                     </div>
                                 </div>
                                 <div class="mt-auto">
-                                    <button class="btn btn-sm btn-outline-primary w-100 py-0" style="font-size: 0.75rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>管理</button>
+                                    <button class="btn btn-sm btn-outline-primary w-100 py-0" style="font-size: 0.75rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>${t.btn_manage}</button>
                                 </div>
                             </div>
                         </div>`;
@@ -2236,19 +2302,19 @@
                                 </div>
                                 <div class="rounded p-2 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">群聊:</span>
+                                        <span class="text-muted">${t.card_label_groups}:</span>
                                         <span class="fw-bold text-primary">${bot.group_count || 0}</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">好友:</span>
+                                        <span class="text-muted">${t.card_label_friends}:</span>
                                         <span class="fw-bold text-success">${bot.friend_count || 0}</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">消息:</span>
-                                        <span><span class="fw-bold text-primary">${bot.msg_count || 0}</span> <span class="text-muted" style="font-size: 0.7em;">(今:${bot.msg_count_today || 0})</span></span>
+                                        <span class="text-muted">${t.card_label_msgs}:</span>
+                                        <span><span class="fw-bold text-primary">${bot.msg_count || 0}</span> <span class="text-muted" style="font-size: 0.7em;">(${t.sort_today}:${bot.msg_count_today || 0})</span></span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">IP:</span>
+                                        <span class="text-muted">${t.card_label_ip}:</span>
                                         <span class="text-truncate" style="max-width: 80px;" title="${bot.remote_addr}">${bot.remote_addr ? bot.remote_addr.split(':')[0] : 'N/A'}</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-1">
@@ -2256,17 +2322,17 @@
                                         <span title="${connDate.toLocaleString()}">${timeStr}</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">协议:</span>
+                                        <span class="text-muted">${t.card_label_protocol}:</span>
                                         <span class="fw-bold text-info">${platform}</span>
                                     </div>
                                     ${bot.owner ? `
                                     <div class="d-flex justify-content-between">
-                                        <span class="text-muted">所有者:</span>
+                                        <span class="text-muted">${t.card_label_owner}:</span>
                                         <span>${bot.owner}</span>
                                     </div>` : ''}
                                 </div>
                                 <div class="mt-auto">
-                                    <button class="btn btn-sm btn-outline-primary w-100 py-1" style="font-size: 0.8rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>管理</button>
+                                    <button class="btn btn-sm btn-outline-primary w-100 py-1" style="font-size: 0.8rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>${t.btn_manage}</button>
                                 </div>
                             </div>
                         </div>
@@ -2305,6 +2371,8 @@
                 if (field === 'time' || field === 'msg') workerSortAsc = false;
             }
 
+            const t = translations[currentLang] || translations['zh-CN'];
+
             // Update UI
             ['addr', 'time', 'status', 'msg'].forEach(f => {
                 const btn = document.getElementById(`btn-sort-worker-${f}`);
@@ -2312,20 +2380,20 @@
                     btn.classList.add('active');
                     let label = '';
                     switch(f) {
-                        case 'addr': label = '地址'; break;
-                        case 'time': label = '时间'; break;
-                        case 'status': label = '状态'; break;
-                        case 'msg': label = '处理'; break;
+                        case 'addr': label = t.sort_address; break;
+                        case 'time': label = t.sort_time; break;
+                        case 'status': label = t.sort_status; break;
+                        case 'msg': label = t.sort_processed; break;
                     }
                     btn.innerHTML = label + (workerSortAsc ? ' ↑' : ' ↓');
                 } else {
                     btn.classList.remove('active');
                     let label = '';
                     switch(f) {
-                        case 'addr': label = '地址'; break;
-                        case 'time': label = '时间'; break;
-                        case 'status': label = '状态'; break;
-                        case 'msg': label = '处理'; break;
+                        case 'addr': label = t.sort_address; break;
+                        case 'time': label = t.sort_time; break;
+                        case 'status': label = t.sort_status; break;
+                        case 'msg': label = t.sort_processed; break;
                     }
                     btn.innerHTML = label;
                 }
@@ -2357,8 +2425,9 @@
                 return workerSortAsc ? res : -res;
             });
 
+            const t = translations[currentLang] || translations['zh-CN'];
             if (workers.length === 0) {
-                container.innerHTML = '<div class="col-12 text-center text-muted">暂无在线 Worker</div>';
+                container.innerHTML = `<div class="col-12 text-center text-muted">${t.no_workers}</div>`;
                 return;
             }
             container.innerHTML = workers.map(w => {
@@ -2374,17 +2443,17 @@
                                     <i class="bi bi-gear-wide-connected fs-6"></i>
                                 </div>
                                 <div class="overflow-hidden w-100">
-                                    <div class="fw-bold text-truncate" style="font-size: 0.85rem;">Worker Node</div>
+                                    <div class="fw-bold text-truncate" style="font-size: 0.85rem;">${t.worker_node_title}</div>
                                     <div class="text-muted text-truncate" style="font-size: 0.7rem;">${w.remote_addr.split(':')[0]}</div>
                                 </div>
                             </div>
                             <div class="bg-light rounded p-1 mb-2 flex-grow-1" style="font-size: 0.75rem;">
                                 <div class="d-flex justify-content-between">
-                                    <span class="text-muted">Status:</span>
+                                    <span class="text-muted">${t.card_label_status}:</span>
                                     <span class="text-success">${w.status}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
-                                    <span class="text-muted">处理:</span>
+                                    <span class="text-muted">${t.card_label_processed}:</span>
                                     <span class="text-primary fw-bold">${w.handled_count || 0}</span>
                                 </div>
                             </div>
@@ -2400,25 +2469,25 @@
                                     <i class="bi bi-gear-wide-connected fs-5"></i>
                                 </div>
                                 <div class="overflow-hidden w-100">
-                                    <div class="fw-bold text-truncate" style="font-size: 0.9rem;">业务节点</div>
-                                    <div class="text-muted text-truncate" style="font-size: 0.7rem;">Worker Node</div>
+                                    <div class="fw-bold text-truncate" style="font-size: 0.9rem;">${t.worker_node}</div>
+                                    <div class="text-muted text-truncate" style="font-size: 0.7rem;">${t.worker_node_title}</div>
                                 </div>
                             </div>
                             <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
                                 <div class="d-flex justify-content-between mb-1">
-                                    <span class="text-muted">IP:</span>
+                                    <span class="text-muted">${t.card_label_ip}:</span>
                                     <span class="text-truncate" style="max-width: 80px;" title="${w.remote_addr}">${w.remote_addr.split(':')[0]}</span>
                                 </div>
                                 <div class="d-flex justify-content-between mb-1">
-                                    <span class="text-muted">连接:</span>
+                                    <span class="text-muted">${t.card_label_connected}:</span>
                                     <span title="${connDate.toLocaleString()}">${timeStr}</span>
                                 </div>
                                 <div class="d-flex justify-content-between mb-1">
-                                    <span class="text-muted">状态:</span>
+                                    <span class="text-muted">${t.card_label_status}:</span>
                                     <span class="text-success">${w.status}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
-                                    <span class="text-muted">处理消息:</span>
+                                    <span class="text-muted">${t.card_label_processed_msgs}:</span>
                                     <span class="text-primary fw-bold">${w.handled_count || 0}</span>
                                 </div>
                             </div>
@@ -2466,7 +2535,7 @@
             try {
                 params = JSON.parse(document.getElementById('action-params').value);
             } catch (e) {
-                alert('Params JSON 格式错误');
+                alert(translations[currentLang].alert_json_error);
                 return;
             }
 
@@ -2511,18 +2580,20 @@
             wsSubscriber = new WebSocket(wsUrl);
             
             wsSubscriber.onopen = () => {
+                const t = translations[currentLang] || translations['zh-CN'];
                 document.getElementById('ws-status').className = 'badge bg-success ms-2';
-                document.getElementById('ws-status').innerText = 'Connected';
-                addEventLog({type: 'system', message: 'WebSocket 连接成功'});
+                document.getElementById('ws-status').innerText = t.status_connected;
+                addEventLog({type: 'system', message: t.ws_connected || 'WebSocket 连接成功'});
                 
                 // Refresh bots when connected
                 updateBots();
             };
             
             wsSubscriber.onclose = () => {
+                const t = translations[currentLang] || translations['zh-CN'];
                 document.getElementById('ws-status').className = 'badge bg-danger ms-2';
-                document.getElementById('ws-status').innerText = 'Disconnected';
-                addEventLog({type: 'system', message: 'WebSocket 连接断开，3秒后重连...'});
+                document.getElementById('ws-status').innerText = t.status_disconnected;
+                addEventLog({type: 'system', message: t.ws_disconnected_retry || 'WebSocket 连接断开，3秒后重连...'});
                 setTimeout(initWebSocket, 3000);
             };
             
@@ -2563,7 +2634,8 @@
                 if (selector.value) {
                     currentBotId = selector.value;
                 } else {
-                    throw new Error("请先选择一个机器人");
+                    const t = translations[currentLang] || translations['zh-CN'];
+                    throw new Error(t.alert_select_bot_first);
                 }
             }
 
@@ -2608,18 +2680,19 @@
         function updateBotSelectorUI(id) {
             const selector = document.getElementById('global-bot-selector');
             selector.value = id;
+            const t = translations[currentLang] || translations['zh-CN'];
             
             const bot = currentBots.find(b => b.self_id == id);
             if (bot) {
                 const platform = bot.platform || 'QQ';
                 let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
                 if (platform === 'QQ') {
-                    avatarUrl = `http://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
+                    avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
                 }
                 
                 const statusBadge = bot.is_alive 
-                    ? '<span class="badge bg-success ms-1" style="font-size: 0.6em; vertical-align: middle;">在线</span>' 
-                    : '<span class="badge bg-secondary ms-1" style="font-size: 0.6em; vertical-align: middle;">离线</span>';
+                    ? `<span class="badge bg-success ms-1" style="font-size: 0.6em; vertical-align: middle;">${t.status_online}</span>` 
+                    : `<span class="badge bg-secondary ms-1" style="font-size: 0.6em; vertical-align: middle;">${t.status_offline}</span>`;
                 
                 const html = `
                     <div class="d-flex align-items-center">
@@ -2647,13 +2720,16 @@
         function onBotChange() {
             currentBotId = document.getElementById('global-bot-selector').value;
             
+            const t = translations[currentLang] || translations['zh-CN'];
+            const loadingText = `<div class="text-center p-4 text-muted">${t.switching_bot}</div>`;
+
             // Clear group view
-            document.getElementById('group-list').innerHTML = '<div class="text-center p-4 text-muted">切换机器人中...</div>';
+            document.getElementById('group-list').innerHTML = loadingText;
             document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
             document.getElementById('group-detail-empty').style.display = 'block';
             
             // Clear friend view
-            document.getElementById('friend-list').innerHTML = '<div class="text-center p-4 text-muted">切换机器人中...</div>';
+            document.getElementById('friend-list').innerHTML = loadingText;
             document.getElementById('friend-detail-content').style.setProperty('display', 'none', 'important');
             document.getElementById('friend-detail-empty').style.display = 'block';
             
@@ -2738,7 +2814,7 @@
             listEl.innerHTML = filtered.map(f => {
                 const name = f.remark || f.nickname || 'Unknown';
                 const id = f.user_id;
-                const avatar = `http://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
+                const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
                 
                 return `
                 <button class="list-group-item list-group-item-action ${id == currentFriendId ? 'active' : ''}" onclick="selectFriend(${id}, '${name.replace(/'/g, "\\'")}')">
@@ -3128,6 +3204,8 @@
                 if (field === 'count' || field === 'msg_today') groupSortAsc = false; // Default desc for count/msg
             }
             
+            const t = translations[currentLang] || translations['zh-CN'];
+
             // Update UI buttons
             ['name', 'count', 'id', 'msg_today'].forEach(f => {
                 const btn = document.getElementById(`btn-sort-group-${f}`);
@@ -3135,20 +3213,20 @@
                     btn.classList.add('active');
                     let label = '';
                     switch(f) {
-                        case 'name': label = '名称'; break;
-                        case 'count': label = '人数'; break;
-                        case 'id': label = 'ID'; break;
-                        case 'msg_today': label = '今日'; break;
+                        case 'name': label = t.sort_name; break;
+                        case 'count': label = t.sort_count; break;
+                        case 'id': label = t.sort_id; break;
+                        case 'msg_today': label = t.sort_today; break;
                     }
                     btn.innerHTML = label + (groupSortAsc ? ' ↑' : ' ↓');
                 } else {
                     btn.classList.remove('active');
                     let label = '';
                     switch(f) {
-                        case 'name': label = '名称'; break;
-                        case 'count': label = '人数'; break;
-                        case 'id': label = 'ID'; break;
-                        case 'msg_today': label = '今日'; break;
+                        case 'name': label = t.sort_name; break;
+                        case 'count': label = t.sort_count; break;
+                        case 'id': label = t.sort_id; break;
+                        case 'msg_today': label = t.sort_today; break;
                     }
                     btn.innerHTML = label;
                 }
@@ -3159,8 +3237,9 @@
 
         function renderGroups(groups) {
             const listEl = document.getElementById('group-list');
+            const t = translations[currentLang] || translations['zh-CN'];
             if (groups.length === 0) {
-                listEl.innerHTML = '<div class="text-center p-4 text-muted">暂无群组</div>';
+                listEl.innerHTML = `<div class="text-center p-4 text-muted">${t.no_groups}</div>`;
                 return;
             }
 
@@ -3189,7 +3268,7 @@
                 <button class="list-group-item list-group-item-action ${g.group_id == currentGroupId ? 'active' : ''}" onclick="selectGroup(${g.group_id}, '${g.group_name}')">
                     <div class="d-flex w-100 align-items-center">
                         <div class="rounded-circle me-2 flex-shrink-0" style="width: 40px; height: 40px; overflow: hidden; background: #f0f0f0;">
-                             <img src="http://p.qlogo.cn/gh/${g.group_id}/${g.group_id}/640/" alt="Group" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';this.style.padding='8px';">
+                             <img src="https://p.qlogo.cn/gh/${g.group_id}/${g.group_id}/640/" alt="Group" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';this.style.padding='8px';">
                         </div>
                         <div class="flex-grow-1 overflow-hidden">
                             <div class="d-flex w-100 justify-content-between">
@@ -3227,7 +3306,7 @@
 
             // Update Avatar
             const avatarEl = document.getElementById('current-group-avatar');
-            avatarEl.src = `http://p.qlogo.cn/gh/${groupId}/${groupId}/640/`;
+            avatarEl.src = `https://p.qlogo.cn/gh/${groupId}/${groupId}/640/`;
             avatarEl.style.display = 'block';
             avatarEl.onerror = function() {
                 this.src = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';
@@ -3287,9 +3366,10 @@
             const tbody = document.getElementById('member-list-body');
             const searchInput = document.getElementById('member-search');
             const keyword = searchInput ? searchInput.value.toLowerCase() : '';
+            const t = translations[currentLang] || translations['zh-CN'];
 
             if (!currentMembers || currentMembers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂无成员</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center">${t.no_members}</td></tr>`;
                 return;
             }
 
@@ -3303,7 +3383,7 @@
             });
             
             if (filteredMembers.length === 0) {
-                 tbody.innerHTML = '<tr><td colspan="6" class="text-center">未找到匹配成员</td></tr>';
+                 tbody.innerHTML = `<tr><td colspan="6" class="text-center">${t.no_match_members}</td></tr>`;
                  return;
             }
 
@@ -3333,6 +3413,10 @@
                 const todayMsg = latestChatStats.user_stats_today ? (latestChatStats.user_stats_today[m.user_id] || 0) : 0;
                 const totalMsg = latestChatStats.user_stats ? (latestChatStats.user_stats[m.user_id] || 0) : 0;
                 
+                const roleKey = 'role_' + m.role;
+                const roleText = t[roleKey] || m.role;
+                const statsTooltip = t.stats_title_tooltip.replace('{today}', todayMsg).replace('{total}', totalMsg);
+
                 return `
                 <tr>
                     <td>
@@ -3351,13 +3435,13 @@
                     <td>${m.user_id}</td>
                     <td>
                         <span class="badge bg-${m.role === 'owner' ? 'warning' : (m.role === 'admin' ? 'success' : 'secondary')}">
-                            ${m.role}
+                            ${roleText}
                         </span>
                     </td>
                     <td>
-                        <div class="d-flex flex-column" title="全平台统计: 今日 ${todayMsg} / 总计 ${totalMsg}">
+                        <div class="d-flex flex-column" title="${statsTooltip}">
                             <span class="badge bg-primary rounded-pill mb-1" style="width: fit-content;">${todayMsg}</span>
-                            <small class="text-muted">总: ${totalMsg}</small>
+                            <small class="text-muted">${t.stats_total}${totalMsg}</small>
                         </div>
                     </td>
                     <td>
@@ -3366,14 +3450,14 @@
                     <td>
                         <div class="dropdown">
                             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                操作
+                                ${t.action_ops}
                             </button>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#" onclick="setCard(${currentGroupId}, ${m.user_id}, '${m.card || m.nickname}')">修改名片</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="banMember(${currentGroupId}, ${m.user_id})">禁言</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="unbanMember(${currentGroupId}, ${m.user_id})">解除禁言</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCard(${currentGroupId}, ${m.user_id}, '${m.card || m.nickname}')">${t.action_set_card}</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="banMember(${currentGroupId}, ${m.user_id})">${t.action_ban}</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="unbanMember(${currentGroupId}, ${m.user_id})">${t.action_unban}</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item text-danger" href="#" onclick="kickMember(${currentGroupId}, ${m.user_id})">移除成员</a></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="kickMember(${currentGroupId}, ${m.user_id})">${t.action_kick}</a></li>
                             </ul>
                         </div>
                     </td>
@@ -3383,11 +3467,12 @@
 
         // --- Member Actions ---
         function banMember(groupId, userId) {
-            const duration = prompt("请输入禁言时长(分钟)，0为解除禁言", "30");
+            const t = translations[currentLang] || translations['zh-CN'];
+            const duration = prompt(t.prompt_ban_duration, "30");
             if (duration === null) return;
             const minutes = parseInt(duration);
             if (isNaN(minutes)) {
-                alert("请输入有效的数字");
+                alert(t.alert_invalid_number);
                 return;
             }
 
@@ -3396,22 +3481,24 @@
                 user_id: userId,
                 duration: minutes * 60
             }).then(() => {
-                alert(minutes > 0 ? '已禁言' : '已解除禁言');
-            }).catch(e => alert('操作失败: ' + e.message));
+                alert(minutes > 0 ? t.alert_banned : t.alert_unbanned);
+            }).catch(e => alert(t.alert_op_failed + e.message));
         }
 
         function unbanMember(groupId, userId) {
+            const t = translations[currentLang] || translations['zh-CN'];
             callBotApi('set_group_ban', {
                 group_id: groupId,
                 user_id: userId,
                 duration: 0
             }).then(() => {
-                alert('已解除禁言');
-            }).catch(e => alert('操作失败: ' + e.message));
+                alert(t.alert_unbanned);
+            }).catch(e => alert(t.alert_op_failed + e.message));
         }
 
         function setCard(groupId, userId, currentCard) {
-            const newCard = prompt("请输入新的群名片", currentCard);
+            const t = translations[currentLang] || translations['zh-CN'];
+            const newCard = prompt(t.prompt_new_card, currentCard);
             if (newCard === null) return;
 
             callBotApi('set_group_card', {
@@ -3419,12 +3506,13 @@
                 user_id: userId,
                 card: newCard
             }).then(() => {
-                alert('已修改名片');
+                alert(t.alert_card_set);
                 loadGroupMembers(groupId); // Reload to show change
-            }).catch(e => alert('操作失败: ' + e.message));
+            }).catch(e => alert(t.alert_op_failed + e.message));
         }
 
         async function sendGroupMsg() {
+            const t = translations[currentLang] || translations['zh-CN'];
             const input = document.getElementById('group-msg-input');
             const msg = input.value.trim();
             if (!msg) return;
@@ -3434,50 +3522,53 @@
                     group_id: currentGroupId,
                     message: msg
                 });
-                alert('发送成功');
+                alert(t.alert_send_success);
                 input.value = '';
                 addEventLog({type: 'system', message: `发送群消息到 [${currentGroupId}]: ${msg}`});
             } catch (e) {
-                alert('发送失败: ' + e.message);
+                alert(t.alert_op_failed + e.message);
             }
         }
         
         function kickMember(groupId, userId) {
-            if (!confirm(`确定要移除成员 ${userId} 吗？`)) return;
+            const t = translations[currentLang] || translations['zh-CN'];
+            if (!confirm(t.confirm_kick_member.replace('{id}', userId))) return;
             callBotApi('set_group_kick', {
                 group_id: groupId,
                 user_id: userId
             }).then(() => {
-                alert('已移除');
+                alert(t.alert_kicked);
                 loadGroupMembers(groupId);
-            }).catch(e => alert('操作失败: ' + e.message));
+            }).catch(e => alert(t.alert_op_failed + e.message));
         }
         
         function leaveGroup() {
-            if (!confirm(`确定要退出群组 ${currentGroupId} 吗？此操作不可逆！`)) return;
+            const t = translations[currentLang] || translations['zh-CN'];
+            if (!confirm(t.confirm_leave_group.replace('{id}', currentGroupId))) return;
              callBotApi('set_group_leave', {
                 group_id: currentGroupId
             }).then(() => {
-                alert('已退出');
+                alert(t.alert_left_group);
                 refreshGroupList();
                 document.getElementById('group-detail-empty').style.display = 'block';
                 document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
-            }).catch(e => alert('操作失败: ' + e.message));
+            }).catch(e => alert(t.alert_op_failed + e.message));
         }
 
         // --- System Actions ---
         async function callSystemAction(action) {
+            const t = translations[currentLang] || translations['zh-CN'];
             if (action === 'clean_logs') {
                 document.getElementById('recent-logs').innerHTML = '';
-                addEventLog({type: 'system', message: '前端日志已清理'});
+                addEventLog({type: 'system', message: t.log_cleaned});
                 return;
             }
             
             try {
                 const res = await callBotApi(action);
-                alert('操作成功: ' + JSON.stringify(res.data));
+                alert(t.alert_op_success + JSON.stringify(res.data));
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                alert(t.alert_op_failed + e.message);
             }
         }
 
@@ -3636,12 +3727,13 @@
             const stats = type === 'Group' ? latestChatStats.group_stats_today : latestChatStats.user_stats_today;
             const names = type === 'Group' ? latestChatStats.group_names : latestChatStats.user_names;
             
-            document.getElementById('statsModalTitle').innerText = type === 'Group' ? '今日活跃群组' : '今日龙王';
-            document.getElementById('statsModalNameHeader').innerText = type === 'Group' ? '群组名称' : '用户昵称';
+            const t = translations[currentLang] || translations['zh-CN'];
+            document.getElementById('statsModalTitle').innerText = type === 'Group' ? (t.top_active_groups || '今日活跃群组') : (t.top_active_users || '今日龙王');
+            document.getElementById('statsModalNameHeader').innerText = type === 'Group' ? (t.group_name_default || '群组名称') : (t.user_nickname || '用户昵称');
             
             const tbody = document.getElementById('statsModalBody');
             if (!stats || Object.keys(stats).length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4">暂无数据</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center p-4">${t.no_data || '暂无数据'}</td></tr>`;
             } else {
                 const sorted = Object.entries(stats).sort(([, a], [, b]) => b - a);
                 tbody.innerHTML = sorted.map(([id, count], index) => {
@@ -3711,6 +3803,7 @@
         }
 
         function updateMsgForm() {
+            const t = translations[currentLang] || translations['zh-CN'];
             const type = document.getElementById('mt-type').value;
             
             // Hide all specific inputs
@@ -3722,13 +3815,13 @@
             
             if (type === 'text' || type === 'poke') {
                 document.getElementById('mt-group-text').style.display = 'block';
-                document.getElementById('mt-content').placeholder = type === 'poke' ? '输入被戳者 QQ 号 (留空则戳当前群)' : '输入文本内容... 支持 CQ 码';
+                document.getElementById('mt-content').placeholder = type === 'poke' ? t.placeholder_poke : t.placeholder_text_cq;
             } else if (type === 'image' || type === 'record' || type === 'video') {
                 document.getElementById('mt-group-file').style.display = 'block';
-                let label = '文件 URL/路径';
-                if (type === 'image') label = '图片 URL/路径';
-                else if (type === 'record') label = '语音 URL/路径 (AMR/Silk)';
-                else if (type === 'video') label = '视频 URL/路径';
+                let label = t.label_file_url;
+                if (type === 'image') label = t.label_image_url;
+                else if (type === 'record') label = t.label_record_url;
+                else if (type === 'video') label = t.label_video_url;
                 document.getElementById('mt-file-label').textContent = label;
             } else if (type === 'music') {
                 document.getElementById('mt-group-music').style.display = 'block';
@@ -3736,15 +3829,16 @@
                 document.getElementById('mt-group-share').style.display = 'block';
             } else if (type === 'json' || type === 'xml') {
                 document.getElementById('mt-group-raw').style.display = 'block';
-                document.getElementById('mt-raw-label').textContent = type.toUpperCase() + ' 内容';
+                document.getElementById('mt-raw-label').textContent = type.toUpperCase() + t.label_raw_content_suffix;
             }
         }
 
         async function submitTestMsg() {
+            const t = translations[currentLang] || translations['zh-CN'];
             const resultEl = document.getElementById('mt-result');
             resultEl.style.display = 'none';
             resultEl.className = 'alert alert-secondary';
-            resultEl.textContent = '发送中...';
+            resultEl.textContent = t.msg_sending;
             resultEl.style.display = 'block';
             
             const target = document.getElementById('mt-target').value;
@@ -3752,7 +3846,7 @@
             
             if (!target) {
                 resultEl.className = 'alert alert-danger';
-                resultEl.textContent = '请输入目标 UID';
+                resultEl.textContent = t.alert_enter_target_uid;
                 return;
             }
 
@@ -3767,7 +3861,7 @@
                 const content = document.getElementById('mt-content').value;
                 if (!content) {
                     resultEl.className = 'alert alert-danger';
-                    resultEl.textContent = '请输入内容';
+                    resultEl.textContent = t.alert_enter_content;
                     return;
                 }
                 params.message = content;
@@ -3778,7 +3872,7 @@
                 const file = document.getElementById('mt-file-path').value;
                 if (!file) {
                     resultEl.className = 'alert alert-danger';
-                    resultEl.textContent = '请输入文件路径/URL';
+                    resultEl.textContent = t.alert_enter_file_url;
                     return;
                 }
                 params.message = [
@@ -3792,7 +3886,7 @@
                 const mId = document.getElementById('mt-music-id').value;
                 if (!mId) {
                     resultEl.className = 'alert alert-danger';
-                    resultEl.textContent = '请输入歌曲ID';
+                    resultEl.textContent = t.msg_input_song_id;
                     return;
                 }
                 params.message = [{
@@ -3816,7 +3910,7 @@
                 const raw = document.getElementById('mt-raw-content').value;
                 if (!raw) {
                     resultEl.className = 'alert alert-danger';
-                    resultEl.textContent = '请输入内容';
+                    resultEl.textContent = t.msg_input_content;
                     return;
                 }
                 params.message = [{
@@ -3889,12 +3983,13 @@
         }
 
         function copyCodePreview() {
+            const t = translations[currentLang] || translations['zh-CN'];
             const content = document.getElementById('code-preview').textContent;
             navigator.clipboard.writeText(content).then(() => {
                 const btn = document.querySelector('button[onclick="copyCodePreview()"]');
                 if(btn) {
                     const original = btn.textContent;
-                    btn.textContent = '已复制';
+                    btn.textContent = t.btn_copied;
                     setTimeout(() => btn.textContent = original, 2000);
                 }
             });

@@ -96,6 +96,10 @@ class onebot(WXBot):
         self._name_index_by_group = {}
         self._msg_cache = collections.OrderedDict()
         
+        # Try to load contacts cache immediately
+        if self.load_contacts_cache():
+             print(f"[onebot] Loaded {len(self.group_list)} groups from contacts cache")
+        
         self.driver = None
 
     def set_driver(self, driver):
@@ -277,10 +281,7 @@ class onebot(WXBot):
             params = {}
         
         name = action
-        result = {"status": "ok", "retcode": 0, "data": {}}
-        
-        # if name in ["send_group_msg", "send_private_msg"]:
-        #      print(f"[onebot] Execute Action: {name}, params={str(params)[:100]}...")
+        result = {"status": "ok", "retcode": 0, "data": {}}  
         
         try:
             if name == "send_group_msg":
@@ -412,6 +413,10 @@ class onebot(WXBot):
 
             elif name == "get_group_list":
                 self._ensure_group_cache()
+                # If group list is empty, try to reload from cache
+                if not getattr(self, 'group_list', []):
+                    self.load_contacts_cache()
+
                 items = []
                 for g in getattr(self, 'group_list', []) or []:
                     group_uid = g.get('UserName')
@@ -604,6 +609,17 @@ class onebot(WXBot):
                 group_id = 0
                 try:
                     group_id = wx_group.get_group_id(group_uid)
+                    if not group_id:
+                        # Try to create/ensure group exists if ID is missing
+                        g_name = "Unknown Group"
+                        # Try to find name in cache
+                        if hasattr(self, 'group_list'):
+                             for g in self.group_list:
+                                 if g.get('UserName') == group_uid:
+                                     g_name = msg.remove_Emoji(g.get('NickName') or '')
+                                     break
+                        group_id = wx_group.get_wx_group(self.self_id, group_uid, g_name, 0, "")
+
                     if group_id:
                         self._group_map_uid_by_id[group_id] = group_uid
                 except:

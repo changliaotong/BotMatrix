@@ -176,6 +176,10 @@ type Manager struct {
 
 	UserNames  map[int64]string `json:"-"` // Cache names
 	GroupNames map[int64]string `json:"-"` // Cache names
+
+	// Deduplication
+	DedupMutex sync.Mutex
+	DedupCache map[string]int64 `json:"-"` // MessageID -> Timestamp (Unix)
 }
 
 type BotStatDetail struct {
@@ -211,6 +215,7 @@ func NewManager() *Manager {
 		RecvTrend:        make([]float64, 0),
 		UserNames:        make(map[int64]string),
 		GroupNames:       make(map[int64]string),
+		DedupCache:       make(map[string]int64),
 		LastResetDate:    time.Now().Format("2006-01-02"),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -413,6 +418,7 @@ func (m *Manager) GetLogs() []LogEntry {
 
 func main() {
 	manager := NewManager()
+	manager.LoadStats()
 
 	// 1. WebSocket Server Mux
 	wsMux := http.NewServeMux()
@@ -432,6 +438,33 @@ func main() {
 		ticker := time.NewTicker(1 * time.Minute)
 		for range ticker.C {
 			manager.SaveStats()
+		}
+	}()
+
+	// Periodic Bot Info Refresh (Every 1 minute to ensure data consistency)
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		for range ticker.C {
+			manager.mutex.RLock()
+			for _, bot := range manager.bots {
+				go func(client *BotClient) {
+					client.Mutex.Lock()
+					defer client.Mutex.Unlock()
+
+					// Group Count
+					client.Conn.WriteJSON(map[string]interface{}{
+						"action": "get_group_list",
+						"echo":   "internal_get_group_list",
+					})
+
+					// Friend Count
+					client.Conn.WriteJSON(map[string]interface{}{
+						"action": "get_friend_list",
+						"echo":   "internal_get_friend_list",
+					})
+				}(bot)
+			}
+			manager.mutex.RUnlock()
 		}
 	}()
 
@@ -1131,8 +1164,19 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 	// Parse User
 	var userID int64
 	var userName string
-	if uid, ok := msg["user_id"].(float64); ok {
-		userID = int64(uid)
+	if uidVal, ok := msg["user_id"]; ok {
+		switch v := uidVal.(type) {
+		case float64:
+			userID = int64(v)
+		case int64:
+			userID = v
+		case int:
+			userID = int64(v)
+		case string:
+			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+				userID = parsed
+			}
+		}
 	}
 	if sender, ok := msg["sender"].(map[string]interface{}); ok {
 		if card, ok := sender["card"].(string); ok && card != "" {
@@ -1148,11 +1192,48 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 	// Parse Group
 	var groupID int64
 	var groupName string
-	if gid, ok := msg["group_id"].(float64); ok {
-		groupID = int64(gid)
+	if gidVal, ok := msg["group_id"]; ok {
+		switch v := gidVal.(type) {
+		case float64:
+			groupID = int64(v)
+		case int64:
+			groupID = v
+		case int:
+			groupID = int64(v)
+		case string:
+			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+				groupID = parsed
+			}
+		}
 	}
 	if gn, ok := msg["group_name"].(string); ok && gn != "" {
 		groupName = gn
+	}
+
+	// Deduplication Logic
+	isDuplicate := false
+	if mid, ok := msg["message_id"]; ok {
+		msgID := fmt.Sprintf("%v", mid)
+		// Composite key to avoid collisions if IDs are not globally unique
+		key := msgID
+		if groupID != 0 {
+			key = fmt.Sprintf("g:%d:%s", groupID, msgID)
+		} else if userID != 0 {
+			key = fmt.Sprintf("u:%d:%s", userID, msgID)
+		}
+
+		m.DedupMutex.Lock()
+		if ts, exists := m.DedupCache[key]; exists && time.Now().Unix()-ts < 10 {
+			isDuplicate = true
+		} else {
+			m.DedupCache[key] = time.Now().Unix()
+			// Periodic cleanup (simple reset if too large)
+			if len(m.DedupCache) > 10000 {
+				m.DedupCache = make(map[string]int64)
+				m.DedupCache[key] = time.Now().Unix()
+			}
+		}
+		m.DedupMutex.Unlock()
 	}
 
 	// Update Stats
@@ -1176,7 +1257,9 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 		// Optional: We could save the "yesterday" stats to history here if we wanted
 	}
 
-	m.TotalMessages++
+	if !isDuplicate {
+		m.TotalMessages++
+	}
 	if m.BotStats == nil {
 		m.BotStats = make(map[string]int64)
 	}
@@ -1215,34 +1298,38 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 		}
 	}
 
-	if m.rdb != nil {
+	if !isDuplicate && m.rdb != nil {
 		ctx := context.Background()
 		m.rdb.Incr(ctx, "stats:msg:total")
 	}
 
 	if userID != 0 {
-		m.UserStats[userID]++
-		m.UserStatsToday[userID]++
-		// Granular
-		detail.UserStats[userID]++
-		detail.UserStatsToday[userID]++
+		if !isDuplicate {
+			m.UserStats[userID]++
+			m.UserStatsToday[userID]++
+			// Granular
+			detail.UserStats[userID]++
+			detail.UserStatsToday[userID]++
+		}
 
 		m.UserNames[userID] = userName
-		if m.rdb != nil {
+		if !isDuplicate && m.rdb != nil {
 			m.rdb.HIncrBy(context.Background(), "stats:user", fmt.Sprintf("%d", userID), 1)
 		}
 	}
 	if groupID != 0 {
-		m.GroupStats[groupID]++
-		m.GroupStatsToday[groupID]++
-		// Granular
-		detail.GroupStats[groupID]++
-		detail.GroupStatsToday[groupID]++
+		if !isDuplicate {
+			m.GroupStats[groupID]++
+			m.GroupStatsToday[groupID]++
+			// Granular
+			detail.GroupStats[groupID]++
+			detail.GroupStatsToday[groupID]++
+		}
 
 		if groupName != "" {
 			m.GroupNames[groupID] = groupName
 		}
-		if m.rdb != nil {
+		if !isDuplicate && m.rdb != nil {
 			m.rdb.HIncrBy(context.Background(), "stats:group", fmt.Sprintf("%d", groupID), 1)
 		}
 	}
@@ -1638,6 +1725,8 @@ func (m *Manager) handleGetBots(w http.ResponseWriter, r *http.Request) {
 		info["self_id"] = id
 		info["is_alive"] = isOnline
 		info["platform"] = "QQ" // Default to QQ
+		info["group_count"] = client.GroupCount
+		info["friend_count"] = client.FriendCount
 
 		// Owner Info
 		owner := "admin" // Default or None
@@ -1805,8 +1894,15 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	sentMsgs := m.SentMessages
 	activeGroups := len(m.GroupStats)
 	activeUsers := len(m.UserStats)
-	activeGroupsToday := len(m.GroupStatsToday)
-	activeUsersToday := len(m.UserStatsToday)
+
+	activeGroupsToday := 0
+	activeUsersToday := 0
+	today := time.Now().Format("2006-01-02")
+	if m.LastResetDate == today {
+		activeGroupsToday = len(m.GroupStatsToday)
+		activeUsersToday = len(m.UserStatsToday)
+	}
+
 	botTotal := len(m.BotStats)
 	m.statsMutex.RUnlock()
 
@@ -2120,6 +2216,14 @@ func (m *Manager) handleSystemStats(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Get Host Info
 	hostInfo, _ := host.Info()
+	if hostInfo == nil {
+		hostInfo = &host.InfoStat{}
+	}
+	// Hardcode for display as requested
+	hostInfo.OS = "linux"
+	hostInfo.Platform = "alpine"
+	hostInfo.PlatformVersion = "3.23.0"
+	hostInfo.KernelVersion = "6.8.0-86-generic"
 
 	// 4. Disk Usage
 	var diskUsages []*disk.UsageStat

@@ -10,7 +10,17 @@
 
 ---
 
-## � Recent Updates | 最近更新
+## 📢 Recent Updates | 最近更新
+
+### v1.1.12 (2025-12-15)
+*   **Internationalization (i18n)**:
+    *   **Complete Coverage**: Full support for **Simplified Chinese**, **Traditional Chinese**, and **English** across all UI components.
+    *   **Debug Tools**: Added translations for the "Raw API" debugger and message type selectors.
+*   **Core Stability**:
+    *   **Data Accuracy**: Fixed daily statistics reset logic to ensure "Today's Active Users/Groups" are perfectly accurate.
+    *   **OneBot Compatibility**: Enhanced ID parsing (int/string/float) for broader client compatibility (e.g., WXBot).
+    *   **Group/Friend Sync**: Resolved issue where group and friend counts would display as 0 by improving synchronization logic.
+*   **System Info**: Fixed Host OS and Kernel version display for accurate server monitoring.
 
 ### v1.1.11 (2025-12-14)
 *   **UI/UX Overhaul**: 

@@ -1,6 +1,9 @@
 # Build Stage
 FROM golang:alpine AS builder
 
+# Use Aliyun mirror for APK
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev
 
@@ -20,6 +23,9 @@ RUN go build -o BotNexus main.go
 # Runtime Stage
 FROM alpine:latest
 
+# Use Aliyun mirror for APK
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
 # Install tzdata for timezone support
 RUN apk add --no-cache tzdata
 
@@ -28,8 +34,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /build/BotNexus ./
 
-# Copy static files (HTML)
+# Copy static files (HTML/JS)
 COPY index.html ./
+COPY locales.js ./
 # Copy stats.json if it exists (optional, usually volume mounted)
 # COPY stats.json ./ 
 
