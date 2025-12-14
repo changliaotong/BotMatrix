@@ -35,6 +35,7 @@ def main():
     parser.add_argument('files', metavar='FILE', type=str, nargs='*', help='Files to update (default: all .py files)')
     parser.add_argument('--restart', action='store_true', default=True, help='Restart the container after update (default: True)')
     parser.add_argument('--no-restart', dest='restart', action='store_false', help='Do not restart the container')
+    parser.add_argument('--services', type=str, default="", help='Specific services to restart (e.g. "bot-manager wxbot")')
 
     args = parser.parse_args()
 
@@ -102,12 +103,10 @@ def main():
         pass
 
     # 4. 服务器端解压并部署
-    print("\n[Step 3/4] Extracting on server...")
+    print("\n[Step 3/4] Extracting and Deploying on server...")
     
     # 确保远程目录存在
     ensure_dir_cmd = f"sudo mkdir -p {REMOTE_DEPLOY_DIR} && sudo chown {USERNAME}:{USERNAME} {REMOTE_DEPLOY_DIR}"
-    # 这里我们直接执行，如果需要输入密码，-t 会处理
-    run_command(f'ssh -t {USERNAME}@{SERVER_IP} "{ensure_dir_cmd}"')
 
     # 命令逻辑：解压到临时目录 -> 移动/覆盖到部署目录 -> 设置权限 -> 清理压缩包
     # 使用 tar -mxzf 覆盖解压
@@ -121,19 +120,24 @@ def main():
     if USE_SUDO:
          remote_cmd_str = f"{SUDO_CMD}tar -mxzf {REMOTE_TMP_DIR}/{tar_filename} -C {REMOTE_DEPLOY_DIR} && rm {REMOTE_TMP_DIR}/{tar_filename}"
 
-    ssh_cmd = f'ssh -t {USERNAME}@{SERVER_IP} "{remote_cmd_str}"'
-    run_command(ssh_cmd)
-
     # 5. 重启容器
+    restart_cmd_str = ""
     if args.restart:
         print("\n[Step 4/4] Rebuilding and Restarting containers...")
         # 因为代码被打包进镜像，必须重新构建才能生效
         # 使用 up -d --build 可以智能构建并重启
-        restart_cmd = f'ssh -t {USERNAME}@{SERVER_IP} "cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose up -d --build"'
-        run_command(restart_cmd)
-        print("\nUpdate and Restart SUCCESS!")
+        services_arg = args.services if args.services else ""
+        restart_cmd_str = f" && cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose up -d --build {services_arg}"
     else:
-        print("\nUpdate SUCCESS! (Container not restarted)")
+        print("\n(Container not restarted)")
+
+    # 合并所有远程命令以减少 SSH 连接次数（减少密码输入）
+    full_remote_cmd = f"{ensure_dir_cmd} && {remote_cmd_str}{restart_cmd_str}"
+    
+    ssh_cmd = f'ssh -t {USERNAME}@{SERVER_IP} "{full_remote_cmd}"'
+    run_command(ssh_cmd)
+
+    print("\nUpdate Process Finished!")
 
 if __name__ == "__main__":
     main()

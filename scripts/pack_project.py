@@ -22,7 +22,8 @@ def pack_project():
         '*.html',
         'go.mod',
         'go.sum',
-        'stats.json'
+        'stats.json',
+        'VERSION'
     ]
     
     # 排除的目录和文件

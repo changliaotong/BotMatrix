@@ -18,25 +18,126 @@
             --text-muted: #6c757d;
             --border-color: #dee2e6;
             --primary-color: #0d6efd;
+            
+            --bg-console: #f8f9fa;
+            --text-console: #212529;
+            --color-log-time: #0d6efd;
+            --color-log-info: #198754;
+            --color-log-error: #dc3545;
+            --color-log-debug: #6c757d;
+            
+            --bg-list-item: #f8f9fa;
         }
-        body { background-color: var(--bg-body); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; }
-        .sidebar { height: 100vh; position: fixed; top: 0; left: 0; width: 250px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); padding-top: 20px; z-index: 1000; }
+
+        [data-theme="dark"] {
+            --bg-body: #121212;
+            --bg-sidebar: #1e1e1e;
+            --bg-card: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #adb5bd;
+            --border-color: #333333;
+            --primary-color: #3d8bfd;
+
+            --bg-console: #1e1e1e;
+            --text-console: #d4d4d4;
+            --color-log-time: #569cd6;
+            --color-log-info: #4ec9b0;
+            --color-log-error: #f44747;
+            --color-log-debug: #dcdcaa;
+            
+            --bg-list-item: #2c2c2c;
+        }
+
+        /* Dark Mode Overrides */
+        [data-theme="dark"] .dropdown-menu {
+            background-color: var(--bg-card);
+            border-color: var(--border-color);
+        }
+        [data-theme="dark"] .dropdown-item {
+            color: var(--text-main);
+        }
+        [data-theme="dark"] .dropdown-item:hover {
+            background-color: var(--bg-list-item);
+            color: var(--text-main);
+        }
+        [data-theme="dark"] .list-group-item {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+            border-color: var(--border-color);
+        }
+        /* Fix TAB title background in dark mode */
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: var(--bg-card) !important;
+            color: var(--text-main) !important;
+            border-color: var(--border-color) var(--border-color) var(--bg-body);
+        }
+        [data-theme="dark"] .card-header {
+            background-color: rgba(255, 255, 255, 0.05) !important;
+            border-bottom-color: var(--border-color);
+            color: var(--text-main);
+        }
+        [data-theme="dark"] .bg-white {
+            background-color: var(--bg-card) !important;
+        }
+
+        /* Dark Mode Modal & Table */
+        [data-theme="dark"] .modal-content {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+            border-color: var(--border-color);
+        }
+        [data-theme="dark"] .modal-header,
+        [data-theme="dark"] .modal-footer {
+            border-color: var(--border-color);
+        }
+        [data-theme="dark"] .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        [data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+            --bs-table-accent-bg: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+        [data-theme="dark"] .table-hover > tbody > tr:hover {
+            --bs-table-hover-bg: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+        [data-theme="dark"] .table thead.table-light th {
+            background-color: var(--bg-sidebar) !important;
+            color: var(--text-main) !important;
+            border-color: var(--border-color);
+        }
+        [data-theme="dark"] .table > :not(caption) > * > * {
+            border-color: var(--border-color);
+        }
+
+        body { background-color: var(--bg-body); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .sidebar { display: flex; flex-direction: column; height: 100vh; position: fixed; top: 0; left: 0; width: 250px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); padding-top: 20px; z-index: 1000; transition: background-color 0.3s, border-color 0.3s; }
+        .card { background-color: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 24px; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); border-radius: 0.75rem; transition: background-color 0.3s, border-color 0.3s; }
+        .form-control, .form-select { background-color: var(--bg-card); color: var(--text-main); border-color: var(--border-color); }
+        .form-control:focus, .form-select:focus { background-color: var(--bg-card); color: var(--text-main); border-color: var(--primary-color); }
+        .dropdown-menu { background-color: var(--bg-card); border-color: var(--border-color); }
+        .dropdown-item { color: var(--text-main); }
+        .dropdown-item:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-main); }
+        .list-group-item { background-color: var(--bg-card); color: var(--text-main); border-color: var(--border-color); }
+        .table { color: var(--text-main); border-color: var(--border-color); }
+        .nav-link { color: var(--text-muted); }
+        
         .sidebar a { color: var(--text-muted); padding: 12px 24px; display: block; text-decoration: none; border-left: 3px solid transparent; }
         .sidebar a:hover, .sidebar a.active { color: var(--primary-color); background-color: rgba(13, 110, 253, 0.1); border-left-color: var(--primary-color); font-weight: 500; }
         .main-content { margin-left: 250px; padding: 25px; }
-        .card { background-color: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 24px; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); border-radius: 0.75rem; }
-        .metric-value { font-size: 1.8rem; font-weight: 700; color: var(--primary-color); }
         .metric-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
-        .log-box { background-color: #1e1e1e; color: #d4d4d4; font-family: monospace; padding: 15px; height: 500px; overflow-y: auto; border-radius: 0.5rem; font-size: 0.85rem; }
-        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px; }
-        .log-time { color: #569cd6; margin-right: 10px; }
-        .log-level-INFO { color: #4ec9b0; }
-        .log-level-ERROR { color: #f44747; }
-        .log-level-DEBUG { color: #dcdcaa; }
+        .log-box { background-color: var(--bg-console); color: var(--text-console); font-family: monospace; padding: 15px; overflow-y: auto; border-radius: 0.5rem; font-size: 0.85rem; border: 1px solid var(--border-color); }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 2px; }
+        .log-time { color: var(--color-log-time); margin-right: 10px; }
+        .log-level-INFO { color: var(--color-log-info); }
+        .log-level-ERROR { color: var(--color-log-error); }
+        .log-level-DEBUG { color: var(--color-log-debug); }
 
         /* Mobile Responsive */
         .mobile-nav { display: none; }
         .overlay { display: none; }
+
+
 
         @media (max-width: 768px) {
             .sidebar {
@@ -77,36 +178,95 @@
             }
             
             /* Group Management Mobile */
-            .group-manage-container {
-                height: auto !important;
-            }
-            .group-manage-col {
-                height: 70vh !important;
-                margin-bottom: 20px;
-            }
+        .group-manage-container {
+            height: auto !important;
         }
-    </style>
+        .group-manage-col {
+            height: 70vh !important;
+            margin-bottom: 20px;
+        }
+    }
+    
+    /* Custom Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    @media (min-width: 768px) {
+        .stats-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (min-width: 1400px) {
+        .stats-grid { grid-template-columns: repeat(8, 1fr); }
+    }
+    .icon-circle {
+        width: 42px;
+        height: 42px;
+        border-radius: 50% !important; /* Force circle */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+    .stat-card {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        height: 100%;
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .stat-info {
+        overflow: hidden;
+        margin-left: 0.75rem;
+    }
+    .stat-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 2px;
+    }
+    .stat-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-main);
+        line-height: 1;
+    }
+</style>
 </head>
 <body>
+
+
     <!-- Login Modal -->
     <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">System Login</h5>
+                    <h5 class="modal-title">系统登录</h5>
                 </div>
                 <div class="modal-body">
                     <form id="loginForm">
                         <div class="mb-3">
-                            <label class="form-label">Username</label>
+                            <label class="form-label">用户名</label>
                             <input type="text" class="form-control" id="loginUser" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Password</label>
+                            <label class="form-label">密码</label>
                             <input type="password" class="form-control" id="loginPass" required>
                         </div>
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">Login</button>
+                            <button type="submit" class="btn btn-primary">登录</button>
                         </div>
                     </form>
                     <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
@@ -157,83 +317,146 @@
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted">Enterprise Bot Manager</small>
-                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.0</span>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.11</span>
             </div>
         </div>
         
-        <!-- Bot Selector -->
-        <div class="px-3 mb-3">
-            <label class="text-muted small mb-2">当前操作机器人</label>
-            <select class="form-select form-select-sm bg-dark text-white border-secondary" id="global-bot-selector" onchange="onBotChange()">
-                <option value="" disabled selected>等待连接...</option>
-            </select>
-        </div>
-
+        <!-- Bot Selector Removed -->
+        
         <nav class="nav flex-column">
-            <a href="#dashboard" class="nav-link active" onclick="showTab('dashboard')"><i class="bi bi-speedometer2"></i> 仪表盘</a>
-            <a href="#groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> 群组管理</a>
-            <a href="#bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> 机器人列表</a>
-            <a href="#events" class="nav-link" onclick="showTab('events')"><i class="bi bi-chat-dots"></i> 实时消息</a>
-            <a href="#logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> 系统日志</a>
-            <a href="#debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> 接口调试</a>
+            <a href="#dashboard" id="nav-dashboard" class="nav-link active" onclick="showTab('dashboard')"><i class="bi bi-speedometer2"></i> 运行状态</a>
+            <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> 云端矩阵</a>
+            <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> 群组好友</a>
+            <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> 系统监控</a>
+            <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> 调试测试</a>
+            <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> 系统设置</a>
             <a href="javascript:void(0)" class="nav-link text-danger mt-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i> 退出登录</a>
         </nav>
+
+        <div class="mt-auto p-3 border-top d-flex justify-content-around align-items-center">
+             <button class="btn btn-outline-secondary rounded-circle theme-toggle-btn-sidebar" onclick="toggleTheme()" title="切换深色/浅色模式" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-moon-stars"></i>
+            </button>
+            <a href="https://github.com/changliaotong/BotMatrix" target="_blank" class="btn btn-outline-secondary rounded-circle github-btn-sidebar" title="View on GitHub" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0;">
+                <i class="bi bi-github"></i>
+            </a>
+        </div>
     </div>
 
     <div class="main-content">
         <!-- Dashboard Tab -->
         <div id="tab-dashboard" class="tab-content">
-            <h2 class="mb-4">仪表盘</h2>
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <div class="card p-3">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary me-3">
-                                <i class="bi bi-robot fs-2"></i>
-                            </div>
-                            <div>
-                                <div class="text-muted small">在线机器人</div>
-                                <div class="fs-2 fw-bold" id="metric-bots">0</div>
-                            </div>
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="dash-system-stats">
+                <!-- 1. Bots -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-primary bg-opacity-10 text-primary">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div class="stat-info w-100">
+                        <div class="stat-label">机器人 (在线/离线/总数)</div>
+                        <div class="stat-value">
+                            <span id="metric-bots">0</span>
+                            <span class="text-muted fs-6 fw-normal">/</span>
+                            <span id="metric-bots-offline" class="text-muted fs-6 fw-normal">0</span>
+                            <span class="text-muted fs-6 fw-normal">/</span>
+                            <span id="metric-bots-total" class="text-muted fs-6 fw-normal">0</span>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card p-3">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning me-3">
-                                <i class="bi bi-cpu-fill fs-2"></i>
-                            </div>
-                            <div>
-                                <div class="text-muted small">CPU 使用率</div>
-                                <div class="fs-2 fw-bold" id="metric-cpu">0%</div>
-                            </div>
+
+                <!-- 2. CPU -->
+                <div class="stat-card" title="CPU详情">
+                    <div class="icon-circle bg-warning bg-opacity-10 text-warning">
+                        <i class="bi bi-cpu-fill"></i>
+                    </div>
+                    <div class="stat-info w-100">
+                        <div class="stat-label" id="metric-cpu-model">CPU 使用率</div>
+                        <div class="stat-value" id="metric-cpu">0%</div>
+                        <div class="d-flex justify-content-between mt-1" style="font-size: 0.65rem; color: var(--text-muted);">
+                             <span id="metric-cpu-cores">0 核</span>
+                             <span id="metric-cpu-freq">0 MHz</span>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card p-3">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success me-3">
-                                <i class="bi bi-memory fs-2"></i>
-                            </div>
-                            <div>
-                                <div class="text-muted small">系统内存</div>
-                                <div class="fs-2 fw-bold" id="metric-mem">0 MB</div>
-                            </div>
+
+                <!-- 3. System Info (New) -->
+                <div class="stat-card" title="主机系统">
+                    <div class="icon-circle bg-info bg-opacity-10 text-info">
+                        <i class="bi bi-pc-display"></i>
+                    </div>
+                    <div class="stat-info w-100">
+                        <div class="stat-label">主机系统</div>
+                        <div class="stat-value" style="font-size: 0.9rem;" id="metric-os-plat">alpine 3.23.0</div>
+                        <div class="d-flex justify-content-between mt-1" style="font-size: 0.65rem; color: var(--text-muted);">
+                             <span id="metric-os-ver">内核: 6.8.0-86-generic</span>
+                             <span id="metric-os-arch"></span>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card p-3">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info me-3">
-                                <i class="bi bi-activity fs-2"></i>
-                            </div>
-                            <div>
-                                <div class="text-muted small">Goroutines</div>
-                                <div class="fs-2 fw-bold" id="metric-goroutines">0</div>
-                            </div>
+
+                <!-- 3. Mem -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-success bg-opacity-10 text-success">
+                        <i class="bi bi-memory"></i>
+                    </div>
+                    <div class="stat-info w-100">
+                        <div class="stat-label">系统内存</div>
+                        <div class="stat-value">
+                            <span id="metric-mem">0 MB</span>
+                            <span id="metric-mem-total" class="text-muted fs-6 fw-normal ms-1">0 GB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Goroutines -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-info bg-opacity-10 text-info">
+                        <i class="bi bi-activity"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Goroutines</div>
+                        <div class="stat-value" id="metric-goroutines">0</div>
+                    </div>
+                </div>
+
+                <!-- 5. Groups -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-primary bg-opacity-10 text-primary">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">活跃群组 (今日/总计)</div>
+                        <div class="stat-value">
+                            <span id="metric-groups-today">0</span> <span class="text-muted fs-6 fw-normal">/</span> <span id="metric-groups-total" class="text-muted fs-6 fw-normal">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Users -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-success bg-opacity-10 text-success">
+                        <i class="bi bi-person"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">活跃用户 (今日/总计)</div>
+                        <div class="stat-value">
+                             <span id="metric-users-today">0</span> <span class="text-muted fs-6 fw-normal">/</span> <span id="metric-users-total" class="text-muted fs-6 fw-normal">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. Messages (Merged) -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-info bg-opacity-10 text-info">
+                        <i class="bi bi-chat-text"></i>
+                    </div>
+                    <div class="stat-info w-100">
+                        <div class="stat-label">消息统计 (接收/发送)</div>
+                        <div class="stat-value">
+                            <span id="metric-msgs-total">0</span>
+                            <span class="text-muted fs-6 fw-normal">/</span>
+                            <span id="metric-sent-total" class="text-muted fs-6 fw-normal">0</span>
                         </div>
                     </div>
                 </div>
@@ -242,54 +465,42 @@
             <div class="row mt-4">
                 <div class="col-md-8">
                      <!-- Charts Row -->
-                     <div class="row g-3 mb-4">
+                     <div class="row g-3 mb-4" id="dash-charts-row">
                         <div class="col-md-4">
-                            <div class="card h-100">
-                                <div class="card-header py-2 small fw-bold">CPU 趋势</div>
-                                <div class="card-body p-2">
-                                    <canvas id="cpuChart" height="150"></canvas>
+                            <div class="card h-100" style="cursor: pointer;" onclick="showSystemDetails('cpu')">
+                                <div class="card-header py-2 small fw-bold d-flex justify-content-between align-items-center">
+                                    <span>CPU 趋势</span>
+                                    <i class="bi bi-arrows-angle-expand text-muted"></i>
+                                </div>
+                                <div class="card-body p-2" style="height: 200px; position: relative;">
+                                    <canvas id="cpuChart"></canvas>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card h-100">
-                                <div class="card-header py-2 small fw-bold">内存趋势</div>
-                                <div class="card-body p-2">
-                                    <canvas id="memChart" height="150"></canvas>
+                            <div class="card h-100" style="cursor: pointer;" onclick="showSystemDetails('mem')">
+                                <div class="card-header py-2 small fw-bold d-flex justify-content-between align-items-center">
+                                    <span>内存趋势</span>
+                                    <i class="bi bi-arrows-angle-expand text-muted"></i>
+                                </div>
+                                <div class="card-body p-2" style="height: 200px; position: relative;">
+                                    <canvas id="memChart"></canvas>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card h-100">
-                                <div class="card-header py-2 small fw-bold">消息吞吐 (QPS)</div>
-                                <div class="card-body p-2">
-                                    <canvas id="msgChart" height="150"></canvas>
+                            <div class="card h-100" style="cursor: pointer;" onclick="showSystemDetails('msg')">
+                                <div class="card-header py-2 small fw-bold d-flex justify-content-between align-items-center">
+                                    <span>消息吞吐 (Msg/Min)</span>
+                                    <i class="bi bi-arrows-angle-expand text-muted"></i>
                                 </div>
+                        <div class="card-body p-2" style="height: 200px; position: relative;">
+                            <canvas id="msgChart"></canvas>
+                        </div>
                             </div>
                         </div>
                      </div>
-
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            🔥 高占用进程 (Top 10)
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-striped mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>PID</th>
-                                        <th>进程名</th>
-                                        <th>CPU %</th>
-                                        <th>内存 (MB)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="process-list">
-                                    <tr><td colspan="4" class="text-center">加载中...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
+ 
                     <div class="row">
                         <div class="col-md-6">
                             <div class="card mb-4">
@@ -320,8 +531,29 @@
                             </div>
                         </div>
                     </div>
+ 
+                    <div class="card mb-4" id="dash-process-card">
+                        <div class="card-header">
+                            🔥 高占用进程 (Top 10)
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>PID</th>
+                                        <th>进程名</th>
+                                        <th>CPU %</th>
+                                        <th>内存 (MB)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="process-list">
+                                    <tr><td colspan="4" class="text-center">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-                    <div class="card mb-4">
+                    <div class="card mb-4" id="dash-actions-card">
                         <div class="card-header">
                             快捷操作
                         </div>
@@ -335,120 +567,264 @@
                         </div>
                     </div>
                 </div>
-
+ 
                 <div class="col-md-4">
-                    <div class="card h-100">
+                    <div class="card h-100" id="dash-logs-card" style="background-color: var(--bg-card); border-color: var(--border-color);">
                         <div class="card-header">
                             最近活动
                         </div>
-                        <div class="card-body">
-                            <div id="recent-logs" class="log-box" style="height: 100%;"></div>
+                        <div class="card-body d-flex flex-column">
+                            <div id="recent-logs" class="log-box flex-grow-1"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Groups Tab -->
-        <div id="tab-groups" class="tab-content" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>群组管理</h2>
-                <button class="btn btn-primary" onclick="refreshGroupList()">
-                    <i class="bi bi-arrow-clockwise"></i> 刷新列表
-                </button>
+        <!-- System Details View -->
+        <div id="tab-view-system-details" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0"><i class="bi bi-graph-up"></i> 系统资源详情</h4>
+                <div>
+                    <div class="btn-group me-2">
+                        <button class="btn btn-outline-secondary btn-sm active" onclick="updateDetailTimeRange('1h')">1小时</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('24h')">24小时</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('7d')">7天</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('30d')">30天</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="updateDetailTimeRange('1y')">全年</button>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="showTab('#dashboard')">返回仪表盘</button>
+                </div>
             </div>
-            
-            <div class="row group-manage-container" style="height: calc(100vh - 150px);">
-                <!-- Left: Group List -->
-                <div class="col-md-4 h-100 group-manage-col">
-                    <div class="card h-100 d-flex flex-column">
-                        <div class="card-header bg-white">
-                            <input type="text" class="form-control mb-2" id="group-search" placeholder="搜索群组..." onkeyup="filterGroups()">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">排序:</small>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <button class="btn btn-outline-secondary active" onclick="sortGroups('name')" id="btn-sort-group-name">名称</button>
-                                    <button class="btn btn-outline-secondary" onclick="sortGroups('count')" id="btn-sort-group-count">人数</button>
-                                    <button class="btn btn-outline-secondary" onclick="sortGroups('id')" id="btn-sort-group-id">ID</button>
-                                </div>
-                            </div>
+
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <ul class="nav nav-tabs card-header-tabs" id="system-detail-tabs">
+                                <li class="nav-item">
+                                    <a class="nav-link active" href="#" onclick="switchDetailTab('cpu', event)">CPU & 负载</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('mem', event)">内存使用</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('msg', event)">消息吞吐</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('disk', event)">磁盘 & I/O</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="switchDetailTab('net', event)">网络流量</a>
+                                </li>
+                            </ul>
                         </div>
-                        <div class="card-body p-0" style="overflow-y: auto;">
-                            <div class="list-group list-group-flush" id="group-list">
-                                <div class="text-center p-4 text-muted">请先选择机器人并刷新</div>
+                        <div class="card-body">
+                            <!-- Large Chart Container -->
+                            <div style="height: 400px; position: relative;">
+                                <canvas id="detailChart"></canvas>
                             </div>
-                        </div>
-                        <div class="card-footer text-muted small" id="group-count">
-                            共 0 个群组
                         </div>
                     </div>
                 </div>
-                
-                <!-- Right: Group Details -->
-                <div class="col-md-8 h-100 group-manage-col">
-                    <div class="card h-100" id="group-detail-empty">
-                        <div class="card-body d-flex align-items-center justify-content-center text-muted">
-                            <div class="text-center">
-                                <i class="bi bi-chat-square-text fs-1"></i>
-                                <p class="mt-2">请从左侧选择一个群组查看详情</p>
+            </div>
+
+            <!-- Hardware Info Grid -->
+            <div class="row" id="hardware-info-grid">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- Groups & Friends Tab -->
+        <div id="tab-groups" class="tab-content" style="display: none;">
+            <div class="d-flex justify-content-start align-items-center mb-3 gap-2">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle d-flex align-items-center" type="button" id="global-bot-dropdown" data-bs-toggle="dropdown" aria-expanded="false" style="min-width: 220px;">
+                             <i class="bi bi-robot me-2"></i>
+                             <span id="global-bot-selected-content" class="text-truncate" style="max-width: 160px;">选择机器人...</span>
+                        </button>
+                        <ul class="dropdown-menu shadow-lg" id="global-bot-list" aria-labelledby="global-bot-dropdown" style="max-height: 400px; overflow-y: auto; width: 320px;">
+                            <!-- Items populated by JS -->
+                        </ul>
+                    </div>
+                    <input type="hidden" id="global-bot-selector" value="">
+                    
+                    <button class="btn btn-primary" onclick="refreshCurrentTabList()">
+                        <i class="bi bi-arrow-clockwise"></i> 刷新列表
+                    </button>
+            </div>
+
+            <ul class="nav nav-tabs mb-3" id="relation-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="tab-groups-list-tab" data-bs-toggle="tab" data-bs-target="#tab-pane-groups" type="button" role="tab" aria-selected="true">群组列表</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-friends-list-tab" data-bs-toggle="tab" data-bs-target="#tab-pane-friends" type="button" role="tab" aria-selected="false" onclick="ensureFriendListLoaded()">好友列表</button>
+                </li>
+            </ul>
+            
+            <div class="tab-content" style="height: calc(100vh - 200px);">
+                <!-- Groups Pane -->
+                <div class="tab-pane fade show active h-100" id="tab-pane-groups" role="tabpanel">
+                    <div class="row h-100">
+                        <!-- Left: Group List -->
+                        <div class="col-md-4 h-100 group-manage-col">
+                            <div class="card h-100 d-flex flex-column">
+                                <div class="card-header">
+                                    <input type="text" class="form-control mb-2" id="group-search" placeholder="搜索群组..." onkeyup="filterGroups()">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">排序:</small>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-secondary active" onclick="sortGroups('name')" id="btn-sort-group-name">名称</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortGroups('count')" id="btn-sort-group-count">人数</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortGroups('msg_today')" id="btn-sort-group-msg_today">今日</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortGroups('id')" id="btn-sort-group-id">ID</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0" style="overflow-y: auto;">
+                                    <div class="list-group list-group-flush" id="group-list">
+                                        <div class="text-center p-4 text-muted">请先选择机器人并刷新</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer text-muted small" id="group-count">
+                                    共 0 个群组
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Group Details -->
+                        <div class="col-md-8 h-100 group-manage-col">
+                            <div class="card h-100" id="group-detail-empty">
+                                <div class="card-body d-flex align-items-center justify-content-center text-muted">
+                                    <div class="text-center">
+                                        <i class="bi bi-chat-square-text fs-1"></i>
+                                        <p class="mt-2">请从左侧选择一个群组查看详情</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card h-100 d-flex flex-column" id="group-detail-content" style="display: none !important;">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <img id="current-group-avatar" src="" class="rounded-circle me-2" style="width: 32px; height: 32px; display: none;">
+                                        <div class="d-flex flex-column">
+                                            <h5 class="mb-0" id="current-group-name">群组名称</h5>
+                                            <small class="text-muted" id="current-group-stats" style="font-size: 0.75rem;">今日: 0 / 总计: 0</small>
+                                        </div>
+                                    </div>
+                                    <span class="badge bg-secondary" id="current-group-id">123456</span>
+                                </div>
+                                
+                                <!-- Chat/Members Area -->
+                                <div class="card-body d-flex flex-column p-0" style="overflow: hidden;">
+                                    <ul class="nav nav-tabs nav-justified" id="group-tabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members-view" type="button">成员列表</button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions-view" type="button">快捷操作</button>
+                                        </li>
+                                    </ul>
+                                    
+                                    <div class="tab-content flex-grow-1" style="overflow-y: auto;">
+                                        <!-- Members View -->
+                                        <div class="tab-pane fade show active p-0" id="members-view">
+                                            <div class="p-2 border-bottom bg-light">
+                                                <input type="text" class="form-control form-control-sm" id="member-search" placeholder="搜索成员(昵称/名片/ID)..." onkeyup="renderMembers()">
+                                            </div>
+                                            <table class="table table-hover mb-0">
+                                                <thead class="table-light sticky-top">
+                                                    <tr>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('card')">昵称/群名片 <i class="bi bi-sort-alpha-down" id="sort-icon-card"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('id')">QQ/WXID <i class="bi" id="sort-icon-id"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('role')">角色 <i class="bi" id="sort-icon-role"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('msg_today')">今日/总计 (全群) <i class="bi" id="sort-icon-msg_today"></i></th>
+                                                        <th style="cursor: pointer;" onclick="sortMembers('time')">最后发言 <i class="bi" id="sort-icon-time"></i></th>
+                                                        <th>操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="member-list-body">
+                                                    <!-- Members here -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        
+                                        <!-- Actions View -->
+                                        <div class="tab-pane fade p-3" id="actions-view">
+                                            <div class="mb-3">
+                                                <label class="form-label">发送群消息</label>
+                                                <textarea class="form-control" id="group-msg-input" rows="4" placeholder="在此输入消息内容..."></textarea>
+                                                <button class="btn btn-primary mt-2" onclick="sendGroupMsg()">
+                                                    <i class="bi bi-send"></i> 发送
+                                                </button>
+                                            </div>
+                                            <hr>
+                                            <div class="mb-3">
+                                                <label class="form-label text-danger">危险操作</label>
+                                                <div>
+                                                    <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()">退出该群</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="card h-100 d-flex flex-column" id="group-detail-content" style="display: none !important;">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0" id="current-group-name">群组名称</h5>
-                            <span class="badge bg-secondary" id="current-group-id">123456</span>
+                </div>
+
+                <!-- Friends Pane -->
+                <div class="tab-pane fade h-100" id="tab-pane-friends" role="tabpanel">
+                    <div class="row h-100">
+                        <!-- Left: Friend List -->
+                        <div class="col-md-4 h-100">
+                            <div class="card h-100 d-flex flex-column">
+                                <div class="card-header bg-white">
+                                    <input type="text" class="form-control mb-2" id="friend-search" placeholder="搜索好友..." onkeyup="filterFriends()">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">排序:</small>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-secondary active" onclick="sortFriends('name')" id="btn-sort-friend-name">名称</button>
+                                            <button class="btn btn-outline-secondary" onclick="sortFriends('id')" id="btn-sort-friend-id">ID</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0" style="overflow-y: auto;">
+                                    <div class="list-group list-group-flush" id="friend-list">
+                                        <div class="text-center p-4 text-muted">请先选择机器人并刷新</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer text-muted small" id="friend-count">
+                                    共 0 个好友
+                                </div>
+                            </div>
                         </div>
                         
-                        <!-- Chat/Members Area -->
-                        <div class="card-body d-flex flex-column p-0" style="overflow: hidden;">
-                            <ul class="nav nav-tabs nav-justified" id="group-tabs" role="tablist">
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members-view" type="button">成员列表</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions-view" type="button">快捷操作</button>
-                                </li>
-                            </ul>
-                            
-                            <div class="tab-content flex-grow-1" style="overflow-y: auto;">
-                                <!-- Members View -->
-                                <div class="tab-pane fade show active p-0" id="members-view">
-                                    <div class="p-2 border-bottom bg-light">
-                                        <input type="text" class="form-control form-control-sm" id="member-search" placeholder="搜索成员(昵称/名片/ID)..." onkeyup="renderMembers()">
+                        <!-- Right: Friend Details -->
+                        <div class="col-md-8 h-100">
+                            <div class="card h-100" id="friend-detail-empty">
+                                <div class="card-body d-flex align-items-center justify-content-center text-muted">
+                                    <div class="text-center">
+                                        <i class="bi bi-person fs-1"></i>
+                                        <p class="mt-2">请从左侧选择一个好友查看详情</p>
                                     </div>
-                                    <table class="table table-hover mb-0">
-                                        <thead class="table-light sticky-top">
-                                            <tr>
-                                                <th style="cursor: pointer;" onclick="sortMembers('card')">昵称/群名片 <i class="bi bi-sort-alpha-down" id="sort-icon-card"></i></th>
-                                                <th style="cursor: pointer;" onclick="sortMembers('id')">QQ/WXID <i class="bi" id="sort-icon-id"></i></th>
-                                                <th style="cursor: pointer;" onclick="sortMembers('role')">角色 <i class="bi" id="sort-icon-role"></i></th>
-                                                <th style="cursor: pointer;" onclick="sortMembers('time')">最后发言 <i class="bi" id="sort-icon-time"></i></th>
-                                                <th>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="member-list-body">
-                                            <!-- Members here -->
-                                        </tbody>
-                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="card h-100 d-flex flex-column" id="friend-detail-content" style="display: none !important;">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0" id="current-friend-name">好友名称</h5>
+                                    <span class="badge bg-secondary" id="current-friend-id">123456</span>
                                 </div>
                                 
-                                <!-- Actions View -->
-                                <div class="tab-pane fade p-3" id="actions-view">
+                                <div class="card-body p-3">
                                     <div class="mb-3">
-                                        <label class="form-label">发送群消息</label>
-                                        <textarea class="form-control" id="group-msg-input" rows="4" placeholder="在此输入消息内容..."></textarea>
-                                        <button class="btn btn-primary mt-2" onclick="sendGroupMsg()">
+                                        <label class="form-label">发送私聊消息</label>
+                                        <textarea class="form-control" id="friend-msg-input" rows="4" placeholder="在此输入消息内容..."></textarea>
+                                        <button class="btn btn-primary mt-2" onclick="sendFriendMsg()">
                                             <i class="bi bi-send"></i> 发送
                                         </button>
-                                    </div>
-                                    <hr>
-                                    <div class="mb-3">
-                                        <label class="form-label text-danger">危险操作</label>
-                                        <div>
-                                            <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()">退出该群</button>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -462,18 +838,36 @@
         <div id="tab-bots" style="display:none;">
             <ul class="nav nav-tabs mb-4">
                 <li class="nav-item">
-                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#view-bots">接入端 (Bots)</button>
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#view-bots">
+                        接入端 (Bots) <span id="badge-bots" class="badge bg-secondary ms-1">0</span>
+                    </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers()">处理端 (Workers)</button>
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers()">
+                        处理端 (Workers) <span id="badge-workers" class="badge bg-secondary ms-1">0</span>
+                    </button>
                 </li>
             </ul>
 
             <div class="tab-content">
                 <div class="tab-pane fade show active" id="view-bots">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3>在线机器人</h3>
-                        <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()">刷新</button>
+                        <div class="d-flex gap-2 align-items-center w-100">
+                            <input type="text" class="form-control form-control-sm" placeholder="搜索机器人..." style="width: 200px;" onkeyup="filterBots(this.value)">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" onclick="sortBots('name')" id="btn-sort-bot-name">名称</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('id')" id="btn-sort-bot-id">ID</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('platform')" id="btn-sort-bot-platform">协议</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('count')" id="btn-sort-bot-count">群数</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('msg')" id="btn-sort-bot-msg">消息</button>
+                                <button class="btn btn-outline-secondary" onclick="sortBots('time')" id="btn-sort-bot-time">时间</button>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary active" id="btn-bot-view-detail" onclick="setBotViewMode('detail')" title="详细模式"><i class="bi bi-card-text"></i></button>
+                                <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式"><i class="bi bi-grid-fill"></i></button>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()">刷新</button>
+                        </div>
                     </div>
                     <div class="row" id="bot-list-container">
                         <!-- Bot Cards -->
@@ -482,8 +876,20 @@
                 
                 <div class="tab-pane fade" id="view-workers">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3>业务处理节点</h3>
-                        <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()">刷新</button>
+                        <div class="d-flex gap-2 align-items-center w-100">
+                            <input type="text" class="form-control form-control-sm" placeholder="搜索Worker..." style="width: 200px;" onkeyup="filterWorkers(this.value)">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('addr')" id="btn-sort-worker-addr">地址</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('time')" id="btn-sort-worker-time">时间</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('msg')" id="btn-sort-worker-msg">处理</button>
+                                <button class="btn btn-outline-secondary" onclick="sortWorkers('status')" id="btn-sort-worker-status">状态</button>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary active" id="btn-worker-view-detail" onclick="setWorkerViewMode('detail')" title="详细模式"><i class="bi bi-card-text"></i></button>
+                                <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式"><i class="bi bi-grid-fill"></i></button>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()">刷新</button>
+                        </div>
                     </div>
                     <div class="row" id="worker-list-container">
                         <!-- Worker Cards -->
@@ -492,71 +898,285 @@
             </div>
         </div>
 
-        <!-- Real-time Events -->
-        <div id="tab-events" style="display:none;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="mb-0">实时消息监控</h4>
-                <div>
-                    <button class="btn btn-sm btn-outline-danger" onclick="clearEvents()">清空</button>
-                    <div class="form-check form-switch d-inline-block ms-2">
-                        <input class="form-check-input" type="checkbox" id="auto-scroll-events" checked>
-                        <label class="form-check-label" for="auto-scroll-events">自动滚动</label>
+        <!-- System Monitor (Merged Events & Logs) -->
+        <div id="tab-monitor" class="tab-content" style="display:none; height: calc(100vh - 80px);">
+            <ul class="nav nav-tabs mb-3" id="monitor-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="monitor-events-tab" data-bs-toggle="tab" data-bs-target="#view-events" type="button" role="tab">实时消息</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="monitor-logs-tab" data-bs-toggle="tab" data-bs-target="#view-logs" type="button" role="tab" onclick="fetchLogs()">系统日志</button>
+                </li>
+            </ul>
+            
+            <div class="tab-content h-100">
+                <!-- Real-time Events -->
+                <div class="tab-pane fade show active h-100" id="view-events" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">实时消息监控</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearEvents()">清空</button>
+                            <div class="form-check form-switch d-inline-block ms-2">
+                                <input class="form-check-input" type="checkbox" id="auto-scroll-events" checked>
+                                <label class="form-check-label" for="auto-scroll-events">自动滚动</label>
+                            </div>
+                            <span id="ws-status" class="badge bg-secondary ms-2">Disconnected</span>
+                        </div>
                     </div>
-                    <span id="ws-status" class="badge bg-secondary ms-2">Disconnected</span>
+                    <div class="log-box" id="event-container" style="height: calc(100% - 60px);">
+                        <div class="text-muted text-center mt-5">等待事件连接...</div>
+                    </div>
                 </div>
-            </div>
-            <div class="log-box" id="event-container" style="background-color: #2b2b2b; height: 600px;">
-                <!-- Events -->
-                <div class="text-muted text-center mt-5">等待事件连接...</div>
-            </div>
-        </div>
 
-        <!-- Logs -->
-        <div id="tab-logs" style="display:none;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="mb-0">系统日志</h4>
-                <div>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogs()">刷新</button>
-                    <div class="form-check form-switch d-inline-block ms-2">
-                        <input class="form-check-input" type="checkbox" id="auto-refresh-logs" checked>
-                        <label class="form-check-label" for="auto-refresh-logs">自动刷新</label>
-                    </div>
-                </div>
-            </div>
-            <div class="log-box" id="log-container">
                 <!-- Logs -->
+                <div class="tab-pane fade h-100" id="view-logs" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">系统日志</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogs()">刷新</button>
+                            <div class="form-check form-switch d-inline-block ms-2">
+                                <input class="form-check-input" type="checkbox" id="auto-refresh-logs" checked>
+                                <label class="form-check-label" for="auto-refresh-logs">自动刷新</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-box" id="log-container" style="height: calc(100% - 60px);">
+                        <!-- Logs -->
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Debug -->
+
+        <!-- Debug & Test (Merged) -->
         <div id="tab-debug" style="display:none;">
-            <h4 class="mb-4">接口调试</h4>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">发送 Action</div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label">Bot ID</label>
-                                <input type="text" class="form-control" id="action-bot-id" placeholder="留空则随机选择">
+            <h4 class="mb-4">调试测试</h4>
+            
+            <ul class="nav nav-tabs mb-3" id="debug-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="debug-visual-tab" data-bs-toggle="tab" data-bs-target="#debug-visual" type="button" role="tab">消息构造</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="debug-raw-tab" data-bs-toggle="tab" data-bs-target="#debug-raw" type="button" role="tab">接口调试</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- Visual Sender -->
+                <div class="tab-pane fade show active" id="debug-visual" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-7">
+                            <div class="card mb-3">
+                                <div class="card-header">发送消息</div>
+                                <div class="card-body">
+                                    <form id="msg-test-form" onsubmit="return false;">
+                                        <div class="mb-3">
+                                            <label class="form-label">目标用户/群组 UID</label>
+                                            <div class="input-group mb-2">
+                                                <select class="form-select" id="mt-group-select" onchange="onTestGroupSelectChange()">
+                                                    <option value="">-- 选择群组 (或手动输入 UID) --</option>
+                                                </select>
+                                                <button class="btn btn-outline-secondary" type="button" onclick="loadTestGroups()" title="刷新群组列表"><i class="bi bi-arrow-clockwise"></i></button>
+                                            </div>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="mt-target" placeholder="群号 (Group ID) 或 QQ号 (User ID)" oninput="updateCodePreview()">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="pasteTargetUid()">粘贴选中</button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">消息类型</label>
+                                            <select class="form-select" id="mt-type" onchange="updateMsgForm(); updateCodePreview()">
+                                                <option value="text">文本 (Text / CQ Code)</option>
+                                                <option value="image">图片 (Image)</option>
+                                                <option value="record">语音 (Record)</option>
+                                                <option value="video">视频 (Video)</option>
+                                                <option value="music">音乐分享 (Music)</option>
+                                                <option value="share">链接分享 (Share)</option>
+                                                <option value="poke">戳一戳 (Poke)</option>
+                                                <option value="json">JSON 卡片</option>
+                                                <option value="xml">XML 卡片</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Text Input -->
+                                        <div id="mt-group-text" class="mb-3">
+                                            <label class="form-label">内容</label>
+                                            <textarea class="form-control" id="mt-content" rows="3" placeholder="输入文本内容..." oninput="updateCodePreview()"></textarea>
+                                        </div>
+                                        
+                                        <!-- File/Image Input -->
+                                        <div id="mt-group-file" class="mb-3" style="display:none;">
+                                            <label class="form-label" id="mt-file-label">文件/图片 URL</label>
+                                            <input type="text" class="form-control" id="mt-file-path" placeholder="http://... or file://..." oninput="updateCodePreview()">
+                                        </div>
+        
+                                        <!-- Music Input -->
+                                        <div id="mt-group-music" class="mb-3" style="display:none;">
+                                            <label class="form-label">音乐分享</label>
+                                            <div class="input-group mb-2">
+                                                <span class="input-group-text">平台</span>
+                                                <select class="form-select" id="mt-music-type" onchange="updateCodePreview()">
+                                                    <option value="qq">QQ音乐</option>
+                                                    <option value="163">网易云音乐</option>
+                                                    <option value="migu">咪咕音乐</option>
+                                                </select>
+                                            </div>
+                                            <div class="input-group">
+                                                <span class="input-group-text">歌曲ID</span>
+                                                <input type="text" class="form-control" id="mt-music-id" placeholder="例如: 123456" oninput="updateCodePreview()">
+                                            </div>
+                                        </div>
+        
+                                        <!-- Share Input -->
+                                        <div id="mt-group-share" class="mb-3" style="display:none;">
+                                            <label class="form-label">链接分享</label>
+                                            <input type="text" class="form-control mb-2" id="mt-share-url" placeholder="跳转 URL" oninput="updateCodePreview()">
+                                            <input type="text" class="form-control mb-2" id="mt-share-title" placeholder="标题" oninput="updateCodePreview()">
+                                            <input type="text" class="form-control mb-2" id="mt-share-content" placeholder="内容描述" oninput="updateCodePreview()">
+                                            <input type="text" class="form-control" id="mt-share-image" placeholder="封面图片 URL" oninput="updateCodePreview()">
+                                        </div>
+                                        
+                                        <!-- JSON/XML Input -->
+                                        <div id="mt-group-raw" class="mb-3" style="display:none;">
+                                            <label class="form-label" id="mt-raw-label">内容</label>
+                                            <textarea class="form-control font-monospace" id="mt-raw-content" rows="5" placeholder='{"app":"com.tencent.miniapp", ...}' oninput="updateCodePreview()"></textarea>
+                                        </div>
+                                        
+                                        <div class="d-grid">
+                                            <button class="btn btn-primary" onclick="submitTestMsg()">发送消息</button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Action Name</label>
-                                <input type="text" class="form-control" id="action-name" value="send_group_msg">
+                        </div>
+                        <div class="col-md-5">
+                            <div class="card mb-3">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span>代码预览 (JSON)</span>
+                                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="copyCodePreview()">复制</button>
+                                </div>
+                                <div class="card-body bg-light p-0 position-relative">
+                                    <pre id="code-preview" class="p-3 mb-0" style="white-space: pre-wrap; font-size: 0.8rem; color: #d63384; max-height: 300px; overflow-y: auto;">{}</pre>
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Params (JSON)</label>
-                                <textarea class="form-control font-monospace" id="action-params" rows="5">{"group_id": 123456, "message": "Hello from Go Manager"}</textarea>
+                            <div class="card">
+                                <div class="card-header">发送结果</div>
+                                <div class="card-body p-3">
+                                     <div id="mt-result" class="alert alert-secondary mb-0" role="alert" style="display:none;"></div>
+                                </div>
                             </div>
-                            <button class="btn btn-primary" onclick="sendAction()">发送请求</button>
+                            <div class="mt-3 text-muted small">
+                                <ul>
+                                    <li>在此页面可视化的构造消息，并实时查看对应的 JSON 数据结构。</li>
+                                    <li>支持 OneBot 11 标准消息类型。</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Raw API -->
+                <div class="tab-pane fade" id="debug-raw" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">发送 Action</div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Bot ID</label>
+                                        <input type="text" class="form-control" id="action-bot-id" placeholder="留空则随机选择">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Action Name</label>
+                                        <input type="text" class="form-control" id="action-name" value="send_group_msg">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Params (JSON)</label>
+                                        <textarea class="form-control font-monospace" id="action-params" rows="5">{"group_id": 123456, "message": "Hello from Go Manager"}</textarea>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="sendAction()">发送请求</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">响应结果</div>
+                                <div class="card-body bg-light">
+                                    <pre id="action-result" class="mb-0">等待请求...</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Settings -->
+        <div id="tab-settings" style="display:none;">
+            <h4 class="mb-4">系统设置</h4>
+            
+            <div class="row">
+                <!-- Common Settings -->
                 <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">响应结果</div>
-                        <div class="card-body bg-light">
-                            <pre id="action-result" class="mb-0">等待请求...</pre>
+                    <div class="card mb-4">
+                        <div class="card-header">常用设置</div>
+                        <div class="card-body">
+                            <form>
+                                <div class="mb-3">
+                                    <label class="form-label">界面主题</label>
+                                    <select class="form-select" onchange="setTheme(this.value)">
+                                        <option value="light">浅色 (Light)</option>
+                                        <option value="dark">深色 (Dark)</option>
+                                        <option value="auto">跟随系统 (Auto)</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">数据刷新频率</label>
+                                    <select class="form-select">
+                                        <option value="2000">2 秒 (快速)</option>
+                                        <option value="5000">5 秒 (正常)</option>
+                                        <option value="10000">10 秒 (省流)</option>
+                                    </select>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="setting-notify" checked>
+                                    <label class="form-check-label" for="setting-notify">启用桌面通知</label>
+                                </div>
+                                <button type="button" class="btn btn-primary">保存常用设置</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Personal Preferences -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">个人偏好设置</div>
+                        <div class="card-body">
+                             <form>
+                                <div class="mb-3">
+                                    <label class="form-label">默认首页</label>
+                                    <select class="form-select">
+                                        <option value="dashboard">仪表盘</option>
+                                        <option value="bots">机器人列表</option>
+                                        <option value="groups">群组管理</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">每页显示条数</label>
+                                    <input type="number" class="form-control" value="20">
+                                </div>
+                                <hr>
+                                <div class="mb-3">
+                                    <label class="form-label">修改密码</label>
+                                    <input type="password" id="pwd-current" class="form-control mb-2" placeholder="当前密码">
+                                    <input type="password" id="pwd-new" class="form-control mb-2" placeholder="新密码">
+                                    <input type="password" id="pwd-confirm" class="form-control" placeholder="确认新密码">
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="updatePassword()">保存个人设置</button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -565,6 +1185,106 @@
     </div>
 
     <script>
+        // --- Theme Management ---
+        let themeListener = null;
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'auto';
+            applyTheme(savedTheme);
+            
+            // Sync with settings dropdown if exists
+            const themeSelect = document.querySelector('select[onchange="setTheme(this.value)"]');
+            if (themeSelect) themeSelect.value = savedTheme;
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+            const next = current === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+        }
+
+        function applyTheme(theme) {
+            // Remove existing listener if any
+            if (themeListener) {
+                window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', themeListener);
+                themeListener = null;
+            }
+
+            if (theme === 'auto') {
+                const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                
+                // Define listener
+                themeListener = (e) => {
+                     if (e.matches) {
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                    } else {
+                        document.documentElement.removeAttribute('data-theme');
+                    }
+                    updateThemeIcon();
+                };
+                
+                // Add listener
+                mq.addEventListener('change', themeListener);
+                
+                // Apply current
+                themeListener(mq);
+                
+            } else if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                updateThemeIcon();
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                updateThemeIcon();
+            }
+            
+            localStorage.setItem('theme', theme);
+        }
+
+        function updateThemeIcon() {
+            const btn = document.querySelector('.theme-toggle-btn-sidebar i');
+            if (btn) {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                btn.className = isDark ? 'bi bi-sun-fill' : 'bi bi-moon-stars';
+            }
+        }
+
+        function setTheme(theme) {
+            applyTheme(theme);
+        }
+
+        async function updatePassword() {
+            const oldPwd = document.getElementById('pwd-current').value;
+            const newPwd = document.getElementById('pwd-new').value;
+            const confirmPwd = document.getElementById('pwd-confirm').value;
+
+            if (!newPwd) return alert('请输入新密码');
+            if (newPwd !== confirmPwd) return alert('两次输入的密码不一致');
+            if (!oldPwd) return alert('请输入当前密码');
+
+            try {
+                const res = await fetch('/api/user/password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+                });
+
+                if (!res.ok) {
+                    const txt = await res.text();
+                    throw new Error(txt);
+                }
+
+                alert('密码修改成功');
+                document.getElementById('pwd-current').value = '';
+                document.getElementById('pwd-new').value = '';
+                document.getElementById('pwd-confirm').value = '';
+            } catch (e) {
+                alert('修改失败: ' + e.message);
+            }
+        }
+
         // --- Auth & Login ---
         let authToken = localStorage.getItem('wxbot_token');
         let authRole = localStorage.getItem('wxbot_role');
@@ -572,6 +1292,46 @@
 
         // Check Auth on Load
         document.addEventListener('DOMContentLoaded', () => {
+            initTheme(); // Initialize theme
+
+            // Check for Magic Link
+            const urlParams = new URLSearchParams(window.location.search);
+            const magicToken = urlParams.get('magic_token');
+
+            if (magicToken) {
+                // Attempt Magic Login
+                fetch('/api/login/magic', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: magicToken })
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error('Magic login failed');
+                    return res.json();
+                })
+                .then(data => {
+                    authToken = data.token;
+                    authRole = data.role;
+                    localStorage.setItem('wxbot_token', authToken);
+                    localStorage.setItem('wxbot_role', authRole);
+                    
+                    // Clear URL params
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    startApp();
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('免密码登录失败，链接可能已过期。请重新获取或使用密码登录。');
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    // Show login
+                    const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                    loginModal.show();
+                });
+                return;
+            }
+
             if (!authToken) {
                 const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
                 loginModal.show();
@@ -580,7 +1340,54 @@
             }
         });
 
+        function applyRoleUI(role) {
+            const isAdmin = (role === 'super' || role === 'admin');
+            
+            // Helper to toggle visibility
+            const toggle = (id, show) => {
+                const el = document.getElementById(id);
+                if(el) el.style.display = show ? '' : 'none';
+            };
+
+            // Sidebar
+            toggle('nav-debug', isAdmin);
+            
+            // Monitor Tabs
+            toggle('monitor-logs-tab', isAdmin);
+            
+            // Dashboard
+            toggle('dash-system-stats', isAdmin); // CPU/Mem cards
+            // Charts should be visible to everyone now (with limited/relevant data)
+            toggle('dash-charts-row', true); 
+            toggle('dash-process-card', isAdmin); // Process List
+            toggle('dash-actions-card', isAdmin); // Quick Actions
+            toggle('dash-logs-card', isAdmin); // Recent Logs
+            
+            // If user is not admin and is currently on a hidden tab, switch to dashboard
+            if (!isAdmin) {
+                const hash = window.location.hash;
+                if (hash === '#debug') {
+                    showTab('dashboard');
+                }
+            }
+        }
+
         function startApp() {
+            applyRoleUI(authRole);
+            
+            // Restore tab from hash
+            const hash = window.location.hash;
+            if (hash) {
+                let tabId = hash.substring(1);
+                if (document.getElementById('tab-' + tabId)) {
+                    const isAdmin = (authRole === 'super' || authRole === 'admin');
+                    if (tabId === 'debug' && !isAdmin) {
+                        tabId = 'dashboard';
+                    }
+                    showTab(tabId);
+                }
+            }
+
             initWebSocket();
             // Load initial data
             updateStats();
@@ -597,29 +1404,40 @@
             setInterval(fetchWorkers, 5000);
         }
 
-        function updateSystemStats() {
+        let lastSystemStats = null;
+
+        async function fetchSystemStats(updateDetails = false) {
             if (!authToken) return;
-            fetch('/api/system/stats', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
-            .then(r => r.json())
-            .then(data => {
+            try {
+                const res = await fetch('/api/system/stats', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!res.ok) throw new Error(res.statusText);
+                const data = await res.json();
+                lastSystemStats = data;
+                window.lastSystemStats = data; // Ensure global access
+
+                // Update Dashboard Cards
                 if (document.getElementById('metric-cpu')) {
                     document.getElementById('metric-cpu').innerText = data.cpu_usage.toFixed(1) + '%';
                 }
-                
-                // Update CPU Chart
-                if (cpuChart) {
-                    const now = new Date().toLocaleTimeString();
-                    if (cpuChart.data.labels.length > 20) {
-                        cpuChart.data.labels.shift();
-                        cpuChart.data.datasets[0].data.shift();
+
+                // OS Info
+                if (data.host_info) {
+                    // Hardcoded per user request
+                    if (document.getElementById('metric-os-plat')) {
+                        document.getElementById('metric-os-plat').innerText = 'alpine 3.23.0';
+                        document.getElementById('metric-os-plat').title = 'alpine 3.23.0';
                     }
-                    cpuChart.data.labels.push(now);
-                    cpuChart.data.datasets[0].data.push(data.cpu_usage);
-                    cpuChart.update();
+                    if (document.getElementById('metric-os-ver')) {
+                         document.getElementById('metric-os-ver').innerText = '内核: 6.8.0-86-generic';
+                    }
+                    if (document.getElementById('metric-os-arch')) {
+                         document.getElementById('metric-os-arch').innerText = data.host_info.kernelArch;
+                    }
                 }
 
+                // Process List
                 const procBody = document.getElementById('process-list');
                 if (procBody && data.processes) {
                     if (data.processes.length === 0) {
@@ -635,8 +1453,19 @@
                         `).join('');
                     }
                 }
-            })
-            .catch(e => console.error("Update system stats error:", e));
+                
+                // Update Detail View if active
+                if (updateDetails || (document.getElementById('tab-view-system-details') && document.getElementById('tab-view-system-details').style.display !== 'none')) {
+                    updateDetailChart(); // This uses lastSystemStats
+                }
+
+            } catch (e) {
+                console.error("Fetch system stats error:", e);
+            }
+        }
+
+        function updateSystemStats() {
+            fetchSystemStats();
         }
 
         // Handle Login Submit
@@ -656,7 +1485,7 @@
                 });
                 
                 if (!res.ok) {
-                    throw new Error('Login failed: ' + res.statusText);
+                    throw new Error('登录失败：用户名或密码错误');
                 }
                 
                 const data = await res.json();
@@ -665,6 +1494,8 @@
                 localStorage.setItem('wxbot_token', authToken);
                 localStorage.setItem('wxbot_role', authRole);
                 
+                applyRoleUI(authRole);
+
                 // Hide Modal
                 const loginModalEl = document.getElementById('loginModal');
                 const modal = bootstrap.Modal.getInstance(loginModalEl);
@@ -696,23 +1527,40 @@
         }
 
         function showTab(tabId) {
+            // Handle #hash
+            if (tabId.startsWith('#')) tabId = tabId.substring(1);
+
             document.querySelectorAll('.main-content > div[id^="tab-"]').forEach(el => el.style.display = 'none');
             document.getElementById('tab-' + tabId).style.display = 'block';
             document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
-            document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`).classList.add('active');
+            const activeLink = document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`);
+            if (activeLink) activeLink.classList.add('active');
             
             if (tabId === 'logs') fetchLogs();
             if (tabId === 'bots') {
                 fetchBots();
                 fetchWorkers();
             }
+            if (tabId === 'groups') {
+                 // If we have a bot selected but no data loaded, try to load
+                 // Avoid double-fetch if we are currently switching bots (indicated by "切换机器人中" in the list)
+                 const listEl = document.getElementById('group-list');
+                 if (currentBotId && currentGroups.length === 0 && listEl && !listEl.innerHTML.includes('切换机器人中')) {
+                     refreshGroupList();
+                 }
+            }
 
             // Close sidebar on mobile
             if (window.innerWidth <= 768) {
                 const sidebar = document.getElementById('sidebar');
                 const overlay = document.getElementById('sidebar-overlay');
-                sidebar.classList.remove('show');
-                overlay.classList.remove('show');
+                if (sidebar) sidebar.classList.remove('show');
+                if (overlay) overlay.classList.remove('show');
+            }
+
+            // Update URL hash
+            if (window.location.hash !== '#' + tabId) {
+                window.history.replaceState(null, null, '#' + tabId);
             }
         }
 
@@ -721,6 +1569,12 @@
         let cpuChart = null;
         let msgChart = null;
         let lastMsgCount = 0;
+        let lastSentCount = 0;
+        let msgHistory = [];
+        let sentHistory = [];
+        let recvHistory = [];
+        const MSG_HISTORY_SIZE = 30; // 30 * 2s = 60s
+        const MAX_CHART_POINTS = 1800; // 1800 * 2s = 60 minutes
 
         function initCharts() {
             try {
@@ -789,20 +1643,46 @@
                         type: 'line',
                         data: {
                             labels: [],
-                            datasets: [{
-                                label: 'Messages',
-                                data: [],
-                                borderColor: '#198754',
-                                tension: 0.4,
-                                fill: true,
-                                backgroundColor: 'rgba(25, 135, 84, 0.1)'
-                            }]
+                            datasets: [
+                                {
+                                    label: '接收',
+                                    data: [],
+                                    borderColor: '#198754', // Green
+                                    tension: 0.4,
+                                    fill: false,
+                                    borderWidth: 2
+                                },
+                                {
+                                    label: '发送',
+                                    data: [],
+                                    borderColor: '#0d6efd', // Blue
+                                    tension: 0.4,
+                                    fill: false,
+                                    borderWidth: 2
+                                },
+                                {
+                                    label: '总量',
+                                    data: [],
+                                    borderColor: '#6c757d', // Gray
+                                    tension: 0.4,
+                                    fill: false,
+                                    borderDash: [5, 5],
+                                    borderWidth: 1
+                                }
+                            ]
                         },
                         options: {
                             responsive: true,
                             animation: false,
                             maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            },
+                            plugins: { 
+                                legend: { display: true, position: 'top', labels: { boxWidth: 10, usePointStyle: true } },
+                                tooltip: { mode: 'index', intersect: false }
+                            },
                             scales: { 
                                 y: { beginAtZero: true, grid: { display: true, drawBorder: false } },
                                 x: { grid: { display: false } }
@@ -832,21 +1712,109 @@
             })
                 .then(r => r.json())
                 .then(data => {
+                    window.latestStats = data; // Store globally for details view
                     if (document.getElementById('metric-goroutines')) {
                         document.getElementById('metric-goroutines').innerText = data.goroutines;
                     }
                     if (document.getElementById('metric-mem')) {
                         document.getElementById('metric-mem').innerText = formatBytes(data.memory_alloc);
                     }
+                    if (document.getElementById('metric-mem-total') && data.memory_total) {
+                        document.getElementById('metric-mem-total').innerText = formatBytes(data.memory_total);
+                    }
+
                     if (document.getElementById('metric-bots')) {
                         document.getElementById('metric-bots').innerText = data.bot_count;
                     }
+                    if (document.getElementById('metric-bots-offline')) {
+                        document.getElementById('metric-bots-offline').innerText = data.bot_count_offline || 0;
+                    }
+                    if (document.getElementById('metric-bots-total')) {
+                        document.getElementById('metric-bots-total').innerText = data.bot_count_total || 0;
+                    }
+
+                    // CPU Details
+                    if (document.getElementById('metric-cpu-model') && data.cpu_model) {
+                         let model = data.cpu_model;
+                         // Keep it reasonably short for the label
+                         if (model.length > 25) model = model.substring(0, 25) + '...';
+                         document.getElementById('metric-cpu-model').innerText = model;
+                         // Set title on the card container (grandparent)
+                         const card = document.getElementById('metric-cpu-model').closest('.stat-card');
+                         if (card) card.title = data.cpu_model;
+                    }
+                    if (document.getElementById('metric-cpu-cores')) {
+                         document.getElementById('metric-cpu-cores').innerText = (data.cpu_cores_physical || 0) + 'P/' + (data.cpu_cores_logical || 0) + 'L 核';
+                    }
+                    if (document.getElementById('metric-cpu-freq')) {
+                         document.getElementById('metric-cpu-freq').innerText = (data.cpu_freq || 0).toFixed(0) + ' MHz';
+                    }
+
+                    // New metrics
+                    if (document.getElementById('metric-groups-today')) document.getElementById('metric-groups-today').innerText = data.active_groups_today;
+                    if (document.getElementById('metric-groups-total')) document.getElementById('metric-groups-total').innerText = data.active_groups;
+                    if (document.getElementById('metric-users-today')) document.getElementById('metric-users-today').innerText = data.active_users_today;
+                    if (document.getElementById('metric-users-total')) document.getElementById('metric-users-total').innerText = data.active_users;
+                    if (document.getElementById('metric-msgs-total')) document.getElementById('metric-msgs-total').innerText = data.message_count;
+                    if (document.getElementById('metric-sent-total')) document.getElementById('metric-sent-total').innerText = data.sent_message_count;
 
                     const now = new Date().toLocaleTimeString();
 
+                    let justInitialized = false;
+
+                    // --- Init History (Once) ---
+                    if (data.cpu_trend && cpuChart && cpuChart.data.labels.length === 0) {
+                        data.cpu_trend.forEach(() => cpuChart.data.labels.push(''));
+                        cpuChart.data.datasets[0].data = data.cpu_trend;
+                        cpuChart.update();
+                        justInitialized = true;
+                    }
+                    if (data.mem_trend && memChart && memChart.data.labels.length === 0) {
+                        data.mem_trend.forEach(() => memChart.data.labels.push(''));
+                        memChart.data.datasets[0].data = data.mem_trend.map(v => v / 1024 / 1024);
+                        memChart.update();
+                        justInitialized = true;
+                    }
+                    if (data.msg_trend && msgChart && msgChart.data.labels.length === 0) {
+                        // Load history
+                        msgHistory = [...data.msg_trend];
+                        sentHistory = data.sent_trend ? [...data.sent_trend] : new Array(msgHistory.length).fill(0);
+                        recvHistory = data.recv_trend ? [...data.recv_trend] : new Array(msgHistory.length).fill(0);
+
+                        // Reconstruct chart data (Moving Sum)
+                        const chartDataRecv = [];
+                        const chartDataSent = [];
+                        const chartDataTotal = [];
+                        const labels = [];
+                        
+                        for (let i = 0; i < msgHistory.length; i++) {
+                            let start = Math.max(0, i - MSG_HISTORY_SIZE + 1);
+                            let sumTotal = 0, sumSent = 0, sumRecv = 0;
+                            for (let j = start; j <= i; j++) {
+                                sumTotal += msgHistory[j] || 0;
+                                sumSent += sentHistory[j] || 0;
+                                sumRecv += recvHistory[j] || 0;
+                            }
+                            chartDataRecv.push(sumRecv);
+                            chartDataSent.push(sumSent);
+                            chartDataTotal.push(sumTotal);
+                            labels.push('');
+                        }
+                        msgChart.data.labels = labels;
+                        msgChart.data.datasets[0].data = chartDataRecv;
+                        msgChart.data.datasets[1].data = chartDataSent;
+                        msgChart.data.datasets[2].data = chartDataTotal;
+                        msgChart.update();
+                        
+                        // Sync counters
+                        lastMsgCount = data.message_count || 0;
+                        lastSentCount = data.sent_message_count || 0;
+                        justInitialized = true;
+                    }
+
                     // Update Memory Chart
-                    if (memChart) {
-                        if (memChart.data.labels.length > 20) {
+                    if (memChart && !justInitialized) {
+                        if (memChart.data.labels.length > MAX_CHART_POINTS) {
                             memChart.data.labels.shift();
                             memChart.data.datasets[0].data.shift();
                         }
@@ -856,27 +1824,167 @@
                     }
                     
                     // Update Message Chart
-                    if (msgChart) {
-                        const currentCount = data.message_count || 0;
-                        const diff = currentCount - lastMsgCount;
-                        // Avoid spike on first load
-                        const val = lastMsgCount === 0 ? 0 : diff;
+                    if (msgChart && !justInitialized) {
+                        const currentTotal = data.message_count || 0;
+                        const currentSent = data.sent_message_count || 0;
                         
-                        lastMsgCount = currentCount;
+                        const diffTotal = currentTotal - lastMsgCount;
+                        const diffSent = currentSent - lastSentCount;
+                        
+                        // Avoid spike on first load
+                        const valTotal = lastMsgCount === 0 ? 0 : (diffTotal < 0 ? 0 : diffTotal);
+                        const valSent = lastSentCount === 0 ? 0 : (diffSent < 0 ? 0 : diffSent);
+                        const valRecv = (valTotal - valSent) < 0 ? 0 : (valTotal - valSent);
+                        
+                        lastMsgCount = currentTotal;
+                        lastSentCount = currentSent;
 
-                        if (msgChart.data.labels.length > 20) {
+                        // Add to history
+                        msgHistory.push(valTotal);
+                        sentHistory.push(valSent);
+                        recvHistory.push(valRecv);
+
+                        if (msgHistory.length > MSG_HISTORY_SIZE) msgHistory.shift();
+                        if (sentHistory.length > MSG_HISTORY_SIZE) sentHistory.shift();
+                        if (recvHistory.length > MSG_HISTORY_SIZE) recvHistory.shift();
+
+                        const rateTotal = msgHistory.reduce((a, b) => a + b, 0);
+                        const rateSent = sentHistory.reduce((a, b) => a + b, 0);
+                        const rateRecv = recvHistory.reduce((a, b) => a + b, 0);
+
+                        if (msgChart.data.labels.length > MAX_CHART_POINTS) {
                             msgChart.data.labels.shift();
-                            msgChart.data.datasets[0].data.shift();
+                            msgChart.data.datasets.forEach(d => d.data.shift());
                         }
                         msgChart.data.labels.push(now);
-                        msgChart.data.datasets[0].data.push(val);
+                        msgChart.data.datasets[0].data.push(rateRecv);
+                        msgChart.data.datasets[1].data.push(rateSent);
+                        msgChart.data.datasets[2].data.push(rateTotal);
                         msgChart.update();
                     }
+
+                    // Update CPU Chart
+                    if (cpuChart && !justInitialized) {
+                        if (cpuChart.data.labels.length > MAX_CHART_POINTS) {
+                            cpuChart.data.labels.shift();
+                            cpuChart.data.datasets[0].data.shift();
+                        }
+                        cpuChart.data.labels.push(now);
+                        cpuChart.data.datasets[0].data.push(data.cpu_usage);
+                        cpuChart.update();
+                    }
+
+                    // Save stats to cache
+                    saveStatsToCache({
+                        bot_count: data.bot_count,
+                        bot_count_offline: data.bot_count_offline || 0,
+                        bot_count_total: data.bot_count_total || 0,
+                        // Cache other critical stats if needed
+                        memory_total: data.memory_total,
+                        cpu_model: data.cpu_model,
+                        cpu_cores_physical: data.cpu_cores_physical,
+                        cpu_cores_logical: data.cpu_cores_logical,
+                        cpu_freq: data.cpu_freq
+                    });
+
                 })
                 .catch(e => console.error("Update stats error:", e));
         }
+
+        // --- Cache Logic ---
+        function saveStatsToCache(stats) {
+            localStorage.setItem('bot_stats_cache', JSON.stringify(stats));
+        }
+
+        function loadStatsFromCache() {
+            const cached = localStorage.getItem('bot_stats_cache');
+            if (cached) {
+                try {
+                    const stats = JSON.parse(cached);
+                    if (document.getElementById('metric-bots')) {
+                        document.getElementById('metric-bots').innerText = stats.bot_count || 0;
+                    }
+                    if (document.getElementById('metric-bots-offline')) {
+                        document.getElementById('metric-bots-offline').innerText = stats.bot_count_offline || 0;
+                    }
+                    if (document.getElementById('metric-bots-total')) {
+                        document.getElementById('metric-bots-total').innerText = stats.bot_count_total || 0;
+                    }
+                    
+                    if (document.getElementById('metric-mem-total') && stats.memory_total) {
+                        document.getElementById('metric-mem-total').innerText = formatBytes(stats.memory_total);
+                    }
+
+                    // CPU Details Cache
+                    if (document.getElementById('metric-cpu-model') && stats.cpu_model) {
+                         let model = stats.cpu_model;
+                         if (model.length > 25) model = model.substring(0, 25) + '...';
+                         document.getElementById('metric-cpu-model').innerText = model;
+                         const card = document.getElementById('metric-cpu-model').closest('.stat-card');
+                         if (card) card.title = stats.cpu_model;
+                    }
+                    if (document.getElementById('metric-cpu-cores') && stats.cpu_cores_physical) {
+                         document.getElementById('metric-cpu-cores').innerText = (stats.cpu_cores_physical || 0) + 'P/' + (stats.cpu_cores_logical || 0) + 'L 核';
+                    }
+                    if (document.getElementById('metric-cpu-freq') && stats.cpu_freq) {
+                         document.getElementById('metric-cpu-freq').innerText = (stats.cpu_freq || 0).toFixed(0) + ' MHz';
+                    }
+                } catch (e) {
+                    console.error("Failed to load cached stats", e);
+                }
+            }
+        }
+        
+        // Load cache immediately
+        loadStatsFromCache();
         
         // --- Bots & Workers ---
+        let currentBots = [];
+        let botSortBy = 'name'; // name, id, count, time
+        let botSortAsc = true;
+        let botFilterText = '';
+        let botViewMode = localStorage.getItem('bot_view_mode') || 'detail';
+
+        let currentWorkers = [];
+        let workerSortBy = 'addr'; // addr, time, status
+        let workerSortAsc = true;
+        let workerFilterText = '';
+        let workerViewMode = localStorage.getItem('worker_view_mode') || 'detail';
+
+        // Update View Mode UI on Load
+        document.addEventListener('DOMContentLoaded', () => {
+             updateViewModeUI('bot', botViewMode);
+             updateViewModeUI('worker', workerViewMode);
+        });
+
+        function setBotViewMode(mode) {
+            botViewMode = mode;
+            localStorage.setItem('bot_view_mode', mode);
+            updateViewModeUI('bot', mode);
+            renderBots();
+        }
+
+        function setWorkerViewMode(mode) {
+            workerViewMode = mode;
+            localStorage.setItem('worker_view_mode', mode);
+            updateViewModeUI('worker', mode);
+            renderWorkers();
+        }
+
+        function updateViewModeUI(type, mode) {
+            const btnDetail = document.getElementById(`btn-${type}-view-detail`);
+            const btnCompact = document.getElementById(`btn-${type}-view-compact`);
+            if (btnDetail && btnCompact) {
+                if (mode === 'detail') {
+                    btnDetail.classList.add('active');
+                    btnCompact.classList.remove('active');
+                } else {
+                    btnDetail.classList.remove('active');
+                    btnCompact.classList.add('active');
+                }
+            }
+        }
+
         function timeAgo(date) {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
             let interval = seconds / 31536000;
@@ -903,33 +2011,253 @@
             })
                 .then(r => r.json())
                 .then(bots => {
-                    const container = document.getElementById('bot-list-container');
+                    currentBots = bots;
+                    const onlineCount = bots.filter(b => b.is_alive).length;
+                    
+                    // Update Badge
+                    const badge = document.getElementById('badge-bots');
+                    if (badge) badge.innerText = onlineCount + '/' + bots.length;
+
+                    // Update Metrics
+                    if (document.getElementById('metric-bots')) {
+                        document.getElementById('metric-bots').innerText = onlineCount;
+                    }
+
+                    // Update Global Selector (Dropdown)
+                    const selectorInput = document.getElementById('global-bot-selector');
+                    const dropdownList = document.getElementById('global-bot-list');
+                    const currentVal = selectorInput.value;
+                    
                     if (bots.length === 0) {
-                        container.innerHTML = '<div class="col-12 text-center text-muted">暂无在线机器人</div>';
+                        dropdownList.innerHTML = '<li><span class="dropdown-item disabled">无机器人数据</span></li>';
+                        document.getElementById('global-bot-selected-content').innerHTML = '无机器人数据';
                     } else {
-                        container.innerHTML = bots.map(bot => {
-                            const connDate = new Date(bot.connected);
-                            const timeStr = timeAgo(bot.connected);
+                        dropdownList.innerHTML = bots.map(bot => {
+                            const isOffline = !bot.is_alive;
+                            const statusClass = isOffline ? 'text-muted' : 'text-success fw-bold';
+                            const badge = isOffline ? '<span class="badge bg-secondary ms-auto">离线</span>' : '<span class="badge bg-success ms-auto">在线</span>';
+                            const platform = bot.platform || 'QQ';
+                            let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
+                            if (platform === 'QQ') {
+                                avatarUrl = `http://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
+                            }
+                            
                             return `
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center p-2 ${isOffline ? 'disabled' : ''}" href="#" onclick="${isOffline ? 'return false;' : `selectBotFromDropdown('${bot.self_id}')`}">
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: var(--bg-list-item);">
+                                            <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+                                        </div>
+                                        <div class="flex-grow-1 overflow-hidden">
+                                            <div class="d-flex align-items-center">
+                                                <div class="fw-bold text-truncate ${statusClass}" style="max-width: 120px;">${bot.nickname || bot.self_id}</div>
+                                                ${badge}
+                                            </div>
+                                            <div class="text-muted small">${bot.self_id}</div>
+                                        </div>
+                                    </a>
+                                </li>
+                            `;
+                        }).join('');
+                        
+                        // Restore selection or select first online
+                        let targetId = currentVal;
+                        if (!targetId || !bots.find(b => b.self_id === targetId && b.is_alive)) {
+                            const firstOnline = bots.find(b => b.is_alive);
+                            if (firstOnline) {
+                                targetId = firstOnline.self_id;
+                            }
+                        }
+                        
+                        if (targetId) {
+                            updateBotSelectorUI(targetId);
+                            if (currentBotId !== targetId) {
+                                currentBotId = targetId;
+                            }
+                        }
+                    }
+
+                    renderBots();
+                });
+        }
+
+        function filterBots(text) {
+            botFilterText = text.toLowerCase();
+            renderBots();
+        }
+
+        function sortBots(field) {
+            if (botSortBy === field) {
+                botSortAsc = !botSortAsc;
+            } else {
+                botSortBy = field;
+                botSortAsc = true;
+                if (field === 'count' || field === 'time' || field === 'msg') botSortAsc = false;
+            }
+
+            // Update UI
+            ['name', 'id', 'platform', 'count', 'time', 'msg'].forEach(f => {
+                const btn = document.getElementById(`btn-sort-bot-${f}`);
+                if (f === botSortBy) {
+                    btn.classList.add('active');
+                    let label = '';
+                    switch(f) {
+                        case 'name': label = '名称'; break;
+                        case 'id': label = 'ID'; break;
+                        case 'platform': label = '协议'; break;
+                        case 'count': label = '群数'; break;
+                        case 'time': label = '时间'; break;
+                        case 'msg': label = '消息'; break;
+                    }
+                    btn.innerHTML = label + (botSortAsc ? ' ↑' : ' ↓');
+                } else {
+                    btn.classList.remove('active');
+                    let label = '';
+                    switch(f) {
+                        case 'name': label = '名称'; break;
+                        case 'id': label = 'ID'; break;
+                        case 'platform': label = '协议'; break;
+                        case 'count': label = '群数'; break;
+                        case 'time': label = '时间'; break;
+                        case 'msg': label = '消息'; break;
+                    }
+                    btn.innerHTML = label;
+                }
+            });
+
+            renderBots();
+        }
+
+        function renderBots() {
+            const container = document.getElementById('bot-list-container');
+            let bots = currentBots.filter(b => {
+                if (!botFilterText) return true;
+                return (b.nickname || '').toLowerCase().includes(botFilterText) || 
+                       (b.self_id || '').includes(botFilterText) ||
+                       (b.platform || '').toLowerCase().includes(botFilterText);
+            });
+
+            // Sort
+            bots.sort((a, b) => {
+                // Always put online bots first
+                if (a.is_alive !== b.is_alive) {
+                    return a.is_alive ? -1 : 1;
+                }
+
+                let res = 0;
+                if (botSortBy === 'name') {
+                    res = (a.nickname || '').localeCompare(b.nickname || '', 'zh-CN');
+                } else if (botSortBy === 'id') {
+                    res = (a.self_id || '').localeCompare(b.self_id || '');
+                } else if (botSortBy === 'count') {
+                    res = (a.group_count || 0) - (b.group_count || 0);
+                } else if (botSortBy === 'time') {
+                    res = new Date(a.connected) - new Date(b.connected);
+                } else if (botSortBy === 'platform') {
+                    res = (a.platform || 'QQ').localeCompare(b.platform || 'QQ', 'zh-CN');
+                } else if (botSortBy === 'msg') {
+                    res = (a.msg_count || 0) - (b.msg_count || 0);
+                }
+                
+                // Primary sort result
+                if (res !== 0) {
+                    return botSortAsc ? res : -res;
+                }
+                
+                // Secondary sort: ID (Always Ascending)
+                return (a.self_id || '').localeCompare(b.self_id || '');
+            });
+
+            if (bots.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted">暂无机器人数据</div>';
+            } else {
+                container.innerHTML = bots.map(bot => {
+                    const connDate = new Date(bot.connected);
+                    const timeStr = timeAgo(bot.connected);
+                    const isOffline = !bot.is_alive;
+                    const cardStyle = isOffline ? 'filter: grayscale(100%); opacity: 0.8;' : '';
+                    const statusBadge = isOffline ? '<span class="badge bg-secondary ms-2">离线</span>' : '<span class="badge bg-success ms-2">在线</span>';
+                    const timeLabel = isOffline ? '离线于:' : '已连接:';
+                    const platform = bot.platform || 'QQ';
+                    let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
+                    if (platform === 'QQ') {
+                        avatarUrl = `http://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`;
+                    }
+                    const platformBadge = `<span class="badge bg-info ms-1">${platform}</span>`;
+
+                    if (botViewMode === 'compact') {
+                         return `
                         <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
-                            <div class="card p-2 h-100 shadow-sm">
+                            <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
                                 <div class="d-flex align-items-center mb-2">
-                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
-                                        <i class="bi bi-robot fs-5"></i>
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: var(--bg-list-item);">
+                                        <img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';this.style.padding='4px';">
                                     </div>
                                     <div class="overflow-hidden w-100">
-                                        <div class="fw-bold text-truncate" title="${bot.nickname || bot.self_id}" style="font-size: 0.9rem;">${bot.nickname || bot.self_id}</div>
+                                        <div class="d-flex align-items-center">
+                                            <div class="fw-bold text-truncate" title="${bot.nickname || bot.self_id}" style="font-size: 0.85rem;">${bot.nickname || bot.self_id}</div>
+                                            ${isOffline ? '<span class="badge bg-secondary ms-1" style="font-size: 0.6em;">OFF</span>' : '<span class="badge bg-success ms-1" style="font-size: 0.6em;">ON</span>'}
+                                        </div>
+                                        <div class="text-muted text-truncate" style="font-size: 0.7rem;">${platform} | ${bot.self_id}</div>
+                                    </div>
+                                </div>
+                                <div class="rounded p-1 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
+                                     <div class="d-flex justify-content-between">
+                                        <span class="text-muted">群: ${bot.group_count || 0}</span>
+                                        <span class="text-muted">友: ${bot.friend_count || 0}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">消息:</span>
+                                        <span class="text-primary fw-bold">${bot.msg_count || 0}</span>
+                                    </div>
+                                </div>
+                                <div class="mt-auto">
+                                    <button class="btn btn-sm btn-outline-primary w-100 py-0" style="font-size: 0.75rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>管理</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+
+                    return `
+                        <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                            <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 48px; height: 48px; overflow: hidden; background: var(--bg-list-item);">
+                                        <img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';this.style.padding='8px';">
+                                    </div>
+                                    <div class="overflow-hidden w-100">
+                                        <div class="d-flex align-items-center">
+                                            <div class="fw-bold text-truncate" title="${bot.nickname || bot.self_id}" style="font-size: 0.9rem;">${bot.nickname || bot.self_id}</div>
+                                            ${statusBadge}
+                                            ${platformBadge}
+                                        </div>
                                         <div class="text-muted text-truncate" style="font-size: 0.7rem;">ID: ${bot.self_id}</div>
                                     </div>
                                 </div>
-                                <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
+                                <div class="rounded p-2 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">IP:</span>
-                                        <span class="text-truncate" style="max-width: 80px;" title="${bot.remote_addr}">${bot.remote_addr.split(':')[0]}</span>
+                                        <span class="text-muted">群聊:</span>
+                                        <span class="fw-bold text-primary">${bot.group_count || 0}</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">连接:</span>
+                                        <span class="text-muted">好友:</span>
+                                        <span class="fw-bold text-success">${bot.friend_count || 0}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">消息:</span>
+                                        <span><span class="fw-bold text-primary">${bot.msg_count || 0}</span> <span class="text-muted" style="font-size: 0.7em;">(今:${bot.msg_count_today || 0})</span></span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">IP:</span>
+                                        <span class="text-truncate" style="max-width: 80px;" title="${bot.remote_addr}">${bot.remote_addr ? bot.remote_addr.split(':')[0] : 'N/A'}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">${timeLabel}</span>
                                         <span title="${connDate.toLocaleString()}">${timeStr}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">协议:</span>
+                                        <span class="fw-bold text-info">${platform}</span>
                                     </div>
                                     ${bot.owner ? `
                                     <div class="d-flex justify-content-between">
@@ -938,38 +2266,12 @@
                                     </div>` : ''}
                                 </div>
                                 <div class="mt-auto">
-                                    <button class="btn btn-sm btn-outline-primary w-100 py-1" style="font-size: 0.8rem;" onclick="setGlobalBot('${bot.self_id}')">管理</button>
+                                    <button class="btn btn-sm btn-outline-primary w-100 py-1" style="font-size: 0.8rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>管理</button>
                                 </div>
                             </div>
                         </div>
                     `}).join('');
-                    }
-
-                    // Update Metrics
-                    if (document.getElementById('metric-bots')) {
-                        document.getElementById('metric-bots').innerText = bots.length;
-                    }
-
-                    // Update Global Selector
-                    const selector = document.getElementById('global-bot-selector');
-                    const currentVal = selector.value;
-                    
-                    if (bots.length === 0) {
-                        selector.innerHTML = '<option value="" disabled selected>无在线机器人</option>';
-                    } else {
-                        selector.innerHTML = bots.map(bot => 
-                            `<option value="${bot.self_id}">${bot.nickname || 'Bot'} (${bot.self_id})</option>`
-                        ).join('');
-                        
-                        // Restore selection or select first
-                        if (currentVal && bots.find(b => b.self_id === currentVal)) {
-                            selector.value = currentVal;
-                        } else {
-                            selector.value = bots[0].self_id;
-                            currentBotId = bots[0].self_id;
-                        }
-                    }
-                });
+            }
         }
 
         function fetchWorkers() {
@@ -979,44 +2281,150 @@
             })
                 .then(r => r.json())
                 .then(workers => {
-                    const container = document.getElementById('worker-list-container');
-                    if (workers.length === 0) {
-                        container.innerHTML = '<div class="col-12 text-center text-muted">暂无在线 Worker</div>';
-                        return;
+                    currentWorkers = workers;
+                    
+                    // Update Badge
+                    const badge = document.getElementById('badge-workers');
+                    if (badge) badge.innerText = workers.length;
+
+                    renderWorkers();
+                });
+        }
+
+        function filterWorkers(text) {
+            workerFilterText = text.toLowerCase();
+            renderWorkers();
+        }
+
+        function sortWorkers(field) {
+            if (workerSortBy === field) {
+                workerSortAsc = !workerSortAsc;
+            } else {
+                workerSortBy = field;
+                workerSortAsc = true;
+                if (field === 'time' || field === 'msg') workerSortAsc = false;
+            }
+
+            // Update UI
+            ['addr', 'time', 'status', 'msg'].forEach(f => {
+                const btn = document.getElementById(`btn-sort-worker-${f}`);
+                if (f === workerSortBy) {
+                    btn.classList.add('active');
+                    let label = '';
+                    switch(f) {
+                        case 'addr': label = '地址'; break;
+                        case 'time': label = '时间'; break;
+                        case 'status': label = '状态'; break;
+                        case 'msg': label = '处理'; break;
                     }
-                    container.innerHTML = workers.map(w => {
-                        const connDate = new Date(w.connected);
-                        const timeStr = timeAgo(w.connected);
-                        return `
-                        <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
-                            <div class="card p-2 h-100 shadow-sm">
-                                <div class="d-flex align-items-center mb-2">
-                                    <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
-                                        <i class="bi bi-gear-wide-connected fs-5"></i>
-                                    </div>
-                                    <div class="overflow-hidden w-100">
-                                        <div class="fw-bold text-truncate" style="font-size: 0.9rem;">业务节点</div>
-                                        <div class="text-muted text-truncate" style="font-size: 0.7rem;">Worker Node</div>
-                                    </div>
+                    btn.innerHTML = label + (workerSortAsc ? ' ↑' : ' ↓');
+                } else {
+                    btn.classList.remove('active');
+                    let label = '';
+                    switch(f) {
+                        case 'addr': label = '地址'; break;
+                        case 'time': label = '时间'; break;
+                        case 'status': label = '状态'; break;
+                        case 'msg': label = '处理'; break;
+                    }
+                    btn.innerHTML = label;
+                }
+            });
+
+            renderWorkers();
+        }
+
+        function renderWorkers() {
+            const container = document.getElementById('worker-list-container');
+            let workers = currentWorkers.filter(w => {
+                if (!workerFilterText) return true;
+                return (w.remote_addr || '').includes(workerFilterText) || 
+                       (w.status || '').toLowerCase().includes(workerFilterText);
+            });
+
+            // Sort
+            workers.sort((a, b) => {
+                let res = 0;
+                if (workerSortBy === 'addr') {
+                    res = (a.remote_addr || '').localeCompare(b.remote_addr || '');
+                } else if (workerSortBy === 'time') {
+                    res = new Date(a.connected) - new Date(b.connected);
+                } else if (workerSortBy === 'status') {
+                    res = (a.status || '').localeCompare(b.status || '');
+                } else if (workerSortBy === 'msg') {
+                    res = (a.handled_count || 0) - (b.handled_count || 0);
+                }
+                return workerSortAsc ? res : -res;
+            });
+
+            if (workers.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted">暂无在线 Worker</div>';
+                return;
+            }
+            container.innerHTML = workers.map(w => {
+                const connDate = new Date(w.connected);
+                const timeStr = timeAgo(w.connected);
+                
+                if (workerViewMode === 'compact') {
+                    return `
+                    <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                        <div class="card p-2 h-100 shadow-sm">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px;">
+                                    <i class="bi bi-gear-wide-connected fs-6"></i>
                                 </div>
-                                <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">IP:</span>
-                                        <span class="text-truncate" style="max-width: 80px;" title="${w.remote_addr}">${w.remote_addr.split(':')[0]}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">连接:</span>
-                                        <span title="${connDate.toLocaleString()}">${timeStr}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-muted">状态:</span>
-                                        <span class="text-success">${w.status}</span>
-                                    </div>
+                                <div class="overflow-hidden w-100">
+                                    <div class="fw-bold text-truncate" style="font-size: 0.85rem;">Worker Node</div>
+                                    <div class="text-muted text-truncate" style="font-size: 0.7rem;">${w.remote_addr.split(':')[0]}</div>
+                                </div>
+                            </div>
+                            <div class="bg-light rounded p-1 mb-2 flex-grow-1" style="font-size: 0.75rem;">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Status:</span>
+                                    <span class="text-success">${w.status}</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">处理:</span>
+                                    <span class="text-primary fw-bold">${w.handled_count || 0}</span>
                                 </div>
                             </div>
                         </div>
-                    `}).join('');
-                });
+                    </div>`;
+                }
+
+                return `
+                    <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                        <div class="card p-2 h-100 shadow-sm">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
+                                    <i class="bi bi-gear-wide-connected fs-5"></i>
+                                </div>
+                                <div class="overflow-hidden w-100">
+                                    <div class="fw-bold text-truncate" style="font-size: 0.9rem;">业务节点</div>
+                                    <div class="text-muted text-truncate" style="font-size: 0.7rem;">Worker Node</div>
+                                </div>
+                            </div>
+                            <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">IP:</span>
+                                    <span class="text-truncate" style="max-width: 80px;" title="${w.remote_addr}">${w.remote_addr.split(':')[0]}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">连接:</span>
+                                    <span title="${connDate.toLocaleString()}">${timeStr}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">状态:</span>
+                                    <span class="text-success">${w.status}</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">处理消息:</span>
+                                    <span class="text-primary fw-bold">${w.handled_count || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `}).join('');
         }
 
         // --- Logs ---
@@ -1048,7 +2456,11 @@
 
         // --- Debug/Actions ---
         function sendAction() {
-            const botId = document.getElementById('action-bot-id').value;
+            let botId = document.getElementById('action-bot-id').value;
+            if (!botId && currentBotId) {
+                botId = currentBotId;
+            }
+            
             const action = document.getElementById('action-name').value;
             let params = {};
             try {
@@ -1193,24 +2605,493 @@
         }
 
         // --- Global Bot Selector ---
+        function updateBotSelectorUI(id) {
+            const selector = document.getElementById('global-bot-selector');
+            selector.value = id;
+            
+            const bot = currentBots.find(b => b.self_id == id);
+            if (bot) {
+                const platform = bot.platform || 'QQ';
+                let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
+                if (platform === 'QQ') {
+                    avatarUrl = `http://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
+                }
+                
+                const statusBadge = bot.is_alive 
+                    ? '<span class="badge bg-success ms-1" style="font-size: 0.6em; vertical-align: middle;">在线</span>' 
+                    : '<span class="badge bg-secondary ms-1" style="font-size: 0.6em; vertical-align: middle;">离线</span>';
+                
+                const html = `
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 28px; height: 28px; overflow: hidden; background: #f0f0f0;">
+                            <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+                        </div>
+                        <div class="overflow-hidden text-start">
+                            <div class="fw-bold text-truncate" style="font-size: 0.85rem; line-height: 1.2;">
+                                ${bot.nickname || bot.self_id}
+                                ${statusBadge}
+                            </div>
+                            <div class="text-muted text-truncate" style="font-size: 0.7rem; line-height: 1;">${bot.self_id}</div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('global-bot-selected-content').innerHTML = html;
+            }
+        }
+
+        function selectBotFromDropdown(id) {
+            updateBotSelectorUI(id);
+            onBotChange();
+        }
+
         function onBotChange() {
             currentBotId = document.getElementById('global-bot-selector').value;
+            
             // Clear group view
             document.getElementById('group-list').innerHTML = '<div class="text-center p-4 text-muted">切换机器人中...</div>';
             document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
             document.getElementById('group-detail-empty').style.display = 'block';
             
-            // Auto refresh groups
-            setTimeout(refreshGroupList, 500);
+            // Clear friend view
+            document.getElementById('friend-list').innerHTML = '<div class="text-center p-4 text-muted">切换机器人中...</div>';
+            document.getElementById('friend-detail-content').style.setProperty('display', 'none', 'important');
+            document.getElementById('friend-detail-empty').style.display = 'block';
+            
+            currentGroups = [];
+            currentFriends = [];
+            
+            // Auto refresh current tab
+            setTimeout(refreshCurrentTabList, 500);
         }
 
-
-        
         function setGlobalBot(id) {
-            const selector = document.getElementById('global-bot-selector');
-            selector.value = id;
-            onBotChange();
+            selectBotFromDropdown(id);
             showTab('groups'); // Jump to groups tab
+        }
+
+        function refreshCurrentTabList() {
+             const activeTab = document.querySelector('#relation-tabs .nav-link.active');
+             if (activeTab && activeTab.id === 'tab-friends-list-tab') {
+                 refreshFriendList();
+             } else {
+                 refreshGroupList();
+             }
+        }
+
+        function ensureFriendListLoaded() {
+            if (currentFriends.length === 0) {
+                refreshFriendList();
+            }
+        }
+
+        // --- Friend Management ---
+        let currentFriends = [];
+        let currentFriendId = 0;
+        let friendSortBy = 'name'; // name, id
+        let friendSortAsc = true;
+
+        async function refreshFriendList() {
+            const listEl = document.getElementById('friend-list');
+            listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+            
+            try {
+                const response = await callBotApi('get_friend_list');
+                const friends = response.data || [];
+                currentFriends = friends;
+                renderFriends(friends);
+                document.getElementById('friend-count').innerText = `共 ${friends.length} 个好友`;
+            } catch (e) {
+                listEl.innerHTML = `<div class="text-center p-4 text-danger">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function renderFriends(friends = null) {
+            if (!friends) friends = currentFriends;
+            
+            // Filter
+            const keyword = document.getElementById('friend-search').value.toLowerCase();
+            let filtered = friends.filter(f => {
+                const name = (f.remark || f.nickname || '').toLowerCase();
+                const id = (f.user_id || '').toString();
+                return name.includes(keyword) || id.includes(keyword);
+            });
+            
+            // Sort
+            filtered.sort((a, b) => {
+                let res = 0;
+                if (friendSortBy === 'name') {
+                    const nameA = a.remark || a.nickname || '';
+                    const nameB = b.remark || b.nickname || '';
+                    res = nameA.localeCompare(nameB, 'zh');
+                } else if (friendSortBy === 'id') {
+                    res = a.user_id - b.user_id;
+                }
+                return friendSortAsc ? res : -res;
+            });
+            
+            const listEl = document.getElementById('friend-list');
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<div class="text-center p-4 text-muted">未找到好友</div>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(f => {
+                const name = f.remark || f.nickname || 'Unknown';
+                const id = f.user_id;
+                const avatar = `http://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
+                
+                return `
+                <button class="list-group-item list-group-item-action ${id == currentFriendId ? 'active' : ''}" onclick="selectFriend(${id}, '${name.replace(/'/g, "\\'")}')">
+                    <div class="d-flex w-100 align-items-center">
+                         <div class="rounded-circle me-2" style="width: 32px; height: 32px; overflow: hidden; background: #f0f0f0;">
+                            <img src="${avatar}" style="width: 100%; height: 100%; object-fit: cover;">
+                        </div>
+                        <div style="overflow: hidden;">
+                            <h6 class="mb-0 text-truncate" style="max-width: 150px;">${name}</h6>
+                            <small class="${id == currentFriendId ? 'text-light' : 'text-muted'}">${id}</small>
+                        </div>
+                    </div>
+                </button>
+                `;
+            }).join('');
+        }
+
+        function filterFriends() {
+            renderFriends();
+        }
+
+        function sortFriends(by) {
+            if (friendSortBy === by) {
+                friendSortAsc = !friendSortAsc;
+            } else {
+                friendSortBy = by;
+                friendSortAsc = true;
+            }
+            
+            // Update buttons
+            document.querySelectorAll('[id^="btn-sort-friend-"]').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-sort-friend-${by}`).classList.add('active');
+            
+            renderFriends();
+        }
+
+        function selectFriend(id, name) {
+            currentFriendId = id;
+            document.getElementById('current-friend-name').innerText = name;
+            document.getElementById('current-friend-id').innerText = id;
+            
+            // Show details
+            document.getElementById('friend-detail-empty').style.display = 'none';
+            document.getElementById('friend-detail-content').style.setProperty('display', 'flex', 'important');
+            
+            // Re-render list to highlight active
+            renderFriends();
+        }
+
+        async function sendFriendMsg() {
+            const text = document.getElementById('friend-msg-input').value;
+            if (!text.trim()) return;
+            
+            try {
+                await callBotApi('send_private_msg', {
+                    user_id: currentFriendId,
+                    message: text
+                });
+                alert('发送成功');
+                document.getElementById('friend-msg-input').value = '';
+                addEventLog({type: 'message', message: `发送给好友(${currentFriendId}): ${text}`});
+            } catch (e) {
+                alert('发送失败: ' + e.message);
+            }
+        }
+
+        // --- System Details View Logic ---
+        let detailChartInstance = null;
+        let detailData = {
+            cpu: [],
+            mem: [],
+            msg: [],
+            disk: [],
+            net: []
+        };
+        let currentDetailType = 'cpu';
+        let currentDetailTimeRange = '1h';
+
+        function showSystemDetails(type) {
+            showTab('#view-system-details');
+            currentDetailType = type || 'cpu';
+            
+            // Set active tab
+            document.querySelectorAll('#system-detail-tabs .nav-link').forEach(el => el.classList.remove('active'));
+            document.querySelector(`#system-detail-tabs .nav-link[onclick*="'${currentDetailType}'"]`).classList.add('active');
+
+            updateDetailChart();
+            fetchSystemStats(true); // Fetch immediately with details
+        }
+
+        function switchDetailTab(type, event) {
+            if (event) event.preventDefault();
+            currentDetailType = type;
+            
+            document.querySelectorAll('#system-detail-tabs .nav-link').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+
+            updateDetailChart();
+        }
+
+        function updateDetailTimeRange(range) {
+            currentDetailTimeRange = range;
+            document.querySelectorAll('#tab-view-system-details .btn-group .btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`#tab-view-system-details .btn-group .btn[onclick*="'${range}'"]`).classList.add('active');
+            
+            // For now, we only have session data, so we can't really change the data source yet,
+            // but we can adjust the chart X-axis scaling or label if we had timestamps.
+            // Since we only have "last 1800 points (1 hour)", we will just show what we have.
+            // In a real implementation, we would fetch historical data here.
+            
+            updateDetailChart();
+        }
+
+        function updateDetailChart() {
+            const ctx = document.getElementById('detailChart').getContext('2d');
+            
+            if (detailChartInstance) {
+                detailChartInstance.destroy();
+            }
+
+            // Fix: Retrieve data from global stats (server trend) or fallback to charts
+            let cpuDataBuffer = [];
+            let memDataBuffer = [];
+            let recvDataBuffer = [];
+            let sentDataBuffer = [];
+            let msgDataBuffer = [];
+            let sourceIsRaw = false;
+
+            if (window.latestStats) {
+                cpuDataBuffer = window.latestStats.cpu_trend || [];
+                memDataBuffer = window.latestStats.mem_trend || [];
+                // Msg trends in latestStats are raw counts per interval
+                msgDataBuffer = window.latestStats.msg_trend || [];
+                sentDataBuffer = window.latestStats.sent_trend || [];
+                recvDataBuffer = window.latestStats.recv_trend || [];
+                sourceIsRaw = true;
+            } else {
+                cpuDataBuffer = cpuChart ? cpuChart.data.datasets[0].data : [];
+                memDataBuffer = memChart ? memChart.data.datasets[0].data : [];
+                recvDataBuffer = msgChart ? msgChart.data.datasets[0].data : [];
+                sentDataBuffer = msgChart ? msgChart.data.datasets[1].data : [];
+                msgDataBuffer = msgChart ? msgChart.data.datasets[2].data : [];
+            }
+
+            let labels = [];
+            let datasets = [];
+            let type = 'line';
+            let options = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                    legend: { display: true },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { display: true, grid: { display: false } },
+                    y: { display: true, beginAtZero: true }
+                }
+            };
+
+            // Common Labels (Just index for now, should be time)
+            // We use global stats buffers
+            
+            if (currentDetailType === 'cpu') {
+                labels = Array.from({length: cpuDataBuffer.length}, (_, i) => i);
+                datasets = [{
+                    label: 'CPU Usage (%)',
+                    data: cpuDataBuffer,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }];
+                options.scales.y.max = 100;
+            } else if (currentDetailType === 'mem') {
+                labels = Array.from({length: memDataBuffer.length}, (_, i) => i);
+                // Convert to GB
+                // If sourceIsRaw (from server), unit is Bytes -> /1024/1024/1024
+                // If from Chart (memChart), unit is MB -> /1024
+                const dataGB = memDataBuffer.map(v => sourceIsRaw ? (v / 1024 / 1024 / 1024) : (v / 1024));
+                datasets = [{
+                    label: 'Memory Usage (GB)',
+                    data: dataGB,
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }];
+            } else if (currentDetailType === 'msg') {
+                labels = Array.from({length: msgDataBuffer.length}, (_, i) => i);
+                datasets = [
+                    {
+                        label: 'Total Messages',
+                        data: msgDataBuffer,
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        fill: true
+                    },
+                    {
+                        label: 'Sent Messages',
+                        data: sentDataBuffer,
+                        borderColor: '#0dcaf0',
+                        borderDash: [5, 5],
+                        fill: false
+                    },
+                    {
+                        label: 'Recv Messages',
+                        data: recvDataBuffer,
+                        borderColor: '#ffc107',
+                        borderDash: [2, 2],
+                        fill: false
+                    }
+                ];
+            } else if (currentDetailType === 'disk') {
+                type = 'bar';
+                // Disk data comes from latest stats fetch, not trend
+                // We need to store it globally or fetch it.
+                // For now, use global `lastSystemStats` if available
+                if (window.lastSystemStats && window.lastSystemStats.disk_usage) {
+                    labels = window.lastSystemStats.disk_usage.map(d => d.path);
+                    const dataUsed = window.lastSystemStats.disk_usage.map(d => (d.used / 1024 / 1024 / 1024).toFixed(2));
+                    const dataFree = window.lastSystemStats.disk_usage.map(d => (d.free / 1024 / 1024 / 1024).toFixed(2));
+                    
+                    datasets = [
+                        {
+                            label: 'Used (GB)',
+                            data: dataUsed,
+                            backgroundColor: '#dc3545'
+                        },
+                        {
+                            label: 'Free (GB)',
+                            data: dataFree,
+                            backgroundColor: '#198754'
+                        }
+                    ];
+                    options.scales.x = { stacked: true };
+                    options.scales.y = { stacked: true, beginAtZero: true };
+                } else {
+                    labels = ['Loading...'];
+                    datasets = [{label: 'No Data', data: []}];
+                }
+            } else if (currentDetailType === 'net') {
+                 // Net IO - currently we don't have trend for Net IO in backend
+                 // We can show current cumulative counters
+                 if (window.lastSystemStats && window.lastSystemStats.net_io && window.lastSystemStats.net_io.length > 0) {
+                     type = 'bar';
+                     const io = window.lastSystemStats.net_io[0];
+                     labels = ['Total Sent', 'Total Recv'];
+                     datasets = [{
+                         label: 'Bytes (MB)',
+                         data: [
+                             (io.bytesSent / 1024 / 1024).toFixed(2), 
+                             (io.bytesRecv / 1024 / 1024).toFixed(2)
+                         ],
+                         backgroundColor: ['#0dcaf0', '#ffc107']
+                     }];
+                 } else {
+                    labels = ['Loading...'];
+                    datasets = [{label: 'No Data', data: []}];
+                 }
+            }
+
+            detailChartInstance = new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: options
+            });
+            
+            // Render Hardware Info Grid
+            renderHardwareGrid();
+        }
+
+        function renderHardwareGrid() {
+            const container = document.getElementById('hardware-info-grid');
+            if (!window.lastSystemStats) return;
+            
+            const s = window.lastSystemStats;
+            let html = '';
+            
+            // Host Info
+            if (s.host_info) {
+                 html += `
+                    <div class="col-12 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header fw-bold">主机信息</div>
+                            <div class="card-body small">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div><span class="text-muted">Hostname:</span> ${s.host_info.hostname}</div>
+                                        <div><span class="text-muted">OS:</span> ${s.host_info.platform} ${s.host_info.platformVersion}</div>
+                                        <div><span class="text-muted">Kernel:</span> ${s.host_info.kernelVersion}</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div><span class="text-muted">Arch:</span> ${s.host_info.kernelArch}</div>
+                                        <div><span class="text-muted">Uptime:</span> ${(s.host_info.uptime / 3600).toFixed(1)} Hours</div>
+                                        <div><span class="text-muted">Boot Time:</span> ${new Date(s.host_info.bootTime * 1000).toLocaleString()}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+            
+            // Disk Info
+            if (s.disk_usage) {
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header fw-bold">磁盘使用</div>
+                            <div class="card-body small" style="overflow-y: auto; max-height: 200px;">
+                                ${s.disk_usage.map(d => `
+                                    <div class="mb-2">
+                                        <div class="d-flex justify-content-between">
+                                            <span>${d.path}</span>
+                                            <span>${d.usedPercent.toFixed(1)}%</span>
+                                        </div>
+                                        <div class="progress" style="height: 6px;">
+                                            <div class="progress-bar bg-${d.usedPercent > 90 ? 'danger' : (d.usedPercent > 70 ? 'warning' : 'success')}" 
+                                                 role="progressbar" style="width: ${d.usedPercent}%"></div>
+                                        </div>
+                                        <div class="text-muted" style="font-size: 0.8em;">
+                                            ${(d.used/1024/1024/1024).toFixed(1)} GB / ${(d.total/1024/1024/1024).toFixed(1)} GB
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>`;
+            }
+            
+            // Net Info
+            if (s.net_interfaces) {
+                 html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header fw-bold">网络接口</div>
+                            <div class="card-body small" style="overflow-y: auto; max-height: 200px;">
+                                ${s.net_interfaces.map(i => `
+                                    <div class="mb-2 border-bottom pb-1">
+                                        <div class="fw-bold text-primary">${i.name}</div>
+                                        ${i.addrs.map(a => `<div>${a.addr}</div>`).join('')}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>`;
+            }
+            
+            container.innerHTML = html;
         }
 
         // --- Group Management ---
@@ -1244,18 +3125,32 @@
             } else {
                 groupSortBy = field;
                 groupSortAsc = true; // Default asc for new field
-                if (field === 'count') groupSortAsc = false; // Default desc for count
+                if (field === 'count' || field === 'msg_today') groupSortAsc = false; // Default desc for count/msg
             }
             
             // Update UI buttons
-            ['name', 'count', 'id'].forEach(f => {
+            ['name', 'count', 'id', 'msg_today'].forEach(f => {
                 const btn = document.getElementById(`btn-sort-group-${f}`);
                 if (f === groupSortBy) {
                     btn.classList.add('active');
-                    btn.innerHTML = (f === 'name' ? '名称' : (f === 'count' ? '人数' : 'ID')) + (groupSortAsc ? ' ↑' : ' ↓');
+                    let label = '';
+                    switch(f) {
+                        case 'name': label = '名称'; break;
+                        case 'count': label = '人数'; break;
+                        case 'id': label = 'ID'; break;
+                        case 'msg_today': label = '今日'; break;
+                    }
+                    btn.innerHTML = label + (groupSortAsc ? ' ↑' : ' ↓');
                 } else {
                     btn.classList.remove('active');
-                    btn.innerHTML = (f === 'name' ? '名称' : (f === 'count' ? '人数' : 'ID'));
+                    let label = '';
+                    switch(f) {
+                        case 'name': label = '名称'; break;
+                        case 'count': label = '人数'; break;
+                        case 'id': label = 'ID'; break;
+                        case 'msg_today': label = '今日'; break;
+                    }
+                    btn.innerHTML = label;
                 }
             });
 
@@ -1278,19 +3173,37 @@
                     res = a.member_count - b.member_count;
                 } else if (groupSortBy === 'id') {
                     res = a.group_id - b.group_id;
+                } else if (groupSortBy === 'msg_today') {
+                    const statA = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[a.group_id] || 0) : 0;
+                    const statB = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[b.group_id] || 0) : 0;
+                    res = statA - statB;
                 }
                 return groupSortAsc ? res : -res;
             });
             
-            listEl.innerHTML = sortedGroups.map(g => `
+            listEl.innerHTML = sortedGroups.map(g => {
+                const todayMsg = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[g.group_id] || 0) : 0;
+                const totalMsg = latestChatStats.group_stats ? (latestChatStats.group_stats[g.group_id] || 0) : 0;
+                
+                return `
                 <button class="list-group-item list-group-item-action ${g.group_id == currentGroupId ? 'active' : ''}" onclick="selectGroup(${g.group_id}, '${g.group_name}')">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1 text-truncate" style="max-width: 200px;">${g.group_name}</h6>
-                        <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">${g.member_count}人</small>
+                    <div class="d-flex w-100 align-items-center">
+                        <div class="rounded-circle me-2 flex-shrink-0" style="width: 40px; height: 40px; overflow: hidden; background: #f0f0f0;">
+                             <img src="http://p.qlogo.cn/gh/${g.group_id}/${g.group_id}/640/" alt="Group" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';this.style.padding='8px';">
+                        </div>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1 text-truncate" style="max-width: 140px;">${g.group_name}</h6>
+                                <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">${g.member_count}人</small>
+                            </div>
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">ID: ${g.group_id}</small>
+                                <span class="badge ${g.group_id == currentGroupId ? 'bg-light text-dark' : 'bg-secondary'} rounded-pill" title="今日: ${todayMsg} / 总计: ${totalMsg}">${todayMsg}</span>
+                            </div>
+                        </div>
                     </div>
-                    <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">ID: ${g.group_id}</small>
                 </button>
-            `).join('');
+            `}).join('');
         }
 
         function filterGroups() {
@@ -1306,6 +3219,20 @@
             currentGroupId = groupId;
             document.getElementById('current-group-name').innerText = groupName;
             document.getElementById('current-group-id').innerText = groupId;
+            
+            // Update Stats
+            const todayMsg = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[groupId] || 0) : 0;
+            const totalMsg = latestChatStats.group_stats ? (latestChatStats.group_stats[groupId] || 0) : 0;
+            document.getElementById('current-group-stats').innerText = `今日: ${todayMsg} / 总计: ${totalMsg}`;
+
+            // Update Avatar
+            const avatarEl = document.getElementById('current-group-avatar');
+            avatarEl.src = `http://p.qlogo.cn/gh/${groupId}/${groupId}/640/`;
+            avatarEl.style.display = 'block';
+            avatarEl.onerror = function() {
+                this.src = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';
+                this.style.padding = '4px';
+            };
             
             document.getElementById('group-detail-empty').style.display = 'none';
             document.getElementById('group-detail-content').style.setProperty('display', 'flex', 'important');
@@ -1339,15 +3266,15 @@
             } else {
                 memberSortBy = field;
                 memberSortAsc = true;
-                if (field === 'time') memberSortAsc = false; // Default desc for time
+                if (field === 'time' || field === 'msg_today') memberSortAsc = false; // Default desc for time/msg
             }
 
             // Update Icons
-            ['card', 'id', 'role', 'time'].forEach(f => {
+            ['card', 'id', 'role', 'time', 'msg_today'].forEach(f => {
                 const icon = document.getElementById(`sort-icon-${f}`);
                 if (f === memberSortBy) {
                     icon.className = memberSortAsc ? 'bi bi-sort-alpha-down' : 'bi bi-sort-alpha-down-alt';
-                    if (f === 'id' || f === 'time') icon.className = memberSortAsc ? 'bi bi-sort-numeric-down' : 'bi bi-sort-numeric-down-alt';
+                    if (f === 'id' || f === 'time' || f === 'msg_today') icon.className = memberSortAsc ? 'bi bi-sort-numeric-down' : 'bi bi-sort-numeric-down-alt';
                 } else {
                     icon.className = 'bi';
                 }
@@ -1362,7 +3289,7 @@
             const keyword = searchInput ? searchInput.value.toLowerCase() : '';
 
             if (!currentMembers || currentMembers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center">暂无成员</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂无成员</td></tr>';
                 return;
             }
 
@@ -1376,7 +3303,7 @@
             });
             
             if (filteredMembers.length === 0) {
-                 tbody.innerHTML = '<tr><td colspan="5" class="text-center">未找到匹配成员</td></tr>';
+                 tbody.innerHTML = '<tr><td colspan="6" class="text-center">未找到匹配成员</td></tr>';
                  return;
             }
 
@@ -1394,11 +3321,19 @@
                     res = (roleWeight[a.role] || 0) - (roleWeight[b.role] || 0);
                 } else if (memberSortBy === 'time') {
                     res = (a.last_sent_time || 0) - (b.last_sent_time || 0);
+                } else if (memberSortBy === 'msg_today') {
+                    const statA = latestChatStats.user_stats_today ? (latestChatStats.user_stats_today[a.user_id] || 0) : 0;
+                    const statB = latestChatStats.user_stats_today ? (latestChatStats.user_stats_today[b.user_id] || 0) : 0;
+                    res = statA - statB;
                 }
                 return memberSortAsc ? res : -res;
             });
 
-            tbody.innerHTML = sortedMembers.map(m => `
+            tbody.innerHTML = sortedMembers.map(m => {
+                const todayMsg = latestChatStats.user_stats_today ? (latestChatStats.user_stats_today[m.user_id] || 0) : 0;
+                const totalMsg = latestChatStats.user_stats ? (latestChatStats.user_stats[m.user_id] || 0) : 0;
+                
+                return `
                 <tr>
                     <td>
                         <div class="d-flex align-items-center">
@@ -1420,6 +3355,12 @@
                         </span>
                     </td>
                     <td>
+                        <div class="d-flex flex-column" title="全平台统计: 今日 ${todayMsg} / 总计 ${totalMsg}">
+                            <span class="badge bg-primary rounded-pill mb-1" style="width: fit-content;">${todayMsg}</span>
+                            <small class="text-muted">总: ${totalMsg}</small>
+                        </div>
+                    </td>
+                    <td>
                         <small class="text-muted">${m.last_sent_time ? new Date(m.last_sent_time * 1000).toLocaleString() : '-'}</small>
                     </td>
                     <td>
@@ -1437,7 +3378,7 @@
                         </div>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         // --- Member Actions ---
@@ -1548,7 +3489,7 @@
             
             const div = document.createElement('div');
             div.className = 'log-entry';
-            div.style.borderBottom = '1px solid #444';
+            div.style.borderBottom = '1px solid var(--border-color)';
             div.style.padding = '8px 0';
             
             const time = new Date().toLocaleTimeString();
@@ -1573,15 +3514,29 @@
             }
             
             div.innerHTML = `<span class="log-time">${time}</span> ${content}`;
-            container.appendChild(div);
             
-            // Limit entries
-            if (container.children.length > 200) {
-                container.removeChild(container.firstChild);
+            if (container) {
+                container.appendChild(div);
+                
+                // Limit entries
+                if (container.children.length > 200) {
+                    container.removeChild(container.firstChild);
+                }
+                
+                if (document.getElementById('auto-scroll-events') && document.getElementById('auto-scroll-events').checked) {
+                    container.scrollTop = container.scrollHeight;
+                }
             }
-            
-            if (document.getElementById('auto-scroll-events').checked) {
-                container.scrollTop = container.scrollHeight;
+
+            // Update Dashboard Recent Logs
+            const dashLog = document.getElementById('recent-logs');
+            if (dashLog) {
+                const clone = div.cloneNode(true);
+                dashLog.appendChild(clone);
+                if (dashLog.children.length > 50) {
+                    dashLog.removeChild(dashLog.firstChild);
+                }
+                dashLog.scrollTop = dashLog.scrollHeight;
             }
         }
 
@@ -1607,8 +3562,24 @@
                 .then(r => r.json())
                 .then(data => {
                     latestChatStats = data;
-                    renderTopList('top-groups', data.group_stats, data.group_names, 'Group');
-                    renderTopList('top-users', data.user_stats, data.user_names, 'User');
+                    // Fix: Use Today's stats for the dashboard top lists
+                    renderTopList('top-groups', data.group_stats_today, data.group_names, 'Group');
+                    renderTopList('top-users', data.user_stats_today, data.user_names, 'User');
+                    
+                    // Refresh lists if visible
+                    const activeTab = document.querySelector('.nav-link.active').getAttribute('href');
+                    if (activeTab === '#groups') {
+                        // Only re-render if we have data to render, to avoid flickering or resetting scroll too often
+                        // But since sorting might depend on stats, we should probably re-render.
+                        // To be less intrusive, maybe only update if we are not dragging/selecting?
+                        // For now, let's just re-render.
+                        if (currentGroups && currentGroups.length > 0) {
+                             renderGroups(currentGroups);
+                        }
+                        if (currentMembers && currentMembers.length > 0) {
+                             renderMembers();
+                        }
+                    }
                 })
                 .catch(e => console.error("Update chat stats error:", e));
         }
@@ -1636,10 +3607,12 @@
 
             list.innerHTML = sorted.map(([id, count], index) => {
                 const name = getDisplayName(id, names, type);
-                // Optional: Fetch avatar if User
+                // Optional: Fetch avatar if User or Group
                 let avatar = '';
                 if (type === 'User') {
                      avatar = `<img src="https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100" class="rounded-circle me-2" width="20" height="20" onerror="this.style.display='none'">`;
+                } else if (type === 'Group') {
+                     avatar = `<img src="https://p.qlogo.cn/gh/${id}/${id}/100/" class="rounded-circle me-2" width="20" height="20" onerror="this.style.display='none'">`;
                 }
 
                 return `
@@ -1647,7 +3620,10 @@
                         <div class="text-truncate" style="max-width: 70%;">
                             <span class="badge bg-light text-dark me-2">#${index + 1}</span>
                             ${avatar}
-                            <span title="${id}">${name}</span>
+                            <span title="${id}">
+                                ${name}
+                                ${names && names[id] ? `<small class="text-muted ms-1" style="font-size:0.8em">(${id})</small>` : ''}
+                            </span>
                         </div>
                         <span class="badge bg-primary rounded-pill">${count}</span>
                     </li>
@@ -1656,10 +3632,11 @@
         }
 
         function showAllStats(type) {
-            const stats = type === 'Group' ? latestChatStats.group_stats : latestChatStats.user_stats;
+            // Fix: Use Today's stats to match Dashboard
+            const stats = type === 'Group' ? latestChatStats.group_stats_today : latestChatStats.user_stats_today;
             const names = type === 'Group' ? latestChatStats.group_names : latestChatStats.user_names;
             
-            document.getElementById('statsModalTitle').innerText = type === 'Group' ? '群组活跃统计' : '用户发言统计';
+            document.getElementById('statsModalTitle').innerText = type === 'Group' ? '今日活跃群组' : '今日龙王';
             document.getElementById('statsModalNameHeader').innerText = type === 'Group' ? '群组名称' : '用户昵称';
             
             const tbody = document.getElementById('statsModalBody');
@@ -1669,17 +3646,258 @@
                 const sorted = Object.entries(stats).sort(([, a], [, b]) => b - a);
                 tbody.innerHTML = sorted.map(([id, count], index) => {
                     const name = getDisplayName(id, names, type);
+                    let avatar = '';
+                    if (type === 'User') {
+                         avatar = `<img src="https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100" class="rounded-circle me-2 border" width="32" height="32" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/person-circle.svg'">`;
+                    } else {
+                         avatar = `<img src="https://p.qlogo.cn/gh/${id}/${id}/100/" class="rounded-circle me-2 border" width="32" height="32" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people-fill.svg'">`;
+                    }
+                    
                     return `
                         <tr>
-                            <td>${index + 1}</td>
-                            <td class="text-truncate" style="max-width: 300px;" title="${id}">${name} <small class="text-muted ms-1">(${id})</small></td>
-                            <td class="text-end">${count}</td>
+                            <td class="align-middle">${index + 1}</td>
+                            <td class="text-truncate align-middle" style="max-width: 300px;" title="${id}">
+                                <div class="d-flex align-items-center">
+                                    ${avatar}
+                                    <div class="overflow-hidden">
+                                        <div class="text-truncate">${name}</div>
+                                        <div class="text-muted small" style="font-size: 0.75rem;">${id}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-end align-middle fw-bold text-primary">${count}</td>
                         </tr>
                     `;
                 }).join('');
             }
             
             new bootstrap.Modal(document.getElementById('statsModal')).show();
+        }
+        // --- Message Test ---
+        async function loadTestGroups() {
+            const select = document.getElementById('mt-group-select');
+            select.innerHTML = '<option value="">加载中...</option>';
+            
+            try {
+                const response = await callBotApi('get_group_list');
+                const groups = response.data || [];
+                
+                // Sort by name
+                groups.sort((a, b) => a.group_name.localeCompare(b.group_name, 'zh-CN'));
+                
+                let html = '<option value="">-- 选择群组 (或手动输入 UID) --</option>';
+                groups.forEach(g => {
+                    html += `<option value="${g.group_id}">[${g.group_id}] ${g.group_name}</option>`;
+                });
+                select.innerHTML = html;
+            } catch (e) {
+                select.innerHTML = '<option value="">加载失败: ' + e.message + '</option>';
+            }
+        }
+
+        function onTestGroupSelectChange() {
+            const select = document.getElementById('mt-group-select');
+            const targetInput = document.getElementById('mt-target');
+            if (select.value) {
+                targetInput.value = select.value;
+            }
+        }
+        
+        function pasteTargetUid() {
+            const select = document.getElementById('mt-group-select');
+            if (select.value) {
+                document.getElementById('mt-target').value = select.value;
+            }
+        }
+
+        function updateMsgForm() {
+            const type = document.getElementById('mt-type').value;
+            
+            // Hide all specific inputs
+            document.getElementById('mt-group-text').style.display = 'none';
+            document.getElementById('mt-group-file').style.display = 'none';
+            document.getElementById('mt-group-music').style.display = 'none';
+            document.getElementById('mt-group-share').style.display = 'none';
+            document.getElementById('mt-group-raw').style.display = 'none';
+            
+            if (type === 'text' || type === 'poke') {
+                document.getElementById('mt-group-text').style.display = 'block';
+                document.getElementById('mt-content').placeholder = type === 'poke' ? '输入被戳者 QQ 号 (留空则戳当前群)' : '输入文本内容... 支持 CQ 码';
+            } else if (type === 'image' || type === 'record' || type === 'video') {
+                document.getElementById('mt-group-file').style.display = 'block';
+                let label = '文件 URL/路径';
+                if (type === 'image') label = '图片 URL/路径';
+                else if (type === 'record') label = '语音 URL/路径 (AMR/Silk)';
+                else if (type === 'video') label = '视频 URL/路径';
+                document.getElementById('mt-file-label').textContent = label;
+            } else if (type === 'music') {
+                document.getElementById('mt-group-music').style.display = 'block';
+            } else if (type === 'share') {
+                document.getElementById('mt-group-share').style.display = 'block';
+            } else if (type === 'json' || type === 'xml') {
+                document.getElementById('mt-group-raw').style.display = 'block';
+                document.getElementById('mt-raw-label').textContent = type.toUpperCase() + ' 内容';
+            }
+        }
+
+        async function submitTestMsg() {
+            const resultEl = document.getElementById('mt-result');
+            resultEl.style.display = 'none';
+            resultEl.className = 'alert alert-secondary';
+            resultEl.textContent = '发送中...';
+            resultEl.style.display = 'block';
+            
+            const target = document.getElementById('mt-target').value;
+            const type = document.getElementById('mt-type').value;
+            
+            if (!target) {
+                resultEl.className = 'alert alert-danger';
+                resultEl.textContent = '请输入目标 UID';
+                return;
+            }
+
+            // Default to group message
+            let action = 'send_group_msg';
+            let params = {
+                group_id: parseInt(target)
+            };
+            
+            // Construct Message
+            if (type === 'text') {
+                const content = document.getElementById('mt-content').value;
+                if (!content) {
+                    resultEl.className = 'alert alert-danger';
+                    resultEl.textContent = '请输入内容';
+                    return;
+                }
+                params.message = content;
+            } else if (type === 'poke') {
+                const qq = document.getElementById('mt-content').value;
+                params.message = `[CQ:poke,qq=${qq || ''}]`;
+            } else if (type === 'image' || type === 'record' || type === 'video') {
+                const file = document.getElementById('mt-file-path').value;
+                if (!file) {
+                    resultEl.className = 'alert alert-danger';
+                    resultEl.textContent = '请输入文件路径/URL';
+                    return;
+                }
+                params.message = [
+                    {
+                        type: type,
+                        data: { file: file }
+                    }
+                ];
+            } else if (type === 'music') {
+                const mType = document.getElementById('mt-music-type').value;
+                const mId = document.getElementById('mt-music-id').value;
+                if (!mId) {
+                    resultEl.className = 'alert alert-danger';
+                    resultEl.textContent = '请输入歌曲ID';
+                    return;
+                }
+                params.message = [{
+                    type: 'music',
+                    data: {
+                        type: mType,
+                        id: mId
+                    }
+                }];
+            } else if (type === 'share') {
+                params.message = [{
+                    type: 'share',
+                    data: {
+                        url: document.getElementById('mt-share-url').value,
+                        title: document.getElementById('mt-share-title').value,
+                        content: document.getElementById('mt-share-content').value,
+                        image: document.getElementById('mt-share-image').value
+                    }
+                }];
+            } else if (type === 'json' || type === 'xml') {
+                const raw = document.getElementById('mt-raw-content').value;
+                if (!raw) {
+                    resultEl.className = 'alert alert-danger';
+                    resultEl.textContent = '请输入内容';
+                    return;
+                }
+                params.message = [{
+                    type: type,
+                    data: {
+                        data: raw
+                    }
+                }];
+            }
+
+            try {
+                const res = await callBotApi(action, params);
+                resultEl.className = 'alert alert-success';
+                resultEl.textContent = '发送成功! MSG ID: ' + (res.data ? res.data.message_id : 'Unknown');
+            } catch (e) {
+                resultEl.className = 'alert alert-danger';
+                resultEl.textContent = '发送失败: ' + e.message;
+            }
+        }
+
+        function updateCodePreview() {
+            const target = document.getElementById('mt-target').value;
+            const type = document.getElementById('mt-type').value;
+            let params = {
+                group_id: target ? parseInt(target) : 0
+            };
+            
+            if (type === 'text') {
+                params.message = document.getElementById('mt-content').value;
+            } else if (type === 'poke') {
+                const qq = document.getElementById('mt-content').value;
+                params.message = `[CQ:poke,qq=${qq || ''}]`;
+            } else if (type === 'image' || type === 'record' || type === 'video') {
+                params.message = [{
+                    type: type,
+                    data: { file: document.getElementById('mt-file-path').value }
+                }];
+            } else if (type === 'music') {
+                params.message = [{
+                    type: 'music',
+                    data: {
+                        type: document.getElementById('mt-music-type').value,
+                        id: document.getElementById('mt-music-id').value
+                    }
+                }];
+            } else if (type === 'share') {
+                params.message = [{
+                    type: 'share',
+                    data: {
+                        url: document.getElementById('mt-share-url').value,
+                        title: document.getElementById('mt-share-title').value,
+                        content: document.getElementById('mt-share-content').value,
+                        image: document.getElementById('mt-share-image').value
+                    }
+                }];
+            } else if (type === 'json' || type === 'xml') {
+                const raw = document.getElementById('mt-raw-content').value;
+                params.message = [{
+                    type: type,
+                    data: { data: raw }
+                }];
+            }
+
+            const preview = {
+                action: 'send_group_msg',
+                params: params
+            };
+            
+            document.getElementById('code-preview').textContent = JSON.stringify(preview, null, 2);
+        }
+
+        function copyCodePreview() {
+            const content = document.getElementById('code-preview').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                const btn = document.querySelector('button[onclick="copyCodePreview()"]');
+                if(btn) {
+                    const original = btn.textContent;
+                    btn.textContent = '已复制';
+                    setTimeout(() => btn.textContent = original, 2000);
+                }
+            });
         }
     </script>
 </body>

@@ -10,7 +10,22 @@
 
 ---
 
-## 📖 Introduction | 简介
+## � Recent Updates | 最近更新
+
+### v1.1.11 (2025-12-14)
+*   **UI/UX Overhaul**: 
+    *   **Dark Mode**: Fully optimized dark theme support for Dashboard, including modals, tables, and charts.
+    *   **Group Avatars**: Added visual identification for groups using QQ avatar API.
+    *   **Layout Fixes**: Improved "Groups & Friends" page layout, alignment, and removed redundant headers.
+    *   **System Info**: Enhanced hardware info display (Host OS, Kernel) on the dashboard.
+*   **Data Accuracy**:
+    *   **Real-time Stats**: Fixed "Today's Active Groups" and "Dragon King" to correctly reflect *today's* data instead of historical totals.
+    *   **Consistency**: Ensured consistency between dashboard widgets and detailed statistics views.
+*   **Performance**: Optimized WebSocket message handling for bot group/friend counts.
+
+---
+
+## �📖 Introduction | 简介
 
 **BotMatrix** is a high-performance, distributed robot management platform designed for enterprise scale. It decouples the connection layer from the logic layer, allowing for massive scalability and robust management.
 

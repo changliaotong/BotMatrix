@@ -1,6 +1,7 @@
 import os
 import subprocess
 import pack_project
+import bump_version
 import sys
 import argparse
 
@@ -40,6 +41,10 @@ def main():
     print(f"   Target: {TARGET}")
     print(f"   Mode: {'Fast (Update & Restart)' if FAST_MODE else 'Full (Rebuild & Recreate)'}")
     print("========================================")
+
+    # 0. 版本号自增
+    print("\n[Step 0/3] Bumping version...")
+    bump_version.bump_version('patch')
 
     # 1. 打包项目
     print("\n[Step 1/3] Packing project files...")
@@ -92,12 +97,13 @@ def main():
             docker_cmd = "sudo docker-compose up -d --remove-orphans && sudo docker-compose restart wxbot"
     else:
         # Full Mode: Rebuild images
+        # Force --no-cache to ensure go build gets latest code
         if TARGET == 'manager':
-            docker_cmd = "sudo docker-compose up -d --build --no-deps bot-manager"
+            docker_cmd = "sudo docker-compose build --no-cache bot-manager && sudo docker-compose up -d --force-recreate bot-manager"
         elif TARGET == 'wxbot':
-            docker_cmd = "sudo docker-compose up -d --build --no-deps wxbot"
+            docker_cmd = "sudo docker-compose build --no-cache wxbot && sudo docker-compose up -d --force-recreate wxbot"
         else:
-            docker_cmd = "sudo docker-compose up -d --build --remove-orphans"
+            docker_cmd = "sudo docker-compose build --no-cache && sudo docker-compose up -d --force-recreate"
 
     remote_cmds.append(docker_cmd)
     

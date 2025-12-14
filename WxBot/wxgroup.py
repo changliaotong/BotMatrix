@@ -17,6 +17,7 @@ class wx_group(MetaData):
 
     @staticmethod
     def get_group_id(group_uid):
+        if not group_uid: return 0
         sql = f"SELECT TOP 1 group_id FROM wx_group WHERE group_uid = '{group_uid}'"
         res = SQLConn.Query(sql)
         # Debug: check if we found it
@@ -28,6 +29,13 @@ class wx_group(MetaData):
     def update(robot_qq, group_uid, group_id, group_name, client_qq, client_name):
         if not group_id: return False
         group_name = group_name.replace("'", "''")
+        
+        # If client_qq is 0, try to preserve existing value
+        if client_qq == 0:
+            existing_client_qq = wx_group.get_int("client_qq", group_id)
+            if existing_client_qq > 0:
+                client_qq = existing_client_qq
+        
         sql = f"UPDATE wx_group SET group_uid = '{group_uid}', group_name = '{group_name}', robot_qq = {robot_qq}, client_qq = {client_qq}, update_date = getdate() WHERE group_id = {group_id}"
         return SQLConn.Exec(sql)
 

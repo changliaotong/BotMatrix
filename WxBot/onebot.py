@@ -417,17 +417,29 @@ class onebot(WXBot):
                     group_uid = g.get('UserName')
                     group_id = self._group_map_id_by_uid.get(group_uid, 0)
                     
+                    group_name = msg.remove_Emoji(g.get('NickName') or '')
+                    
+                # Update group name in DB if needed
+                    if group_id:
+                        try:
+                            # Update group info to ensure latest name is saved
+                            wx_group.update(self.self_id, group_uid, group_id, group_name, 0, "")
+                        except Exception as e:
+                            print(f"[onebot] wx_group.update error: {e}")
+
                     if not group_id:
                         try:
-                            group_id = wx_group.get_group_id(group_uid)
+                            # Use get_wx_group to find or create/update
+                            # Pass 0 for client_qq, relying on wxgroup.update to preserve it
+                            group_id = wx_group.get_wx_group(self.self_id, group_uid, group_name, 0, "")
+                            
                             if group_id:
                                 self._group_map_id_by_uid[group_uid] = group_id
                                 self._group_map_uid_by_id[group_id] = group_uid
-                        except Exception:
+                        except Exception as e:
+                            print(f"[onebot] get_wx_group error: {e}")
                             group_id = 0
                             
-                    group_name = msg.remove_Emoji(g.get('NickName') or '')
-                    
                     member_count = 0
                     if hasattr(self, 'group_members') and group_uid in self.group_members:
                         member_count = len(self.group_members[group_uid])
@@ -447,14 +459,24 @@ class onebot(WXBot):
                 if gid_uid and hasattr(self, 'group_members') and gid_uid in self.group_members:
                      for m in self.group_members[gid_uid]:
                         uid = m.get('UserName')
+                        
+                        # Extract names first to pass to get_client_qq
+                        nickname = msg.remove_Emoji(m.get('NickName') or m.get('RemarkName') or '')
+                        card = msg.remove_Emoji(m.get('DisplayName') or '')
+                        remark = msg.remove_Emoji(m.get('RemarkName') or '')
+                        
                         user_id = 0
                         try:
-                            user_id = wx_client.get_client_qq(self.self_id, group_id, uid, "", "", "", "", "")
+                            # Pass extracted names to create/update client
+                            user_id = wx_client.get_client_qq(self.self_id, group_id, uid, nickname, card, remark, nickname, "")
                         except Exception:
                             user_id = 0
                         
-                        nickname = msg.remove_Emoji(m.get('NickName') or '')
-                        card = msg.remove_Emoji(m.get('DisplayName') or '')
+                        # Parse Sex
+                        sex_val = m.get('Sex', 0)
+                        sex = "unknown"
+                        if sex_val == 1: sex = "male"
+                        elif sex_val == 2: sex = "female"
                         
                         # Default fields
                         role = "member"
@@ -466,7 +488,7 @@ class onebot(WXBot):
                             "nickname": nickname, 
                             "card": card,
                             "role": role,
-                            "sex": "unknown",
+                            "sex": sex,
                             "age": 0,
                             "area": "",
                             "join_time": 0,
@@ -613,9 +635,25 @@ class onebot(WXBot):
                         pass
                 event["user_id"] = user_id
                 
+                # Try to enrich sender info from group members cache
+                card = ""
+                role = "member"
+                if hasattr(self, 'group_members') and group_uid in self.group_members:
+                    for m in self.group_members[group_uid]:
+                         if m.get('UserName') == sender_uid:
+                             # Enrich nickname if unknown or simple
+                             real_nick = msg.remove_Emoji(m.get('NickName') or '')
+                             if sender_name == "Unknown" or not sender_name:
+                                 sender_name = real_nick
+                             
+                             card = msg.remove_Emoji(m.get('DisplayName') or '')
+                             break
+
                 event["sender"] = {
                     "user_id": user_id,
                     "nickname": sender_name,
+                    "card": card,
+                    "role": role,
                     "sex": "unknown",
                     "age": 0
                 }
@@ -648,9 +686,19 @@ class onebot(WXBot):
                 else:
                     text = str(content) if content else ""
                     
+                # Try to enrich sender info
+                remark = ""
+                for c in getattr(self, 'contact_list', []) or []:
+                     if c.get('UserName') == sender_uid:
+                         if sender_name == "Unknown":
+                             sender_name = msg.remove_Emoji(c.get('NickName') or '')
+                         remark = msg.remove_Emoji(c.get('RemarkName') or '')
+                         break
+
                 event["sender"] = {
                     "user_id": user_id,
                     "nickname": sender_name,
+                    "card": remark,
                     "sex": "unknown",
                     "age": 0
                 }
@@ -723,6 +771,9 @@ class onebot(WXBot):
                          group_name = "Group"
                 except:
                     pass
+                
+                # ADDED: Include group_name in event
+                event["group_name"] = group_name
             
             # Log received message (Compact)
             log_time = time.strftime("%H:%M:%S", time.localtime(event.get('time')))
