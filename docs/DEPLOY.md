@@ -1,89 +1,152 @@
-# Server Deployment Guide (Ubuntu/Linux)
+# BotMatrix Deployment Guide
 
-This guide describes how to deploy the **BotMatrix** system (BotNexus + WxBot) to an Ubuntu server using Docker.
+This guide describes how to deploy the **BotMatrix** ecosystem using Docker.
 
 ## 1. Prerequisites
 
-Ensure your server has:
-*   **Docker** installed (`curl -fsSL https://get.docker.com | bash`)
-*   **Docker Compose** installed.
-*   **Network Access**:
-    *   Access to an external **Redis** server (optional but recommended for persistence).
-    *   Ports `3111` (WebSocket) and `5000` (Web UI) open in the firewall.
+*   **Docker** & **Docker Compose** installed.
+*   **Git** installed.
+*   (Optional) **Redis** server for data persistence (recommended for production).
 
-## 2. File Upload
+## 2. Quick Start
 
-Upload the entire project directory to your server (e.g., `/opt/BotMatrix`).
-Required files/directories:
-*   `BotNexus/`
-*   `WxBot/`
-*   `TencentBot/`
-*   `docker-compose.yml`
+```bash
+# 1. Clone the repository
+git clone https://github.com/changliaotong/BotMatrix.git
+cd BotMatrix
 
-## 3. Configuration
+# 2. Configure desired bots (see Section 3)
+# Example: Configure KookBot
+cp KookBot/config.sample.json KookBot/config.json
+# Edit KookBot/config.json with your token
 
-### Environment Variables
-Check `docker-compose.yml` for default values. You can override them by creating a `.env` file or modifying `docker-compose.yml` directly.
+# 3. Start the ecosystem
+docker-compose up -d --build
+```
 
-Key variables:
-*   `REDIS_ADDR`: Address of your Redis server (default: `192.168.0.126:6379`).
-*   `REDIS_PWD`: Redis password.
-*   `BOT_SELF_ID`: The QQ/Wx ID of your bot (default: `1098299491`).
+## 3. Configuration Guide
 
-### TencentBot Configuration
-1.  Copy `TencentBot/config.sample.json` to `TencentBot/config.json`.
-2.  Edit `config.json` with your Tencent Bot credentials:
+BotMatrix uses a modular architecture. You only need to configure and enable the bots you intend to use.
+
+### 🧠 BotNexus (Core Manager)
+*   **File**: `docker-compose.yml` (environment variables)
+*   **Port**: `5000` (Web Dashboard), `3005` (WebSocket Gateway)
+*   **Config**:
+    *   `REDIS_ADDR`: Redis server address.
+    *   `REDIS_PWD`: Redis password.
+
+### 🟢 WxBot (WeChat)
+*   **Type**: Python / OneBot
+*   **Login**: Scan QR code via logs or Dashboard.
+*   **Config**: `docker-compose.yml` (`BOT_SELF_ID`).
+
+### 🐧 TencentBot (Official QQ)
+*   **Type**: Go / BotGo SDK
+*   **Config**: `TencentBot/config.json`
     ```json
     {
-      "app_id": 123456789,
-      "secret": "YOUR_APP_SECRET",
-      "sandbox": false,
-      "self_id": "OPTIONAL_BOT_ID",
-      "nexus_addr": "ws://bot-manager:3001"
+      "app_id": 123456,
+      "secret": "YOUR_SECRET",
+      "sandbox": false
     }
     ```
 
-### Port Mapping
-By default:
-*   **Web Dashboard**: `http://<server-ip>:5000`
-*   **WebSocket Gateway**: `ws://<server-ip>:3111`
+### 🐱 NapCat (Personal QQ)
+*   **Type**: Docker / OneBot 11 (NTQQ)
+*   **Config**: `NapCat/config/onebot11.json` (Pre-configured for BotMatrix)
+*   **Login**: Scan QR code via WebUI (`http://localhost:6099/webui`) or logs.
 
-If these ports are occupied, modify the `ports` section in `docker-compose.yml`.
-
-## 4. Deployment
-
-Run the following command in the project root:
-
-```bash
-# Build and start services in background
-sudo docker-compose up -d --build
-```
-
-To stop:
-```bash
-sudo docker-compose down
-```
-
-## 5. Verification & Login
-
-1.  **Check Logs**:
-    ```bash
-    sudo docker-compose logs -f
+### 钉 DingTalkBot (DingTalk)
+*   **Type**: Go / Webhook & Stream
+*   **Config**: `DingTalkBot/config.json`
+    ```json
+    {
+      "client_id": "YOUR_CLIENT_ID",
+      "client_secret": "YOUR_CLIENT_SECRET"
+    }
     ```
-    Ensure `bot-manager` starts successfully and `wxbot` connects to it.
 
-2.  **Login**:
-    *   Open `http://<server-ip>:5000` in your browser.
-    *   You should see the dashboard.
-    *   Check the logs or dashboard for the Login QR Code from `wxbot`.
-    *   Scan the code with your WeChat mobile app.
+### ✈️ FeishuBot (Lark/Feishu)
+*   **Type**: Go / WebSocket
+*   **Config**: `FeishuBot/config.json`
+    ```json
+    {
+      "app_id": "cli_xxx",
+      "app_secret": "xxx"
+    }
+    ```
 
-3.  **Client Connection**:
-    *   Connect your C# clients or other OneBot tools to `ws://<server-ip>:3111`.
-    *   BotNexus will route messages between your clients and the WxBot.
+### ✈️ TelegramBot
+*   **Type**: Go / Long Polling
+*   **Config**: `TelegramBot/config.json`
+    ```json
+    {
+      "bot_token": "123456:ABC-DEF"
+    }
+    ```
 
-## 6. Troubleshooting
+### 🎮 DiscordBot
+*   **Type**: Go / Gateway
+*   **Config**: `DiscordBot/config.json`
+    ```json
+    {
+      "bot_token": "YOUR_BOT_TOKEN"
+    }
+    ```
 
-*   **Connection Refused**: Check firewall settings (`ufw allow 5000`, `ufw allow 3111`).
-*   **Redis Error**: Ensure the Redis address in `docker-compose.yml` is reachable from within the Docker container.
-*   **WxBot Disconnected**: Check `docker-compose logs wxbot`. Ensure `MANAGER_URL` is correct (`ws://bot-manager:3001`).
+### 💬 SlackBot
+*   **Type**: Go / Socket Mode
+*   **Config**: `SlackBot/config.json`
+    ```json
+    {
+      "bot_token": "xoxb-...",
+      "app_token": "xapp-..."
+    }
+    ```
+
+### 🦜 KookBot (Kaiheila)
+*   **Type**: Go / WebSocket
+*   **Config**: `KookBot/config.json`
+    ```json
+    {
+      "bot_token": "YOUR_KOOK_TOKEN"
+    }
+    ```
+
+### 📧 EmailBot
+*   **Type**: Go / IMAP & SMTP
+*   **Config**: `EmailBot/config.json`
+    ```json
+    {
+      "imap_server": "imap.gmail.com",
+      "username": "user@example.com",
+      "password": "app_password"
+    }
+    ```
+
+### 🏢 WeComBot (Enterprise WeChat)
+*   **Type**: Go / Callback & API
+*   **Config**: `WeComBot/config.json`
+    ```json
+    {
+      "corp_id": "wx...",
+      "agent_id": 10001,
+      "secret": "...",
+      "token": "...",
+      "encoding_aes_key": "..."
+    }
+    ```
+*   **Callback URL**: `http://<YOUR_IP>:5002/callback`
+
+## 4. Dashboard & Management
+
+Access the BotMatrix Dashboard at:
+**http://localhost:5000**
+*   **Default User**: `admin`
+*   **Default Pass**: `123456`
+
+## 5. Troubleshooting
+
+*   **Ports Occupied**: Check `docker-compose.yml` and change mapped ports (e.g., `5000:5000` -> `5050:5000`).
+*   **Connection Failed**: Ensure `NEXUS_ADDR` in bot configs points to `ws://bot-manager:3005` (internal Docker network).
+*   **Logs**: Use `docker-compose logs -f [service_name]` to debug specific bots.

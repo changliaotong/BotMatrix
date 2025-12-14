@@ -1,0 +1,4 @@
+{
+  "bot_token": "YOUR_KOOK_BOT_TOKEN",
+  "nexus_addr": "ws://localhost:3005"
+}

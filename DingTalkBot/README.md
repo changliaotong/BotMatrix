@@ -12,6 +12,11 @@ A **Go-based** DingTalk (钉钉) Robot implementation for [BotMatrix](../README.
 *   **OneBot 11 Compliance**:
     *   `send_group_msg` / `send_msg` -> DingTalk Group Message.
     *   `send_private_msg` -> Simulated via @Mention in Group (Webhook limitation).
+    *   **New**: `message` Event -> Forwards received DingTalk messages (Text/Content) to Nexus.
+*   **Intelligent Parsing**:
+    *   Automatically parses `im.message.receive_v1` events.
+    *   Extracts Text, Sender ID, and Group ID.
+    *   Forwards unknown events as `notice` type for debugging.
 *   **Security**: Implements DingTalk's HMAC-SHA256 signature algorithm for safe message delivery.
 *   **Auto-Configuration**: Automatically generates a unique `self_id` based on your token if not provided.
 

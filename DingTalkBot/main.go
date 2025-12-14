@@ -148,11 +148,7 @@ func startStreamClient() {
 func handleStreamEvent(df *payload.DataFrame) {
 	// Parse the event content
 	// DingTalk Stream events usually contain a JSON payload in the Data field
-	log.Printf("Received Stream Event: Type=%s, Data=%s", df.Type, df.Data)
-
-	// Basic OneBot Message Event Construction
-	// Note: We need to parse the specific DingTalk event format.
-	// This is a simplified example assuming we receive a message event.
+	log.Printf("Received Stream Event: Type=%s", df.Type)
 
 	var eventData map[string]interface{}
 	if err := json.Unmarshal([]byte(df.Data), &eventData); err != nil {
@@ -160,17 +156,69 @@ func handleStreamEvent(df *payload.DataFrame) {
 		return
 	}
 
-	// Check event type from data if available, or assume based on subscription
-	eventType, _ := eventData["type"].(string)
+	// Extract Event Type
+	eventType, _ := eventData["type"].(string) // e.g., "im.message.receive_v1"
 
-	// Map to OneBot Message
-	// This mapping depends heavily on the actual JSON structure of DingTalk Stream events
-	// For now, we log it. To make it functional, we'd need the exact spec.
-	// But simply receiving it proves the SDK works.
+	if eventType == "im.message.receive_v1" {
+		// Handle Message Event
+		// Note: The actual structure is deeply nested
+		// eventData["data"] -> {"content": "...", "sender_id": ...} (Simplified assumption)
+		// DingTalk Stream V2 event structure:
+		// {
+		//   "specVersion": "1.0",
+		//   "type": "im.message.receive_v1",
+		//   "headers": {...},
+		//   "data": { ... message details ... }
+		// }
 
-	// Example: Forwarding a raw event to Nexus for debugging/handling
+		if data, ok := eventData["data"].(map[string]interface{}); ok {
+			contentStr, _ := data["content"].(string)
+			// Content is often a JSON string itself
+			var contentMap map[string]interface{}
+			json.Unmarshal([]byte(contentStr), &contentMap)
+
+			text := ""
+			if t, ok := contentMap["text"].(string); ok {
+				text = t
+			}
+
+			// Sender
+			senderID := ""
+			if sender, ok := data["sender"].(map[string]interface{}); ok {
+				senderID, _ = sender["sender_id"].(string) // UnionID or StaffID
+			}
+
+			// Conversation
+			groupID := ""
+			if cid, ok := data["conversation_id"].(string); ok {
+				groupID = cid
+			}
+
+			log.Printf("Parsed Message: [%s] %s", senderID, text)
+
+			sendToNexus(map[string]interface{}{
+				"post_type":    "message",
+				"message_type": "group", // Default to group/chat
+				"time":         time.Now().Unix(),
+				"self_id":      config.SelfID,
+				"sub_type":     "normal",
+				"message_id":   getString(data, "message_id"),
+				"user_id":      senderID,
+				"group_id":     groupID,
+				"message":      text,
+				"raw_message":  text,
+				"sender": map[string]interface{}{
+					"user_id":  senderID,
+					"nickname": "DingTalkUser",
+				},
+			})
+			return
+		}
+	}
+
+	// Forward other events or if parsing failed
 	sendToNexus(map[string]interface{}{
-		"post_type":   "notice", // or message
+		"post_type":   "notice",
 		"notice_type": "dingtalk_event",
 		"sub_type":    eventType,
 		"raw_data":    eventData,

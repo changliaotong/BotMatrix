@@ -54,20 +54,138 @@ services:
       - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
     command: ["python", "onebot.py"]
 
-  # 3. DingTalkBot: DingTalk Webhook Worker
-  # dingtalk-bot:
-  #   build:
-  #     context: ./DingTalkBot
-  #   container_name: dingtalk-bot
-  #   restart: always
-  #   depends_on:
-  #     - bot-manager
-  #   volumes:
-  #     - ./DingTalkBot/config.json:/app/config.json
-  #   environment:
-  #     - TZ=Asia/Shanghai
-  #     - NEXUS_ADDR=ws://bot-manager:3005
-  #     # - DINGTALK_TOKEN=your_token_here
-  #     # - DINGTALK_SECRET=your_secret_here
+  # 4. DingTalkBot: DingTalk Webhook/Stream Worker
+  dingtalk-bot:
+    build:
+      context: ./DingTalkBot
+    container_name: dingtalk-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./DingTalkBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 5. FeishuBot: Feishu/Lark Enterprise Worker
+  feishu-bot:
+    build:
+      context: ./FeishuBot
+    container_name: feishu-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./FeishuBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 6. TelegramBot: Telegram Worker
+  telegram-bot:
+    build:
+      context: ./TelegramBot
+    container_name: telegram-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./TelegramBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 7. DiscordBot: Discord Worker
+  discord-bot:
+    build:
+      context: ./DiscordBot
+    container_name: discord-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./DiscordBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 8. SlackBot: Slack Enterprise Worker
+  slack-bot:
+    build:
+      context: ./SlackBot
+    container_name: slack-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./SlackBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 9. KookBot: Kook Community Worker
+  kook-bot:
+    build:
+      context: ./KookBot
+    container_name: kook-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./KookBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 10. EmailBot: Email Integration Worker
+  email-bot:
+    build:
+      context: ./EmailBot
+    container_name: email-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./EmailBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 11. WeComBot: Enterprise WeChat Worker
+  wecom-bot:
+    build:
+      context: ./WeComBot
+    container_name: wecom-bot
+    restart: always
+    ports:
+      - "5002:8001" # Expose callback port
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./WeComBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://bot-manager:3005
+
+  # 12. NapCat: Personal QQ Worker (OneBot 11)
+  napcat:
+    image: napneko/napcat:latest
+    container_name: napcat
+    restart: always
+    ports:
+      - "6099:6099" # WebUI
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./NapCat/config:/app/napcat/config
+      - ./NapCat/qq:/app/.config/QQ
+    environment:
+      - TZ=Asia/Shanghai
+      - ACCOUNT= # Optional: Fill in your QQ number for auto-login if previously logged in
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
 networks:

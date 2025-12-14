@@ -12,6 +12,15 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.16 (2025-12-15)
+*   **New Integrations**:
+    *   **KookBot**: Added support for Kook (Kaiheila) community platform.
+    *   **EmailBot**: Added bidirectional Email support (IMAP/SMTP) bridged to OneBot.
+    *   **WeComBot**: Added Enterprise WeChat support via Callback/API.
+    *   **NapCat**: Integrated NapCat (NTQQ) for personal QQ account automation.
+*   **Documentation**:
+    *   Comprehensive deployment guide covering all 10+ bot platforms.
+
 ### v1.1.15 (2025-12-15)
 *   **TencentBot Enhanced**:
     *   **Strict Separation**: Completely separated **QQ Group** and **Guild Channel** logic to align with platform concepts.
@@ -65,9 +74,16 @@
 
 *   **BotNexus (The Core)**: A high-concurrency Gateway written in **Go**. It provides a unified WebSocket interface, REST API, and a powerful **Real-time Dashboard**.
 *   **WxBot (The Worker)**: A flexible Worker Node written in **Python**. It handles protocol adaptation (WeChat/OneBot) and executes business logic.
+*   **WeComBot (Enterprise)**: A **Go-based** implementation for WeChat Work (WeCom), supporting internal app integration via callbacks.
+*   **NapCat (Personal)**: A **Containerized** implementation for Personal QQ, utilizing NTQQ and OneBot 11.
 *   **TencentBot (The Official Worker)**: A high-performance Worker written in **Go**, utilizing the official Tencent Bot SDK (`botgo`) for stable, compliant QQ Guild and Group operations.
 *   **DingTalkBot (The Enterprise Worker)**: A **Go-based** implementation supporting DingTalk's Webhook and Stream Mode for enterprise internal integration.
-*   **FeishuBot (Coming Soon)**: Planned support for Feishu/Lark ecosystem.
+*   **FeishuBot (The Modern Worker)**: A **Go-based** implementation for Feishu/Lark, utilizing official WebSocket SDK for secure, firewall-friendly enterprise operations.
+*   **TelegramBot (International)**: A **Go-based** implementation for Telegram, connecting via Long Polling.
+*   **DiscordBot (Community)**: A **Go-based** implementation for Discord, supporting channel messages and DMs.
+*   **SlackBot (Enterprise)**: A **Go-based** implementation for Slack, utilizing Socket Mode for enterprise integration.
+*   **KookBot (Community)**: A **Go-based** implementation for Kook (Kaiheila), utilizing WebSocket for real-time interaction.
+*   **EmailBot (Utility)**: A **Go-based** implementation for Email (IMAP/SMTP), bridging emails to OneBot messages.
 
 ---
 
@@ -104,15 +120,40 @@ graph TD
     subgraph "Worker Cluster"
         WxBot["WxBot (Python)"]
         TencentBot["TencentBot (Go)"]
-        OtherBot["Other Bot"]
+        DingTalkBot["DingTalkBot (Go)"]
+        FeishuBot["FeishuBot (Go)"]
+        TelegramBot["TelegramBot (Go)"]
+        DiscordBot["DiscordBot (Go)"]
+        SlackBot["SlackBot (Go)"]
+        KookBot["KookBot (Go)"]
+        EmailBot["EmailBot (Go)"]
+        WeComBot["WeComBot (Go)"]
+        NapCat["NapCat (Docker)"]
     end
     
     Nexus <-->|WebSocket| WxBot
     Nexus <-->|WebSocket| TencentBot
-    Nexus <-->|WebSocket| OtherBot
+    Nexus <-->|WebSocket| DingTalkBot
+    Nexus <-->|WebSocket| FeishuBot
+    Nexus <-->|WebSocket| TelegramBot
+    Nexus <-->|WebSocket| DiscordBot
+    Nexus <-->|WebSocket| SlackBot
+    Nexus <-->|WebSocket| KookBot
+    Nexus <-->|WebSocket| EmailBot
+    Nexus <-->|WebSocket| WeComBot
+    Nexus <-->|WebSocket| NapCat
     
     WxBot <-->|Protocol| WeChat["WeChat Servers"]
     TencentBot <-->|OpenAPI| QQ["Tencent QQ Platform"]
+    NapCat <-->|NTQQ| PersonalQQ["Personal QQ"]
+    DingTalkBot <-->|Stream/Hook| DingTalk["DingTalk Cloud"]
+    FeishuBot <-->|WebSocket/API| Feishu["Feishu Cloud"]
+    TelegramBot <-->|Long Polling| Telegram["Telegram Cloud"]
+    DiscordBot <-->|Gateway| Discord["Discord Cloud"]
+    SlackBot <-->|Socket Mode| Slack["Slack Cloud"]
+    KookBot <-->|WebSocket| Kook["Kook Cloud"]
+    EmailBot <-->|IMAP/SMTP| Email["Email Servers"]
+    WeComBot <-->|Callback/API| WeCom["WeCom Cloud"]
 ```
 
 ## 📂 Project Structure | 项目结构
@@ -129,6 +170,33 @@ BotMatrix/
 ├── TencentBot/          # [Go] The Official (QQ Worker)
 │   ├── main.go          # BotGo Implementation
 │   └── config.json      # Bot Configuration
+├── DingTalkBot/         # [Go] The Enterprise (DingTalk Worker)
+│   ├── main.go          # Stream/Webhook Implementation
+│   └── config.json      # Dual-mode Config
+├── FeishuBot/           # [Go] The Modern (Feishu Worker)
+│   ├── main.go          # WebSocket Implementation
+│   └── config.json      # App Config
+├── TelegramBot/         # [Go] The International (Telegram Worker)
+│   ├── main.go          # Long Polling Implementation
+│   └── config.json      # Bot Token Config
+├── DiscordBot/          # [Go] The Community (Discord Worker)
+│   ├── main.go          # Gateway Implementation
+│   └── config.json      # Bot Token Config
+├── SlackBot/            # [Go] The Enterprise (Slack Worker)
+│   ├── main.go          # Socket Mode Implementation
+│   └── config.json      # App/Bot Token Config
+├── KookBot/             # [Go] The Community (Kook Worker)
+│   ├── main.go          # WebSocket Implementation
+│   └── config.json      # Bot Token Config
+├── EmailBot/            # [Go] The Utility (Email Worker)
+│   ├── main.go          # IMAP/SMTP Implementation
+│   └── config.json      # Server/Auth Config
+├── WeComBot/            # [Go] The Enterprise (WeCom Worker)
+│   ├── main.go          # Callback/API Implementation
+│   └── config.json      # App/Token Config
+├── NapCat/              # [Docker] The Personal (QQ Worker)
+│   ├── config/          # OneBot 11 Config
+│   └── qq/              # QQ Session Data
 └── docker-compose.yml   # One-Click Deployment
 ```
 
