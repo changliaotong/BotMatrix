@@ -61,20 +61,20 @@
 
 ```mermaid
 graph TD
-    User[Admin / User] -->|HTTPS / WSS| Nexus[BotNexus (Go Gateway)]
-    Nexus -->|Monitor| Dashboard[Web Dashboard]
+    User["Admin / User"] -->|HTTPS / WSS| Nexus["BotNexus (Go Gateway)"]
+    Nexus -->|Monitor| Dashboard["Web Dashboard"]
     
     subgraph "Worker Cluster"
-        WxBot1[Python Worker 1]
-        WxBot2[Python Worker 2]
-        OtherBot[Other Bot]
+        WxBot1["Python Worker 1"]
+        WxBot2["Python Worker 2"]
+        OtherBot["Other Bot"]
     end
     
     Nexus <-->|WebSocket| WxBot1
     Nexus <-->|WebSocket| WxBot2
     Nexus <-->|WebSocket| OtherBot
     
-    WxBot1 <-->|Protocol| WeChat[WeChat Servers]
+    WxBot1 <-->|Protocol| WeChat["WeChat Servers"]
 ```
 
 ## 📂 Project Structure | 项目结构

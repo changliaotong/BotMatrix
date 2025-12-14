@@ -20,6 +20,9 @@ RUN go build -o BotNexus main.go
 # Runtime Stage
 FROM alpine:latest
 
+# Install tzdata for timezone support
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 
 # Copy binary from builder
