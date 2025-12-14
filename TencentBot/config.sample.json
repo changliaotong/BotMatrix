@@ -1,0 +1,6 @@
+{
+    "app_id": "YOUR_APP_ID",
+    "token": "YOUR_BOT_TOKEN",
+    "secret": "YOUR_APP_SECRET",
+    "nexus_addr": "ws://localhost:3001"
+}

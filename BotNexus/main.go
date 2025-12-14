@@ -1304,7 +1304,13 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 	}
 
 	if userID != 0 {
-		if !isDuplicate {
+		// Exclude self (Bot) from User Stats (Dragon King)
+		isSelf := false
+		if selfIDInt, err := strconv.ParseInt(botID, 10, 64); err == nil && selfIDInt == userID {
+			isSelf = true
+		}
+
+		if !isDuplicate && !isSelf {
 			m.UserStats[userID]++
 			m.UserStatsToday[userID]++
 			// Granular
@@ -1312,9 +1318,11 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 			detail.UserStatsToday[userID]++
 		}
 
-		m.UserNames[userID] = userName
-		if !isDuplicate && m.rdb != nil {
-			m.rdb.HIncrBy(context.Background(), "stats:user", fmt.Sprintf("%d", userID), 1)
+		if !isSelf {
+			m.UserNames[userID] = userName
+			if !isDuplicate && m.rdb != nil {
+				m.rdb.HIncrBy(context.Background(), "stats:user", fmt.Sprintf("%d", userID), 1)
+			}
 		}
 	}
 	if groupID != 0 {
@@ -1725,8 +1733,6 @@ func (m *Manager) handleGetBots(w http.ResponseWriter, r *http.Request) {
 		info["self_id"] = id
 		info["is_alive"] = isOnline
 		info["platform"] = "QQ" // Default to QQ
-		info["group_count"] = client.GroupCount
-		info["friend_count"] = client.FriendCount
 
 		// Owner Info
 		owner := "admin" // Default or None

@@ -12,6 +12,15 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.13 (2025-12-15)
+*   **New Bot Type**:
+    *   **Tencent Official Bot**: Added support for Tencent's official QQ Bot platform (`QQOfficial`) using the official `botgo` SDK.
+    *   **BotNexus Integration**: Native integration for official bots with correct platform identification and message translation to OneBot 11 standard.
+*   **Data Accuracy Improvements**:
+    *   **Dragon King Fix**: Excluded bot's own messages from "Top Active Users" statistics to ensure leaderboard accuracy.
+    *   **Bot Status Fix**: Resolved a critical panic when accessing group counts for offline bots.
+    *   **Platform Info**: Fixed platform display in the bot list to correctly show "QQOfficial" or other custom platforms instead of defaulting to "QQ".
+
 ### v1.1.12 (2025-12-15)
 *   **Internationalization (i18n)**:
     *   **Complete Coverage**: Full support for **Simplified Chinese**, **Traditional Chinese**, and **English** across all UI components.
