@@ -20,6 +20,7 @@ def pack_project():
         # Go / BotNexus files
         '*.go',
         '*.html',
+        '*.js',
         'go.mod',
         'go.sum',
         'stats.json',

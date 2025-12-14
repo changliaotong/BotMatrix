@@ -2598,10 +2598,11 @@
             };
             
             wsSubscriber.onmessage = (evt) => {
-                try {
-                    const data = JSON.parse(evt.data);
-                    
-                    // Handle API Responses
+            try {
+                const data = JSON.parse(evt.data);
+                console.log("WS Recv:", data); // Debug Log
+
+                // Handle API Responses
                     if (data.echo && pendingRequests.has(data.echo)) {
                         const req = pendingRequests.get(data.echo);
                         clearTimeout(req.timeout);

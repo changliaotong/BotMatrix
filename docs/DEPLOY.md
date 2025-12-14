@@ -17,6 +17,7 @@ Upload the entire project directory to your server (e.g., `/opt/BotMatrix`).
 Required files/directories:
 *   `BotNexus/`
 *   `WxBot/`
+*   `TencentBot/`
 *   `docker-compose.yml`
 
 ## 3. Configuration
@@ -28,6 +29,19 @@ Key variables:
 *   `REDIS_ADDR`: Address of your Redis server (default: `192.168.0.126:6379`).
 *   `REDIS_PWD`: Redis password.
 *   `BOT_SELF_ID`: The QQ/Wx ID of your bot (default: `1098299491`).
+
+### TencentBot Configuration
+1.  Copy `TencentBot/config.sample.json` to `TencentBot/config.json`.
+2.  Edit `config.json` with your Tencent Bot credentials:
+    ```json
+    {
+      "app_id": 123456789,
+      "secret": "YOUR_APP_SECRET",
+      "sandbox": false,
+      "self_id": "OPTIONAL_BOT_ID",
+      "nexus_addr": "ws://bot-manager:3001"
+    }
+    ```
 
 ### Port Mapping
 By default:

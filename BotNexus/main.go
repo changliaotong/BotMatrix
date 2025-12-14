@@ -1812,6 +1812,22 @@ func (m *Manager) handleGetBots(w http.ResponseWriter, r *http.Request) {
 		}
 		m.statsMutex.RUnlock()
 
+		// Generate Avatar URL based on Platform
+		// QQ / Android / Guild / Tencent: Use QQ Avatar
+		platform := fmt.Sprintf("%v", info["platform"])
+		if platform == "QQ" || platform == "Android" || platform == "Guild" || platform == "Tencent" {
+			info["avatar_url"] = fmt.Sprintf("http://q1.qlogo.cn/g?b=qq&nk=%s&s=640", id)
+		} else if platform == "DingTalk" {
+			info["avatar_url"] = "https://img.alicdn.com/tfs/TB19Z7Kj4z1gK0jSZSgXXavwpXa-1024-1024.png"
+		} else if platform == "Lark" {
+			info["avatar_url"] = "https://sf3-cn.feishucdn.com/obj/eden-cn/ul_j_ul/feishu-logo.png"
+		} else if platform == "Telegram" {
+			info["avatar_url"] = "https://telegram.org/img/t_logo.png"
+		} else {
+			// Fallback
+			info["avatar_url"] = "https://ui-avatars.com/api/?name=" + fmt.Sprintf("%v", info["nickname"])
+		}
+
 		botList = append(botList, info)
 	}
 

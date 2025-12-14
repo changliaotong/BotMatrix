@@ -18,7 +18,23 @@ services:
       - REDIS_ADDR=${REDIS_ADDR:-192.168.0.126:6379}
       - REDIS_PWD=${REDIS_PWD:-redis_zsYik8}
 
-  # 2. WxBot: WeChat Robot Worker
+  # 2. TencentBot: Tencent Official QQ Bot Worker
+  tencent-bot:
+    build:
+      context: ./TencentBot
+    container_name: tencent-bot
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./TencentBot/config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
+      - NEXUS_ADDR=ws://192.168.0.167:3005
+      - TENCENT_SANDBOX=true
+      # Configuration is loaded from config.json
+
+  # 3. WxBot: WeChat Robot Worker
   wxbot:
     build: 
       context: ./WxBot
@@ -37,4 +53,3 @@ services:
       - MANAGER_URL=ws://bot-manager:3001
       - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
     command: ["python", "onebot.py"]
-

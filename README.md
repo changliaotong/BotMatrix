@@ -12,6 +12,21 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.15 (2025-12-15)
+*   **TencentBot Enhanced**:
+    *   **Strict Separation**: Completely separated **QQ Group** and **Guild Channel** logic to align with platform concepts.
+    *   **New APIs**: Added comprehensive support for Guild Channel management (Create/Delete Channels, Role Management, Member Kick, etc.).
+    *   **Deployment**: Optimized targeted deployment via `deploy.ps1`.
+*   **Documentation**:
+    *   Updated README and Architecture diagrams to reflect the new multi-bot ecosystem.
+
+### v1.1.14 (2025-12-15)
+*   **Deployment**:
+    *   **Configuration**: Simplified Docker deployment by consolidating configuration into `config.json` for TencentBot, removing duplicate environment variables.
+    *   **Persistence**: Ensured configuration persistence via Docker volume mounting.
+*   **Tencent Official Bot**:
+    *   **Build Fix**: Resolved build errors related to token initialization and SDK compatibility.
+
 ### v1.1.13 (2025-12-15)
 *   **New Bot Type**:
     *   **Tencent Official Bot**: Added support for Tencent's official QQ Bot platform (`QQOfficial`) using the official `botgo` SDK.
@@ -50,6 +65,7 @@
 
 *   **BotNexus (The Core)**: A high-concurrency Gateway written in **Go**. It provides a unified WebSocket interface, REST API, and a powerful **Real-time Dashboard**.
 *   **WxBot (The Worker)**: A flexible Worker Node written in **Python**. It handles protocol adaptation (WeChat/OneBot) and executes business logic.
+*   **TencentBot (The Official Worker)**: A high-performance Worker written in **Go**, utilizing the official Tencent Bot SDK (`botgo`) for stable, compliant QQ Guild and Group operations.
 
 ---
 
@@ -84,16 +100,17 @@ graph TD
     Nexus -->|Monitor| Dashboard["Web Dashboard"]
     
     subgraph "Worker Cluster"
-        WxBot1["Python Worker 1"]
-        WxBot2["Python Worker 2"]
+        WxBot["WxBot (Python)"]
+        TencentBot["TencentBot (Go)"]
         OtherBot["Other Bot"]
     end
     
-    Nexus <-->|WebSocket| WxBot1
-    Nexus <-->|WebSocket| WxBot2
+    Nexus <-->|WebSocket| WxBot
+    Nexus <-->|WebSocket| TencentBot
     Nexus <-->|WebSocket| OtherBot
     
-    WxBot1 <-->|Protocol| WeChat["WeChat Servers"]
+    WxBot <-->|Protocol| WeChat["WeChat Servers"]
+    TencentBot <-->|OpenAPI| QQ["Tencent QQ Platform"]
 ```
 
 ## 📂 Project Structure | 项目结构
@@ -104,9 +121,12 @@ BotMatrix/
 │   ├── main.go          # Core Logic
 │   ├── index.html       # Modern Responsive UI (Bootstrap 5 + Chart.js)
 │   └── Dockerfile       # Deployment config
-├── WxBot/               # [Python] The Brawn (Worker Nodes)
+├── WxBot/               # [Python] The Brawn (WeChat Worker)
 │   ├── bots/            # Business Logic
 │   └── web_ui.py        # Legacy UI (Deprecated)
+├── TencentBot/          # [Go] The Official (QQ Worker)
+│   ├── main.go          # BotGo Implementation
+│   └── config.json      # Bot Configuration
 └── docker-compose.yml   # One-Click Deployment
 ```
 
@@ -122,6 +142,11 @@ BotMatrix/
 ```bash
 git clone https://github.com/changliaotong/BotMatrix.git
 cd BotMatrix
+
+# Configure TencentBot (Optional)
+cp TencentBot/config.sample.json TencentBot/config.json
+# Edit TencentBot/config.json with your AppID and Secret
+
 docker-compose up -d --build
 ```
 

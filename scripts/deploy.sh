@@ -17,19 +17,19 @@ echo "[Step 1/3] Packing project..."
 python3 scripts/pack_project.py
 
 # if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-#     git archive --format=zip --output=wxbot_deploy.zip HEAD
+#     git archive --format=zip --output=botmatrix_deploy.zip HEAD
 # else
 #     python3 scripts/pack_project.py
 # fi
 
-if [ ! -f "wxbot_deploy.zip" ]; then
-    echo "Error: wxbot_deploy.zip not found!"
+if [ ! -f "botmatrix_deploy.zip" ]; then
+    echo "Error: botmatrix_deploy.zip not found!"
     exit 1
 fi
 
 # 2. Upload
 echo "[Step 2/3] Uploading to server..."
-scp wxbot_deploy.zip ${USERNAME}@${SERVER_IP}:${TEMP_ZIP}
+scp botmatrix_deploy.zip ${USERNAME}@${SERVER_IP}:${TEMP_ZIP}
 
 # 3. Deploy
 echo "[Step 3/3] Executing remote commands..."
