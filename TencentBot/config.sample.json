@@ -1,5 +1,5 @@
 {
-    "app_id": "YOUR_APP_ID",
+    "app_id": 123456789,
     "token": "YOUR_BOT_TOKEN",
     "secret": "YOUR_APP_SECRET",
     "nexus_addr": "ws://localhost:3001"

@@ -33,21 +33,38 @@ var (
 )
 
 func loadConfig() {
+	// Try to load from file first
 	file, err := os.Open("config.json")
-	if err != nil {
-		log.Println("config.json not found, creating from sample...")
-		// Create a dummy config if not exists, but better to just fail or use env
-		if os.IsNotExist(err) {
-			sampleData, _ := os.ReadFile("config.sample.json")
-			os.WriteFile("config.json", sampleData, 0644)
-			log.Fatal("Please edit config.json and restart.")
+	if err == nil {
+		defer file.Close()
+		decoder := json.NewDecoder(file)
+		if err := decoder.Decode(&config); err != nil {
+			log.Println("Error decoding config.json, falling back to environment variables:", err)
 		}
-		log.Fatal("Error reading config:", err)
+	} else {
+		log.Println("config.json not found, using environment variables.")
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&config); err != nil {
-		log.Fatal("Error decoding config:", err)
+
+	// Override with environment variables if present
+	if envAppID := os.Getenv("TENCENT_APP_ID"); envAppID != "" {
+		fmt.Sscanf(envAppID, "%d", &config.AppID)
+	}
+	if envToken := os.Getenv("TENCENT_TOKEN"); envToken != "" {
+		config.Token = envToken
+	}
+	if envSecret := os.Getenv("TENCENT_SECRET"); envSecret != "" {
+		config.Secret = envSecret
+	}
+	if envNexusAddr := os.Getenv("NEXUS_ADDR"); envNexusAddr != "" {
+		config.NexusAddr = envNexusAddr
+	}
+
+	// Validation
+	if config.AppID == 0 || config.Token == "" || config.Secret == "" {
+		log.Fatal("Missing configuration. Please check config.json or environment variables (TENCENT_APP_ID, TENCENT_TOKEN, TENCENT_SECRET).")
+	}
+	if config.NexusAddr == "" {
+		config.NexusAddr = "ws://localhost:3001"
 	}
 }
 
