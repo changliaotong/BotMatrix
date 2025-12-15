@@ -35,15 +35,59 @@ type Config struct {
 	Sandbox   bool   `json:"sandbox"`
 	SelfID    string `json:"self_id"` // Optional: manually set SelfID
 	NexusAddr string `json:"nexus_addr"`
+	LogPort   int    `json:"log_port"` // Port for HTTP Log Viewer
 }
 
 var (
-	config    Config
-	nexusConn *websocket.Conn
-	api       openapi.OpenAPI
-	ctx       context.Context
-	selfID    string
+	config     Config
+	nexusConn  *websocket.Conn
+	api        openapi.OpenAPI
+	ctx        context.Context
+	selfID     string
+	logManager *LogManager
 )
+
+// LogManager handles in-memory log buffering
+type LogManager struct {
+	buffer []string
+	size   int
+	mu     sync.RWMutex
+}
+
+func NewLogManager(size int) *LogManager {
+	return &LogManager{
+		buffer: make([]string, 0, size),
+		size:   size,
+	}
+}
+
+func (l *LogManager) Write(p []byte) (n int, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg := string(p)
+	// Simple rotation
+	if len(l.buffer) >= l.size {
+		l.buffer = l.buffer[1:]
+	}
+	l.buffer = append(l.buffer, strings.TrimRight(msg, "\n"))
+
+	return os.Stdout.Write(p)
+}
+
+func (l *LogManager) GetLogs(lines int) []string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if lines <= 0 || lines >= len(l.buffer) {
+		// Return a copy
+		result := make([]string, len(l.buffer))
+		copy(result, l.buffer)
+		return result
+	}
+
+	return l.buffer[len(l.buffer)-lines:]
+}
 
 // SessionCache to store last message ID for replying
 type SessionCache struct {
@@ -960,6 +1004,28 @@ func handleAction(action map[string]interface{}) {
 		// Mute member not fully supported in this SDK version or requires different API
 		log.Println("set_group_ban not implemented yet")
 		sendToNexus(map[string]interface{}{"status": "failed", "echo": action["echo"]})
+
+	case "get_logs":
+		// Fetch logs from memory buffer
+		lines := 100 // Default
+		if params, ok := action["params"].(map[string]interface{}); ok {
+			if lStr := getString(params, "lines"); lStr != "" {
+				if l, err := strconv.Atoi(lStr); err == nil {
+					lines = l
+				}
+			}
+		}
+
+		logs := []string{}
+		if logManager != nil {
+			logs = logManager.GetLogs(lines)
+		}
+
+		sendToNexus(map[string]interface{}{
+			"status": "ok",
+			"data":   logs,
+			"echo":   action["echo"],
+		})
 	}
 }
 
@@ -1249,8 +1315,38 @@ var _ event.MessageReactionEventHandler = messageReactionEventHandler
 // var _ event.C2CMessageEventHandler = c2cMessageEventHandler
 
 func main() {
+	// Initialize Logger
+	logManager = NewLogManager(2000) // Keep last 2000 lines
+	log.SetOutput(logManager)
+
 	loadConfig()
 	ctx = context.Background()
+
+	// Start HTTP Log Viewer if configured
+	if config.LogPort > 0 {
+		go func() {
+			http.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
+				lines := 100
+				if l := r.URL.Query().Get("lines"); l != "" {
+					if v, err := strconv.Atoi(l); err == nil {
+						lines = v
+					}
+				}
+
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				logs := logManager.GetLogs(lines)
+				for _, line := range logs {
+					fmt.Fprintln(w, line)
+				}
+			})
+
+			addr := fmt.Sprintf(":%d", config.LogPort)
+			log.Printf("Starting Log Viewer at http://localhost%s/logs", addr)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Printf("Failed to start Log Viewer: %v", err)
+			}
+		}()
+	}
 
 	// Initialize Bot Token
 	botToken := token.NewQQBotTokenSource(
