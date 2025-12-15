@@ -169,22 +169,22 @@ services:
       - NEXUS_ADDR=ws://bot-manager:3005
 
   # 12. NapCat: Personal QQ Worker (OneBot 11)
-  napcat:
-    image: napneko/napcat:latest
-    container_name: napcat
-    restart: always
-    ports:
-      - "6099:6099" # WebUI
-    depends_on:
-      - bot-manager
-    volumes:
-      - ./NapCat/config:/app/napcat/config
-      - ./NapCat/qq:/app/.config/QQ
-    environment:
-      - TZ=Asia/Shanghai
-      - ACCOUNT= # Optional: Fill in your QQ number for auto-login if previously logged in
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+  # napcat:
+  #   image: napneko/napcat:latest
+  #   container_name: napcat
+  #   restart: always
+  #   ports:
+  #     - "6099:6099" # WebUI
+  #   depends_on:
+  #     - bot-manager
+  #   volumes:
+  #     - ./NapCat/config:/app/napcat/config
+  #     - ./NapCat/qq:/app/.config/QQ
+  #   environment:
+  #     - TZ=Asia/Shanghai
+  #     - ACCOUNT= # Optional: Fill in your QQ number for auto-login if previously logged in
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1G
 
