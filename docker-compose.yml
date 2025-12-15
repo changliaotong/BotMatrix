@@ -18,6 +18,18 @@ services:
       - REDIS_ADDR=${REDIS_ADDR:-192.168.0.126:6379}
       - REDIS_PWD=${REDIS_PWD:-redis_zsYik8}
 
+  # 1.1 System Worker: Global Logic & Commands
+  system-worker:
+    build:
+      context: ./SystemWorker
+    container_name: botmatrix-system-worker
+    restart: always
+    depends_on:
+      - bot-manager
+    environment:
+      - TZ=Asia/Shanghai
+      - BOT_MANAGER_URL=ws://bot-manager:3001
+
   # 2. TencentBot: Tencent Official QQ Bot Worker
   tencent-bot:
     build:

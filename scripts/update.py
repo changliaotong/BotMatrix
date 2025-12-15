@@ -35,9 +35,18 @@ def main():
     parser.add_argument('files', metavar='FILE', type=str, nargs='*', help='Files to update (default: all .py files)')
     parser.add_argument('--restart', action='store_true', default=True, help='Restart the container after update (default: True)')
     parser.add_argument('--no-restart', dest='restart', action='store_false', help='Do not restart the container')
+    parser.add_argument('--rebuild', action='store_true', default=True, help='Rebuild the container image (default: True)')
+    parser.add_argument('--no-rebuild', dest='rebuild', action='store_false', help='Do not rebuild, just restart (requires volume mapping)')
     parser.add_argument('--services', type=str, default="", help='Specific services to restart (e.g. "bot-manager wxbot")')
+    parser.add_argument('--no-sudo', dest='use_sudo', action='store_false', help='Do not use sudo for remote commands')
+    parser.set_defaults(use_sudo=True)
 
     args = parser.parse_args()
+    
+    # Global sudo configuration
+    global USE_SUDO, SUDO_CMD
+    USE_SUDO = args.use_sudo
+    SUDO_CMD = "sudo " if USE_SUDO else ""
 
     # 1. 确定要上传的文件
     files_to_upload = args.files
@@ -48,6 +57,7 @@ def main():
         additional_items = [
             'WxBot',        # Python Worker & Core
             'BotNexus',     # Go Manager
+            'SystemWorker', # Python System Worker
             'TencentBot',   # Official QQ Bot
             'DingTalkBot',  # DingTalk Bot
             'FeishuBot',    # Feishu/Lark Bot
@@ -85,10 +95,24 @@ def main():
     
     print(f"\n[Step 1/4] Compressing files to {tar_filename}...")
     try:
+        def exclude_function(tarinfo):
+            name = tarinfo.name
+            if any(x in name for x in ['__pycache__', '.git', '.vs', '.idea', 'node_modules', 'obj', 'bin']):
+                return None
+            if name.endswith('.pyc') or name.endswith('.pyo') or name.endswith('.pyd'):
+                return None
+            
+            # Exclude temp directories (session files, logs, QR codes)
+            # These should be persisted on server and not overwritten by local dev files
+            if '/temp/' in name.replace('\\', '/') or name.replace('\\', '/').endswith('/temp'):
+                return None
+                
+            return tarinfo
+
         with tarfile.open(tar_filename, "w:gz") as tar:
             for file in files_to_upload:
                 if os.path.exists(file):
-                    tar.add(file)
+                    tar.add(file, filter=exclude_function)
                 else:
                     print(f"Warning: File {file} not found, skipping.")
     except Exception as e:
@@ -116,7 +140,10 @@ def main():
     print("\n[Step 3/4] Extracting and Deploying on server...")
     
     # 确保远程目录存在
-    ensure_dir_cmd = f"sudo mkdir -p {REMOTE_DEPLOY_DIR} && sudo chown {USERNAME}:{USERNAME} {REMOTE_DEPLOY_DIR}"
+    # 如果不使用 sudo，尝试直接创建（如果权限允许）
+    ensure_dir_cmd = f"{SUDO_CMD}mkdir -p {REMOTE_DEPLOY_DIR} && {SUDO_CMD}chown {USERNAME}:{USERNAME} {REMOTE_DEPLOY_DIR}"
+    if not USE_SUDO:
+         ensure_dir_cmd = f"mkdir -p {REMOTE_DEPLOY_DIR}"
 
     # 命令逻辑：解压到临时目录 -> 移动/覆盖到部署目录 -> 设置权限 -> 清理压缩包
     # 使用 tar -mxzf 覆盖解压
@@ -133,11 +160,19 @@ def main():
     # 5. 重启容器
     restart_cmd_str = ""
     if args.restart:
-        print("\n[Step 4/4] Rebuilding and Restarting containers...")
-        # 因为代码被打包进镜像，必须重新构建才能生效
-        # 使用 up -d --build 可以智能构建并重启
+        print("\n[Step 4/4] Restarting containers...")
         services_arg = args.services if args.services else ""
-        restart_cmd_str = f" && cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose up -d --build {services_arg}"
+        
+        if args.rebuild:
+            print(" (Full Rebuild Mode)")
+            # 因为代码被打包进镜像，必须重新构建才能生效
+            # 使用 up -d --build 可以智能构建并重启
+            # 为了避免 "container name already in use" 错误，先停止并删除旧容器（数据保留在卷中）
+            restart_cmd_str = f" && cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose stop {services_arg} && {SUDO_CMD}docker-compose rm -f {services_arg} && {SUDO_CMD}docker-compose up -d --build {services_arg}"
+        else:
+            print(" (Fast Restart Mode - No Rebuild)")
+            # 仅重启容器，适用于代码通过 volume 挂载的情况
+            restart_cmd_str = f" && cd {REMOTE_DEPLOY_DIR} && {SUDO_CMD}docker-compose restart {services_arg}"
     else:
         print("\n(Container not restarted)")
 

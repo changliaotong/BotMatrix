@@ -97,6 +97,8 @@ class WXBot:
         self.cache_file = os.path.join(self.temp_pwd, 'session.json')
         self.qr_file_path = os.path.join(self.temp_pwd, 'wxqr.png')
 
+        self.is_ready = False # Flag to indicate if bot is fully initialized (logged in & contacts loaded)
+
         self.my_account = {}  # 当前账户
 
         # 所有相关账号: 联系人, 公众号, 群组, 特殊账号
@@ -299,8 +301,8 @@ class WXBot:
     def get_contact_prefer_name(name):
         if name is None:
             return None
-        #if 'remark_name' in name:
-            #return name['remark_name']
+        if 'remark_name' in name:
+            return name['remark_name']
         if 'nickname' in name:
             return name['nickname']
         if 'display_name' in name:
@@ -311,8 +313,8 @@ class WXBot:
     def get_group_member_prefer_name(name):
         if name is None:
             return None
-        #if 'remark_name' in name:
-            #return name['remark_name']
+        if 'remark_name' in name:
+            return name['remark_name']
         if 'display_name' in name:
             return name['display_name']
         if 'nickname' in name:
@@ -322,9 +324,14 @@ class WXBot:
     def load_session_cache(self):
         try:
             if not os.path.exists(self.cache_file):
+                print(f"[wxbot] Session file not found: {self.cache_file}")
                 return False
             with open(self.cache_file, 'r') as f:
-                data = json.loads(f.read())
+                content = f.read()
+                if not content:
+                    print("[wxbot] Session file is empty")
+                    return False
+                data = json.loads(content)
             self.uin = data.get('uin', '')
             self.sid = data.get('sid', '')
             self.skey = data.get('skey', '')
@@ -343,8 +350,15 @@ class WXBot:
                 self.session.cookies = requests.utils.cookiejar_from_dict(cookies_dict, cookiejar=None, overwrite=True)
             except Exception:
                 pass
-            return all([self.uin, self.sid, self.skey, self.pass_ticket, self.base_uri])
-        except Exception:
+            
+            valid = all([self.uin, self.sid, self.skey, self.pass_ticket, self.base_uri])
+            if valid:
+                print(f"[wxbot] Session loaded successfully. Uin={self.uin}")
+            else:
+                print(f"[wxbot] Session loaded but invalid (missing fields).")
+            return valid
+        except Exception as e:
+            print(f"[wxbot] Load session cache failed: {e}")
             return False
 
     def save_session_cache(self):
@@ -790,8 +804,9 @@ class WXBot:
 
             content = self.extract_msg_content(msg_type_id, msg)
             
-            # If extract_msg_content identified a system user, override the user info
-            if isinstance(content, dict) and 'user' in content:
+            # If extract_msg_content identified a system user, override the user info ONLY if not group
+            # For groups, we want 'user' to remain the Group info, and 'content.user' to be the Sender info
+            if msg_type_id != 3 and isinstance(content, dict) and 'user' in content:
                 user = content['user']
 
             message = {'msg_type_id': msg_type_id,
@@ -1524,18 +1539,24 @@ class WXBot:
                 if self.DEBUG:
                     print('[INFO] Get %d contacts' % len(self.contact_list))
                     print('[INFO] Get %d groups' % len(self.group_list))
+                
+                print(f"[wxbot] Processing {len(self.group_list)} groups...")
                 for wxgroup in self.group_list:
-                    group_uid = wxgroup['UserName']
-                    group_name = wxgroup['NickName']
-                    group_name = msg.remove_Emoji(group_name)
-                    group_id = 0
-                    client_qq = 0
-                    robot_qq = common.default_robot_qq
-                    client_name = ""
-                    group_id = wx_group.get_wx_group(robot_qq, group_uid, group_name, client_qq, client_name)
-                    if self.DEBUG:
-                        print(group_name, "=>", group_id)
+                    try:
+                        group_uid = wxgroup['UserName']
+                        group_name = wxgroup['NickName']
+                        group_name = msg.replace_emoji(group_name)
+                        group_id = 0
+                        client_qq = 0
+                        robot_qq = common.default_robot_qq
+                        client_name = ""
+                        group_id = wx_group.get_wx_group(robot_qq, group_uid, group_name, client_qq, client_name)
+                        #if self.DEBUG:
+                        print(f"[GroupInfo] {group_name} => {group_id} (uid={group_uid})")
+                    except Exception as e:
+                        print(f"[GroupInfo] Error processing group {wxgroup.get('NickName')}: {e}")
                 print('[INFO] Start to process messages .')
+                self.is_ready = True
                 self.proc_msg()
                 return
             else:
@@ -1576,19 +1597,25 @@ class WXBot:
         #added by derlin 添加或更新群信息到数据库中！ 
         if self.DEBUG:
             print('[INFO] Get %d groups' % len(self.group_list))
+        
+        print(f"[wxbot] Processing {len(self.group_list)} groups (fresh login)...")
         for wxgroup in self.group_list:
-            group_uid = wxgroup['UserName']
-            group_name = wxgroup['NickName']
-            group_name = msg.remove_Emoji(group_name)
-            group_id = 0
-            client_qq = 0
-            robot_qq = common.default_robot_qq
-            client_name = ""
-            group_id = wx_group.get_wx_group(robot_qq, group_uid, group_name, client_qq, client_name)
-            if self.DEBUG:
-                print(group_name, "=>", group_id)
+            try:
+                group_uid = wxgroup['UserName']
+                group_name = wxgroup['NickName']
+                group_name = msg.replace_emoji(group_name)
+                group_id = 0
+                client_qq = 0
+                robot_qq = common.default_robot_qq
+                client_name = ""
+                group_id = wx_group.get_wx_group(robot_qq, group_uid, group_name, client_qq, client_name)
+                #if self.DEBUG:
+                print(f"[GroupInfo] {group_name} => {group_id} (uid={group_uid})")
+            except Exception as e:
+                print(f"[GroupInfo] Error processing group {wxgroup.get('NickName')}: {e}")
         #end added by derlin
         print('[INFO] Start to process messages .')
+        self.is_ready = True
         self.proc_msg()
 
     def get_uuid(self):

@@ -86,9 +86,9 @@ def test_private_quote():
         "to_user_id": "robot_uid"
     }
     
-    # Ensure msg module mock works for remove_Emoji
+    # Ensure msg module mock works for replace_emoji
     import msg
-    msg.msg.remove_Emoji.side_effect = lambda x: x
+    msg.msg.replace_emoji.side_effect = lambda x: x
     
     bot.handle_msg_all(msg_private)
     

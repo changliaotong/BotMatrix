@@ -18,7 +18,7 @@ class common():
 
     #emoji
     @staticmethod
-    def removeEmoji(message):
+    def replace_emoji(message):
         if not message:
             return message
         

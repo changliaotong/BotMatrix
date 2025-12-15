@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Fixed WxBot displaying "unknown" for users and groups by prioritizing `RemarkName` (remark name) correctly in name resolution.
+
 ## v1.1.17 (2025-12-15)
 *   **WxBot Core Improvements**:
     *   **System Message Parsing**: Fixed parsing errors for system events (Invite, Group Rename, Tickle) to prevent junk data in `wx_client`.

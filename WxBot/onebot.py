@@ -74,20 +74,8 @@ class onebot(WXBot):
         print(f"[onebot] Configured QR Code Mode: {self.conf['qr']}")
 
         self.self_id = int(self_id) if self_id else 0
+        # Multi-account support removed. Always use default session.json and wxqr.png from WXBot base class.
         
-        if self.self_id:
-            self.cache_file = os.path.join(self.temp_pwd, f'session_{self.self_id}.json')
-            self.qr_file_path = os.path.join(self.temp_pwd, f'wxqr_{self.self_id}.png')
-            
-            default_session = os.path.join(self.temp_pwd, 'session.json')
-            if not os.path.exists(self.cache_file) and os.path.exists(default_session):
-                print(f"[onebot] Migrating default session to {self.cache_file}")
-                try:
-                    import shutil
-                    shutil.copy(default_session, self.cache_file)
-                except Exception as e:
-                    print(f"[onebot] Migration failed: {e}")
-
         self.boot_ts = int(time.time())
         self._seen_msg_ids = set()
         self._last_active_group_uid = None
@@ -158,8 +146,8 @@ class onebot(WXBot):
         members = self.group_members[group_uid]
         target_m = None
         for m in members:
-            dname = m.get('DisplayName')
-            nname = m.get('NickName')
+            dname = msg.replace_emoji(m.get('DisplayName'))
+            nname = msg.replace_emoji(m.get('NickName'))
             
             # Check exact match
             if (dname and dname == name) or (nname and nname == name):
@@ -175,8 +163,8 @@ class onebot(WXBot):
                  return self.self_id
 
             try:
-                nickname = target_m.get('NickName') or ""
-                display_name = target_m.get('DisplayName') or ""
+                nickname = msg.replace_emoji(target_m.get('NickName') or "")
+                display_name = msg.replace_emoji(target_m.get('DisplayName') or "")
                 
                 user_id = wx_client.get_client_qq(self.self_id, group_id, target_uid, nickname, display_name, "", nickname, "")
                 if user_id:
@@ -254,7 +242,7 @@ class onebot(WXBot):
             except Exception:
                 pass
             
-            return f"@{msg.remove_Emoji(nickname)}"
+            return f"@{msg.replace_emoji(nickname)}"
 
         message = at_pattern.sub(replace_at, message)
         
@@ -384,7 +372,7 @@ class onebot(WXBot):
                     if gid_uid:
                         for g in getattr(self, 'group_list', []) or []:
                             if g.get('UserName') == gid_uid:
-                                group_name = msg.remove_Emoji(g.get('NickName') or '')
+                                group_name = msg.replace_emoji(g.get('NickName') or '')
                                 break
                 except:
                     pass
@@ -417,7 +405,7 @@ class onebot(WXBot):
                     if uid:
                         for c in getattr(self, 'contact_list', []) or []:
                              if c.get('UserName') == uid:
-                                 nickname = msg.remove_Emoji(c.get('NickName') or '')
+                                 nickname = msg.replace_emoji(c.get('NickName') or '')
                                  break
                 except:
                     pass
@@ -464,7 +452,7 @@ class onebot(WXBot):
                             if not kicked_nickname:
                                 kicked_nickname = str(user_id)
                             else:
-                                kicked_nickname = msg.remove_Emoji(kicked_nickname)
+                                kicked_nickname = msg.replace_emoji(kicked_nickname)
                         except Exception:
                             kicked_nickname = str(user_id)
 
@@ -482,7 +470,7 @@ class onebot(WXBot):
                                 gname = ""
                                 for g in getattr(self, 'group_list', []) or []:
                                     if g.get('UserName') == gid_uid:
-                                        gname = msg.remove_Emoji(g.get('NickName') or '')
+                                        gname = msg.replace_emoji(g.get('NickName') or '')
                                         break
                                 event = {
                                     "self_id": self.self_id,
@@ -507,11 +495,11 @@ class onebot(WXBot):
                     uid = c.get('UserName')
                     user_id = 0
                     try:
-                        user_id = wx_client.get_client_qq_by_uid(uid)
+                        user_id = wx_client.get_client_qq_by_uid(self.self_id, uid)
                     except Exception:
                         user_id = 0
-                    nickname = msg.remove_Emoji(c.get('NickName') or '')
-                    remark = msg.remove_Emoji(c.get('RemarkName') or '')
+                    nickname = msg.replace_emoji(c.get('NickName') or '')
+                    remark = msg.replace_emoji(c.get('RemarkName') or '')
                     items.append({"user_id": user_id, "nickname": nickname, "remark": remark})
                 result["data"] = items
 
@@ -526,7 +514,7 @@ class onebot(WXBot):
                     group_uid = g.get('UserName')
                     group_id = self._group_map_id_by_uid.get(group_uid, 0)
                     
-                    group_name = msg.remove_Emoji(g.get('NickName') or '')
+                    group_name = msg.replace_emoji(g.get('NickName') or '')
                     
                 # Update group name in DB if needed
                     if group_id:
@@ -570,9 +558,9 @@ class onebot(WXBot):
                         uid = m.get('UserName')
                         
                         # Extract names first to pass to get_client_qq
-                        nickname = msg.remove_Emoji(m.get('NickName') or m.get('RemarkName') or '')
-                        card = msg.remove_Emoji(m.get('DisplayName') or '')
-                        remark = msg.remove_Emoji(m.get('RemarkName') or '')
+                        nickname = msg.replace_emoji(m.get('NickName') or m.get('RemarkName') or '')
+                        card = msg.replace_emoji(m.get('DisplayName') or '')
+                        remark = msg.replace_emoji(m.get('RemarkName') or '')
                         
                         user_id = 0
                         try:
@@ -612,7 +600,7 @@ class onebot(WXBot):
             
             elif name == "get_login_info":
                  info = getattr(self, 'my_account', {})
-                 nickname = msg.remove_Emoji(info.get('NickName') or "Unknown")
+                 nickname = msg.replace_emoji(info.get('NickName') or "Unknown")
                  result["data"] = {"user_id": self.self_id, "nickname": nickname}
 
             else:
@@ -720,7 +708,7 @@ class onebot(WXBot):
                         if hasattr(self, 'group_list'):
                              for g in self.group_list:
                                  if g.get('UserName') == group_uid:
-                                     g_name = msg.remove_Emoji(g.get('NickName') or '')
+                                     g_name = msg.replace_emoji(g.get('NickName') or '')
                                      break
                         group_id = wx_group.get_wx_group(self.self_id, group_uid, g_name, 0, "")
 
@@ -819,12 +807,12 @@ class onebot(WXBot):
                 
                 if isinstance(content, dict) and 'user' in content:
                     sender_uid = content['user'].get('id', '')
-                    sender_name = content['user'].get('name', 'Unknown')
-                    text = content.get('data', '')
+                    sender_name = msg.replace_emoji(content['user'].get('name', 'Unknown'))
+                    text = msg.replace_emoji(content.get('data', ''))
                 else:
                     # Fallback
                     sender_uid = ""
-                    text = str(content) if content else ""
+                    text = msg.replace_emoji(str(content)) if content else ""
                     
                 # Map Sender UID to User ID (int)
                 user_id = 0
@@ -843,11 +831,11 @@ class onebot(WXBot):
                     for m in self.group_members[group_uid]:
                          if m.get('UserName') == sender_uid:
                              # Enrich nickname if unknown or simple
-                             real_nick = msg.remove_Emoji(m.get('NickName') or '')
+                             real_nick = msg.replace_emoji(m.get('NickName') or '')
                              if sender_name == "Unknown" or not sender_name:
                                  sender_name = real_nick
                              
-                             card = msg.remove_Emoji(m.get('DisplayName') or '')
+                             card = msg.replace_emoji(m.get('DisplayName') or '')
                              break
 
                 event["sender"] = {
@@ -865,7 +853,17 @@ class onebot(WXBot):
                 event["sub_type"] = "friend"
                 
                 sender_uid = from_uid
-                sender_name = user_data.get('name', 'Unknown')
+                sender_name = msg.replace_emoji(user_data.get('name', 'Unknown'))
+                
+                # Try to enrich sender info from contact_list (friends) BEFORE calling get_client_qq
+                # This helps matching existing users if UID changed but RemarkName/NickName is known
+                remark = ""
+                for c in getattr(self, 'contact_list', []) or []:
+                     if c.get('UserName') == sender_uid:
+                         if sender_name == "Unknown":
+                             sender_name = msg.replace_emoji(c.get('NickName') or '')
+                         remark = msg.replace_emoji(c.get('RemarkName') or '')
+                         break
                 
                 # Map Sender UID to User ID (int)
                 user_id = 0
@@ -873,7 +871,8 @@ class onebot(WXBot):
                     try:
                         # Use get_client_qq to ensure user exists in DB
                         # robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status
-                        user_id = wx_client.get_client_qq(self.self_id, 0, sender_uid, sender_name, sender_name, "", sender_name, "")
+                        # Note: For friends, display_name is usually same as nick_name or remark
+                        user_id = wx_client.get_client_qq(self.self_id, 0, sender_uid, sender_name, sender_name, remark, sender_name, "")
                     except Exception as e:
                         print(f"[onebot] Failed to map private user_id: {e}")
                         pass
@@ -883,19 +882,13 @@ class onebot(WXBot):
                 content = _msg.get('content')
                 text = ""
                 if isinstance(content, dict):
-                    text = content.get('data', '')
+                    text = msg.replace_emoji(content.get('data', ''))
                 else:
-                    text = str(content) if content else ""
+                    text = msg.replace_emoji(str(content)) if content else ""
                     
                 # Try to enrich sender info
-                remark = ""
-                for c in getattr(self, 'contact_list', []) or []:
-                     if c.get('UserName') == sender_uid:
-                         if sender_name == "Unknown":
-                             sender_name = msg.remove_Emoji(c.get('NickName') or '')
-                         remark = msg.remove_Emoji(c.get('RemarkName') or '')
-                         break
-
+                # Already done above
+                
                 event["sender"] = {
                     "user_id": user_id,
                     "nickname": sender_name,
@@ -930,7 +923,7 @@ class onebot(WXBot):
                             # Split by first full-width colon
                             q_parts = temp.split("：", 1)
                             if len(q_parts) >= 2:
-                                q_name = q_parts[0]
+                                q_name = msg.replace_emoji(q_parts[0])
                                 q_uid = self._find_user_id_by_name(group_uid, group_id, q_name)
                                 if q_uid:
                                     final_message = f"[CQ:at,qq={q_uid}] {final_message}"
@@ -959,19 +952,48 @@ class onebot(WXBot):
             event["message_id"] = _msg.get('MsgId', int(time.time()))
             
             # Get Group Name if available
-            group_name = "Unknown"
+            group_name = None
             if is_group:
                 try:
-                    # Try to find group name from group_list
-                    for g in getattr(self, 'group_list', []) or []:
-                        if g.get('UserName') == group_uid:
-                            group_name = msg.remove_Emoji(g.get('NickName') or '')
-                            break
+                    # 0. Try to get from WXBot resolved user name (which is group name for group msgs)
+                    if user_data and user_data.get('name') and user_data.get('name') != 'unknown':
+                         possible_name = msg.replace_emoji(user_data.get('name'))
+                         if possible_name and not possible_name.startswith('@@'):
+                             group_name = possible_name
+
+                    # 1. Try to find group name from group_list if still unknown
+                    if not group_name:
+                        for g in getattr(self, 'group_list', []) or []:
+                            if g.get('UserName') == group_uid:
+                                possible_name = msg.replace_emoji(g.get('NickName') or '')
+                                if possible_name and not possible_name.startswith('@@'):
+                                    group_name = possible_name
+                                break
+                    
+                    # 2. If not found or empty, try to refresh from API
                     if not group_name and group_uid:
-                         # Fallback if not found in list
-                         group_name = "Group"
-                except:
-                    pass
+                         # Attempt to fetch fresh info
+                         info = self._refresh_group_info(group_uid)
+                         if info:
+                             group_name = msg.replace_emoji(info.get('NickName') or '')
+                             
+                             # If we got info but it wasn't in list, add it
+                             in_list = False
+                             for g in self.group_list:
+                                 if g.get('UserName') == group_uid:
+                                     in_list = True
+                                     break
+                             if not in_list:
+                                 self.group_list.append(info)
+                                 if 'normal_member' in self.account_info:
+                                     self.account_info['normal_member'][group_uid] = {'type': 'group', 'info': info}
+
+                    # 3. Fallback if still unknown
+                    if not group_name:
+                         group_name = "Unknown"
+                except Exception as e:
+                    print(f"[onebot] Error resolving group name: {e}")
+                    group_name = "Unknown"
                 
                 # ADDED: Include group_name in event
                 event["group_name"] = group_name
@@ -1200,7 +1222,7 @@ class onebot(WXBot):
             
             # Get Group ID
             try:
-                gname = msg.remove_Emoji(g.get('NickName') or "")
+                gname = msg.replace_emoji(g.get('NickName') or "")
                 # 1. Try to sync by name (find latest)
                 group_id = wx_group.sync_group_uid(robot_qq, gname, gid)
                 if not group_id:
@@ -1225,18 +1247,13 @@ class onebot(WXBot):
             for m in members:
                 try:
                     uid = m.get('UserName')
-                    nickname = msg.remove_Emoji(m.get('NickName') or "")
-                    display_name = msg.remove_Emoji(m.get('DisplayName') or "")
-                    remark_name = msg.remove_Emoji(m.get('RemarkName') or "")
+                    nickname = msg.replace_emoji(m.get('NickName') or "")
+                    display_name = msg.replace_emoji(m.get('DisplayName') or "")
+                    remark_name = msg.replace_emoji(m.get('RemarkName') or "")
                     attr_status = m.get('AttrStatus') or ""
                     
-                    # 1. Try to sync by name (find latest)
-                    client_qq = wx_client.sync_client_uid(robot_qq, uid, nickname, remark_name, display_name)
-                    
-                    if not client_qq:
-                        # 2. Fallback to standard get/create
-                        # Signature: get_client_qq(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status)
-                        client_qq = wx_client.get_client_qq(robot_qq, group_id, uid, nickname, display_name, remark_name, nickname, attr_status)
+                    # Signature: get_client_qq(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status)
+                    client_qq = wx_client.get_client_qq(robot_qq, group_id, uid, nickname, display_name, remark_name, nickname, attr_status)
                     
                     count += 1
                 except Exception as e:
@@ -1247,11 +1264,10 @@ class onebot(WXBot):
         for c in getattr(self, 'contact_list', []) or []:
             try:
                 uid = c.get('UserName')
-                nickname = msg.remove_Emoji(c.get('NickName') or "")
-                remark_name = msg.remove_Emoji(c.get('RemarkName') or "")
-                display_name = msg.remove_Emoji(c.get('DisplayName') or "")
+                nickname = msg.replace_emoji(c.get('NickName') or "")
+                remark_name = msg.replace_emoji(c.get('RemarkName') or "")
+                display_name = msg.replace_emoji(c.get('DisplayName') or "")
                 
-                wx_client.sync_client_uid(robot_qq, uid, nickname, remark_name, display_name)
                 # Ensure it exists
                 wx_client.get_client_qq(robot_qq, 0, uid, nickname, display_name, remark_name, nickname, "")
             except:
@@ -1379,7 +1395,14 @@ def main():
         print(f"[main] Failed to start WebUI: {e}")
 
     # Start Driver (Blocking Asyncio Loop)
-    print("[main] Starting Driver Loop...")
+    print("[main] Waiting for WXBot to be ready (login & contacts)...")
+    while not bot.is_ready:
+        time.sleep(1)
+        
+    # Ensure lists are populated (sanity check)
+    g_count = len(getattr(bot, 'group_list', []))
+    c_count = len(getattr(bot, 'contact_list', []))
+    print(f"[main] WXBot is ready! Loaded {g_count} groups and {c_count} contacts. Starting Driver Loop...")
     try:
         asyncio.run(driver.start())
     except KeyboardInterrupt:

@@ -100,12 +100,15 @@ class OneBotDriver:
         while self.running:
             try:
                 print(f"[Driver] Connecting to {url}...")
-                # Add role=Universal if missing
+                # Add role=Universal and platform=wechat if missing
                 connect_url = url
                 if "?" not in connect_url:
                     connect_url += "?role=Universal"
                 elif "role=" not in connect_url:
                     connect_url += "&role=Universal"
+                
+                if "platform=" not in connect_url:
+                    connect_url += "&platform=wechat"
 
                 async with websockets.connect(connect_url) as ws:
                     print(f"[Driver] Connected to {url}!")
@@ -208,10 +211,16 @@ class OneBotDriver:
         try:
             async for msg in ws:
                 try:
+                    data = json.loads(msg)
+                    
+                    # Filter foreign events (broadcasts from other bots)
+                    if "post_type" in data and "self_id" in data:
+                        if self.bot and str(data.get("self_id")) != str(self.bot.self_id):
+                            continue # Silently ignore events not for us
+
                     # Log received message
                     print(f"[Driver] Recv from {getattr(ws, 'remote_address', 'unknown')}: {str(msg)[:200]}")
                     
-                    data = json.loads(msg)
                     if "action" in data:
                         # Execute Action
                         if self.bot:

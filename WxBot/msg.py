@@ -167,5 +167,5 @@ class msg():
 
     #emoji
     @staticmethod
-    def remove_Emoji(message):
-        return common.removeEmoji(message)
+    def replace_emoji(message):
+        return common.replace_emoji(message)

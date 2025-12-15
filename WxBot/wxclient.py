@@ -49,14 +49,33 @@ class wx_client(MetaData):
         is_new = False
 
         # Step 1: 尝试按 UID 查
-        client_qq = wx_client.get_client_qq_by_uid(client_uid)
+        client_qq = wx_client.get_client_qq_by_uid(robot_qq, client_uid)
 
         # Step 2: 若找不到，尝试匹配旧记录
         if not client_qq:
             client_qq = wx_client.match_existing_client(robot_qq, group_id, remark_name, display_name, nick_name, attr_status)
             if client_qq:
                 # 同一个人，但 UID 改变了
+                def safe(s): return s.replace("'", "''") if s else ""
+                
+                # 1. Update the matched client with new UID
                 SQLConn.Exec(f"update wx_client set client_uid='{client_uid}', update_date=getdate() where client_qq='{client_qq}'")
+                
+                # 2. Clear names for OTHER clients with the same name to avoid future conflicts
+                # This prevents "zombie" records from being matched again
+                conditions = []
+                if nick_name and nick_name.lower() != "unknown":
+                    conditions.append(f"nick_name = '{safe(nick_name)}'")
+                if display_name and display_name.lower() != "unknown":
+                    conditions.append(f"display_name = '{safe(display_name)}'")
+                if remark_name and remark_name.lower() != "unknown":
+                    conditions.append(f"remark_name = '{safe(remark_name)}'")
+                
+                if conditions:
+                    where_name = " OR ".join(conditions)
+                    # Update wx_client: Clear names for other records with same name
+                    sql_clean = f"UPDATE wx_client SET nick_name='', display_name='', remark_name='' WHERE robot_qq={robot_qq} AND client_qq != {client_qq} AND ({where_name})"
+                    SQLConn.Exec(sql_clean)
             else:
                 # Step 3: 若名字都 unknown，则生成 anon_key
                 if not client_name or client_name.lower() == "unknown":
@@ -67,7 +86,7 @@ class wx_client(MetaData):
                     nick_name = anon_key
                 is_new = True
                 wx_client.append(robot_qq, group_id, client_uid, 0, client_name, display_name, remark_name, nick_name, attr_status)
-                client_qq = wx_client.get_client_qq_by_uid(client_uid)
+                client_qq = wx_client.get_client_qq_by_uid(robot_qq, client_uid)
 
         # Step 4: 更新常规信息
         if not is_new:
@@ -82,22 +101,32 @@ class wx_client(MetaData):
     @staticmethod
     def match_existing_client(robot_qq, group_id, remark_name, display_name, nick_name, attr_status):
         """匹配旧 UID 用户"""
-        fields = [remark_name, display_name, nick_name]
-        for name_field in fields:
-            if not name_field or name_field.lower() == "unknown":
-                continue
-            name_field = name_field.replace("'", "''")
-            sql = (
-        "select top 1 a.UserId "
-        "from GroupMember a inner join wx_client b on a.UserId = b.client_qq "
-        f"where a.GroupId = {group_id} and "
-        f"(a.NickName = '{name_field}' or a.DisplayName = '{name_field}' or b.remark_name = '{name_field}') "
-        f"and b.attr_status = '{attr_status}' "
-        "order by a.InsertDate desc"
-    )
-            client_qq = SQLConn.Query(sql)
-            if client_qq:
-                return int(client_qq)
+        # Optimized: Directly query wx_client instead of relying on unmaintained GroupMember table
+        
+        conditions = []
+        def safe(s): return s.replace("'", "''") if s else ""
+        
+        if nick_name and nick_name.lower() != "unknown":
+            conditions.append(f"nick_name = '{safe(nick_name)}'")
+        if display_name and display_name.lower() != "unknown":
+            conditions.append(f"display_name = '{safe(display_name)}'")
+        if remark_name and remark_name.lower() != "unknown":
+            conditions.append(f"remark_name = '{safe(remark_name)}'")
+            
+        if not conditions:
+            return 0
+            
+        where_clause = " OR ".join(conditions)
+        
+        # Filter by robot_qq to scope to current bot instance
+        attr_filter = f" AND attr_status = '{attr_status}'" if attr_status else ""
+        
+        # Prioritize most recently updated record
+        sql = f"SELECT TOP 1 client_qq FROM wx_client WHERE robot_qq = {robot_qq} AND ({where_clause}) {attr_filter} ORDER BY update_date DESC"
+        
+        res = SQLConn.Query(sql)
+        if res:
+            return int(res)
         return 0
     
     @staticmethod
@@ -148,9 +177,9 @@ class wx_client(MetaData):
         return SQLConn.Exec(sql)
 
     @staticmethod
-    def get_client_qq_by_uid(client_uid):
+    def get_client_qq_by_uid(robot_qq, client_uid):
         if not client_uid: return 0
-        sql = str.format("select top 1 client_qq from wx_client where client_uid = '{0}'", client_uid)
+        sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and client_uid = '{1}'", robot_qq, client_uid)
         client_qq = SQLConn.Query(sql)
         if not client_qq:
             return 0
@@ -188,14 +217,14 @@ class wx_client(MetaData):
         
         # Priority: NickName + AttrStatus
         if nick_name:
-            sql = str.format("select top 1 client_qq from wx_client where nick_name = '{0}' and attr_status = '{1}'", nick_name, attr_status)
+            sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and nick_name = '{1}' and attr_status = '{2}'", robot_qq, nick_name, attr_status)
             client_qq = SQLConn.Query(sql)
             if client_qq:
                 return int(client_qq)
                 
         # Fallback: DisplayName (if stored in wx_client, though usually nick_name is better)
         if display_name:
-             sql = str.format("select top 1 client_qq from wx_client where display_name = '{0}' and attr_status = '{1}'", display_name, attr_status)
+             sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and display_name = '{1}' and attr_status = '{2}'", robot_qq, display_name, attr_status)
              client_qq = SQLConn.Query(sql)
              if client_qq:
                  return int(client_qq)
