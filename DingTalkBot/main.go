@@ -305,12 +305,20 @@ func handleNexusMessage(message []byte) {
 	case "send_group_msg", "send_msg":
 		params, _ := action["params"].(map[string]interface{})
 		msg := getString(params, "message")
+		groupID := getString(params, "group_id")
+
 		if msg != "" {
 			var err error
 			if config.AccessToken != "" {
 				err = sendDingTalkMessage(msg)
+			} else if config.ClientID != "" {
+				// Enterprise Mode
+				if groupID == "" {
+					err = fmt.Errorf("group_id required for enterprise group message")
+				} else {
+					err = sendEnterpriseGroupMessage(groupID, msg)
+				}
 			} else {
-				// Fallback to Enterprise sending if needed (not implemented yet)
 				err = fmt.Errorf("webhook access_token not configured")
 			}
 
@@ -331,6 +339,8 @@ func handleNexusMessage(message []byte) {
 			if config.AccessToken != "" {
 				// Simulate private msg via @mention in group
 				err = sendDingTalkMessageWithAt(msg, []string{userID})
+			} else if config.ClientID != "" {
+				err = sendEnterprisePrivateMessage(userID, msg)
 			} else {
 				err = fmt.Errorf("webhook access_token not configured")
 			}
@@ -419,5 +429,111 @@ func sendDingTalkMessageWithAt(content string, atMobiles []string) error {
 		return fmt.Errorf("dingtalk api error: %v", result)
 	}
 
+	return nil
+}
+
+// --- Enterprise Robot API (Stream Mode) ---
+
+type AccessTokenResponse struct {
+	ErrCode     int    `json:"errcode"`
+	ErrMsg      string `json:"errmsg"`
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+}
+
+var (
+	enterpriseToken string
+	tokenExpiry     time.Time
+)
+
+func getEnterpriseAccessToken() (string, error) {
+	if enterpriseToken != "" && time.Now().Before(tokenExpiry) {
+		return enterpriseToken, nil
+	}
+
+	url := fmt.Sprintf("https://oapi.dingtalk.com/gettoken?appkey=%s&appsecret=%s", config.ClientID, config.ClientSecret)
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result AccessTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if result.ErrCode != 0 {
+		return "", fmt.Errorf("get token error: %s", result.ErrMsg)
+	}
+
+	enterpriseToken = result.AccessToken
+	tokenExpiry = time.Now().Add(time.Duration(result.ExpiresIn-200) * time.Second)
+	return enterpriseToken, nil
+}
+
+func sendEnterpriseGroupMessage(conversationID, content string) error {
+	token, err := getEnterpriseAccessToken()
+	if err != nil {
+		return err
+	}
+
+	url := "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
+
+	msgParam := map[string]string{"content": content}
+	msgParamBytes, _ := json.Marshal(msgParam)
+
+	payload := map[string]interface{}{
+		"robotCode":          config.ClientID,
+		"openConversationId": conversationID,
+		"msgKey":             "sampleText",
+		"msgParam":           string(msgParamBytes),
+	}
+
+	return postToDingTalkAPI(url, token, payload)
+}
+
+func sendEnterprisePrivateMessage(userID, content string) error {
+	token, err := getEnterpriseAccessToken()
+	if err != nil {
+		return err
+	}
+
+	// Using batchSend for single user
+	url := "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend"
+
+	msgParam := map[string]string{"content": content}
+	msgParamBytes, _ := json.Marshal(msgParam)
+
+	payload := map[string]interface{}{
+		"robotCode": config.ClientID,
+		"userIds":   []string{userID},
+		"msgKey":    "sampleText",
+		"msgParam":  string(msgParamBytes),
+	}
+
+	return postToDingTalkAPI(url, token, payload)
+}
+
+func postToDingTalkAPI(url, token string, payload map[string]interface{}) error {
+	jsonBody, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-acs-dingtalk-access-token", token)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("api error status: %d, body: %s", resp.StatusCode, string(body))
+	}
 	return nil
 }

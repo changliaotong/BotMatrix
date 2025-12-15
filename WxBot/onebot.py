@@ -6,6 +6,7 @@ import time
 import random
 import threading
 import re
+import base64
 import collections
 import html
 import xml.etree.ElementTree as ET
@@ -257,10 +258,10 @@ class onebot(WXBot):
 
         message = at_pattern.sub(replace_at, message)
         
-        # 2. Handle [CQ:image,file=...] -> [图片]
-        # For now, just replace with text indicating image
-        img_pattern = re.compile(r'\[CQ:image,[^\]]*\]')
-        message = img_pattern.sub(r'[图片]', message)
+        # 2. Handle [CQ:image,file=...]
+        # We don't replace it here anymore, we handle it in _parse_message_chain
+        # img_pattern = re.compile(r'\[CQ:image,[^\]]*\]')
+        # message = img_pattern.sub(r'[图片]', message)
         
         # 3. Handle [CQ:face,id=...] -> WeChat Face
         message = msg.cq_to_wx_face(message)
@@ -270,6 +271,91 @@ class onebot(WXBot):
         message = reply_pattern.sub(r'', message) # Reply is usually implicit or handled by app
 
         return message
+
+    def _parse_message_chain(self, message, group_id=None):
+        """
+        Parse message into a chain of text and image segments.
+        """
+        parsed_text = self._parse_cq_code(message, group_id)
+        
+        segments = []
+        pattern = re.compile(r'(\[CQ:image,[^\]]*\])')
+        parts = pattern.split(parsed_text)
+        
+        for part in parts:
+            if not part: continue
+            
+            if part.startswith('[CQ:image'):
+                m = re.search(r'file=([^,\]]+)', part)
+                if m:
+                    file_val = m.group(1)
+                    segments.append({'type': 'image', 'file': file_val})
+            else:
+                segments.append({'type': 'text', 'data': part})
+        
+        return segments
+
+    def _download_to_temp_new(self, file_or_url: str) -> str:
+        """
+        Download image to temp file if it is URL or Base64
+        """
+        if not file_or_url: return None
+        
+        if file_or_url.startswith('http'):
+            try:
+                r = self.session.get(file_or_url, timeout=30)
+                if r.status_code == 200:
+                    suffix = ".jpg"
+                    if "png" in r.headers.get("Content-Type", ""): suffix = ".png"
+                    elif "gif" in r.headers.get("Content-Type", ""): suffix = ".gif"
+                    
+                    fname = os.path.join(self.temp_pwd, f"img_{int(time.time())}_{random.randint(1000,9999)}{suffix}")
+                    with open(fname, 'wb') as f:
+                        f.write(r.content)
+                    return fname
+            except Exception as e:
+                print(f"[onebot] Download error: {e}")
+                return None
+        elif file_or_url.startswith('base64://'):
+             try:
+                 data = base64.b64decode(file_or_url[9:])
+                 fname = os.path.join(self.temp_pwd, f"img_{int(time.time())}_{random.randint(1000,9999)}.jpg")
+                 with open(fname, 'wb') as f:
+                     f.write(data)
+                 return fname
+             except:
+                 return None
+        
+        if os.path.exists(file_or_url):
+            return file_or_url
+            
+        return None
+
+    def _send_group_image_via_wechat(self, group_id, file_val):
+        gid_uid = (self._group_map_uid_by_id.get(group_id) if hasattr(self, '_group_map_uid_by_id') else None) or wx_group.get_group_uid(group_id)
+        if not gid_uid:
+            print(f"[onebot] Error: Unknown group_id {group_id}")
+            return 0
+        
+        path = self._download_to_temp_new(file_val)
+        if path:
+            print(f"[onebot] Sending image to group {group_id}: {path}")
+            if self.send_img_msg_by_uid(path, gid_uid):
+                return int(time.time())
+        return 0
+
+    def _send_private_image_via_wechat(self, user_id, file_val):
+        uid = wx_client.get_client_uid(user_id)
+        if not uid:
+             print(f"[onebot] Error: Unknown user_id {user_id}")
+             return 0
+        
+        path = self._download_to_temp_new(file_val)
+        if path:
+            print(f"[onebot] Sending image to user {user_id}: {path}")
+            if self.send_img_msg_by_uid(path, uid):
+                return int(time.time())
+        return 0
 
     # 你的自定义函数 ...
     def execute_onebot_action(self, action: str, params: dict = None) -> dict:
@@ -288,8 +374,8 @@ class onebot(WXBot):
                 group_id = params.get("group_id")
                 raw_message = params.get("message", "")
                 
-                # Parse CQ Code
-                message = self._parse_cq_code(str(raw_message), group_id)
+                # Parse Message Chain (Text + Images)
+                segments = self._parse_message_chain(str(raw_message), group_id)
                 
                 # Try to get group name for logging
                 group_name = "Unknown"
@@ -303,17 +389,26 @@ class onebot(WXBot):
                 except:
                     pass
 
-                print(f"[SEND] [Group: {group_name}({group_id})] {message}")
-                mid = self._send_group_message_via_wechat(group_id, message)
+                last_mid = 0
+                for seg in segments:
+                    if seg['type'] == 'text':
+                        text = seg['data']
+                        if text:
+                            print(f"[SEND] [Group: {group_name}({group_id})] {text}")
+                            last_mid = self._send_group_message_via_wechat(group_id, text)
+                    elif seg['type'] == 'image':
+                        print(f"[SEND] [Group: {group_name}({group_id})] [Image]")
+                        last_mid = self._send_group_image_via_wechat(group_id, seg['file'])
+
                 info = getattr(self, '_last_send_info', {})
-                result["data"] = {"message_id": mid, "debug_ret": info.get('ret'), "http_status": info.get('status')}
+                result["data"] = {"message_id": last_mid, "debug_ret": info.get('ret'), "http_status": info.get('status')}
 
             elif name == "send_private_msg":
                 user_id = params.get("user_id")
                 raw_message = params.get("message", "")
                 
-                # Parse CQ Code
-                message = self._parse_cq_code(str(raw_message))
+                # Parse Message Chain
+                segments = self._parse_message_chain(str(raw_message))
                 
                 # Try to get user nickname
                 nickname = "Unknown"
@@ -327,10 +422,19 @@ class onebot(WXBot):
                 except:
                     pass
 
-                print(f"[SEND] [Private: {nickname}({user_id})] {message}")
-                mid = self._send_private_message_via_wechat(user_id, message)
+                last_mid = 0
+                for seg in segments:
+                    if seg['type'] == 'text':
+                        text = seg['data']
+                        if text:
+                            print(f"[SEND] [Private: {nickname}({user_id})] {text}")
+                            last_mid = self._send_private_message_via_wechat(user_id, text)
+                    elif seg['type'] == 'image':
+                        print(f"[SEND] [Private: {nickname}({user_id})] [Image]")
+                        last_mid = self._send_private_image_via_wechat(user_id, seg['file'])
+
                 info = getattr(self, '_last_send_info', {})
-                result["data"] = {"message_id": mid, "debug_ret": info.get('ret'), "http_status": info.get('status')}
+                result["data"] = {"message_id": last_mid, "debug_ret": info.get('ret'), "http_status": info.get('status')}
 
             elif name == "set_group_kick":
                 group_id = params.get("group_id")
@@ -628,6 +732,87 @@ class onebot(WXBot):
                 
                 # Sender Info
                 content = _msg.get('content')
+                
+                # Handle System Events (Join, Rename, Tickle)
+                if isinstance(content, dict) and content.get('system_event'):
+                    sys_evt = content.get('system_event')
+                    evt_type = sys_evt.get('type')
+                    
+                    # Resolve IDs
+                    op_name = sys_evt.get('operator_name')
+                    target_name = sys_evt.get('target_name')
+                    
+                    if op_name == 'self':
+                        op_id = self.self_id
+                    else:
+                        op_id = wx_client.find_client_by_name(self.self_id, op_name) if op_name else 0
+                        
+                    target_id = wx_client.find_client_by_name(self.self_id, target_name) if target_name else 0
+                    
+                    if evt_type == 'group_increase':
+                        event["post_type"] = "notice"
+                        event["notice_type"] = "group_increase"
+                        event["sub_type"] = sys_evt.get('sub_type', 'invite')
+                        event["user_id"] = target_id
+                        event["operator_id"] = op_id
+                        
+                    elif evt_type == 'poke':
+                        event["post_type"] = "notice"
+                        event["notice_type"] = "notify"
+                        event["sub_type"] = "poke"
+                        event["user_id"] = op_id  # Sender (poker)
+                        event["target_id"] = target_id # Target (pokee)
+                        
+                    elif evt_type == 'group_update':
+                         sub_type = sys_evt.get('sub_type')
+                         
+                         if sub_type == 'name':
+                             # Group Name Change
+                             new_name = sys_evt.get('new_name')
+                             if new_name:
+                                 # Update DB
+                                 wx_group.update_name(group_id, new_name)
+                                 # Update Cache
+                                 if hasattr(self, 'group_list'):
+                                     for g in self.group_list:
+                                         if g.get('UserName') == group_uid:
+                                             g['NickName'] = new_name
+                                 
+                                 event["post_type"] = "notice"
+                                 event["notice_type"] = "group_update"
+                                 event["sub_type"] = "name"
+                                 event["operator_id"] = op_id
+                                 event["new_name"] = new_name
+                         
+                         elif sub_type == 'pin':
+                             event["post_type"] = "notice"
+                             event["notice_type"] = "group_update"
+                             event["sub_type"] = "pin"
+                             event["operator_id"] = op_id
+                             event["action"] = sys_evt.get('action') # set/unset
+                             
+                         elif sub_type == 'owner':
+                             event["post_type"] = "notice"
+                             event["notice_type"] = "group_update"
+                             event["sub_type"] = "owner"
+                             event["operator_id"] = op_id
+                             
+                         elif evt_type == 'group_recall':
+                             event["post_type"] = "notice"
+                             event["notice_type"] = "group_recall"
+                             event["user_id"] = op_id
+                             event["operator_id"] = op_id
+                             
+                         elif evt_type == 'red_packet':
+                             event["post_type"] = "notice"
+                             event["notice_type"] = "notify"
+                             event["sub_type"] = "red_packet"
+                             event["message"] = sys_evt.get('content')
+                            
+                    # Dispatch and return (skip normal message processing)
+                    self.dispatch_event(event)
+                    return
+
                 sender_uid = ""
                 sender_name = "Unknown"
                 text = ""
@@ -1012,18 +1197,27 @@ class onebot(WXBot):
         for g in getattr(self, 'group_list', []) or []:
             gid = g.get('UserName')
             members = g.get('MemberList', [])
-            if not members:
-                continue
-                
+            
             # Get Group ID
             try:
                 gname = msg.remove_Emoji(g.get('NickName') or "")
-                group_id = wx_group.get_wx_group(robot_qq, gid, gname, 0, "")
+                # 1. Try to sync by name (find latest)
+                group_id = wx_group.sync_group_uid(robot_qq, gname, gid)
+                if not group_id:
+                    # 2. Fallback to standard get/create
+                    group_id = wx_group.get_wx_group(robot_qq, gid, gname, 0, "")
             except Exception as e:
                 print(f"[onebot] sync group error {gid}: {e}")
                 continue
                 
             if not group_id:
+                continue
+            
+            # Update cache maps
+            self._group_map_id_by_uid[gid] = group_id
+            self._group_map_uid_by_id[group_id] = gid
+                
+            if not members:
                 continue
                 
             # print(f"[onebot] Syncing members for group {gname} ({group_id})...")
@@ -1036,13 +1230,32 @@ class onebot(WXBot):
                     remark_name = msg.remove_Emoji(m.get('RemarkName') or "")
                     attr_status = m.get('AttrStatus') or ""
                     
-                    # Trigger the sync logic in wx_client
-                    # Signature: get_client_qq(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status)
-                    wx_client.get_client_qq(robot_qq, group_id, uid, nickname, display_name, remark_name, nickname, attr_status)
+                    # 1. Try to sync by name (find latest)
+                    client_qq = wx_client.sync_client_uid(robot_qq, uid, nickname, remark_name, display_name)
+                    
+                    if not client_qq:
+                        # 2. Fallback to standard get/create
+                        # Signature: get_client_qq(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status)
+                        client_qq = wx_client.get_client_qq(robot_qq, group_id, uid, nickname, display_name, remark_name, nickname, attr_status)
+                    
                     count += 1
                 except Exception as e:
                     # print(f"[onebot] sync member error: {e}")
                     pass
+        
+        # Also sync contacts (friends)
+        for c in getattr(self, 'contact_list', []) or []:
+            try:
+                uid = c.get('UserName')
+                nickname = msg.remove_Emoji(c.get('NickName') or "")
+                remark_name = msg.remove_Emoji(c.get('RemarkName') or "")
+                display_name = msg.remove_Emoji(c.get('DisplayName') or "")
+                
+                wx_client.sync_client_uid(robot_qq, uid, nickname, remark_name, display_name)
+                # Ensure it exists
+                wx_client.get_client_qq(robot_qq, 0, uid, nickname, display_name, remark_name, nickname, "")
+            except:
+                pass
                     
         if self.DEBUG:
             print(f"[onebot] Finished syncing {count} members.")

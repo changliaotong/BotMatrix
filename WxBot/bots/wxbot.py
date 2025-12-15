@@ -525,16 +525,123 @@ class WXBot:
             return {'type': 0, 'data': content.replace('<br/>', '\n')}
         elif msg_type_id == 3:  # 群聊
             sp = content.find('<br/>')
-            uid = content[:sp]
-            content = content[sp:]
-            content = content.replace('<br/>', '')
-            uid = uid[:-1]
-            name = self.get_contact_prefer_name(self.get_contact_name(uid))
-            if not name:
-                name = self.get_group_member_prefer_name(self.get_group_member_name(msg['FromUserName'], uid))
-            if not name:
-                name = 'unknown'
-            msg_content['user'] = {'id': uid, 'name': name}
+            if sp > -1:
+                uid = content[:sp]
+                content = content[sp:]
+                content = content.replace('<br/>', '')
+                uid = uid[:-1]
+                name = self.get_contact_prefer_name(self.get_contact_name(uid))
+                if not name:
+                    name = self.get_group_member_prefer_name(self.get_group_member_name(msg['FromUserName'], uid))
+                if not name:
+                    name = 'unknown'
+                msg_content['user'] = {'id': uid, 'name': name}
+            else:
+                # System message or Event (e.g. Tickle, Privacy Warning)
+                # Content has no uid prefix
+                msg_content['user'] = {'id': 'system', 'name': 'System'}
+                
+                # Parse System Events
+                # 1. Invite/Join: "Inviter"邀请"Invitee"加入了
+                match_invite = re.search(r'"(.*?)"邀请"(.*?)"加入了', content)
+                match_qrcode = re.search(r'"(.*?)"通过扫描"(.*?)"分享的二维码加入群聊', content)
+                
+                if match_invite:
+                    msg_content['system_event'] = {
+                        'type': 'group_increase',
+                        'sub_type': 'invite',
+                        'operator_name': match_invite.group(1),
+                        'target_name': match_invite.group(2)
+                    }
+                elif match_qrcode:
+                    msg_content['system_event'] = {
+                        'type': 'group_increase',
+                        'sub_type': 'invite', # Treat QR join as invite by the sharer
+                        'operator_name': match_qrcode.group(2),
+                        'target_name': match_qrcode.group(1)
+                    }
+                
+                # 2. Group Rename: "Operator"修改群名为“NewName
+                elif '修改群名为' in content:
+                    match_rename = re.search(r'"(.*?)"修改群名为“(.*)', content)
+                    if match_rename:
+                        new_name = match_rename.group(2)
+                        if new_name.endswith('”'): new_name = new_name[:-1]
+                        msg_content['system_event'] = {
+                            'type': 'group_update',
+                            'sub_type': 'name',
+                            'operator_name': match_rename.group(1),
+                            'new_name': new_name
+                        }
+
+                # 3. Tickle: "Operator" 拍了拍 "Target"
+                elif '拍了拍' in content:
+                    match_tickle = re.search(r'"(.*?)" 拍了拍 "(.*?)"', content)
+                    if match_tickle:
+                        msg_content['system_event'] = {
+                            'type': 'poke',
+                            'operator_name': match_tickle.group(1),
+                            'target_name': match_tickle.group(2)
+                        }
+                
+                # 4. QR Code Join: "Inviter"分享的二维码加入群聊 (Implicitly usually "Invitee" joined via...)
+                # Pattern: "Invitee"通过扫描"Inviter"分享的二维码加入群聊
+                elif '二维码加入群聊' in content:
+                    match_qr = re.search(r'"(.*?)"通过扫描"(.*?)"分享的二维码加入群聊', content)
+                    if match_qr:
+                        msg_content['system_event'] = {
+                            'type': 'group_increase',
+                            'sub_type': 'qrcode', # or scan
+                            'target_name': match_qr.group(1),
+                            'operator_name': match_qr.group(2)
+                        }
+                         
+                # 5. Remove Top/Pin: "Operator"移除了一条置顶消息
+                # Or: "Operator"置顶了一条消息 (Assumption)
+                elif '置顶' in content:
+                    match_pin = re.search(r'"(.*?)"(.*?)了(.*?)置顶', content)
+                    if match_pin:
+                        action = 'unset' if '移除' in match_pin.group(2) else 'set'
+                        msg_content['system_event'] = {
+                            'type': 'group_update',
+                            'sub_type': 'pin',
+                            'action': action,
+                            'operator_name': match_pin.group(1)
+                        }
+                        
+                # 6. Owner Change: 你已成为新群主
+                elif '成为新群主' in content:
+                    # This usually means SELF became owner, or someone else?
+                    # Pattern: "User"已成为新群主
+                    match_owner = re.search(r'"(.*?)"已成为新群主', content)
+                    if match_owner:
+                       msg_content['system_event'] = {
+                            'type': 'group_update',
+                            'sub_type': 'owner',
+                            'operator_name': match_owner.group(1)
+                       }
+                    elif '你已成为新群主' in content:
+                       msg_content['system_event'] = {
+                            'type': 'group_update',
+                            'sub_type': 'owner',
+                            'operator_name': 'self' # Handle self resolution later
+                       }
+                
+                # 7. Recall: "Operator" 撤回了一条消息
+                elif '撤回了一条消息' in content:
+                    match_recall = re.search(r'"(.*?)" 撤回了一条消息', content)
+                    if match_recall:
+                        msg_content['system_event'] = {
+                            'type': 'group_recall',
+                            'operator_name': match_recall.group(1)
+                        }
+                        
+                # 8. Red Packet: 收到红包
+                elif '收到红包' in content:
+                    msg_content['system_event'] = {
+                        'type': 'red_packet',
+                        'content': content
+                    }
         else:  # Self, Contact, Special, Public, Unknown
             pass
 
@@ -682,6 +789,11 @@ class WXBot:
             user['name'] = html.unescape(user['name'])
 
             content = self.extract_msg_content(msg_type_id, msg)
+            
+            # If extract_msg_content identified a system user, override the user info
+            if isinstance(content, dict) and 'user' in content:
+                user = content['user']
+
             message = {'msg_type_id': msg_type_id,
                        'msg_id': msg['MsgId'],
                        'content': content,

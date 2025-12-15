@@ -26,6 +26,13 @@ class wx_group(MetaData):
         return int(res) if res else 0  
 
     @staticmethod
+    def update_name(group_id, new_name):
+        """Update group name only"""
+        new_name = new_name.replace("'", "''")
+        sql = f"UPDATE wx_group SET group_name = N'{new_name}', update_date = getdate() WHERE group_id = {group_id}"
+        return SQLConn.Exec(sql)
+
+    @staticmethod
     def update(robot_qq, group_uid, group_id, group_name, client_qq, client_name):
         if not group_id: return False
         group_name = group_name.replace("'", "''")
@@ -122,10 +129,28 @@ class wx_group(MetaData):
                 except:
                     pass
 
-    #微信机器人号码是否为管理员
     @staticmethod
     def is_admin(group_id):
         sql = str.format("select top 1 is_admin from wx_group where group_id = {0}", group_id)
         res = SQLConn.Query(sql)
-        return bool(res)  
+        return bool(res)
+
+    @staticmethod
+    def sync_group_uid(robot_qq, group_name, new_uid):
+        """
+        Find group by name (prioritizing latest update) and update its UID.
+        Returns group_id if found and updated, 0 otherwise.
+        """
+        group_name = group_name.replace("'", "''")
+        # Find the most recently updated group with this name for this robot
+        sql = f"SELECT TOP 1 group_id FROM wx_group WHERE robot_qq = {robot_qq} AND group_name = N'{group_name}' ORDER BY update_date DESC"
+        res = SQLConn.Query(sql)
+        
+        if res:
+            group_id = int(res)
+            # Update the UID for this group
+            update_sql = f"UPDATE wx_group SET group_uid = '{new_uid}', update_date = getdate() WHERE group_id = {group_id}"
+            if SQLConn.Exec(update_sql):
+                return group_id
+        return 0
 

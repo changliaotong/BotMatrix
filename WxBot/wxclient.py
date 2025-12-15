@@ -1,6 +1,7 @@
 #encoding:utf-8
 from MetaData import *
 from SQLConn import *
+import hashlib
 
 class User(MetaData):
     database = "sz84_robot"
@@ -28,68 +29,123 @@ class wx_client(MetaData):
     def isBinded(robot_qq, client_qq):
         res = SQLConn.Query(str.format("select top 1 1 from wx_client where client_qq = '{0}'", client_qq))
         return bool(res)
-    
-    @staticmethod
-    def get_client_qq(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status):
-        is_new = False
-        client_qq = wx_client.get_client_qq_by_uid(client_uid)
-        if not client_qq:
-            # Fallback: Try to find by Name/AttrStatus if UID changed (e.g. restart)
-            client_qq = wx_client.get_client_qq_by_name(robot_qq, group_id, client_uid, client_qq, nick_name, display_name, attr_status)
-            if client_qq:
-                # print(f"[wxclient] Recovered client_qq={client_qq} for uid={client_uid} by name")
-                pass
-            else:
-                is_new = True
-                wx_client.append(robot_qq, group_id, client_uid, client_qq, client_name, display_name, remark_name, nick_name, attr_status)
-                client_qq = wx_client.get_client_qq_by_uid(client_uid)                       
-        if not is_new:
-            # Always update UID to keep it fresh
-            wx_client.update(robot_qq, group_id, client_uid, client_qq, client_name, display_name, remark_name, nick_name, attr_status)
-        
-        # Ensure it exists in robot_client mapping (if needed)
-        try:
-            if client_qq > 0:
-                if not User.exists(client_qq):
-                    # print(f"[wxclient] User {client_qq} not found in User table, inserting...")
-                    User.append(robot_qq, group_id, client_qq, client_name, group_id)
-                else:
-                    pass
-                    # print(f"[wxclient] User {client_qq} already exists.")
-        except Exception as e:
-            print(f"[wxclient] User sync error: {e}")
-        
-        return client_qq    
 
     @staticmethod
+    def _make_anon_key(robot_qq, group_id, client_uid):
+        """为 unknown 用户生成稳定匿名标识"""
+        text = f"{robot_qq}_{group_id}_{client_uid}"
+        md5 = hashlib.md5(text.encode("utf-8")).hexdigest()
+        return f"anon_{md5[:8]}"
+
+    @staticmethod
+    def get_client_qq(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status):
+        """
+        改进版：
+        1️⃣ 先按 UID 查找；
+        2️⃣ 未找到则尝试匹配旧 UID 用户；
+        3️⃣ 若全为 unknown 则使用 anon_key；
+        4️⃣ 自动更新 UID；
+        """
+        is_new = False
+
+        # Step 1: 尝试按 UID 查
+        client_qq = wx_client.get_client_qq_by_uid(client_uid)
+
+        # Step 2: 若找不到，尝试匹配旧记录
+        if not client_qq:
+            client_qq = wx_client.match_existing_client(robot_qq, group_id, remark_name, display_name, nick_name, attr_status)
+            if client_qq:
+                # 同一个人，但 UID 改变了
+                SQLConn.Exec(f"update wx_client set client_uid='{client_uid}', update_date=getdate() where client_qq='{client_qq}'")
+            else:
+                # Step 3: 若名字都 unknown，则生成 anon_key
+                if not client_name or client_name.lower() == "unknown":
+                    anon_key = wx_client._make_anon_key(robot_qq, group_id, client_uid)
+                    client_name = anon_key
+                    display_name = anon_key
+                    remark_name = anon_key
+                    nick_name = anon_key
+                is_new = True
+                wx_client.append(robot_qq, group_id, client_uid, 0, client_name, display_name, remark_name, nick_name, attr_status)
+                client_qq = wx_client.get_client_qq_by_uid(client_uid)
+
+        # Step 4: 更新常规信息
+        if not is_new:
+            wx_client.update(robot_qq, group_id, client_uid, client_qq, client_name, display_name, remark_name, nick_name, attr_status)
+
+        # Step 5: 确保 client 表中存在
+        if not User.exists(client_qq):
+            User.append(robot_qq, group_id, client_qq, client_name, group_id)
+
+        return client_qq
+
+    @staticmethod
+    def match_existing_client(robot_qq, group_id, remark_name, display_name, nick_name, attr_status):
+        """匹配旧 UID 用户"""
+        fields = [remark_name, display_name, nick_name]
+        for name_field in fields:
+            if not name_field or name_field.lower() == "unknown":
+                continue
+            name_field = name_field.replace("'", "''")
+            sql = (
+        "select top 1 a.UserId "
+        "from GroupMember a inner join wx_client b on a.UserId = b.client_qq "
+        f"where a.GroupId = {group_id} and "
+        f"(a.NickName = '{name_field}' or a.DisplayName = '{name_field}' or b.remark_name = '{name_field}') "
+        f"and b.attr_status = '{attr_status}' "
+        "order by a.InsertDate desc"
+    )
+            client_qq = SQLConn.Query(sql)
+            if client_qq:
+                return int(client_qq)
+        return 0
+    
+    @staticmethod
     def append(robot_qq, group_id, client_uid, client_qq, client_name, display_name, remark_name, nick_name, attr_status):
-        client_name = client_name.replace("'", "''")
-        display_name = display_name.replace("'", "''")
-        remark_name = remark_name.replace("'", "''")
-        nick_name = nick_name.replace("'", "''")
+        """插入用户（带未知名修正）"""
+        # Guard: Prevent system messages or junk data from being inserted as users
+        # 1. Length check: Standard IDs are usually < 60 chars
+        if len(client_uid) > 60:
+            return False
+            
+        # 2. Keyword check: Filter out system messages, but allow valid IDs (starting with @, wxid_, gh_)
+        is_standard_id = client_uid.startswith('@') or client_uid.startswith('wxid_') or client_uid.startswith('gh_') or client_uid in ['filehelper', 'weixin']
+        
+        if not is_standard_id and any(k in client_uid for k in ['邀请', '修改群名为', '拍了拍', '撤回', '红包']):
+            return False
+
+        def safe(x): return x.replace("'", "''") if x else ""
+        client_name = safe(client_name)
+        display_name = safe(display_name)
+        remark_name = safe(remark_name)
+        nick_name = safe(nick_name)
         # Ensure attr_status is not None
         attr_status = attr_status or ""
-        sql = str.format("insert into wx_client(client_uid, client_name, display_name, remark_name, nick_name, robot_qq, attr_status) "\
-            "values('{0}','{1}','{2}','{3}','{4}','{5}','{6}')", client_uid, client_name, display_name, remark_name, nick_name, robot_qq, attr_status)
+
+        sql = (
+            "insert into wx_client(client_uid, client_name, display_name, remark_name, nick_name, robot_qq, attr_status) "
+            f"values('{client_uid}','{client_name}','{display_name}','{remark_name}','{nick_name}','{robot_qq}','{attr_status}')"
+        )
         SQLConn.Exec(sql)
-        # Assuming client_oid is the auto-increment primary key, map it to client_qq
-        # Note: This logic assumes 'client_oid' exists. If not, this will fail. 
-        # But keeping original logic for safety.
-        sql = str.format("update wx_client set client_qq = client_oid + 90000000000 where client_uid = '{0}'", client_uid)
+        sql = f"update wx_client set client_qq = client_oid + 90000000000 where client_uid = '{client_uid}'"
         return SQLConn.Exec(sql)
 
     @staticmethod
     def update(robot_qq, group_id, client_uid, client_qq, client_name, display_name, remark_name, nick_name, attr_status):   
-        client_name = client_name.replace("'", "''")
-        display_name = display_name.replace("'", "''")
-        remark_name = remark_name.replace("'", "''")
-        nick_name = nick_name.replace("'", "''")
+        """更新用户"""
+        def safe(x): return x.replace("'", "''") if x else ""
+        client_name = safe(client_name)
+        display_name = safe(display_name)
+        remark_name = safe(remark_name)
+        nick_name = safe(nick_name)
         attr_status = attr_status or ""
-        sql = str.format("update wx_client set client_uid = '{0}', client_name = '{1}', display_name = '{2}', remark_name = '{3}', nick_name = '{4}', " \
-            "robot_qq='{5}' , attr_status = '{7}', update_date = getdate() where client_qq = '{6}'", client_uid, client_name, display_name, 
-            remark_name, nick_name, robot_qq, client_qq, attr_status)
-        res = SQLConn.Exec(sql)
-        return res
+
+        sql = (
+            "update wx_client set client_uid='{0}', client_name='{1}', display_name='{2}', "
+            "remark_name='{3}', nick_name='{4}', robot_qq='{5}', attr_status='{7}', "
+            "update_date=getdate() where client_qq='{6}'"
+        ).format(client_uid, client_name, display_name, remark_name, nick_name, robot_qq, client_qq, attr_status)
+        return SQLConn.Exec(sql)
 
     @staticmethod
     def get_client_qq_by_uid(client_uid):
@@ -146,6 +202,48 @@ class wx_client(MetaData):
                  
         return 0
 
+    @staticmethod
+    def sync_client_uid(robot_qq, new_uid, nick_name, remark_name, display_name):
+        """
+        Find client by names (prioritizing latest update) and update UID.
+        Returns client_qq if found/updated, 0 otherwise.
+        """
+        nick_name = (nick_name or "").replace("'", "''")
+        remark_name = (remark_name or "").replace("'", "''")
+        display_name = (display_name or "").replace("'", "''")
+        
+        # Build where clause conditions
+        conditions = []
+        if nick_name:
+            conditions.append(f"nick_name = N'{nick_name}'")
+        if remark_name:
+            conditions.append(f"remark_name = N'{remark_name}'")
+        if display_name:
+            conditions.append(f"display_name = N'{display_name}'")
+            
+        if not conditions:
+            return 0
+            
+        where_clause = " OR ".join(conditions)
+        sql = f"SELECT TOP 1 client_qq FROM wx_client WHERE robot_qq = {robot_qq} AND ({where_clause}) ORDER BY update_date DESC"
+        
+        res = SQLConn.Query(sql)
+        if res:
+            client_qq = int(res)
+            # Update UID
+            update_sql = f"UPDATE wx_client SET client_uid = '{new_uid}', update_date = getdate() WHERE client_qq = {client_qq}"
+            if SQLConn.Exec(update_sql):
+                return client_qq
+        return 0
+
+    @staticmethod
+    def find_client_by_name(robot_qq, name):
+        """Find client ID by any name field (nick/remark/display)"""
+        name = (name or "").replace("'", "''")
+        if not name: return 0
+        sql = f"SELECT TOP 1 client_qq FROM wx_client WHERE robot_qq = {robot_qq} AND (nick_name = N'{name}' OR remark_name = N'{name}' OR display_name = N'{name}') ORDER BY update_date DESC"
+        res = SQLConn.Query(sql)
+        return int(res) if res else 0
 
 if __name__ == '__main__':
     common.is_debug = True

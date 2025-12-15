@@ -12,6 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.17 (2025-12-15)
+*   **WxBot Core Improvements**:
+    *   **System Message Parsing**: Fixed parsing errors for system events (Invite, Group Rename, Tickle) to prevent junk data in `wx_client`.
+    *   **OneBot 11 Compliance**: Added native support for `group_increase` (Join/Invite), `group_update` (Name Change), and `poke` (Tickle) events.
+    *   **Data Integrity**: Implemented strict guard clauses and ID validation to ensure only valid User IDs are stored.
+    *   **Codebase Optimization**: Merged `wxclientv2` logic into the main `wxclient` to unify user matching algorithms and removed redundant files.
+
 ### v1.1.16 (2025-12-15)
 *   **New Integrations**:
     *   **KookBot**: Added support for Kook (Kaiheila) community platform.
