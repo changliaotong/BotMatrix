@@ -656,6 +656,10 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 		var eventSummary string
 		if msgMap, ok := data.(map[string]interface{}); ok {
 			if pt, ok := msgMap["post_type"].(string); ok {
+			// Prevent infinite loop: Don't log "log" events
+			if pt == "log" {
+				// Just dispatch, don't log to avoid recursion
+			} else {
 				eventSummary = fmt.Sprintf("Type: %s", pt)
 				if sub, ok := msgMap["sub_type"].(string); ok {
 					eventSummary += fmt.Sprintf(", Sub: %s", sub)
@@ -667,9 +671,13 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 						eventSummary += fmt.Sprintf(", Msg: %s", msg)
 					}
 				}
+				// Use log.Printf instead of m.AddLog to avoid infinite recursion loop
+				// m.AddLog triggers broadcastToSubscribers which triggers m.AddLog...
+				if eventSummary != "" {
+					// log.Printf("[DEBUG] Dispatching event to worker: %s", eventSummary)
+				}
 			}
 		}
-		m.AddLog("DEBUG", fmt.Sprintf("Dispatching event to worker (1/%d): %s", len(m.workers), eventSummary))
 		targetIndex := int(time.Now().UnixNano()) % len(m.workers)
 		worker := m.workers[targetIndex]
 
