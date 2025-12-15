@@ -16,6 +16,7 @@ config.json
 # Docker
 wxbot_deploy.zip
 botmatrix_deploy.zip
+update_package.tar.gz
 
 # Go Binaries
 *.exe

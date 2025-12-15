@@ -48,6 +48,16 @@ def main():
         additional_items = [
             'WxBot',        # Python Worker & Core
             'BotNexus',     # Go Manager
+            'TencentBot',   # Official QQ Bot
+            'DingTalkBot',  # DingTalk Bot
+            'FeishuBot',    # Feishu/Lark Bot
+            'TelegramBot',  # Telegram Bot
+            'DiscordBot',   # Discord Bot
+            'SlackBot',     # Slack Bot
+            'KookBot',      # Kook Bot
+            'EmailBot',     # Email Bot
+            'WeComBot',     # Enterprise WeChat Bot
+            'NapCat',       # NapCat (OneBot 11)
             'scripts',      # 运维脚本
             'docs',         # 文档
             'docker-compose.yml', 
