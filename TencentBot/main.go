@@ -1047,19 +1047,6 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 
 	sendToNexus(obEvent)
 
-	// TEST: Reply with random string
-	// Generate a simple random string using time
-	randomStr := fmt.Sprintf("Random Reply: %d", time.Now().UnixNano())
-	log.Printf("Sending test reply: %s", randomStr)
-
-	_, err := api.PostMessage(ctx, data.ChannelID, &dto.MessageToCreate{
-		Content: randomStr,
-		MsgID:   data.ID, // Reply to the message
-	})
-	if err != nil {
-		log.Printf("Error sending test reply: %v", err)
-	}
-
 	return nil
 }
 
@@ -1089,19 +1076,6 @@ func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageDa
 	}
 
 	sendToNexus(obEvent)
-
-	// TEST: Reply with random string for DM
-	randomStr := fmt.Sprintf("DM Reply: %d", time.Now().UnixNano())
-	log.Printf("Sending DM test reply: %s", randomStr)
-
-	// For Direct Messages, we use PostMessage targeting the DM ChannelID provided in the event
-	_, err := api.PostMessage(ctx, data.ChannelID, &dto.MessageToCreate{
-		Content: randomStr,
-		MsgID:   data.ID, // Reply to the message
-	})
-	if err != nil {
-		log.Printf("Error sending DM test reply: %v", err)
-	}
 
 	return nil
 }
