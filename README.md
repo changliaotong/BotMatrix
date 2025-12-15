@@ -68,6 +68,7 @@
 ### 📜 Centralized Log Management (集中式日志管理)
 > *See it all in one place.*
 *   **Unified View**: Monitor console logs from all connected bots directly in the dashboard.
+*   **Smart Display**: Auto-truncates long logs with click-to-expand; auto-pauses refresh on interaction.
 *   **Real-Time Streaming**: Logs are streamed via WebSocket with practically zero latency.
 *   **Per-Bot Filtering**: Easily switch between viewing system logs or specific bot logs.
 
