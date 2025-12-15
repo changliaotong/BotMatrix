@@ -33,8 +33,8 @@ def on_open(ws):
         "sub_type": "friend",
         "message_id": "test_msg_123",
         "user_id": "1098299491", # Matches ADMIN_USER_ID in SystemWorker
-        "message": "#sys status",
-        "raw_message": "#sys status",
+        "message": "#sys info",
+        "raw_message": "#sys info",
         "font": 0,
         "sender": {
             "user_id": "1098299491",
@@ -44,8 +44,18 @@ def on_open(ws):
         "self_id": "BotTest1"
     }
     
-    print("Sending #sys status...")
-    ws.send(json.dumps(event))
+    def send_loop(ws):
+        while True:
+            print("Sending #sys info...")
+            try:
+                ws.send(json.dumps(event))
+            except Exception as e:
+                print(f"Send failed: {e}")
+                break
+            time.sleep(5)
+
+    # Start a thread to keep sending
+    threading.Thread(target=send_loop, args=(ws,), daemon=True).start()
 
 if __name__ == "__main__":
     # Headers to identify as a Bot
@@ -54,7 +64,11 @@ if __name__ == "__main__":
         "X-Platform": "Guild"
     }
     
-    ws = websocket.WebSocketApp("ws://localhost:3001",
+    # Connect to remote Nexus
+    SERVER_IP = "192.168.0.167"
+    PORT = "3005"
+    
+    ws = websocket.WebSocketApp(f"ws://{SERVER_IP}:{PORT}",
                               on_open=on_open,
                               on_message=on_message,
                               on_error=on_error,

@@ -233,6 +233,11 @@ func handleNexusCommand(data []byte) {
 		if userID != "" && text != "" {
 			sendKookDirectMessage(userID, text, cmd.Echo)
 		}
+	case "delete_msg":
+		msgID, _ := cmd.Params["message_id"].(string)
+		if msgID != "" {
+			deleteKookMessage(msgID, cmd.Echo)
+		}
 	case "get_login_info":
 		sendToNexus(map[string]interface{}{
 			"status": "ok",
@@ -243,6 +248,18 @@ func handleNexusCommand(data []byte) {
 			"echo": cmd.Echo,
 		})
 	}
+}
+
+func deleteKookMessage(msgID, echo string) {
+	err := session.MessageDelete(msgID)
+	if err != nil {
+		log.Printf("Failed to delete message: %v", err)
+		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		return
+	}
+
+	log.Printf("Deleted message %s", msgID)
+	sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
 }
 
 func sendKookMessage(targetID, content, echo string) {

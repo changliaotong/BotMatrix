@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.18 (2025-12-15)
+*   **Feature Highlights**:
+    *   **Burn After Reading (阅后即焚)**: Renamed and enhanced the Auto-Recall feature. Users can now set messages to self-destruct after 0-120s directly from the dashboard.
+    *   **Smart Robot Collaboration (机器人智能协作)**: Officially documented the "Smart Send" mechanism that allows ordinary bots to "wake up" guild bots, bypassing platform restrictions.
+
 ## [Unreleased]
 
 ### Fixed

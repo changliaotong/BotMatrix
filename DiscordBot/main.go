@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -196,6 +197,11 @@ func handleNexusCommand(data []byte) {
 				log.Printf("Failed to create DM: %v", err)
 			}
 		}
+	case "delete_msg":
+		msgID, _ := cmd.Params["message_id"].(string)
+		if msgID != "" {
+			deleteDiscordMessage(msgID, cmd.Echo)
+		}
 	case "get_login_info":
 		sendToNexus(map[string]interface{}{
 			"status": "ok",
@@ -216,9 +222,31 @@ func sendDiscordMessage(channelID, text, echo string) {
 		return
 	}
 	log.Printf("Sent message to %s: %s", channelID, text)
+	// Return composite ID: "channelID:messageID"
+	compositeID := fmt.Sprintf("%s:%s", channelID, msg.ID)
 	sendToNexus(map[string]interface{}{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": msg.ID},
+		"data":   map[string]interface{}{"message_id": compositeID},
 		"echo":   echo,
 	})
+}
+
+func deleteDiscordMessage(compositeID, echo string) {
+	parts := strings.Split(compositeID, ":")
+	if len(parts) != 2 {
+		sendToNexus(map[string]interface{}{"status": "failed", "message": "invalid message_id format", "echo": echo})
+		return
+	}
+	channelID := parts[0]
+	messageID := parts[1]
+
+	err := dg.ChannelMessageDelete(channelID, messageID)
+	if err != nil {
+		log.Printf("Failed to delete message: %v", err)
+		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		return
+	}
+
+	log.Printf("Deleted message %s in channel %s", messageID, channelID)
+	sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
 }

@@ -328,8 +328,11 @@ class onebot(WXBot):
         path = self._download_to_temp_new(file_val)
         if path:
             print(f"[onebot] Sending image to group {group_id}: {path}")
-            if self.send_img_msg_by_uid(path, gid_uid):
-                return int(time.time())
+            res = self.send_img_msg_by_uid(path, gid_uid)
+            if res:
+                 svr_id = res.get('MsgID', '')
+                 local_id = res.get('LocalID', '')
+                 return f"{gid_uid}:{svr_id}:{local_id}"
         return 0
 
     def _send_private_image_via_wechat(self, user_id, file_val):
@@ -341,8 +344,11 @@ class onebot(WXBot):
         path = self._download_to_temp_new(file_val)
         if path:
             print(f"[onebot] Sending image to user {user_id}: {path}")
-            if self.send_img_msg_by_uid(path, uid):
-                return int(time.time())
+            res = self.send_img_msg_by_uid(path, uid)
+            if res:
+                 svr_id = res.get('MsgID', '')
+                 local_id = res.get('LocalID', '')
+                 return f"{uid}:{svr_id}:{local_id}"
         return 0
 
     # 你的自定义函数 ...
@@ -377,19 +383,21 @@ class onebot(WXBot):
                 except:
                     pass
 
-                last_mid = 0
+                last_mids = []
                 for seg in segments:
                     if seg['type'] == 'text':
                         text = seg['data']
                         if text:
                             print(f"[SEND] [Group: {group_name}({group_id})] {text}")
-                            last_mid = self._send_group_message_via_wechat(group_id, text)
+                            mid = self._send_group_message_via_wechat(group_id, text)
+                            if mid: last_mids.append(str(mid))
                     elif seg['type'] == 'image':
                         print(f"[SEND] [Group: {group_name}({group_id})] [Image]")
-                        last_mid = self._send_group_image_via_wechat(group_id, seg['file'])
+                        mid = self._send_group_image_via_wechat(group_id, seg['file'])
+                        if mid: last_mids.append(str(mid))
 
                 info = getattr(self, '_last_send_info', {})
-                result["data"] = {"message_id": last_mid, "debug_ret": info.get('ret'), "http_status": info.get('status')}
+                result["data"] = {"message_id": ";".join(last_mids), "debug_ret": info.get('ret'), "http_status": info.get('status')}
 
             elif name == "send_private_msg":
                 user_id = params.get("user_id")
@@ -410,19 +418,57 @@ class onebot(WXBot):
                 except:
                     pass
 
-                last_mid = 0
+                last_mids = []
                 for seg in segments:
                     if seg['type'] == 'text':
                         text = seg['data']
                         if text:
                             print(f"[SEND] [Private: {nickname}({user_id})] {text}")
-                            last_mid = self._send_private_message_via_wechat(user_id, text)
+                            mid = self._send_private_message_via_wechat(user_id, text)
+                            if mid: last_mids.append(str(mid))
                     elif seg['type'] == 'image':
                         print(f"[SEND] [Private: {nickname}({user_id})] [Image]")
-                        last_mid = self._send_private_image_via_wechat(user_id, seg['file'])
+                        mid = self._send_private_image_via_wechat(user_id, seg['file'])
+                        if mid: last_mids.append(str(mid))
 
                 info = getattr(self, '_last_send_info', {})
-                result["data"] = {"message_id": last_mid, "debug_ret": info.get('ret'), "http_status": info.get('status')}
+                result["data"] = {"message_id": ";".join(last_mids), "debug_ret": info.get('ret'), "http_status": info.get('status')}
+
+            elif name == "delete_msg":
+                message_id = params.get("message_id")
+                if not message_id:
+                     result["status"] = "failed"
+                     result["retcode"] = 100
+                     result["msg"] = "missing message_id"
+                else:
+                    success_count = 0
+                    fail_count = 0
+                    ids = str(message_id).split(';')
+                    for mid in ids:
+                        if not mid: continue
+                        try:
+                            # Parse composite ID: ToUserName:MsgID:LocalID
+                            parts = mid.split(':')
+                            if len(parts) >= 3:
+                                to_user_name = parts[0]
+                                svr_msg_id = parts[1]
+                                client_msg_id = parts[2]
+                                
+                                if self.revoke_msg(client_msg_id, svr_msg_id, to_user_name):
+                                    success_count += 1
+                                else:
+                                    fail_count += 1
+                            else:
+                                fail_count += 1
+                        except Exception:
+                            fail_count += 1
+                    
+                    if success_count > 0:
+                        result["data"] = {}
+                    else:
+                        result["status"] = "failed"
+                        result["retcode"] = -1
+                        result["msg"] = "revoke failed"
 
             elif name == "set_group_kick":
                 group_id = params.get("group_id")
@@ -621,8 +667,12 @@ class onebot(WXBot):
             return 0
         
         try:
-            self.send_msg_by_uid(message, gid_uid)
-            return int(time.time()) # Fake ID
+            res = self.send_msg_by_uid(message, gid_uid)
+            if res:
+                 svr_id = res.get('MsgID', '')
+                 local_id = res.get('LocalID', '')
+                 return f"{gid_uid}:{svr_id}:{local_id}"
+            return 0
         except Exception as e:
             print(f"[onebot] Send Error: {e}")
             return 0
@@ -637,8 +687,12 @@ class onebot(WXBot):
              return 0
         
         try:
-            self.send_msg_by_uid(message, uid)
-            return int(time.time())
+            res = self.send_msg_by_uid(message, uid)
+            if res:
+                 svr_id = res.get('MsgID', '')
+                 local_id = res.get('LocalID', '')
+                 return f"{uid}:{svr_id}:{local_id}"
+            return 0
         except Exception as e:
             print(f"[onebot] Send Private Error: {e}")
             return 0

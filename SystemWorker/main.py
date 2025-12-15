@@ -9,19 +9,24 @@ import io
 import contextlib
 import traceback
 import requests
-from plotter import generate_status_image
+try:
+    from plotter import generate_status_image
+except ImportError as e:
+    print(f"[{WORKER_NAME}] Error importing plotter: {e}")
+    generate_status_image = None
 
 # 配置
 BOT_MANAGER_URL = os.getenv("BOT_MANAGER_URL", "ws://bot-manager:3001")
 BOT_MANAGER_API = os.getenv("BOT_MANAGER_API", "http://bot-manager:5000") # HTTP API for Bot List
 WORKER_NAME = "SystemWorker-Core"
-ADMIN_USER_ID = 1098299491 # 请替换为您的 UserID，或者实现动态鉴权
+ADMIN_USER_ID = 1653346663 # 请替换为您的 UserID，或者实现动态鉴权
 
 async def send_reply(ws, data, message):
     """辅助函数：发送回复"""
     params = {
         "user_id": data.get("user_id"),
-        "message": message
+        "message": message,
+        "message_type": data.get("message_type", "private") # Default to private if missing
     }
     
     # 关键修复：透传 self_id，确保 BotNexus 知道用哪个 Bot 发送回复
@@ -35,8 +40,18 @@ async def send_reply(ws, data, message):
     }
     if data.get("message_type") == "group":
         reply["params"]["group_id"] = data.get("group_id")
-    
-    print(f"[{WORKER_NAME}] Sending reply via Bot {params.get('self_id', 'Auto')}: {message[:50]}...")
+    # Also forward guild_id/channel_id if present (for Guild support)
+    if "guild_id" in data:
+        reply["params"]["guild_id"] = data["guild_id"]
+    if "channel_id" in data:
+        reply["params"]["channel_id"] = data["channel_id"]
+        # If it's a guild message, ensure message_type is correct
+        if data.get("message_type") == "guild":
+             pass # Already set above
+        elif data.get("message_type") is None: 
+             reply["params"]["message_type"] = "guild"
+
+    print(f"[{WORKER_NAME}] Sending reply via Bot {params.get('self_id', 'Auto')}: {message[:50]}... (Type: {reply['params'].get('message_type')})")
     await ws.send(json.dumps(reply))
 
 async def get_bot_list():
@@ -51,13 +66,37 @@ async def get_bot_list():
     except:
         return []
 
+import re
+
 async def handle_message(ws, data):
     """处理接收到的消息"""
     raw_msg = data.get("raw_message", "").strip()
     user_id = data.get("user_id")
     
+    # Debug: Print all received messages to logs
+    print(f"[{WORKER_NAME}] Recv from {user_id} (Bot:{data.get('self_id')}): {raw_msg}")
+    
+    # Normalize command (remove extra spaces and leading mentions)
+    # e.g. "#sys   info" -> "#sys info"
+    # e.g. "[CQ:at,qq=123] #sys status" -> "#sys status"
+    normalized_msg = re.sub(r'\s+', ' ', raw_msg)
+    # Remove CQ:at
+    normalized_msg = re.sub(r'\[CQ:at,qq=[^\]]+\]', '', normalized_msg).strip()
+    # Remove text mentions like @Bot (simple approximation)
+    normalized_msg = re.sub(r'^@\S+\s+', '', normalized_msg).strip()
+    
+    print(f"[{WORKER_NAME}] Normalized: '{normalized_msg}'")
+
+    # 0. Ping
+    if normalized_msg == "#sys ping":
+        await send_reply(ws, data, "🏓 Pong!")
+
     # 1. #sys status - 可视化仪表盘
-    if raw_msg == "#sys status":
+    elif normalized_msg == "#sys status":
+        if generate_status_image is None:
+             await send_reply(ws, data, "⚠️ Plotter module not available (Import Error)")
+             return
+
         await send_reply(ws, data, "📊 Generating System Status...")
         print("Generating status image...")
         try:
@@ -78,13 +117,13 @@ async def handle_message(ws, data):
             await send_reply(ws, data, f"Error generating status: {e}")
 
     # 2. #sys exec <code> - 远程代码执行 (危险!)
-    elif raw_msg.startswith("#sys exec "):
+    elif normalized_msg.startswith("#sys exec "):
         # 鉴权
         if user_id != ADMIN_USER_ID:
             await send_reply(ws, data, "🚫 Permission Denied")
             return
 
-        code = raw_msg[10:].strip()
+        code = normalized_msg[10:].strip()
         # 捕获 stdout
         str_io = io.StringIO()
         try:
@@ -105,12 +144,12 @@ async def handle_message(ws, data):
             await send_reply(ws, data, f"❌ Exec Error:\n{traceback.format_exc()}")
 
     # 3. #sys broadcast <msg> - 全域广播
-    elif raw_msg.startswith("#sys broadcast "):
+    elif normalized_msg.startswith("#sys broadcast "):
         if user_id != ADMIN_USER_ID:
             await send_reply(ws, data, "🚫 Permission Denied")
             return
 
-        broadcast_msg = raw_msg[15:].strip()
+        broadcast_msg = normalized_msg[15:].strip()
         if not broadcast_msg:
             return
 
@@ -129,13 +168,19 @@ async def handle_message(ws, data):
         #    await send_reply(ws, data, f"Broadcast {i+1}: {broadcast_msg}")
 
     # 4. 保留原有的 #sys info 作为纯文本备选
-    elif raw_msg == "#sys info":
+    elif normalized_msg == "#sys info":
+        # Check Bot Status (Mock for now, or use real data if available)
+        bot_status_str = "Bot Status: Checking..."
+        # In a real scenario, we would fetch this from BotNexus or maintain a heartbeat list
+        # Since we don't have it here, we'll just show what we know
+        
         sys_info = (
             f"[{WORKER_NAME}]\n"
             f"Status: Online\n"
             f"Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"Python: {platform.python_version()}\n"
-            f"System: {platform.system()} {platform.release()}"
+            f"System: {platform.system()} {platform.release()}\n"
+            f"Note: Use '#sys status' for graphical dashboard (if supported)."
         )
         await send_reply(ws, data, sys_info)
 
@@ -148,6 +193,12 @@ async def main():
             async with websockets.connect(connect_url) as ws:
                 print(f"[{WORKER_NAME}] Connected to BotNexus!")
                 
+                # Notify Admin on Startup
+                try:
+                    await send_reply(ws, {"user_id": ADMIN_USER_ID, "self_id": ""}, f"[{WORKER_NAME}] Connected and Ready! (v2)")
+                except Exception as notify_err:
+                    print(f"Startup notify failed: {notify_err}")
+
                 while True:
                     try:
                         message = await ws.recv()

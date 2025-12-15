@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -203,6 +204,22 @@ func handleNexusCommand(data []byte) {
 		if chatIDStr != "" && text != "" {
 			sendTelegramMessage(chatIDStr, text, cmd.Echo)
 		}
+	case "delete_msg":
+		msgIDStr, _ := cmd.Params["message_id"].(string)
+		// Telegram requires ChatID to delete a message.
+		// Standard OneBot delete_msg only provides message_id.
+		// However, we implemented sendTelegramMessage to return message_id as just ID.
+		// To support deletion, we need to know the ChatID.
+		// We can't know ChatID from just MessageID in Telegram API (unlike Discord/Slack where we might need it too).
+		// Wait, Telegram `deleteMessage` takes `chat_id` and `message_id`.
+		// If we don't store the mapping, we can't delete it.
+		// BUT, maybe we can change the returned message_id to be "chat_id:message_id"?
+		// Yes, let's do that in sendTelegramMessage first.
+
+		if msgIDStr != "" {
+			deleteTelegramMessage(msgIDStr, cmd.Echo)
+		}
+
 	case "get_login_info":
 		sendToNexus(map[string]interface{}{
 			"status": "ok",
@@ -229,9 +246,35 @@ func sendTelegramMessage(chatIDStr, text, echo string) {
 	}
 
 	log.Printf("Sent message to %d: %s", chatID, text)
+	// Return composite ID: "chat_id:message_id"
+	compositeID := fmt.Sprintf("%d:%d", chatID, sentMsg.MessageID)
 	sendToNexus(map[string]interface{}{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": fmt.Sprintf("%d", sentMsg.MessageID)},
+		"data":   map[string]interface{}{"message_id": compositeID},
 		"echo":   echo,
 	})
+}
+
+func deleteTelegramMessage(compositeID, echo string) {
+	parts := strings.Split(compositeID, ":")
+	if len(parts) != 2 {
+		sendToNexus(map[string]interface{}{"status": "failed", "message": "invalid message_id format", "echo": echo})
+		return
+	}
+
+	var chatID int64
+	var messageID int
+	fmt.Sscanf(parts[0], "%d", &chatID)
+	fmt.Sscanf(parts[1], "%d", &messageID)
+
+	delCfg := tgbotapi.NewDeleteMessage(chatID, messageID)
+	_, err := bot.Request(delCfg)
+	if err != nil {
+		log.Printf("Failed to delete message: %v", err)
+		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		return
+	}
+
+	log.Printf("Deleted message %d in chat %d", messageID, chatID)
+	sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
 }

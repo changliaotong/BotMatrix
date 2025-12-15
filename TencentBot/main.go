@@ -1,13 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -35,6 +43,67 @@ var (
 	ctx       context.Context
 	selfID    string
 )
+
+// SessionCache to store last message ID for replying
+type SessionCache struct {
+	sync.RWMutex
+	UserLastMsgID    map[string]string // UserID -> MsgID (C2C)
+	GroupLastMsgID   map[string]string // GroupID -> MsgID (Group)
+	ChannelLastMsgID map[string]string // ChannelID -> MsgID (Guild)
+	LastMsgTime      map[string]int64  // MsgID -> Timestamp (Unix)
+}
+
+var sessionCache = &SessionCache{
+	UserLastMsgID:    make(map[string]string),
+	GroupLastMsgID:   make(map[string]string),
+	ChannelLastMsgID: make(map[string]string),
+	LastMsgTime:      make(map[string]int64),
+}
+
+func (s *SessionCache) Save(keyType, key, msgID string) {
+	s.Lock()
+	defer s.Unlock()
+	switch keyType {
+	case "user":
+		s.UserLastMsgID[key] = msgID
+	case "group":
+		s.GroupLastMsgID[key] = msgID
+	case "channel":
+		s.ChannelLastMsgID[key] = msgID
+	}
+	s.LastMsgTime[msgID] = time.Now().Unix()
+	log.Printf("[SessionCache] Saved %s session for %s: %s", keyType, key, msgID)
+}
+
+func (s *SessionCache) Get(keyType, key string) string {
+	s.RLock()
+	defer s.RUnlock()
+
+	var msgID string
+	switch keyType {
+	case "user":
+		msgID = s.UserLastMsgID[key]
+	case "group":
+		msgID = s.GroupLastMsgID[key]
+	case "channel":
+		msgID = s.ChannelLastMsgID[key]
+	}
+
+	if msgID == "" {
+		return ""
+	}
+
+	// Check 5-minute limit (300 seconds)
+	// We use a slightly shorter limit (290s) to be safe
+	if ts, ok := s.LastMsgTime[msgID]; ok {
+		if time.Now().Unix()-ts > 290 {
+			log.Printf("[SessionCache] Session expired for %s %s (MsgID: %s)", keyType, key, msgID)
+			return "" // Expired
+		}
+		return msgID
+	}
+	return ""
+}
 
 func loadConfig() {
 	// Try to load from file first
@@ -130,14 +199,87 @@ func handleNexusMessages() {
 	}
 }
 
-func cleanContent(content string) (string, string) {
-	// Simple CQ Code handling
-	if strings.Contains(content, "[CQ:image") {
-		if strings.Contains(content, "base64://") {
-			return "【BotMatrix: Base64 Image Not Supported】", ""
-		}
-		// TODO: Extract HTTP URL for Image field
+func uploadGroupFile(groupID string, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
 	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return err
+	}
+	io.Copy(part, file)
+
+	_ = writer.WriteField("file_type", "1")
+	_ = writer.WriteField("srv_send_msg", "true")
+
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("https://api.sgroup.qq.com/v2/groups/%s/files", groupID)
+	if config.Sandbox {
+		url = fmt.Sprintf("https://sandbox.api.sgroup.qq.com/v2/groups/%s/files", groupID)
+	}
+
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bot %d.%s", config.AppID, config.Token))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("upload failed: %s - %s", resp.Status, string(respBody))
+	}
+
+	return nil
+}
+
+func cleanContent(content string) (string, string) {
+	// Regex for CQ Image with Base64
+	re := regexp.MustCompile(`\[CQ:image,file=base64://([^\]]+)\]`)
+	matches := re.FindStringSubmatch(content)
+
+	if len(matches) > 1 {
+		b64Data := matches[1]
+		data, err := base64.StdEncoding.DecodeString(b64Data)
+		if err != nil {
+			log.Printf("Error decoding base64 image: %v", err)
+			return strings.ReplaceAll(content, matches[0], "[Image Error]"), ""
+		}
+
+		tmpFile, err := ioutil.TempFile("", "tencent_img_*.png")
+		if err != nil {
+			log.Printf("Error creating temp file: %v", err)
+			return strings.ReplaceAll(content, matches[0], "[Image Save Error]"), ""
+		}
+		defer tmpFile.Close()
+
+		if _, err := tmpFile.Write(data); err != nil {
+			log.Printf("Error writing to temp file: %v", err)
+			return strings.ReplaceAll(content, matches[0], "[Image Write Error]"), ""
+		}
+
+		cleanMsg := strings.ReplaceAll(content, matches[0], "")
+		return strings.TrimSpace(cleanMsg), tmpFile.Name()
+	}
+
 	return content, ""
 }
 
@@ -160,12 +302,30 @@ func handleAction(action map[string]interface{}) {
 		if messageType == "private" {
 			// C2C
 			userID := getString(params, "user_id")
-			safeContent, _ := cleanContent(content)
-			log.Printf("[NEXUS-MSG] Sending Private Message to %s: %s", userID, safeContent)
-			_, err := api.PostC2CMessage(ctx, userID, &dto.MessageToCreate{
+			safeContent, imagePath := cleanContent(content)
+
+			// Try to find session if message_id is missing
+			msgID := getString(params, "message_id")
+			if msgID == "" {
+				msgID = sessionCache.Get("user", userID)
+				if msgID != "" {
+					log.Printf("[NEXUS-MSG] Using cached session MsgID %s for User %s", msgID, userID)
+				}
+			}
+
+			log.Printf("[NEXUS-MSG] Sending Private Message to %s: %s (Img: %s)", userID, safeContent, imagePath)
+			msgData := &dto.MessageToCreate{
 				Content: safeContent,
-				MsgID:   getString(params, "message_id"),
-			})
+				MsgID:   msgID,
+			}
+			if imagePath != "" {
+				// msgData.FileImage = imagePath // FileImage might not be supported in C2C
+				safeContent += "\n[Image not supported in Private Chat]"
+				msgData.Content = safeContent
+				os.Remove(imagePath)
+			}
+
+			_, err := api.PostC2CMessage(ctx, userID, msgData)
 			if err != nil {
 				log.Printf("[NEXUS-MSG] Failed to send private message: %v", err)
 			} else {
@@ -175,17 +335,50 @@ func handleAction(action map[string]interface{}) {
 		} else if messageType == "group" {
 			// QQ Group
 			groupID := getString(params, "group_id")
-			safeContent, _ := cleanContent(content)
-			log.Printf("[NEXUS-MSG] Sending Group Message to %s: %s", groupID, safeContent)
-			_, err := api.PostGroupMessage(ctx, groupID, &dto.MessageToCreate{
-				Content: safeContent,
-				MsgID:   getString(params, "message_id"),
-			})
-			if err != nil {
-				log.Printf("[NEXUS-MSG] Failed to send group message: %v", err)
-			} else {
-				log.Printf("[NEXUS-MSG] Group message sent successfully")
+			safeContent, imagePath := cleanContent(content)
+
+			// Try to find session if message_id is missing
+			msgID := getString(params, "message_id")
+			if msgID == "" {
+				msgID = sessionCache.Get("group", groupID)
+				if msgID != "" {
+					log.Printf("[NEXUS-MSG] Using cached session MsgID %s for Group %s", msgID, groupID)
+				}
 			}
+
+			log.Printf("[NEXUS-MSG] Sending Group Message to %s: %s (Img: %s)", groupID, safeContent, imagePath)
+
+			var err error
+
+			// Upload file if exists
+			if imagePath != "" {
+				err = uploadGroupFile(groupID, imagePath)
+				if err != nil {
+					log.Printf("[NEXUS-MSG] Failed to upload group file: %v", err)
+					safeContent += "\n[Image Upload Failed]"
+				} else {
+					log.Printf("[NEXUS-MSG] Group file uploaded successfully")
+				}
+				os.Remove(imagePath)
+			}
+
+			// Send text message if content is not empty
+			if safeContent != "" {
+				msgData := &dto.MessageToCreate{
+					Content: safeContent,
+					MsgID:   msgID,
+				}
+				_, errPost := api.PostGroupMessage(ctx, groupID, msgData)
+				if errPost != nil {
+					log.Printf("[NEXUS-MSG] Failed to send group message: %v", errPost)
+					if err == nil {
+						err = errPost
+					}
+				} else {
+					log.Printf("[NEXUS-MSG] Group message sent successfully")
+				}
+			}
+
 			handleSendResponse(err, nil, action)
 		} else if messageType == "guild" {
 			// Guild Channel
@@ -194,12 +387,30 @@ func handleAction(action map[string]interface{}) {
 			if channelID == "" {
 				channelID = getString(params, "group_id")
 			}
-			safeContent, _ := cleanContent(content)
-			log.Printf("[NEXUS-MSG] Sending Guild Message to %s: %s", channelID, safeContent)
-			msg, err := api.PostMessage(ctx, channelID, &dto.MessageToCreate{
+			safeContent, imagePath := cleanContent(content)
+
+			// Try to find session if message_id is missing
+			msgID := getString(params, "message_id")
+			if msgID == "" {
+				msgID = sessionCache.Get("channel", channelID)
+				if msgID != "" {
+					log.Printf("[NEXUS-MSG] Using cached session MsgID %s for Channel %s", msgID, channelID)
+				}
+			}
+
+			log.Printf("[NEXUS-MSG] Sending Guild Message to %s: %s (Img: %s)", channelID, safeContent, imagePath)
+			msgData := &dto.MessageToCreate{
 				Content: safeContent,
-				MsgID:   getString(params, "message_id"),
-			})
+				MsgID:   msgID,
+			}
+			if imagePath != "" {
+				// msgData.FileImage = imagePath // Not supported
+				safeContent += "\n[Image not supported in Guild Channel]"
+				msgData.Content = safeContent
+				os.Remove(imagePath)
+			}
+
+			msg, err := api.PostMessage(ctx, channelID, msgData)
 			if err != nil {
 				log.Printf("[NEXUS-MSG] Failed to send guild message: %v", err)
 			} else {
@@ -213,17 +424,44 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		groupID := getString(params, "group_id")
 		content, _ := params["message"].(string)
-		safeContent, _ := cleanContent(content)
-		log.Printf("[NEXUS-MSG] Sending Group Message (send_group_msg) to %s: %s", groupID, safeContent)
-		_, err := api.PostGroupMessage(ctx, groupID, &dto.MessageToCreate{
-			Content: safeContent,
-			MsgID:   getString(params, "message_id"),
-		})
-		if err != nil {
-			log.Printf("[NEXUS-MSG] Failed to send group message: %v", err)
-		} else {
-			log.Printf("[NEXUS-MSG] Group message sent successfully")
+		safeContent, imagePath := cleanContent(content)
+
+		// Try to find session if message_id is missing
+		msgID := getString(params, "message_id")
+		if msgID == "" {
+			msgID = sessionCache.Get("group", groupID)
+			if msgID != "" {
+				log.Printf("[NEXUS-MSG] Using cached session MsgID %s for Group %s", msgID, groupID)
+			}
 		}
+
+		log.Printf("[NEXUS-MSG] Sending Group Message (send_group_msg) to %s: %s", groupID, safeContent)
+
+		var err error
+		if imagePath != "" {
+			err = uploadGroupFile(groupID, imagePath)
+			if err != nil {
+				log.Printf("[NEXUS-MSG] Failed to upload group file: %v", err)
+				safeContent += "\n[Image Upload Failed]"
+			}
+			os.Remove(imagePath)
+		}
+
+		if safeContent != "" {
+			_, errPost := api.PostGroupMessage(ctx, groupID, &dto.MessageToCreate{
+				Content: safeContent,
+				MsgID:   msgID,
+			})
+			if errPost != nil {
+				log.Printf("[NEXUS-MSG] Failed to send group message: %v", errPost)
+				if err == nil {
+					err = errPost
+				}
+			} else {
+				log.Printf("[NEXUS-MSG] Group message sent successfully")
+			}
+		}
+
 		handleSendResponse(err, nil, action)
 
 	case "send_private_msg":
@@ -231,11 +469,26 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		userID := getString(params, "user_id")
 		content, _ := params["message"].(string)
-		safeContent, _ := cleanContent(content)
+		safeContent, imagePath := cleanContent(content)
+
+		if imagePath != "" {
+			safeContent += "\n[Image not supported in Private Chat]"
+			os.Remove(imagePath)
+		}
+
+		// Try to find session if message_id is missing
+		msgID := getString(params, "message_id")
+		if msgID == "" {
+			msgID = sessionCache.Get("user", userID)
+			if msgID != "" {
+				log.Printf("[NEXUS-MSG] Using cached session MsgID %s for User %s", msgID, userID)
+			}
+		}
+
 		log.Printf("[NEXUS-MSG] Sending Private Message (send_private_msg) to %s: %s", userID, safeContent)
 		_, err := api.PostC2CMessage(ctx, userID, &dto.MessageToCreate{
 			Content: safeContent,
-			MsgID:   getString(params, "message_id"),
+			MsgID:   msgID,
 		})
 		if err != nil {
 			log.Printf("[NEXUS-MSG] Failed to send private message: %v", err)
@@ -259,10 +512,19 @@ func handleAction(action map[string]interface{}) {
 			return
 		}
 
+		// Try to find session if message_id is missing
+		msgID := getString(params, "message_id")
+		if msgID == "" {
+			msgID = sessionCache.Get("channel", channelID)
+			if msgID != "" {
+				log.Printf("[NEXUS-MSG] Using cached session MsgID %s for Channel %s", msgID, channelID)
+			}
+		}
+
 		log.Printf("Sending to Guild %s Channel %s: %s", guildID, channelID, content)
 		msg, err := api.PostMessage(ctx, channelID, &dto.MessageToCreate{
 			Content: content,
-			MsgID:   getString(params, "message_id"),
+			MsgID:   msgID,
 		})
 		handleSendResponse(err, msg, action)
 
@@ -760,6 +1022,9 @@ func sendToNexus(data interface{}) {
 func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) error {
 	log.Printf("Received AT Message from %s: %s", data.Author.Username, data.Content)
 
+	// Save Session for Reply
+	sessionCache.Save("channel", data.ChannelID, data.ID)
+
 	// Translate to OneBot Message Event
 	obEvent := map[string]interface{}{
 		"post_type":    "message",
@@ -800,6 +1065,9 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 
 func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageData) error {
 	log.Printf("Received Direct Message from %s: %s", data.Author.Username, data.Content)
+
+	// Save Session for Reply (DM uses ChannelID)
+	sessionCache.Save("channel", data.ChannelID, data.ID)
 
 	// Translate to OneBot Message Event
 	obEvent := map[string]interface{}{
@@ -908,6 +1176,10 @@ func messageReactionEventHandler(event *dto.WSPayload, data *dto.WSMessageReacti
 
 func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessageData) error {
 	log.Printf("Received Group AT Message from %s: %s", data.Author.ID, data.Content)
+
+	// Save Session for Reply
+	sessionCache.Save("group", data.GroupID, data.ID)
+
 	sendToNexus(map[string]interface{}{
 		"post_type":    "message",
 		"message_type": "group",
@@ -943,6 +1215,10 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 
 func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) error {
 	log.Printf("Received C2C Message from %s: %s", data.Author.ID, data.Content)
+
+	// Save Session for Reply
+	sessionCache.Save("user", data.Author.ID, data.ID)
+
 	sendToNexus(map[string]interface{}{
 		"post_type":    "message",
 		"message_type": "private",

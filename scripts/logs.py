@@ -15,25 +15,35 @@ def main():
     
     args = parser.parse_args()
     
-    # 映射简写到容器名
+    # 映射简写到容器名 (for docker logs) or service name (for docker-compose logs)
     service_map = {
-        "system-worker": "botmatrix-system-worker",
-        "worker": "botmatrix-system-worker",
-        "sys": "botmatrix-system-worker",
-        "manager": "botmatrix-manager",
-        "bot-manager": "botmatrix-manager",
-        "nexus": "botmatrix-manager",
+        "system-worker": "system-worker",
+        "worker": "system-worker",
+        "sys": "system-worker",
+        "manager": "bot-manager",
+        "bot-manager": "bot-manager",
+        "nexus": "bot-manager",
         "wxbot": "wxbot",
         "wx": "wxbot",
-        "bot": "wxbot"
+        "bot": "wxbot",
+        "tencent": "tencent-bot",
+        "dingtalk": "dingtalk-bot"
     }
+
+    target = args.service
     
-    container_name = service_map.get(args.service, args.service)
-    
-    # 构建 SSH 命令
-    # 使用 -t 强制分配伪终端，以便 sudo 可能需要密码时能交互 (在本地终端运行时)
-    # 注意：在自动化环境中如果需要密码可能会卡住，但之前的 update.py 似乎能跑通
-    cmd = f"ssh -t {USERNAME}@{SERVER_IP} \"sudo docker logs {'-f' if args.follow else ''} --tail {args.lines} {container_name}\""
+    # Special mode: debug (watch sys + manager)
+    if target == "debug":
+        cmd = f"ssh -t {USERNAME}@{SERVER_IP} \"cd /opt/BotMatrix && sudo docker-compose logs {'-f' if args.follow else ''} --tail {args.lines} system-worker bot-manager\""
+    else:
+        # Default single service check
+        service_name = service_map.get(target, target)
+        
+        # Try to use docker-compose logs for everything as it's cleaner with colors/prefixes
+        # But we need to know the service name in docker-compose.yml
+        # The mapping above uses service names.
+        
+        cmd = f"ssh -t {USERNAME}@{SERVER_IP} \"cd /opt/BotMatrix && sudo docker-compose logs {'-f' if args.follow else ''} --tail {args.lines} {service_name}\""
     
     print(f"Executing: {cmd}")
     try:

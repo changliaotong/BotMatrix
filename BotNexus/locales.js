@@ -74,6 +74,10 @@ const translations = {
         "col_member_last_seen": "最后发言",
         "col_action": "操作",
         "send_group_msg": "发送群消息",
+        "auto_recall_label": "阅后即焚 (自动撤回)",
+        "recall_delay_label": "延迟撤回(秒)",
+        "recall_limit_hint": "频道限120s",
+        "recall_delay_placeholder": "0 = 立即撤回",
         "enter_msg_placeholder": "在此输入消息内容...",
         "danger_zone": "危险操作",
         "btn_leave_group": "退出该群",
@@ -293,7 +297,8 @@ const translations = {
         "alert_enter_content": "请输入内容",
         "alert_enter_file_url": "请输入文件路径/URL",
         "col_member_id": "QQ/WXID",
-        "btn_send": "发送"
+        "btn_send": "发送",
+        "btn_smart_send": "智能发送 (WakeUp)"
     },
     "zh-TW": {
         "app_title": "BotMatrix Manager",
@@ -370,6 +375,10 @@ const translations = {
         "col_member_last_seen": "最後發言",
         "col_action": "操作",
         "send_group_msg": "發送群消息",
+        "auto_recall_label": "閱後即焚 (自動撤回)",
+        "recall_delay_label": "延遲撤回(秒)",
+        "recall_limit_hint": "頻道限120s",
+        "recall_delay_placeholder": "0 = 立即撤回",
         "enter_msg_placeholder": "在此輸入消息內容...",
         "danger_zone": "危險操作",
         "btn_leave_group": "退出該群",
@@ -596,7 +605,8 @@ const translations = {
         "alert_enter_content": "請輸入內容",
         "alert_enter_file_url": "請輸入文件路徑/URL",
         "col_member_id": "QQ/WXID",
-        "btn_send": "發送"
+        "btn_send": "發送",
+        "btn_smart_send": "智能發送 (WakeUp)"
     },
     "en": {
         "app_title": "BotMatrix Manager",
@@ -673,6 +683,10 @@ const translations = {
         "col_member_last_seen": "Last Seen",
         "col_action": "Action",
         "send_group_msg": "Send Group Message",
+        "auto_recall_label": "Burn After Reading (Auto Recall)",
+        "recall_delay_label": "Recall Delay(s)",
+        "recall_limit_hint": "Channel Limit 120s",
+        "recall_delay_placeholder": "0 = Recall Immediately",
         "enter_msg_placeholder": "Enter message here...",
         "danger_zone": "Danger Zone",
         "btn_leave_group": "Leave Group",
@@ -899,6 +913,7 @@ const translations = {
         "alert_enter_content": "Please enter content",
         "alert_enter_file_url": "Please enter file path/URL",
         "col_member_id": "ID",
-        "btn_send": "Send"
+        "btn_send": "Send",
+        "btn_smart_send": "Smart Send (WakeUp)"
     }
 };

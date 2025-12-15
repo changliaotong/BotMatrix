@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -154,17 +156,59 @@ func handleAction(msg []byte) {
 		}
 
 		msgManager := wc.GetMessage()
-		_, err := msgManager.SendText(req)
+		msgID, err := msgManager.SendText(req)
 		if err != nil {
 			log.Printf("Failed to send WeCom message: %v", err)
 			response["status"] = "failed"
 			response["retcode"] = -1
+		} else {
+			response["data"] = map[string]interface{}{
+				"message_id": msgID,
+			}
+		}
+
+	case "delete_msg":
+		msgID, _ := params["message_id"].(string)
+		if msgID != "" {
+			err := recallMessage(msgID)
+			if err != nil {
+				log.Printf("Failed to recall WeCom message: %v", err)
+				response["status"] = "failed"
+				response["retcode"] = -1
+			}
 		}
 	}
 
 	if conn != nil {
 		conn.WriteJSON(response)
 	}
+}
+
+func recallMessage(msgID string) error {
+	token, err := wc.GetContext().GetAccessToken()
+	if err != nil {
+		return err
+	}
+
+	url := "https://qyapi.weixin.qq.com/cgi-bin/message/recall?access_token=" + token
+	payload := map[string]string{"msgid": msgID}
+	jsonBody, _ := json.Marshal(payload)
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	if errcode, ok := result["errcode"].(float64); ok && errcode != 0 {
+		return fmt.Errorf("wecom recall error: %v", result)
+	}
+	return nil
 }
 
 func main() {

@@ -12,13 +12,24 @@ A **Go-based** DingTalk (钉钉) Robot implementation for [BotMatrix](../README.
 *   **OneBot 11 Compliance**:
     *   `send_group_msg` / `send_msg` -> DingTalk Group Message.
     *   `send_private_msg` -> Simulated via @Mention in Group (Webhook limitation).
-    *   **New**: `message` Event -> Forwards received DingTalk messages (Text/Content) to Nexus.
+    *   `delete_msg` -> **New!** Supports recalling messages (Enterprise Mode required).
+    *   `message` Event -> Forwards received DingTalk messages (Text/Content) to Nexus.
 *   **Intelligent Parsing**:
     *   Automatically parses `im.message.receive_v1` events.
     *   Extracts Text, Sender ID, and Group ID.
     *   Forwards unknown events as `notice` type for debugging.
 *   **Security**: Implements DingTalk's HMAC-SHA256 signature algorithm for safe message delivery.
 *   **Auto-Configuration**: Automatically generates a unique `self_id` based on your token if not provided.
+
+### 🔥 Burn After Reading (Message Recall)
+
+DingTalkBot supports the **Burn After Reading** feature orchestrated by BotNexus.
+
+*   **Requirement**: You must configure **Stream Mode** (Enterprise Robot with `client_id` and `client_secret`) to use this feature. Webhook-only bots cannot recall messages.
+*   **Mechanism**:
+    *   When sending a message, the bot returns a special `message_id` format: `conversationID|processQueryKey`.
+    *   The `delete_msg` action uses this ID to call the DingTalk `groupMessages/recall` API.
+*   **Usage**: Simply enable "Burn After Reading" in the BotNexus dashboard or send a `delete_msg` command with the ID returned by a previous send action.
 
 ## 🛠 Configuration
 
@@ -41,12 +52,12 @@ Create a `config.json` file in the root directory:
 | `nexus_addr` | Address of the BotNexus WebSocket server. | **Required** |
 | `access_token` | Token from the Webhook URL (e.g., `.../send?access_token=THIS_PART`). | **Webhook** |
 | `secret` | "Secure Settings" -> "Sign" (SEC...) in DingTalk Robot settings. | **Webhook** |
-| `client_id` | AppKey of your Enterprise Internal Robot. | **Stream** |
-| `client_secret` | AppSecret of your Enterprise Internal Robot. | **Stream** |
+| `client_id` | AppKey of your Enterprise Internal Robot. | **Stream (Required for Recall)** |
+| `client_secret` | AppSecret of your Enterprise Internal Robot. | **Stream (Required for Recall)** |
 
 > **Tip**: 
 > *   For **Send Only**, just configure `access_token` (and optional `secret`).
-> *   For **Receive & Send**, configure `client_id` + `client_secret` (for receiving) AND `access_token` (for sending).
+> *   For **Receive, Send & Recall**, configure `client_id` + `client_secret` (Stream Mode). The `access_token` is optional if Stream Mode sending is fully supported, but recommended for fallback or specific webhook features.
 
 ## 🚀 Deployment
 

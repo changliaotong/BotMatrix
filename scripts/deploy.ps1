@@ -59,9 +59,20 @@ if ($Service) {
         $CleanupCmd = "sudo docker rm -f botmatrix-manager || true"
     } elseif ($Service -eq "system-worker") {
         $CleanupCmd = "sudo docker rm -f botmatrix-system-worker || true"
+    } elseif ($Service -eq "no-wx") {
+        $ServicesToDeploy = "bot-manager system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot"
+        # Add other bots if they exist in docker-compose, but these are the main ones + verified ones
+        # Use service names for docker-compose up
+        
+        # Cleanup containers (using container names)
+        $CleanupCmd = "sudo docker rm -f botmatrix-manager botmatrix-system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot || true"
+        
+        $DockerCmd = "$CleanupCmd && sudo docker-compose up -d --build --force-recreate $ServicesToDeploy"
     }
     
-    $DockerCmd = "$CleanupCmd && sudo docker-compose up -d --build --force-recreate --no-deps $Service"
+    if ($Service -ne "no-wx") {
+        $DockerCmd = "$CleanupCmd && sudo docker-compose up -d --build --force-recreate --no-deps $Service"
+    }
 } else {
     # Full deployment: down everything and bring it back up
     $DockerCmd = "sudo docker-compose down --remove-orphans && sudo docker-compose up -d --build"

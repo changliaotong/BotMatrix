@@ -59,6 +59,18 @@
 *   **Role-Based Access**: Granular permissions for **Admins** and standard **Users**.
 *   **Multi-User Auth**: Secure login system with token-based authentication.
 
+### 🔥 Burn After Reading (阅后即焚)
+> *Privacy First, Trace Free.*
+*   **Secure & Ephemeral**: Auto-recall messages after a configurable delay (0-120s).
+*   **High-End Privacy**: Ensure sensitive info vanishes without a trace.
+*   **Universal Control**: Seamlessly integrated into the dashboard for supported bots.
+
+### 🧠 Intelligent Robot Collaboration (机器人智能协作)
+> *One Click, Full Linkage.*
+*   **Smart Wake-Up**: Bypasses Tencent Guild Bot restrictions (passive reply only) by coordinating with ordinary bots to "wake up" guild bots via @mentions.
+*   **Cross-Protocol Synergy**: Bridges the gap between different bot platforms (e.g., QQ Guild ↔ QQ Group).
+*   **Unstoppable Workflow**: Ensures critical messages are delivered even under strict platform limitations. [Read More](docs/QQ_GUILD_SMART_SEND_CN.md).
+
 ---
 
 ## 🛠 Architecture | 架构

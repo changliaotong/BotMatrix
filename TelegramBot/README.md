@@ -8,8 +8,18 @@ A **Go-based** Telegram Robot implementation for [BotMatrix](../README.md).
     *   **Sending**: `send_group_msg` (to Groups), `send_private_msg` (to Users).
     *   **Receiving**: Supports Text messages.
     *   **Meta**: `get_login_info`.
+    *   **Recall**: `delete_msg` support.
 *   **Long Polling**: Uses standard Telegram Long Polling for event updates.
 *   **Zero-Config Networking**: Connects outbound to BotNexus; no public IP required for the bot itself.
+*   **Burn After Reading**: **New!** Supports message recall.
+
+### 🔥 Burn After Reading (Message Recall)
+
+TelegramBot supports message recall via the `delete_msg` action.
+
+*   **ID Format**: `ChatID:MessageID` (e.g., `-100123456789:55`).
+*   **Mechanism**: Uses the standard `deleteMessage` API.
+*   **Permissions**: The bot must be an Admin in groups to delete messages from others (though for its own messages, standard rights usually suffice).
 
 ## 🛠 Configuration
 

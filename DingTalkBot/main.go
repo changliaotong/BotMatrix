@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -309,6 +310,8 @@ func handleNexusMessage(message []byte) {
 
 		if msg != "" {
 			var err error
+			var msgID string
+
 			if config.AccessToken != "" {
 				err = sendDingTalkMessage(msg)
 			} else if config.ClientID != "" {
@@ -316,17 +319,50 @@ func handleNexusMessage(message []byte) {
 				if groupID == "" {
 					err = fmt.Errorf("group_id required for enterprise group message")
 				} else {
-					err = sendEnterpriseGroupMessage(groupID, msg)
+					msgID, err = sendEnterpriseGroupMessage(groupID, msg)
 				}
 			} else {
 				err = fmt.Errorf("webhook access_token not configured")
 			}
 
 			if err == nil {
+				data := map[string]interface{}{}
+				if msgID != "" {
+					data["message_id"] = msgID
+				}
+				sendToNexus(map[string]interface{}{"status": "ok", "data": data, "echo": action["echo"]})
+			} else {
+				sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": action["echo"]})
+			}
+		}
+
+	case "delete_msg":
+		params, _ := action["params"].(map[string]interface{})
+		msgID := getString(params, "message_id")
+		// DingTalk recall requires conversation ID too?
+		// "recall/group/message" needs "openConversationId" and "processQueryKey" (msgID)
+		// We don't have conversation ID in delete_msg params from generic logic.
+		// However, processQueryKey might be unique enough or we might need to store it?
+		// Actually, let's see if we can recall with just msgID or if we need to encode groupID in msgID.
+
+		// Strategy: Encode groupID in msgID -> "groupID|processQueryKey"
+		if msgID != "" && config.ClientID != "" {
+			// Try to split
+			// If simpler approach: user passes group_id in params? No, BotNexus generic logic doesn't send it.
+			// So we MUST encode it.
+
+			// If encoded "groupID|msgID"
+			// But wait, if I change return ID format, I need to ensure it doesn't break anything.
+			// It should be fine as it's just a string token.
+
+			err := recallEnterpriseMessage(msgID)
+			if err == nil {
 				sendToNexus(map[string]interface{}{"status": "ok", "echo": action["echo"]})
 			} else {
 				sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": action["echo"]})
 			}
+		} else {
+			sendToNexus(map[string]interface{}{"status": "failed", "message": "recall not supported or invalid id", "echo": action["echo"]})
 		}
 
 	case "send_private_msg":
@@ -472,10 +508,10 @@ func getEnterpriseAccessToken() (string, error) {
 	return enterpriseToken, nil
 }
 
-func sendEnterpriseGroupMessage(conversationID, content string) error {
+func sendEnterpriseGroupMessage(conversationID, content string) (string, error) {
 	token, err := getEnterpriseAccessToken()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	url := "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
@@ -490,7 +526,43 @@ func sendEnterpriseGroupMessage(conversationID, content string) error {
 		"msgParam":           string(msgParamBytes),
 	}
 
-	return postToDingTalkAPI(url, token, payload)
+	resp, err := postToDingTalkAPI(url, token, payload)
+	if err != nil {
+		return "", err
+	}
+
+	// Get processQueryKey
+	if key, ok := resp["processQueryKey"].(string); ok {
+		// Encode conversationID for recall: "cid|key"
+		return fmt.Sprintf("%s|%s", conversationID, key), nil
+	}
+	return "", nil
+}
+
+func recallEnterpriseMessage(encodedID string) error {
+	// Split "cid|key"
+	parts := strings.Split(encodedID, "|")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid message_id format for recall")
+	}
+	conversationID := parts[0]
+	processQueryKey := parts[1]
+
+	token, err := getEnterpriseAccessToken()
+	if err != nil {
+		return err
+	}
+
+	url := "https://api.dingtalk.com/v1.0/robot/groupMessages/recall"
+
+	payload := map[string]interface{}{
+		"robotCode":          config.ClientID,
+		"openConversationId": conversationID,
+		"processQueryKey":    processQueryKey,
+	}
+
+	_, err = postToDingTalkAPI(url, token, payload)
+	return err
 }
 
 func sendEnterprisePrivateMessage(userID, content string) error {
@@ -512,14 +584,15 @@ func sendEnterprisePrivateMessage(userID, content string) error {
 		"msgParam":  string(msgParamBytes),
 	}
 
-	return postToDingTalkAPI(url, token, payload)
+	_, err = postToDingTalkAPI(url, token, payload)
+	return err
 }
 
-func postToDingTalkAPI(url, token string, payload map[string]interface{}) error {
+func postToDingTalkAPI(url, token string, payload map[string]interface{}) (map[string]interface{}, error) {
 	jsonBody, _ := json.Marshal(payload)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -527,13 +600,16 @@ func postToDingTalkAPI(url, token string, payload map[string]interface{}) error 
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("api error status: %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("api error status: %d, body: %s", resp.StatusCode, string(body))
 	}
-	return nil
+
+	var result map[string]interface{}
+	json.Unmarshal(body, &result)
+	return result, nil
 }

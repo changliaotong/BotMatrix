@@ -180,6 +180,37 @@ type Manager struct {
 	// Deduplication
 	DedupMutex sync.Mutex
 	DedupCache map[string]int64 `json:"-"` // MessageID -> Timestamp (Unix)
+
+	// Active Sessions (Contacts)
+	SessionMutex sync.RWMutex
+	Sessions     map[string]*ContactSession `json:"-"` // Key: BotID:Type:ID
+
+	// Auto Recall
+	AutoRecallMutex sync.RWMutex
+	AutoRecallMap   map[string]AutoRecallTask `json:"-"` // Echo -> Task
+}
+
+type AutoRecallTask struct {
+	Delay int // Seconds
+	BotID string
+}
+
+type ContactSession struct {
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Type        string             `json:"type"` // "private", "group", "guild"
+	BotID       string             `json:"bot_id"`
+	GuildID     string             `json:"guild_id,omitempty"`
+	LastActive  int64              `json:"last_active"`
+	LastMsgID   string             `json:"last_msg_id"`
+	LastMsgTime int64              `json:"last_msg_time"`
+	ActiveBots  map[string]BotInfo `json:"active_bots"` // Other bots seen in this group
+}
+
+type BotInfo struct {
+	ID       string `json:"id"`
+	Nickname string `json:"nickname"`
+	Platform string `json:"platform"`
 }
 
 type BotStatDetail struct {
@@ -222,7 +253,9 @@ func NewManager() *Manager {
 				return true
 			},
 		},
-		logBuffer: make([]LogEntry, 0, 200),
+		logBuffer:     make([]LogEntry, 0, 200),
+		Sessions:      make(map[string]*ContactSession),
+		AutoRecallMap: make(map[string]AutoRecallTask),
 	}
 
 	// Initialize Redis
@@ -558,7 +591,9 @@ func main() {
 	uiMux.HandleFunc("/api/stats", manager.handleGetStats)
 	uiMux.HandleFunc("/api/stats/chat", manager.handleGetChatStats)
 	uiMux.HandleFunc("/api/system/stats", manager.handleSystemStats)
+	uiMux.HandleFunc("/api/contacts", manager.handleGetContacts)
 	uiMux.HandleFunc("/api/action", manager.handleAction)
+	uiMux.HandleFunc("/api/smart_action", manager.handleSmartAction)
 
 	// Auth API
 	uiMux.HandleFunc("/api/login", manager.handleLogin)
@@ -618,6 +653,7 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 	// 2. Load Balance to Workers (Business Logic)
 	// ... (Existing Worker Logic) ...
 	if len(m.workers) > 0 {
+		m.AddLog("DEBUG", fmt.Sprintf("Dispatching event to worker (1/%d)", len(m.workers)))
 		targetIndex := int(time.Now().UnixNano()) % len(m.workers)
 		worker := m.workers[targetIndex]
 
@@ -640,6 +676,13 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 				if e == nil {
 					break
 				}
+			}
+		}
+	} else {
+		// Only log if it's a message event to avoid noise
+		if msgMap, ok := data.(map[string]interface{}); ok {
+			if pt, ok := msgMap["post_type"].(string); ok && pt == "message" {
+				m.AddLog("WARN", "No workers available to handle message event!")
 			}
 		}
 	}
@@ -788,6 +831,57 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(message, &msgMap); err != nil {
 			m.AddLog("ERROR", fmt.Sprintf("Failed to parse message from %s: %v | Content: %s", selfID, err, string(message)))
 			continue
+		}
+
+		// Handle Auto Recall Response
+		if echo, ok := msgMap["echo"].(string); ok && echo != "" {
+			m.AutoRecallMutex.RLock()
+			task, exists := m.AutoRecallMap[echo]
+			m.AutoRecallMutex.RUnlock()
+
+			if exists {
+				// Remove task
+				m.AutoRecallMutex.Lock()
+				delete(m.AutoRecallMap, echo)
+				m.AutoRecallMutex.Unlock()
+
+				// Check status
+				status, _ := msgMap["status"].(string)
+				retcode, _ := msgMap["retcode"].(float64)
+
+				if status == "ok" || retcode == 0 {
+					// Extract message_id
+					var msgID string
+					if data, ok := msgMap["data"].(map[string]interface{}); ok {
+						msgID = getString(data, "message_id")
+					}
+
+					if msgID != "" {
+						go func(botID string, msgID string, delay int) {
+							if delay > 0 {
+								time.Sleep(time.Duration(delay) * time.Second)
+							}
+
+							m.mutex.RLock()
+							targetBot, ok := m.bots[botID]
+							m.mutex.RUnlock()
+
+							if ok {
+								m.AddLog("INFO", fmt.Sprintf("Auto Recall: Deleting message %s from Bot %s after %ds", msgID, botID, delay))
+
+								targetBot.Mutex.Lock()
+								targetBot.Conn.WriteJSON(map[string]interface{}{
+									"action": "delete_msg",
+									"params": map[string]interface{}{
+										"message_id": msgID,
+									},
+								})
+								targetBot.Mutex.Unlock()
+							}
+						}(task.BotID, msgID, task.Delay)
+					}
+				}
+			}
 		}
 
 		// Update SelfID if needed
@@ -1089,6 +1183,25 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 	// 1. Determine Target Bot ID
 	var targetID string
 
+	// Extract auto_recall
+	autoRecall := 0
+	if ar, ok := req["auto_recall"]; ok {
+		switch v := ar.(type) {
+		case float64:
+			autoRecall = int(v)
+		case int:
+			autoRecall = v
+		}
+		delete(req, "auto_recall")
+	}
+
+	// Ensure echo is present if auto_recall is used
+	if autoRecall > 0 {
+		if _, ok := req["echo"]; !ok {
+			req["echo"] = fmt.Sprintf("api_%d", time.Now().UnixNano())
+		}
+	}
+
 	// Check top-level "self_id" (Best practice for routing)
 	if id, ok := req["self_id"]; ok {
 		targetID = fmt.Sprintf("%v", id)
@@ -1127,6 +1240,31 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 	// 3. Send to Bot
 	if targetBot != nil {
+		if autoRecall > 0 {
+			// Validate Auto Recall Delay
+			if autoRecall > 120 {
+				// Check if it's a Guild/Channel Bot
+				// Assuming Platform string contains "guild" or "channel" or "qqguild"
+				isGuildBot := false
+				if strings.Contains(strings.ToLower(targetBot.Platform), "guild") ||
+					strings.Contains(strings.ToLower(targetBot.Platform), "channel") {
+					isGuildBot = true
+				}
+
+				if isGuildBot {
+					autoRecall = 120
+					m.AddLog("WARN", fmt.Sprintf("Auto Recall delay capped to 120s for Guild Bot %s", targetBot.SelfID))
+				}
+			}
+
+			m.AutoRecallMutex.Lock()
+			m.AutoRecallMap[getString(req, "echo")] = AutoRecallTask{
+				Delay: autoRecall,
+				BotID: targetBot.SelfID,
+			}
+			m.AutoRecallMutex.Unlock()
+		}
+
 		targetBot.Mutex.Lock()
 		err := targetBot.Conn.WriteJSON(req)
 
@@ -1349,6 +1487,156 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 			m.rdb.HIncrBy(context.Background(), "stats:group", fmt.Sprintf("%d", groupID), 1)
 		}
 	}
+
+	// --- Session Tracking ---
+	go m.updateSession(botID, msg, userID, userName, groupID, groupName)
+}
+
+func (m *Manager) updateSession(botID string, msg map[string]interface{}, userID int64, userName string, groupID int64, groupName string) {
+	messageType, _ := msg["message_type"].(string)
+
+	// Extract Message ID
+	var msgID string
+	if idVal, ok := msg["message_id"]; ok {
+		switch v := idVal.(type) {
+		case string:
+			msgID = v
+		case float64:
+			msgID = fmt.Sprintf("%.0f", v)
+		case int64:
+			msgID = fmt.Sprintf("%d", v)
+		default:
+			msgID = fmt.Sprintf("%v", v)
+		}
+	}
+
+	m.SessionMutex.Lock()
+	defer m.SessionMutex.Unlock()
+
+	now := time.Now().Unix()
+
+	// 1. Group Session
+	if groupID != 0 {
+		key := fmt.Sprintf("%s:group:%d", botID, groupID)
+		if s, ok := m.Sessions[key]; ok {
+			s.LastActive = now
+			s.LastMsgID = msgID
+			s.LastMsgTime = now
+			if groupName != "" {
+				s.Name = groupName
+			}
+		} else {
+			name := groupName
+			if name == "" {
+				name = fmt.Sprintf("Group %d", groupID)
+			}
+			m.Sessions[key] = &ContactSession{
+				ID:          fmt.Sprintf("%d", groupID),
+				Name:        name,
+				Type:        "group",
+				BotID:       botID,
+				LastActive:  now,
+				LastMsgID:   msgID,
+				LastMsgTime: now,
+				ActiveBots:  make(map[string]BotInfo),
+			}
+		}
+
+		// Update ActiveBots for ALL sessions of this GroupID
+		targetGroupIDStr := fmt.Sprintf("%d", groupID)
+		m.mutex.RLock()
+		currentBotClient, exists := m.bots[botID]
+		m.mutex.RUnlock()
+
+		if exists {
+			info := BotInfo{
+				ID:       botID,
+				Nickname: currentBotClient.Nickname,
+				Platform: currentBotClient.Platform,
+			}
+			for _, s := range m.Sessions {
+				if s.Type == "group" && s.ID == targetGroupIDStr {
+					if s.ActiveBots == nil {
+						s.ActiveBots = make(map[string]BotInfo)
+					}
+					s.ActiveBots[botID] = info
+				}
+			}
+		}
+	}
+
+	// 2. Guild/Channel Session
+	if messageType == "guild" {
+		guildID, _ := msg["guild_id"].(string)
+		channelID, _ := msg["channel_id"].(string)
+
+		if channelID != "" {
+			key := fmt.Sprintf("%s:guild:%s", botID, channelID)
+			// Try to get guild name from message if available (not standard OneBot but useful)
+			guildName, _ := msg["guild_name"].(string)
+			channelName, _ := msg["channel_name"].(string)
+
+			name := channelName
+			if name == "" {
+				name = fmt.Sprintf("Channel %s", channelID)
+			}
+			if guildName != "" {
+				name = fmt.Sprintf("[%s] %s", guildName, name)
+			} else if guildID != "" {
+				name = fmt.Sprintf("[%s] %s", guildID, name)
+			}
+
+			if s, ok := m.Sessions[key]; ok {
+				s.LastActive = now
+				s.LastMsgID = msgID
+				s.LastMsgTime = now
+				if channelName != "" {
+					s.Name = name // Update name if we got better info
+				}
+			} else {
+				m.Sessions[key] = &ContactSession{
+					ID:          channelID,
+					Name:        name,
+					Type:        "guild",
+					BotID:       botID,
+					GuildID:     guildID,
+					LastActive:  now,
+					LastMsgID:   msgID,
+					LastMsgTime: now,
+				}
+			}
+		}
+	}
+
+	// 3. User Session (Private)
+	// Only track if it's explicitly a private message OR we want to track individual users in groups too?
+	// Usually "contacts" implies people we can DM.
+	// If message_type is private, track it.
+	if messageType == "private" && userID != 0 {
+		key := fmt.Sprintf("%s:private:%d", botID, userID)
+		if s, ok := m.Sessions[key]; ok {
+			s.LastActive = now
+			s.LastMsgID = msgID
+			s.LastMsgTime = now
+			if userName != "" {
+				s.Name = userName
+			}
+		} else {
+			name := userName
+			if name == "" {
+				name = fmt.Sprintf("User %d", userID)
+			}
+			m.Sessions[key] = &ContactSession{
+				ID:          fmt.Sprintf("%d", userID),
+				Name:        name,
+				Type:        "private",
+				BotID:       botID,
+				LastActive:  now,
+				LastMsgID:   msgID,
+				LastMsgTime: now,
+			}
+		}
+	}
 }
 
 // Auth Handlers & Logic
@@ -1456,6 +1744,28 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"token": token,
 		"role":  role,
 	})
+}
+
+func (m *Manager) handleGetContacts(w http.ResponseWriter, r *http.Request) {
+	// Simple auth check (optional, but good practice)
+	// user := m.authenticate(r)
+	// if user == nil { http.Error(...) }
+
+	m.SessionMutex.RLock()
+	defer m.SessionMutex.RUnlock()
+
+	sessions := make([]*ContactSession, 0, len(m.Sessions))
+	for _, s := range m.Sessions {
+		sessions = append(sessions, s)
+	}
+
+	// Sort by LastActive Desc
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastActive > sessions[j].LastActive
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sessions)
 }
 
 // Magic Link Handlers
@@ -2082,6 +2392,167 @@ func (m *Manager) handleGetChatStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func getString(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case string:
+			return v
+		case float64:
+			return fmt.Sprintf("%.0f", v)
+		case int64:
+			return fmt.Sprintf("%d", v)
+		case int:
+			return fmt.Sprintf("%d", v)
+		default:
+			return fmt.Sprintf("%v", v)
+		}
+	}
+	return ""
+}
+
+func (m *Manager) handleSmartAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims := m.authenticate(r)
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	action, _ := req["action"].(string)
+	params, _ := req["params"].(map[string]interface{})
+
+	// Only handle smart group messages for now
+	if action == "send_group_msg" {
+		botID := getString(req, "self_id") // Optional target bot
+		groupID := getString(params, "group_id")
+		msgContent := getString(params, "message")
+
+		if groupID == "" || msgContent == "" {
+			http.Error(w, "Missing group_id or message", http.StatusBadRequest)
+			return
+		}
+
+		m.SessionMutex.RLock()
+		// Try to find a suitable bot session for this group
+		// Priority:
+		// 1. Specified BotID with valid MsgID
+		// 2. Any Bot with valid MsgID
+		// 3. Specified BotID (requires WakeUp)
+		// 4. Any Bot (Direct send)
+
+		// Find the session for this bot/group
+		var targetSession *ContactSession
+		var helperBotID string
+
+		// If botID is specified, find its session
+		if botID != "" {
+			key := fmt.Sprintf("%s:group:%s", botID, groupID)
+			if s, ok := m.Sessions[key]; ok {
+				targetSession = s
+			}
+		}
+
+		// Check if we need to wake up
+		needsWakeUp := false
+		if targetSession != nil {
+			// Check if message_id is valid (within 290s to be safe)
+			if time.Now().Unix()-targetSession.LastMsgTime > 290 {
+				needsWakeUp = true
+			}
+		}
+
+		if needsWakeUp && targetSession != nil {
+			// Find a helper bot in the SAME group
+			for bID := range targetSession.ActiveBots {
+				if bID != botID {
+					// Found a helper!
+					helperBotID = bID
+					break
+				}
+			}
+
+			if helperBotID != "" {
+				// 1. Send WakeUp command via Helper Bot
+				m.AddLog("INFO", fmt.Sprintf("SmartSend: Waking up Bot %s via Helper %s in Group %s", botID, helperBotID, groupID))
+
+				// Get Target Bot Nickname
+				targetNick := "Bot" // Default
+				m.mutex.RLock()
+				if tb, ok := m.bots[botID]; ok {
+					targetNick = tb.Nickname
+				}
+				m.mutex.RUnlock()
+
+				// Send WakeUp Message
+				wakeUpMsg := fmt.Sprintf("@%s [WakeUp]", targetNick)
+				// Or use CQ Code if needed: [CQ:at,qq=BOT_ID]
+				// wakeUpMsg = fmt.Sprintf("[CQ:at,qq=%s] [WakeUp]", botID) // Better reliability
+
+				wakeUpReq := map[string]interface{}{
+					"action": "send_group_msg",
+					"params": map[string]interface{}{
+						"group_id": groupID,
+						"message":  wakeUpMsg,
+					},
+					"self_id":     helperBotID,
+					"auto_recall": 5, // Auto delete after 5s
+				}
+
+				// Send directly to helper
+				m.dispatchAPIRequest(wakeUpReq)
+
+				// 2. Wait a bit for the event to propagate (Hack/Simplification)
+				// Ideally we should wait for the event, but for now a short sleep might work
+				// since local network is fast.
+				time.Sleep(2 * time.Second)
+
+				// 3. Re-check session (it should be updated by the incoming message event)
+				m.SessionMutex.RUnlock()           // Release lock to allow update
+				time.Sleep(100 * time.Millisecond) // Yield
+				m.SessionMutex.RLock()             // Re-acquire
+
+				if s, ok := m.Sessions[fmt.Sprintf("%s:group:%s", botID, groupID)]; ok {
+					targetSession = s
+					// Update params with new message_id
+					params["message_id"] = s.LastMsgID
+					m.AddLog("INFO", fmt.Sprintf("SmartSend: WakeUp successful? Using MsgID: %s", s.LastMsgID))
+				}
+			} else {
+				m.AddLog("WARN", fmt.Sprintf("SmartSend: No helper bot found for Group %s to wake up %s", groupID, botID))
+			}
+		}
+		m.SessionMutex.RUnlock()
+
+		// Inject message_id if available from session (even if not waking up, maybe it's still valid)
+		if targetSession != nil && targetSession.LastMsgID != "" {
+			// Only inject if not already present
+			if _, ok := params["message_id"]; !ok {
+				params["message_id"] = targetSession.LastMsgID
+			}
+		}
+	}
+
+	// Dispatch original request (with potentially updated params)
+	// If it was a "Smart" send, we might have added message_id
+	m.dispatchAPIRequest(req)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "ok",
+		"detail": "Request dispatched (Smart Logic Applied)",
+	})
+}
+
 func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 	user := m.authenticate(r)
 	if user == nil {
@@ -2095,9 +2566,10 @@ func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		BotID  string                 `json:"bot_id"`
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
+		BotID      string                 `json:"bot_id"`
+		Action     string                 `json:"action"`
+		Params     map[string]interface{} `json:"params"`
+		AutoRecall int                    `json:"auto_recall"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2149,10 +2621,21 @@ func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct OneBot Action Frame
+	echo := fmt.Sprintf("api_%d", time.Now().UnixNano())
 	actionFrame := map[string]interface{}{
 		"action": req.Action,
 		"params": req.Params,
-		"echo":   fmt.Sprintf("api_%d", time.Now().UnixNano()),
+		"echo":   echo,
+	}
+
+	// Register Auto Recall if needed
+	if req.AutoRecall > 0 {
+		m.AutoRecallMutex.Lock()
+		m.AutoRecallMap[echo] = AutoRecallTask{
+			Delay: req.AutoRecall,
+			BotID: client.SelfID,
+		}
+		m.AutoRecallMutex.Unlock()
 	}
 
 	client.Mutex.Lock()

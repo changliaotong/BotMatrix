@@ -318,7 +318,7 @@
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted" data-i18n="sidebar_subtitle">Enterprise Bot Manager</small>
-                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.32</span>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.39</span>
             </div>
         </div>
         
@@ -768,9 +768,28 @@
                                             <div class="mb-3">
                                                 <label class="form-label" data-i18n="send_group_msg">发送群消息</label>
                                                 <textarea class="form-control" id="group-msg-input" rows="4" placeholder="在此输入消息内容..." data-i18n="enter_msg_placeholder"></textarea>
-                                                <button class="btn btn-primary mt-2" onclick="sendGroupMsg()">
-                                                    <i class="bi bi-send"></i> <span data-i18n="btn_send">发送</span>
-                                                </button>
+                                                
+                                                <div class="form-check mt-2">
+                                                    <input class="form-check-input" type="checkbox" id="auto-recall-check" onchange="toggleAutoRecallInput()">
+                                                    <label class="form-check-label" for="auto-recall-check" data-i18n="auto_recall_label">
+                                                        发送后自动撤回
+                                                    </label>
+                                                </div>
+                                                <div class="input-group input-group-sm mt-1 mb-2" id="auto-recall-input-group" style="display: none;">
+                                                    <span class="input-group-text" data-i18n="recall_delay_label">延迟撤回(秒)</span>
+                                                    <input type="number" class="form-control" id="auto-recall-delay" value="0" min="0" max="120" placeholder="0 = 立即撤回" data-i18n-placeholder="recall_delay_placeholder">
+                                                    <span class="input-group-text text-muted" style="font-size: 0.8em;" data-i18n="recall_limit_hint">频道限120s</span>
+                                                </div>
+
+                                                <div class="d-flex gap-2 mt-2">
+                                                    <button class="btn btn-primary" onclick="sendGroupMsg()">
+                                                        <i class="bi bi-send"></i> <span data-i18n="btn_send">发送</span>
+                                                    </button>
+                                                    <button class="btn btn-info text-white" onclick="sendSmartGroupMsg()">
+                                                        <i class="bi bi-lightning-charge"></i> <span data-i18n="btn_smart_send">智能发送 (WakeUp)</span>
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted d-block mt-1">智能发送: 当机器人无法直接回复时(如频道机器人过期)，会尝试唤醒其他机器人协助。</small>
                                             </div>
                                             <hr>
                                             <div class="mb-3">
@@ -2772,8 +2791,12 @@
             listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
             
             try {
-                const response = await callBotApi('get_friend_list');
-                const friends = response.data || [];
+                const response = await fetch('/api/contacts');
+                const contacts = await response.json();
+                
+                // Filter by current Bot and type private
+                const friends = contacts.filter(c => c.bot_id === currentBotId && c.type === 'private');
+                
                 currentFriends = friends;
                 renderFriends(friends);
                 document.getElementById('friend-count').innerText = `共 ${friends.length} 个好友`;
@@ -2788,8 +2811,8 @@
             // Filter
             const keyword = document.getElementById('friend-search').value.toLowerCase();
             let filtered = friends.filter(f => {
-                const name = (f.remark || f.nickname || '').toLowerCase();
-                const id = (f.user_id || '').toString();
+                const name = (f.name || '').toLowerCase();
+                const id = (f.id || '').toString();
                 return name.includes(keyword) || id.includes(keyword);
             });
             
@@ -2797,11 +2820,11 @@
             filtered.sort((a, b) => {
                 let res = 0;
                 if (friendSortBy === 'name') {
-                    const nameA = a.remark || a.nickname || '';
-                    const nameB = b.remark || b.nickname || '';
+                    const nameA = a.name || '';
+                    const nameB = b.name || '';
                     res = nameA.localeCompare(nameB, 'zh');
                 } else if (friendSortBy === 'id') {
-                    res = a.user_id - b.user_id;
+                    res = String(a.id).localeCompare(String(b.id));
                 }
                 return friendSortAsc ? res : -res;
             });
@@ -2813,15 +2836,15 @@
             }
 
             listEl.innerHTML = filtered.map(f => {
-                const name = f.remark || f.nickname || 'Unknown';
-                const id = f.user_id;
+                const name = f.name || 'Unknown';
+                const id = f.id;
                 const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
                 
                 return `
-                <button class="list-group-item list-group-item-action ${id == currentFriendId ? 'active' : ''}" onclick="selectFriend(${id}, '${name.replace(/'/g, "\\'")}')">
+                <button class="list-group-item list-group-item-action ${id == currentFriendId ? 'active' : ''}" onclick="selectFriend('${id}', '${name.replace(/'/g, "\\'")}')">
                     <div class="d-flex w-100 align-items-center">
                          <div class="rounded-circle me-2" style="width: 32px; height: 32px; overflow: hidden; background: #f0f0f0;">
-                            <img src="${avatar}" style="width: 100%; height: 100%; object-fit: cover;">
+                            <img src="${avatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/person.svg'">
                         </div>
                         <div style="overflow: hidden;">
                             <h6 class="mb-0 text-truncate" style="max-width: 150px;">${name}</h6>
@@ -3186,11 +3209,16 @@
             listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
             
             try {
-                const response = await callBotApi('get_group_list');
-                const groups = response.data || [];
-                currentGroups = groups;
-                renderGroups(groups);
-                document.getElementById('group-count').innerText = `共 ${groups.length} 个群组`;
+                // Fetch from new contacts API
+                const response = await fetch('/api/contacts');
+                const contacts = await response.json();
+                
+                // Filter by current Bot
+                const filtered = contacts.filter(c => c.bot_id === currentBotId);
+                
+                currentGroups = filtered;
+                renderGroups(filtered);
+                document.getElementById('group-count').innerText = `共 ${filtered.length} 个会话`;
             } catch (e) {
                 listEl.innerHTML = `<div class="text-center p-4 text-danger">获取失败: ${e.message}</div>`;
             }
@@ -3248,37 +3276,56 @@
             const sortedGroups = [...groups].sort((a, b) => {
                 let res = 0;
                 if (groupSortBy === 'name') {
-                    res = a.group_name.localeCompare(b.group_name, 'zh-CN');
+                    res = a.name.localeCompare(b.name, 'zh-CN');
                 } else if (groupSortBy === 'count') {
-                    res = a.member_count - b.member_count;
+                    res = 0; // Not available in session
                 } else if (groupSortBy === 'id') {
-                    res = a.group_id - b.group_id;
+                    res = String(a.id).localeCompare(String(b.id));
                 } else if (groupSortBy === 'msg_today') {
-                    const statA = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[a.group_id] || 0) : 0;
-                    const statB = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[b.group_id] || 0) : 0;
+                    const statA = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[a.id] || 0) : 0;
+                    const statB = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[b.id] || 0) : 0;
                     res = statA - statB;
                 }
                 return groupSortAsc ? res : -res;
             });
             
             listEl.innerHTML = sortedGroups.map(g => {
-                const todayMsg = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[g.group_id] || 0) : 0;
-                const totalMsg = latestChatStats.group_stats ? (latestChatStats.group_stats[g.group_id] || 0) : 0;
+                const todayMsg = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[g.id] || 0) : 0;
+                const totalMsg = latestChatStats.group_stats ? (latestChatStats.group_stats[g.id] || 0) : 0;
                 
+                let typeBadge = '<span class="badge bg-secondary" style="font-size: 0.6rem;">群</span>';
+                if (g.type === 'private') {
+                    typeBadge = '<span class="badge bg-success" style="font-size: 0.6rem;">私</span>';
+                } else if (g.type === 'guild') {
+                    typeBadge = '<span class="badge bg-info" style="font-size: 0.6rem;">频</span>';
+                }
+
+                // Avatar URL logic
+                let avatarUrl = '';
+                if (g.type === 'group') {
+                    avatarUrl = `https://p.qlogo.cn/gh/${g.id}/${g.id}/640/`;
+                } else if (g.type === 'private') {
+                    avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${g.id}&s=100`;
+                } else {
+                    avatarUrl = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/diagram-3.svg';
+                }
+
                 return `
-                <button class="list-group-item list-group-item-action ${g.group_id == currentGroupId ? 'active' : ''}" onclick="selectGroup(${g.group_id}, '${g.group_name}')">
+                <button class="list-group-item list-group-item-action ${g.id == currentGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}', '${g.name.replace(/'/g, "\\'")}', '${g.type}', '${g.guild_id || ''}')">
                     <div class="d-flex w-100 align-items-center">
                         <div class="rounded-circle me-2 flex-shrink-0" style="width: 40px; height: 40px; overflow: hidden; background: #f0f0f0;">
-                             <img src="https://p.qlogo.cn/gh/${g.group_id}/${g.group_id}/640/" alt="Group" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';this.style.padding='8px';">
+                             <img src="${avatarUrl}" alt="${g.type}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/${g.type === 'private' ? 'person' : 'people'}.svg';this.style.padding='8px';">
                         </div>
                         <div class="flex-grow-1 overflow-hidden">
                             <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1 text-truncate" style="max-width: 140px;">${g.group_name}</h6>
-                                <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">${g.member_count}人</small>
+                                <h6 class="mb-1 text-truncate" style="max-width: 140px;">${g.name}</h6>
+                                <div>
+                                    ${typeBadge}
+                                </div>
                             </div>
                             <div class="d-flex w-100 justify-content-between align-items-center">
-                                <small class="${g.group_id == currentGroupId ? 'text-light' : 'text-muted'}">ID: ${g.group_id}</small>
-                                <span class="badge ${g.group_id == currentGroupId ? 'bg-light text-dark' : 'bg-secondary'} rounded-pill" title="今日: ${todayMsg} / 总计: ${totalMsg}">${todayMsg}</span>
+                                <small class="${g.id == currentGroupId ? 'text-light' : 'text-muted'}">ID: ${g.id}</small>
+                                <span class="badge ${g.id == currentGroupId ? 'bg-light text-dark' : 'bg-secondary'} rounded-pill" title="今日: ${todayMsg} / 总计: ${totalMsg}">${todayMsg}</span>
                             </div>
                         </div>
                     </div>
@@ -3289,25 +3336,37 @@
         function filterGroups() {
             const keyword = document.getElementById('group-search').value.toLowerCase();
             const filtered = currentGroups.filter(g => 
-                g.group_name.toLowerCase().includes(keyword) || 
-                String(g.group_id).includes(keyword)
+                g.name.toLowerCase().includes(keyword) || 
+                String(g.id).includes(keyword)
             );
             renderGroups(filtered);
         }
 
-        async function selectGroup(groupId, groupName) {
-            currentGroupId = groupId;
-            document.getElementById('current-group-name').innerText = groupName;
-            document.getElementById('current-group-id').innerText = groupId;
+        let currentContactType = 'group';
+        let currentGuildId = '';
+
+        async function selectGroup(id, name, type = 'group', guildId = '') {
+            currentGroupId = id;
+            currentContactType = type;
+            currentGuildId = guildId;
+
+            document.getElementById('current-group-name').innerText = name;
+            document.getElementById('current-group-id').innerText = id;
             
             // Update Stats
-            const todayMsg = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[groupId] || 0) : 0;
-            const totalMsg = latestChatStats.group_stats ? (latestChatStats.group_stats[groupId] || 0) : 0;
+            const todayMsg = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[id] || 0) : 0;
+            const totalMsg = latestChatStats.group_stats ? (latestChatStats.group_stats[id] || 0) : 0;
             document.getElementById('current-group-stats').innerText = `今日: ${todayMsg} / 总计: ${totalMsg}`;
 
             // Update Avatar
             const avatarEl = document.getElementById('current-group-avatar');
-            avatarEl.src = `https://p.qlogo.cn/gh/${groupId}/${groupId}/640/`;
+            if (type === 'group') {
+                avatarEl.src = `https://p.qlogo.cn/gh/${id}/${id}/640/`;
+            } else if (type === 'private') {
+                avatarEl.src = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
+            } else {
+                 avatarEl.src = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/diagram-3.svg';
+            }
             avatarEl.style.display = 'block';
             avatarEl.onerror = function() {
                 this.src = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/people.svg';
@@ -3320,11 +3379,25 @@
             // Highlight selection
             renderGroups(currentGroups.filter(g => {
                 const keyword = document.getElementById('group-search').value.toLowerCase();
-                return g.group_name.toLowerCase().includes(keyword) || String(g.group_id).includes(keyword);
+                return g.name.toLowerCase().includes(keyword) || String(g.id).includes(keyword);
             }));
 
-            // Load members
-            loadGroupMembers(groupId);
+            // Handle View switching
+            const membersTabBtn = document.getElementById('members-tab');
+            const actionsTabBtn = document.getElementById('actions-tab');
+            
+            if (type === 'group') {
+                membersTabBtn.style.display = 'block';
+                // Switch to members tab if not already active or if we just hid it previously
+                const bsTab = new bootstrap.Tab(membersTabBtn);
+                bsTab.show();
+                loadGroupMembers(id);
+            } else {
+                membersTabBtn.style.display = 'none';
+                // Switch to actions tab
+                const bsTab = new bootstrap.Tab(actionsTabBtn);
+                bsTab.show();
+            }
         }
 
         async function loadGroupMembers(groupId) {
@@ -3512,22 +3585,140 @@
             }).catch(e => alert(t.alert_op_failed + e.message));
         }
 
+        function toggleAutoRecallInput() {
+            const checked = document.getElementById('auto-recall-check').checked;
+            document.getElementById('auto-recall-input-group').style.display = checked ? 'flex' : 'none';
+        }
+
         async function sendGroupMsg() {
             const t = translations[currentLang] || translations['zh-CN'];
             const input = document.getElementById('group-msg-input');
             const msg = input.value.trim();
             if (!msg) return;
             
+            // Auto Recall Params
+            let autoRecall = 0;
+            if (document.getElementById('auto-recall-check').checked) {
+                const delayStr = document.getElementById('auto-recall-delay').value;
+                autoRecall = parseInt(delayStr);
+                if (isNaN(autoRecall) || autoRecall < 0) autoRecall = 0;
+            }
+
             try {
-                await callBotApi('send_group_msg', {
-                    group_id: currentGroupId,
+                let action = 'send_group_msg';
+                let params = {
                     message: msg
+                };
+
+                if (currentContactType === 'group') {
+                    action = 'send_group_msg';
+                    params.group_id = currentGroupId;
+                } else if (currentContactType === 'private') {
+                    action = 'send_private_msg';
+                    params.user_id = currentGroupId;
+                } else if (currentContactType === 'guild') {
+                    action = 'send_msg';
+                    params.message_type = 'guild';
+                    params.channel_id = currentGroupId;
+                    params.guild_id = currentGuildId;
+                }
+
+                // Inject auto_recall into the request wrapper, not params (unless the API design changed, but usually it's top level for the manager)
+                // Wait, callBotApi wraps params. 
+                // We need to pass auto_recall to the manager.
+                // callBotApi implementation:
+                /*
+                function callBotApi(action, params) {
+                    return fetch('/api/action', {
+                        body: JSON.stringify({
+                            bot_id: currentBotId,
+                            action: action,
+                            params: params
+                        })
+                    })
+                }
+                */
+                // The manager expects auto_recall at the top level of the JSON body.
+                // callBotApi currently only supports bot_id, action, params.
+                // We need to modify callBotApi or manually call fetch here.
+                
+                // Let's manually call fetch here to support auto_recall without changing callBotApi signature for everyone
+                const body = {
+                    bot_id: currentBotId,
+                    action: action,
+                    params: params,
+                    auto_recall: autoRecall
+                };
+
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(body)
                 });
+                
+                const result = await res.json();
+                if (result.error) throw new Error(result.error);
+
                 alert(t.alert_send_success);
                 input.value = '';
-                addEventLog({type: 'system', message: `发送群消息到 [${currentGroupId}]: ${msg}`});
+                addEventLog({type: 'system', message: `发送消息到 [${currentGroupId}]: ${msg}`});
             } catch (e) {
                 alert(t.alert_op_failed + e.message);
+            }
+        }
+
+        async function sendSmartGroupMsg() {
+            if (!currentGroupId || !currentBotId) return;
+            const content = document.getElementById('group-msg-input').value.trim();
+            if (!content) return;
+            
+            // Auto Recall Params
+            let autoRecall = 0;
+            if (document.getElementById('auto-recall-check').checked) {
+                const delayStr = document.getElementById('auto-recall-delay').value;
+                autoRecall = parseInt(delayStr);
+                if (isNaN(autoRecall) || autoRecall < 0) autoRecall = 0;
+            }
+            
+            // UI Feedback
+            const btn = event.target.closest('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 发送中...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/smart_action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({
+                        action: 'send_group_msg',
+                        params: {
+                            group_id: currentGroupId,
+                            message: content
+                        },
+                        self_id: currentBotId,
+                        auto_recall: autoRecall
+                    })
+                });
+
+                if (!res.ok) {
+                    throw new Error('请求失败');
+                }
+
+                const data = await res.json();
+                alert('智能发送请求已提交: ' + (data.detail || 'Success'));
+                document.getElementById('group-msg-input').value = '';
+            } catch (e) {
+                alert('智能发送失败: ' + e.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
         

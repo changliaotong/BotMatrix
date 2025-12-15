@@ -8,8 +8,18 @@ A **Go-based** Discord Robot implementation for [BotMatrix](../README.md).
     *   **Sending**: `send_group_msg` (to Channels), `send_private_msg` (Direct Message).
     *   **Receiving**: Supports Text messages.
     *   **Meta**: `get_login_info`.
+    *   **Recall**: `delete_msg` support.
 *   **WebSocket Gateway**: Uses official Discord Gateway via `discordgo`.
 *   **Channel Mapping**: Maps Discord Channels to OneBot `group_id`.
+*   **Burn After Reading**: **New!** Supports message recall.
+
+### 🔥 Burn After Reading (Message Recall)
+
+DiscordBot supports message recall via the `delete_msg` action.
+
+*   **ID Format**: `ChannelID:MessageID` (e.g., `123456789:987654321`).
+*   **Mechanism**: Uses the standard `ChannelMessageDelete` API.
+*   **Permissions**: The bot needs the `MANAGE_MESSAGES` permission to delete messages from others, but can always delete its own.
 
 ## 🛠 Configuration
 

@@ -10,7 +10,14 @@ A **Go-based** Feishu/Lark (飞书) Robot implementation for [BotMatrix](../READ
     *   **Receiving**: Supports **Text**, **Image**, **File**, **Audio**, and **Rich Text** (Post) messages.
     *   **Meta**: `get_login_info`, `get_group_list`.
     *   **CQ Codes**: Automatically converts rich media to `[CQ:image]`, `[CQ:file]`, etc.
-*   **Auto-Configuration**: Reads from `config.json` or Environment Variables.
+*   **Burn After Reading**: **New!** Supports message recall.
+
+### 🔥 Burn After Reading (Message Recall)
+
+FeishuBot supports message recall via the `delete_msg` action.
+
+*   **Mechanism**: Uses the `im.v1.messages.delete` API.
+*   **Usage**: The `message_id` returned by send actions can be used directly for recall.
 
 ## 🛠 Configuration
 

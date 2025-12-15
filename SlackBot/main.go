@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -225,6 +226,11 @@ func handleNexusCommand(data []byte) {
 			// Try sending directly, Slack API is smart.
 			sendSlackMessage(userID, text, cmd.Echo)
 		}
+	case "delete_msg":
+		msgID, _ := cmd.Params["message_id"].(string)
+		if msgID != "" {
+			deleteSlackMessage(msgID, cmd.Echo)
+		}
 	case "get_login_info":
 		sendToNexus(map[string]interface{}{
 			"status": "ok",
@@ -254,9 +260,31 @@ func sendSlackMessage(channelID, text, echo string) {
 	}
 
 	log.Printf("Sent message to %s", channelID)
+	// Return composite ID: "channelID:timestamp"
+	compositeID := fmt.Sprintf("%s:%s", channelID, timestamp)
 	sendToNexus(map[string]interface{}{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": timestamp},
+		"data":   map[string]interface{}{"message_id": compositeID},
 		"echo":   echo,
 	})
+}
+
+func deleteSlackMessage(compositeID, echo string) {
+	parts := strings.Split(compositeID, ":")
+	if len(parts) != 2 {
+		sendToNexus(map[string]interface{}{"status": "failed", "message": "invalid message_id format", "echo": echo})
+		return
+	}
+	channelID := parts[0]
+	timestamp := parts[1]
+
+	_, _, err := api.DeleteMessage(channelID, timestamp)
+	if err != nil {
+		log.Printf("Failed to delete message: %v", err)
+		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		return
+	}
+
+	log.Printf("Deleted message %s in channel %s", timestamp, channelID)
+	sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
 }
