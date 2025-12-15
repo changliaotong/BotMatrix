@@ -15,7 +15,6 @@ All notable changes to this project will be documented in this file.
     *   **API Response Broadcast**: Fixed an issue where API responses (Echo) were being load-balanced to random workers. They are now broadcast to all connected workers to ensure the requester receives the response.
     *   **Self-ID Injection**: Ensured `self_id` is always present in broadcasted messages to guarantee correct permission filtering and routing.
     *   **Float ID Routing**: Fixed a bug where `self_id` passed as a float (scientific notation) in API requests caused message routing failures (sending to wrong/random bot).
-    *   **C# Compatibility**: Added support for `SelfId` (PascalCase) parameter in API requests, commonly used by C# bot frameworks.
 
 ## v1.1.45 (2025-12-15)
 *   **Centralized Log Management (集中式日志管理)**:
