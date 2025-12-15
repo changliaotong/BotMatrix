@@ -1324,12 +1324,24 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 	// Fallback: Check "params.self_id" (Some implementations put it here)
 	if targetID == "" {
 		if params, ok := req["params"].(map[string]interface{}); ok {
+			// Check standard "self_id"
 			if id, ok := params["self_id"]; ok {
 				switch v := id.(type) {
 				case float64:
 					targetID = fmt.Sprintf("%.0f", v)
 				default:
 					targetID = fmt.Sprintf("%v", v)
+				}
+			}
+			// Check PascalCase "SelfId" (C# convention)
+			if targetID == "" {
+				if id, ok := params["SelfId"]; ok {
+					switch v := id.(type) {
+					case float64:
+						targetID = fmt.Sprintf("%.0f", v)
+					default:
+						targetID = fmt.Sprintf("%v", v)
+					}
 				}
 			}
 		}
