@@ -303,7 +303,13 @@ const translations = {
         "alert_enter_file_url": "请输入文件路径/URL",
         "col_member_id": "QQ/WXID",
         "btn_send": "发送",
-        "btn_smart_send": "智能发送 (WakeUp)"
+        "btn_smart_send": "智能发送 (WakeUp)",
+        "check_member_label": "查询群成员",
+        "check_member_placeholder": "输入用户 ID (QQ号)",
+        "btn_check": "查询",
+        "member_found": "成员存在: {name} (名片: {card})",
+        "member_not_found": "成员不存在",
+        "check_error": "查询失败: "
     },
     "zh-TW": {
         "app_title": "BotMatrix Manager",
@@ -616,7 +622,13 @@ const translations = {
         "alert_enter_file_url": "請輸入文件路徑/URL",
         "col_member_id": "QQ/WXID",
         "btn_send": "發送",
-        "btn_smart_send": "智能發送 (WakeUp)"
+        "btn_smart_send": "智能發送 (WakeUp)",
+        "check_member_label": "查詢群成員",
+        "check_member_placeholder": "輸入用戶 ID (QQ號)",
+        "btn_check": "查詢",
+        "member_found": "成員存在: {name} (名片: {card})",
+        "member_not_found": "成員不存在",
+        "check_error": "查詢失敗: "
     },
     "en": {
         "app_title": "BotMatrix Manager",
@@ -929,6 +941,12 @@ const translations = {
         "alert_enter_file_url": "Please enter file path/URL",
         "col_member_id": "ID",
         "btn_send": "Send",
-        "btn_smart_send": "Smart Send (WakeUp)"
+        "btn_smart_send": "Smart Send (WakeUp)",
+        "check_member_label": "Check Member",
+        "check_member_placeholder": "User ID",
+        "btn_check": "Check",
+        "member_found": "Member Found: {name} (Card: {card})",
+        "member_not_found": "Member Not Found",
+        "check_error": "Check Failed: "
     }
 };

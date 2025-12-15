@@ -794,6 +794,15 @@
                                             </div>
                                             <hr>
                                             <div class="mb-3">
+                                                <label class="form-label" data-i18n="check_member_label">查询群成员</label>
+                                                <div class="input-group">
+                                                    <input type="text" class="form-control" id="check-member-input" placeholder="输入用户 ID (QQ号)" data-i18n-placeholder="check_member_placeholder">
+                                                    <button class="btn btn-outline-primary" type="button" onclick="checkGroupMember()" data-i18n="btn_check">查询</button>
+                                                </div>
+                                                <div id="check-member-result" class="form-text mt-1" style="min-height: 20px;"></div>
+                                            </div>
+                                            <hr>
+                                            <div class="mb-3">
                                                 <label class="form-label text-danger" data-i18n="danger_zone">危险操作</label>
                                                 <div>
                                                     <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()" data-i18n="btn_leave_group">退出该群</button>
@@ -3930,6 +3939,44 @@
                 document.getElementById('group-detail-empty').style.display = 'block';
                 document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
             }).catch(e => alert(t.alert_op_failed + e.message));
+        }
+
+        function checkGroupMember() {
+            const userId = document.getElementById('check-member-input').value.trim();
+            const resultEl = document.getElementById('check-member-result');
+            const t = translations[currentLang] || translations['zh-CN'];
+            
+            if (!userId) {
+                resultEl.innerHTML = `<span class="text-danger">${t.alert_invalid_number || 'Invalid ID'}</span>`;
+                return;
+            }
+
+            resultEl.innerHTML = `<span class="text-muted">${t.loading || 'Loading...'}</span>`;
+            
+            callBotApi('get_group_member_info', {
+                group_id: Number(currentGroupId),
+                user_id: Number(userId),
+                no_cache: true
+            }).then(data => {
+                if (data && (data.user_id || data.nickname)) {
+                    // Found
+                    let name = data.nickname || userId;
+                    let card = data.card || '';
+                    let text = t.member_found.replace('{name}', name).replace('{card}', card);
+                    resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${text}</span>`;
+                } else {
+                    // Not found
+                    resultEl.innerHTML = `<span class="text-warning">${t.member_not_found}</span>`;
+                }
+            }).catch(e => {
+                console.error(e);
+                // If 404 or other error, usually means not found or bot offline
+                let msg = t.check_error + e.message;
+                if (e.message.includes('not found') || e.message.includes('不存在')) {
+                    msg = t.member_not_found;
+                }
+                resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${msg}</span>`;
+            });
         }
 
         // --- System Actions ---
