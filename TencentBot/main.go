@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -964,8 +965,19 @@ func handleAction(action map[string]interface{}) {
 
 // Helper to safely get string from map
 func getString(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case string:
+			return v
+		case float64:
+			return strconv.FormatFloat(v, 'f', 0, 64)
+		case int:
+			return strconv.Itoa(v)
+		case int64:
+			return strconv.FormatInt(v, 10)
+		default:
+			return fmt.Sprintf("%v", v)
+		}
 	}
 	return ""
 }
