@@ -679,53 +679,72 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 	// 2. Load Balance to Workers (Business Logic)
 	// ... (Existing Worker Logic) ...
 	if len(m.workers) > 0 {
-		var eventSummary string
+		isAPIResponse := false
 		if msgMap, ok := data.(map[string]interface{}); ok {
-			if pt, ok := msgMap["post_type"].(string); ok {
-				// Prevent infinite loop: Don't log "log" events
-				if pt == "log" {
-					// Just dispatch, don't log to avoid recursion
-				} else {
-					eventSummary = fmt.Sprintf("Type: %s", pt)
-					if sub, ok := msgMap["sub_type"].(string); ok {
-						eventSummary += fmt.Sprintf(", Sub: %s", sub)
-					}
-					if msg, ok := msgMap["raw_message"].(string); ok {
-						if len(msg) > 50 {
-							eventSummary += fmt.Sprintf(", Msg: %s...", msg[:50])
-						} else {
-							eventSummary += fmt.Sprintf(", Msg: %s", msg)
+			// If post_type is missing, it's likely an API response (echo)
+			if _, ok := msgMap["post_type"]; !ok {
+				isAPIResponse = true
+			}
+		}
+
+		if isAPIResponse {
+			// API Responses (Echo) should be broadcast to ALL workers
+			// because we don't track which worker sent the request.
+			for _, worker := range m.workers {
+				worker.Mutex.Lock()
+				worker.Conn.WriteJSON(data)
+				worker.Mutex.Unlock()
+			}
+		} else {
+			// Events (Push) should be Load Balanced (Round Robin)
+			var eventSummary string
+			if msgMap, ok := data.(map[string]interface{}); ok {
+				if pt, ok := msgMap["post_type"].(string); ok {
+					// Prevent infinite loop: Don't log "log" events
+					if pt == "log" {
+						// Just dispatch, don't log to avoid recursion
+					} else {
+						eventSummary = fmt.Sprintf("Type: %s", pt)
+						if sub, ok := msgMap["sub_type"].(string); ok {
+							eventSummary += fmt.Sprintf(", Sub: %s", sub)
 						}
-					}
-					// Use log.Printf instead of m.AddLog to avoid infinite recursion loop
-					// m.AddLog triggers broadcastToSubscribers which triggers m.AddLog...
-					if eventSummary != "" {
-						// log.Printf("[DEBUG] Dispatching event to worker: %s", eventSummary)
+						if msg, ok := msgMap["raw_message"].(string); ok {
+							if len(msg) > 50 {
+								eventSummary += fmt.Sprintf(", Msg: %s...", msg[:50])
+							} else {
+								eventSummary += fmt.Sprintf(", Msg: %s", msg)
+							}
+						}
+						// Use log.Printf instead of m.AddLog to avoid infinite recursion loop
+						// m.AddLog triggers broadcastToSubscribers which triggers m.AddLog...
+						if eventSummary != "" {
+							// log.Printf("[DEBUG] Dispatching event to worker: %s", eventSummary)
+						}
 					}
 				}
 			}
-		}
-		targetIndex := int(time.Now().UnixNano()) % len(m.workers)
-		worker := m.workers[targetIndex]
+			targetIndex := int(time.Now().UnixNano()) % len(m.workers)
+			worker := m.workers[targetIndex]
 
-		worker.Mutex.Lock()
-		err := worker.Conn.WriteJSON(data)
-		worker.HandledCount++
-		worker.Mutex.Unlock()
+			worker.Mutex.Lock()
+			err := worker.Conn.WriteJSON(data)
+			worker.HandledCount++
+			worker.Mutex.Unlock()
 
-		if err != nil {
-			go func(w *WorkerClient) {
-				m.removeWorker(w)
-			}(worker)
-			for i, w := range m.workers {
-				if i == targetIndex {
-					continue
-				}
-				w.Mutex.Lock()
-				e := w.Conn.WriteJSON(data)
-				w.Mutex.Unlock()
-				if e == nil {
-					break
+			if err != nil {
+				go func(w *WorkerClient) {
+					m.removeWorker(w)
+				}(worker)
+				for i, w := range m.workers {
+					if i == targetIndex {
+						continue
+					}
+					w.Mutex.Lock()
+					e := w.Conn.WriteJSON(data)
+					w.Mutex.Unlock()
+					if e == nil {
+						break
+					}
 				}
 			}
 		}
@@ -1145,6 +1164,12 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Fallback: check lifecycle meta_event for nickname? (OneBot 11 doesn't specify it usually)
+
+		// Ensure self_id is present in the broadcasted message
+		// This is critical for subscribers to know which bot the message came from
+		if _, ok := msgMap["self_id"]; !ok && selfID != "" {
+			msgMap["self_id"] = selfID
+		}
 
 		// Broadcast to subscribers
 		m.broadcastToSubscribers(msgMap)

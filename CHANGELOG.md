@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
     *   **Auto-Pause**: Log refreshing now automatically pauses when a user expands a log entry or selects text (e.g., for copying).
 *   **TencentBot**:
     *   **Upload Logic**: Enhanced avatar uploading with automatic fallback from URL to multipart upload to bypass link blocking.
+*   **Message Routing (消息路由)**:
+    *   **API Response Broadcast**: Fixed an issue where API responses (Echo) were being load-balanced to random workers. They are now broadcast to all connected workers to ensure the requester receives the response.
+    *   **Self-ID Injection**: Ensured `self_id` is always present in broadcasted messages to guarantee correct permission filtering and routing.
 
 ## v1.1.45 (2025-12-15)
 *   **Centralized Log Management (集中式日志管理)**:
