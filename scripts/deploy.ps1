@@ -1,7 +1,7 @@
 param (
     [string]$ServerIP = "192.168.0.167",
     [string]$Username = "derlin",
-    [string]$RemoteDir = "/opt/wxbot",
+    [string]$RemoteDir = "/opt/BotMatrix",
     [string]$IdentityFile = "",
     [string]$Service = ""
 )
@@ -51,19 +51,29 @@ $DockerCmd = ""
 if ($Service) {
     # If a service is specified, we only update that service (and its deps if needed, but usually we want to isolate)
     # We do NOT run 'down' to keep other services running
-    $DockerCmd = "docker-compose up -d --build --no-deps $Service"
+    # Force remove container to avoid "Conflict: The container name is already in use" errors
+    $CleanupCmd = "sudo docker rm -f $Service || true"
+    
+    # Handle specific container names if they differ from service names (e.g. system-worker -> botmatrix-system-worker)
+    if ($Service -eq "bot-manager") {
+        $CleanupCmd = "sudo docker rm -f botmatrix-manager || true"
+    } elseif ($Service -eq "system-worker") {
+        $CleanupCmd = "sudo docker rm -f botmatrix-system-worker || true"
+    }
+    
+    $DockerCmd = "$CleanupCmd && sudo docker-compose up -d --build --force-recreate --no-deps $Service"
 } else {
     # Full deployment: down everything and bring it back up
-    $DockerCmd = "docker-compose down --remove-orphans && docker-compose up -d --build"
+    $DockerCmd = "sudo docker-compose down --remove-orphans && sudo docker-compose up -d --build"
 }
 
 $remoteCommands = @"
     echo '--> Creating directory...'
-    mkdir -p ${RemoteDir}
+    sudo mkdir -p ${RemoteDir}
     
     echo '--> Unzipping...'
-    unzip -o ${TempZip} -d ${RemoteDir}
-    rm ${TempZip}
+    sudo unzip -o ${TempZip} -d ${RemoteDir}
+    sudo rm ${TempZip}
     
     echo '--> Switching directory...'
     cd ${RemoteDir}

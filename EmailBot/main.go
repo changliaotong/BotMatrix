@@ -210,7 +210,7 @@ func pollEmails() {
 	defer c.Logout()
 
 	for {
-		mbox, err := c.Select("INBOX", false)
+		_, err := c.Select("INBOX", false)
 		if err != nil {
 			log.Printf("Select INBOX failed: %v", err)
 			time.Sleep(time.Duration(config.PollInterval) * time.Second)
@@ -219,7 +219,7 @@ func pollEmails() {
 
 		// Search for UNSEEN messages
 		criteria := imap.NewSearchCriteria()
-		criteria.WithoutFlags = []string{imap.Seen}
+		criteria.WithoutFlags = []string{imap.SeenFlag}
 		uids, err := c.Search(criteria)
 		if err != nil {
 			log.Printf("Search failed: %v", err)

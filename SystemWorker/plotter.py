@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg') # Force non-interactive backend for Docker
 import matplotlib.pyplot as plt
 import io
 import base64

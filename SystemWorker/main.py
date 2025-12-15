@@ -19,16 +19,24 @@ ADMIN_USER_ID = 1098299491 # 请替换为您的 UserID，或者实现动态鉴�
 
 async def send_reply(ws, data, message):
     """辅助函数：发送回复"""
+    params = {
+        "user_id": data.get("user_id"),
+        "message": message
+    }
+    
+    # 关键修复：透传 self_id，确保 BotNexus 知道用哪个 Bot 发送回复
+    # 如果不传，BotNexus 会随机选一个 Bot，可能导致消息发不出去
+    if "self_id" in data:
+        params["self_id"] = data["self_id"]
+
     reply = {
         "action": "send_msg",
-        "params": {
-            "user_id": data.get("user_id"),
-            "message": message
-        }
+        "params": params
     }
     if data.get("message_type") == "group":
         reply["params"]["group_id"] = data.get("group_id")
     
+    print(f"[{WORKER_NAME}] Sending reply via Bot {params.get('self_id', 'Auto')}: {message[:50]}...")
     await ws.send(json.dumps(reply))
 
 async def get_bot_list():
@@ -50,6 +58,7 @@ async def handle_message(ws, data):
     
     # 1. #sys status - 可视化仪表盘
     if raw_msg == "#sys status":
+        await send_reply(ws, data, "📊 Generating System Status...")
         print("Generating status image...")
         try:
             # 获取 Bot 列表信息 (模拟)

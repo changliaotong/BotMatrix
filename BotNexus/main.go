@@ -672,6 +672,13 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 			continue
 		}
 
+		// Fix: Don't broadcast to standard OneBot implementations (like NapCat/LLOneBot)
+		// that don't support incoming events and treat them as "undefined" API actions.
+		// These usually default to "QQ" platform.
+		if bot.Platform == "QQ" {
+			continue
+		}
+
 		// Avoid sending to unauthenticated bots if strictly required?
 		// For now, trust internal network.
 
@@ -1148,10 +1155,11 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 					m.rdb.Incr(ctx, "stats:msg:sent")
 				}
 			}
-			// m.AddLog("DEBUG", fmt.Sprintf("Forwarded API to bot %s: %v", targetBot.SelfID, req["action"]))
+			// Enable this log for debugging
+			m.AddLog("DEBUG", fmt.Sprintf("Forwarded API to bot %s: %v | Params: %v", targetBot.SelfID, req["action"], req["params"]))
 		}
 	} else {
-		m.AddLog("WARN", "No bot available to handle API request")
+		m.AddLog("WARN", fmt.Sprintf("No bot available to handle API request. TargetID: %s", targetID))
 	}
 }
 

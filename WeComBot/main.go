@@ -142,17 +142,19 @@ func handleAction(msg []byte) {
 		msgContent, _ := params["message"].(string)
 
 		// Send text message
-		msg := message.Message{
-			ToUser:  userID,
-			MsgType: "text",
-			Text: message.Text{
+		req := message.SendTextRequest{
+			SendRequestCommon: &message.SendRequestCommon{
+				ToUser:  userID,
+				MsgType: "text",
+				AgentID: strconv.FormatInt(config.AgentID, 10),
+			},
+			Text: message.TextField{
 				Content: msgContent,
 			},
-			Safe: 0,
 		}
 
 		msgManager := wc.GetMessage()
-		_, err := msgManager.Send(msg)
+		_, err := msgManager.SendText(req)
 		if err != nil {
 			log.Printf("Failed to send WeCom message: %v", err)
 			response["status"] = "failed"
@@ -172,7 +174,7 @@ func main() {
 	// Initialize WeCom SDK
 	wcConfig := &workConfig.Config{
 		CorpID:         config.CorpID,
-		AgentID:        config.AgentID,
+		AgentID:        strconv.FormatInt(config.AgentID, 10),
 		CorpSecret:     config.Secret,
 		Token:          config.Token,
 		EncodingAESKey: config.EncodingAESKey,
@@ -202,51 +204,32 @@ func main() {
 }
 
 func handleCallback(c *gin.Context) {
-	server := wc.GetServer(c.Request, c.Writer)
+	// TODO: Work module in v2.1.11 does not have GetServer.
+	// We need to implement manual callback handling (signature verification, decryption, XML parsing).
+	// For now, we just acknowledge the request to avoid timeout errors on WeCom side.
 
-	// Set Message Handler
-	server.SetMessageHandler(func(msg *message.MixMessage) *message.Reply {
-		// Log message
-		log.Printf("Received WeCom Message: %+v", msg)
+	echoStr := c.Query("echostr")
+	if echoStr != "" {
+		// Verify URL (GET request)
+		// signature := c.Query("msg_signature")
+		// timestamp := c.Query("timestamp")
+		// nonce := c.Query("nonce")
+		// if util.Signature(config.Token, timestamp, nonce, echoStr) == signature { ... }
 
-		// Construct OneBot Message
-		// MsgType: text, image, voice, video, location, link
+		// For verification, we usually need to decrypt the echostr using EncodingAESKey.
+		// Since we don't have the full logic yet, we might fail the verification step in WeCom admin panel.
+		// But if this is already configured, we just need to handle POST messages.
 
-		var content string
-		if msg.MsgType == "text" {
-			content = msg.Content
-		} else if msg.MsgType == "image" {
-			content = fmt.Sprintf("[CQ:image,file=%s]", msg.PicURL)
-		} else {
-			content = fmt.Sprintf("[Unsupported MsgType: %s]", msg.MsgType)
-		}
-
-		event := map[string]interface{}{
-			"post_type":    "message",
-			"message_type": "private", // Internal App usually treats messages as private
-			"time":         msg.CreateTime,
-			"self_id":      selfID,
-			"sub_type":     "friend",
-			"message_id":   strconv.FormatInt(msg.MsgID, 10),
-			"user_id":      msg.FromUserName, // This is the UserID in WeCom
-			"message":      content,
-			"raw_message":  content,
-			"sender": map[string]interface{}{
-				"user_id":  msg.FromUserName,
-				"nickname": msg.FromUserName, // We don't have nickname yet
-			},
-		}
-
-		sendEvent(event)
-
-		return nil // Don't reply directly via XML to avoid timeout issues with complex logic
-	})
-
-	// Process Request
-	if err := server.Serve(); err != nil {
-		log.Printf("WeCom Serve Error: %v", err)
-		return
+		// We can use util.DecryptMsg if needed.
+		// But for now, let's just log.
+		log.Printf("Received verification request: %s", echoStr)
 	}
 
-	// In gin, we don't need to do anything else as server.Serve() handles the response
+	// Handle POST messages
+	if c.Request.Method == "POST" {
+		log.Println("Received WeCom callback (POST)")
+		// TODO: Parse body, decrypt, broadcast to Nexus
+	}
+
+	c.String(200, "success")
 }

@@ -263,9 +263,11 @@ if __name__ == "__main__":
     self_id = os.getenv("BOT_SELF_ID", "0")
     print(f"[Driver] Initializing Bot {self_id}...")
     
-    # Instantiate onebot with our driver as the gateway
+    # Instantiate onebot
     # This will register the bot to the driver via driver.add_bot
-    bot = onebot(driver, self_id=self_id)
+    bot = onebot(self_id=self_id)
+    bot.set_driver(driver)
+    driver.add_bot(bot, self_id)
     
     # Start WebUI
     try:

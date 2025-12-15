@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -129,13 +130,25 @@ func handleNexusMessages() {
 	}
 }
 
+func cleanContent(content string) (string, string) {
+	// Simple CQ Code handling
+	if strings.Contains(content, "[CQ:image") {
+		if strings.Contains(content, "base64://") {
+			return "【BotMatrix: Base64 Image Not Supported】", ""
+		}
+		// TODO: Extract HTTP URL for Image field
+	}
+	return content, ""
+}
+
 func handleAction(action map[string]interface{}) {
 	act, ok := action["action"].(string)
 	if !ok {
 		return
 	}
 
-	log.Printf("Received action: %s", act)
+	params, _ := action["params"].(map[string]interface{})
+	log.Printf("[NEXUS-MSG] Received action: %s | Params: %+v", act, params)
 
 	switch act {
 	case "send_msg":
@@ -147,18 +160,32 @@ func handleAction(action map[string]interface{}) {
 		if messageType == "private" {
 			// C2C
 			userID := getString(params, "user_id")
+			safeContent, _ := cleanContent(content)
+			log.Printf("[NEXUS-MSG] Sending Private Message to %s: %s", userID, safeContent)
 			_, err := api.PostC2CMessage(ctx, userID, &dto.MessageToCreate{
-				Content: content,
+				Content: safeContent,
 				MsgID:   getString(params, "message_id"),
 			})
+			if err != nil {
+				log.Printf("[NEXUS-MSG] Failed to send private message: %v", err)
+			} else {
+				log.Printf("[NEXUS-MSG] Private message sent successfully")
+			}
 			handleSendResponse(err, nil, action)
 		} else if messageType == "group" {
 			// QQ Group
 			groupID := getString(params, "group_id")
+			safeContent, _ := cleanContent(content)
+			log.Printf("[NEXUS-MSG] Sending Group Message to %s: %s", groupID, safeContent)
 			_, err := api.PostGroupMessage(ctx, groupID, &dto.MessageToCreate{
-				Content: content,
+				Content: safeContent,
 				MsgID:   getString(params, "message_id"),
 			})
+			if err != nil {
+				log.Printf("[NEXUS-MSG] Failed to send group message: %v", err)
+			} else {
+				log.Printf("[NEXUS-MSG] Group message sent successfully")
+			}
 			handleSendResponse(err, nil, action)
 		} else if messageType == "guild" {
 			// Guild Channel
@@ -167,10 +194,17 @@ func handleAction(action map[string]interface{}) {
 			if channelID == "" {
 				channelID = getString(params, "group_id")
 			}
+			safeContent, _ := cleanContent(content)
+			log.Printf("[NEXUS-MSG] Sending Guild Message to %s: %s", channelID, safeContent)
 			msg, err := api.PostMessage(ctx, channelID, &dto.MessageToCreate{
-				Content: content,
+				Content: safeContent,
 				MsgID:   getString(params, "message_id"),
 			})
+			if err != nil {
+				log.Printf("[NEXUS-MSG] Failed to send guild message: %v", err)
+			} else {
+				log.Printf("[NEXUS-MSG] Guild message sent successfully")
+			}
 			handleSendResponse(err, msg, action)
 		}
 
@@ -179,10 +213,17 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		groupID := getString(params, "group_id")
 		content, _ := params["message"].(string)
+		safeContent, _ := cleanContent(content)
+		log.Printf("[NEXUS-MSG] Sending Group Message (send_group_msg) to %s: %s", groupID, safeContent)
 		_, err := api.PostGroupMessage(ctx, groupID, &dto.MessageToCreate{
-			Content: content,
+			Content: safeContent,
 			MsgID:   getString(params, "message_id"),
 		})
+		if err != nil {
+			log.Printf("[NEXUS-MSG] Failed to send group message: %v", err)
+		} else {
+			log.Printf("[NEXUS-MSG] Group message sent successfully")
+		}
 		handleSendResponse(err, nil, action)
 
 	case "send_private_msg":
@@ -190,10 +231,17 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		userID := getString(params, "user_id")
 		content, _ := params["message"].(string)
+		safeContent, _ := cleanContent(content)
+		log.Printf("[NEXUS-MSG] Sending Private Message (send_private_msg) to %s: %s", userID, safeContent)
 		_, err := api.PostC2CMessage(ctx, userID, &dto.MessageToCreate{
-			Content: content,
+			Content: safeContent,
 			MsgID:   getString(params, "message_id"),
 		})
+		if err != nil {
+			log.Printf("[NEXUS-MSG] Failed to send private message: %v", err)
+		} else {
+			log.Printf("[NEXUS-MSG] Private message sent successfully")
+		}
 		handleSendResponse(err, nil, action)
 
 	case "send_guild_channel_msg":

@@ -7,7 +7,7 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 )
 
-func main() {
+func _main() {
 	info, err := host.Info()
 	if err != nil {
 		fmt.Println("Error:", err)

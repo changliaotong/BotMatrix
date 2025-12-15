@@ -1,10 +1,14 @@
 # Build Stage
-FROM golang:1.23-alpine AS builder
+FROM golang:alpine AS builder
+
+# Use Aliyun mirror for APK
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 WORKDIR /app
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
+ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 
 # Copy source code
@@ -15,6 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o FeishuBot .
 
 # Run Stage
 FROM alpine:latest
+
+# Use Aliyun mirror for APK
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 WORKDIR /root/
 

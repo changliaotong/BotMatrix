@@ -3,8 +3,8 @@
 # Configuration
 SERVER_IP="${1:-192.168.0.167}"
 USERNAME="${2:-derlin}"
-REMOTE_DIR="/opt/wxbot"
-TEMP_ZIP="/tmp/wxbot_deploy.zip"
+REMOTE_DIR="/opt/BotMatrix"
+TEMP_ZIP="/tmp/botmatrix_deploy.zip"
 
 echo "========================================"
 echo "   Deploying to ${USERNAME}@${SERVER_IP}"
@@ -45,7 +45,11 @@ ssh -t ${USERNAME}@${SERVER_IP} "
     cd ${REMOTE_DIR}
     
     echo '--> Restarting services...'
+    # If partial deploy logic were here, we'd add cleanup commands.
+    # But this script seems to do a full down/up every time.
     sudo docker-compose down --remove-orphans
+    # Add aggressive cleanup just in case down misses something (unlikely but safe)
+    # sudo docker rm -f tencent-bot wxbot botmatrix-manager botmatrix-system-worker || true
     sudo docker-compose up -d --build
     
     echo '--> Deployment SUCCESS!'

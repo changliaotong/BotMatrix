@@ -24,7 +24,7 @@
 
 *   **BotNexus (The Core)**: A high-concurrency Gateway written in **Go**. It provides a unified WebSocket interface, REST API, and a powerful **Real-time Dashboard**.
 *   **SystemWorker (The Brain)**: A system-level **Python** worker. It handles global commands, visualizes status, and executes remote code.
-*   **WxBot (The Worker)**: A flexible Worker Node written in **Python**. It handles protocol adaptation (WeChat/OneBot) and executes business logic.
+*   **WxBot (The Bot)**: A flexible Bot Node written in **Python**. It handles protocol adaptation (WeChat/OneBot) and executes business logic.
 *   **WeComBot (Enterprise)**: A **Go-based** implementation for WeChat Work (WeCom), supporting internal app integration via callbacks.
 *   **NapCat (Personal)**: A **Containerized** implementation for Personal QQ, utilizing NTQQ and OneBot 11.
 *   **TencentBot (The Official Worker)**: A high-performance Worker written in **Go**, utilizing the official Tencent Bot SDK (`botgo`) for stable, compliant QQ Guild and Group operations.
@@ -117,7 +117,7 @@ BotMatrix/
 │   ├── main.go          # Core Logic
 │   ├── index.html       # Modern Responsive UI (Bootstrap 5 + Chart.js)
 │   └── Dockerfile       # Deployment config
-├── WxBot/               # [Python] The Brawn (WeChat Worker)
+├── WxBot/               # [Python] The Brawn (WeChat Bot)
 │   ├── bots/            # Business Logic
 │   └── web_ui.py        # Legacy UI (Deprecated)
 ├── TencentBot/          # [Go] The Official (QQ Worker)
