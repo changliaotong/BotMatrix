@@ -653,7 +653,23 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 	// 2. Load Balance to Workers (Business Logic)
 	// ... (Existing Worker Logic) ...
 	if len(m.workers) > 0 {
-		m.AddLog("DEBUG", fmt.Sprintf("Dispatching event to worker (1/%d)", len(m.workers)))
+		var eventSummary string
+		if msgMap, ok := data.(map[string]interface{}); ok {
+			if pt, ok := msgMap["post_type"].(string); ok {
+				eventSummary = fmt.Sprintf("Type: %s", pt)
+				if sub, ok := msgMap["sub_type"].(string); ok {
+					eventSummary += fmt.Sprintf(", Sub: %s", sub)
+				}
+				if msg, ok := msgMap["raw_message"].(string); ok {
+					if len(msg) > 50 {
+						eventSummary += fmt.Sprintf(", Msg: %s...", msg[:50])
+					} else {
+						eventSummary += fmt.Sprintf(", Msg: %s", msg)
+					}
+				}
+			}
+		}
+		m.AddLog("DEBUG", fmt.Sprintf("Dispatching event to worker (1/%d): %s", len(m.workers), eventSummary))
 		targetIndex := int(time.Now().UnixNano()) % len(m.workers)
 		worker := m.workers[targetIndex]
 
