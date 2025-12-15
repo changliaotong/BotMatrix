@@ -988,7 +988,7 @@
         <!-- Logs Tab (Full Page) -->
         <div id="tab-logs" class="content-section" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="mb-0" data-i18n="system_logs_title">日志中心</h4>
+                <h4 class="mb-0" data-i18n="log_center">日志中心</h4>
                 <div class="d-flex align-items-center">
                     <select class="form-select form-select-sm me-2" id="log-bot-selector-full" style="width: auto; min-width: 200px;" onchange="fetchLogsFull()">
                         <option value="">全部 (All)</option>
@@ -2203,8 +2203,8 @@
              const current = selector.value;
              const t = translations[currentLang] || translations['zh-CN'];
              
-             let html = `<option value="">${t.log_all || '全部 (All)'}</option>`;
-             html += `<option value="system">BotNexus System</option>`;
+             let html = `<option value="">${t.log_all}</option>`;
+             html += `<option value="system">${t.log_system}</option>`;
              
              bots.forEach(b => {
                  const name = b.nickname || b.self_id;
@@ -2578,9 +2578,10 @@
             // Given the existing code uses ${log.message} directly, we assume it's raw text or safe HTML.
             
             const shortMsg = message.substring(0, MAX_LEN) + '...';
+            const t = translations[currentLang] || translations['zh-CN'];
             
-            return `<span class="log-short" style="cursor:pointer; text-decoration:underline dotted; color: inherit;" onclick="toggleLogExpand(this)" title="点击展开">${shortMsg}</span>` + 
-                   `<span class="log-full" style="display:none; cursor:pointer; color: inherit;" onclick="toggleLogExpand(this)" title="点击收起">${message}</span>`;
+            return `<span class="log-short" style="cursor:pointer; text-decoration:underline dotted; color: inherit;" onclick="toggleLogExpand(this)" title="${t.log_expand}">${shortMsg}</span>` + 
+                   `<span class="log-full" style="display:none; cursor:pointer; color: inherit;" onclick="toggleLogExpand(this)" title="${t.log_collapse}">${message}</span>`;
         }
 
         function toggleLogExpand(el) {
@@ -2638,8 +2639,8 @@
              const current = selector.value;
              const t = translations[currentLang] || translations['zh-CN'];
              
-             let html = `<option value="">${t.log_all || '全部 (All)'}</option>`;
-             html += `<option value="system">BotNexus System</option>`;
+             let html = `<option value="">${t.log_all}</option>`;
+             html += `<option value="system">${t.log_system}</option>`;
              
              bots.forEach(b => {
                  const name = b.nickname || b.self_id;

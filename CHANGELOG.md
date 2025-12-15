@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 *   **Message Routing (消息路由)**:
     *   **API Response Broadcast**: Fixed an issue where API responses (Echo) were being load-balanced to random workers. They are now broadcast to all connected workers to ensure the requester receives the response.
     *   **Self-ID Injection**: Ensured `self_id` is always present in broadcasted messages to guarantee correct permission filtering and routing.
+    *   **Log Center i18n**: Added missing internationalization support for the Log Center, including log filtering options, titles, and expand/collapse actions.
     *   **Float ID Routing**: Fixed a bug where `self_id` passed as a float (scientific notation) in API requests caused message routing failures (sending to wrong/random bot).
 
 ## v1.1.45 (2025-12-15)
