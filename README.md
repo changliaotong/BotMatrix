@@ -23,6 +23,7 @@
 **BotMatrix** is a high-performance, distributed robot management platform designed for enterprise scale. It decouples the connection layer from the logic layer, allowing for massive scalability and robust management.
 
 *   **BotNexus (The Core)**: A high-concurrency Gateway written in **Go**. It provides a unified WebSocket interface, REST API, and a powerful **Real-time Dashboard**.
+*   **SystemWorker (The Brain)**: A system-level **Python** worker. It handles global commands, visualizes status, and executes remote code.
 *   **WxBot (The Worker)**: A flexible Worker Node written in **Python**. It handles protocol adaptation (WeChat/OneBot) and executes business logic.
 *   **WeComBot (Enterprise)**: A **Go-based** implementation for WeChat Work (WeCom), supporting internal app integration via callbacks.
 *   **NapCat (Personal)**: A **Containerized** implementation for Personal QQ, utilizing NTQQ and OneBot 11.
@@ -68,6 +69,7 @@ graph TD
     Nexus -->|Monitor| Dashboard["Web Dashboard"]
     
     subgraph "Worker Cluster"
+        SystemWorker["SystemWorker (Python)"]
         WxBot["WxBot (Python)"]
         TencentBot["TencentBot (Go)"]
         DingTalkBot["DingTalkBot (Go)"]
@@ -81,6 +83,7 @@ graph TD
         NapCat["NapCat (Docker)"]
     end
     
+    Nexus <-->|WebSocket| SystemWorker
     Nexus <-->|WebSocket| WxBot
     Nexus <-->|WebSocket| TencentBot
     Nexus <-->|WebSocket| DingTalkBot
