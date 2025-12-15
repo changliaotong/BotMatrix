@@ -41,6 +41,7 @@ type Config struct {
 var (
 	config     Config
 	nexusConn  *websocket.Conn
+	nexusMu    sync.Mutex
 	api        openapi.OpenAPI
 	ctx        context.Context
 	selfID     string
@@ -71,6 +72,17 @@ func (l *LogManager) Write(p []byte) (n int, err error) {
 		l.buffer = l.buffer[1:]
 	}
 	l.buffer = append(l.buffer, strings.TrimRight(msg, "\n"))
+
+	// Stream to Nexus
+	go func(m string) {
+		sendToNexus(map[string]interface{}{
+			"post_type": "log",
+			"level":     "INFO",
+			"message":   strings.TrimSpace(m),
+			"time":      time.Now().Format("15:04:05"),
+			"self_id":   selfID,
+		})
+	}(msg)
 
 	return os.Stdout.Write(p)
 }
@@ -1087,6 +1099,8 @@ func handleSendResponse(err error, msg *dto.Message, action map[string]interface
 }
 
 func sendToNexus(data interface{}) {
+	nexusMu.Lock()
+	defer nexusMu.Unlock()
 	if nexusConn == nil {
 		return
 	}

@@ -318,7 +318,7 @@
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted" data-i18n="sidebar_subtitle">Enterprise Bot Manager</small>
-                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.39</span>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.45</span>
             </div>
         </div>
         
@@ -964,7 +964,11 @@
                 <div class="tab-pane fade h-100" id="view-logs" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h5 class="mb-0" data-i18n="system_logs_title">系统日志</h5>
-                        <div>
+                        <div class="d-flex align-items-center">
+                            <select class="form-select form-select-sm me-2" id="log-bot-selector" style="width: auto; min-width: 150px;" onchange="fetchLogs()">
+                                <option value="">全部 (All)</option>
+                                <option value="system">BotNexus System</option>
+                            </select>
                             <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogs()" data-i18n="refresh">刷新</button>
                             <div class="form-check form-switch d-inline-block ms-2">
                                 <input class="form-check-input" type="checkbox" id="auto-refresh-logs" checked>
@@ -2160,7 +2164,27 @@
                     }
 
                     renderBots();
+                    updateLogBotSelector(bots);
                 });
+        }
+
+        function updateLogBotSelector(bots) {
+             const selector = document.getElementById('log-bot-selector');
+             if (!selector) return;
+             // Keep selection
+             const current = selector.value;
+             const t = translations[currentLang] || translations['zh-CN'];
+             
+             let html = `<option value="">${t.log_all || '全部 (All)'}</option>`;
+             html += `<option value="system">BotNexus System</option>`;
+             
+             bots.forEach(b => {
+                 const name = b.nickname || b.self_id;
+                 const status = b.is_alive ? '' : ' (Offline)';
+                 html += `<option value="${b.self_id}">${name} (${b.platform})${status}</option>`;
+             });
+             selector.innerHTML = html;
+             selector.value = current;
         }
 
         function filterBots(text) {
@@ -2518,7 +2542,10 @@
         // --- Logs ---
         function fetchLogs() {
             if (!authToken) return;
-            fetch('/api/logs', {
+            const selector = document.getElementById('log-bot-selector');
+            const botId = selector ? selector.value : '';
+
+            fetch(`/api/logs?bot_id=${botId}`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             })
                 .then(r => r.json())
@@ -2638,6 +2665,24 @@
                     }
 
                     if (data.post_type === 'log') {
+                        // Check filter
+                        const selector = document.getElementById('log-bot-selector');
+                        const filter = selector ? selector.value : '';
+                        const log = data.data;
+                        const selfId = data.self_id || '';
+
+                        if (filter === '' || (filter === 'system' && !selfId) || filter === selfId) {
+                            const container = document.getElementById('log-container');
+                            if (container) {
+                                const div = document.createElement('div');
+                                div.className = 'log-entry';
+                                div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${log.message}`;
+                                container.appendChild(div);
+                                if (document.getElementById('auto-refresh-logs').checked) {
+                                    container.scrollTop = container.scrollHeight;
+                                }
+                            }
+                        }
                         return;
                     }
                     addEventLog(data);

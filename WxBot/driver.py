@@ -5,10 +5,49 @@ import sys
 import threading
 import time
 import websockets
+import logging
 from onebot import onebot
 
 # Ensure WxBot root is in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+class NexusLogHandler(logging.Handler):
+    def __init__(self, driver):
+        super().__init__()
+        self.driver = driver
+    
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            if not msg: return
+            
+            # Avoid recursion if logging from within broadcast logic
+            if "post_type" in msg and "log" in msg: return
+
+            event = {
+                "post_type": "log",
+                "level": record.levelname,
+                "message": msg,
+                "time": time.strftime("%H:%M:%S"),
+                "self_id": str(getattr(self.driver.bot, 'self_id', 'unknown')) if self.driver.bot else 'unknown'
+            }
+            
+            if self.driver._loop and self.driver._loop.is_running() and self.driver._event_queue:
+                 self.driver._loop.call_soon_threadsafe(self.driver._event_queue.put_nowait, event)
+        except:
+            self.handleError(record)
+
+class StdoutToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, message):
+        if message.strip() == "": return
+        self.logger.log(self.level, message.strip())
+
+    def flush(self):
+        pass
 
 class OneBotDriver:
     """
@@ -192,7 +231,8 @@ class OneBotDriver:
                     try:
                         # Log sending (truncated)
                         evt_type = event.get('post_type', 'unknown')
-                        print(f"[Driver] Push {evt_type} to {getattr(ws, 'remote_address', 'unknown')}")
+                        if evt_type != 'log':
+                            print(f"[Driver] Push {evt_type} to {getattr(ws, 'remote_address', 'unknown')}")
                         send_tasks.append(asyncio.create_task(ws.send(message)))
                     except Exception as e:
                         print(f"[Driver] Error preparing send: {e}")
@@ -257,6 +297,25 @@ if __name__ == "__main__":
     
     # 1. Initialize Driver
     driver = OneBotDriver()
+
+    # Setup Logging to Nexus
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Console Handler (to see logs in terminal)
+    # We must use sys.__stdout__ because we are about to redirect sys.stdout
+    console_handler = logging.StreamHandler(sys.__stdout__)
+    console_handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(console_handler)
+
+    # Nexus Handler (to stream logs to BotNexus)
+    nexus_handler = NexusLogHandler(driver)
+    nexus_handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(nexus_handler)
+
+    # Redirect print to logger
+    sys.stdout = StdoutToLogger(logger, logging.INFO)
+    sys.stderr = StdoutToLogger(logger, logging.ERROR)
     
     # 2. Initialize Bot
     # self_id will be auto-generated or read from env

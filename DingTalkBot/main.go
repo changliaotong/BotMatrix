@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -38,9 +39,37 @@ type Config struct {
 var (
 	config       Config
 	nexusConn    *websocket.Conn
+	nexusMu      sync.Mutex // Added mutex
 	httpClient   = &http.Client{Timeout: 10 * time.Second}
 	streamClient *client.StreamClient
 )
+
+type LogManager struct {
+	mu     sync.Mutex
+	buffer []string
+	size   int
+}
+
+func (l *LogManager) Write(p []byte) (n int, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg := string(p)
+	// Stream to Nexus
+	go func(m string) {
+		// Use a temporary map to avoid concurrent map writes if sendToNexus modifies it
+		// But sendToNexus is locked now.
+		sendToNexus(map[string]interface{}{
+			"post_type": "log",
+			"level":     "INFO",
+			"message":   strings.TrimSpace(m),
+			"time":      time.Now().Format("15:04:05"),
+			"self_id":   fmt.Sprintf("%d", config.SelfID),
+		})
+	}(msg)
+
+	return os.Stdout.Write(p)
+}
 
 func loadConfig() {
 	file, err := os.Open("config.json")
@@ -99,6 +128,12 @@ func loadConfig() {
 }
 
 func main() {
+	// Initialize Log Manager
+	logManager := &LogManager{
+		buffer: make([]string, 0, 100),
+		size:   100,
+	}
+	log.SetOutput(logManager)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	loadConfig()
 
@@ -273,6 +308,9 @@ func connectNexus() {
 }
 
 func sendToNexus(data map[string]interface{}) {
+	nexusMu.Lock()
+	defer nexusMu.Unlock()
+
 	if nexusConn == nil {
 		return
 	}

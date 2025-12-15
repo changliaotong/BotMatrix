@@ -146,6 +146,10 @@ type Manager struct {
 	logBuffer   []LogEntry
 	logMutex    sync.RWMutex
 
+	// Pending Requests (Echo -> Channel)
+	pendingRequests map[string]chan map[string]interface{}
+	pendingMutex    sync.Mutex
+
 	// Redis
 	rdb *redis.Client
 
@@ -224,6 +228,7 @@ type LogEntry struct {
 	Time    string `json:"time"`
 	Level   string `json:"level"`
 	Message string `json:"message"`
+	BotID   string `json:"bot_id,omitempty"`
 }
 
 func NewManager() *Manager {
@@ -253,9 +258,10 @@ func NewManager() *Manager {
 				return true
 			},
 		},
-		logBuffer:     make([]LogEntry, 0, 200),
-		Sessions:      make(map[string]*ContactSession),
-		AutoRecallMap: make(map[string]AutoRecallTask),
+		logBuffer:       make([]LogEntry, 0, 200),
+		Sessions:        make(map[string]*ContactSession),
+		AutoRecallMap:   make(map[string]AutoRecallTask),
+		pendingRequests: make(map[string]chan map[string]interface{}),
 	}
 
 	// Initialize Redis
@@ -281,14 +287,20 @@ func NewManager() *Manager {
 	return m
 }
 
-func (m *Manager) AddLog(level, message string) {
+func (m *Manager) AddLog(level, message string, botID ...string) {
 	m.logMutex.Lock()
 	defer m.logMutex.Unlock()
+
+	var bid string
+	if len(botID) > 0 {
+		bid = botID[0]
+	}
 
 	entry := LogEntry{
 		Time:    time.Now().Format("15:04:05"),
 		Level:   level,
 		Message: message,
+		BotID:   bid,
 	}
 
 	if len(m.logBuffer) >= 200 {
@@ -301,6 +313,7 @@ func (m *Manager) AddLog(level, message string) {
 	go m.broadcastToSubscribers(map[string]interface{}{
 		"post_type": "log",
 		"data":      entry,
+		"self_id":   bid,
 	})
 }
 
@@ -973,6 +986,17 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 					})
 				}()
 			}
+		}
+
+		// --- Log Forwarding ---
+		if pt, ok := msgMap["post_type"].(string); ok && pt == "log" {
+			level, _ := msgMap["level"].(string)
+			message, _ := msgMap["message"].(string)
+			if level == "" {
+				level = "INFO"
+			}
+			m.AddLog(level, message, selfID)
+			continue
 		}
 
 		// --- Magic Link Logic ---
@@ -2237,8 +2261,28 @@ func (m *Manager) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+
+	botID := r.URL.Query().Get("bot_id")
+	logs := m.GetLogs()
+
+	if botID != "" {
+		filtered := make([]LogEntry, 0)
+		for _, l := range logs {
+			if botID == "system" {
+				if l.BotID == "" {
+					filtered = append(filtered, l)
+				}
+			} else {
+				if l.BotID == botID {
+					filtered = append(filtered, l)
+				}
+			}
+		}
+		logs = filtered
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m.GetLogs())
+	json.NewEncoder(w).Encode(logs)
 }
 
 func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {

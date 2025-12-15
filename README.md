@@ -65,6 +65,12 @@
 *   **High-End Privacy**: Ensure sensitive info vanishes without a trace.
 *   **Universal Control**: Seamlessly integrated into the dashboard for supported bots.
 
+### 📜 Centralized Log Management (集中式日志管理)
+> *See it all in one place.*
+*   **Unified View**: Monitor console logs from all connected bots directly in the dashboard.
+*   **Real-Time Streaming**: Logs are streamed via WebSocket with practically zero latency.
+*   **Per-Bot Filtering**: Easily switch between viewing system logs or specific bot logs.
+
 ### 🧠 Intelligent Robot Collaboration (机器人智能协作)
 > *One Click, Full Linkage.*
 *   **Smart Wake-Up**: Bypasses Tencent Guild Bot restrictions (passive reply only) by coordinating with ordinary bots to "wake up" guild bots via @mentions.

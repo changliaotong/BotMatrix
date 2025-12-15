@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.45 (2025-12-15)
+*   **Centralized Log Management (集中式日志管理)**:
+    *   **BotNexus Dashboard**: Added a new real-time log viewer with per-bot filtering capabilities.
+    *   **Universal Streaming**: Bot clients (TencentBot, DingTalkBot, WxBot) now stream their console logs directly to BotNexus for centralized monitoring.
+    *   **Architecture**: Implemented a scalable log aggregation protocol via WebSocket "log" events.
+
 ## v1.1.18 (2025-12-15)
 *   **Feature Highlights**:
     *   **Burn After Reading (阅后即焚)**: Renamed and enhanced the Auto-Recall feature. Users can now set messages to self-destruct after 0-120s directly from the dashboard.
