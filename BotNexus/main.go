@@ -656,25 +656,26 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 		var eventSummary string
 		if msgMap, ok := data.(map[string]interface{}); ok {
 			if pt, ok := msgMap["post_type"].(string); ok {
-			// Prevent infinite loop: Don't log "log" events
-			if pt == "log" {
-				// Just dispatch, don't log to avoid recursion
-			} else {
-				eventSummary = fmt.Sprintf("Type: %s", pt)
-				if sub, ok := msgMap["sub_type"].(string); ok {
-					eventSummary += fmt.Sprintf(", Sub: %s", sub)
-				}
-				if msg, ok := msgMap["raw_message"].(string); ok {
-					if len(msg) > 50 {
-						eventSummary += fmt.Sprintf(", Msg: %s...", msg[:50])
-					} else {
-						eventSummary += fmt.Sprintf(", Msg: %s", msg)
+				// Prevent infinite loop: Don't log "log" events
+				if pt == "log" {
+					// Just dispatch, don't log to avoid recursion
+				} else {
+					eventSummary = fmt.Sprintf("Type: %s", pt)
+					if sub, ok := msgMap["sub_type"].(string); ok {
+						eventSummary += fmt.Sprintf(", Sub: %s", sub)
 					}
-				}
-				// Use log.Printf instead of m.AddLog to avoid infinite recursion loop
-				// m.AddLog triggers broadcastToSubscribers which triggers m.AddLog...
-				if eventSummary != "" {
-					// log.Printf("[DEBUG] Dispatching event to worker: %s", eventSummary)
+					if msg, ok := msgMap["raw_message"].(string); ok {
+						if len(msg) > 50 {
+							eventSummary += fmt.Sprintf(", Msg: %s...", msg[:50])
+						} else {
+							eventSummary += fmt.Sprintf(", Msg: %s", msg)
+						}
+					}
+					// Use log.Printf instead of m.AddLog to avoid infinite recursion loop
+					// m.AddLog triggers broadcastToSubscribers which triggers m.AddLog...
+					if eventSummary != "" {
+						// log.Printf("[DEBUG] Dispatching event to worker: %s", eventSummary)
+					}
 				}
 			}
 		}
