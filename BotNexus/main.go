@@ -1313,14 +1313,24 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 	// Check top-level "self_id" (Best practice for routing)
 	if id, ok := req["self_id"]; ok {
-		targetID = fmt.Sprintf("%v", id)
+		switch v := id.(type) {
+		case float64:
+			targetID = fmt.Sprintf("%.0f", v)
+		default:
+			targetID = fmt.Sprintf("%v", v)
+		}
 	}
 
 	// Fallback: Check "params.self_id" (Some implementations put it here)
 	if targetID == "" {
 		if params, ok := req["params"].(map[string]interface{}); ok {
 			if id, ok := params["self_id"]; ok {
-				targetID = fmt.Sprintf("%v", id)
+				switch v := id.(type) {
+				case float64:
+					targetID = fmt.Sprintf("%.0f", v)
+				default:
+					targetID = fmt.Sprintf("%v", v)
+				}
 			}
 		}
 	}
