@@ -188,4 +188,3 @@ services:
         limits:
           memory: 1G
 
-networks:
