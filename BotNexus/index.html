@@ -318,7 +318,7 @@
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted" data-i18n="sidebar_subtitle">Enterprise Bot Manager</small>
-                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.45</span>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.62</span>
             </div>
         </div>
         
@@ -329,6 +329,7 @@
             <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> <span data-i18n="sidebar_bots">云端矩阵</span></a>
             <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> <span data-i18n="sidebar_groups">群组好友</span></a>
             <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
+            <a href="#logs" id="nav-logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> <span data-i18n="sidebar_logs">日志中心</span></a>
             <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> <span data-i18n="sidebar_debug">调试测试</span></a>
             <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> <span data-i18n="sidebar_settings">系统设置</span></a>
             <a href="javascript:void(0)" class="nav-link text-danger mt-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i> <span data-i18n="sidebar_logout">退出登录</span></a>
@@ -984,6 +985,32 @@
         </div>
 
 
+        <!-- Logs Tab (Full Page) -->
+        <div id="tab-logs" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0" data-i18n="system_logs_title">日志中心</h4>
+                <div class="d-flex align-items-center">
+                    <select class="form-select form-select-sm me-2" id="log-bot-selector-full" style="width: auto; min-width: 200px;" onchange="fetchLogsFull()">
+                        <option value="">全部 (All)</option>
+                        <option value="system">BotNexus System</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="fetchLogsFull()" data-i18n="refresh">刷新</button>
+                    <div class="form-check form-switch d-inline-block ms-3">
+                        <input class="form-check-input" type="checkbox" id="auto-refresh-logs-full" checked>
+                        <label class="form-check-label" for="auto-refresh-logs-full" data-i18n="auto_refresh">自动刷新</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card h-100" style="height: calc(100vh - 150px) !important;">
+                <div class="card-body p-0 d-flex flex-column h-100">
+                    <div class="log-box flex-grow-1" id="log-container-full" style="border: none; border-radius: 0 0 0.75rem 0.75rem;">
+                        <!-- Logs -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Debug & Test (Merged) -->
         <div id="tab-debug" style="display:none;">
             <h4 class="mb-4" data-i18n="debug_test_title">调试测试</h4>
@@ -1620,7 +1647,7 @@
             const activeLink = document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`);
             if (activeLink) activeLink.classList.add('active');
             
-            if (tabId === 'logs') fetchLogs();
+            if (tabId === 'logs') fetchLogsFull();
             if (tabId === 'bots') {
                 fetchBots();
                 fetchWorkers();
@@ -2165,6 +2192,7 @@
 
                     renderBots();
                     updateLogBotSelector(bots);
+                    updateLogBotSelectorFull(bots);
                 });
         }
 
@@ -2539,7 +2567,99 @@
                 `}).join('');
         }
 
-        // --- Logs ---
+        // --- Log Truncation & Interaction ---
+        function renderLogMessage(message) {
+            const MAX_LEN = 300;
+            if (!message || message.length <= MAX_LEN) return message;
+            
+            // Simple escape to prevent breaking HTML structure
+            // We assume message is mostly text. If it contains HTML tags, this simple truncation might break them.
+            // For safety, we treat it as text for the truncated part, but we must be careful not to double escape if the original was HTML.
+            // Given the existing code uses ${log.message} directly, we assume it's raw text or safe HTML.
+            
+            const shortMsg = message.substring(0, MAX_LEN) + '...';
+            
+            return `<span class="log-short" style="cursor:pointer; text-decoration:underline dotted; color: inherit;" onclick="toggleLogExpand(this)" title="点击展开">${shortMsg}</span>` + 
+                   `<span class="log-full" style="display:none; cursor:pointer; color: inherit;" onclick="toggleLogExpand(this)" title="点击收起">${message}</span>`;
+        }
+
+        function toggleLogExpand(el) {
+            const parent = el.parentElement;
+            const shortSpan = parent.querySelector('.log-short');
+            const fullSpan = parent.querySelector('.log-full');
+            
+            // Pause refresh when clicked
+            const autoRefreshFull = document.getElementById('auto-refresh-logs-full');
+            if (autoRefreshFull) autoRefreshFull.checked = false;
+            
+            const autoRefreshWidget = document.getElementById('auto-refresh-logs');
+            if (autoRefreshWidget) autoRefreshWidget.checked = false;
+
+            if (el.classList.contains('log-short')) {
+                shortSpan.style.display = 'none';
+                fullSpan.style.display = 'inline';
+            } else {
+                shortSpan.style.display = 'inline';
+                fullSpan.style.display = 'none';
+            }
+        }
+
+        // --- Logs (Full Page) ---
+        function fetchLogsFull() {
+            if (!authToken) return;
+            const selector = document.getElementById('log-bot-selector-full');
+            const botId = selector ? selector.value : '';
+
+            fetch(`/api/logs?bot_id=${botId}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+                .then(r => r.json())
+                .then(logs => {
+                    const container = document.getElementById('log-container-full');
+                    if (!container) return;
+                    
+                    container.innerHTML = logs.map(log => `
+                        <div class="log-entry">
+                            <span class="log-time">[${log.time}]</span>
+                            <span class="log-level-${log.level}">${log.level}</span>: 
+                            ${renderLogMessage(log.message)}
+                        </div>
+                    `).join('');
+                    // Scroll to bottom
+                    container.scrollTop = container.scrollHeight;
+                });
+        }
+        
+        // Sync selectors
+        function updateLogBotSelectorFull(bots) {
+             const selector = document.getElementById('log-bot-selector-full');
+             if (!selector) return;
+             // Keep selection
+             const current = selector.value;
+             const t = translations[currentLang] || translations['zh-CN'];
+             
+             let html = `<option value="">${t.log_all || '全部 (All)'}</option>`;
+             html += `<option value="system">BotNexus System</option>`;
+             
+             bots.forEach(b => {
+                 const name = b.nickname || b.self_id;
+                 const status = b.is_alive ? '' : ' (Offline)';
+                 html += `<option value="${b.self_id}">${name} (${b.platform})${status}</option>`;
+             });
+             selector.innerHTML = html;
+             selector.value = current;
+        }
+
+        // setInterval(() => {
+        //     // Auto refresh full page logs - Disabled to prevent jumping, relying on WebSocket
+        //     if (document.getElementById('tab-logs') && 
+        //         document.getElementById('tab-logs').style.display !== 'none' && 
+        //         document.getElementById('auto-refresh-logs-full').checked) {
+        //         fetchLogsFull();
+        //     }
+        // }, 2000);
+
+        // --- Logs (Widget) ---
         function fetchLogs() {
             if (!authToken) return;
             const selector = document.getElementById('log-bot-selector');
@@ -2555,7 +2675,7 @@
                         <div class="log-entry">
                             <span class="log-time">[${log.time}]</span>
                             <span class="log-level-${log.level}">${log.level}</span>: 
-                            ${log.message}
+                            ${renderLogMessage(log.message)}
                         </div>
                     `).join('');
                     // Scroll to bottom
@@ -2676,10 +2796,29 @@
                             if (container) {
                                 const div = document.createElement('div');
                                 div.className = 'log-entry';
-                                div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${log.message}`;
+                                div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
                                 container.appendChild(div);
                                 if (document.getElementById('auto-refresh-logs').checked) {
                                     container.scrollTop = container.scrollHeight;
+                                }
+                            }
+                        }
+
+                        // Full Page Log Update
+                        const selectorFull = document.getElementById('log-bot-selector-full');
+                        const filterFull = selectorFull ? selectorFull.value : '';
+                        if (filterFull === '' || (filterFull === 'system' && !selfId) || filterFull === selfId) {
+                            const containerFull = document.getElementById('log-container-full');
+                            if (containerFull) {
+                                const div = document.createElement('div');
+                                div.className = 'log-entry';
+                                div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
+                                containerFull.appendChild(div);
+                                if (containerFull.children.length > 2000) {
+                                    containerFull.removeChild(containerFull.firstChild);
+                                }
+                                if (document.getElementById('auto-refresh-logs-full').checked) {
+                                    containerFull.scrollTop = containerFull.scrollHeight;
                                 }
                             }
                         }
@@ -4231,6 +4370,42 @@
                 }
             });
         }
+
+        // --- Log Selection Auto-Pause ---
+        function checkLogSelectionAndPause() {
+            const selection = window.getSelection();
+            if (!selection || selection.toString().length === 0) return;
+
+            // Check if selection intersects with log containers
+            // We use commonAncestorContainer to check if the selection is inside the log container
+            let node = selection.anchorNode;
+            if (!node) return;
+            if (node.nodeType === 3) node = node.parentNode; // text node -> element
+
+            const container = document.getElementById('log-container');
+            const containerFull = document.getElementById('log-container-full');
+            
+            // Check if the selection is within either container
+            if ((container && container.contains(node)) || 
+                (containerFull && containerFull.contains(node))) {
+                 
+                 const autoRefreshFull = document.getElementById('auto-refresh-logs-full');
+                 if (autoRefreshFull && autoRefreshFull.checked) {
+                     autoRefreshFull.checked = false;
+                 }
+                 
+                 const autoRefreshWidget = document.getElementById('auto-refresh-logs');
+                 if (autoRefreshWidget && autoRefreshWidget.checked) {
+                     autoRefreshWidget.checked = false;
+                 }
+            }
+        }
+        
+        document.addEventListener('mouseup', checkLogSelectionAndPause);
+        document.addEventListener('keyup', (e) => {
+             // Shift + Arrows usually select text
+             if (e.shiftKey) checkLogSelectionAndPause();
+        });
     </script>
 </body>
 </html>

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.46 (2025-12-16)
+*   **Napcat & OneBot Integration (Napcat 集成)**:
+    *   **Compatibility**: Added fallback support for standard OneBot implementations (like Napcat) that don't support custom count actions. It now calculates counts from `get_group_list` and `get_friend_list`.
+    *   **Performance**: Optimized bot info refresh interval to 1 hour with Redis caching for approximate tracking.
+*   **Dashboard UI Improvements (界面优化)**:
+    *   **Smart Log Display**: Implemented log truncation (300 chars) with "Click to Expand" for better readability.
+    *   **Auto-Pause**: Log refreshing now automatically pauses when a user expands a log entry or selects text (e.g., for copying).
+*   **TencentBot**:
+    *   **Upload Logic**: Enhanced avatar uploading with automatic fallback from URL to multipart upload to bypass link blocking.
+
 ## v1.1.45 (2025-12-15)
 *   **Centralized Log Management (集中式日志管理)**:
     *   **BotNexus Dashboard**: Added a new real-time log viewer with per-bot filtering capabilities.

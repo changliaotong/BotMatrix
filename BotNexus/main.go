@@ -258,7 +258,7 @@ func NewManager() *Manager {
 				return true
 			},
 		},
-		logBuffer:       make([]LogEntry, 0, 200),
+		logBuffer:       make([]LogEntry, 0, 2000),
 		Sessions:        make(map[string]*ContactSession),
 		AutoRecallMap:   make(map[string]AutoRecallTask),
 		pendingRequests: make(map[string]chan map[string]interface{}),
@@ -303,7 +303,7 @@ func (m *Manager) AddLog(level, message string, botID ...string) {
 		BotID:   bid,
 	}
 
-	if len(m.logBuffer) >= 200 {
+	if len(m.logBuffer) >= 2000 {
 		m.logBuffer = m.logBuffer[1:]
 	}
 	m.logBuffer = append(m.logBuffer, entry)
@@ -487,9 +487,9 @@ func main() {
 		}
 	}()
 
-	// Periodic Bot Info Refresh (Every 1 minute to ensure data consistency)
+	// Periodic Bot Info Refresh (Every 1 hour to ensure data consistency)
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(1 * time.Hour)
 		for range ticker.C {
 			manager.mutex.RLock()
 			for _, bot := range manager.bots {
@@ -497,17 +497,30 @@ func main() {
 					client.Mutex.Lock()
 					defer client.Mutex.Unlock()
 
-					// Group Count
-					client.Conn.WriteJSON(map[string]interface{}{
-						"action": "get_group_list",
-						"echo":   "internal_get_group_list",
-					})
+					// Group & Friend Count
+					// Check Platform: Guild bots use custom count actions; QQ/Others use list fetching
+					isGuild := strings.Contains(strings.ToLower(client.Platform), "guild")
 
-					// Friend Count
-					client.Conn.WriteJSON(map[string]interface{}{
-						"action": "get_friend_list",
-						"echo":   "internal_get_friend_list",
-					})
+					if isGuild {
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_group_count",
+							"echo":   "internal_get_group_count",
+						})
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_friend_count",
+							"echo":   "internal_get_friend_count",
+						})
+					} else {
+						// Standard OneBot / QQ: Fetch full lists to count
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_group_list",
+							"echo":   "internal_get_group_list_count",
+						})
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_friend_list",
+							"echo":   "internal_get_friend_list_count",
+						})
+					}
 				}(bot)
 			}
 			manager.mutex.RUnlock()
@@ -973,17 +986,30 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 						"echo":   "internal_get_login_info",
 					})
 
-					// Group Count
-					client.Conn.WriteJSON(map[string]interface{}{
-						"action": "get_group_list",
-						"echo":   "internal_get_group_list",
-					})
+					// Group & Friend Count
+					// Check Platform: Guild bots use custom count actions; QQ/Others use list fetching
+					isGuild := strings.Contains(strings.ToLower(client.Platform), "guild")
 
-					// Friend Count
-					client.Conn.WriteJSON(map[string]interface{}{
-						"action": "get_friend_list",
-						"echo":   "internal_get_friend_list",
-					})
+					if isGuild {
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_group_count",
+							"echo":   "internal_get_group_count",
+						})
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_friend_count",
+							"echo":   "internal_get_friend_count",
+						})
+					} else {
+						// Standard OneBot / QQ: Fetch full lists to count
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_group_list",
+							"echo":   "internal_get_group_list_count",
+						})
+						client.Conn.WriteJSON(map[string]interface{}{
+							"action": "get_friend_list",
+							"echo":   "internal_get_friend_list_count",
+						})
+					}
 				}()
 			}
 		}
@@ -1052,60 +1078,69 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
-			case "internal_get_group_list":
+			case "internal_get_group_count":
 				// Debug Logging for Group Count Issue
+				if data, ok := msgMap["data"].(map[string]interface{}); ok {
+					if countVal, ok := data["count"]; ok {
+						var count int
+						switch v := countVal.(type) {
+						case float64:
+							count = int(v)
+						case int:
+							count = v
+						case int64:
+							count = int(v)
+						}
+						client.GroupCount = count
+						m.AddLog("DEBUG", fmt.Sprintf("Bot %s Group Count: %d", selfID, client.GroupCount))
+						if m.rdb != nil {
+							m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "group_count", client.GroupCount)
+						}
+					}
+				} else {
+					m.AddLog("WARN", fmt.Sprintf("Bot %s returned invalid group_count data: %v", selfID, msgMap["data"]))
+				}
+
+			case "internal_get_friend_count":
+				if data, ok := msgMap["data"].(map[string]interface{}); ok {
+					if countVal, ok := data["count"]; ok {
+						var count int
+						switch v := countVal.(type) {
+						case float64:
+							count = int(v)
+						case int:
+							count = v
+						case int64:
+							count = int(v)
+						}
+						client.FriendCount = count
+						m.AddLog("DEBUG", fmt.Sprintf("Bot %s Friend Count: %d", selfID, client.FriendCount))
+						if m.rdb != nil {
+							m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "friend_count", client.FriendCount)
+						}
+					}
+				} else {
+					m.AddLog("WARN", fmt.Sprintf("Bot %s returned invalid friend_count data: %v", selfID, msgMap["data"]))
+				}
+
+			case "internal_get_group_list_count":
 				if data, ok := msgMap["data"].([]interface{}); ok {
-					client.GroupCount = len(data)
-					m.AddLog("DEBUG", fmt.Sprintf("Bot %s Group Count: %d", selfID, client.GroupCount))
+					count := len(data)
+					client.GroupCount = count
+					m.AddLog("DEBUG", fmt.Sprintf("Bot %s Group Count (from list): %d", selfID, client.GroupCount))
 					if m.rdb != nil {
 						m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "group_count", client.GroupCount)
 					}
-
-					// Populate Group Names Cache
-					m.statsMutex.Lock()
-					for _, item := range data {
-						if group, ok := item.(map[string]interface{}); ok {
-							var gid int64
-							var gname string
-
-							if idVal, ok := group["group_id"]; ok {
-								switch v := idVal.(type) {
-								case float64:
-									gid = int64(v)
-								case int64:
-									gid = v
-								case int:
-									gid = int64(v)
-								case string:
-									// Try to parse string ID
-									if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
-										gid = parsed
-									}
-								}
-							}
-
-							if nameVal, ok := group["group_name"].(string); ok {
-								gname = nameVal
-							}
-
-							if gid != 0 && gname != "" {
-								m.GroupNames[gid] = gname
-							}
-						}
-					}
-					m.statsMutex.Unlock()
-				} else {
-					m.AddLog("WARN", fmt.Sprintf("Bot %s returned invalid group_list data: %v", selfID, msgMap["data"]))
 				}
-			case "internal_get_friend_list":
+
+			case "internal_get_friend_list_count":
 				if data, ok := msgMap["data"].([]interface{}); ok {
-					client.FriendCount = len(data)
-					m.AddLog("DEBUG", fmt.Sprintf("Bot %s Friend Count: %d", selfID, client.FriendCount))
+					count := len(data)
+					client.FriendCount = count
+					m.AddLog("DEBUG", fmt.Sprintf("Bot %s Friend Count (from list): %d", selfID, client.FriendCount))
 					if m.rdb != nil {
 						m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "friend_count", client.FriendCount)
 					}
-				} else {
-					m.AddLog("WARN", fmt.Sprintf("Bot %s returned invalid friend_list data: %v", selfID, msgMap["data"]))
 				}
 			}
 		}

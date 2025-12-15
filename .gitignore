@@ -13,6 +13,10 @@ config.json
 *.db
 *.sqlite
 
+# Runtime Data
+session_cache.json
+stats.json
+
 # Docker
 wxbot_deploy.zip
 botmatrix_deploy.zip
@@ -23,3 +27,7 @@ update_package.tar.gz
 *.dll
 go_manager/manager
 BotNexus/manager
+
+# C# Artifacts
+obj/
+bin/

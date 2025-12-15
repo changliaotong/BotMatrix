@@ -45,6 +45,8 @@ services:
       - NEXUS_ADDR=ws://192.168.0.167:3005
       - TENCENT_SANDBOX=true
       # Configuration is loaded from config.json
+    ports:
+      - "3133:3133" # Expose HTTP Log Viewer & File Server
 
   # 3. WxBot: WeChat Robot Worker
   wxbot:

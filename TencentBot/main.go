@@ -11,12 +11,14 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -29,24 +31,74 @@ import (
 
 // Config holds the configuration
 type Config struct {
-	AppID     uint64 `json:"app_id"` // AppID is uint64 in SDK
-	Token     string `json:"token"`
-	Secret    string `json:"secret"`
-	Sandbox   bool   `json:"sandbox"`
-	SelfID    string `json:"self_id"` // Optional: manually set SelfID
-	NexusAddr string `json:"nexus_addr"`
-	LogPort   int    `json:"log_port"` // Port for HTTP Log Viewer
+	AppID      uint64 `json:"app_id"` // AppID is uint64 in SDK
+	Token      string `json:"token"`
+	Secret     string `json:"secret"`
+	Sandbox    bool   `json:"sandbox"`
+	SelfID     string `json:"self_id"` // Optional: manually set SelfID
+	NexusAddr  string `json:"nexus_addr"`
+	LogPort    int    `json:"log_port"`    // Port for HTTP Log Viewer
+	FileHost   string `json:"file_host"`   // Public base URL for serving files (e.g. http://1.2.3.4:8080)
+	MediaRoute string `json:"media_route"` // Internal route path for media (default: /media/)
 }
 
 var (
-	config     Config
-	nexusConn  *websocket.Conn
-	nexusMu    sync.Mutex
-	api        openapi.OpenAPI
-	ctx        context.Context
-	selfID     string
-	logManager *LogManager
+	config         Config
+	nexusConn      *websocket.Conn
+	nexusMu        sync.Mutex
+	api            openapi.OpenAPI
+	ctx            context.Context
+	selfID         string
+	logManager     *LogManager
+	msgSeq         int64
+	accessToken    string
+	tokenExpiresAt int64
+	tokenMu        sync.Mutex
 )
+
+// getAppAccessToken fetches or returns a valid access token
+func getAppAccessToken() (string, error) {
+	tokenMu.Lock()
+	defer tokenMu.Unlock()
+
+	// Return cached token if valid (buffer 60s)
+	if accessToken != "" && time.Now().Unix() < tokenExpiresAt-60 {
+		return accessToken, nil
+	}
+
+	url := "https://bots.qq.com/app/getAppAccessToken"
+	data := map[string]string{
+		"appId":        fmt.Sprintf("%d", config.AppID),
+		"clientSecret": config.Secret,
+	}
+	jsonData, _ := json.Marshal(data)
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to get access token: %s", string(body))
+	}
+
+	var result struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   string `json:"expires_in"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	accessToken = result.AccessToken
+	exp, _ := strconv.Atoi(result.ExpiresIn)
+	tokenExpiresAt = time.Now().Unix() + int64(exp)
+
+	log.Printf("Refreshed Access Token, expires in %d seconds", exp)
+	return accessToken, nil
+}
 
 // LogManager handles in-memory log buffering
 type LogManager struct {
@@ -103,11 +155,12 @@ func (l *LogManager) GetLogs(lines int) []string {
 
 // SessionCache to store last message ID for replying
 type SessionCache struct {
-	sync.RWMutex
-	UserLastMsgID    map[string]string // UserID -> MsgID (C2C)
-	GroupLastMsgID   map[string]string // GroupID -> MsgID (Group)
-	ChannelLastMsgID map[string]string // ChannelID -> MsgID (Guild)
-	LastMsgTime      map[string]int64  // MsgID -> Timestamp (Unix)
+	sync.RWMutex     `json:"-"`
+	UserLastMsgID    map[string]string                   `json:"user_last_msg_id"`
+	GroupLastMsgID   map[string]string                   `json:"group_last_msg_id"`
+	ChannelLastMsgID map[string]string                   `json:"channel_last_msg_id"`
+	LastMsgTime      map[string]int64                    `json:"last_msg_time"`
+	PendingActions   map[string][]map[string]interface{} `json:"pending_actions"`
 }
 
 var sessionCache = &SessionCache{
@@ -115,9 +168,66 @@ var sessionCache = &SessionCache{
 	GroupLastMsgID:   make(map[string]string),
 	ChannelLastMsgID: make(map[string]string),
 	LastMsgTime:      make(map[string]int64),
+	PendingActions:   make(map[string][]map[string]interface{}),
 }
 
-func (s *SessionCache) Save(keyType, key, msgID string) {
+func (s *SessionCache) SaveDisk() {
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Printf("Failed to marshal session cache: %v", err)
+		return
+	}
+	if err := ioutil.WriteFile("session_cache.json", data, 0644); err != nil {
+		log.Printf("Failed to save session cache to disk: %v", err)
+	}
+}
+
+func (s *SessionCache) LoadDisk() {
+	data, err := ioutil.ReadFile("session_cache.json")
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("Failed to read session cache from disk: %v", err)
+		}
+		return
+	}
+	s.Lock()
+	defer s.Unlock()
+	if err := json.Unmarshal(data, s); err != nil {
+		log.Printf("Failed to unmarshal session cache: %v", err)
+	} else {
+		log.Printf("Loaded session cache from disk: %d users, %d groups", len(s.UserLastMsgID), len(s.GroupLastMsgID))
+	}
+	// Initialize maps if nil
+	if s.UserLastMsgID == nil {
+		s.UserLastMsgID = make(map[string]string)
+	}
+	if s.GroupLastMsgID == nil {
+		s.GroupLastMsgID = make(map[string]string)
+	}
+	if s.ChannelLastMsgID == nil {
+		s.ChannelLastMsgID = make(map[string]string)
+	}
+	if s.LastMsgTime == nil {
+		s.LastMsgTime = make(map[string]int64)
+	}
+	if s.PendingActions == nil {
+		s.PendingActions = make(map[string][]map[string]interface{})
+	}
+}
+
+func (s *SessionCache) AddPending(keyType, key string, action map[string]interface{}) {
+	s.Lock()
+	defer s.Unlock()
+	compositeKey := keyType + ":" + key
+	if s.PendingActions == nil {
+		s.PendingActions = make(map[string][]map[string]interface{})
+	}
+	s.PendingActions[compositeKey] = append(s.PendingActions[compositeKey], action)
+	log.Printf("[SessionCache] Queued pending action for %s %s", keyType, key)
+	go s.SaveDisk()
+}
+
+func (s *SessionCache) Save(keyType, key, msgID string) []map[string]interface{} {
 	s.Lock()
 	defer s.Unlock()
 	switch keyType {
@@ -130,6 +240,20 @@ func (s *SessionCache) Save(keyType, key, msgID string) {
 	}
 	s.LastMsgTime[msgID] = time.Now().Unix()
 	log.Printf("[SessionCache] Saved %s session for %s: %s", keyType, key, msgID)
+
+	// Check pending
+	compositeKey := keyType + ":" + key
+	var pending []map[string]interface{}
+	if actions, ok := s.PendingActions[compositeKey]; ok && len(actions) > 0 {
+		pending = actions
+		delete(s.PendingActions, compositeKey)
+		log.Printf("[SessionCache] Found %d pending actions for %s %s", len(pending), keyType, key)
+	}
+
+	// Save to disk asynchronously
+	go s.SaveDisk()
+
+	return pending
 }
 
 func (s *SessionCache) Get(keyType, key string) string {
@@ -195,6 +319,28 @@ func loadConfig() {
 		config.NexusAddr = envNexusAddr
 	}
 
+	if envLogPort := os.Getenv("LOG_PORT"); envLogPort != "" {
+		fmt.Sscanf(envLogPort, "%d", &config.LogPort)
+	}
+	if envFileHost := os.Getenv("FILE_HOST"); envFileHost != "" {
+		config.FileHost = envFileHost
+	}
+	if envMediaRoute := os.Getenv("MEDIA_ROUTE"); envMediaRoute != "" {
+		config.MediaRoute = envMediaRoute
+	}
+
+	// Defaults
+	if config.MediaRoute == "" {
+		config.MediaRoute = "/media/"
+	}
+	// Ensure MediaRoute starts and ends with /
+	if !strings.HasPrefix(config.MediaRoute, "/") {
+		config.MediaRoute = "/" + config.MediaRoute
+	}
+	if !strings.HasSuffix(config.MediaRoute, "/") {
+		config.MediaRoute = config.MediaRoute + "/"
+	}
+
 	// Validation
 	if config.AppID == 0 || config.Token == "" || config.Secret == "" {
 		log.Fatal("Missing configuration. Please check config.json or environment variables (TENCENT_APP_ID, TENCENT_TOKEN, TENCENT_SECRET).")
@@ -256,30 +402,139 @@ func handleNexusMessages() {
 	}
 }
 
-func uploadGroupFile(groupID string, filePath string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
+func uploadGroupFile(groupID string, filePath string, fileType int) (string, error) {
+	// Helper to parse response
+	parseResponse := func(resp *http.Response) (string, error) {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return "", err
+		}
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("upload failed: %s - %s", resp.Status, string(body))
+		}
+		log.Printf("[DEBUG] Upload Response: %s", string(body))
+		var result struct {
+			FileUUID string `json:"file_uuid"`
+			FileInfo string `json:"file_info"`
+			TTL      int    `json:"ttl"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return "", fmt.Errorf("failed to parse response: %v", err)
+		}
+		return result.FileInfo, nil
 	}
-	defer file.Close()
 
+	// 1. If URL, Use JSON Payload (Direct URL Upload)
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+		log.Printf("[DEBUG] Using Direct URL Upload for Group: %s", filePath)
+		payload := map[string]interface{}{
+			"file_type":    fileType,
+			"url":          filePath,
+			"srv_send_msg": false,
+		}
+		jsonBody, err := json.Marshal(payload)
+		if err == nil {
+			url := fmt.Sprintf("https://api.sgroup.qq.com/v2/groups/%s/files", groupID)
+			if config.Sandbox {
+				url = fmt.Sprintf("https://sandbox.api.sgroup.qq.com/v2/groups/%s/files", groupID)
+			}
+
+			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+			if err == nil {
+				token, err := getAppAccessToken()
+				if err == nil {
+					req.Header.Set("Authorization", fmt.Sprintf("QQBot %s", token))
+					req.Header.Set("Content-Type", "application/json")
+
+					client := &http.Client{Timeout: 30 * time.Second}
+					resp, err := client.Do(req)
+					if err == nil {
+						fileInfo, err := parseResponse(resp)
+						resp.Body.Close()
+						if err == nil {
+							return fileInfo, nil
+						}
+						log.Printf("[WARN] Direct URL upload failed (API error): %v. Falling back to Multipart Upload.", err)
+					} else {
+						log.Printf("[WARN] Direct URL upload request failed: %v. Falling back to Multipart Upload.", err)
+					}
+				} else {
+					log.Printf("[WARN] Failed to get token for Direct URL upload: %v", err)
+				}
+			} else {
+				log.Printf("[WARN] Failed to create request for Direct URL upload: %v", err)
+			}
+		}
+	}
+
+	// 2. Multipart Upload (Local File or Downloaded URL fallback)
+	localPath := filePath
+	var cleanUp func()
+
+	// If it's a URL (fallback case), we need to download it to a temp file
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+		log.Printf("[DEBUG] Downloading file for Multipart Upload: %s", filePath)
+		resp, err := http.Get(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to download file for fallback upload: %v", err)
+		}
+		defer resp.Body.Close()
+
+		tmpFile, err := ioutil.TempFile("", "upload_fallback_*.jpg")
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp file: %v", err)
+		}
+
+		_, err = io.Copy(tmpFile, resp.Body)
+		tmpFile.Close()
+		if err != nil {
+			os.Remove(tmpFile.Name())
+			return "", fmt.Errorf("failed to save downloaded file: %v", err)
+		}
+
+		localPath = tmpFile.Name()
+		cleanUp = func() {
+			os.Remove(localPath)
+		}
+	}
+
+	if cleanUp != nil {
+		defer cleanUp()
+	}
+
+	// 2. Prepare Multipart Request
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	// File Field
+	file, err := os.Open(localPath)
 	if err != nil {
-		return err
+		return "", err
 	}
-	io.Copy(part, file)
+	defer file.Close()
 
-	_ = writer.WriteField("file_type", "1")
-	_ = writer.WriteField("srv_send_msg", "true")
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filepath.Base(localPath)))
+	h.Set("Content-Type", "image/jpeg") // Force JPEG for now as we save as .jpg
+	part, err := writer.CreatePart(h)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return "", err
+	}
+
+	// Other Fields
+	writer.WriteField("file_type", fmt.Sprintf("%d", fileType))
+	writer.WriteField("srv_send_msg", "false")
 
 	err = writer.Close()
 	if err != nil {
-		return err
+		return "", err
 	}
 
+	// 3. Send Request
 	url := fmt.Sprintf("https://api.sgroup.qq.com/v2/groups/%s/files", groupID)
 	if config.Sandbox {
 		url = fmt.Sprintf("https://sandbox.api.sgroup.qq.com/v2/groups/%s/files", groupID)
@@ -287,57 +542,260 @@ func uploadGroupFile(groupID string, filePath string) error {
 
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bot %d.%s", config.AppID, config.Token))
+	token, err := getAppAccessToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to get access token for upload: %v", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("QQBot %s", token))
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		respBody, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("upload failed: %s - %s", resp.Status, string(respBody))
-	}
-
-	return nil
+	return parseResponse(resp)
 }
 
-func cleanContent(content string) (string, string) {
-	// Regex for CQ Image with Base64
-	re := regexp.MustCompile(`\[CQ:image,file=base64://([^\]]+)\]`)
-	matches := re.FindStringSubmatch(content)
-
-	if len(matches) > 1 {
-		b64Data := matches[1]
-		data, err := base64.StdEncoding.DecodeString(b64Data)
+func uploadC2CFile(userID string, filePath string, fileType int) (string, error) {
+	// Helper to parse response
+	parseResponse := func(resp *http.Response) (string, error) {
+		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("Error decoding base64 image: %v", err)
-			return strings.ReplaceAll(content, matches[0], "[Image Error]"), ""
+			return "", err
 		}
-
-		tmpFile, err := ioutil.TempFile("", "tencent_img_*.png")
-		if err != nil {
-			log.Printf("Error creating temp file: %v", err)
-			return strings.ReplaceAll(content, matches[0], "[Image Save Error]"), ""
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("upload failed: %s - %s", resp.Status, string(body))
 		}
-		defer tmpFile.Close()
-
-		if _, err := tmpFile.Write(data); err != nil {
-			log.Printf("Error writing to temp file: %v", err)
-			return strings.ReplaceAll(content, matches[0], "[Image Write Error]"), ""
+		log.Printf("[DEBUG] C2C Upload Response: %s", string(body))
+		var result struct {
+			FileUUID string `json:"file_uuid"`
+			FileInfo string `json:"file_info"`
+			TTL      int    `json:"ttl"`
 		}
-
-		cleanMsg := strings.ReplaceAll(content, matches[0], "")
-		return strings.TrimSpace(cleanMsg), tmpFile.Name()
+		if err := json.Unmarshal(body, &result); err != nil {
+			return "", fmt.Errorf("failed to parse response: %v", err)
+		}
+		return result.FileInfo, nil
 	}
 
-	return content, ""
+	// 1. If URL, Use JSON Payload (Direct URL Upload)
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+		log.Printf("[DEBUG] Using Direct URL Upload for C2C: %s", filePath)
+		payload := map[string]interface{}{
+			"file_type":    fileType,
+			"url":          filePath,
+			"srv_send_msg": false,
+		}
+		jsonBody, err := json.Marshal(payload)
+		if err == nil {
+			url := fmt.Sprintf("https://api.sgroup.qq.com/v2/users/%s/files", userID)
+			if config.Sandbox {
+				url = fmt.Sprintf("https://sandbox.api.sgroup.qq.com/v2/users/%s/files", userID)
+			}
+
+			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+			if err == nil {
+				token, err := getAppAccessToken()
+				if err == nil {
+					req.Header.Set("Authorization", fmt.Sprintf("QQBot %s", token))
+					req.Header.Set("Content-Type", "application/json")
+
+					client := &http.Client{Timeout: 30 * time.Second}
+					resp, err := client.Do(req)
+					if err == nil {
+						fileInfo, err := parseResponse(resp)
+						resp.Body.Close()
+						if err == nil {
+							return fileInfo, nil
+						}
+						log.Printf("[WARN] Direct URL upload failed (API error): %v. Falling back to Multipart Upload.", err)
+					} else {
+						log.Printf("[WARN] Direct URL upload request failed: %v. Falling back to Multipart Upload.", err)
+					}
+				} else {
+					log.Printf("[WARN] Failed to get token for Direct URL upload: %v", err)
+				}
+			} else {
+				log.Printf("[WARN] Failed to create request for Direct URL upload: %v", err)
+			}
+		}
+	}
+
+	// 2. Multipart Upload (Local File or Downloaded URL fallback)
+	localPath := filePath
+	var cleanUp func()
+
+	// If it's a URL (fallback case), we need to download it to a temp file
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+		log.Printf("[DEBUG] Downloading file for Multipart Upload: %s", filePath)
+		resp, err := http.Get(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to download file for fallback upload: %v", err)
+		}
+		defer resp.Body.Close()
+
+		tmpFile, err := ioutil.TempFile("", "upload_fallback_*.jpg")
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp file: %v", err)
+		}
+
+		_, err = io.Copy(tmpFile, resp.Body)
+		tmpFile.Close()
+		if err != nil {
+			os.Remove(tmpFile.Name())
+			return "", fmt.Errorf("failed to save downloaded file: %v", err)
+		}
+
+		localPath = tmpFile.Name()
+		cleanUp = func() {
+			os.Remove(localPath)
+		}
+	}
+
+	if cleanUp != nil {
+		defer cleanUp()
+	}
+
+	// 2. Prepare Multipart Request
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// File Field
+	file, err := os.Open(localPath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filepath.Base(localPath)))
+	h.Set("Content-Type", "image/jpeg")
+	part, err := writer.CreatePart(h)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return "", err
+	}
+
+	// Other Fields
+	writer.WriteField("file_type", fmt.Sprintf("%d", fileType))
+	writer.WriteField("srv_send_msg", "false")
+
+	err = writer.Close()
+	if err != nil {
+		return "", err
+	}
+
+	// 3. Send Request
+	url := fmt.Sprintf("https://api.sgroup.qq.com/v2/users/%s/files", userID)
+	if config.Sandbox {
+		url = fmt.Sprintf("https://sandbox.api.sgroup.qq.com/v2/users/%s/files", userID)
+	}
+
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := getAppAccessToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to get access token for upload: %v", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("QQBot %s", token))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	return parseResponse(resp)
+}
+
+func cleanContent(content string) (string, string, int) {
+	// Return: cleanedContent, filePath, fileType (1:Image, 2:Video, 3:Audio, 4:File)
+
+	// Helper to process base64 or path
+	process := func(fullMatch, fileVal string, fType int) (string, string, int) {
+		if strings.HasPrefix(fileVal, "base64://") {
+			b64Data := strings.TrimPrefix(fileVal, "base64://")
+			data, err := base64.StdEncoding.DecodeString(b64Data)
+			if err != nil {
+				log.Printf("Error decoding base64: %v", err)
+				return strings.ReplaceAll(content, fullMatch, "[Media Error]"), "", 0
+			}
+
+			prefix := "tencent_media_"
+			ext := ".dat"
+			if fType == 1 {
+				ext = ".png"
+			}
+			if fType == 2 {
+				ext = ".mp4"
+			}
+			if fType == 3 {
+				ext = ".amr"
+			}
+
+			tmpFile, err := ioutil.TempFile("", prefix+"*"+ext)
+			if err != nil {
+				log.Printf("Error creating temp file: %v", err)
+				return strings.ReplaceAll(content, fullMatch, "[Media Save Error]"), "", 0
+			}
+			defer tmpFile.Close()
+
+			if _, err := tmpFile.Write(data); err != nil {
+				log.Printf("Error writing to temp file: %v", err)
+				return strings.ReplaceAll(content, fullMatch, "[Media Write Error]"), "", 0
+			}
+			cleanMsg := strings.ReplaceAll(content, fullMatch, "")
+			return strings.TrimSpace(cleanMsg), tmpFile.Name(), fType
+		}
+		// Local file
+		cleanMsg := strings.ReplaceAll(content, fullMatch, "")
+		return strings.TrimSpace(cleanMsg), fileVal, fType
+	}
+
+	// Image
+	reImg := regexp.MustCompile(`\[CQ:image,[^\]]*\]`)
+	if match := reImg.FindString(content); match != "" {
+		reFile := regexp.MustCompile(`file=([^,\]]+)`)
+		if fileMatches := reFile.FindStringSubmatch(match); len(fileMatches) > 1 {
+			return process(match, fileMatches[1], 1)
+		}
+	}
+
+	// Video
+	reVid := regexp.MustCompile(`\[CQ:video,[^\]]*\]`)
+	if match := reVid.FindString(content); match != "" {
+		reFile := regexp.MustCompile(`file=([^,\]]+)`)
+		if fileMatches := reFile.FindStringSubmatch(match); len(fileMatches) > 1 {
+			return process(match, fileMatches[1], 2)
+		}
+	}
+
+	// Audio
+	reAud := regexp.MustCompile(`\[CQ:record,[^\]]*\]`)
+	if match := reAud.FindString(content); match != "" {
+		reFile := regexp.MustCompile(`file=([^,\]]+)`)
+		if fileMatches := reFile.FindStringSubmatch(match); len(fileMatches) > 1 {
+			return process(match, fileMatches[1], 3)
+		}
+	}
+
+	return content, "", 0
 }
 
 func handleAction(action map[string]interface{}) {
@@ -359,7 +817,7 @@ func handleAction(action map[string]interface{}) {
 		if messageType == "private" {
 			// C2C
 			userID := getString(params, "user_id")
-			safeContent, imagePath := cleanContent(content)
+			safeContent, imagePath, fileType := cleanContent(content)
 
 			// Try to find session if message_id is missing
 			msgID := getString(params, "message_id")
@@ -367,24 +825,87 @@ func handleAction(action map[string]interface{}) {
 				msgID = sessionCache.Get("user", userID)
 				if msgID != "" {
 					log.Printf("[NEXUS-MSG] Using cached session MsgID %s for User %s", msgID, userID)
+				} else {
+					log.Printf("[NEXUS-MSG] No active session (MsgID) for User %s. Caching action pending user reply.", userID)
+					sessionCache.AddPending("user", userID, action)
+					return
 				}
 			}
 
 			log.Printf("[NEXUS-MSG] Sending Private Message to %s: %s (Img: %s)", userID, safeContent, imagePath)
+
+			var media *dto.MediaInfo
+			var publicURL string
+
+			if imagePath != "" {
+				// Calculate Public URL for fallback
+				if config.FileHost != "" {
+					fileName := filepath.Base(imagePath)
+					host := strings.TrimRight(config.FileHost, "/")
+					route := strings.Trim(config.MediaRoute, "/")
+					if route != "" {
+						route = "/" + route
+					}
+					publicURL = fmt.Sprintf("%s%s/%s", host, route, fileName)
+				}
+
+				fileInfo, errUpload := uploadC2CFile(userID, imagePath, fileType)
+				if errUpload != nil {
+					log.Printf("[NEXUS-MSG] Failed to upload C2C file: %v", errUpload)
+					// Fallback to URL
+					if publicURL != "" {
+						// Remove scheme to avoid 40054010
+						safeUrl := strings.Replace(publicURL, "http://", "", 1)
+						safeUrl = strings.Replace(safeUrl, "https://", "", 1)
+						safeContent += fmt.Sprintf("\n[图片]: %s", safeUrl)
+					} else {
+						safeContent += "\n[Image Upload Failed]"
+					}
+				} else {
+					media = &dto.MediaInfo{FileInfo: []byte(fileInfo)}
+				}
+
+				// Do not remove immediately if using URL fallback or successful upload (needed for serving)
+				if !strings.HasPrefix(imagePath, "http") {
+					go func(path string) {
+						time.Sleep(10 * time.Minute)
+						os.Remove(path)
+						log.Printf("Cleaned up temp file: %s", path)
+					}(imagePath)
+				}
+			}
+
+			if safeContent == "" {
+				safeContent = " "
+			}
+
 			msgData := &dto.MessageToCreate{
 				Content: safeContent,
 				MsgID:   msgID,
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+				Media:   media,
 			}
-			if imagePath != "" {
-				// msgData.FileImage = imagePath // FileImage might not be supported in C2C
-				safeContent += "\n[Image not supported in Private Chat]"
-				msgData.Content = safeContent
-				os.Remove(imagePath)
+			if media != nil {
+				msgData.MsgType = 7 // 7: Media
 			}
 
 			_, err := api.PostC2CMessage(ctx, userID, msgData)
 			if err != nil {
 				log.Printf("[NEXUS-MSG] Failed to send private message: %v", err)
+				// If Media failed (e.g. 40034004), retry with Text Only URL
+				if media != nil && publicURL != "" {
+					log.Printf("[NEXUS-MSG] Retrying with Text URL fallback...")
+					msgData.Media = nil
+					msgData.MsgType = 0
+					msgData.Content = safeContent + fmt.Sprintf("\n[图片]: %s", publicURL)
+					_, errRetry := api.PostC2CMessage(ctx, userID, msgData)
+					if errRetry != nil {
+						log.Printf("[NEXUS-MSG] Retry failed: %v", errRetry)
+					} else {
+						log.Printf("[NEXUS-MSG] Retry with URL successful")
+						err = nil // Treat as success
+					}
+				}
 			} else {
 				log.Printf("[NEXUS-MSG] Private message sent successfully")
 			}
@@ -392,7 +913,7 @@ func handleAction(action map[string]interface{}) {
 		} else if messageType == "group" {
 			// QQ Group
 			groupID := getString(params, "group_id")
-			safeContent, imagePath := cleanContent(content)
+			safeContent, imagePath, fileType := cleanContent(content)
 
 			// Try to find session if message_id is missing
 			msgID := getString(params, "message_id")
@@ -400,36 +921,88 @@ func handleAction(action map[string]interface{}) {
 				msgID = sessionCache.Get("group", groupID)
 				if msgID != "" {
 					log.Printf("[NEXUS-MSG] Using cached session MsgID %s for Group %s", msgID, groupID)
+				} else {
+					log.Printf("[NEXUS-MSG] No active session (MsgID) for Group %s. Caching action pending group reply.", groupID)
+					sessionCache.AddPending("group", groupID, action)
+					return
 				}
 			}
 
 			log.Printf("[NEXUS-MSG] Sending Group Message to %s: %s (Img: %s)", groupID, safeContent, imagePath)
 
 			var err error
+			var media *dto.MediaInfo
+			var publicURL string
 
 			// Upload file if exists
 			if imagePath != "" {
-				err = uploadGroupFile(groupID, imagePath)
-				if err != nil {
-					log.Printf("[NEXUS-MSG] Failed to upload group file: %v", err)
-					safeContent += "\n[Image Upload Failed]"
+				// Calculate Public URL for fallback
+				if config.FileHost != "" {
+					fileName := filepath.Base(imagePath)
+					host := strings.TrimRight(config.FileHost, "/")
+					route := strings.Trim(config.MediaRoute, "/")
+					if route != "" {
+						route = "/" + route
+					}
+					publicURL = fmt.Sprintf("%s%s/%s", host, route, fileName)
+				}
+
+				fileInfo, errUpload := uploadGroupFile(groupID, imagePath, fileType)
+				if errUpload != nil {
+					log.Printf("[NEXUS-MSG] Failed to upload group file: %v", errUpload)
+					err = errUpload
+					if publicURL != "" {
+						safeUrl := strings.Replace(publicURL, "http://", "", 1)
+						safeUrl = strings.Replace(safeUrl, "https://", "", 1)
+						safeContent += fmt.Sprintf("\n[图片]: %s", safeUrl)
+					} else {
+						safeContent += "\n[Image Upload Failed]"
+					}
 				} else {
 					log.Printf("[NEXUS-MSG] Group file uploaded successfully")
+					media = &dto.MediaInfo{FileInfo: []byte(fileInfo)}
 				}
-				os.Remove(imagePath)
+				if !strings.HasPrefix(imagePath, "http") {
+					os.Remove(imagePath)
+				}
 			}
 
-			// Send text message if content is not empty
-			if safeContent != "" {
+			// Send message if content is not empty or media is present
+			if safeContent != "" || media != nil {
+				if safeContent == "" {
+					safeContent = " "
+				}
 				msgData := &dto.MessageToCreate{
 					Content: safeContent,
 					MsgID:   msgID,
+					MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+					Media:   media,
+				}
+				if media != nil {
+					msgData.MsgType = 7
 				}
 				_, errPost := api.PostGroupMessage(ctx, groupID, msgData)
 				if errPost != nil {
 					log.Printf("[NEXUS-MSG] Failed to send group message: %v", errPost)
 					if err == nil {
 						err = errPost
+					}
+					// Retry with URL fallback
+					if media != nil && publicURL != "" {
+						log.Printf("[NEXUS-MSG] Retrying Group Msg with Text URL fallback...")
+						msgData.Media = nil
+						msgData.MsgType = 0
+						// Remove scheme
+						safeUrl := strings.Replace(publicURL, "http://", "", 1)
+						safeUrl = strings.Replace(safeUrl, "https://", "", 1)
+						msgData.Content = safeContent + fmt.Sprintf("\n[图片]: %s", safeUrl)
+						_, errRetry := api.PostGroupMessage(ctx, groupID, msgData)
+						if errRetry != nil {
+							log.Printf("[NEXUS-MSG] Retry failed: %v", errRetry)
+						} else {
+							log.Printf("[NEXUS-MSG] Retry with URL successful")
+							err = nil
+						}
 					}
 				} else {
 					log.Printf("[NEXUS-MSG] Group message sent successfully")
@@ -444,7 +1017,7 @@ func handleAction(action map[string]interface{}) {
 			if channelID == "" {
 				channelID = getString(params, "group_id")
 			}
-			safeContent, imagePath := cleanContent(content)
+			safeContent, imagePath, _ := cleanContent(content)
 
 			// Try to find session if message_id is missing
 			msgID := getString(params, "message_id")
@@ -452,6 +1025,10 @@ func handleAction(action map[string]interface{}) {
 				msgID = sessionCache.Get("channel", channelID)
 				if msgID != "" {
 					log.Printf("[NEXUS-MSG] Using cached session MsgID %s for Channel %s", msgID, channelID)
+				} else {
+					log.Printf("[NEXUS-MSG] No active session (MsgID) for Channel %s. Caching action pending channel reply.", channelID)
+					sessionCache.AddPending("channel", channelID, action)
+					return
 				}
 			}
 
@@ -459,12 +1036,15 @@ func handleAction(action map[string]interface{}) {
 			msgData := &dto.MessageToCreate{
 				Content: safeContent,
 				MsgID:   msgID,
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
 			}
 			if imagePath != "" {
 				// msgData.FileImage = imagePath // Not supported
 				safeContent += "\n[Image not supported in Guild Channel]"
 				msgData.Content = safeContent
-				os.Remove(imagePath)
+				if !strings.HasPrefix(imagePath, "http") {
+					os.Remove(imagePath)
+				}
 			}
 
 			msg, err := api.PostMessage(ctx, channelID, msgData)
@@ -481,7 +1061,7 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		groupID := getString(params, "group_id")
 		content, _ := params["message"].(string)
-		safeContent, imagePath := cleanContent(content)
+		safeContent, imagePath, fileType := cleanContent(content)
 
 		// Try to find session if message_id is missing
 		msgID := getString(params, "message_id")
@@ -495,20 +1075,35 @@ func handleAction(action map[string]interface{}) {
 		log.Printf("[NEXUS-MSG] Sending Group Message (send_group_msg) to %s: %s", groupID, safeContent)
 
 		var err error
+		var media *dto.MediaInfo
+
 		if imagePath != "" {
-			err = uploadGroupFile(groupID, imagePath)
-			if err != nil {
-				log.Printf("[NEXUS-MSG] Failed to upload group file: %v", err)
-				safeContent += "\n[Image Upload Failed]"
+			fileInfo, errUpload := uploadGroupFile(groupID, imagePath, fileType)
+			if errUpload != nil {
+				log.Printf("[NEXUS-MSG] Failed to upload group file: %v", errUpload)
+				err = errUpload
+				safeContent += "\n[Image Upload Failed: Local file upload not supported, use URL]"
+			} else {
+				log.Printf("[NEXUS-MSG] Group file uploaded successfully")
+				media = &dto.MediaInfo{FileInfo: []byte(fileInfo)}
 			}
-			os.Remove(imagePath)
+			if !strings.HasPrefix(imagePath, "http") {
+				os.Remove(imagePath)
+			}
 		}
 
-		if safeContent != "" {
-			_, errPost := api.PostGroupMessage(ctx, groupID, &dto.MessageToCreate{
+		// Send message if content is not empty or media is present
+		if safeContent != "" || media != nil {
+			if safeContent == "" {
+				safeContent = " "
+			}
+			msgData := &dto.MessageToCreate{
 				Content: safeContent,
 				MsgID:   msgID,
-			})
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+				Media:   media,
+			}
+			_, errPost := api.PostGroupMessage(ctx, groupID, msgData)
 			if errPost != nil {
 				log.Printf("[NEXUS-MSG] Failed to send group message: %v", errPost)
 				if err == nil {
@@ -526,12 +1121,7 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		userID := getString(params, "user_id")
 		content, _ := params["message"].(string)
-		safeContent, imagePath := cleanContent(content)
-
-		if imagePath != "" {
-			safeContent += "\n[Image not supported in Private Chat]"
-			os.Remove(imagePath)
-		}
+		safeContent, imagePath, fileType := cleanContent(content)
 
 		// Try to find session if message_id is missing
 		msgID := getString(params, "message_id")
@@ -542,11 +1132,33 @@ func handleAction(action map[string]interface{}) {
 			}
 		}
 
-		log.Printf("[NEXUS-MSG] Sending Private Message (send_private_msg) to %s: %s", userID, safeContent)
-		_, err := api.PostC2CMessage(ctx, userID, &dto.MessageToCreate{
+		log.Printf("[NEXUS-MSG] Sending Private Message (send_private_msg) to %s: %s (Img: %s)", userID, safeContent, imagePath)
+
+		var media *dto.MediaInfo
+		if imagePath != "" {
+			fileInfo, errUpload := uploadC2CFile(userID, imagePath, fileType)
+			if errUpload != nil {
+				log.Printf("[NEXUS-MSG] Failed to upload C2C file: %v", errUpload)
+				safeContent += "\n[Image Upload Failed: Local file upload not supported, use URL]"
+			} else {
+				media = &dto.MediaInfo{FileInfo: []byte(fileInfo)}
+			}
+			if !strings.HasPrefix(imagePath, "http") {
+				os.Remove(imagePath)
+			}
+		}
+
+		if safeContent == "" {
+			safeContent = " "
+		}
+
+		msgData := &dto.MessageToCreate{
 			Content: safeContent,
 			MsgID:   msgID,
-		})
+			MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+			Media:   media,
+		}
+		_, err := api.PostC2CMessage(ctx, userID, msgData)
 		if err != nil {
 			log.Printf("[NEXUS-MSG] Failed to send private message: %v", err)
 		} else {
@@ -582,6 +1194,7 @@ func handleAction(action map[string]interface{}) {
 		msg, err := api.PostMessage(ctx, channelID, &dto.MessageToCreate{
 			Content: content,
 			MsgID:   msgID,
+			MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
 		})
 		handleSendResponse(err, msg, action)
 
@@ -626,6 +1239,48 @@ func handleAction(action map[string]interface{}) {
 			"status": "ok",
 			"data":   []interface{}{},
 			"echo":   action["echo"],
+		})
+
+	case "get_group_count":
+		// For official bots, map Guilds to Groups for compatibility/visibility
+		// Fetch Guilds to count
+		guilds, err := api.MeGuilds(ctx, &dto.GuildPager{Limit: "100"})
+		count := 0
+		if err == nil {
+			count = len(guilds)
+		}
+		sendToNexus(map[string]interface{}{
+			"status": "ok",
+			"data": map[string]interface{}{
+				"count": count,
+			},
+			"echo": action["echo"],
+		})
+
+	case "get_friend_count":
+		// Return count of friends (0 for now, as official bots don't have friends)
+		sendToNexus(map[string]interface{}{
+			"status": "ok",
+			"data": map[string]interface{}{
+				"count": 0,
+			},
+			"echo": action["echo"],
+		})
+
+	case "get_guild_count":
+		// Fetch Guilds to count
+		// Note: This is still somewhat expensive if we have many guilds, but saves bandwidth to Nexus
+		guilds, err := api.MeGuilds(ctx, &dto.GuildPager{Limit: "100"})
+		count := 0
+		if err == nil {
+			count = len(guilds)
+		}
+		sendToNexus(map[string]interface{}{
+			"status": "ok",
+			"data": map[string]interface{}{
+				"count": count,
+			},
+			"echo": action["echo"],
 		})
 
 	case "get_guild_list":
@@ -1115,7 +1770,27 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 	log.Printf("Received AT Message from %s: %s", data.Author.Username, data.Content)
 
 	// Save Session for Reply
-	sessionCache.Save("channel", data.ChannelID, data.ID)
+	pending := sessionCache.Save("channel", data.ChannelID, data.ID)
+	for _, action := range pending {
+		go handleAction(action)
+	}
+
+	// Test: Reply with Avatar
+	if strings.Contains(data.Content, "头像") || strings.EqualFold(strings.TrimSpace(data.Content), "avatar") {
+		avatar := data.Author.Avatar
+		if avatar == "" {
+			avatar = "Avatar URL not found"
+		}
+		log.Printf("Replying with Avatar: %s", avatar)
+		_, err := api.PostMessage(context.Background(), data.ChannelID, &dto.MessageToCreate{
+			Content: fmt.Sprintf("Your Avatar: %s", avatar),
+			MsgID:   data.ID,
+			MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+		})
+		if err != nil {
+			log.Printf("Failed to reply avatar: %v", err)
+		}
+	}
 
 	// Translate to OneBot Message Event
 	obEvent := map[string]interface{}{
@@ -1146,7 +1821,10 @@ func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageDa
 	log.Printf("Received Direct Message from %s: %s", data.Author.Username, data.Content)
 
 	// Save Session for Reply (DM uses ChannelID)
-	sessionCache.Save("channel", data.ChannelID, data.ID)
+	pending := sessionCache.Save("channel", data.ChannelID, data.ID)
+	for _, action := range pending {
+		go handleAction(action)
+	}
 
 	// Translate to OneBot Message Event
 	obEvent := map[string]interface{}{
@@ -1244,7 +1922,59 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 	log.Printf("Received Group AT Message from %s: %s", data.Author.ID, data.Content)
 
 	// Save Session for Reply
-	sessionCache.Save("group", data.GroupID, data.ID)
+	pending := sessionCache.Save("group", data.GroupID, data.ID)
+	for _, action := range pending {
+		go handleAction(action)
+	}
+
+	// Test: Reply with Avatar
+	if strings.Contains(data.Content, "头像") || strings.EqualFold(strings.TrimSpace(data.Content), "avatar") {
+		avatar := data.Author.Avatar
+		if avatar == "" {
+			avatar = "https://q1.qlogo.cn/g?b=qq&nk=1653346663&s=100"
+		}
+		log.Printf("Replying with Avatar (Uploading...): %s", avatar)
+
+		// Upload file to get FileInfo
+		fileInfo, err := uploadGroupFile(data.GroupID, avatar, 1) // 1 = Image
+		if err != nil {
+			log.Printf("Failed to upload avatar via URL: %v. Trying proxy...", err)
+			// Fallback: Download and Proxy
+			resp, errDl := http.Get(avatar)
+			if errDl == nil {
+				defer resp.Body.Close()
+				tmpFile, errTmp := ioutil.TempFile("", "avatar_*.jpg")
+				if errTmp == nil {
+					defer tmpFile.Close()
+					_, _ = io.Copy(tmpFile, resp.Body)
+					tmpPath := tmpFile.Name()
+					// Upload local file
+					fileInfo, err = uploadGroupFile(data.GroupID, tmpPath, 1)
+					os.Remove(tmpPath)
+				}
+			}
+		}
+
+		if err != nil {
+			log.Printf("Failed to upload avatar: %v", err)
+			api.PostGroupMessage(context.Background(), data.GroupID, &dto.MessageToCreate{
+				Content: fmt.Sprintf("Avatar Upload Failed: %v", err),
+				MsgID:   data.ID,
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+			})
+		} else {
+			_, err := api.PostGroupMessage(context.Background(), data.GroupID, &dto.MessageToCreate{
+				Content: " ",
+				MsgType: 7,
+				Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
+				MsgID:   data.ID,
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+			})
+			if err != nil {
+				log.Printf("Failed to reply avatar media: %v", err)
+			}
+		}
+	}
 
 	sendToNexus(map[string]interface{}{
 		"post_type":    "message",
@@ -1264,18 +1994,6 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 		"self_id": selfID,
 	})
 
-	// TEST: Reply with random string
-	randomStr := fmt.Sprintf("Group Reply: %d", time.Now().UnixNano())
-	log.Printf("Sending Group test reply: %s", randomStr)
-
-	_, err := api.PostGroupMessage(ctx, data.GroupID, &dto.MessageToCreate{
-		Content: randomStr,
-		MsgID:   data.ID,
-	})
-	if err != nil {
-		log.Printf("Error sending Group test reply: %v", err)
-	}
-
 	return nil
 }
 
@@ -1283,7 +2001,74 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 	log.Printf("Received C2C Message from %s: %s", data.Author.ID, data.Content)
 
 	// Save Session for Reply
-	sessionCache.Save("user", data.Author.ID, data.ID)
+	pending := sessionCache.Save("user", data.Author.ID, data.ID)
+	for _, action := range pending {
+		go handleAction(action)
+	}
+
+	// Test: Reply with Avatar
+	if strings.Contains(data.Content, "头像") || strings.EqualFold(strings.TrimSpace(data.Content), "avatar") {
+		avatar := data.Author.Avatar
+		if avatar == "" {
+			// Fallback to a default avatar
+			avatar = "https://q1.qlogo.cn/g?b=qq&nk=1653346663&s=100"
+		}
+		log.Printf("Replying with Avatar (Uploading...): %s", avatar)
+
+		// Upload file to get FileInfo
+		fileInfo, err := uploadC2CFile(data.Author.ID, avatar, 1) // 1 = Image
+		if err != nil {
+			log.Printf("Failed to upload avatar via URL: %v. Trying proxy...", err)
+			// Fallback: Download and Proxy
+			resp, errDl := http.Get(avatar)
+			if errDl == nil {
+				defer resp.Body.Close()
+				tmpFile, errTmp := ioutil.TempFile("", "avatar_*.jpg")
+				if errTmp == nil {
+					defer tmpFile.Close()
+					_, _ = io.Copy(tmpFile, resp.Body)
+					tmpPath := tmpFile.Name()
+					// Upload local file
+					fileInfo, err = uploadC2CFile(data.Author.ID, tmpPath, 1)
+					os.Remove(tmpPath)
+				}
+			}
+		}
+
+		if err != nil {
+			log.Printf("Failed to upload avatar: %v", err)
+			api.PostC2CMessage(context.Background(), data.Author.ID, &dto.MessageToCreate{
+				Content: fmt.Sprintf("Avatar Upload Failed: %v", err),
+				MsgID:   data.ID,
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+			})
+		} else {
+			_, err := api.PostC2CMessage(context.Background(), data.Author.ID, &dto.MessageToCreate{
+				Content: " ",
+				MsgType: 7,
+				Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
+				MsgID:   data.ID,
+				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
+			})
+			if err != nil {
+				log.Printf("Failed to reply avatar media: %v", err)
+			}
+		}
+	}
+
+	// Handle Attachments (Images, Video, Audio, Files)
+	for _, attachment := range data.Attachments {
+		if strings.HasPrefix(attachment.ContentType, "image") {
+			data.Content += fmt.Sprintf("[CQ:image,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "video") {
+			data.Content += fmt.Sprintf("[CQ:video,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "audio") {
+			data.Content += fmt.Sprintf("[CQ:record,file=%s]", attachment.URL)
+		} else {
+			// Generic File
+			data.Content += fmt.Sprintf("[CQ:file,file=%s,name=%s]", attachment.URL, filepath.Base(attachment.URL))
+		}
+	}
 
 	sendToNexus(map[string]interface{}{
 		"post_type":    "message",
@@ -1301,18 +2086,6 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 		"time":    time.Now().Unix(),
 		"self_id": selfID,
 	})
-
-	// TEST: Reply with random string
-	randomStr := fmt.Sprintf("C2C Reply: %d", time.Now().UnixNano())
-	log.Printf("Sending C2C test reply: %s", randomStr)
-
-	_, err := api.PostC2CMessage(ctx, data.Author.ID, &dto.MessageToCreate{
-		Content: randomStr,
-		MsgID:   data.ID,
-	})
-	if err != nil {
-		log.Printf("Error sending C2C test reply: %v", err)
-	}
 
 	return nil
 }
@@ -1336,7 +2109,10 @@ func main() {
 	loadConfig()
 	ctx = context.Background()
 
-	// Start HTTP Log Viewer if configured
+	// Load Session Cache
+	sessionCache.LoadDisk()
+
+	// Start HTTP Log Viewer and File Server if configured
 	if config.LogPort > 0 {
 		go func() {
 			http.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
@@ -1354,10 +2130,47 @@ func main() {
 				}
 			})
 
+			// Serve temporary media files
+			// Maps config.MediaRoute + filename -> os.TempDir()/filename
+			http.HandleFunc(config.MediaRoute, func(w http.ResponseWriter, r *http.Request) {
+				fileName := strings.TrimPrefix(r.URL.Path, config.MediaRoute)
+				if fileName == "" || strings.Contains(fileName, "..") || strings.Contains(fileName, "/") {
+					http.Error(w, "Invalid file name", http.StatusBadRequest)
+					return
+				}
+				// Look in temp dir
+				tmpPath := filepath.Join(os.TempDir(), fileName)
+				// Check existence
+				if _, err := os.Stat(tmpPath); os.IsNotExist(err) {
+					http.Error(w, "File not found", http.StatusNotFound)
+					return
+				}
+
+				// Log access
+				log.Printf("Serving media: %s to %s (UA: %s)", fileName, r.RemoteAddr, r.UserAgent())
+
+				// Explicitly set Content-Type based on extension
+				ext := strings.ToLower(filepath.Ext(fileName))
+				switch ext {
+				case ".png":
+					w.Header().Set("Content-Type", "image/png")
+				case ".jpg", ".jpeg":
+					w.Header().Set("Content-Type", "image/jpeg")
+				case ".gif":
+					w.Header().Set("Content-Type", "image/gif")
+				case ".mp4":
+					w.Header().Set("Content-Type", "video/mp4")
+				case ".amr":
+					w.Header().Set("Content-Type", "audio/amr")
+				}
+
+				http.ServeFile(w, r, tmpPath)
+			})
+
 			addr := fmt.Sprintf(":%d", config.LogPort)
-			log.Printf("Starting Log Viewer at http://localhost%s/logs", addr)
+			log.Printf("Starting HTTP Server at http://localhost%s (Logs: /logs, Media: %s)", addr, config.MediaRoute)
 			if err := http.ListenAndServe(addr, nil); err != nil {
-				log.Printf("Failed to start Log Viewer: %v", err)
+				log.Printf("Failed to start HTTP Server: %v", err)
 			}
 		}()
 	}
