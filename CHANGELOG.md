@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.64 (2025-12-17)
+*   **System Reliability Enhancements (系统可靠性增强)**:
+    *   **Worker Disconnect Detection**: Implemented automatic heartbeat monitoring for Worker connections with 60-second timeout detection and cleanup mechanism.
+    *   **Message Persistence Queue**: Added in-memory message queue to prevent message loss during Worker disconnections, with automatic message replay for new Workers.
+    *   **Message Retry Mechanism**: Implemented intelligent message retry system with exponential backoff (1min, 2min, 4min) and maximum 3 retry attempts for failed message deliveries.
+    *   **Compile Error Fix**: Fixed missing "os" package import in WxBotGo/core/bot.go causing build failures.
+    *   **Thread Safety**: Enhanced all shared resource operations with proper mutex locking for concurrent access safety.
+
 ## v1.1.63 (2025-12-17)
 *   **Security Enhancements (安全增强)**:
     *   **WebSocket Authentication**: Implemented an optional token-based authentication mechanism for BotNexus WebSocket connections.

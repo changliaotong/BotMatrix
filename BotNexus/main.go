@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -127,10 +128,11 @@ type BotClient struct {
 }
 
 type WorkerClient struct {
-	Conn         *websocket.Conn
-	Mutex        sync.Mutex
-	Connected    time.Time
-	HandledCount int64
+	Conn          *websocket.Conn
+	Mutex         sync.Mutex
+	Connected     time.Time
+	HandledCount  int64
+	LastHeartbeat time.Time
 }
 
 type Subscriber struct {
@@ -199,6 +201,10 @@ type Manager struct {
 	// Auto Recall
 	AutoRecallMutex sync.RWMutex
 	AutoRecallMap   map[string]AutoRecallTask `json:"-"` // Echo -> Task
+
+	// Message Persistence Queue
+	MessageQueueMutex sync.RWMutex
+	MessageQueue      []interface{} `json:"-"` // Persistent message queue for reliability
 }
 
 type AutoRecallTask struct {
@@ -269,6 +275,7 @@ func NewManager() *Manager {
 		Sessions:        make(map[string]*ContactSession),
 		AutoRecallMap:   make(map[string]AutoRecallTask),
 		pendingRequests: make(map[string]chan map[string]interface{}),
+		MessageQueue:    make([]interface{}, 0, 1000),
 	}
 
 	// Initialize Redis
@@ -623,6 +630,151 @@ func main() {
 		}
 	}()
 
+	// Worker Heartbeat Timeout Detection (30s interval)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			manager.mutex.Lock()
+			now := time.Now()
+			activeWorkers := make([]*WorkerClient, 0)
+
+			for _, worker := range manager.workers {
+				worker.Mutex.Lock()
+				if now.Sub(worker.LastHeartbeat) < 60*time.Second {
+					activeWorkers = append(activeWorkers, worker)
+				} else {
+					// 超时Worker，关闭连接
+					worker.Conn.Close()
+					manager.AddLog("WARN", fmt.Sprintf("Worker heartbeat timeout after %v, removing", now.Sub(worker.LastHeartbeat)))
+				}
+				worker.Mutex.Unlock()
+			}
+
+			manager.workers = activeWorkers
+			manager.mutex.Unlock()
+		}
+	}()
+
+	// 消息队列清理机制 - 每5分钟清理过期消息
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			manager.MessageQueueMutex.Lock()
+			now := time.Now()
+
+			// 清理超过30分钟的消息
+			cutoffTime := now.Add(-30 * time.Minute)
+			validMessages := make([]interface{}, 0)
+
+			for _, msg := range manager.MessageQueue {
+				if msgMap, ok := msg.(map[string]interface{}); ok {
+					if timestamp, ok := msgMap["timestamp"].(float64); ok {
+						msgTime := time.Unix(int64(timestamp), 0)
+						if msgTime.After(cutoffTime) {
+							validMessages = append(validMessages, msg)
+						}
+					} else {
+						// 没有时间戳的消息，保留
+						validMessages = append(validMessages, msg)
+					}
+				} else {
+					// 非map格式的消息，保留
+					validMessages = append(validMessages, msg)
+				}
+			}
+
+			removed := len(manager.MessageQueue) - len(validMessages)
+			if removed > 0 {
+				manager.AddLog("INFO", fmt.Sprintf("Cleaned up %d expired messages from queue", removed))
+			}
+
+			manager.MessageQueue = validMessages
+			manager.MessageQueueMutex.Unlock()
+		}
+	}()
+
+	// 消息重试机制 - 每30秒处理重试队列
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			manager.MessageQueueMutex.Lock()
+			now := time.Now()
+			remainingMessages := make([]interface{}, 0)
+
+			for _, msg := range manager.MessageQueue {
+				if retryMsg, ok := msg.(map[string]interface{}); ok {
+					if botID, ok := retryMsg["bot_id"].(string); ok {
+						if message, ok := retryMsg["message"].(map[string]interface{}); ok {
+							if retryCount, ok := retryMsg["retry_count"].(float64); ok {
+								// 检查是否超过最大重试次数（3次）
+								if int(retryCount) >= 3 {
+									manager.AddLog("ERROR", fmt.Sprintf("Message retry limit exceeded for bot %s, discarding message", botID))
+									continue
+								}
+
+								// 检查是否到了重试时间（指数退避：1分钟、2分钟、4分钟）
+								if createdAt, ok := retryMsg["created_at"].(time.Time); ok {
+									retryDelay := time.Duration(math.Pow(2, float64(retryCount))) * time.Minute
+									if now.Sub(createdAt) < retryDelay {
+										// 还未到重试时间，保留消息
+										remainingMessages = append(remainingMessages, msg)
+										continue
+									}
+								}
+
+								// 尝试重新发送消息
+								manager.mutex.RLock()
+								targetBot, exists := manager.bots[botID]
+								manager.mutex.RUnlock()
+
+								if exists && targetBot != nil {
+									targetBot.Mutex.Lock()
+									err := targetBot.Conn.WriteJSON(message)
+									targetBot.Mutex.Unlock()
+
+									if err != nil {
+										manager.AddLog("ERROR", fmt.Sprintf("Message retry failed for bot %s (attempt %d): %v", botID, int(retryCount)+1, err))
+										// 增加重试计数并保留消息
+										retryMsg["retry_count"] = retryCount + 1
+										remainingMessages = append(remainingMessages, msg)
+									} else {
+										manager.AddLog("INFO", fmt.Sprintf("Message retry successful for bot %s (attempt %d)", botID, int(retryCount)+1))
+										// 重试成功，不保留消息
+									}
+								} else {
+									manager.AddLog("WARN", fmt.Sprintf("Bot %s not available for retry, keeping message in queue", botID))
+									// Bot不可用，保留消息
+									remainingMessages = append(remainingMessages, msg)
+								}
+							} else {
+								// 不是重试消息格式，保留
+								remainingMessages = append(remainingMessages, msg)
+							}
+						} else {
+							// 不是重试消息格式，保留
+							remainingMessages = append(remainingMessages, msg)
+						}
+					} else {
+						// 不是重试消息格式，保留
+						remainingMessages = append(remainingMessages, msg)
+					}
+				} else {
+					// 不是重试消息格式，保留
+					remainingMessages = append(remainingMessages, msg)
+				}
+			}
+
+			manager.MessageQueue = remainingMessages
+			manager.MessageQueueMutex.Unlock()
+		}
+	}()
+
 	// 2. Web UI Server Mux
 	uiMux := http.NewServeMux()
 
@@ -763,6 +915,10 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 					}
 				}
 			}
+
+			// 将消息加入持久化队列
+			m.enqueueMessage(data)
+
 			targetIndex := int(time.Now().UnixNano()) % len(m.workers)
 			worker := m.workers[targetIndex]
 
@@ -858,6 +1014,36 @@ func (m *Manager) removeWorker(target *WorkerClient) {
 	m.workers = newWorkers
 	target.Conn.Close()
 	m.AddLog("INFO", "Worker removed due to error")
+}
+
+// 消息队列管理函数
+func (m *Manager) enqueueMessage(data interface{}) {
+	m.MessageQueueMutex.Lock()
+	defer m.MessageQueueMutex.Unlock()
+
+	// 限制队列大小，避免内存溢出
+	if len(m.MessageQueue) >= 1000 {
+		// 移除最旧的消息（FIFO）
+		m.MessageQueue = m.MessageQueue[1:]
+	}
+	m.MessageQueue = append(m.MessageQueue, data)
+}
+
+func (m *Manager) getMessageQueue() []interface{} {
+	m.MessageQueueMutex.RLock()
+	defer m.MessageQueueMutex.RUnlock()
+
+	// 返回队列的副本
+	result := make([]interface{}, len(m.MessageQueue))
+	copy(result, m.MessageQueue)
+	return result
+}
+
+func (m *Manager) clearMessageQueue() {
+	m.MessageQueueMutex.Lock()
+	defer m.MessageQueueMutex.Unlock()
+
+	m.MessageQueue = m.MessageQueue[:0] // 清空队列但保留容量
 }
 
 func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
@@ -1241,6 +1427,17 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 			client.Mutex.Unlock()
 		}
 
+		// Update Worker heartbeat for worker connections
+		if role, ok := msgMap["role"].(string); ok && role == "worker" {
+			m.mutex.RLock()
+			for _, worker := range m.workers {
+				worker.Mutex.Lock()
+				worker.LastHeartbeat = time.Now()
+				worker.Mutex.Unlock()
+			}
+			m.mutex.RUnlock()
+		}
+
 		// Record Stats
 		go m.recordStats(selfID, msgMap)
 
@@ -1315,14 +1512,44 @@ func serveWorker(m *Manager, w http.ResponseWriter, r *http.Request) {
 	}
 
 	worker := &WorkerClient{
-		Conn:      conn,
-		Connected: time.Now(),
+		Conn:          conn,
+		Connected:     time.Now(),
+		LastHeartbeat: time.Now(),
 	}
 
 	m.mutex.Lock()
 	m.workers = append(m.workers, worker)
 	m.mutex.Unlock()
 	m.AddLog("INFO", "New Worker connected (Competing Consumer)")
+
+	// 重放最近的消息队列给新连接的Worker
+	go func() {
+		// 等待Worker连接稳定
+		time.Sleep(100 * time.Millisecond)
+
+		// 获取消息队列并发送给新Worker
+		queue := m.getMessageQueue()
+		if len(queue) > 0 {
+			m.AddLog("INFO", fmt.Sprintf("Replaying %d messages to new Worker", len(queue)))
+
+			// 批量发送消息，避免阻塞
+			for i, msg := range queue {
+				worker.Mutex.Lock()
+				err := worker.Conn.WriteJSON(msg)
+				worker.Mutex.Unlock()
+
+				if err != nil {
+					m.AddLog("WARN", fmt.Sprintf("Failed to replay message %d to new Worker: %v", i, err))
+					break
+				}
+
+				// 小延迟避免消息风暴
+				if i%10 == 0 {
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
+		}
+	}()
 
 	// Keep alive / Read loop (to detect close)
 	defer func() {
@@ -1451,6 +1678,22 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 		if err != nil {
 			m.AddLog("ERROR", fmt.Sprintf("Failed to send API to bot %s: %v", targetBot.SelfID, err))
+
+			// 消息重试机制 - 如果发送失败，添加到重试队列
+			if action, ok := req["action"].(string); ok && strings.HasPrefix(action, "send_") {
+				m.AddLog("WARN", fmt.Sprintf("Adding message to retry queue for bot %s", targetBot.SelfID))
+
+				retryMsg := map[string]interface{}{
+					"bot_id":      targetBot.SelfID,
+					"message":     req,
+					"retry_count": 0,
+					"created_at":  time.Now(),
+				}
+
+				m.MessageQueueMutex.Lock()
+				m.MessageQueue = append(m.MessageQueue, retryMsg)
+				m.MessageQueueMutex.Unlock()
+			}
 		} else {
 			// Update Global Sent Stats (Persistent)
 			if action, ok := req["action"].(string); ok && strings.HasPrefix(action, "send_") {

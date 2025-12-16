@@ -12,6 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.64 - System Reliability & Stability
+*   **🔄 Worker Disconnect Detection**: Automatic heartbeat monitoring with 60-second timeout detection and cleanup.
+*   **💾 Message Persistence**: In-memory message queue prevents message loss during Worker disconnections.
+*   **🔄 Intelligent Message Retry**: Exponential backoff retry mechanism (1min, 2min, 4min) with max 3 attempts.
+*   **🔧 Compile Error Fix**: Resolved WxBotGo build failure by adding missing "os" package import.
+*   **🔒 Thread Safety**: Enhanced mutex locking for all shared resource operations.
+
 ### v1.1.63 - Security & I18n
 *   **🔒 Security**: Implemented optional token authentication for WebSocket connections to prevent unauthorized access.
 *   **🌏 I18n**: Enhanced internationalization for Overmind integration and sidebar menus.
