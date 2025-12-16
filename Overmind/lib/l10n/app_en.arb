@@ -1,0 +1,17 @@
+{
+    "appTitle": "OVERMIND",
+    "tabNexus": "NEXUS",
+    "tabFleet": "FLEET",
+    "tabLogs": "LOGS",
+    "noActiveNodes": "No Active Nodes",
+    "disconnectedNexus": "Disconnected from Nexus",
+    "msgPrefix": "MSG",
+    "noActiveUnits": "No active units detected",
+    "scanNetwork": "SCAN NETWORK",
+    "restart": "RESTART",
+    "stop": "STOP",
+    "start": "START",
+    "settings": "Settings",
+    "language": "Language",
+    "switchLanguage": "Switch Language"
+}

@@ -1,0 +1,17 @@
+{
+    "appTitle": "主宰",
+    "tabNexus": "节点",
+    "tabFleet": "舰队",
+    "tabLogs": "日志",
+    "noActiveNodes": "无活跃节点",
+    "disconnectedNexus": "已断开连接",
+    "msgPrefix": "消息",
+    "noActiveUnits": "未检测到活跃单元",
+    "scanNetwork": "扫描网络",
+    "restart": "重启",
+    "stop": "停止",
+    "start": "启动",
+    "settings": "设置",
+    "language": "语言",
+    "switchLanguage": "切换语言"
+}
