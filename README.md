@@ -72,6 +72,17 @@
 *   **Real-Time Streaming**: Logs are streamed via WebSocket with practically zero latency.
 *   **Per-Bot Filtering**: Easily switch between viewing system logs or specific bot logs.
 
+### 🐳 Docker Container Management (容器管理)
+> *Control your infrastructure.*
+*   **Visual Management**: View and manage Docker containers directly from the sidebar.
+*   **Status at a Glance**: Check container ID, names, image, and running status instantly.
+*   **One-Click Refresh**: Keep track of container changes in real-time.
+
+### 🧠 Overmind Integration (Overmind 集成)
+> *Next-level control.*
+*   **Seamless Access**: One-click navigation to the Overmind frontend directly from the sidebar.
+*   **Unified Workflow**: Manage your bot cluster and Overmind system without switching contexts.
+
 ### 🧠 Intelligent Robot Collaboration (机器人智能协作)
 > *One Click, Full Linkage.*
 *   **Smart Wake-Up**: Bypasses Tencent Guild Bot restrictions (passive reply only) by coordinating with ordinary bots to "wake up" guild bots via @mentions.

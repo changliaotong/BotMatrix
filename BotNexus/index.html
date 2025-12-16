@@ -329,18 +329,19 @@
             <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> <span data-i18n="sidebar_bots">云端矩阵</span></a>
             <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> <span data-i18n="sidebar_groups">群组好友</span></a>
             <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
+            <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
+            <a href="#overmind" id="nav-overmind" class="nav-link" onclick="showOvermind()"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
             <a href="#logs" id="nav-logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> <span data-i18n="sidebar_logs">日志中心</span></a>
             <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> <span data-i18n="sidebar_debug">调试测试</span></a>
             <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> <span data-i18n="sidebar_settings">系统设置</span></a>
-            <a href="javascript:void(0)" class="nav-link text-danger mt-3" onclick="logout()"><i class="bi bi-box-arrow-right"></i> <span data-i18n="sidebar_logout">退出登录</span></a>
         </nav>
 
-        <div class="mt-auto p-3 border-top d-flex justify-content-around align-items-center">
-             <button class="btn btn-outline-secondary rounded-circle theme-toggle-btn-sidebar" onclick="toggleTheme()" title="Toggle Theme" data-i18n-title="theme_toggle" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+        <div class="mt-auto p-3 border-top d-flex justify-content-around align-items-center flex-wrap">
+             <button class="btn btn-outline-secondary rounded-circle theme-toggle-btn-sidebar mb-2" onclick="toggleTheme()" title="Toggle Theme" data-i18n-title="theme_toggle" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
                 <i class="bi bi-moon-stars"></i>
             </button>
             
-            <div class="dropup">
+            <div class="dropup mb-2">
                 <button class="btn btn-outline-secondary rounded-circle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Language" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-translate"></i>
                 </button>
@@ -351,9 +352,17 @@
                 </ul>
             </div>
 
-            <a href="https://github.com/changliaotong/BotMatrix" target="_blank" class="btn btn-outline-secondary rounded-circle github-btn-sidebar" title="View on GitHub" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0;">
+            <a href="https://github.com/changliaotong/BotMatrix" target="_blank" class="btn btn-outline-secondary rounded-circle github-btn-sidebar mb-2" title="View on GitHub" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0;">
                 <i class="bi bi-github"></i>
             </a>
+
+            <button class="btn btn-outline-danger rounded-circle mb-2" onclick="logout()" title="Logout" data-i18n-title="sidebar_logout" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+            
+            <div class="w-100 text-center mt-1" style="font-size: 0.75rem; color: var(--text-muted);">
+                <span data-i18n="sidebar_logout">退出登录</span>
+            </div>
         </div>
     </div>
 
@@ -993,6 +1002,34 @@
             </div>
         </div>
 
+
+        <!-- Docker Tab -->
+        <div id="tab-docker" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0" data-i18n="sidebar_docker">Docker管理</h4>
+                <button class="btn btn-sm btn-primary" onclick="loadDockerContainers()">
+                    <i class="bi bi-arrow-clockwise"></i> <span data-i18n="refresh">刷新</span>
+                </button>
+            </div>
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Names</th>
+                                <th>Image</th>
+                                <th>State</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="docker-container-list">
+                            <tr><td colspan="5" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
         <!-- Logs Tab (Full Page) -->
         <div id="tab-logs" class="content-section" style="display: none;">
@@ -1657,6 +1694,7 @@
             if (activeLink) activeLink.classList.add('active');
             
             if (tabId === 'logs') fetchLogsFull();
+            if (tabId === 'docker') loadDockerContainers();
             if (tabId === 'bots') {
                 fetchBots();
                 fetchWorkers();
@@ -4454,6 +4492,41 @@
              // Shift + Arrows usually select text
              if (e.shiftKey) checkLogSelectionAndPause();
         });
+
+        // --- Docker Management ---
+        function loadDockerContainers() {
+            const tbody = document.getElementById('docker-container-list');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>';
+            
+            fetch('/api/docker/list', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            })
+            .then(r => r.json())
+            .then(containers => {
+                 if (!containers || containers.length === 0) {
+                     tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" data-i18n="no_data">No Data</td></tr>';
+                     return;
+                 }
+                 tbody.innerHTML = containers.map(c => `
+                    <tr>
+                        <td><span class="font-monospace">${c.Id.substring(0, 12)}</span></td>
+                        <td>${(c.Names || []).join(', ')}</td>
+                        <td>${c.Image}</td>
+                        <td><span class="badge bg-${c.State === 'running' ? 'success' : 'secondary'}">${c.State}</span></td>
+                        <td>${c.Status}</td>
+                    </tr>
+                 `).join('');
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error: ${err}</td></tr>`;
+            });
+        }
+
+        // --- Overmind ---
+        function showOvermind() {
+            window.open('/overmind/', '_blank');
+        }
     </script>
 </body>
 </html>
