@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
     *   **Worker Disconnect Detection**: Implemented automatic heartbeat monitoring for Worker connections with 60-second timeout detection and cleanup mechanism.
     *   **Message Persistence Queue**: Added in-memory message queue to prevent message loss during Worker disconnections, with automatic message replay for new Workers.
     *   **Message Retry Mechanism**: Implemented intelligent message retry system with exponential backoff (1min, 2min, 4min) and maximum 3 retry attempts for failed message deliveries.
+    *   **Bot Heartbeat Monitoring**: Added automatic heartbeat tracking for Bot connections with 5-minute timeout detection and cleanup mechanism to prevent message routing to disconnected bots.
+    *   **Enhanced Message Routing**: Added debug logging and improved target bot selection logic to prevent messages from being sent to incorrect or disconnected bots.
     *   **Compile Error Fix**: Fixed missing "os" package import in WxBotGo/core/bot.go causing build failures.
     *   **Thread Safety**: Enhanced all shared resource operations with proper mutex locking for concurrent access safety.
 

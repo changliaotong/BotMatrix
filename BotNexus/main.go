@@ -115,16 +115,17 @@ func GenerateRandomToken(length int) string {
 
 // BotClient represents a connected OneBot client
 type BotClient struct {
-	Conn        *websocket.Conn
-	SelfID      string
-	Nickname    string
-	GroupCount  int
-	FriendCount int
-	Connected   time.Time
-	Platform    string
-	Mutex       sync.Mutex
-	SentCount   int64 // New: Track sent messages per bot session
-	RecvCount   int64 // New: Track received messages per bot session
+	Conn          *websocket.Conn
+	SelfID        string
+	Nickname      string
+	GroupCount    int
+	FriendCount   int
+	Connected     time.Time
+	Platform      string
+	Mutex         sync.Mutex
+	SentCount     int64     // New: Track sent messages per bot session
+	RecvCount     int64     // New: Track received messages per bot session
+	LastHeartbeat time.Time // New: Track last heartbeat for timeout detection
 }
 
 type WorkerClient struct {
@@ -697,6 +698,47 @@ func main() {
 		}
 	}()
 
+	// Bot Heartbeat Timeout Detection (30s interval)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			manager.mutex.Lock()
+			now := time.Now()
+			activeBots := make(map[string]*BotClient)
+
+			for botID, bot := range manager.bots {
+				bot.Mutex.Lock()
+				// 如果bot从未发送过心跳（LastHeartbeat为零值），使用连接时间作为参考
+				lastActive := bot.LastHeartbeat
+				if lastActive.IsZero() {
+					lastActive = bot.Connected
+				}
+
+				if now.Sub(lastActive) < 5*time.Minute { // Bot超时时间设为5分钟
+					activeBots[botID] = bot
+				} else {
+					// 超时bot，关闭连接
+					bot.Conn.Close()
+					manager.AddLog("WARN", fmt.Sprintf("Bot heartbeat timeout after %v, removing: %s", now.Sub(lastActive), botID))
+
+					// 更新Redis状态
+					if manager.rdb != nil {
+						ctx := context.Background()
+						manager.rdb.SRem(ctx, "bots:online", botID)
+						manager.rdb.HSet(ctx, fmt.Sprintf("bot:info:%s", botID), "disconnected_at", now.Format(time.RFC3339))
+					}
+				}
+				bot.Mutex.Unlock()
+			}
+
+			// 更新bot列表
+			manager.bots = activeBots
+			manager.mutex.Unlock()
+		}
+	}()
+
 	// 消息重试机制 - 每30秒处理重试队列
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -1098,10 +1140,11 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &BotClient{
-		Conn:      conn,
-		SelfID:    selfID,
-		Connected: time.Now(),
-		Platform:  platform,
+		Conn:          conn,
+		SelfID:        selfID,
+		Connected:     time.Now(),
+		Platform:      platform,
+		LastHeartbeat: time.Now(), // 初始化心跳时间为连接时间
 	}
 
 	m.mutex.Lock()
@@ -1142,6 +1185,11 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 			m.AddLog("ERROR", fmt.Sprintf("Failed to parse message from %s: %v | Content: %s", selfID, err, string(message)))
 			continue
 		}
+
+		// 更新bot心跳时间
+		client.Mutex.Lock()
+		client.LastHeartbeat = time.Now()
+		client.Mutex.Unlock()
 
 		// Handle Auto Recall Response
 		if echo, ok := msgMap["echo"].(string); ok && echo != "" {
@@ -1622,9 +1670,19 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 	var targetBot *BotClient
 
+	// 调试日志：显示当前可用的bot列表
+	botList := make([]string, 0, len(m.bots))
+	for botID := range m.bots {
+		botList = append(botList, botID)
+	}
+	m.AddLog("DEBUG", fmt.Sprintf("dispatchAPIRequest: Available bots: %v, Target ID: %s", botList, targetID))
+
 	if targetID != "" {
 		if bot, ok := m.bots[targetID]; ok {
 			targetBot = bot
+			m.AddLog("DEBUG", fmt.Sprintf("Found target bot: %s", targetID))
+		} else {
+			m.AddLog("WARN", fmt.Sprintf("Target bot %s not found, will use fallback", targetID))
 		}
 	}
 
@@ -1634,6 +1692,7 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 			// Just pick the first one
 			for _, bot := range m.bots {
 				targetBot = bot
+				m.AddLog("WARN", fmt.Sprintf("No target bot found, using fallback bot: %s", targetBot.SelfID))
 				break
 			}
 		}

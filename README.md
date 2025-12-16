@@ -16,6 +16,8 @@
 *   **🔄 Worker Disconnect Detection**: Automatic heartbeat monitoring with 60-second timeout detection and cleanup.
 *   **💾 Message Persistence**: In-memory message queue prevents message loss during Worker disconnections.
 *   **🔄 Intelligent Message Retry**: Exponential backoff retry mechanism (1min, 2min, 4min) with max 3 attempts.
+*   **🤖 Bot Heartbeat Monitoring**: Automatic heartbeat tracking for Bot connections with 5-minute timeout detection and cleanup.
+*   **🎯 Enhanced Message Routing**: Improved target bot selection logic with debug logging to prevent incorrect message routing.
 *   **🔧 Compile Error Fix**: Resolved WxBotGo build failure by adding missing "os" package import.
 *   **🔒 Thread Safety**: Enhanced mutex locking for all shared resource operations.
 
