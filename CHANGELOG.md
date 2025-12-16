@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.62 (2025-12-16)
+*   **Web UI Enhancements (界面增强)**:
+    *   **Docker Management**: Added a new "Docker Management" menu in the sidebar. Users can now view container status, logs, and perform basic actions (start/stop) directly from the Web UI.
+    *   **Overmind Integration**: Added a direct navigation link to the **Overmind** frontend, enabling seamless switching between bot management and system visualization.
+    *   **Menu Organization**: Reorganized sidebar menu for better accessibility.
+*   **Documentation (文档)**:
+    *   **Feature Updates**: Updated README to include details about the new Docker management and Overmind integration capabilities.
+
 ## v1.1.46 (2025-12-16)
 *   **Napcat & OneBot Integration (Napcat 集成)**:
     *   **Compatibility**: Added fallback support for standard OneBot implementations (like Napcat) that don't support custom count actions. It now calculates counts from `get_group_list` and `get_friend_list`.
@@ -48,7 +56,7 @@ All notable changes to this project will be documented in this file.
     *   **WeComBot**: Added Enterprise WeChat support via Callback/API.
     *   **NapCat**: Integrated NapCat (NTQQ) for personal QQ account automation.
 *   **Documentation**:
-    *   Comprehensive deployment guide covering all 10+ bot platforms.
+    *   **Deployment**: Comprehensive deployment guide covering all 10+ bot platforms.
 
 ## v1.1.15 (2025-12-15)
 *   **TencentBot Enhanced**:
@@ -56,7 +64,7 @@ All notable changes to this project will be documented in this file.
     *   **New APIs**: Added comprehensive support for Guild Channel management (Create/Delete Channels, Role Management, Member Kick, etc.).
     *   **Deployment**: Optimized targeted deployment via `deploy.ps1`.
 *   **Documentation**:
-    *   Updated README and Architecture diagrams to reflect the new multi-bot ecosystem.
+    *   **Architecture**: Updated README and Architecture diagrams to reflect the new multi-bot ecosystem.
 
 ## v1.1.14 (2025-12-15)
 *   **Deployment**:
