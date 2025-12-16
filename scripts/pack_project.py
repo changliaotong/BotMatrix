@@ -21,9 +21,20 @@ def pack_project():
         '*.go',
         '*.html',
         '*.js',
+        '*.css',
+        '*.json',
+        '*.wasm',
+        '*.png',
+        '*.jpg',
+        '*.jpeg',
+        '*.svg',
+        '*.ico',
+        '*.ttf',
+        '*.otf',
+        '*.woff',
+        '*.woff2',
         'go.mod',
         'go.sum',
-        'stats.json',
         'VERSION'
     ]
     

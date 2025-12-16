@@ -37,6 +37,10 @@ COPY --from=builder /build/BotNexus ./
 # Copy static files (HTML/JS)
 COPY index.html ./
 COPY locales.js ./
+# Copy Overmind Web App (if exists, but we assume it does for deployment)
+# Using COPY . . would be lazy, so we specificy directory.
+# Note: This requires the directory to exist in the build context.
+COPY overmind ./overmind
 # Copy stats.json if it exists (optional, usually volume mounted)
 # COPY stats.json ./ 
 

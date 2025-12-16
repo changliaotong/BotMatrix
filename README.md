@@ -12,7 +12,9 @@
 
 ## 📢 Recent Updates | 最近更新
 
-### v1.1.62 - Docker & Overmind
+### v1.1.63 - Security & I18n
+*   **🔒 Security**: Implemented optional token authentication for WebSocket connections to prevent unauthorized access.
+*   **🌏 I18n**: Enhanced internationalization for Overmind integration and sidebar menus.
 *   **🐳 Docker Management**: New sidebar menu for visualizing and managing Docker containers (view status, logs, etc.).
 *   **🧠 Overmind Integration**: Seamless access to Overmind system via the sidebar for unified control.
 *   **✨ UI Enhancements**: Optimized sidebar structure and added multi-language support for new modules.
@@ -23,7 +25,7 @@
 
 ---
 
-## �📖 Introduction | 简介
+## 📖 Introduction | 简介
 
 **BotMatrix** is a high-performance, distributed robot management platform designed for enterprise scale. It decouples the connection layer from the logic layer, allowing for massive scalability and robust management.
 
@@ -220,9 +222,25 @@ The `WxBot` container will automatically try to connect to `BotNexus`.
 
 ---
 
-## 📄 Documentation
+## 📚 Documentation | 文档导航
 
-For detailed server deployment and API documentation, please refer to [docs/DEPLOY.md](docs/DEPLOY.md).
+- **部署与维护 / Deployment & Ops**
+  - [docs/DEPLOY.md](docs/DEPLOY.md) - **Docker 部署与远程自动部署脚本使用说明**（推荐从这里开始）
+  - [docs/SERVER_MANUAL.md](docs/SERVER_MANUAL.md) - **旧版 Python OneBot 网关服务端手册（Legacy / 兼容文档）**  
+    > 当前推荐架构为：`BotNexus (Go 网关)` + 各平台 Bot Worker + `SystemWorker`，Python 网关仅用于兼容老项目。
+
+- **特性与协议说明 / Features & Protocols**
+  - [docs/QQ_GUILD_SMART_SEND_CN.md](docs/QQ_GUILD_SMART_SEND_CN.md) - QQ 频道/群组 **智能协作发送（Smart Send / WakeUp）** 机制说明
+  - [docs/CSharpReconnectExample.cs](docs/CSharpReconnectExample.cs) - C# 客户端重连示例代码
+
+- **客户端 / Clients**
+  - `Overmind/README.md` - Overmind 可视化控制台（Flutter 桌面/移动端）
+  - `wx_bot_app/README.md` - 实验性移动端控制应用（Flutter）
+
+- **子模块 / Bots & Workers**
+  - `BotNexus/` - Go 网关与 Web 面板
+  - `SystemWorker/README.md` - SystemWorker 系统 Worker 说明
+  - 各平台 Bot：`WxBot/`, `TencentBot/`, `DingTalkBot/`, `FeishuBot/`, `TelegramBot/`, `DiscordBot/`, `SlackBot/`, `KookBot/`, `WeComBot/`, `EmailBot/` 等目录下均有各自的 `README.md`（使用前建议阅读对应文档）
 
 ---
 

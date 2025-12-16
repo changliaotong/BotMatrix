@@ -695,7 +695,14 @@ HTML_TEMPLATE = r"""
                                     </tr>
                                     <tr>
                                         <td><strong>WebSocket 客户端</strong></td>
-                                        <td><span class="badge badge-soft-danger">未连接</span></td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <span id="ws-client-status" class="badge badge-soft-danger me-2">未连接</span>
+                                                <div class="form-check form-switch mb-0">
+                                                    <input class="form-check-input ws-client-toggle-group" type="checkbox" id="ws-client-toggle" onchange="toggleWsClient(this.checked)" disabled>
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1116,7 +1123,23 @@ HTML_TEMPLATE = r"""
                             </form>
                         </div>
                         
-                        <div class="tab-pane fade" id="net-ws-client"><p class="text-muted">暂无内容</p></div>
+                        <div class="tab-pane fade" id="net-ws-client">
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">连接状态</label>
+                                <div class="col-sm-9">
+                                     <span id="ws-client-status-2" class="badge badge-soft-secondary">检测中...</span>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <label class="col-sm-3 col-form-label">启用连接</label>
+                                <div class="col-sm-9">
+                                    <div class="form-check form-switch pt-2">
+                                        <input class="form-check-input ws-client-toggle-group" type="checkbox" onchange="toggleWsClient(this.checked)" disabled>
+                                    </div>
+                                    <div class="form-text">开启后将尝试连接到 BotNexus (默认 ws://localhost:3001)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="mt-3 text-end">
                          <div class="alert alert-warning d-inline-block me-2 mb-0 py-1 small" id="config-status" style="display:none;"></div>
@@ -2155,12 +2178,83 @@ HTML_TEMPLATE = r"""
                 });
         }
 
+        function updateNexusStatus() {
+            fetch('/api/nexus/status')
+                .then(r => r.json())
+                .then(data => {
+                    const statusEl1 = document.getElementById('ws-client-status');
+                    const statusEl2 = document.getElementById('ws-client-status-2');
+                    const toggles = document.querySelectorAll('.ws-client-toggle-group');
+                    
+                    let statusClass = 'badge badge-soft-danger me-2';
+                    let statusText = '未启用';
+                    
+                    if (data.connected) {
+                        statusClass = 'badge badge-soft-success me-2';
+                        statusText = '已连接';
+                    } else if (data.running) {
+                        statusClass = 'badge badge-soft-warning me-2';
+                        statusText = '连接中...';
+                    }
+                    
+                    if (statusEl1) {
+                        statusEl1.className = statusClass;
+                        statusEl1.textContent = statusText;
+                    }
+                    if (statusEl2) {
+                        statusEl2.className = statusClass;
+                        statusEl2.textContent = statusText;
+                    }
+                    
+                    toggles.forEach(t => {
+                        t.disabled = false;
+                        t.checked = data.running;
+                    });
+                })
+                .catch(e => console.error(e));
+        }
+
+        function toggleWsClient(checked) {
+            const toggles = document.querySelectorAll('.ws-client-toggle-group');
+            const statusEl1 = document.getElementById('ws-client-status');
+            const statusEl2 = document.getElementById('ws-client-status-2');
+            
+            toggles.forEach(t => t.disabled = true);
+            
+            const tempText = checked ? '正在启动...' : '正在停止...';
+            if (statusEl1) statusEl1.textContent = tempText;
+            if (statusEl2) statusEl2.textContent = tempText;
+            
+            fetch('/api/nexus/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ enable: checked })
+            })
+            .then(r => r.json())
+            .then(res => {
+                toggles.forEach(t => t.disabled = false);
+                if (res.status === 'ok') {
+                    updateNexusStatus();
+                } else {
+                    alert('操作失败: ' + res.msg);
+                    toggles.forEach(t => t.checked = !checked);
+                }
+            })
+            .catch(err => {
+                toggles.forEach(t => t.disabled = false);
+                alert('请求错误: ' + err);
+                toggles.forEach(t => t.checked = !checked);
+            });
+        }
+
         // Init
         document.addEventListener('DOMContentLoaded', function() {
             updateBotList();
             initDarkMode();
             loadNetworkConfig();
             initSystemChart();
+            updateNexusStatus();
+            setInterval(updateNexusStatus, 5000);
             setInterval(updateSystemStats, 5000);
         });
 
@@ -2462,6 +2556,53 @@ class WebUI:
                     "os_version": f"{platform.system()} {platform.release()} {platform.machine()}"
                 }
             })
+
+        @self.app.route('/api/nexus/status')
+        def get_nexus_status():
+            if not self.manager.bots:
+                return jsonify({"running": False, "connected": False, "urls": []})
+            
+            driver = self.manager.bots[0].driver
+            if not driver:
+                return jsonify({"running": False, "connected": False, "urls": []})
+
+            connected = len(driver.clients) > 0
+            return jsonify({
+                "running": driver.running,
+                "connected": connected,
+                "urls": driver.ws_urls
+            })
+
+        @self.app.route('/api/nexus/toggle', methods=['POST'])
+        def toggle_nexus():
+            data = request.json or {}
+            enable = data.get("enable", False)
+            
+            if not self.manager.bots:
+                return jsonify({"status": "error", "msg": "No bot initialized"})
+            
+            driver = self.manager.bots[0].driver
+            if not driver:
+                return jsonify({"status": "error", "msg": "No driver initialized"})
+
+            import asyncio
+            
+            if enable:
+                if not driver.running:
+                    driver.running = True
+                    # Loop in driver.py will pick this up
+            else:
+                if driver.running:
+                    driver.running = False
+                    # Force close existing connections
+                    if driver._loop and driver.clients:
+                        for ws in list(driver.clients):
+                            # Use threadsafe call since we are in Flask thread
+                            driver._loop.call_soon_threadsafe(
+                                asyncio.create_task, ws.close()
+                            )
+            
+            return jsonify({"status": "ok", "running": driver.running})
 
         @self.app.route('/api/groups')
         def groups():

@@ -73,8 +73,9 @@ def main():
         print("  4. [Wx] WxBot Only")
         print("  5. [Tencent] TencentBot Only")
         print("  6. [Sys] System Worker Only")
+        print("  7. [Overmind] Overmind + Bot Manager (Builds Frontend)")
         
-        choice = input("\nEnter choice (1-6) [1]: ").strip()
+        choice = input("\nEnter choice (1-7) [1]: ").strip()
         
         if choice == "" or choice == "1":
             TARGET = "all"
@@ -88,6 +89,8 @@ def main():
             TARGET = "tencent-bot"
         elif choice == "6":
             TARGET = "system-worker"
+        elif choice == "7":
+            TARGET = "overmind"
         else:
             print("Invalid choice. Aborting.")
             sys.exit(1)
@@ -97,6 +100,38 @@ def main():
     print(f"   Target: {TARGET}")
     print(f"   Mode: {'Fast (Update & Restart)' if FAST_MODE else 'Full (Rebuild & Recreate)'}")
     print("========================================")
+
+    # 0. Build Overmind (If requested)
+    if TARGET == "overmind":
+        print("\n[Step 0/3] Building Overmind (Flutter Web)...")
+        # Ensure we are in root dir for relative paths
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        overmind_dir = os.path.join(root_dir, "Overmind")
+        
+        # Build Command
+        build_cmd = "flutter build web --release --base-href /overmind/"
+        print(f"Executing: {build_cmd} in {overmind_dir}")
+        
+        # On Windows we need shell=True for flutter command usually if it's a batch file
+        ret = subprocess.run(build_cmd, shell=True, cwd=overmind_dir)
+        if ret.returncode != 0:
+            print("Error: Flutter build failed!")
+            sys.exit(1)
+            
+        # Copy Artifacts
+        src_dir = os.path.join(overmind_dir, "build", "web")
+        dest_dir = os.path.join(root_dir, "BotNexus", "overmind")
+        
+        print(f"Copying artifacts from {src_dir} to {dest_dir}...")
+        if os.path.exists(dest_dir):
+            shutil.rmtree(dest_dir)
+        shutil.copytree(src_dir, dest_dir)
+        
+        # Switch target to manager for the rest of deployment logic (as overmind is part of manager image)
+        # But keep a flag if needed, or just let it fall through to manager logic
+        # Actually, we need to ensure the image is rebuilt to include the new files
+        TARGET = "manager"
+        FAST_MODE = False # Force rebuild to include new static files
 
     # 0. 版本号自增
     print("\n[Step 0/3] Bumping version...")
@@ -225,6 +260,7 @@ def main():
     print("\n========================================")
     print("   Deployment Successful!")
     print(f"   Dashboard: http://{SERVER_IP}:5000")
+    print(f"   Overmind:  http://{SERVER_IP}:5000/overmind/")
     print(f"   WxBot WebUI: http://{SERVER_IP}:5001")
     print(f"   Gateway:   ws://{SERVER_IP}:3111")
     print("========================================")

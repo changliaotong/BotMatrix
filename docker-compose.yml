@@ -13,10 +13,12 @@ services:
       - "3005:3001"  # WebSocket for Internal/External Communication
     volumes:
       - ./BotNexus/stats.json:/app/stats.json
+      - /var/run/docker.sock:/var/run/docker.sock # Enable Docker Management
     environment:
       - TZ=Asia/Shanghai
       - REDIS_ADDR=${REDIS_ADDR:-192.168.0.126:6379}
       - REDIS_PWD=${REDIS_PWD:-redis_zsYik8}
+      - MANAGER_TOKEN=${MANAGER_TOKEN:-}
 
   # 1.1 System Worker: Global Logic & Commands
   system-worker:
@@ -48,7 +50,7 @@ services:
     ports:
       - "3133:3133" # Expose HTTP Log Viewer & File Server
 
-  # 3. WxBot: WeChat Robot Worker
+  # 3. WxBot: WeChat Robot Worker (Python)
   wxbot:
     build: 
       context: ./WxBot
@@ -66,7 +68,24 @@ services:
       - TZ=Asia/Shanghai
       - MANAGER_URL=ws://bot-manager:3001
       - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
+      - MANAGER_TOKEN=${MANAGER_TOKEN:-}
+      - MANAGER_TOKEN=${MANAGER_TOKEN:-}
     command: ["python", "onebot.py"]
+
+  # 3.1 WxBotGo: WeChat Robot Worker (Go Version)
+  wxbot-go:
+    build: 
+      context: ./WxBotGo
+    container_name: wxbot-go
+    restart: always
+    depends_on:
+      - bot-manager
+    volumes:
+      - ./WxBotGo/storage.json:/app/storage.json # Persist login session
+    environment:
+      - TZ=Asia/Shanghai
+      - MANAGER_URL=ws://bot-manager:3001
+      - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
 
   # 4. DingTalkBot: DingTalk Webhook/Stream Worker
   dingtalk-bot:

@@ -1413,7 +1413,11 @@ def main():
         if os.getenv("BOTNEXUS_HOST"):
             nexus_host = os.getenv("BOTNEXUS_HOST")
             
+        # Optional token
+        token = os.getenv("MANAGER_TOKEN", "")
         nexus_url = f"ws://{nexus_host}:{nexus_port}/"
+        if token:
+            nexus_url += f"?token={token}"
         print(f"[main] Adding default BotNexus URL: {nexus_url}")
         driver.ws_urls.append(nexus_url)
     

@@ -18,6 +18,25 @@ if ($Service) {
 }
 Write-Host "========================================" -ForegroundColor Cyan
 
+# 0. Build Overmind
+Write-Host "[Step 0/3] Building Overmind (Flutter Web)..." -ForegroundColor Green
+Push-Location Overmind
+# Ensure we build for the correct base href so it can be served under /overmind/
+cmd /c "flutter build web --release --base-href /overmind/"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Flutter build failed!"
+    Pop-Location
+    exit 1
+}
+Pop-Location
+
+# Copy artifacts to BotNexus/overmind
+$Dest = "BotNexus/overmind"
+if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+Copy-Item -Recurse -Force Overmind/build/web/* $Dest
+Write-Host "Overmind built and copied to $Dest"
+
 # 1. Pack
 Write-Host "[Step 1/3] Packing project..." -ForegroundColor Green
 python scripts/pack_project.py

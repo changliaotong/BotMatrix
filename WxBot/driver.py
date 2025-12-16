@@ -136,7 +136,11 @@ class OneBotDriver:
 
     async def _maintain_client_connection(self, url):
         """Maintain connection to upstream (Client mode)"""
-        while self.running:
+        while True:
+            if not self.running:
+                await asyncio.sleep(1)
+                continue
+
             try:
                 print(f"[Driver] Connecting to {url}...")
                 # Add role=Universal and platform=wechat if missing

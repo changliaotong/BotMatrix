@@ -15,7 +15,7 @@ class User(MetaData):
     def append(robot_qq, group_id, client_qq, client_name, ref_qq):
         client_name = client_name.replace("'", "''")
         sql = str.format("insert into [User](BotUin, GroupId, Id, Name, RefUserId) \
-            values({0}, {1}, {2}, '{3}', {4})", robot_qq, group_id, client_qq, client_name, ref_qq)
+            values({0}, {1}, {2}, N'{3}', {4})", robot_qq, group_id, client_qq, client_name, ref_qq)
         return SQLConn.Exec(sql)
 
 class wx_client(MetaData):   
@@ -65,11 +65,11 @@ class wx_client(MetaData):
                 # This prevents "zombie" records from being matched again
                 conditions = []
                 if nick_name and nick_name.lower() != "unknown":
-                    conditions.append(f"nick_name = '{safe(nick_name)}'")
+                    conditions.append(f"nick_name = N'{safe(nick_name)}'")
                 if display_name and display_name.lower() != "unknown":
-                    conditions.append(f"display_name = '{safe(display_name)}'")
+                    conditions.append(f"display_name = N'{safe(display_name)}'")
                 if remark_name and remark_name.lower() != "unknown":
-                    conditions.append(f"remark_name = '{safe(remark_name)}'")
+                    conditions.append(f"remark_name = N'{safe(remark_name)}'")
                 
                 if conditions:
                     where_name = " OR ".join(conditions)
@@ -107,11 +107,11 @@ class wx_client(MetaData):
         def safe(s): return s.replace("'", "''") if s else ""
         
         if nick_name and nick_name.lower() != "unknown":
-            conditions.append(f"nick_name = '{safe(nick_name)}'")
+            conditions.append(f"nick_name = N'{safe(nick_name)}'")
         if display_name and display_name.lower() != "unknown":
-            conditions.append(f"display_name = '{safe(display_name)}'")
+            conditions.append(f"display_name = N'{safe(display_name)}'")
         if remark_name and remark_name.lower() != "unknown":
-            conditions.append(f"remark_name = '{safe(remark_name)}'")
+            conditions.append(f"remark_name = N'{safe(remark_name)}'")
             
         if not conditions:
             return 0
@@ -153,7 +153,7 @@ class wx_client(MetaData):
 
         sql = (
             "insert into wx_client(client_uid, client_name, display_name, remark_name, nick_name, robot_qq, attr_status) "
-            f"values('{client_uid}','{client_name}','{display_name}','{remark_name}','{nick_name}','{robot_qq}','{attr_status}')"
+            f"values('{client_uid}',N'{client_name}',N'{display_name}',N'{remark_name}',N'{nick_name}','{robot_qq}','{attr_status}')"
         )
         SQLConn.Exec(sql)
         sql = f"update wx_client set client_qq = client_oid + 90000000000 where client_uid = '{client_uid}'"
@@ -170,8 +170,8 @@ class wx_client(MetaData):
         attr_status = attr_status or ""
 
         sql = (
-            "update wx_client set client_uid='{0}', client_name='{1}', display_name='{2}', "
-            "remark_name='{3}', nick_name='{4}', robot_qq='{5}', attr_status='{7}', "
+            "update wx_client set client_uid='{0}', client_name=N'{1}', display_name=N'{2}', "
+            "remark_name=N'{3}', nick_name=N'{4}', robot_qq='{5}', attr_status='{7}', "
             "update_date=getdate() where client_qq='{6}'"
         ).format(client_uid, client_name, display_name, remark_name, nick_name, robot_qq, client_qq, attr_status)
         return SQLConn.Exec(sql)
@@ -217,14 +217,14 @@ class wx_client(MetaData):
         
         # Priority: NickName + AttrStatus
         if nick_name:
-            sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and nick_name = '{1}' and attr_status = '{2}'", robot_qq, nick_name, attr_status)
+            sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and nick_name = N'{1}' and attr_status = '{2}'", robot_qq, nick_name, attr_status)
             client_qq = SQLConn.Query(sql)
             if client_qq:
                 return int(client_qq)
                 
         # Fallback: DisplayName (if stored in wx_client, though usually nick_name is better)
         if display_name:
-             sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and display_name = '{1}' and attr_status = '{2}'", robot_qq, display_name, attr_status)
+             sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and display_name = N'{1}' and attr_status = '{2}'", robot_qq, display_name, attr_status)
              client_qq = SQLConn.Query(sql)
              if client_qq:
                  return int(client_qq)

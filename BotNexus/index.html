@@ -356,7 +356,7 @@
                 <i class="bi bi-github"></i>
             </a>
 
-            <button class="btn btn-outline-danger rounded-circle mb-2" onclick="logout()" title="Logout" data-i18n-title="sidebar_logout" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+            <button class="btn btn-outline-secondary rounded-circle mb-2" onclick="logout()" title="Logout" data-i18n-title="sidebar_logout" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
                 <i class="bi bi-box-arrow-right"></i>
             </button>
             
@@ -1007,24 +1007,33 @@
         <div id="tab-docker" class="content-section" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h4 class="mb-0" data-i18n="sidebar_docker">Docker管理</h4>
-                <button class="btn btn-sm btn-primary" onclick="loadDockerContainers()">
-                    <i class="bi bi-arrow-clockwise"></i> <span data-i18n="refresh">刷新</span>
-                </button>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary me-2" onclick="addBotNode()">
+                        <i class="bi bi-plus-lg"></i> <span data-i18n="docker_add_bot">添加机器人</span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-success me-2" onclick="addBotNode()">
+                        <i class="bi bi-plus-lg"></i> <span data-i18n="docker_add_node">添加节点</span>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="loadDockerContainers()">
+                        <i class="bi bi-arrow-clockwise"></i> <span data-i18n="refresh">刷新</span>
+                    </button>
+                </div>
             </div>
             <div class="card">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>ID</th>
+                                <th data-i18n="docker_container_id">ID</th>
                                 <th>Names</th>
-                                <th>Image</th>
-                                <th>State</th>
-                                <th>Status</th>
+                                <th data-i18n="docker_image">Image</th>
+                                <th data-i18n="docker_status">State</th>
+                                <th data-i18n="docker_status">Status</th>
+                                <th data-i18n="docker_action">Action</th>
                             </tr>
                         </thead>
                         <tbody id="docker-container-list">
-                            <tr><td colspan="5" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -4494,10 +4503,14 @@
         });
 
         // --- Docker Management ---
-        function loadDockerContainers() {
+        function loadDockerContainers(isSilent = false) {
             const tbody = document.getElementById('docker-container-list');
             if (!tbody) return;
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>';
+            
+            // Only show loading indicator if not silent refresh
+            if (!isSilent) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>';
+            }
             
             fetch('/api/docker/list', {
                 headers: { 'Authorization': `Bearer ${authToken}` }
@@ -4505,22 +4518,80 @@
             .then(r => r.json())
             .then(containers => {
                  if (!containers || containers.length === 0) {
-                     tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" data-i18n="no_data">No Data</td></tr>';
+                     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" data-i18n="no_data">No Data</td></tr>';
                      return;
                  }
-                 tbody.innerHTML = containers.map(c => `
+                 
+                 const t = translations[currentLang] || translations['zh-CN'];
+                 
+                 tbody.innerHTML = containers.map(c => {
+                    const isRunning = c.State === 'running';
+                    const shortId = c.Id.substring(0, 12);
+                    return `
                     <tr>
-                        <td><span class="font-monospace">${c.Id.substring(0, 12)}</span></td>
+                        <td><span class="font-monospace">${shortId}</span></td>
                         <td>${(c.Names || []).join(', ')}</td>
                         <td>${c.Image}</td>
-                        <td><span class="badge bg-${c.State === 'running' ? 'success' : 'secondary'}">${c.State}</span></td>
+                        <td><span class="badge bg-${isRunning ? 'success' : 'secondary'}">${c.State}</span></td>
                         <td>${c.Status}</td>
+                        <td>
+                            ${isRunning ? 
+                                `<button class="btn btn-sm btn-outline-danger me-1" onclick="controlContainer('${c.Id}', 'stop')"><i class="bi bi-stop-fill"></i> ${t.docker_stop}</button>
+                                 <button class="btn btn-sm btn-outline-warning" onclick="controlContainer('${c.Id}', 'restart')"><i class="bi bi-arrow-repeat"></i> ${t.docker_restart}</button>` 
+                                : 
+                                `<button class="btn btn-sm btn-outline-success" onclick="controlContainer('${c.Id}', 'start')"><i class="bi bi-play-fill"></i> ${t.docker_start}</button>`
+                            }
+                        </td>
                     </tr>
-                 `).join('');
+                 `}).join('');
             })
             .catch(err => {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error: ${err}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error: ${err}</td></tr>`;
             });
+        }
+
+        function controlContainer(id, action) {
+            const t = translations[currentLang] || translations['zh-CN'];
+            const actionText = t[`docker_${action}`] || action;
+            const confirmMsg = t.docker_confirm_action
+                .replace('{id}', id.substring(0, 12))
+                .replace('{action}', actionText);
+                
+            if (!confirm(confirmMsg)) return;
+            
+            // Show loading state on the button itself? 
+            // For now, simple alert or just proceed. 
+            // Ideally we should disable the button.
+            
+            fetch('/api/docker/action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({
+                    container_id: id,
+                    action: action
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'ok' || (res.id && !res.message)) { 
+                    // Use silent refresh to avoid full table flicker
+                    loadDockerContainers(true);
+                } else {
+                    alert(`${t.docker_action_failed}: ${res.message || JSON.stringify(res)}`);
+                }
+            })
+            .catch(err => {
+                alert('Error: ' + err);
+            });
+        }
+
+        function addBotNode() {
+            const t = translations[currentLang] || translations['zh-CN'];
+            // Placeholder for now
+            alert("Feature coming soon: Auto-execute commands to deploy new bots/nodes.\n(需要后端支持自动部署脚本)");
         }
 
         // --- Overmind ---
