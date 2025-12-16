@@ -12,6 +12,11 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.62 - Docker & Overmind
+*   **🐳 Docker Management**: New sidebar menu for visualizing and managing Docker containers (view status, logs, etc.).
+*   **🧠 Overmind Integration**: Seamless access to Overmind system via the sidebar for unified control.
+*   **✨ UI Enhancements**: Optimized sidebar structure and added multi-language support for new modules.
+
 > For detailed update history, please refer to [CHANGELOG.md](CHANGELOG.md).
 >
 > 更多更新记录请查看 [CHANGELOG.md](CHANGELOG.md)。
