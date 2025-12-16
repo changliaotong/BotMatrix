@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.65 (2025-12-17)
+*   **Message Queue System Enhancement (消息队列系统增强)**:
+    *   **Separated Retry Queue**: Completely separated message persistence queue from retry queue to prevent successful messages from being re-sent.
+    *   **Retry Queue Isolation**: Failed messages now go into a dedicated retry queue (`RetryQueue`) instead of being mixed with the persistence queue (`MessageQueue`).
+    *   **Enhanced Retry Logic**: Improved retry processing to only handle messages in the retry queue, preventing any interference with successful message deliveries.
+    *   **Queue Management APIs**: Added new REST API endpoints (`/api/queue/messages` and `/api/queue/retries`) for monitoring both persistence and retry queue status.
+    *   **Improved Error Handling**: Enhanced error logging and message format validation to ensure only valid retry messages are processed.
+
 ## v1.1.64 (2025-12-17)
 *   **System Reliability Enhancements (系统可靠性增强)**:
     *   **Worker Disconnect Detection**: Implemented automatic heartbeat monitoring for Worker connections with 60-second timeout detection and cleanup mechanism.
