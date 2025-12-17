@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.68 (2025-12-17)
+*   **Message Retry Mechanism (消息重试机制)**:
+    *   **Automatic Retry Queue**: Added automatic message retry mechanism when bot message sending fails, ensuring reliable message delivery.
+    *   **Exponential Backoff**: Implemented exponential backoff strategy (1s, 2s, 4s) to prevent system overload during retries.
+    *   **Max Retry Limit**: Configurable maximum retry attempts (default: 3) with automatic cleanup of expired messages after 5 minutes.
+    *   **Queue Management API**: Enhanced `/api/queue/messages` endpoint to return detailed retry queue status including retry count, next retry time, and error information.
+    *   **Background Processing**: Dedicated background goroutine processes retry queue every 5 seconds for efficient message recovery.
+    *   **Thread-Safe Operations**: All retry queue operations are protected by mutex locks for concurrent access safety.
+
 ## v1.1.67 (2025-12-17)
 *   **Worker Heartbeat Fix (Worker心跳修复)**:
     *   **Targeted Heartbeat Updates**: Fixed worker heartbeat logic to only update the specific worker that sent the heartbeat, instead of updating all workers.

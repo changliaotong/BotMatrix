@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
@@ -202,11 +202,26 @@ type Manager struct {
 	AutoRecallMutex sync.RWMutex
 	AutoRecallMap   map[string]AutoRecallTask `json:"-"` // Echo -> Task
 
+	// Message Confirmation & Retry
+	MessageMutex    sync.RWMutex
+	PendingMessages map[string]*PendingMessage `json:"-"` // Message ID -> Pending Message
+
 }
 
 type AutoRecallTask struct {
 	Delay int // Seconds
 	BotID string
+}
+
+type PendingMessage struct {
+	MessageID   string
+	TargetBotID string
+	Message     map[string]interface{}
+	RetryCount  int
+	MaxRetries  int
+	NextRetry   time.Time
+	CreatedAt   time.Time
+	LastError   string
 }
 
 type ContactSession struct {
@@ -271,7 +286,8 @@ func NewManager() *Manager {
 		Sessions:        make(map[string]*ContactSession),
 		AutoRecallMap:   make(map[string]AutoRecallTask),
 		pendingRequests: make(map[string]chan map[string]interface{}),
-		routingRules:    make(map[string]string), // 初始化路由规则
+		routingRules:    make(map[string]string),          // 初始化路由规则
+		PendingMessages: make(map[string]*PendingMessage), // 初始化待处理消息映射
 	}
 
 	// Initialize Redis
@@ -693,6 +709,9 @@ func main() {
 			manager.mutex.Unlock()
 		}
 	}()
+
+	// 启动消息重试队列处理协程
+	go manager.processRetryQueue()
 
 	// 2. Web UI Server Mux
 	uiMux := http.NewServeMux()
@@ -1628,6 +1647,8 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 		if err != nil {
 			m.AddLog("ERROR", fmt.Sprintf("Failed to send API to bot %s: %v", targetBot.SelfID, err))
+			// 添加到重试队列
+			m.addToRetryQueue(req, targetBot.SelfID, err.Error())
 		} else {
 			// Update Global Sent Stats (Persistent)
 			if action, ok := req["action"].(string); ok && strings.HasPrefix(action, "send_") {
@@ -2740,6 +2761,141 @@ func (m *Manager) handleGetChatStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// 添加消息到重试队列
+func (m *Manager) addToRetryQueue(message map[string]interface{}, targetBotID string, errorMsg string) {
+	// 生成消息ID
+	messageID := m.generateMessageID()
+
+	// 创建待处理消息
+	pendingMsg := &PendingMessage{
+		MessageID:   messageID,
+		TargetBotID: targetBotID,
+		Message:     message,
+		RetryCount:  0,
+		MaxRetries:  3,
+		NextRetry:   time.Now().Add(time.Second), // 1秒后开始第一次重试
+		CreatedAt:   time.Now(),
+		LastError:   errorMsg,
+	}
+
+	m.MessageMutex.Lock()
+	m.PendingMessages[messageID] = pendingMsg
+	m.MessageMutex.Unlock()
+
+	m.AddLog("INFO", fmt.Sprintf("Added message %s to retry queue for bot %s (error: %s)", messageID, targetBotID, errorMsg))
+}
+
+// 生成消息ID
+func (m *Manager) generateMessageID() string {
+	return fmt.Sprintf("msg_%d_%s", time.Now().UnixNano(), generateRandomString(8))
+}
+
+// 生成随机字符串
+func generateRandomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+// 处理消息重试
+func (m *Manager) processRetryQueue() {
+	ticker := time.NewTicker(5 * time.Second) // 每5秒检查一次重试队列
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.MessageMutex.Lock()
+		now := time.Now()
+
+		// 收集需要重试的消息
+		messagesToRetry := make([]*PendingMessage, 0)
+		for _, pendingMsg := range m.PendingMessages {
+			if now.After(pendingMsg.NextRetry) && pendingMsg.RetryCount < pendingMsg.MaxRetries {
+				messagesToRetry = append(messagesToRetry, pendingMsg)
+			}
+		}
+		m.MessageMutex.Unlock()
+
+		// 处理重试消息
+		for _, pendingMsg := range messagesToRetry {
+			m.retryMessage(pendingMsg)
+		}
+
+		// 清理过期的失败消息
+		m.cleanupExpiredMessages()
+	}
+}
+
+// 重试单个消息
+func (m *Manager) retryMessage(pendingMsg *PendingMessage) {
+	m.MessageMutex.Lock()
+	pendingMsg.RetryCount++
+
+	// 检查目标bot是否仍然可用
+	targetBot := m.getBotByID(pendingMsg.TargetBotID)
+	if targetBot == nil {
+		pendingMsg.LastError = "Target bot no longer available"
+		m.MessageMutex.Unlock()
+		m.AddLog("WARN", fmt.Sprintf("Cannot retry message %s: target bot %s no longer available", pendingMsg.MessageID, pendingMsg.TargetBotID))
+		return
+	}
+
+	m.MessageMutex.Unlock()
+
+	// 尝试重新发送消息
+	targetBot.Mutex.Lock()
+	err := targetBot.Conn.WriteJSON(pendingMsg.Message)
+	targetBot.Mutex.Unlock()
+
+	if err != nil {
+		// 发送仍然失败，更新重试信息
+		m.MessageMutex.Lock()
+		pendingMsg.LastError = err.Error()
+		pendingMsg.NextRetry = time.Now().Add(time.Duration(pendingMsg.RetryCount) * time.Second * 2) // 指数退避
+		m.MessageMutex.Unlock()
+
+		m.AddLog("WARN", fmt.Sprintf("Retry %d failed for message %s to bot %s: %v", pendingMsg.RetryCount, pendingMsg.MessageID, pendingMsg.TargetBotID, err))
+	} else {
+		// 发送成功，从队列中移除
+		m.MessageMutex.Lock()
+		delete(m.PendingMessages, pendingMsg.MessageID)
+		m.MessageMutex.Unlock()
+
+		m.AddLog("INFO", fmt.Sprintf("Successfully retried message %s to bot %s after %d attempts", pendingMsg.MessageID, pendingMsg.TargetBotID, pendingMsg.RetryCount))
+	}
+}
+
+// 清理过期的失败消息
+func (m *Manager) cleanupExpiredMessages() {
+	m.MessageMutex.Lock()
+	defer m.MessageMutex.Unlock()
+
+	now := time.Now()
+	expiredTime := 5 * time.Minute // 5分钟后清理
+
+	for messageID, pendingMsg := range m.PendingMessages {
+		if now.Sub(pendingMsg.CreatedAt) > expiredTime {
+			delete(m.PendingMessages, messageID)
+			m.AddLog("INFO", fmt.Sprintf("Cleaned up expired message %s (created at %v)", messageID, pendingMsg.CreatedAt))
+		}
+	}
+}
+
+// 根据ID获取bot
+func (m *Manager) getBotByID(botID string) *BotClient {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	for _, bot := range m.bots {
+		if bot.SelfID == botID {
+			return bot
+		}
+	}
+	return nil
+}
+
 // 路由规则相关函数
 
 // findTargetWorker 根据路由规则查找目标worker
@@ -2929,12 +3085,36 @@ func (m *Manager) handleGetMessageQueue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// For now, return an empty message queue
-	// This can be extended to return actual queued messages if needed
-	queue := []interface{}{}
+	// 获取待处理消息队列状态
+	m.MessageMutex.RLock()
+	queue := make([]map[string]interface{}, 0)
+
+	for messageID, pendingMsg := range m.PendingMessages {
+		queueItem := map[string]interface{}{
+			"message_id":    messageID,
+			"target_bot_id": pendingMsg.TargetBotID,
+			"retry_count":   pendingMsg.RetryCount,
+			"max_retries":   pendingMsg.MaxRetries,
+			"next_retry":    pendingMsg.NextRetry.Format(time.RFC3339),
+			"created_at":    pendingMsg.CreatedAt.Format(time.RFC3339),
+			"last_error":    pendingMsg.LastError,
+		}
+		queue = append(queue, queueItem)
+	}
+	m.MessageMutex.RUnlock()
+
+	// 按创建时间排序（最新的在前）
+	sort.Slice(queue, func(i, j int) bool {
+		createdAtI, _ := time.Parse(time.RFC3339, queue[i]["created_at"].(string))
+		createdAtJ, _ := time.Parse(time.RFC3339, queue[j]["created_at"].(string))
+		return createdAtI.After(createdAtJ)
+	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(queue)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"queue": queue,
+		"total": len(queue),
+	})
 }
 
 func getString(m map[string]interface{}, key string) string {

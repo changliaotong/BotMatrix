@@ -12,6 +12,14 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.68 - Message Retry Mechanism
+*   **🔄 Automatic Message Retry**: Added intelligent retry mechanism for failed bot message deliveries, ensuring reliable message transmission.
+*   **⏱️ Exponential Backoff**: Implemented smart retry timing (1s, 2s, 4s intervals) to prevent system overload during recovery attempts.
+*   **🎯 Max Retry Limit**: Configurable retry attempts (default: 3) with automatic cleanup of expired messages after 5 minutes.
+*   **📊 Queue Management**: Enhanced `/api/queue/messages` API provides detailed retry queue status including retry count, next retry time, and error details.
+*   **⚡ Background Processing**: Dedicated background worker processes retry queue every 5 seconds for efficient message recovery.
+*   **🔒 Thread-Safe**: All retry operations are protected by mutex locks for concurrent access safety.
+
 ### v1.1.67 - Worker Heartbeat Fix & Temporary Fixed Routing
 *   **💓 Worker Heartbeat Fix**: Fixed worker heartbeat logic to only update specific worker heartbeat times, preventing false timeout disconnections.
 *   **🔧 Testing Routing Rules**: Added temporary routing rules to direct specific group or bot messages to fixed workers for testing purposes.
