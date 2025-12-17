@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket连接测试</h1>
+    <div id="status">等待连接...</div>
+    <div id="log"></div>
+    
+    <script>
+        function log(message) {
+            document.getElementById('log').innerHTML += '<br>' + new Date().toLocaleTimeString() + ': ' + message;
+        }
+        
+        function testWebSocket(url, role) {
+            log('正在连接 ' + role + ': ' + url);
+            
+            const ws = new WebSocket(url);
+            
+            ws.onopen = function() {
+                log('✅ ' + role + ' 连接成功');
+                document.getElementById('status').innerHTML = role + ' 已连接';
+                
+                // 发送身份验证
+                ws.send(JSON.stringify({
+                    type: 'identify',
+                    role: role,
+                    id: 'test_' + role + '_' + Date.now()
+                }));
+            };
+            
+            ws.onmessage = function(event) {
+                log('📨 收到消息: ' + event.data);
+            };
+            
+            ws.onerror = function(error) {
+                log('❌ 连接错误: ' + error);
+                document.getElementById('status').innerHTML = role + ' 连接错误';
+            };
+            
+            ws.onclose = function(event) {
+                log('🔌 连接关闭: code=' + event.code + ', reason=' + event.reason);
+                document.getElementById('status').innerHTML = role + ' 已断开';
+            };
+            
+            return ws;
+        }
+        
+        // 测试Worker连接
+        const workerWs = testWebSocket('ws://192.168.0.115:3001/ws/workers', 'Worker');
+        
+        // 5秒后测试Bot连接
+        setTimeout(() => {
+            const botWs = testWebSocket('ws://192.168.0.115:3001/ws/bots', 'Bot');
+        }, 5000);
+    </script>
+</body>
+</html>
