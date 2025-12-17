@@ -5,7 +5,7 @@ services:
   bot-manager:
     build: 
       context: ./BotNexus
-    container_name: botmatrix-manager
+    container_name: btmgr
     restart: always
     pid: host
     ports:
@@ -24,7 +24,7 @@ services:
   system-worker:
     build:
       context: ./SystemWorker
-    container_name: botmatrix-system-worker
+    container_name: btsys
     restart: always
     depends_on:
       - bot-manager
@@ -36,7 +36,7 @@ services:
   tencent-bot:
     build:
       context: ./TencentBot
-    container_name: tencent-bot
+    container_name: btqq
     restart: always
     depends_on:
       - bot-manager
@@ -54,7 +54,7 @@ services:
   wxbot:
     build: 
       context: ./WxBot
-    container_name: wxbot
+    container_name: btwc
     restart: always
     ports:
       - "5001:5001" # WebUI for QR Code Login
@@ -76,7 +76,7 @@ services:
   wxbot-go:
     build: 
       context: ./WxBotGo
-    container_name: wxbot-go
+    container_name: btwg
     restart: always
     depends_on:
       - bot-manager
@@ -91,7 +91,7 @@ services:
   dingtalk-bot:
     build:
       context: ./DingTalkBot
-    container_name: dingtalk-bot
+    container_name: btdt
     restart: always
     depends_on:
       - bot-manager
@@ -105,7 +105,7 @@ services:
   feishu-bot:
     build:
       context: ./FeishuBot
-    container_name: feishu-bot
+    container_name: btfs
     restart: always
     depends_on:
       - bot-manager
@@ -119,7 +119,7 @@ services:
   telegram-bot:
     build:
       context: ./TelegramBot
-    container_name: telegram-bot
+    container_name: bttg
     restart: always
     depends_on:
       - bot-manager
@@ -133,7 +133,7 @@ services:
   discord-bot:
     build:
       context: ./DiscordBot
-    container_name: discord-bot
+    container_name: btdc
     restart: always
     depends_on:
       - bot-manager
@@ -147,7 +147,7 @@ services:
   slack-bot:
     build:
       context: ./SlackBot
-    container_name: slack-bot
+    container_name: btsl
     restart: always
     depends_on:
       - bot-manager
@@ -161,7 +161,7 @@ services:
   kook-bot:
     build:
       context: ./KookBot
-    container_name: kook-bot
+    container_name: btkk
     restart: always
     depends_on:
       - bot-manager
@@ -175,7 +175,7 @@ services:
   email-bot:
     build:
       context: ./EmailBot
-    container_name: email-bot
+    container_name: btem
     restart: always
     depends_on:
       - bot-manager
@@ -189,7 +189,7 @@ services:
   wecom-bot:
     build:
       context: ./WeComBot
-    container_name: wecom-bot
+    container_name: btwm
     restart: always
     ports:
       - "5002:8001" # Expose callback port

@@ -659,7 +659,7 @@ func main() {
 				} else {
 					// 超时Worker，关闭连接
 					worker.Conn.Close()
-					manager.AddLog("WARN", fmt.Sprintf("Worker heartbeat timeout after %v, removing", now.Sub(worker.LastHeartbeat)))
+					manager.AddLog("WARN", fmt.Sprintf("Worker %s heartbeat timeout after %v, removing", worker.ID, now.Sub(worker.LastHeartbeat)))
 				}
 				worker.Mutex.Unlock()
 			}
@@ -1472,8 +1472,22 @@ func serveWorker(m *Manager, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 生成唯一的worker ID，使用简洁格式，并检查是否已存在
+	var workerID string
+	maxAttempts := 10
+	for attempts := 0; attempts < maxAttempts; attempts++ {
+		// 使用毫秒级时间戳+随机数，格式更简洁
+		millis := time.Now().UnixNano() / 1000000 // 毫秒时间戳
+		workerID = fmt.Sprintf("worker%d%d", millis%10000, rand.Intn(1000))
+		if !m.isWorkerIDExists(workerID) {
+			break
+		}
+		// 如果ID已存在，等待一小段时间再试
+		time.Sleep(time.Millisecond * 5)
+	}
+
 	worker := &WorkerClient{
-		ID:            fmt.Sprintf("worker_%d", time.Now().UnixNano()),
+		ID:            workerID,
 		Conn:          conn,
 		Connected:     time.Now(),
 		LastHeartbeat: time.Now(),
@@ -1505,16 +1519,63 @@ func serveWorker(m *Manager, w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// 启动心跳检测
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 心跳发送goroutine
+	go func() {
+		ticker := time.NewTicker(30 * time.Second) // 30秒发送一次心跳
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				worker.Mutex.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, []byte{})
+				worker.Mutex.Unlock()
+
+				if err != nil {
+					m.AddLog("WARN", fmt.Sprintf("Worker %s heartbeat failed: %v", worker.ID, err))
+					cancel() // 取消主循环
+					return
+				}
+				m.AddLog("DEBUG", fmt.Sprintf("Worker %s heartbeat sent successfully", worker.ID))
+			case <-ctx.Done():
+				m.AddLog("INFO", fmt.Sprintf("Worker %s heartbeat goroutine stopped", worker.ID))
+				return
+			}
+		}
+	}()
+
 	// Keep alive / Read loop (to detect close)
 	defer func() {
+		m.AddLog("INFO", fmt.Sprintf("Worker %s connection closing", worker.ID))
 		m.removeWorker(worker)
+		cancel() // 确保心跳goroutine退出
 	}()
+
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second)) // 60秒读取超时
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second)) // 收到pong后重置超时
+		worker.LastHeartbeat = time.Now()
+		return nil
+	})
 
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				m.AddLog("WARN", fmt.Sprintf("Worker %s connection error: %v", worker.ID, err))
+			} else {
+				m.AddLog("INFO", fmt.Sprintf("Worker %s connection closed normally", worker.ID))
+			}
 			break
 		}
+
+		// 重置读取超时
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		worker.LastHeartbeat = time.Now()
 
 		// Handle API requests from Worker
 		var req map[string]interface{}
@@ -1667,7 +1728,34 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 			}
 		}
 	} else {
-		m.AddLog("WARN", fmt.Sprintf("No bot available to handle API request. TargetID: %s", targetID))
+		// 如果没有找到目标bot，直接随机选择一个worker进行负载均衡
+		m.AddLog("WARN", fmt.Sprintf("No bot available to handle API request. TargetID: %s, trying random worker", targetID))
+
+		// 随机选择一个worker
+		m.mutex.RLock()
+		if len(m.workers) > 0 {
+			// 使用简单的轮询算法
+			if m.workerIndex >= len(m.workers) {
+				m.workerIndex = 0
+			}
+			targetWorker := m.workers[m.workerIndex]
+			m.workerIndex++
+			m.mutex.RUnlock()
+
+			// 发送请求到选中的worker
+			targetWorker.Mutex.Lock()
+			err := targetWorker.Conn.WriteJSON(req)
+			targetWorker.Mutex.Unlock()
+
+			if err != nil {
+				m.AddLog("ERROR", fmt.Sprintf("Failed to send API to worker %s: %v", targetWorker.ID, err))
+			} else {
+				m.AddLog("INFO", fmt.Sprintf("Successfully routed API request to worker %s (random selection)", targetWorker.ID))
+			}
+		} else {
+			m.mutex.RUnlock()
+			m.AddLog("WARN", fmt.Sprintf("No workers available to handle API request"))
+		}
 	}
 }
 
@@ -2545,6 +2633,7 @@ func (m *Manager) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	workerList := make([]map[string]interface{}, 0)
 	for _, w := range m.workers {
 		workerList = append(workerList, map[string]interface{}{
+			"id":            w.ID, // 添加worker ID字段
 			"remote_addr":   w.Conn.RemoteAddr().String(),
 			"connected":     w.Connected.Format(time.RFC3339),
 			"status":        "active",
@@ -2894,6 +2983,19 @@ func (m *Manager) getBotByID(botID string) *BotClient {
 		}
 	}
 	return nil
+}
+
+// 检查worker ID是否已存在
+func (m *Manager) isWorkerIDExists(workerID string) bool {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	for _, worker := range m.workers {
+		if worker.ID == workerID {
+			return true
+		}
+	}
+	return false
 }
 
 // 路由规则相关函数

@@ -447,8 +447,8 @@ class _RoutingScreenState extends State<RoutingScreen> {
               child: Text('可用的Workers', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             ..._workers.map((worker) => DropdownMenuItem(
-              value: worker,
-              child: Text('⚙️ $worker'),
+              value: worker['id'] as String,
+              child: Text('⚙️ ${worker['id']}'),
             )),
           ],
           onChanged: (value) => selectedWorker = value,

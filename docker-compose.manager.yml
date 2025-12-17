@@ -10,7 +10,7 @@ services:
   bot-manager:
     build: 
       context: ./BotNexus
-    container_name: botmatrix-manager
+    container_name: btmgr
     restart: always
     pid: host
     ports:

@@ -3,13 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotMatrix Manager</title>
+    <title>BotMatrix Manager v1.1.69</title>
     <!-- Use Staticfile CDN (Reliable in China) -->
     <link href="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.staticfile.org/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.staticfile.org/Chart.js/3.7.1/chart.min.js"></script>
     <script src="locales.js"></script>
+    
+    <!-- Error handling for external scripts -->
+    <script>
+        // Ignore external script errors (like browser extensions)
+        window.addEventListener('error', function(e) {
+            // Check if error is from external script
+            if (e.filename && (e.filename.includes('index.ts') || e.filename.includes('.js'))) {
+                console.warn('Ignored external script error:', e.message, 'from', e.filename);
+                e.preventDefault();
+                return true;
+            }
+        });
+        
+        // Handle MutationObserver errors from external scripts
+        const originalObserve = MutationObserver.prototype.observe;
+        MutationObserver.prototype.observe = function(target, options) {
+            try {
+                if (!target || typeof target.querySelector !== 'function') {
+                    console.warn('MutationObserver called with invalid target, ignoring');
+                    return;
+                }
+                return originalObserve.call(this, target, options);
+            } catch (e) {
+                console.warn('MutationObserver error ignored:', e.message);
+            }
+        };
+    </script>
     <style>
         :root {
             --bg-body: #f8f9fa;
@@ -281,7 +308,7 @@
         <button class="btn btn-outline-secondary me-3" onclick="toggleSidebar()">
             <i class="bi bi-list fs-4"></i>
         </button>
-        <h5 class="m-0">BotMatrix</h5>
+        <h5 class="m-0">BotMatrix <small class="text-muted fs-6">v1.1.69</small></h5>
     </div>
     
     <!-- Overlay -->
@@ -318,7 +345,7 @@
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted" data-i18n="sidebar_subtitle">Enterprise Bot Manager</small>
-                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.62</span>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.69</span>
             </div>
         </div>
         
@@ -330,6 +357,7 @@
             <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> <span data-i18n="sidebar_groups">群组好友</span></a>
             <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
             <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
+            <a href="#routing" id="nav-routing" class="nav-link" onclick="showTab('routing')"><i class="bi bi-diagram-3"></i> <span data-i18n="sidebar_routing">路由管理</span></a>
             <a href="#overmind" id="nav-overmind" class="nav-link" onclick="showOvermind()"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
             <a href="#logs" id="nav-logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> <span data-i18n="sidebar_logs">日志中心</span></a>
             <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> <span data-i18n="sidebar_debug">调试测试</span></a>
@@ -359,10 +387,6 @@
             <button class="btn btn-outline-secondary rounded-circle mb-2" onclick="logout()" title="Logout" data-i18n-title="sidebar_logout" style="width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
                 <i class="bi bi-box-arrow-right"></i>
             </button>
-            
-            <div class="w-100 text-center mt-1" style="font-size: 0.75rem; color: var(--text-muted);">
-                <span data-i18n="sidebar_logout">退出登录</span>
-            </div>
         </div>
     </div>
 
@@ -1040,6 +1064,77 @@
             </div>
         </div>
 
+        <!-- Routing Tab -->
+        <div id="tab-routing" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex align-items-center">
+                    <h4 class="mb-0 me-2" data-i18n="sidebar_routing">路由管理</h4>
+                    <button class="btn btn-sm btn-outline-info" onclick="toggleRoutingHelp()" data-i18n-title="routing_help_tooltip" title="使用说明">
+                        <i class="bi bi-question-circle"></i>
+                    </button>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary me-2" onclick="showAddRoutingRuleDialog()">
+                        <i class="bi bi-plus-lg"></i> <span data-i18n="routing_add_rule">添加路由规则</span>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="fetchRoutingRules()">
+                        <i class="bi bi-arrow-clockwise"></i> <span data-i18n="refresh">刷新</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 路由规则使用说明 -->
+            <div class="alert alert-info mb-4" id="routing-help-section" style="display: none;">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+                    <div>
+                        <h6 class="alert-heading mb-2" data-i18n="routing_usage_title">📋 路由规则使用说明</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong data-i18n="routing_pattern_format">🎯 匹配模式格式：</strong></p>
+                                <ul class="small mb-2">
+                                <li><code>user_123456</code> - 精确匹配用户ID（123456）</li>
+                                <li><code>group_789012</code> - 精确匹配群组ID（789012）</li>
+                                <li><code>*_test</code> - 通配符匹配（以_test结尾）</li>
+                                <li><code>123*</code> - 通配符匹配（以123开头）</li>
+                            </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong data-i18n="routing_target_format">🔄 目标节点格式：</strong></p>
+                            <ul class="small mb-2">
+                                <li><code>worker_1</code> - 指定工作节点</li>
+                                <li><code>worker_2</code> - 指定工作节点</li>
+                                <li><code>default</code> - 默认处理节点</li>
+                            </ul>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <p class="mb-1"><strong data-i18n="routing_priority_rules">⚡ 优先级规则：</strong></p>
+                                <ul class="small mb-0">
+                                    <li>精确匹配 > 通配符匹配</li>
+                                    <li>先添加的规则优先匹配</li>
+                                    <li>无匹配时使用默认处理</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <hr>
+                        <p class="small mb-0" data-i18n="routing_example_usage">💡 示例：将用户123456的消息路由到worker_1处理，设置匹配模式为"user_123456"，目标节点为"worker_1"</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row" id="routing-list-container">
+                <!-- Routing Rule Cards -->
+                <div class="col-12 text-center text-muted">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2" data-i18n="loading_routing_rules">正在加载路由规则...</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Logs Tab (Full Page) -->
         <div id="tab-logs" class="content-section" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -1302,6 +1397,42 @@
         </div>
     </div>
 
+    <!-- Routing Rule Modal -->
+    <div class="modal fade" id="routingRuleModal" tabindex="-1" aria-labelledby="routingRuleModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="routingRuleModalLabel" data-i18n="routing_add_rule">添加路由规则</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="routing-rule-form">
+                        <div class="mb-3">
+                            <label for="routing-pattern" class="form-label" data-i18n="routing_pattern">匹配模式</label>
+                            <input type="text" class="form-control" id="routing-pattern" placeholder="group_123, user_456, *" data-i18n-placeholder="routing_pattern_placeholder">
+                            <div class="form-text" data-i18n="routing_pattern_help">支持通配符*，多个模式用逗号分隔</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="routing-target" class="form-label" data-i18n="routing_target">目标地址</label>
+                            <input type="text" class="form-control" id="routing-target" placeholder="ws://localhost:8080, http://example.com" data-i18n-placeholder="routing_target_placeholder">
+                            <div class="form-text" data-i18n="routing_target_help">消息转发目标地址</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="routing-enabled" checked>
+                                <label class="form-check-label" for="routing-enabled" data-i18n="routing_enabled">启用规则</label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="cancel">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveRoutingRule()" data-i18n="save">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- Language Management ---
         let currentLang = 'zh-CN';
@@ -1456,11 +1587,21 @@
 
         // Check Auth on Load
         document.addEventListener('DOMContentLoaded', () => {
-            initTheme(); // Initialize theme
-            initLanguage(); // Initialize language
+            try {
+                initTheme(); // Initialize theme
+                initLanguage(); // Initialize language
+
+            // Force logout if requested via URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('logout') === '1') {
+                localStorage.removeItem('wxbot_token');
+                localStorage.removeItem('wxbot_role');
+                // Clear the logout parameter from URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                alert('已强制退出登录');
+            }
 
             // Check for Magic Link
-            const urlParams = new URLSearchParams(window.location.search);
             const magicToken = urlParams.get('magic_token');
 
             if (magicToken) {
@@ -1504,6 +1645,16 @@
             } else {
                 startApp();
             }
+            } catch (e) {
+                console.error('DOMContentLoaded error:', e);
+                // Try to show login modal even if there was an error
+                try {
+                    const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                    loginModal.show();
+                } catch (modalError) {
+                    console.error('Failed to show login modal:', modalError);
+                }
+            }
         });
 
         function applyRoleUI(role) {
@@ -1538,36 +1689,202 @@
             }
         }
 
-        function startApp() {
-            applyRoleUI(authRole);
-            
-            // Restore tab from hash
-            const hash = window.location.hash;
-            if (hash) {
-                let tabId = hash.substring(1);
-                if (document.getElementById('tab-' + tabId)) {
-                    const isAdmin = (authRole === 'super' || authRole === 'admin');
-                    if (tabId === 'debug' && !isAdmin) {
-                        tabId = 'dashboard';
-                    }
-                    showTab(tabId);
+        function showTab(tabId) {
+            try {
+                // 隐藏所有内容区域
+                const contentSections = document.querySelectorAll('.content-section');
+                contentSections.forEach(section => {
+                    section.style.display = 'none';
+                });
+                
+                // 显示目标内容区域
+                const targetTab = document.getElementById('tab-' + tabId);
+                if (targetTab) {
+                    targetTab.style.display = '';
+                }
+                
+                // 更新导航状态
+                const navLinks = document.querySelectorAll('.nav-link');
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                const targetNav = document.getElementById('nav-' + tabId);
+                if (targetNav) {
+                    targetNav.classList.add('active');
+                }
+                
+                // 更新URL hash（不触发hashchange事件）
+                const newHash = '#' + tabId;
+                if (window.location.hash !== newHash) {
+                    window.location.hash = newHash;
+                }
+                
+                // 根据tab触发相应的初始化函数
+                switch(tabId) {
+                    case 'dashboard':
+                        // 仪表板已在startApp中初始化
+                        break;
+                    case 'bots':
+                        if (typeof fetchBots === 'function') {
+                            fetchBots();
+                        }
+                        break;
+                    case 'groups':
+                        if (typeof loadGroups === 'function') {
+                            loadGroups();
+                        }
+                        break;
+                    case 'workers':
+                        if (typeof fetchWorkers === 'function') {
+                            fetchWorkers();
+                        }
+                        break;
+                    case 'docker':
+                        if (typeof loadDockerContainers === 'function') {
+                            loadDockerContainers();
+                        }
+                        break;
+                    case 'routing':
+                        if (typeof fetchRoutingRules === 'function') {
+                            fetchRoutingRules();
+                        }
+                        break;
+                    case 'logs':
+                        if (typeof fetchLogsFull === 'function') {
+                            fetchLogsFull();
+                        }
+                        break;
+                    case 'debug':
+                        if (typeof loadTestGroups === 'function') {
+                            loadTestGroups();
+                        }
+                        break;
+                    case 'settings':
+                        // 设置页面不需要额外初始化
+                        break;
+                }
+                
+                console.log('切换到标签页:', tabId);
+                
+            } catch (error) {
+                console.error('切换标签页失败:', error);
+                // 如果切换失败，尝试回到仪表板
+                if (tabId !== 'dashboard') {
+                    showTab('dashboard');
                 }
             }
+        }
 
-            initWebSocket();
-            // Load initial data
-            updateStats();
-            updateSystemStats();
-            fetchBots();
-            fetchWorkers();
-            updateChatStats();
-            
-            // Start Timers
-            setInterval(updateStats, 2000);
-            setInterval(updateSystemStats, 2000);
-            setInterval(updateChatStats, 5000);
-            setInterval(updateBots, 5000);
-            setInterval(fetchWorkers, 5000);
+        function startApp() {
+            try {
+                applyRoleUI(authRole);
+                
+                // Restore tab from hash - 增加错误处理防止卡死
+                try {
+                    const hash = window.location.hash;
+                    if (hash) {
+                        let tabId = hash.substring(1);
+                        
+                        // 验证tabId是否有效
+                        const validTabs = ['dashboard', 'bots', 'groups', 'workers', 'docker', 'logs', 'debug', 'settings'];
+                        const isValidTab = validTabs.includes(tabId) && document.getElementById('tab-' + tabId);
+                        
+                        if (isValidTab) {
+                            const isAdmin = (authRole === 'super' || authRole === 'admin');
+                            
+                            // 权限检查
+                            if (tabId === 'debug' && !isAdmin) {
+                                tabId = 'dashboard';
+                            }
+                            
+                            // 延迟执行tab切换，避免在页面加载时立即执行导致卡死
+                            setTimeout(() => {
+                                try {
+                                    showTab(tabId);
+                                } catch (tabError) {
+                                    console.error('Tab切换失败:', tabError);
+                                    // 如果切换失败，回到仪表板
+                                    showTab('dashboard');
+                                }
+                            }, 50);
+                        } else {
+                            // 如果hash无效，默认显示仪表板
+                            setTimeout(() => showTab('dashboard'), 50);
+                        }
+                    } else {
+                        // 没有hash时默认显示仪表板
+                        setTimeout(() => showTab('dashboard'), 50);
+                    }
+                } catch (hashError) {
+                    console.error('Hash解析失败:', hashError);
+                    // 出错时默认显示仪表板
+                    setTimeout(() => showTab('dashboard'), 50);
+                }
+
+                // 延迟初始化，防止页面卡死
+                setTimeout(() => {
+                    try {
+                        initWebSocket();
+                    } catch (wsError) {
+                        console.error('WebSocket初始化失败:', wsError);
+                    }
+                }, 100);
+                
+                // 分批加载数据，避免同时请求导致卡死
+                setTimeout(() => {
+                    try {
+                        updateStats();
+                        updateSystemStats();
+                    } catch (error) {
+                        console.error('系统数据加载失败:', error);
+                    }
+                }, 200);
+                
+                setTimeout(() => {
+                    try {
+                        fetchBots();
+                        fetchWorkers();
+                    } catch (error) {
+                        console.error('机器人数据加载失败:', error);
+                    }
+                }, 400);
+                
+                setTimeout(() => {
+                    try {
+                        updateChatStats();
+                    } catch (error) {
+                        console.error('聊天数据加载失败:', error);
+                    }
+                }, 600);
+                
+                // 启动定时器，添加错误处理
+                const safeSetInterval = (fn, interval, name) => {
+                    return setInterval(() => {
+                        try {
+                            fn();
+                        } catch (error) {
+                            console.error(`${name}定时器执行失败:`, error);
+                        }
+                    }, interval);
+                };
+                
+                window.updateInterval = safeSetInterval(updateStats, 2000, 'updateStats');
+                window.systemStatsInterval = safeSetInterval(updateSystemStats, 2000, 'updateSystemStats');
+                window.chatStatsInterval = safeSetInterval(updateChatStats, 5000, 'updateChatStats');
+                window.botsInterval = safeSetInterval(updateBots, 5000, 'updateBots');
+                window.workersInterval = safeSetInterval(fetchWorkers, 5000, 'fetchWorkers');
+                
+            } catch (error) {
+                console.error('startApp初始化失败:', error);
+                // 尝试显示错误信息
+                try {
+                    const t = translations[currentLang] || translations['zh-CN'];
+                    alert(t.startup_error || '应用初始化失败，请刷新页面重试');
+                } catch (alertError) {
+                    console.error('显示错误信息失败:', alertError);
+                }
+            }
         }
 
         let lastSystemStats = null;
@@ -1677,9 +1994,34 @@
         });
 
         function logout() {
+            // Clear WebSocket connection if exists
+            if (window.wsSubscriber) {
+                try {
+                    window.wsSubscriber.close();
+                } catch (e) {
+                    console.error('WebSocket close error:', e);
+                }
+                window.wsSubscriber = null;
+            }
+            
+            // Clear all intervals
+            if (window.updateInterval) clearInterval(window.updateInterval);
+            if (window.systemStatsInterval) clearInterval(window.systemStatsInterval);
+            if (window.chatStatsInterval) clearInterval(window.chatStatsInterval);
+            if (window.botsInterval) clearInterval(window.botsInterval);
+            if (window.workersInterval) clearInterval(window.workersInterval);
+            
+            // Clear localStorage
             localStorage.removeItem('wxbot_token');
             localStorage.removeItem('wxbot_role');
-            location.reload();
+            
+            // Clear session variables
+            window.authToken = null;
+            window.authRole = null;
+            window.currentBotId = '';
+            
+            // Force reload with cache clear
+            location.href = location.origin + location.pathname + '?logout=1';
         }
 
         // --- Navigation ---
@@ -2787,7 +3129,26 @@
         let wsSubscriber = null;
         const pendingRequests = new Map(); // echo -> {resolve, reject, timeout}
 
+        let wsReconnectAttempts = 0;
+        const MAX_WS_RECONNECT_ATTEMPTS = 5; // 减少重连次数
+        const WS_RECONNECT_DELAY = 5000; // 增加重连延迟到5秒
+        
         function initWebSocket() {
+            // 防止重复连接
+            if (wsSubscriber && wsSubscriber.readyState === WebSocket.CONNECTING) {
+                console.log('WebSocket正在连接中...');
+                return;
+            }
+            
+            if (wsReconnectAttempts >= MAX_WS_RECONNECT_ATTEMPTS) {
+                console.error('WebSocket重连次数过多，停止重连');
+                const t = translations[currentLang] || translations['zh-CN'];
+                document.getElementById('ws-status').className = 'badge bg-danger ms-2';
+                document.getElementById('ws-status').innerText = t.status_error || '连接失败';
+                addEventLog({type: 'system', message: 'WebSocket连接失败次数过多，请检查网络或服务器状态'});
+                return;
+            }
+            
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             // Use the same port as the page (external mapped port) instead of hardcoded 3001
             // Because docker maps 3005:3001, we should connect to window.location.port (which is 3005 if accessing via 3005, or whatever nginx sets)
@@ -2800,93 +3161,135 @@
                 wsUrl += `&token=${encodeURIComponent(authToken)}`;
             }
             
-            wsSubscriber = new WebSocket(wsUrl);
-            
-            wsSubscriber.onopen = () => {
-                const t = translations[currentLang] || translations['zh-CN'];
-                document.getElementById('ws-status').className = 'badge bg-success ms-2';
-                document.getElementById('ws-status').innerText = t.status_connected;
-                addEventLog({type: 'system', message: t.ws_connected || 'WebSocket 连接成功'});
+            try {
+                wsSubscriber = new WebSocket(wsUrl);
                 
-                // Refresh bots when connected
-                updateBots();
-            };
-            
-            wsSubscriber.onclose = () => {
-                const t = translations[currentLang] || translations['zh-CN'];
-                document.getElementById('ws-status').className = 'badge bg-danger ms-2';
-                document.getElementById('ws-status').innerText = t.status_disconnected;
-                addEventLog({type: 'system', message: t.ws_disconnected_retry || 'WebSocket 连接断开，3秒后重连...'});
-                setTimeout(initWebSocket, 3000);
-            };
-            
-            wsSubscriber.onmessage = (evt) => {
+                // 连接超时处理
+                const connectTimeout = setTimeout(() => {
+                    if (wsSubscriber && wsSubscriber.readyState === WebSocket.CONNECTING) {
+                        console.warn('WebSocket连接超时');
+                        wsSubscriber.close();
+                    }
+                }, 10000); // 10秒超时
+                
+                wsSubscriber.onopen = () => {
+                    clearTimeout(connectTimeout);
+                    wsReconnectAttempts = 0; // 重置重连次数
+                    const t = translations[currentLang] || translations['zh-CN'];
+                    document.getElementById('ws-status').className = 'badge bg-success ms-2';
+                    document.getElementById('ws-status').innerText = t.status_connected;
+                    addEventLog({type: 'system', message: t.ws_connected || 'WebSocket 连接成功'});
+                    
+                    // Refresh bots when connected
+                    updateBots();
+                };
+                
+                wsSubscriber.onerror = (error) => {
+                    clearTimeout(connectTimeout);
+                    const t = translations[currentLang] || translations['zh-CN'];
+                    console.error('WebSocket error:', error);
+                    document.getElementById('ws-status').className = 'badge bg-warning ms-2';
+                    document.getElementById('ws-status').innerText = t.status_error || '连接错误';
+                    addEventLog({type: 'system', message: t.ws_error || 'WebSocket 连接错误'});
+                };
+                
+                wsSubscriber.onclose = () => {
+                    clearTimeout(connectTimeout);
+                    const t = translations[currentLang] || translations['zh-CN'];
+                    document.getElementById('ws-status').className = 'badge bg-danger ms-2';
+                    document.getElementById('ws-status').innerText = t.status_disconnected;
+                    addEventLog({type: 'system', message: t.ws_disconnected_retry || 'WebSocket 连接断开，3秒后重连...'});
+                    
+                    // 确保清理并重连
+                    if (wsSubscriber) {
+                        wsSubscriber = null;
+                    }
+                    
+                    wsReconnectAttempts++;
+                    setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+                };
+                
+            } catch (error) {
+                console.error('创建WebSocket失败:', error);
+                wsReconnectAttempts++;
+                setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+            }
+        };
+        
+        wsSubscriber.onmessage = (evt) => {
             try {
                 const data = JSON.parse(evt.data);
                 console.log("WS Recv:", data); // Debug Log
 
                 // Handle API Responses
-                    if (data.echo && pendingRequests.has(data.echo)) {
-                        const req = pendingRequests.get(data.echo);
-                        clearTimeout(req.timeout);
-                        pendingRequests.delete(data.echo);
-                        req.resolve(data);
-                        // Optional: Don't log API responses to event log to reduce noise
-                        // return; 
-                    }
-
-                    // Auto-refresh bot list on connection/nickname update
-                    if (data.echo === 'internal_get_login_info' || 
-                        (data.post_type === 'meta_event' && data.meta_event_type === 'lifecycle')) {
-                        setTimeout(updateBots, 500); // Wait a bit for state to settle
-                    }
-
-                    if (data.post_type === 'log') {
-                        // Check filter
-                        const selector = document.getElementById('log-bot-selector');
-                        const filter = selector ? selector.value : '';
-                        const log = data.data;
-                        const selfId = data.self_id || '';
-
-                        if (filter === '' || (filter === 'system' && !selfId) || filter === selfId) {
-                            const container = document.getElementById('log-container');
-                            if (container) {
-                                const div = document.createElement('div');
-                                div.className = 'log-entry';
-                                div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
-                                container.appendChild(div);
-                                if (document.getElementById('auto-refresh-logs').checked) {
-                                    container.scrollTop = container.scrollHeight;
-                                }
-                            }
-                        }
-
-                        // Full Page Log Update
-                        const selectorFull = document.getElementById('log-bot-selector-full');
-                        const filterFull = selectorFull ? selectorFull.value : '';
-                        if (filterFull === '' || (filterFull === 'system' && !selfId) || filterFull === selfId) {
-                            const containerFull = document.getElementById('log-container-full');
-                            if (containerFull) {
-                                const div = document.createElement('div');
-                                div.className = 'log-entry';
-                                div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
-                                containerFull.appendChild(div);
-                                if (containerFull.children.length > 2000) {
-                                    containerFull.removeChild(containerFull.firstChild);
-                                }
-                                if (document.getElementById('auto-refresh-logs-full').checked) {
-                                    containerFull.scrollTop = containerFull.scrollHeight;
-                                }
-                            }
-                        }
-                        return;
-                    }
-                    addEventLog(data);
-                } catch (e) {
-                    console.error('WS Parse Error', e);
+                if (data.echo && pendingRequests.has(data.echo)) {
+                    const req = pendingRequests.get(data.echo);
+                    clearTimeout(req.timeout);
+                    pendingRequests.delete(data.echo);
+                    req.resolve(data);
+                    // Optional: Don't log API responses to event log to reduce noise
+                    // return; 
                 }
-            };
-        }
+
+                // Auto-refresh bot list on connection/nickname update
+                if (data.echo === 'internal_get_login_info' || 
+                    (data.post_type === 'meta_event' && data.meta_event_type === 'lifecycle')) {
+                    setTimeout(updateBots, 500); // Wait a bit for state to settle
+                }
+
+                if (data.post_type === 'log') {
+                    // Check filter
+                    const selector = document.getElementById('log-bot-selector');
+                    const filter = selector ? selector.value : '';
+                    const log = data.data;
+                    const selfId = data.self_id || '';
+                    
+                    // Auto-refresh bot list on client connection logs
+                    if (log.message && log.message.includes('Client connected:')) {
+                        setTimeout(updateBots, 1000); // Wait a bit longer for connection to settle
+                    }
+
+                    if (filter === '' || (filter === 'system' && !selfId) || filter === selfId) {
+                        const container = document.getElementById('log-container');
+                        if (container) {
+                            const div = document.createElement('div');
+                            div.className = 'log-entry';
+                            div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
+                            container.appendChild(div);
+                            if (container.children.length > 500) { // 限制日志条目数量
+                                container.removeChild(container.firstChild);
+                            }
+                            if (document.getElementById('auto-refresh-logs').checked) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        }
+                    }
+
+                    // Full Page Log Update
+                    const selectorFull = document.getElementById('log-bot-selector-full');
+                    const filterFull = selectorFull ? selectorFull.value : '';
+                    if (filterFull === '' || (filterFull === 'system' && !selfId) || filterFull === selfId) {
+                        const containerFull = document.getElementById('log-container-full');
+                        if (containerFull) {
+                            const div = document.createElement('div');
+                            div.className = 'log-entry';
+                            div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
+                            containerFull.appendChild(div);
+                            if (containerFull.children.length > 500) { // 减少日志条目限制，节省内存
+                                containerFull.removeChild(containerFull.firstChild);
+                            }
+                            if (document.getElementById('auto-refresh-logs-full').checked) {
+                                containerFull.scrollTop = containerFull.scrollHeight;
+                            }
+                        }
+                    }
+                    return;
+                }
+                addEventLog(data);
+            } catch (e) {
+                console.error('WS Parse Error', e);
+            }
+        };
 
         // --- API Helper ---
         async function callBotApi(action, params = {}) {
@@ -4598,6 +5001,336 @@
         function showOvermind() {
             window.open('/overmind/', '_blank');
         }
+
+        // --- Routing Management ---
+        let routingRules = [];
+
+        async function fetchRoutingRules() {
+            const container = document.getElementById('routing-list-container');
+            if (!container) return;
+            
+            container.innerHTML = `
+                <div class="col-12 text-center text-muted">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2" data-i18n="loading_routing_rules">正在加载路由规则...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch('/api/admin/routing', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                // Convert object format to array format for easier rendering
+                routingRules = [];
+                if (data.rules && typeof data.rules === 'object') {
+                    for (const [key, workerID] of Object.entries(data.rules)) {
+                        routingRules.push({
+                            key: key,
+                            worker_id: workerID
+                        });
+                    }
+                }
+                renderRoutingRules();
+                
+            } catch (error) {
+                console.error('Failed to fetch routing rules:', error);
+                const t = translations[currentLang] || translations['zh-CN'];
+                container.innerHTML = `
+                    <div class="col-12 text-center text-danger">
+                        <i class="bi bi-exclamation-triangle fs-4"></i>
+                        <p class="mt-2">${t.loading_failed || '加载失败'}: ${error.message}</p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="fetchRoutingRules()">
+                            <i class="bi bi-arrow-clockwise"></i> ${t.retry || '重试'}
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        function toggleRoutingHelp() {
+            const helpSection = document.getElementById('routing-help-section');
+            if (helpSection.style.display === 'none') {
+                helpSection.style.display = 'block';
+            } else {
+                helpSection.style.display = 'none';
+            }
+        }
+
+        function renderRoutingRules() {
+            const container = document.getElementById('routing-list-container');
+            if (!container) return;
+            
+            const t = translations[currentLang] || translations['zh-CN'];
+            
+            if (!routingRules || routingRules.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center text-muted">
+                        <i class="bi bi-diagram-3 fs-1"></i>
+                        <p class="mt-3" data-i18n="no_routing_rules">暂无路由规则</p>
+                        <button class="btn btn-primary" onclick="showAddRoutingRuleDialog()">
+                            <i class="bi bi-plus-lg"></i> <span data-i18n="routing_add_rule">添加路由规则</span>
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = routingRules.map(rule => `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0 text-truncate" title="${rule.key || ''}">${rule.key || '未命名规则'}</h6>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#" onclick="editRoutingRule('${rule.key}')">
+                                            <i class="bi bi-pencil"></i> ${t.edit || '编辑'}
+                                        </a></li>
+                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteRoutingRule('${rule.key}')">
+                                            <i class="bi bi-trash"></i> ${t.delete || '删除'}
+                                        </a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <p class="card-text small text-muted mb-2">
+                                <i class="bi bi-arrow-right"></i> ${rule.worker_id || '未设置目标'}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-diagram-3"></i> ${t.target_worker || '目标工作节点'}: ${rule.worker_id || 'N/A'}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showAddRoutingRuleDialog() {
+            // Reset form for new rule
+            document.getElementById('routing-pattern').value = '';
+            document.getElementById('routing-target').value = '';
+            document.getElementById('routing-enabled').checked = true;
+            
+            // Update modal title for adding new rule
+            const modalTitle = document.querySelector('#routingRuleModal .modal-title');
+            if (modalTitle) {
+                modalTitle.textContent = '添加路由规则';
+                modalTitle.setAttribute('data-i18n', 'routing_add_rule');
+            }
+            
+            // Update save button for adding new rule
+            const saveButton = document.querySelector('#routingRuleModal .modal-footer .btn-primary');
+            if (saveButton) {
+                saveButton.textContent = '保存';
+                saveButton.setAttribute('data-i18n', 'save');
+                saveButton.onclick = () => saveRoutingRule();
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('routingRuleModal'));
+            modal.show();
+        }
+
+        async function saveRoutingRule() {
+            const pattern = document.getElementById('routing-pattern').value.trim();
+            const target = document.getElementById('routing-target').value.trim();
+            const enabled = document.getElementById('routing-enabled').checked;
+            
+            if (!pattern || !target) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/routing', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        key: pattern,
+                        worker_id: target
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || '保存失败');
+                }
+                
+                const modal = bootstrap.Modal.getInstance(document.getElementById('routingRuleModal'));
+                modal.hide();
+                
+                fetchRoutingRules(); // Refresh the list
+                
+            } catch (error) {
+                console.error('Failed to save routing rule:', error);
+                alert('保存失败: ' + error.message);
+            }
+        }
+
+        async function deleteRoutingRule(ruleId) {
+            const t = translations[currentLang] || translations['zh-CN'];
+            if (!confirm(t.confirm_delete || '确定要删除这条路由规则吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/routing', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        key: ruleId,
+                        worker_id: '' // Empty worker_id means delete
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                fetchRoutingRules(); // Refresh the list
+                
+            } catch (error) {
+                console.error('Failed to delete routing rule:', error);
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        function editRoutingRule(ruleId) {
+            const rule = routingRules.find(r => r.id === ruleId);
+            if (!rule) {
+                alert('规则不存在');
+                return;
+            }
+            
+            showAddRoutingRuleDialog();
+            
+            // Pre-fill the form after modal is shown
+            setTimeout(() => {
+                document.getElementById('routing-pattern').value = rule.pattern || '';
+                document.getElementById('routing-target').value = rule.target || '';
+                document.getElementById('routing-enabled').checked = rule.enabled;
+                
+                // Change modal title
+                const modalTitle = document.querySelector('#routingRuleModal .modal-title');
+                if (modalTitle) {
+                    modalTitle.textContent = '编辑路由规则';
+                    modalTitle.setAttribute('data-i18n', 'routing_edit_rule');
+                }
+                
+                // Change save button to update
+                const saveButton = document.querySelector('#routingRuleModal .modal-footer .btn-primary');
+                if (saveButton) {
+                    saveButton.textContent = '更新';
+                    saveButton.setAttribute('data-i18n', 'update');
+                    saveButton.onclick = () => updateRoutingRule(ruleId);
+                }
+            }, 100);
+        }
+
+        async function updateRoutingRule(ruleId) {
+            const pattern = document.getElementById('routing-pattern').value.trim();
+            const target = document.getElementById('routing-target').value.trim();
+            const enabled = document.getElementById('routing-enabled').checked;
+            
+            if (!pattern || !target) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/routing/${ruleId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        pattern: pattern,
+                        target: target,
+                        enabled: enabled
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || '更新失败');
+                }
+                
+                const modal = bootstrap.Modal.getInstance(document.getElementById('routingRuleModal'));
+                modal.hide();
+                
+                fetchRoutingRules(); // Refresh the list
+                
+            } catch (error) {
+                console.error('Failed to update routing rule:', error);
+                alert('更新失败: ' + error.message);
+            }
+        }
+        
+        // 页面刷新时的清理逻辑
+        function cleanupBeforeUnload() {
+            // 清理WebSocket连接
+            if (window.wsSubscriber) {
+                try {
+                    window.wsSubscriber.close();
+                    window.wsSubscriber = null;
+                } catch (e) {
+                    console.error('清理WebSocket失败:', e);
+                }
+            }
+            
+            // 清理所有定时器
+            const intervals = [
+                'updateInterval', 'systemStatsInterval', 'chatStatsInterval', 
+                'botsInterval', 'workersInterval'
+            ];
+            
+            intervals.forEach(intervalName => {
+                if (window[intervalName]) {
+                    clearInterval(window[intervalName]);
+                    window[intervalName] = null;
+                }
+            });
+            
+            // 清理所有待处理的请求
+            if (window.pendingRequests) {
+                window.pendingRequests.clear();
+            }
+            
+            console.log('页面清理完成');
+        }
+        
+        // 监听页面刷新和关闭事件
+        window.addEventListener('beforeunload', cleanupBeforeUnload);
+        window.addEventListener('pagehide', cleanupBeforeUnload);
+        
+        // 监听页面可见性变化，优化性能
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // 页面隐藏时暂停部分定时器
+                console.log('页面隐藏，暂停部分定时器');
+            } else {
+                // 页面显示时恢复定时器
+                console.log('页面显示，恢复定时器');
+            }
+        });
     </script>
 </body>
 </html>

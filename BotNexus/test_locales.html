@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Locales.js</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>Testing locales.js syntax</h1>
+    <div id="result"></div>
+    
+    <script src="locales.js"></script>
+    <script>
+        try {
+            // 尝试访问翻译对象
+            if (typeof translations !== 'undefined') {
+                document.getElementById('result').innerHTML = '<p style="color: green;">✅ locales.js loaded successfully!</p>';
+                
+                // 测试几个关键的路由翻译
+                if (translations['en'] && translations['en']['routing_example_usage']) {
+                    document.getElementById('result').innerHTML += '<p>English routing example: ' + translations['en']['routing_example_usage'] + '</p>';
+                }
+                
+                if (translations['zh-CN'] && translations['zh-CN']['routing_example_usage']) {
+                    document.getElementById('result').innerHTML += '<p>Chinese routing example: ' + translations['zh-CN']['routing_example_usage'] + '</p>';
+                }
+                
+                if (translations['zh-TW'] && translations['zh-TW']['routing_example_usage']) {
+                    document.getElementById('result').innerHTML += '<p>Taiwanese routing example: ' + translations['zh-TW']['routing_example_usage'] + '</p>';
+                }
+            } else {
+                document.getElementById('result').innerHTML = '<p style="color: red;">❌ translations object not found</p>';
+            }
+        } catch (error) {
+            document.getElementById('result').innerHTML = '<p style="color: red;">❌ Error loading locales.js: ' + error.message + '</p>';
+            console.error('Error:', error);
+        }
+    </script>
+</body>
+</html>

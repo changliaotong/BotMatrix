@@ -20,12 +20,20 @@
 *   **⚡ Background Processing**: Dedicated background worker processes retry queue every 5 seconds for efficient message recovery.
 *   **🔒 Thread-Safe**: All retry operations are protected by mutex locks for concurrent access safety.
 
-### v1.1.67 - Worker Heartbeat Fix & Temporary Fixed Routing
+### v1.1.68 - Routing Logic Fix & Enhanced Worker Management
+*   **🎯 Corrected Routing Logic**: Fixed message routing to properly distinguish between API requests (random worker selection) and message events (routing rule application).
+*   **🔧 Worker ID Optimization**: Shortened worker IDs for better readability and management.
+*   **🔄 Duplicate ID Prevention**: Added retry mechanism to prevent duplicate worker IDs with 10-attempt retry loop.
+*   **💓 Enhanced Heartbeat**: Improved worker connection stability with ping/pong mechanism and 60-second timeout detection.
+*   **📊 Routing Test Tool**: Added `test_routing_simple.html` for easy validation of routing rule functionality.
+*   **🛡️ Load Balancing**: API requests now use proper round-robin load balancing when no target bot is available.
+
+### v1.1.67 - Worker Heartbeat Fix & Routing Rules
 *   **💓 Worker Heartbeat Fix**: Fixed worker heartbeat logic to only update specific worker heartbeat times, preventing false timeout disconnections.
-*   **🔧 Testing Routing Rules**: Added temporary routing rules to direct specific group or bot messages to fixed workers for testing purposes.
+*   **🔧 Routing Rules Implementation**: Added intelligent message routing to direct specific group or bot messages to designated workers.
 *   **🔐 Admin API**: New `/api/admin/routing` REST API for managing routing rules (admin only).
 *   **🔄 Priority Routing**: Messages first check routing rules before falling back to round-robin load balancing.
-*   **🛡️ Failure Recovery**: Automatic fallback to round-robin if fixed worker is unavailable.
+*   **🛡️ Failure Recovery**: Automatic fallback to round-robin if designated worker is unavailable.
 *   **📊 UI Enhancements**: Overmind routing screen now displays worker handled counts and improved dropdown selection.
 
 ### v1.1.66 - Cross-Bot Message Prevention
@@ -133,6 +141,20 @@
 *   **Smart Wake-Up**: Bypasses Tencent Guild Bot restrictions (passive reply only) by coordinating with ordinary bots to "wake up" guild bots via @mentions.
 *   **Cross-Protocol Synergy**: Bridges the gap between different bot platforms (e.g., QQ Guild ↔ QQ Group).
 *   **Unstoppable Workflow**: Ensures critical messages are delivered even under strict platform limitations. [Read More](docs/QQ_GUILD_SMART_SEND_CN.md).
+
+### 🎯 Intelligent Message Routing (智能消息路由)
+> *Smart Load Balancing & Fixed Routing.*
+*   **Dual Routing Modes**: 
+  *   **API Requests**: External requests use round-robin load balancing for optimal worker distribution
+  *   **Message Events**: Bot messages apply intelligent routing rules for targeted worker selection
+*   **Priority Routing**: Messages first check routing rules (group_id/bot_id → worker_id) before falling back to random selection
+*   **Enterprise Use Cases**: 
+  *   **VIP Users**: Route high-priority users to dedicated high-performance workers
+  *   **Testing Environment**: Direct test messages to specific workers for debugging
+  *   **Load Distribution**: Balance workload across workers based on business requirements
+*   **Admin Management**: REST API (`/api/admin/routing`) for dynamic routing rule configuration
+*   **Failure Recovery**: Automatic fallback to round-robin if designated worker is unavailable
+*   **Real-time Validation**: Built-in test tools for routing rule functionality verification
 
 ---
 

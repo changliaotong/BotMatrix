@@ -264,11 +264,6 @@ class BotNexusService extends ChangeNotifier {
       rethrow;
     }
   }
-    } catch (e) {
-      print('Error controlling container: $e');
-      return false;
-    }
-  }
 
   @override
   void dispose() {
