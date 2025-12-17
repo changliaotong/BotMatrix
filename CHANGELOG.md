@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 ## v1.1.67 (2025-12-17)
+*   **Worker Heartbeat Fix (Worker心跳修复)**:
+    *   **Targeted Heartbeat Updates**: Fixed worker heartbeat logic to only update the specific worker that sent the heartbeat, instead of updating all workers.
+    *   **Worker ID Tracking**: Added worker_id field to worker messages for proper heartbeat identification.
+    *   **Connection Stability**: Improved worker connection stability by preventing false timeout disconnections.
+    *   **Warning Logs**: Added warning logs when worker heartbeats are received without proper worker_id identification.
 *   **Temporary Fixed Routing (临时固定路由)**:
     *   **Group/Bot Routing Rules**: Added temporary routing rules to direct specific group or bot messages to a fixed worker for testing purposes.
     *   **Admin API**: Implemented `/api/admin/routing` REST API for managing routing rules (admin only).

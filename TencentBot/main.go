@@ -1767,7 +1767,16 @@ func sendToNexus(data interface{}) {
 // Event Handlers
 
 func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) error {
-	log.Printf("Received AT Message from %s: %s", data.Author.Username, data.Content)
+	// 打印收到的完整消息信息
+	log.Printf("=== 收到频道消息 ===")
+	log.Printf("消息ID: %s", data.ID)
+	log.Printf("频道ID: %s", data.ChannelID)
+	log.Printf("频道名称: %s", data.ChannelID)
+	log.Printf("用户ID: %s", data.Author.ID)
+	log.Printf("用户名: %s", data.Author.Username)
+	log.Printf("消息内容: %s", data.Content)
+	log.Printf("消息时间: %d", data.Timestamp)
+	log.Printf("完整数据结构: %+v", data)
 
 	// Save Session for Reply
 	pending := sessionCache.Save("channel", data.ChannelID, data.ID)
@@ -1792,7 +1801,7 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 		}
 	}
 
-	// Translate to OneBot Message Event
+	// Translate to OneBot v11 Message Event
 	obEvent := map[string]interface{}{
 		"post_type":    "message",
 		"message_type": "guild", // Guild messages are distinct from group
@@ -1808,17 +1817,27 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 			"user_id":  data.Author.ID,
 			"nickname": data.Author.Username,
 		},
-		"time":    time.Now().Unix(),
-		"self_id": selfID,
+		"time":     time.Now().Unix(),
+		"self_id":  selfID,
+		"platform": "qqguild", // 添加平台标识
 	}
 
+	log.Printf("转换为OneBot v11格式: %+v", obEvent)
 	sendToNexus(obEvent)
 
 	return nil
 }
 
 func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageData) error {
-	log.Printf("Received Direct Message from %s: %s", data.Author.Username, data.Content)
+	// 打印收到的完整私信信息
+	log.Printf("=== 收到私信消息 ===")
+	log.Printf("消息ID: %s", data.ID)
+	log.Printf("频道ID: %s", data.ChannelID)
+	log.Printf("用户ID: %s", data.Author.ID)
+	log.Printf("用户名: %s", data.Author.Username)
+	log.Printf("消息内容: %s", data.Content)
+	log.Printf("消息时间: %d", data.Timestamp)
+	log.Printf("完整数据结构: %+v", data)
 
 	// Save Session for Reply (DM uses ChannelID)
 	pending := sessionCache.Save("channel", data.ChannelID, data.ID)
@@ -1826,14 +1845,13 @@ func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageDa
 		go handleAction(action)
 	}
 
-	// Translate to OneBot Message Event
+	// Translate to OneBot v11 Message Event
 	obEvent := map[string]interface{}{
 		"post_type":    "message",
 		"message_type": "private",
 		"sub_type":     "friend",
 		"message_id":   data.ID,
 		"user_id":      data.Author.ID,
-		"group_id":     "", // Private message
 		"message":      data.Content,
 		"raw_message":  data.Content,
 		"font":         0,
@@ -1841,10 +1859,12 @@ func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageDa
 			"user_id":  data.Author.ID,
 			"nickname": data.Author.Username,
 		},
-		"time":    time.Now().Unix(),
-		"self_id": selfID,
+		"time":     time.Now().Unix(),
+		"self_id":  selfID,
+		"platform": "qqguild", // 添加平台标识
 	}
 
+	log.Printf("转换为OneBot v11格式: %+v", obEvent)
 	sendToNexus(obEvent)
 
 	return nil
@@ -1860,6 +1880,7 @@ func guildEventHandler(event *dto.WSPayload, data *dto.WSGuildData) error {
 		"guild_name":  data.Name,
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
+		"platform":    "qqguild", // 添加平台标识
 	})
 	return nil
 }
@@ -1878,6 +1899,7 @@ func guildMemberEventHandler(event *dto.WSPayload, data *dto.WSGuildMemberData) 
 		"operator_id": data.OpUserID,
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
+		"platform":    "qqguild", // 添加平台标识
 	})
 	return nil
 }
@@ -1893,6 +1915,7 @@ func channelEventHandler(event *dto.WSPayload, data *dto.WSChannelData) error {
 		"channel_name": data.Name,
 		"time":         time.Now().Unix(),
 		"self_id":      selfID,
+		"platform":     "qqguild", // 添加平台标识
 	})
 	return nil
 }
@@ -1914,12 +1937,21 @@ func messageReactionEventHandler(event *dto.WSPayload, data *dto.WSMessageReacti
 		"emoji":       data.Emoji,
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
+		"platform":    "qqguild", // 添加平台标识
 	})
 	return nil
 }
 
 func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessageData) error {
-	log.Printf("Received Group AT Message from %s: %s", data.Author.ID, data.Content)
+	// 打印收到的完整群消息信息
+	log.Printf("=== 收到群消息 ===")
+	log.Printf("消息ID: %s", data.ID)
+	log.Printf("群ID: %s", data.GroupID)
+	log.Printf("用户ID: %s", data.Author.ID)
+	log.Printf("用户名: %s", data.Author.Username)
+	log.Printf("消息内容: %s", data.Content)
+	log.Printf("消息时间: %d", data.Timestamp)
+	log.Printf("完整数据结构: %+v", data)
 
 	// Save Session for Reply
 	pending := sessionCache.Save("group", data.GroupID, data.ID)
@@ -1976,13 +2008,28 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 		}
 	}
 
-	sendToNexus(map[string]interface{}{
+	// 处理附件
+	for _, attachment := range data.Attachments {
+		if strings.HasPrefix(attachment.ContentType, "image") {
+			data.Content += fmt.Sprintf("[CQ:image,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "video") {
+			data.Content += fmt.Sprintf("[CQ:video,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "audio") {
+			data.Content += fmt.Sprintf("[CQ:record,file=%s]", attachment.URL)
+		} else {
+			// Generic File
+			data.Content += fmt.Sprintf("[CQ:file,file=%s,name=%s]", attachment.URL, filepath.Base(attachment.URL))
+		}
+	}
+
+	obEvent := map[string]interface{}{
 		"post_type":    "message",
 		"message_type": "group",
 		"sub_type":     "normal",
 		"message_id":   data.ID,
 		"user_id":      data.Author.ID,
 		"group_id":     data.GroupID, // Changed from GroupOpenID to GroupID
+		"anonymous":    nil,          // 标准OneBot v11要求，非匿名消息为null
 		"message":      data.Content,
 		"raw_message":  data.Content,
 		"font":         0,
@@ -1990,15 +2037,26 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 			"user_id":  data.Author.ID,
 			"nickname": "Group Member",
 		},
-		"time":    time.Now().Unix(),
-		"self_id": selfID,
-	})
+		"time":     time.Now().Unix(),
+		"self_id":  selfID,
+		"platform": "qqguild", // 修正为统一的平台标识
+	}
+
+	log.Printf("转换为OneBot v11格式: %+v", obEvent)
+	sendToNexus(obEvent)
 
 	return nil
 }
 
 func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) error {
-	log.Printf("Received C2C Message from %s: %s", data.Author.ID, data.Content)
+	// 打印收到的完整私聊消息信息
+	log.Printf("=== 收到私聊消息 ===")
+	log.Printf("消息ID: %s", data.ID)
+	log.Printf("用户ID: %s", data.Author.ID)
+	log.Printf("用户名: %s", data.Author.Username)
+	log.Printf("消息内容: %s", data.Content)
+	log.Printf("消息时间: %d", data.Timestamp)
+	log.Printf("完整数据结构: %+v", data)
 
 	// Save Session for Reply
 	pending := sessionCache.Save("user", data.Author.ID, data.ID)
@@ -2070,7 +2128,7 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 		}
 	}
 
-	sendToNexus(map[string]interface{}{
+	obEvent := map[string]interface{}{
 		"post_type":    "message",
 		"message_type": "private",
 		"sub_type":     "friend",
@@ -2083,9 +2141,13 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 			"user_id":  data.Author.ID,
 			"nickname": "Friend",
 		},
-		"time":    time.Now().Unix(),
-		"self_id": selfID,
-	})
+		"time":     time.Now().Unix(),
+		"self_id":  selfID,
+		"platform": "qqguild", // 添加平台标识
+	}
+
+	log.Printf("转换为OneBot v11格式: %+v", obEvent)
+	sendToNexus(obEvent)
 
 	return nil
 }

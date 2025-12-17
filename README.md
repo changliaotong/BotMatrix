@@ -12,7 +12,8 @@
 
 ## 📢 Recent Updates | 最近更新
 
-### v1.1.67 - Temporary Fixed Routing
+### v1.1.67 - Worker Heartbeat Fix & Temporary Fixed Routing
+*   **💓 Worker Heartbeat Fix**: Fixed worker heartbeat logic to only update specific worker heartbeat times, preventing false timeout disconnections.
 *   **🔧 Testing Routing Rules**: Added temporary routing rules to direct specific group or bot messages to fixed workers for testing purposes.
 *   **🔐 Admin API**: New `/api/admin/routing` REST API for managing routing rules (admin only).
 *   **🔄 Priority Routing**: Messages first check routing rules before falling back to round-robin load balancing.

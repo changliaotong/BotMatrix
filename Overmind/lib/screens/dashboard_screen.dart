@@ -7,6 +7,7 @@ import '../services/language_provider.dart';
 import '../models/bot_info.dart';
 import '../models/log_entry.dart';
 import 'fleet_screen.dart';
+import 'routing_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -29,6 +30,7 @@ class DashboardScreen extends StatelessWidget {
             tabs: [
               Tab(icon: const Icon(Icons.hub), text: l10n.tabNexus),
               Tab(icon: const Icon(Icons.dns), text: l10n.tabFleet),
+              Tab(icon: const Icon(Icons.route), text: '路由'), // 添加路由管理标签页
               Tab(icon: const Icon(Icons.terminal), text: l10n.tabLogs),
             ],
           ),
@@ -54,11 +56,12 @@ class DashboardScreen extends StatelessWidget {
             )
           ],
         ),
-        body: const TabBarView(
+        body: TabBarView(
           children: [
-            BotListTab(),
-            FleetScreen(),
-            LogConsoleTab(),
+            const BotListTab(),
+            const FleetScreen(),
+            const RoutingScreen(), // 添加路由管理界面
+            const LogConsoleTab(),
           ],
         ),
       ),

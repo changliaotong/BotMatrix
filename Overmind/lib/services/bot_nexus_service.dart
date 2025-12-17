@@ -197,12 +197,73 @@ class BotNexusService extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        await fetchContainers(); // Refresh list
         return true;
-      } else {
-        print('Failed to control container: ${response.body}');
-        return false;
       }
+      return false;
+    } catch (e) {
+      print('Error controlling container: $e');
+      return false;
+    }
+  }
+
+  // 路由规则管理相关方法
+  Future<Map<String, dynamic>> getRoutingRules() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_apiBaseUrl/admin/routing'),
+        headers: _token.isNotEmpty ? {'Authorization': 'Bearer $_token'} : {},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      throw Exception('Failed to get routing rules: ${response.statusCode}');
+    } catch (e) {
+      print('Error getting routing rules: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> setRoutingRule(String key, String workerId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_apiBaseUrl/admin/routing'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (_token.isNotEmpty) 'Authorization': 'Bearer $_token',
+        },
+        body: jsonEncode({
+          'key': key,
+          'worker_id': workerId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error setting routing rule: $e');
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getWorkers() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_apiBaseUrl/workers/list'),
+        headers: _token.isNotEmpty ? {'Authorization': 'Bearer $_token'} : {},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      throw Exception('Failed to get workers: ${response.statusCode}');
+    } catch (e) {
+      print('Error getting workers: $e');
+      rethrow;
+    }
+  }
     } catch (e) {
       print('Error controlling container: $e');
       return false;

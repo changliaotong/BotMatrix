@@ -363,6 +363,13 @@ class onebot(WXBot):
         name = action
         result = {"status": "ok", "retcode": 0, "data": {}}  
         
+        # Handle self_id parameter - use provided self_id or fallback to instance self_id
+        target_self_id = params.get("self_id", self.self_id)
+        if target_self_id != self.self_id:
+            # If a different self_id is requested, this bot cannot handle it
+            result.update({"status": "failed", "retcode": 10004, "msg": f"bot {target_self_id} not found"})
+            return result
+        
         try:
             if name == "send_group_msg":
                 group_id = params.get("group_id")
@@ -397,7 +404,7 @@ class onebot(WXBot):
                         if mid: last_mids.append(str(mid))
 
                 info = getattr(self, '_last_send_info', {})
-                result["data"] = {"message_id": ";".join(last_mids), "debug_ret": info.get('ret'), "http_status": info.get('status')}
+                result["data"] = {"message_id": ";".join(last_mids), "self_id": self.self_id, "platform": "weixin", "debug_ret": info.get('ret'), "http_status": info.get('status')}
 
             elif name == "send_private_msg":
                 user_id = params.get("user_id")
@@ -432,7 +439,7 @@ class onebot(WXBot):
                         if mid: last_mids.append(str(mid))
 
                 info = getattr(self, '_last_send_info', {})
-                result["data"] = {"message_id": ";".join(last_mids), "debug_ret": info.get('ret'), "http_status": info.get('status')}
+                result["data"] = {"message_id": ";".join(last_mids), "self_id": self.self_id, "platform": "weixin", "debug_ret": info.get('ret'), "http_status": info.get('status')}
 
             elif name == "delete_msg":
                 message_id = params.get("message_id")
@@ -464,7 +471,7 @@ class onebot(WXBot):
                             fail_count += 1
                     
                     if success_count > 0:
-                        result["data"] = {}
+                        result["data"] = {"self_id": self.self_id, "platform": "weixin"}
                     else:
                         result["status"] = "failed"
                         result["retcode"] = -1
@@ -504,7 +511,7 @@ class onebot(WXBot):
 
                         ok = self.delete_user_from_group(gid_uid, uid)
                         if ok:
-                            result["data"] = True
+                            result["data"] = {"self_id": self.self_id, "platform": "weixin"}
                             try:
                                 # 发送踢出通知
                                 kick_msg = f"{kicked_nickname} 被移出群聊"
@@ -547,7 +554,7 @@ class onebot(WXBot):
                     nickname = msg.replace_emoji(c.get('NickName') or '')
                     remark = msg.replace_emoji(c.get('RemarkName') or '')
                     items.append({"user_id": user_id, "nickname": nickname, "remark": remark})
-                result["data"] = items
+                result["data"] = {"self_id": self.self_id, "platform": "weixin", "friends": items}
 
             elif name == "get_group_list":
                 self._ensure_group_cache()
@@ -593,7 +600,7 @@ class onebot(WXBot):
                         "member_count": member_count,
                         "max_member_count": member_count
                     })
-                result["data"] = items
+                result["data"] = {"self_id": self.self_id, "platform": "weixin", "groups": items}
 
             elif name == "get_group_member_list":
                 group_id = params.get("group_id")
@@ -642,12 +649,101 @@ class onebot(WXBot):
                             "title_expire_time": 0,
                             "card_changeable": False
                         })
-                result["data"] = items
+                result["data"] = {"self_id": self.self_id, "platform": "weixin", "members": items}
+            
+            elif name == "get_group_member_info":
+                group_id = params.get("group_id")
+                user_id = params.get("user_id")
+                
+                if not group_id or not user_id:
+                    result.update({"status": "failed", "retcode": 10003, "msg": "missing group_id or user_id"})
+                else:
+                    # Convert user_id to wx uid
+                    wx_uid = self._uid_map_by_qq.get(str(user_id)) if hasattr(self, '_uid_map_by_qq') else None
+                    if not wx_uid:
+                        # Try to find in reverse mapping
+                        for uid, qq in (self._uid_map_by_qq.items() if hasattr(self, '_uid_map_by_qq') else {}):
+                            if qq == user_id:
+                                wx_uid = uid
+                                break
+                    
+                    gid_uid = (self._group_map_uid_by_id.get(group_id) if hasattr(self, '_group_map_uid_by_id') else None) or wx_group.get_group_uid(group_id)
+                    
+                    if gid_uid and wx_uid and hasattr(self, 'group_members') and gid_uid in self.group_members:
+                        # Find the specific member
+                        member_info = None
+                        for m in self.group_members[gid_uid]:
+                            if m.get('UserName') == wx_uid:
+                                member_info = m
+                                break
+                        
+                        if member_info:
+                            # Extract member details
+                            nickname = msg.replace_emoji(member_info.get('NickName') or member_info.get('RemarkName') or '')
+                            card = msg.replace_emoji(member_info.get('DisplayName') or '')
+                            remark = msg.replace_emoji(member_info.get('RemarkName') or '')
+                            
+                            # Parse Sex
+                            sex_val = member_info.get('Sex', 0)
+                            sex = "unknown"
+                            if sex_val == 1: sex = "male"
+                            elif sex_val == 2: sex = "female"
+                            
+                            # Default role
+                            role = "member"
+                            
+                            result["data"] = {
+                                "self_id": self.self_id,
+                                "platform": "weixin",
+                                "group_id": group_id,
+                                "user_id": user_id,
+                                "nickname": nickname,
+                                "card": card,
+                                "role": role,
+                                "sex": sex,
+                                "age": 0,
+                                "area": "",
+                                "join_time": 0,
+                                "last_sent_time": 0,
+                                "level": "1",
+                                "unfriendly": False,
+                                "title": "",
+                                "title_expire_time": 0,
+                                "card_changeable": False
+                            }
+                        else:
+                            result.update({"status": "failed", "retcode": 10004, "msg": "member not found"})
+                    else:
+                        result.update({"status": "failed", "retcode": 10004, "msg": "group or member not found"})
             
             elif name == "get_login_info":
                  info = getattr(self, 'my_account', {})
                  nickname = msg.replace_emoji(info.get('NickName') or "Unknown")
-                 result["data"] = {"user_id": self.self_id, "nickname": nickname}
+                 result["data"] = {"self_id": self.self_id, "platform": "weixin", "user_id": self.self_id, "nickname": nickname}
+
+            elif name == "get_bot_info":
+                info = getattr(self, 'my_account', {})
+                nickname = msg.replace_emoji(info.get('NickName') or "Unknown")
+                
+                # Get bot status information
+                online_status = "online"  # Default to online since we're processing requests
+                
+                result["data"] = {
+                    "self_id": self.self_id,
+                    "platform": "weixin",
+                    "user_id": self.self_id,
+                    "nickname": nickname,
+                    "avatar": "",  # WeChat doesn't provide easy avatar URL access
+                    "status": {
+                        "online": True,
+                        "good": online_status == "online"
+                    },
+                    "impl": "wxbot",
+                    "version": {
+                        "onebot_version": "11",
+                        "impl_version": "1.0.0"
+                    }
+                }
 
             else:
                 result.update({"status": "failed", "retcode": 10002, "msg": f"unsupported action {name}"})
@@ -734,6 +830,7 @@ class onebot(WXBot):
             
             # Initialize OneBot Event
             event = {
+                "platform" : "weixin",
                 "self_id": self.self_id,
                 "time": int(time.time()),
                 "post_type": "message",
@@ -1103,6 +1200,7 @@ class onebot(WXBot):
             
             # Initialize Event
             event = {
+                "platform" : "weixin",
                 "self_id": self.self_id,
                 "time": int(time.time()),
                 "post_type": "message",

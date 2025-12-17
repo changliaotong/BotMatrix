@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -129,6 +128,7 @@ type BotClient struct {
 }
 
 type WorkerClient struct {
+	ID            string // Worker标识
 	Conn          *websocket.Conn
 	Mutex         sync.Mutex
 	Connected     time.Time
@@ -163,6 +163,9 @@ type Manager struct {
 	// Docker
 	dockerClient *dclient.Client
 
+	// 临时固定路由规则 (测试用)
+	routingRules map[string]string // group_id/bot_id -> worker_id
+
 	// Chat Stats
 	statsMutex      sync.RWMutex
 	TotalMessages   int64            `json:"total_messages"`    // Global counter
@@ -191,10 +194,6 @@ type Manager struct {
 	UserNames  map[int64]string `json:"-"` // Cache names
 	GroupNames map[int64]string `json:"-"` // Cache names
 
-	// Deduplication
-	DedupMutex sync.Mutex
-	DedupCache map[string]int64 `json:"-"` // MessageID -> Timestamp (Unix)
-
 	// Active Sessions (Contacts)
 	SessionMutex sync.RWMutex
 	Sessions     map[string]*ContactSession `json:"-"` // Key: BotID:Type:ID
@@ -203,9 +202,6 @@ type Manager struct {
 	AutoRecallMutex sync.RWMutex
 	AutoRecallMap   map[string]AutoRecallTask `json:"-"` // Echo -> Task
 
-	// Message Persistence Queue
-	MessageQueueMutex sync.RWMutex
-	MessageQueue      []interface{} `json:"-"` // Persistent message queue for reliability
 }
 
 type AutoRecallTask struct {
@@ -265,7 +261,6 @@ func NewManager() *Manager {
 		RecvTrend:        make([]float64, 0),
 		UserNames:        make(map[int64]string),
 		GroupNames:       make(map[int64]string),
-		DedupCache:       make(map[string]int64),
 		LastResetDate:    time.Now().Format("2006-01-02"),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -276,7 +271,7 @@ func NewManager() *Manager {
 		Sessions:        make(map[string]*ContactSession),
 		AutoRecallMap:   make(map[string]AutoRecallTask),
 		pendingRequests: make(map[string]chan map[string]interface{}),
-		MessageQueue:    make([]interface{}, 0, 1000),
+		routingRules:    make(map[string]string), // 初始化路由规则
 	}
 
 	// Initialize Redis
@@ -658,46 +653,6 @@ func main() {
 		}
 	}()
 
-	// 消息队列清理机制 - 每5分钟清理过期消息
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			manager.MessageQueueMutex.Lock()
-			now := time.Now()
-
-			// 清理超过30分钟的消息
-			cutoffTime := now.Add(-30 * time.Minute)
-			validMessages := make([]interface{}, 0)
-
-			for _, msg := range manager.MessageQueue {
-				if msgMap, ok := msg.(map[string]interface{}); ok {
-					if timestamp, ok := msgMap["timestamp"].(float64); ok {
-						msgTime := time.Unix(int64(timestamp), 0)
-						if msgTime.After(cutoffTime) {
-							validMessages = append(validMessages, msg)
-						}
-					} else {
-						// 没有时间戳的消息，保留
-						validMessages = append(validMessages, msg)
-					}
-				} else {
-					// 非map格式的消息，保留
-					validMessages = append(validMessages, msg)
-				}
-			}
-
-			removed := len(manager.MessageQueue) - len(validMessages)
-			if removed > 0 {
-				manager.AddLog("INFO", fmt.Sprintf("Cleaned up %d expired messages from queue", removed))
-			}
-
-			manager.MessageQueue = validMessages
-			manager.MessageQueueMutex.Unlock()
-		}
-	}()
-
 	// Bot Heartbeat Timeout Detection (30s interval)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -739,84 +694,6 @@ func main() {
 		}
 	}()
 
-	// 消息重试机制 - 每30秒处理重试队列
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			manager.MessageQueueMutex.Lock()
-			now := time.Now()
-			remainingMessages := make([]interface{}, 0)
-
-			for _, msg := range manager.MessageQueue {
-				if retryMsg, ok := msg.(map[string]interface{}); ok {
-					if botID, ok := retryMsg["bot_id"].(string); ok {
-						if message, ok := retryMsg["message"].(map[string]interface{}); ok {
-							if retryCount, ok := retryMsg["retry_count"].(float64); ok {
-								// 检查是否超过最大重试次数（3次）
-								if int(retryCount) >= 3 {
-									manager.AddLog("ERROR", fmt.Sprintf("Message retry limit exceeded for bot %s, discarding message", botID))
-									continue
-								}
-
-								// 检查是否到了重试时间（指数退避：1分钟、2分钟、4分钟）
-								if createdAt, ok := retryMsg["created_at"].(time.Time); ok {
-									retryDelay := time.Duration(math.Pow(2, float64(retryCount))) * time.Minute
-									if now.Sub(createdAt) < retryDelay {
-										// 还未到重试时间，保留消息
-										remainingMessages = append(remainingMessages, msg)
-										continue
-									}
-								}
-
-								// 尝试重新发送消息
-								manager.mutex.RLock()
-								targetBot, exists := manager.bots[botID]
-								manager.mutex.RUnlock()
-
-								if exists && targetBot != nil {
-									targetBot.Mutex.Lock()
-									err := targetBot.Conn.WriteJSON(message)
-									targetBot.Mutex.Unlock()
-
-									if err != nil {
-										manager.AddLog("ERROR", fmt.Sprintf("Message retry failed for bot %s (attempt %d): %v", botID, int(retryCount)+1, err))
-										// 增加重试计数并保留消息
-										retryMsg["retry_count"] = retryCount + 1
-										remainingMessages = append(remainingMessages, msg)
-									} else {
-										manager.AddLog("INFO", fmt.Sprintf("Message retry successful for bot %s (attempt %d)", botID, int(retryCount)+1))
-										// 重试成功，不保留消息
-									}
-								} else {
-									manager.AddLog("WARN", fmt.Sprintf("Bot %s not available for retry, keeping message in queue", botID))
-									// Bot不可用，保留消息
-									remainingMessages = append(remainingMessages, msg)
-								}
-							} else {
-								// 不是重试消息格式，保留
-								remainingMessages = append(remainingMessages, msg)
-							}
-						} else {
-							// 不是重试消息格式，保留
-							remainingMessages = append(remainingMessages, msg)
-						}
-					} else {
-						// 不是重试消息格式，保留
-						remainingMessages = append(remainingMessages, msg)
-					}
-				} else {
-					// 不是重试消息格式，保留
-					remainingMessages = append(remainingMessages, msg)
-				}
-			}
-
-			manager.MessageQueue = remainingMessages
-			manager.MessageQueueMutex.Unlock()
-		}
-	}()
-
 	// 2. Web UI Server Mux
 	uiMux := http.NewServeMux()
 
@@ -827,6 +704,7 @@ func main() {
 	uiMux.HandleFunc("/api/stats", manager.handleGetStats)
 	uiMux.HandleFunc("/api/stats/chat", manager.handleGetChatStats)
 	uiMux.HandleFunc("/api/system/stats", manager.handleSystemStats)
+	uiMux.HandleFunc("/api/queue/messages", manager.handleGetMessageQueue)
 	uiMux.HandleFunc("/api/contacts", manager.handleGetContacts)
 	uiMux.HandleFunc("/api/action", manager.handleAction)
 	uiMux.HandleFunc("/api/smart_action", manager.handleSmartAction)
@@ -846,7 +724,12 @@ func main() {
 	uiMux.HandleFunc("/api/admin/magic_link", manager.handleGenerateMagicLink)
 	uiMux.HandleFunc("/api/me", manager.handleMe)
 	uiMux.HandleFunc("/api/user/password", manager.handleUpdatePassword)
-	uiMux.HandleFunc("/api/admin/assign", manager.handleAssignBot) // Admin only
+	uiMux.HandleFunc("/api/admin/assign", manager.handleAssignBot)     // Admin only
+	uiMux.HandleFunc("/api/admin/routing", manager.handleRoutingRules) // 路由规则管理
+	uiMux.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[TEST] Test API called")
+		w.Write([]byte("Test API working"))
+	})
 
 	// Static Files
 	// Serve Overmind specifically to handle SPA fallback (if index.html exists)
@@ -862,8 +745,8 @@ func main() {
 		http.ServeFile(w, r, "./overmind/index.html")
 	})
 
-	fs := http.FileServer(http.Dir("."))
-	uiMux.Handle("/", fs)
+	// 提供静态文件（作为最后的路由）
+	uiMux.Handle("/", http.FileServer(http.Dir(".")))
 
 	manager.AddLog("INFO", fmt.Sprintf("Starting Web UI on %s", WEBUI_PORT))
 	// Enable CORS
@@ -922,12 +805,18 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 		}
 
 		if isAPIResponse {
-			// API Responses (Echo) should be broadcast to ALL workers
-			// because we don't track which worker sent the request.
-			for _, worker := range m.workers {
-				worker.Mutex.Lock()
-				worker.Conn.WriteJSON(data)
-				worker.Mutex.Unlock()
+			// API Responses (Echo) 只发送给一个worker，避免重复
+			targetIndex := int(time.Now().UnixNano()) % len(m.workers)
+			worker := m.workers[targetIndex]
+
+			worker.Mutex.Lock()
+			err := worker.Conn.WriteJSON(data)
+			worker.Mutex.Unlock()
+
+			if err != nil {
+				go func(w *WorkerClient) {
+					m.removeWorker(w)
+				}(worker)
 			}
 		} else {
 			// Events (Push) should be Load Balanced (Round Robin)
@@ -958,30 +847,46 @@ func (m *Manager) broadcastToSubscribers(data interface{}) {
 				}
 			}
 
-			// 将消息加入持久化队列
-			m.enqueueMessage(data)
+			// 检查路由规则 - 优先处理固定路由
+			targetWorker := m.findTargetWorker(data)
+			if targetWorker != nil {
+				// 使用固定路由的worker
+				targetWorker.Mutex.Lock()
+				err := targetWorker.Conn.WriteJSON(data)
+				targetWorker.HandledCount++
+				targetWorker.Mutex.Unlock()
 
-			targetIndex := int(time.Now().UnixNano()) % len(m.workers)
-			worker := m.workers[targetIndex]
+				if err != nil {
+					go func(w *WorkerClient) {
+						m.removeWorker(w)
+					}(targetWorker)
+					// 如果固定路由失败，回退到轮询
+					m.fallbackToRoundRobin(data)
+				}
+			} else {
+				// 没有匹配的路由规则，使用轮询
+				targetIndex := int(time.Now().UnixNano()) % len(m.workers)
+				worker := m.workers[targetIndex]
 
-			worker.Mutex.Lock()
-			err := worker.Conn.WriteJSON(data)
-			worker.HandledCount++
-			worker.Mutex.Unlock()
+				worker.Mutex.Lock()
+				err := worker.Conn.WriteJSON(data)
+				worker.HandledCount++
+				worker.Mutex.Unlock()
 
-			if err != nil {
-				go func(w *WorkerClient) {
-					m.removeWorker(w)
-				}(worker)
-				for i, w := range m.workers {
-					if i == targetIndex {
-						continue
-					}
-					w.Mutex.Lock()
-					e := w.Conn.WriteJSON(data)
-					w.Mutex.Unlock()
-					if e == nil {
-						break
+				if err != nil {
+					go func(w *WorkerClient) {
+						m.removeWorker(w)
+					}(worker)
+					for i, w := range m.workers {
+						if i == targetIndex {
+							continue
+						}
+						w.Mutex.Lock()
+						e := w.Conn.WriteJSON(data)
+						w.Mutex.Unlock()
+						if e == nil {
+							break
+						}
 					}
 				}
 			}
@@ -1055,37 +960,7 @@ func (m *Manager) removeWorker(target *WorkerClient) {
 	}
 	m.workers = newWorkers
 	target.Conn.Close()
-	m.AddLog("INFO", "Worker removed due to error")
-}
-
-// 消息队列管理函数
-func (m *Manager) enqueueMessage(data interface{}) {
-	m.MessageQueueMutex.Lock()
-	defer m.MessageQueueMutex.Unlock()
-
-	// 限制队列大小，避免内存溢出
-	if len(m.MessageQueue) >= 1000 {
-		// 移除最旧的消息（FIFO）
-		m.MessageQueue = m.MessageQueue[1:]
-	}
-	m.MessageQueue = append(m.MessageQueue, data)
-}
-
-func (m *Manager) getMessageQueue() []interface{} {
-	m.MessageQueueMutex.RLock()
-	defer m.MessageQueueMutex.RUnlock()
-
-	// 返回队列的副本
-	result := make([]interface{}, len(m.MessageQueue))
-	copy(result, m.MessageQueue)
-	return result
-}
-
-func (m *Manager) clearMessageQueue() {
-	m.MessageQueueMutex.Lock()
-	defer m.MessageQueueMutex.Unlock()
-
-	m.MessageQueue = m.MessageQueue[:0] // 清空队列但保留容量
+	m.AddLog("INFO", fmt.Sprintf("Worker %s removed due to error", target.ID))
 }
 
 func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
@@ -1399,7 +1274,7 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 							count = int(v)
 						}
 						client.GroupCount = count
-						m.AddLog("DEBUG", fmt.Sprintf("Bot %s Group Count: %d", selfID, client.GroupCount))
+						// 更新群组数量
 						if m.rdb != nil {
 							m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "group_count", client.GroupCount)
 						}
@@ -1421,7 +1296,7 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 							count = int(v)
 						}
 						client.FriendCount = count
-						m.AddLog("DEBUG", fmt.Sprintf("Bot %s Friend Count: %d", selfID, client.FriendCount))
+						// 更新好友数量
 						if m.rdb != nil {
 							m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "friend_count", client.FriendCount)
 						}
@@ -1434,7 +1309,7 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 				if data, ok := msgMap["data"].([]interface{}); ok {
 					count := len(data)
 					client.GroupCount = count
-					m.AddLog("DEBUG", fmt.Sprintf("Bot %s Group Count (from list): %d", selfID, client.GroupCount))
+					// 更新群组数量（从列表）
 					if m.rdb != nil {
 						m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "group_count", client.GroupCount)
 					}
@@ -1444,7 +1319,7 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 				if data, ok := msgMap["data"].([]interface{}); ok {
 					count := len(data)
 					client.FriendCount = count
-					m.AddLog("DEBUG", fmt.Sprintf("Bot %s Friend Count (from list): %d", selfID, client.FriendCount))
+					// 更新好友数量（从列表）
 					if m.rdb != nil {
 						m.rdb.HSet(context.Background(), fmt.Sprintf("bot:info:%s", selfID), "friend_count", client.FriendCount)
 					}
@@ -1459,13 +1334,23 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 			msgMap["self_id"] = selfID
 		}
 
+		// 添加详细的self_id检查日志
+		if msgSelfID, ok := msgMap["self_id"]; ok {
+			// 检查消息中的self_id
+			if fmt.Sprintf("%v", msgSelfID) == "0" {
+				m.AddLog("WARN", fmt.Sprintf("Detected self_id=0 in message from bot %s: %v", selfID, msgMap))
+			}
+		} else if selfID != "" {
+			// 消息中没有self_id，使用bot的self_id
+		}
+
 		// Broadcast to subscribers
 		m.broadcastToSubscribers(msgMap)
 
 		// Log API response
 		if _, ok := msgMap["echo"]; ok {
 			// Don't log internal login info echo to avoid clutter if frequent? Actually it's once.
-			m.AddLog("DEBUG", fmt.Sprintf("Recv API Resp from %s: %s", selfID, string(message)))
+			// 收到API响应
 		}
 
 		// Update Recv Count (Session)
@@ -1477,13 +1362,22 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 
 		// Update Worker heartbeat for worker connections
 		if role, ok := msgMap["role"].(string); ok && role == "worker" {
-			m.mutex.RLock()
-			for _, worker := range m.workers {
-				worker.Mutex.Lock()
-				worker.LastHeartbeat = time.Now()
-				worker.Mutex.Unlock()
+			// 获取worker ID（如果消息中包含）
+			if workerID, ok := msgMap["worker_id"].(string); ok {
+				m.mutex.RLock()
+				for _, worker := range m.workers {
+					if worker.ID == workerID {
+						worker.Mutex.Lock()
+						worker.LastHeartbeat = time.Now()
+						worker.Mutex.Unlock()
+						break
+					}
+				}
+				m.mutex.RUnlock()
+			} else {
+				// 如果没有worker_id，记录警告日志
+				m.AddLog("WARN", "Received worker heartbeat without worker_id")
 			}
-			m.mutex.RUnlock()
 		}
 
 		// Record Stats
@@ -1498,7 +1392,7 @@ func serveWS(m *Manager, w http.ResponseWriter, r *http.Request) {
 				if len(msgStr) > 1000 {
 					msgStr = msgStr[:1000] + "...(truncated)"
 				}
-				m.AddLog("DEBUG", fmt.Sprintf("Recv from %s: %s", selfID, msgStr))
+				// 收到消息
 			}
 		}
 	}
@@ -1560,6 +1454,7 @@ func serveWorker(m *Manager, w http.ResponseWriter, r *http.Request) {
 	}
 
 	worker := &WorkerClient{
+		ID:            fmt.Sprintf("worker_%d", time.Now().UnixNano()),
 		Conn:          conn,
 		Connected:     time.Now(),
 		LastHeartbeat: time.Now(),
@@ -1568,34 +1463,26 @@ func serveWorker(m *Manager, w http.ResponseWriter, r *http.Request) {
 	m.mutex.Lock()
 	m.workers = append(m.workers, worker)
 	m.mutex.Unlock()
-	m.AddLog("INFO", "New Worker connected (Competing Consumer)")
+	m.AddLog("INFO", fmt.Sprintf("New Worker %s connected (Competing Consumer)", worker.ID))
 
-	// 重放最近的消息队列给新连接的Worker
+	// 向Worker查询BotID信息
 	go func() {
-		// 等待Worker连接稳定
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond) // 等待连接稳定
 
-		// 获取消息队列并发送给新Worker
-		queue := m.getMessageQueue()
-		if len(queue) > 0 {
-			m.AddLog("INFO", fmt.Sprintf("Replaying %d messages to new Worker", len(queue)))
+		queryMsg := map[string]interface{}{
+			"action": "get_bot_info",
+			"params": map[string]interface{}{},
+			"echo":   fmt.Sprintf("bot_info_%s", worker.ID),
+		}
 
-			// 批量发送消息，避免阻塞
-			for i, msg := range queue {
-				worker.Mutex.Lock()
-				err := worker.Conn.WriteJSON(msg)
-				worker.Mutex.Unlock()
+		worker.Mutex.Lock()
+		err := worker.Conn.WriteJSON(queryMsg)
+		worker.Mutex.Unlock()
 
-				if err != nil {
-					m.AddLog("WARN", fmt.Sprintf("Failed to replay message %d to new Worker: %v", i, err))
-					break
-				}
-
-				// 小延迟避免消息风暴
-				if i%10 == 0 {
-					time.Sleep(10 * time.Millisecond)
-				}
-			}
+		if err != nil {
+			m.AddLog("WARN", fmt.Sprintf("Failed to query bot info from Worker %s: %v", worker.ID, err))
+		} else {
+			// 已向Worker发送bot信息查询
 		}
 	}()
 
@@ -1613,12 +1500,17 @@ func serveWorker(m *Manager, w http.ResponseWriter, r *http.Request) {
 		// Handle API requests from Worker
 		var req map[string]interface{}
 		if err := json.Unmarshal(message, &req); err == nil {
+			// 添加worker_id到消息中，用于心跳识别
+			req["worker_id"] = worker.ID
+			req["role"] = "worker"
 			m.dispatchAPIRequest(req)
 		}
 	}
 }
 
 func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
+	// 处理API请求
+
 	// 1. Determine Target Bot ID
 	var targetID string
 
@@ -1646,9 +1538,13 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 		switch v := id.(type) {
 		case float64:
 			targetID = fmt.Sprintf("%.0f", v)
+			// 找到self_id
 		default:
 			targetID = fmt.Sprintf("%v", v)
+			// 找到self_id
 		}
+	} else {
+		// 未在顶层找到self_id
 	}
 
 	// Fallback: Check "params.self_id" (Some implementations put it here)
@@ -1658,10 +1554,16 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 				switch v := id.(type) {
 				case float64:
 					targetID = fmt.Sprintf("%.0f", v)
+					// 在params中找到self_id
 				default:
 					targetID = fmt.Sprintf("%v", v)
+					// 在params中找到self_id
 				}
+			} else {
+				// params中未找到self_id
 			}
+		} else {
+			// 请求中未找到params
 		}
 	}
 
@@ -1670,36 +1572,25 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 	var targetBot *BotClient
 
-	// 调试日志：显示当前可用的bot列表
-	botList := make([]string, 0, len(m.bots))
-	for botID := range m.bots {
-		botList = append(botList, botID)
-	}
-	m.AddLog("DEBUG", fmt.Sprintf("dispatchAPIRequest: Available bots: %v, Target ID: %s", botList, targetID))
-
-	if targetID != "" {
-		if bot, ok := m.bots[targetID]; ok {
-			targetBot = bot
-			m.AddLog("DEBUG", fmt.Sprintf("Found target bot: %s", targetID))
-		} else {
-			m.AddLog("WARN", fmt.Sprintf("Target bot %s not found, will use fallback", targetID))
-		}
+	// 拒绝处理self_id为"0"或空的消息，防止跨机器人消息发送
+	if targetID == "0" || targetID == "" {
+		return
 	}
 
-	// 2. If no specific bot or not found, pick any (First one)
+	// 2. Find target bot
+	targetBot = m.bots[targetID]
 	if targetBot == nil {
-		if len(m.bots) > 0 {
-			// Just pick the first one
-			for _, bot := range m.bots {
-				targetBot = bot
-				m.AddLog("WARN", fmt.Sprintf("No target bot found, using fallback bot: %s", targetBot.SelfID))
-				break
-			}
-		}
+		return
 	}
 
 	// 3. Send to Bot
 	if targetBot != nil {
+		// 前面的逻辑已经确保targetBot的ID与targetID一致
+
+		// 移除worker相关的字段，避免bot收到这些字段
+		delete(req, "worker_id")
+		delete(req, "role")
+
 		if autoRecall > 0 {
 			// Validate Auto Recall Delay
 			if autoRecall > 120 {
@@ -1737,22 +1628,6 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 
 		if err != nil {
 			m.AddLog("ERROR", fmt.Sprintf("Failed to send API to bot %s: %v", targetBot.SelfID, err))
-
-			// 消息重试机制 - 如果发送失败，添加到重试队列
-			if action, ok := req["action"].(string); ok && strings.HasPrefix(action, "send_") {
-				m.AddLog("WARN", fmt.Sprintf("Adding message to retry queue for bot %s", targetBot.SelfID))
-
-				retryMsg := map[string]interface{}{
-					"bot_id":      targetBot.SelfID,
-					"message":     req,
-					"retry_count": 0,
-					"created_at":  time.Now(),
-				}
-
-				m.MessageQueueMutex.Lock()
-				m.MessageQueue = append(m.MessageQueue, retryMsg)
-				m.MessageQueueMutex.Unlock()
-			}
 		} else {
 			// Update Global Sent Stats (Persistent)
 			if action, ok := req["action"].(string); ok && strings.HasPrefix(action, "send_") {
@@ -1769,8 +1644,6 @@ func (m *Manager) dispatchAPIRequest(req map[string]interface{}) {
 					m.rdb.Incr(ctx, "stats:msg:sent")
 				}
 			}
-			// Enable this log for debugging
-			m.AddLog("DEBUG", fmt.Sprintf("Forwarded API to bot %s: %v | Params: %v", targetBot.SelfID, req["action"], req["params"]))
 		}
 	} else {
 		m.AddLog("WARN", fmt.Sprintf("No bot available to handle API request. TargetID: %s", targetID))
@@ -1832,31 +1705,8 @@ func (m *Manager) recordStats(botID string, msg map[string]interface{}) {
 		groupName = gn
 	}
 
-	// Deduplication Logic
+	// Deduplication Logic - Removed as per user request
 	isDuplicate := false
-	if mid, ok := msg["message_id"]; ok {
-		msgID := fmt.Sprintf("%v", mid)
-		// Composite key to avoid collisions if IDs are not globally unique
-		key := msgID
-		if groupID != 0 {
-			key = fmt.Sprintf("g:%d:%s", groupID, msgID)
-		} else if userID != 0 {
-			key = fmt.Sprintf("u:%d:%s", userID, msgID)
-		}
-
-		m.DedupMutex.Lock()
-		if ts, exists := m.DedupCache[key]; exists && time.Now().Unix()-ts < 10 {
-			isDuplicate = true
-		} else {
-			m.DedupCache[key] = time.Now().Unix()
-			// Periodic cleanup (simple reset if too large)
-			if len(m.DedupCache) > 10000 {
-				m.DedupCache = make(map[string]int64)
-				m.DedupCache[key] = time.Now().Unix()
-			}
-		}
-		m.DedupMutex.Unlock()
-	}
 
 	// Update Stats
 	m.statsMutex.Lock()
@@ -2888,6 +2738,203 @@ func (m *Manager) handleGetChatStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// 路由规则相关函数
+
+// findTargetWorker 根据路由规则查找目标worker
+func (m *Manager) findTargetWorker(data interface{}) *WorkerClient {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	msgMap, ok := data.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	// 提取路由键
+	var routingKey string
+
+	// 1. 检查群ID
+	if groupID, ok := msgMap["group_id"].(string); ok && groupID != "" {
+		routingKey = groupID
+	} else if groupID, ok := msgMap["group_id"].(int64); ok && groupID != 0 {
+		routingKey = fmt.Sprintf("%d", groupID)
+	}
+
+	// 2. 检查机器人ID
+	if routingKey == "" {
+		if botID, ok := msgMap["self_id"].(string); ok && botID != "" {
+			routingKey = botID
+		}
+	}
+
+	if routingKey == "" {
+		return nil
+	}
+
+	// 查找路由规则
+	if targetWorkerID, exists := m.routingRules[routingKey]; exists {
+		// 查找对应的worker
+		for _, worker := range m.workers {
+			if worker.ID == targetWorkerID {
+				return worker
+			}
+		}
+	}
+
+	return nil
+}
+
+// fallbackToRoundRobin 当固定路由失败时的回退机制
+func (m *Manager) fallbackToRoundRobin(data interface{}) {
+	if len(m.workers) == 0 {
+		return
+	}
+
+	targetIndex := int(time.Now().UnixNano()) % len(m.workers)
+	worker := m.workers[targetIndex]
+
+	worker.Mutex.Lock()
+	err := worker.Conn.WriteJSON(data)
+	worker.HandledCount++
+	worker.Mutex.Unlock()
+
+	if err != nil {
+		go func(w *WorkerClient) {
+			m.removeWorker(w)
+		}(worker)
+		for i, w := range m.workers {
+			if i == targetIndex {
+				continue
+			}
+			w.Mutex.Lock()
+			e := w.Conn.WriteJSON(data)
+			w.Mutex.Unlock()
+			if e == nil {
+				break
+			}
+		}
+	}
+}
+
+// SetRoutingRule 设置路由规则 (API调用)
+func (m *Manager) SetRoutingRule(key string, workerID string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if workerID == "" {
+		delete(m.routingRules, key)
+		log.Printf("[ROUTING] 删除路由规则: %s", key)
+	} else {
+		m.routingRules[key] = workerID
+		log.Printf("[ROUTING] 设置路由规则: %s -> %s", key, workerID)
+	}
+}
+
+// GetRoutingRules 获取所有路由规则
+func (m *Manager) GetRoutingRules() map[string]string {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	rules := make(map[string]string)
+	for k, v := range m.routingRules {
+		rules[k] = v
+	}
+	return rules
+}
+
+// handleRoutingRules 处理路由规则管理API
+func (m *Manager) handleRoutingRules(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[ROUTING] API called: %s %s", r.Method, r.URL.Path)
+
+	user := m.authenticate(r)
+	if user == nil {
+		log.Printf("[ROUTING] Authentication failed")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("[ROUTING] User authenticated: %s (role: %s)", user.Username, user.Role)
+
+	// 检查权限 (需要管理员权限)
+	if user.Role != "admin" {
+		log.Printf("[ROUTING] Permission denied: user %s is not admin", user.Username)
+		http.Error(w, "Forbidden: Admin required", http.StatusForbidden)
+		return
+	}
+
+	log.Printf("[ROUTING] Admin access granted for %s", user.Username)
+
+	switch r.Method {
+	case "GET":
+		// 获取当前路由规则
+		rules := m.GetRoutingRules()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"rules": rules,
+		})
+
+	case "POST":
+		// 设置路由规则
+		var req struct {
+			Key      string `json:"key"`       // group_id 或 bot_id
+			WorkerID string `json:"worker_id"` // worker_id (空字符串表示删除)
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if req.Key == "" {
+			http.Error(w, "Key is required", http.StatusBadRequest)
+			return
+		}
+
+		// 验证worker是否存在
+		if req.WorkerID != "" {
+			found := false
+			m.mutex.RLock()
+			for _, worker := range m.workers {
+				if worker.ID == req.WorkerID {
+					found = true
+					break
+				}
+			}
+			m.mutex.RUnlock()
+
+			if !found {
+				http.Error(w, "Worker not found", http.StatusNotFound)
+				return
+			}
+		}
+
+		m.SetRoutingRule(req.Key, req.WorkerID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Routing rule updated",
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (m *Manager) handleGetMessageQueue(w http.ResponseWriter, r *http.Request) {
+	if m.authenticate(r) == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// For now, return an empty message queue
+	// This can be extended to return actual queued messages if needed
+	queue := []interface{}{}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(queue)
 }
 
 func getString(m map[string]interface{}, key string) string {
