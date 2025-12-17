@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.69 (2025-12-18)
+*   **Worker-Bot Bidirectional Communication (Worker-Bot双向通信)**:
+    *   **🔧 Request-Response Mapping**: Implemented complete request-response mapping system using echo field to track pending requests.
+    *   **🔄 Worker→Bot Request Forwarding**: Workers can now send API requests (with echo) to bots for operations like member checks, admin verification, muting, or kicking.
+    *   **📨 Bot→Worker Response Relay**: Bot responses are automatically relayed back to the originating worker using the echo identifier.
+    *   **⏱️ Timeout Management**: 30-second timeout for pending requests with automatic cleanup and error response generation.
+    *   **🛡️ Error Handling**: Comprehensive error handling for unavailable bots, forwarding failures, and request timeouts with appropriate error codes (1404, 1400, 1401).
+    *   **🧪 Test Interface**: Added `test_worker_bot_api.html` for comprehensive testing of bidirectional communication scenarios.
+    *   **🔒 Thread-Safe Operations**: All request-response operations are protected by mutex locks for concurrent access safety.
+
 ## v1.1.68 (2025-12-17)
 *   **Message Retry Mechanism (消息重试机制)**:
     *   **Automatic Retry Queue**: Added automatic message retry mechanism when bot message sending fails, ensuring reliable message delivery.
@@ -10,6 +20,13 @@ All notable changes to this project will be documented in this file.
     *   **Queue Management API**: Enhanced `/api/queue/messages` endpoint to return detailed retry queue status including retry count, next retry time, and error information.
     *   **Background Processing**: Dedicated background goroutine processes retry queue every 5 seconds for efficient message recovery.
     *   **Thread-Safe Operations**: All retry queue operations are protected by mutex locks for concurrent access safety.
+*   **Routing Logic Fix & Enhanced Worker Management (路由逻辑修复与Worker管理增强)**:
+    *   **🎯 Corrected Routing Logic**: Fixed message routing to properly distinguish between API requests (random worker selection) and message events (routing rule application).
+    *   **🔧 Worker ID Optimization**: Shortened worker IDs for better readability and management.
+    *   **🔄 Duplicate ID Prevention**: Added retry mechanism to prevent duplicate worker IDs with 10-attempt retry loop.
+    *   **💓 Enhanced Heartbeat**: Improved worker connection stability with ping/pong mechanism and 60-second timeout detection.
+    *   **📊 Routing Test Tool**: Added `test_routing_simple.html` for easy validation of routing rule functionality.
+    *   **🛡️ Load Balancing**: API requests now use proper round-robin load balancing when no target bot is available.
 
 ## v1.1.67 (2025-12-17)
 *   **Worker Heartbeat Fix (Worker心跳修复)**:

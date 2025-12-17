@@ -20,6 +20,14 @@
 *   **⚡ Background Processing**: Dedicated background worker processes retry queue every 5 seconds for efficient message recovery.
 *   **🔒 Thread-Safe**: All retry operations are protected by mutex locks for concurrent access safety.
 
+### v1.1.69 - Worker-Bot Bidirectional Communication
+*   **🔧 Request-Response Mapping**: Implemented complete request-response mapping system using echo field to track pending requests.
+*   **🔄 Worker→Bot Request Forwarding**: Workers can now send API requests to bots for operations like member checks, admin verification, muting, or kicking.
+*   **📨 Bot→Worker Response Relay**: Bot responses are automatically relayed back to the originating worker using the echo identifier.
+*   **⏱️ Timeout Management**: 30-second timeout for pending requests with automatic cleanup and error response generation.
+*   **🛡️ Error Handling**: Comprehensive error handling for unavailable bots, forwarding failures, and request timeouts.
+*   **🧪 Test Interface**: Added `test_worker_bot_api.html` for comprehensive testing of bidirectional communication scenarios.
+
 ### v1.1.68 - Routing Logic Fix & Enhanced Worker Management
 *   **🎯 Corrected Routing Logic**: Fixed message routing to properly distinguish between API requests (random worker selection) and message events (routing rule application).
 *   **🔧 Worker ID Optimization**: Shortened worker IDs for better readability and management.
@@ -48,22 +56,6 @@
 *   **💾 Retry Queue Isolation**: Failed messages now go into a dedicated retry queue instead of being mixed with the persistence queue.
 *   **📊 Queue Management APIs**: Added new REST API endpoints (`/api/queue/messages` and `/api/queue/retries`) for monitoring both persistence and retry queue status.
 *   **🔧 Enhanced Retry Logic**: Improved retry processing to only handle messages in the retry queue, preventing interference with successful message deliveries.
-
-### v1.1.64 - System Reliability & Stability
-*   **🔄 Worker Disconnect Detection**: Automatic heartbeat monitoring with 60-second timeout detection and cleanup.
-*   **💾 Message Persistence**: In-memory message queue prevents message loss during Worker disconnections.
-*   **🔄 Intelligent Message Retry**: Exponential backoff retry mechanism (1min, 2min, 4min) with max 3 attempts.
-*   **🤖 Bot Heartbeat Monitoring**: Automatic heartbeat tracking for Bot connections with 5-minute timeout detection and cleanup.
-*   **🎯 Enhanced Message Routing**: Improved target bot selection logic with debug logging to prevent incorrect message routing.
-*   **🔧 Compile Error Fix**: Resolved WxBotGo build failure by adding missing "os" package import.
-*   **🔒 Thread Safety**: Enhanced mutex locking for all shared resource operations.
-
-### v1.1.63 - Security & I18n
-*   **🔒 Security**: Implemented optional token authentication for WebSocket connections to prevent unauthorized access.
-*   **🌏 I18n**: Enhanced internationalization for Overmind integration and sidebar menus.
-*   **🐳 Docker Management**: New sidebar menu for visualizing and managing Docker containers (view status, logs, etc.).
-*   **🧠 Overmind Integration**: Seamless access to Overmind system via the sidebar for unified control.
-*   **✨ UI Enhancements**: Optimized sidebar structure and added multi-language support for new modules.
 
 > For detailed update history, please refer to [CHANGELOG.md](CHANGELOG.md).
 >
@@ -292,6 +284,7 @@ The `WxBot` container will automatically try to connect to `BotNexus`.
 - **特性与协议说明 / Features & Protocols**
   - [docs/QQ_GUILD_SMART_SEND_CN.md](docs/QQ_GUILD_SMART_SEND_CN.md) - QQ 频道/群组 **智能协作发送（Smart Send / WakeUp）** 机制说明
   - [docs/CSharpReconnectExample.cs](docs/CSharpReconnectExample.cs) - C# 客户端重连示例代码
+  - `BotNexus/test_routing_simple.html` - **路由规则测试工具**（Web界面用于验证消息路由功能）
 
 - **客户端 / Clients**
   - `Overmind/README.md` - Overmind 可视化控制台（Flutter 桌面/移动端）
