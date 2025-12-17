@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.67 (2025-12-17)
+*   **Temporary Fixed Routing (临时固定路由)**:
+    *   **Group/Bot Routing Rules**: Added temporary routing rules to direct specific group or bot messages to a fixed worker for testing purposes.
+    *   **Admin API**: Implemented `/api/admin/routing` REST API for managing routing rules (admin only).
+    *   **Priority-Based Routing**: Messages are first checked against routing rules before falling back to round-robin load balancing.
+    *   **Failure Recovery**: If the fixed worker is unavailable, the system automatically falls back to round-robin distribution.
+    *   **Overmind UI Integration**: Enhanced Overmind routing screen to display worker handled counts and improve dropdown selection.
+
+## v1.1.66 (2025-12-17)
+*   **Cross-Bot Message Prevention (防止跨机器人消息发送)**:
+    *   **Enhanced Message Routing Security**: Completely removed fallback logic that could cause messages to be sent to incorrect bots.
+    *   **Strict Target Validation**: Messages with invalid or missing self_id (including "0") are now rejected instead of being routed to random bots.
+    *   **Simplified Worker Architecture**: Removed Worker-BotID binding logic as Workers are designed to be shared competing consumers.
+    *   **Improved Error Logging**: Enhanced error messages to clearly indicate when messages are rejected due to invalid target bot identification.
+    *   **Worker ID Tracking**: Added unique ID assignment for better Worker connection tracking and debugging.
+
 ## v1.1.65 (2025-12-17)
 *   **Message Queue System Enhancement (消息队列系统增强)**:
     *   **Separated Retry Queue**: Completely separated message persistence queue from retry queue to prevent successful messages from being re-sent.
