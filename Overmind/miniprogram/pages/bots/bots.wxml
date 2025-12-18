@@ -1,0 +1,186 @@
+<!-- 机器人管理页面 -->
+<view class="container">
+  <!-- 搜索和筛选栏 -->
+  <view class="search-bar">
+    <view class="search-input-wrapper">
+      <input 
+        class="search-input" 
+        placeholder="搜索机器人名称、ID或平台" 
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        confirm-type="search"
+      />
+      <text class="search-icon">🔍</text>
+    </view>
+  </view>
+
+  <!-- 筛选和排序工具栏 -->
+  <view class="filter-toolbar">
+    <view class="filter-group">
+      <text class="filter-label">状态:</text>
+      <view class="filter-tabs">
+        <text 
+          class="filter-tab {{statusFilter === 'all' ? 'active' : ''}}" 
+          data-status="all"
+          bindtap="onStatusFilterChange"
+        >全部</text>
+        <text 
+          class="filter-tab {{statusFilter === 'online' ? 'active' : ''}}" 
+          data-status="online"
+          bindtap="onStatusFilterChange"
+        >在线</text>
+        <text 
+          class="filter-tab {{statusFilter === 'offline' ? 'active' : ''}}" 
+          data-status="offline"
+          bindtap="onStatusFilterChange"
+        >离线</text>
+        <text 
+          class="filter-tab {{statusFilter === 'error' ? 'active' : ''}}" 
+          data-status="error"
+          bindtap="onStatusFilterChange"
+        >错误</text>
+      </view>
+    </view>
+    
+    <view class="sort-group">
+      <picker bindchange="onSortChange" value="{{sortBy}}" range="{{['name', 'status', 'platform', 'created']}}" range-key="{{['名称', '状态', '平台', '创建时间']}}">
+        <view class="sort-picker">
+          <text>排序: {{sortBy === 'name' ? '名称' : sortBy === 'status' ? '状态' : sortBy === 'platform' ? '平台' : '创建时间'}}</text>
+          <text class="sort-arrow">▼</text>
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 批量操作工具栏 -->
+  <view class="batch-toolbar" wx:if="{{isSelecting}}">
+    <view class="selection-info">
+      <text>已选择 {{selectedBots.length}} 个机器人</text>
+    </view>
+    <view class="batch-actions">
+      <button 
+        class="batch-btn batch-start" 
+        size="mini"
+        data-operation="start"
+        bindtap="batchOperation"
+      >启动</button>
+      <button 
+        class="batch-btn batch-stop" 
+        size="mini"
+        data-operation="stop"
+        bindtap="batchOperation"
+      >停止</button>
+      <button 
+        class="batch-btn batch-restart" 
+        size="mini"
+        data-operation="restart"
+        bindtap="batchOperation"
+      >重启</button>
+      <button 
+        class="batch-btn batch-cancel" 
+        size="mini"
+        bindtap="cancelSelection"
+      >取消</button>
+    </view>
+  </view>
+
+  <!-- 机器人列表 -->
+  <view class="bot-list" wx:if="{{isLoaded && !isLoading}}">
+    <view 
+      class="bot-item {{isSelecting && selectedBots.indexOf(item.id) !== -1 ? 'selected' : ''}}" 
+      wx:for="{{filteredBots}}" 
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="onBotTap"
+      bindlongpress="startSelection"
+    >
+      <view class="bot-header">
+        <view class="bot-info">
+          <view class="bot-name-wrapper">
+            <text class="bot-name">{{item.name}}</text>
+            <text class="bot-id">#{{item.id}}</text>
+          </view>
+          <view class="bot-platform">
+            <text class="platform-badge platform-{{item.platform}}">{{item.platformText}}</text>
+          </view>
+        </view>
+        
+        <view class="bot-status">
+          <view 
+            class="status-indicator" 
+            style="background-color: {{item.statusColor}}"
+          ></view>
+          <text class="status-text" style="color: {{item.statusColor}}">{{item.statusText}}</text>
+        </view>
+      </view>
+
+      <view class="bot-details">
+        <view class="bot-stat">
+          <text class="stat-label">群组数:</text>
+          <text class="stat-value">{{item.groupCount || 0}}</text>
+        </view>
+        <view class="bot-stat">
+          <text class="stat-label">消息数:</text>
+          <text class="stat-value">{{item.messageCount || 0}}</text>
+        </view>
+        <view class="bot-stat">
+          <text class="stat-label">最后在线:</text>
+          <text class="stat-value">{{item.lastSeenText}}</text>
+        </view>
+      </view>
+
+      <view class="bot-actions" wx:if="{{!isSelecting}}">
+        <button 
+          class="action-btn {{item.status === 'online' ? 'btn-stop' : 'btn-start'}}" 
+          size="mini"
+          data-id="{{item.id}}"
+          bindtap="toggleBotStatus"
+        >
+          {{item.status === 'online' ? '停止' : '启动'}}
+        </button>
+        <button 
+          class="action-btn btn-detail" 
+          size="mini"
+          data-id="{{item.id}}"
+          bindtap="onBotTap"
+        >
+          详情
+        </button>
+      </view>
+
+      <view class="selection-indicator" wx:if="{{isSelecting}}">
+        <view class="checkbox {{selectedBots.indexOf(item.id) !== -1 ? 'checked' : ''}}">
+          <text wx:if="{{selectedBots.indexOf(item.id) !== -1}}">✓</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{isLoaded && !isLoading && filteredBots.length === 0}}">
+    <view class="empty-icon">🤖</view>
+    <text class="empty-title">暂无机器人</text>
+    <text class="empty-desc">{{searchKeyword || statusFilter !== 'all' ? '没有找到符合条件的机器人' : '还没有添加任何机器人'}}</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{isLoading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载机器人列表...</text>
+  </view>
+
+  <!-- 错误状态 -->
+  <view class="error-state" wx:if="{{loadError}}">
+    <view class="error-icon">⚠️</view>
+    <text class="error-title">加载失败</text>
+    <text class="error-desc">{{loadError}}</text>
+    <button class="retry-btn" bindtap="loadBots">重新加载</button>
+  </view>
+
+  <!-- 底部批量选择按钮 -->
+  <view class="bottom-actions" wx:if="{{!isSelecting && filteredBots.length > 0}}">
+    <button class="batch-select-btn" bindtap="startSelection">
+      批量选择
+    </button>
+  </view>
+</view>

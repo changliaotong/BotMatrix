@@ -1,0 +1,191 @@
+<!-- 系统监控页面 -->
+<view class="monitoring-container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">系统监控</text>
+    <text class="update-time">更新时间: {{lastUpdateTime}}</text>
+  </view>
+
+  <!-- 时间范围选择 -->
+  <view class="time-range-selector">
+    <view class="range-item {{timeRange === '1h' ? 'active' : ''}}" 
+          data-range="1h" bindtap="onTimeRangeChange">1小时</view>
+    <view class="range-item {{timeRange === '6h' ? 'active' : ''}}" 
+          data-range="6h" bindtap="onTimeRangeChange">6小时</view>
+    <view class="range-item {{timeRange === '24h' ? 'active' : ''}}" 
+          data-range="24h" bindtap="onTimeRangeChange">24小时</view>
+    <view class="range-item {{timeRange === '7d' ? 'active' : ''}}" 
+          data-range="7d" bindtap="onTimeRangeChange">7天</view>
+  </view>
+
+  <!-- 网络状态卡片 -->
+  <view class="status-card network-status">
+    <view class="card-header">
+      <text class="card-title">网络状态</text>
+      <view class="status-indicator" 
+            style="background-color: {{getNetworkStatusColor(networkStatus.status)}}"></view>
+    </view>
+    <view class="network-content">
+      <view class="network-item">
+        <text class="item-label">状态:</text>
+        <text class="item-value">{{getNetworkStatusText(networkStatus.status)}}</text>
+      </view>
+      <view class="network-item">
+        <text class="item-label">延迟:</text>
+        <text class="item-value">{{networkStatus.latency}}ms</text>
+      </view>
+      <view class="network-item">
+        <text class="item-label">丢包率:</text>
+        <text class="item-value">{{networkStatus.packetLoss}}%</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- CPU监控卡片 -->
+  <view class="status-card cpu-status">
+    <view class="card-header">
+      <text class="card-title">CPU使用率</text>
+      <text class="card-subtitle">{{monitoringData.cpu.cores}}核</text>
+    </view>
+    <view class="progress-container">
+      <progress percent="{{monitoringData.cpu.usage}}" 
+                activeColor="{{getCpuUsageColor(monitoringData.cpu.usage)}}"
+                stroke-width="8"
+                border-radius="4"/>
+      <text class="progress-text">{{monitoringData.cpu.usage}}%</text>
+    </view>
+    <view class="cpu-temperature">
+      <text class="temp-label">温度:</text>
+      <text class="temp-value">{{monitoringData.cpu.temperature}}°C</text>
+    </view>
+  </view>
+
+  <!-- 内存监控卡片 -->
+  <view class="status-card memory-status">
+    <view class="card-header">
+      <text class="card-title">内存使用</text>
+      <text class="card-subtitle">{{formatBytes(monitoringData.memory.total)}}</text>
+    </view>
+    <view class="progress-container">
+      <progress percent="{{monitoringData.memory.usage}}" 
+                activeColor="{{getMemoryUsageColor(monitoringData.memory.usage)}}"
+                stroke-width="8"
+                border-radius="4"/>
+      <text class="progress-text">{{monitoringData.memory.usage}}%</text>
+    </view>
+    <view class="memory-stats">
+      <view class="memory-item">
+        <text class="item-label">已用:</text>
+        <text class="item-value">{{formatBytes(monitoringData.memory.used)}}</text>
+      </view>
+      <view class="memory-item">
+        <text class="item-label">可用:</text>
+        <text class="item-value">{{formatBytes(monitoringData.memory.free)}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 磁盘监控卡片 -->
+  <view class="status-card disk-status">
+    <view class="card-header">
+      <text class="card-title">磁盘使用</text>
+      <text class="card-subtitle">{{formatBytes(monitoringData.disk.total)}}</text>
+    </view>
+    <view class="progress-container">
+      <progress percent="{{monitoringData.disk.usage}}" 
+                activeColor="{{getDiskUsageColor(monitoringData.disk.usage)}}"
+                stroke-width="8"
+                border-radius="4"/>
+      <text class="progress-text">{{monitoringData.disk.usage}}%</text>
+    </view>
+    <view class="disk-stats">
+      <view class="disk-item">
+        <text class="item-label">已用:</text>
+        <text class="item-value">{{formatBytes(monitoringData.disk.used)}}</text>
+      </view>
+      <view class="disk-item">
+        <text class="item-label">可用:</text>
+        <text class="item-value">{{formatBytes(monitoringData.disk.free)}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 网络流量卡片 -->
+  <view class="status-card network-traffic">
+    <view class="card-header">
+      <text class="card-title">网络流量</text>
+      <text class="card-subtitle">{{monitoringData.network.connections}} 连接</text>
+    </view>
+    <view class="traffic-stats">
+      <view class="traffic-item upload">
+        <view class="traffic-icon">↑</view>
+        <view class="traffic-info">
+          <text class="traffic-label">上传</text>
+          <text class="traffic-value">{{formatSpeed(monitoringData.network.upload)}}</text>
+        </view>
+      </view>
+      <view class="traffic-item download">
+        <view class="traffic-icon">↓</view>
+        <view class="traffic-info">
+          <text class="traffic-label">下载</text>
+          <text class="traffic-value">{{formatSpeed(monitoringData.network.download)}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 进程信息卡片 -->
+  <view class="status-card process-info">
+    <view class="card-header">
+      <text class="card-title">进程信息</text>
+      <text class="card-subtitle">运行时间: {{formatUptime(monitoringData.uptime)}}</text>
+    </view>
+    <view class="process-stats">
+      <view class="process-item">
+        <text class="process-number">{{monitoringData.processes.total}}</text>
+        <text class="process-label">总进程</text>
+      </view>
+      <view class="process-item">
+        <text class="process-number">{{monitoringData.processes.running}}</text>
+        <text class="process-label">运行中</text>
+      </view>
+      <view class="process-item">
+        <text class="process-number">{{monitoringData.processes.sleeping}}</text>
+        <text class="process-label">睡眠中</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 性能图表卡片 -->
+  <view class="status-card performance-chart" wx:if="{{performanceData.cpuHistory.length > 0}}">
+    <view class="card-header">
+      <text class="card-title">性能趋势</text>
+    </view>
+    <view class="chart-container">
+      <!-- CPU历史图表 -->
+      <view class="chart-item">
+        <text class="chart-title">CPU使用率趋势</text>
+        <canvas type="2d" id="cpuChart" class="performance-chart"></canvas>
+      </view>
+      
+      <!-- 内存历史图表 -->
+      <view class="chart-item">
+        <text class="chart-title">内存使用率趋势</text>
+        <canvas type="2d" id="memoryChart" class="performance-chart"></canvas>
+      </view>
+      
+      <!-- 网络流量图表 -->
+      <view class="chart-item" wx:if="{{performanceData.networkHistory.length > 0}}">
+        <text class="chart-title">网络流量趋势</text>
+        <canvas type="2d" id="networkChart" class="performance-chart"></canvas>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部操作按钮 -->
+  <view class="action-buttons">
+    <button class="refresh-btn" bindtap="refreshData" loading="{{isRefreshing}}">
+      {{isRefreshing ? '刷新中...' : '刷新数据'}}
+    </button>
+  </view>
+</view>

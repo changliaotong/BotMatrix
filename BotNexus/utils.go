@@ -10,13 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// JWT相关
-type UserClaims struct {
-	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"is_admin"`
-	jwt.RegisteredClaims
-}
+// JWT相关 - UserClaims定义已从types.go导入
 
 // JWT密钥 - 应该从环境变量读取
 var jwtSecret = []byte("your-secret-key-change-this")

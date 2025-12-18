@@ -1,57 +1,59 @@
+# ======================
 # Build Stage
+# ======================
 FROM golang:alpine AS builder
 
 # Use Aliyun mirror for APK
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev git ca-certificates
 
 WORKDIR /build
 
 # Copy dependency files
 COPY go.mod go.sum ./
 ENV GOPROXY=https://goproxy.cn,direct
+ENV GO111MODULE=on
+ENV GOSUMDB=off
 RUN go mod download
 
-# Copy source code
-COPY main.go ./
+# Copy all source code
+COPY . .
 
-# Build the application
-RUN go build -o BotNexus main.go
+# Build the binary
+RUN go build -o BotNexus
 
+# ======================
 # Runtime Stage
+# ======================
 FROM alpine:latest
 
 # Use Aliyun mirror for APK
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # Install tzdata for timezone support
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata ca-certificates
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /build/BotNexus ./
-
-# Copy static files (HTML/JS)
-COPY index.html ./
-COPY locales.js ./
-# Copy Overmind Web App (if exists, but we assume it does for deployment)
-# Using COPY . . would be lazy, so we specificy directory.
-# Note: This requires the directory to exist in the build context.
+COPY web ./web
 COPY overmind ./overmind
-# Copy stats.json if it exists (optional, usually volume mounted)
-# COPY stats.json ./ 
 
 # Expose ports
 EXPOSE 3001 5000
 
-# Set default environment variables
+# Environment variables
 ENV WS_PORT=:3001
 ENV WEBUI_PORT=:5000
 ENV REDIS_ADDR=192.168.0.126:6379
 ENV REDIS_PWD=redis_zsYik8
+
+# Optional: run as non-root
+RUN addgroup -S appgroup && adduser -S -D -H -G appgroup appuser
+USER appuser
 
 # Run the application
 CMD ["./BotNexus"]

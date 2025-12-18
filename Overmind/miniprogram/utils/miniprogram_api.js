@@ -278,22 +278,23 @@ class MiniProgramAPI {
   static async login(username, password) {
     try {
       MiniProgramAdapter.showLoading('登录中...');
-      const data = await MiniProgramAdapter.request({
-        url: `${API_BASE_URL}/login`,
+      const response = await MiniProgramAdapter.request({
+        url: `${API_BASE_URL}/api/login`,
         method: 'POST',
         data: { username, password },
         timeout: 5000
       });
       MiniProgramAdapter.hideLoading();
       
-      if (data.token) {
+      if (response.success && response.token) {
         // 保存token
-        MiniProgramAdapter.setStorageSync('token', data.token);
+        MiniProgramAdapter.setStorageSync('token', response.token);
         MiniProgramAdapter.showToast('登录成功');
-        return { success: true, data };
+        return { success: true, data: response };
       } else {
-        MiniProgramAdapter.showToast('登录失败：用户名或密码错误');
-        return { success: false, error: '登录失败' };
+        const errorMsg = response.message || '用户名或密码错误';
+        MiniProgramAdapter.showToast(errorMsg);
+        return { success: false, error: errorMsg };
       }
     } catch (error) {
       MiniProgramAdapter.hideLoading();
@@ -303,18 +304,56 @@ class MiniProgramAPI {
     }
   }
 
-  // 验证token - 本地验证（后端无对应接口）
+  // 验证token - 通过请求用户信息接口验证
   static async validateToken(token) {
     try {
-      // 由于后端没有提供token验证接口，我们简单验证token格式
-      if (token && token.startsWith('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')) {
-        // 假设token格式正确即为有效
-        return { valid: true, userInfo: { id: 1, username: 'admin' } };
+      if (!token) return { valid: false };
+      
+      const response = await MiniProgramAdapter.request({
+        url: `${API_BASE_URL}/api/user/info`,
+        method: 'GET',
+        timeout: 5000
+      });
+      
+      if (response.success) {
+        return { 
+          valid: true, 
+          userInfo: response.data 
+        };
       } else {
-        return { valid: false, error: '无效的token格式' };
+        return { valid: false, error: response.message };
       }
     } catch (error) {
+      console.error('Token验证失败:', error);
       return { valid: false, error: error.message };
+    }
+  }
+
+  // 修改密码
+  static async changePassword(oldPassword, newPassword) {
+    try {
+      MiniProgramAdapter.showLoading('修改密码中...');
+      const response = await MiniProgramAdapter.request({
+        url: `${API_BASE_URL}/api/user/password`,
+        method: 'POST',
+        data: { 
+          old_password: oldPassword, 
+          new_password: newPassword 
+        },
+        timeout: 5000
+      });
+      MiniProgramAdapter.hideLoading();
+      
+      if (response.success) {
+        MiniProgramAdapter.showToast('密码修改成功');
+        return { success: true };
+      } else {
+        MiniProgramAdapter.showToast(response.message || '修改失败');
+        return { success: false, error: response.message };
+      }
+    } catch (error) {
+      MiniProgramAdapter.hideLoading();
+      return { success: false, error: error.message };
     }
   }
 

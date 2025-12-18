@@ -1,0 +1,404 @@
+/* 系统监控页面样式 */
+.monitoring-container {
+  padding: 20rpx;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+/* 页面标题 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding: 0 10rpx;
+}
+
+.page-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.update-time {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 时间范围选择器 */
+.time-range-selector {
+  display: flex;
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 10rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.range-item {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  color: #666;
+  border-radius: 8rpx;
+  transition: all 0.3s ease;
+}
+
+.range-item.active {
+  background-color: #1890ff;
+  color: #fff;
+}
+
+/* 状态卡片基础样式 */
+.status-card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 卡片头部 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.card-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.card-subtitle {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.status-indicator {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background-color: #52c41a;
+}
+
+/* 网络状态卡片 */
+.network-content {
+  display: flex;
+  justify-content: space-between;
+}
+
+.network-item {
+  text-align: center;
+  flex: 1;
+}
+
+.item-label {
+  font-size: 24rpx;
+  color: #999;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.item-value {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+/* 进度条容器 */
+.progress-container {
+  position: relative;
+  margin-bottom: 16rpx;
+}
+
+progress {
+  width: 100%;
+  height: 16rpx;
+  border-radius: 8rpx;
+}
+
+.progress-text {
+  position: absolute;
+  right: 0;
+  top: -40rpx;
+  font-size: 24rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+/* CPU温度 */
+.cpu-temperature {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.temp-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.temp-value {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+/* 内存和磁盘统计 */
+.memory-stats,
+.disk-stats {
+  display: flex;
+  justify-content: space-between;
+}
+
+.memory-item,
+.disk-item {
+  text-align: center;
+  flex: 1;
+}
+
+/* 网络流量 */
+.traffic-stats {
+  display: flex;
+  justify-content: space-around;
+}
+
+.traffic-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #f8f9fa;
+}
+
+.traffic-item.upload {
+  background-color: #fff7e6;
+}
+
+.traffic-item.download {
+  background-color: #e6f7ff;
+}
+
+.traffic-icon {
+  font-size: 48rpx;
+  margin-right: 16rpx;
+  font-weight: bold;
+}
+
+.traffic-item.upload .traffic-icon {
+  color: #fa8c16;
+}
+
+.traffic-item.download .traffic-icon {
+  color: #1890ff;
+}
+
+.traffic-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.traffic-label {
+  font-size: 24rpx;
+  color: #999;
+  margin-bottom: 4rpx;
+}
+
+.traffic-value {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+/* 进程信息 */
+.process-stats {
+  display: flex;
+  justify-content: space-around;
+}
+
+.process-item {
+  text-align: center;
+  padding: 20rpx;
+}
+
+.process-number {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: #1890ff;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.process-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 性能图表 */
+.chart-container {
+  margin-top: 20rpx;
+}
+
+.chart-item {
+  margin-bottom: 30rpx;
+}
+
+.chart-item:last-child {
+  margin-bottom: 0;
+}
+
+.chart-title {
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 16rpx;
+  display: block;
+  font-weight: 500;
+}
+
+.chart-bars {
+  display: flex;
+  align-items: end;
+  height: 120rpx;
+  border-bottom: 2rpx solid #e8e8e8;
+  padding-bottom: 10rpx;
+}
+
+.bar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 2rpx;
+}
+
+.bar {
+  width: 20rpx;
+  border-radius: 4rpx 4rpx 0 0;
+  transition: height 0.3s ease;
+}
+
+.bar-label {
+  font-size: 20rpx;
+  color: #999;
+  margin-top: 8rpx;
+  transform: rotate(-45deg);
+  white-space: nowrap;
+}
+
+/* Canvas图表样式 */
+.performance-chart {
+  width: 100%;
+  height: 200rpx;
+  background-color: #fafafa;
+  border-radius: 8rpx;
+}
+
+/* 深色模式下的Canvas背景 */
+@media (prefers-color-scheme: dark) {
+  .performance-chart {
+    background-color: #333;
+  }
+}
+
+/* 操作按钮 */
+.action-buttons {
+  padding: 20rpx 0;
+}
+
+.refresh-btn {
+  width: 100%;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 4rpx 12rpx rgba(24, 144, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(24, 144, 255, 0.2);
+}
+
+.refresh-btn[loading] {
+  background-color: #40a9ff;
+}
+
+/* 响应式设计 */
+@media (min-width: 768px) {
+  .monitoring-container {
+    padding: 30rpx;
+    max-width: 1200rpx;
+    margin: 0 auto;
+  }
+  
+  .status-card {
+    padding: 32rpx;
+  }
+  
+  .page-title {
+    font-size: 42rpx;
+  }
+  
+  .card-title {
+    font-size: 36rpx;
+  }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .monitoring-container {
+    background-color: #1a1a1a;
+  }
+  
+  .status-card {
+    background-color: #2a2a2a;
+    box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.3);
+  }
+  
+  .page-title,
+  .card-title,
+  .item-value,
+  .temp-value,
+  .traffic-value,
+  .process-number {
+    color: #fff;
+  }
+  
+  .update-time,
+  .card-subtitle,
+  .item-label,
+  .temp-label,
+  .traffic-label,
+  .process-label,
+  .bar-label {
+    color: #ccc;
+  }
+  
+  .traffic-item {
+    background-color: #3a3a3a;
+  }
+  
+  .chart-bars {
+    border-bottom-color: #444;
+  }
+}

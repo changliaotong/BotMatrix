@@ -1,0 +1,225 @@
+<!-- 系统监控页面 -->
+<view class="container">
+  <!-- 系统概览卡片 -->
+  <view class="overview-card" wx:if="{{systemInfo}}">
+    <view class="card-header">
+      <text class="card-title">系统概览</text>
+      <text class="update-time">{{systemInfo.bootTimeText}}</text>
+    </view>
+    
+    <view class="overview-stats">
+      <view class="stat-item">
+        <text class="stat-label">运行时长</text>
+        <text class="stat-value">{{systemInfo.uptimeText}}</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-label">CPU核心</text>
+        <text class="stat-value">{{systemInfo.cpuCount || 0}}</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-label">总内存</text>
+        <text class="stat-value">{{formatBytes(systemInfo.totalMemory || 0)}}</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-label">系统负载</text>
+        <text class="stat-value">{{systemInfo.loadAverage || '0.00'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 实时性能指标 -->
+  <view class="performance-card">
+    <view class="card-header">
+      <text class="card-title">实时性能</text>
+      <view class="real-time-stats">
+        <view class="real-time-stat">
+          <text class="stat-label">CPU</text>
+          <text class="stat-value" style="color: #1989fa">{{realTimeStats.cpuUsage}}%</text>
+        </view>
+        <view class="real-time-stat">
+          <text class="stat-label">内存</text>
+          <text class="stat-value" style="color: #07c160">{{realTimeStats.memoryUsage}}%</text>
+        </view>
+        <view class="real-time-stat">
+          <text class="stat-label">网络入</text>
+          <text class="stat-value" style="color: #ff976a">{{realTimeStats.networkIn}} KB/s</text>
+        </view>
+        <view class="real-time-stat">
+          <text class="stat-label">网络出</text>
+          <text class="stat-value" style="color: #ee0a24">{{realTimeStats.networkOut}} KB/s</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 标签页导航 -->
+  <view class="tab-nav">
+    <view 
+      class="tab-item {{activeTab === 'overview' ? 'active' : ''}}" 
+      data-tab="overview"
+      bindtap="onTabChange"
+    >
+      <text class="tab-text">概览</text>
+    </view>
+    <view 
+      class="tab-item {{activeTab === 'performance' ? 'active' : ''}}" 
+      data-tab="performance"
+      bindtap="onTabChange"
+    >
+      <text class="tab-text">性能</text>
+    </view>
+    <view 
+      class="tab-item {{activeTab === 'network' ? 'active' : ''}}" 
+      data-tab="network"
+      bindtap="onTabChange"
+    >
+      <text class="tab-text">网络</text>
+    </view>
+    <view 
+      class="tab-item {{activeTab === 'processes' ? 'active' : ''}}" 
+      data-tab="processes"
+      bindtap="onTabChange"
+    >
+      <text class="tab-text">进程</text>
+    </view>
+  </view>
+
+  <!-- 概览标签页 -->
+  <view class="tab-content" wx:if="{{activeTab === 'overview'}}">
+    <!-- 系统信息 -->
+    <view class="info-section">
+      <view class="section-title">系统信息</view>
+      <view class="info-grid">
+        <view class="info-item">
+          <text class="info-label">主机名</text>
+          <text class="info-value">{{systemInfo.hostname || '未知'}}</text>
+        </view>
+        <view class="info-item">
+          <text class="info-label">操作系统</text>
+          <text class="info-value">{{systemInfo.platform || '未知'}} {{systemInfo.arch || ''}}</text>
+        </view>
+        <view class="info-item">
+          <text class="info-label">Node.js版本</text>
+          <text class="info-value">{{systemInfo.nodeVersion || '未知'}}</text>
+        </view>
+        <view class="info-item">
+          <text class="info-label">系统架构</text>
+          <text class="info-value">{{systemInfo.arch || '未知'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 磁盘使用情况 -->
+    <view class="info-section">
+      <view class="section-title">磁盘使用</view>
+      <view class="disk-list">
+        <view class="disk-item" wx:for="{{diskUsage}}" wx:key="mount">
+          <view class="disk-header">
+            <text class="disk-mount">{{item.mount}}</text>
+            <text class="disk-percent">{{formatPercent(item.used, item.total)}}</text>
+          </view>
+          <view class="disk-progress">
+            <view 
+              class="disk-progress-bar" 
+              style="width: {{item.usage}}%; background-color: {{item.usage > 80 ? '#ee0a24' : item.usage > 60 ? '#ff976a' : '#07c160'}}"
+            ></view>
+          </view>
+          <view class="disk-stats">
+            <text class="disk-stat">已用: {{formatBytes(item.used * 1024 * 1024)}}</text>
+            <text class="disk-stat">可用: {{formatBytes(item.free * 1024 * 1024)}}</text>
+            <text class="disk-stat">总计: {{formatBytes(item.total * 1024 * 1024)}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 性能标签页 -->
+  <view class="tab-content" wx:if="{{activeTab === 'performance'}}">
+    <!-- CPU使用率图表 -->
+    <view class="chart-section">
+      <view class="chart-header">
+        <text class="chart-title">CPU使用率</text>
+        <text class="chart-value">{{realTimeStats.cpuUsage}}%</text>
+      </view>
+      <canvas id="cpuChart" class="performance-chart" type="2d"></canvas>
+    </view>
+
+    <!-- 内存使用率图表 -->
+    <view class="chart-section">
+      <view class="chart-header">
+        <text class="chart-title">内存使用率</text>
+        <text class="chart-value">{{realTimeStats.memoryUsage}}%</text>
+      </view>
+      <canvas id="memoryChart" class="performance-chart" type="2d"></canvas>
+    </view>
+  </view>
+
+  <!-- 网络标签页 -->
+  <view class="tab-content" wx:if="{{activeTab === 'network'}}">
+    <!-- 网络流量图表 -->
+    <view class="chart-section">
+      <view class="chart-header">
+        <text class="chart-title">网络流量</text>
+        <text class="chart-legend">
+          <text style="color: #07c160">入站 {{realTimeStats.networkIn}} KB/s</text>
+          <text style="color: #1989fa; margin-left: 20rpx">出站 {{realTimeStats.networkOut}} KB/s</text>
+        </text>
+      </view>
+      <canvas id="networkChart" class="performance-chart" type="2d"></canvas>
+    </view>
+
+    <!-- 网络连接 -->
+    <view class="connection-section">
+      <view class="section-title">网络连接 ({{networkConnections.length}})</view>
+      <view class="connection-list">
+        <view class="connection-item" wx:for="{{networkConnections}}" wx:key="localAddr">
+          <view class="connection-info">
+            <text class="connection-protocol">{{item.protocol}}</text>
+            <text class="connection-status" style="color: {{getConnectionStatusColor(item.status)}}">{{item.status}}</text>
+          </view>
+          <view class="connection-addr">
+            <text class="connection-addr-text">{{item.localAddr}} → {{item.remoteAddr}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 进程标签页 -->
+  <view class="tab-content" wx:if="{{activeTab === 'processes'}}">
+    <view class="process-section">
+      <view class="section-title">进程列表 ({{processList.length}})</view>
+      <view class="process-list">
+        <view class="process-item" wx:for="{{processList}}" wx:key="pid">
+          <view class="process-header">
+            <text class="process-name">{{item.name}}</text>
+            <text 
+              class="process-status" 
+              style="color: {{getProcessStatusColor(item.status)}}"
+            >{{item.status}}</text>
+          </view>
+          <view class="process-stats">
+            <text class="process-stat">PID: {{item.pid}}</text>
+            <text class="process-stat">CPU: {{item.cpu}}%</text>
+            <text class="process-stat">内存: {{item.memory}}MB</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{isLoading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载系统监控数据...</text>
+  </view>
+
+  <!-- 错误状态 -->
+  <view class="error-state" wx:if="{{loadError}}">
+    <view class="error-icon">⚠️</view>
+    <text class="error-title">加载失败</text>
+    <text class="error-desc">{{loadError}}</text>
+    <button class="retry-btn" bindtap="loadSystemData">重新加载</button>
+  </view>
+</view>

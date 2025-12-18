@@ -25,8 +25,38 @@ update_package.tar.gz
 # Go Binaries
 *.exe
 *.dll
-go_manager/manager
+BotNexus/BotNexus
+BotNexus/BotNexus.exe~
+wxbot-linux-amd64
+wxbot-macos-arm64
+wxbot-android-arm64
+main
 BotNexus/manager
+go_manager/manager
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+temp/
+tmp/
+*.zip
+*.tar.gz
+*.7z
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+venv/
+.venv/
+node_modules/
 
 # C# Artifacts
 obj/

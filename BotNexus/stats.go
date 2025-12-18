@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -101,4 +100,31 @@ func (m *Manager) GetStatsSummary() map[string]interface{} {
 	m.LogDebug("[Stats] Retrieved stats summary: %v", summary)
 	
 	return summary
+}
+
+// StartStatsResetTimer 启动统计信息重置定时器
+func (m *Manager) StartStatsResetTimer() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.resetDailyStats()
+	}
+}
+
+// resetDailyStats 重置每日统计
+func (m *Manager) resetDailyStats() {
+	now := time.Now()
+	currentDate := now.Format("2006-01-02")
+
+	m.statsMutex.Lock()
+	defer m.statsMutex.Unlock()
+
+	if m.LastResetDate != currentDate {
+		m.LogInfo("[Stats] 重置每日统计信息: %s -> %s", m.LastResetDate, currentDate)
+		m.UserStatsToday = make(map[int64]int64)
+		m.GroupStatsToday = make(map[int64]int64)
+		m.BotStatsToday = make(map[string]int64)
+		m.LastResetDate = currentDate
+	}
 }

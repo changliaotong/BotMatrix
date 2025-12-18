@@ -2,13 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## v1.1.0 (2025-12-19)
-*   **Overmind Mini-Program Updates (Overmind小程序更新)**:
-    *   **✅ API Address Fix**: Fixed API and WebSocket address configuration in `miniprogram_api.js` and `app.js` to use correct backend port (3001).
-    *   **✅ Data Visualization Enhancement**: Improved system monitoring charts using `chart_util.js` for CPU, memory, and network metrics.
-    *   **✅ WebSocket Connection Optimization**: Updated WebSocket configuration for better connection stability.
-    *   **✅ Documentation Update**: Updated `PROJECT_SUMMARY.md` and mini-program `README.md` with latest feature status.
-
 ## v1.1.69 (2025-12-18)
 *   **Worker-Bot Bidirectional Communication (Worker-Bot双向通信)**:
     *   **🔧 Request-Response Mapping**: Implemented complete request-response mapping system using echo field to track pending requests.
@@ -18,6 +11,12 @@ All notable changes to this project will be documented in this file.
     *   **🛡️ Error Handling**: Comprehensive error handling for unavailable bots, forwarding failures, and request timeouts with appropriate error codes (1404, 1400, 1401).
     *   **🧪 Test Interface**: Added `test_worker_bot_api.html` for comprehensive testing of bidirectional communication scenarios.
     *   **🔒 Thread-Safe Operations**: All request-response operations are protected by mutex locks for concurrent access safety.
+
+*   **Overmind Mini-Program Updates (Overmind小程序更新)**:
+    *   **✅ API Address Fix**: Fixed API and WebSocket address configuration in `miniprogram_api.js` and `app.js` to use correct backend port (3001).
+    *   **✅ Data Visualization Enhancement**: Improved system monitoring charts using `chart_util.js` for CPU, memory, and network metrics.
+    *   **✅ WebSocket Connection Optimization**: Updated WebSocket configuration for better connection stability.
+    *   **✅ Documentation Update**: Updated `PROJECT_SUMMARY.md` and mini-program `README.md` with latest feature status.
 
 ## v1.1.68 (2025-12-17)
 *   **Message Retry Mechanism (消息重试机制)**:

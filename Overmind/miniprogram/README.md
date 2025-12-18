@@ -191,7 +191,7 @@ const WS_BASE_URL = 'wss://your-overmind-server.com/ws';
 
 ## 更新日志
 
-### v1.1.0 (2025-12-19)
+### v1.1.69 (2025-12-18)
 - ✅ 修复API地址配置错误
 - ✅ 完善数据可视化功能
 - ✅ 优化WebSocket连接配置

@@ -1,0 +1,190 @@
+<!--pages/logs/logs.wxml-->
+<view class="container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">日志管理</text>
+    <view class="page-actions">
+      <button class="btn btn-small {{autoRefresh ? 'btn-primary' : ''}}" bindtap="toggleAutoRefresh">
+        <text class="btn-icon">{{autoRefresh ? '⏸' : '▶'}}</text>
+        {{autoRefresh ? '停止刷新' : '自动刷新'}}
+      </button>
+      <button class="btn btn-small btn-primary" bindtap="showExportModal">
+        导出
+      </button>
+      <button class="btn btn-small btn-danger" bindtap="clearLogs">
+        清空
+      </button>
+    </view>
+  </view>
+
+  <!-- 搜索和筛选栏 -->
+  <view class="filter-bar">
+    <view class="search-box">
+      <input 
+        class="search-input" 
+        placeholder="搜索日志内容、机器人ID..."
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+      />
+      <text class="search-icon">🔍</text>
+    </view>
+    
+    <view class="filter-controls">
+      <picker 
+        mode="selector" 
+        range="{{levels}}"
+        range-key="label"
+        value="{{selectedLevelIndex}}"
+        bindchange="onLevelChange"
+      >
+        <view class="filter-picker">
+          <text>{{levels[selectedLevelIndex].label}}</text>
+          <text class="picker-arrow">▼</text>
+        </view>
+      </picker>
+      
+      <picker 
+        mode="selector" 
+        range="{{bots}}"
+        range-key="label"
+        value="{{selectedBotIndex}}"
+        bindchange="onBotChange"
+      >
+        <view class="filter-picker">
+          <text>{{bots[selectedBotIndex].label}}</text>
+          <text class="picker-arrow">▼</text>
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 统计信息 -->
+  <view class="stats-bar" wx:if="{{filteredLogs.length > 0}}">
+    <text>共 {{filteredLogs.length}} 条日志</text>
+    <text wx:if="{{selectedLogs.length > 0}}">已选择 {{selectedLogs.length}} 条</text>
+  </view>
+
+  <!-- 日志列表 -->
+  <scroll-view 
+    class="logs-container" 
+    scroll-y 
+    enable-back-to-top
+    bindscrolltolower="onReachBottom"
+  >
+    <view wx:if="{{loading && filteredLogs.length === 0}}" class="loading">
+      <view class="loading-spinner"></view>
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <view wx:if="{{!loading && filteredLogs.length === 0}}" class="empty">
+      <text class="empty-image">📄</text>
+      <text class="empty-text">暂无日志记录</text>
+      <text class="empty-desc">系统运行正常，暂无日志产生</text>
+    </view>
+
+    <view wx:if="{{error}}" class="error">
+      <text class="error-text">{{error}}</text>
+      <button class="btn btn-primary" bindtap="refreshLogs">重新加载</button>
+    </view>
+
+    <!-- 日志项列表 -->
+    <view class="logs-list" wx:if="{{filteredLogs.length > 0}}">
+      <view 
+        class="log-item {{selectedLogIds.includes(item.id) ? 'selected' : ''}}"
+        wx:for="{{filteredLogs}}"
+        wx:key="id"
+        data-log="{{item}}"
+        bindtap="onLogItemTap"
+        bindlongpress="onLogItemLongPress"
+      >
+        <!-- 选择框 -->
+        <view class="log-select" catchtap="onLogSelect">
+          <view class="checkbox {{selectedLogIds.includes(item.id) ? 'checked' : ''}}"></view>
+        </view>
+
+        <!-- 日志内容 -->
+        <view class="log-content">
+          <view class="log-header">
+            <view class="log-time">{{item.time}}</view>
+            <view class="log-level {{item.levelClass}}">
+              {{item.levelText}}
+            </view>
+          </view>
+          
+          <view class="log-body">
+            <view class="log-message">{{item.shortMessage}}</view>
+            <view class="log-bot" wx:if="{{item.botId}}">
+              <text class="bot-label">机器人:</text>
+              <text class="bot-id">{{item.botId}}</text>
+            </view>
+          </view>
+          
+          <view class="log-footer" wx:if="{{item.metadata}}">
+            <view class="log-metadata">
+              <text class="metadata-item" wx:for="{{item.metadata}}" wx:key="key" wx:for-item="meta">
+                {{meta.key}}: {{meta.value}}
+              </text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 操作按钮 -->
+        <view class="log-actions">
+          <button class="btn-icon" bindtap="copyLogMessage" data-log="{{item}}">
+            📋
+          </button>
+        </view>
+      </view>
+
+      <!-- 加载更多 -->
+      <view wx:if="{{loading && filteredLogs.length > 0}}" class="load-more">
+        <view class="loading-spinner"></view>
+        <text>加载更多...</text>
+      </view>
+
+      <!-- 没有更多 -->
+      <view wx:if="{{!hasMore && filteredLogs.length > 0}}" class="no-more">
+        <text>已显示全部日志</text>
+      </view>
+    </view>
+  </scroll-view>
+</view>
+
+<!-- 导出模态框 -->
+<view class="modal-overlay" wx:if="{{showExportModal}}" bindtap="hideExportModal">
+  <view class="modal-content" catchtap="stopPropagation">
+    <view class="modal-header">
+      <text class="modal-title">导出日志</text>
+      <button class="btn-close" bindtap="hideExportModal">✕</button>
+    </view>
+    
+    <view class="modal-body">
+      <view class="export-info">
+        <text>将导出 {{selectedLogs.length > 0 ? selectedLogs.length : filteredLogs.length}} 条日志</text>
+      </view>
+      
+      <view class="export-format">
+        <text class="format-label">导出格式:</text>
+        <radio-group class="format-options" bindchange="onExportFormatChange">
+          <label class="format-option">
+            <radio value="json" checked="{{exportFormat === 'json'}}" />
+            <text>JSON 格式</text>
+          </label>
+          <label class="format-option">
+            <radio value="csv" checked="{{exportFormat === 'csv'}}" />
+            <text>CSV 格式</text>
+          </label>
+          <label class="format-option">
+            <radio value="txt" checked="{{exportFormat === 'txt'}}" />
+            <text>文本格式</text>
+          </label>
+        </radio-group>
+      </view>
+    </view>
+    
+    <view class="modal-footer">
+      <button class="btn btn-default" bindtap="hideExportModal">取消</button>
+      <button class="btn btn-primary" bindtap="exportLogs">导出</button>
+    </view>
+  </view>
+</view>

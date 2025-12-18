@@ -1,0 +1,313 @@
+<!--pages/settings/settings.wxml-->
+<view class="container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">系统设置</text>
+    <view class="page-actions">
+      <button class="btn btn-small {{hasChanges ? 'btn-primary' : ''}}" 
+              bindtap="saveSettings" 
+              disabled="{{!hasChanges || saving}}">
+        {{saving ? '保存中...' : '保存'}}
+      </button>
+      <button class="btn btn-small" bindtap="resetSettings">重置</button>
+    </view>
+  </view>
+
+  <!-- 标签页导航 -->
+  <view class="tab-nav">
+    <view class="tab-item {{activeTab === tab.key ? 'active' : ''}}" 
+          wx:for="{{tabs}}" 
+          wx:key="key"
+          data-tab="{{tab.key}}"
+          bindtap="switchTab">
+      <text class="tab-icon">{{tab.icon}}</text>
+      <text class="tab-label">{{tab.label}}</text>
+    </view>
+  </view>
+
+  <!-- 设置内容 -->
+  <scroll-view class="settings-content" scroll-y>
+    <!-- 系统设置 -->
+    <view class="settings-section" wx:if="{{activeTab === 'system'}}">
+      <view class="section-title">系统设置</view>
+      <!-- ... existing system settings ... -->
+    </view>
+
+    <!-- 账户设置 -->
+    <view class="settings-section" wx:if="{{activeTab === 'account'}}">
+      <view class="section-title">账户设置</view>
+      
+      <view class="user-info-card">
+        <view class="user-avatar">{{userInfo.username[0]}}</view>
+        <view class="user-details">
+          <text class="user-name">{{userInfo.username}}</text>
+          <text class="user-role">{{userInfo.role === 'admin' ? '管理员' : '普通用户'}}</text>
+        </view>
+      </view>
+
+      <view class="setting-item" bindtap="showChangePassword">
+        <view class="setting-info">
+          <text class="setting-label">修改密码</text>
+          <text class="setting-desc">定期更换密码以保障账户安全</text>
+        </view>
+        <view class="setting-arrow">></view>
+      </view>
+
+      <view class="logout-btn-container">
+        <button class="btn btn-danger logout-btn" bindtap="onLogout">退出登录</button>
+      </view>
+    </view>
+
+    <!-- 通知设置 -->
+    <view class="settings-section" wx:if="{{activeTab === 'notifications'}}">
+      <view class="section-title">通知设置</view>
+      
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">启用通知</text>
+          <text class="setting-desc">接收系统和机器人状态通知</text>
+        </view>
+        <switch 
+          checked="{{settings.notifications.enabled}}"
+          data-key="notifications"
+          data-subkey="enabled"
+          bindchange="onSwitchChange"
+        />
+      </view>
+
+      <view class="setting-item" wx:if="{{settings.notifications.enabled}}">
+        <view class="setting-info">
+          <text class="setting-label">声音提醒</text>
+          <text class="setting-desc">通知时播放提示音</text>
+        </view>
+        <switch 
+          checked="{{settings.notifications.sound}}"
+          data-key="notifications"
+          data-subkey="sound"
+          bindchange="onSwitchChange"
+        />
+      </view>
+
+      <view class="setting-item" wx:if="{{settings.notifications.enabled}}">
+        <view class="setting-info">
+          <text class="setting-label">震动提醒</text>
+          <text class="setting-desc">通知时震动设备</text>
+        </view>
+        <switch 
+          checked="{{settings.notifications.vibration}}"
+          data-key="notifications"
+          data-subkey="vibration"
+          bindchange="onSwitchChange"
+        />
+      </view>
+
+      <view class="setting-item" wx:if="{{settings.notifications.enabled}}">
+        <view class="setting-info">
+          <text class="setting-label">仅严重通知</text>
+          <text class="setting-desc">只接收严重级别的通知</text>
+        </view>
+        <switch 
+          checked="{{settings.notifications.criticalOnly}}"
+          data-key="notifications"
+          data-subkey="criticalOnly"
+          bindchange="onSwitchChange"
+        />
+      </view>
+    </view>
+
+    <!-- 性能设置 -->
+    <view class="settings-section" wx:if="{{activeTab === 'performance'}}">
+      <view class="section-title">性能设置</view>
+      
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">启用缓存</text>
+          <text class="setting-desc">缓存数据以提高加载速度</text>
+        </view>
+        <switch 
+          checked="{{settings.performance.cacheEnabled}}"
+          data-key="performance"
+          data-subkey="cacheEnabled"
+          bindchange="onSwitchChange"
+        />
+      </view>
+
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">数据压缩</text>
+          <text class="setting-desc">压缩传输数据以节省流量</text>
+        </view>
+        <switch 
+          checked="{{settings.performance.compressionEnabled}}"
+          data-key="performance"
+          data-subkey="compressionEnabled"
+          bindchange="onSwitchChange"
+        />
+      </view>
+
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">请求超时</text>
+          <text class="setting-desc">网络请求的超时时间</text>
+        </view>
+        <picker 
+          mode="selector" 
+          range="{{timeouts}}"
+          range-key="label"
+          value="{{performanceTimeoutIndex}}"
+          data-key="performance"
+          data-subkey="timeout"
+          bindchange="onSettingChange">
+          <view class="picker-value">
+            {{timeouts[performanceTimeoutIndex].label}}
+            <text class="picker-arrow">▼</text>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <!-- 网络设置 -->
+    <view class="settings-section" wx:if="{{activeTab === 'network'}}">
+      <view class="section-title">网络设置</view>
+      
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">重试次数</text>
+          <text class="setting-desc">网络失败时的重试次数</text>
+        </view>
+        <picker 
+          mode="selector" 
+          range="{{retryCounts}}"
+          range-key="label"
+          value="{{retryCountIndex}}"
+          data-key="network"
+          data-subkey="retryCount"
+          bindchange="onSettingChange">
+          <view class="picker-value">
+            {{retryCounts[retryCountIndex].label}}
+            <text class="picker-arrow">▼</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">重试间隔</text>
+          <text class="setting-desc">每次重试之间的间隔时间</text>
+        </view>
+        <input 
+          type="number" 
+          class="setting-input"
+          value="{{settings.network.retryDelay}}"
+          data-key="network"
+          data-subkey="retryDelay"
+          bindblur="onSettingChange"
+          placeholder="毫秒"
+        />
+      </view>
+
+      <view class="setting-item">
+        <view class="setting-info">
+          <text class="setting-label">网络超时</text>
+          <text class="setting-desc">网络连接的超时时间</text>
+        </view>
+        <picker 
+          mode="selector" 
+          range="{{timeouts}}"
+          range-key="label"
+          value="{{networkTimeoutIndex}}"
+          data-key="network"
+          data-subkey="timeout"
+          bindchange="onSettingChange">
+          <view class="picker-value">
+            {{timeouts[networkTimeoutIndex].label}}
+            <text class="picker-arrow">▼</text>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <!-- 关于页面 -->
+    <view class="settings-section" wx:if="{{activeTab === 'about'}}">
+      <view class="section-title">关于应用</view>
+      
+      <view class="about-card">
+        <view class="app-logo">
+          <text class="logo-text">🤖</text>
+        </view>
+        <view class="app-info">
+          <text class="app-name">{{appInfo.name}}</text>
+          <text class="app-version">版本 {{appInfo.version}} (构建 {{appInfo.build}})</text>
+          <text class="app-desc">{{appInfo.description}}</text>
+        </view>
+      </view>
+
+      <view class="about-section">
+        <view class="about-item" bindtap="showAppInfo">
+          <text class="about-label">应用信息</text>
+          <text class="about-arrow">›</text>
+        </view>
+        
+        <view class="about-item" bindtap="checkForUpdates">
+          <text class="about-label">检查更新</text>
+          <text class="about-arrow">›</text>
+        </view>
+        
+        <view class="about-item" bindtap="openGitHub">
+          <text class="about-label">开源项目</text>
+          <text class="about-arrow">›</text>
+        </view>
+        
+        <view class="about-item" bindtap="clearCache">
+          <text class="about-label">清除缓存</text>
+          <text class="about-arrow">›</text>
+        </view>
+      </view>
+
+      <view class="about-section">
+        <view class="about-item" bindtap="exportSettings">
+          <text class="about-label">导出设置</text>
+          <text class="about-arrow">›</text>
+        </view>
+        
+        <view class="about-item" bindtap="importSettings">
+          <text class="about-label">导入设置</text>
+          <text class="about-arrow">›</text>
+        </view>
+      </view>
+
+      <view class="about-footer">
+        <text class="footer-text">© 2024 {{appInfo.author}}</text>
+        <text class="footer-text">Powered by BotMatrix</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 修改密码弹窗 -->
+  <view class="modal-mask" wx:if="{{showPasswordModal}}">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">修改密码</text>
+        <text class="modal-close" bindtap="hideChangePassword">×</text>
+      </view>
+      <view class="modal-body">
+        <view class="modal-form-item">
+          <text class="modal-label">原密码</text>
+          <input class="modal-input" password placeholder="请输入原密码" value="{{oldPassword}}" data-field="oldPassword" bindinput="onPasswordInput" />
+        </view>
+        <view class="modal-form-item">
+          <text class="modal-label">新密码</text>
+          <input class="modal-input" password placeholder="请输入新密码" value="{{newPassword}}" data-field="newPassword" bindinput="onPasswordInput" />
+        </view>
+        <view class="modal-form-item">
+          <text class="modal-label">确认新密码</text>
+          <input class="modal-input" password placeholder="请再次输入新密码" value="{{confirmPassword}}" data-field="confirmPassword" bindinput="onPasswordInput" />
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn btn-secondary" bindtap="hideChangePassword">取消</button>
+        <button class="btn btn-primary" bindtap="submitChangePassword">确认修改</button>
+      </view>
+    </view>
+  </view>
+</view>

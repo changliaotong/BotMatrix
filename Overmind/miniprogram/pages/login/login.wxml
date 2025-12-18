@@ -1,0 +1,51 @@
+<!-- 登录页面 -->
+<view class="login-container">
+  <!-- 登录表单 -->
+  <view class="login-form">
+    <!-- 标题 -->
+    <view class="login-title">BotMatrix</view>
+    <view class="login-subtitle">机器人管理系统</view>
+    
+    <!-- 用户名输入 -->
+    <view class="form-item">
+      <text class="form-label">用户名</text>
+      <input 
+        class="form-input" 
+        placeholder="请输入用户名" 
+        value="{{username}}" 
+        bindinput="onUsernameInput"
+        auto-focus
+      />
+    </view>
+    
+    <!-- 密码输入 -->
+    <view class="form-item">
+      <text class="form-label">密码</text>
+      <input 
+        class="form-input" 
+        placeholder="请输入密码" 
+        value="{{password}}" 
+        bindinput="onPasswordInput"
+        password
+      />
+    </view>
+    
+    <!-- 登录按钮 -->
+    <button 
+      class="login-btn" 
+      bindtap="onLogin"
+      disabled="{{isLoading}}"
+    >
+      {{isLoading ? '登录中...' : '登录'}}
+    </button>
+    
+    <!-- 错误提示 -->
+    <view class="error-message" wx:if="{{errorMessage}}">{{errorMessage}}</view>
+    
+    <!-- 调试信息 -->
+    <view class="debug-info" wx:if="{{debugMode}}">
+      <text>测试账号: admin</text>
+      <text>测试密码: admin123</text>
+    </view>
+  </view>
+</view>

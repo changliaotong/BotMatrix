@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "BotMatrix控制台",
+  "navigationBarBackgroundColor": "#007bff",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#f5f5f5",
+  "enablePullDownRefresh": true,
+  "onReachBottomDistance": 50
+}

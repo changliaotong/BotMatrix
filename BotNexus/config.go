@@ -11,6 +11,10 @@ var (
 	STATS_FILE = "stats.json"
 	REDIS_ADDR = "192.168.0.126:6379"
 	REDIS_PWD  = "redis_zsYik8"
+	// JWT配置
+	JWT_SECRET = "botnexus_secret_key_for_jwt_token_generation"
+	// 默认管理员密码（第一次启动时使用，建议登录后修改）
+	DEFAULT_ADMIN_PASSWORD = "admin123"
 )
 
 func init() {

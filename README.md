@@ -12,12 +12,6 @@
 
 ## 📢 Recent Updates | 最近更新
 
-### v1.1.0 - Overmind Mini-Program Updates
-*   **✅ API Address Fix**: Fixed API and WebSocket address configuration in `miniprogram_api.js` and `app.js` to use correct backend port (3001).
-*   **✅ Data Visualization Enhancement**: Improved system monitoring charts using `chart_util.js` for CPU, memory, and network metrics.
-*   **✅ WebSocket Connection Optimization**: Updated WebSocket configuration for better connection stability.
-*   **✅ Documentation Update**: Updated `PROJECT_SUMMARY.md` and mini-program `README.md` with latest feature status.
-
 ### v1.1.70 - Message Retry Mechanism
 *   **🔄 Automatic Message Retry**: Added intelligent retry mechanism for failed bot message deliveries, ensuring reliable message transmission.
 *   **⏱️ Exponential Backoff**: Implemented smart retry timing (1s, 2s, 4s intervals) to prevent system overload during recovery attempts.
@@ -66,6 +60,81 @@
 > For detailed update history, please refer to [CHANGELOG.md](CHANGELOG.md).
 >
 > 更多更新记录请查看 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
+## 🚀 Getting Started | 快速开始
+
+### Prerequisites | 环境要求
+*   **Go**: 1.19+ (For BotNexus & Go-based Workers)
+*   **Python**: 3.9+ (For SystemWorker & WxBot)
+*   **Docker & Docker Compose**: Recommended for production deployment
+*   **Flutter**: For building Overmind mobile/web dashboard (Optional)
+
+### Installation | 安装步骤
+
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/changliaotong/BotMatrix.git
+    cd BotMatrix
+    ```
+
+2.  **Configuration**
+    *   Copy `.env.example` to `.env` and configure your environment variables.
+    *   For each bot component (e.g., `WxBot`, `TencentBot`), copy `config.sample.json` to `config.json` in its respective directory.
+
+3.  **Run with Docker Compose (Recommended)**
+    ```bash
+    docker-compose up -d
+    ```
+
+4.  **Access the Dashboard**
+    *   Open your browser and navigate to `http://localhost:8080` (or your configured port).
+    *   The Overmind dashboard is also available via `/overmind/` route.
+
+---
+
+## 📂 Project Structure | 项目结构
+
+| Directory | Description | Language |
+| :--- | :--- | :--- |
+| `BotNexus/` | Central Gateway & Management API | Go |
+| `Overmind/` | Cross-platform Management Dashboard | Flutter |
+| `WxBotGo/` | High-performance WeChat Bot (Android/UOS) | Go |
+| `WxBot/` | Legacy/Feature-rich WeChat Bot | Python |
+| `SystemWorker/` | System Monitoring & Remote Execution | Python |
+| `TencentBot/` | Official QQ Guild/Group Support | Go |
+| `DingTalkBot/` | Enterprise DingTalk Integration | Go |
+| `FeishuBot/` | Modern Feishu/Lark Integration | Go |
+| `docs/` | Detailed Technical Documentation | Markdown |
+
+---
+
+## 🛠 Deployment | 部署指南
+
+We provide a unified deployment script `deploy.py` for simplified lifecycle management:
+
+```bash
+# Bump version and pack project
+python deploy.py --target all --mode full
+
+# Fast update (restart containers without rebuild)
+python deploy.py --target manager --mode fast
+```
+
+Detailed deployment guides can be found in [docs/DEPLOY.md](docs/DEPLOY.md).
+
+---
+
+## 🤝 Contributing | 贡献指南
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+---
+
+## 📜 License | 开源协议
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 

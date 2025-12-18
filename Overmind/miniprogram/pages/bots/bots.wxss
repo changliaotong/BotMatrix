@@ -1,0 +1,457 @@
+/* 机器人管理页面样式 */
+
+.container {
+  padding: 20rpx;
+  padding-bottom: 120rpx;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+/* 搜索栏 */
+.search-bar {
+  margin-bottom: 20rpx;
+}
+
+.search-input-wrapper {
+  position: relative;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx 60rpx 20rpx 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.search-input {
+  width: 100%;
+  font-size: 28rpx;
+  color: #333;
+  border: none;
+  outline: none;
+}
+
+.search-icon {
+  position: absolute;
+  right: 20rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 32rpx;
+  color: #999;
+}
+
+/* 筛选工具栏 */
+.filter-toolbar {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+}
+
+.filter-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-right: 16rpx;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 12rpx;
+}
+
+.filter-tab {
+  padding: 8rpx 16rpx;
+  font-size: 24rpx;
+  color: #666;
+  background: #f5f5f5;
+  border-radius: 6rpx;
+  transition: all 0.3s;
+}
+
+.filter-tab.active {
+  color: #fff;
+  background: #1989fa;
+}
+
+.sort-group {
+  display: flex;
+  align-items: center;
+}
+
+.sort-picker {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 16rpx;
+  font-size: 24rpx;
+  color: #666;
+  background: #f5f5f5;
+  border-radius: 6rpx;
+}
+
+.sort-arrow {
+  margin-left: 8rpx;
+  font-size: 20rpx;
+}
+
+/* 批量操作工具栏 */
+.batch-toolbar {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.selection-info {
+  margin-bottom: 16rpx;
+}
+
+.selection-info text {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 12rpx;
+}
+
+.batch-btn {
+  flex: 1;
+  padding: 16rpx 24rpx;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+  border: none;
+}
+
+.batch-start {
+  background: #07c160;
+  color: #fff;
+}
+
+.batch-stop {
+  background: #ee0a24;
+  color: #fff;
+}
+
+.batch-restart {
+  background: #ff976a;
+  color: #fff;
+}
+
+.batch-cancel {
+  background: #969799;
+  color: #fff;
+}
+
+/* 机器人列表 */
+.bot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.bot-item {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  position: relative;
+  transition: all 0.3s;
+}
+
+.bot-item.selected {
+  border: 2rpx solid #1989fa;
+  background: #f0f7ff;
+}
+
+.bot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16rpx;
+}
+
+.bot-info {
+  flex: 1;
+}
+
+.bot-name-wrapper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.bot-name {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: 500;
+  margin-right: 12rpx;
+}
+
+.bot-id {
+  font-size: 24rpx;
+  color: #999;
+  background: #f5f5f5;
+  padding: 2rpx 8rpx;
+  border-radius: 4rpx;
+}
+
+.bot-platform {
+  margin-bottom: 8rpx;
+}
+
+.platform-badge {
+  padding: 4rpx 12rpx;
+  font-size: 22rpx;
+  border-radius: 6rpx;
+  font-weight: 500;
+}
+
+.platform-qq {
+  background: #12b7f5;
+  color: #fff;
+}
+
+.platform-wechat {
+  background: #07c160;
+  color: #fff;
+}
+
+.platform-telegram {
+  background: #0088cc;
+  color: #fff;
+}
+
+.platform-discord {
+  background: #5865f2;
+  color: #fff;
+}
+
+.bot-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-indicator {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  margin-right: 8rpx;
+}
+
+.status-text {
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.bot-details {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  padding: 16rpx 0;
+  border-top: 1rpx solid #f5f5f5;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.bot-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #999;
+  margin-bottom: 4rpx;
+}
+
+.stat-value {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.bot-actions {
+  display: flex;
+  gap: 12rpx;
+  justify-content: flex-end;
+}
+
+.action-btn {
+  padding: 12rpx 24rpx;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+  border: none;
+  min-width: 100rpx;
+}
+
+.btn-start {
+  background: #07c160;
+  color: #fff;
+}
+
+.btn-stop {
+  background: #ee0a24;
+  color: #fff;
+}
+
+.btn-detail {
+  background: #1989fa;
+  color: #fff;
+}
+
+/* 选择指示器 */
+.selection-indicator {
+  position: absolute;
+  top: 24rpx;
+  right: 24rpx;
+}
+
+.checkbox {
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid #ddd;
+  border-radius: 6rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  transition: all 0.3s;
+}
+
+.checkbox.checked {
+  background: #1989fa;
+  border-color: #1989fa;
+}
+
+.checkbox.checked text {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+  font-weight: 500;
+}
+
+.empty-desc {
+  font-size: 28rpx;
+  color: #999;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 80rpx;
+  height: 80rpx;
+  border: 4rpx solid #f5f5f5;
+  border-top: 4rpx solid #1989fa;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 24rpx;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #666;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 错误状态 */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 120rpx;
+  margin-bottom: 24rpx;
+}
+
+.error-title {
+  font-size: 32rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+  font-weight: 500;
+}
+
+.error-desc {
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 32rpx;
+}
+
+.retry-btn {
+  padding: 20rpx 40rpx;
+  font-size: 28rpx;
+  color: #fff;
+  background: #1989fa;
+  border: none;
+  border-radius: 8rpx;
+}
+
+/* 底部操作按钮 */
+.bottom-actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  padding: 20rpx;
+  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.batch-select-btn {
+  width: 100%;
+  padding: 24rpx;
+  font-size: 30rpx;
+  color: #fff;
+  background: #1989fa;
+  border: none;
+  border-radius: 12rpx;
+  font-weight: 500;
+}

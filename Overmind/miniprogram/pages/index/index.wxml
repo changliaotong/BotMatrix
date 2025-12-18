@@ -1,0 +1,134 @@
+<!-- 首页 - 仪表板 -->
+<view class="container">
+  <!-- 系统状态统计卡片 -->
+  <view class="stats-card fade-in">
+    <view class="stats-item">
+      <view class="stats-value">{{systemStats.onlineBots || 0}}</view>
+      <view class="stats-label">在线机器人</view>
+    </view>
+    <view class="stats-item">
+      <view class="stats-value">{{systemStats.totalGroups || 0}}</view>
+      <view class="stats-label">管理群组</view>
+    </view>
+    <view class="stats-item">
+      <view class="stats-value">{{systemStats.totalMessages || 0}}</view>
+      <view class="stats-label">消息总数</view>
+    </view>
+  </view>
+
+  <!-- 系统状态监控 -->
+  <view class="card fade-in">
+    <view class="card-header">
+      <view class="card-title">系统状态</view>
+      <view class="status-indicator {{systemStatus.online ? 'status-online' : 'status-offline'}}">
+        {{systemStatus.online ? '在线' : '离线'}}
+      </view>
+    </view>
+    <view class="card-content">
+      <view class="list-item">
+        <view class="list-item-content">
+          <view class="list-item-title">CPU使用率</view>
+          <view class="list-item-desc">{{systemStatus.cpuPercent}}%</view>
+        </view>
+        <view class="progress-bar" style="width: 200rpx;">
+          <view class="progress-fill" style="width: {{systemStatus.cpuPercent}}%;"></view>
+        </view>
+      </view>
+      
+      <view class="list-item">
+        <view class="list-item-content">
+          <view class="list-item-title">内存使用率</view>
+          <view class="list-item-desc">{{systemStatus.memoryPercent}}%</view>
+        </view>
+        <view class="progress-bar" style="width: 200rpx;">
+          <view class="progress-fill" style="width: {{systemStatus.memoryPercent}}%;"></view>
+        </view>
+      </view>
+
+      <view class="list-item">
+        <view class="list-item-content">
+          <view class="list-item-title">运行时间</view>
+          <view class="list-item-desc">{{systemStatus.uptime}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 异常告警 -->
+  <view class="card fade-in" wx:if="{{alerts.length > 0}}">
+    <view class="card-header">
+      <view class="card-title">异常告警</view>
+      <view class="status-indicator status-warning">
+        {{alerts.length}} 条
+      </view>
+    </view>
+    <view class="card-content">
+      <block wx:for="{{alerts}}" wx:key="id">
+        <view class="list-item">
+          <view class="list-item-content">
+            <view class="list-item-title">{{item.title}}</view>
+            <view class="list-item-desc">{{item.message}}</view>
+          </view>
+          <view class="list-item-action">
+            <text class="time">{{item.time}}</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 快速操作 -->
+  <view class="card fade-in">
+    <view class="card-header">
+      <view class="card-title">快速操作</view>
+    </view>
+    <view class="card-content">
+      <view class="grid">
+        <view class="grid-item" bindtap="refreshStatus">
+          <view class="grid-content">
+            <text class="grid-icon">🔄</text>
+            <view class="grid-title">刷新状态</view>
+            <view class="grid-desc">更新系统状态</view>
+          </view>
+        </view>
+        
+        <view class="grid-item" bindtap="toggleAllBots" data-enable="{{true}}">
+          <view class="grid-content">
+            <text class="grid-icon">▶️</text>
+            <view class="grid-title">启动全部</view>
+            <view class="grid-desc">启动所有机器人</view>
+          </view>
+        </view>
+        
+        <view class="grid-item" bindtap="toggleAllBots" data-enable="{{false}}">
+          <view class="grid-content">
+            <text class="grid-icon">⏹️</text>
+            <view class="grid-title">停止全部</view>
+            <view class="grid-desc">停止所有机器人</view>
+          </view>
+        </view>
+        
+        <view class="grid-item" bindtap="navigateToLogs">
+          <view class="grid-content">
+            <text class="grid-icon">📋</text>
+            <view class="grid-title">查看日志</view>
+            <view class="grid-desc">系统运行日志</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty" wx:if="{{!isLoaded}}">
+    <text class="empty-image">⏳</text>
+    <view class="empty-text">正在加载数据...</view>
+  </view>
+
+  <!-- 错误状态 -->
+  <view class="error" wx:if="{{loadError}}">
+    <text class="empty-image">❌</text>
+    <view class="error-text">{{loadError}}</view>
+    <button class="btn btn-primary btn-small" bindtap="refreshStatus">重新加载</button>
+  </view>
+</view>

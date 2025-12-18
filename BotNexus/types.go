@@ -44,18 +44,23 @@ type Subscriber struct {
 	User  *User
 }
 
-// User represents a user
+// User represents a user with password hash
 type User struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"is_admin"`
+	ID             int64     `json:"id"`
+	Username       string    `json:"username"`
+	PasswordHash   string    `json:"-"` // 密码哈希，不序列化到JSON
+	IsAdmin        bool      `json:"is_admin"`
+	SessionVersion int       `json:"session_version"` // 用于同步登录状态和强制登出
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // UserClaims for JWT
 type UserClaims struct {
-	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"is_admin"`
+	UserID         int64  `json:"user_id"`
+	Username       string `json:"username"`
+	IsAdmin        bool   `json:"is_admin"`
+	SessionVersion int    `json:"session_version"`
 	jwt.RegisteredClaims
 }
 
@@ -137,4 +142,8 @@ type Manager struct {
 
 	// Connection Stats (New)
 	connectionStats ConnectionStats
+
+	// User Management
+	users      map[string]*User // 用户名 -> 用户信息
+	usersMutex sync.RWMutex     // 用户存储的并发保护
 }
