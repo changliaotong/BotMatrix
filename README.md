@@ -12,7 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
-### v1.1.68 - Message Retry Mechanism
+### v1.1.0 - Overmind Mini-Program Updates
+*   **✅ API Address Fix**: Fixed API and WebSocket address configuration in `miniprogram_api.js` and `app.js` to use correct backend port (3001).
+*   **✅ Data Visualization Enhancement**: Improved system monitoring charts using `chart_util.js` for CPU, memory, and network metrics.
+*   **✅ WebSocket Connection Optimization**: Updated WebSocket configuration for better connection stability.
+*   **✅ Documentation Update**: Updated `PROJECT_SUMMARY.md` and mini-program `README.md` with latest feature status.
+
+### v1.1.70 - Message Retry Mechanism
 *   **🔄 Automatic Message Retry**: Added intelligent retry mechanism for failed bot message deliveries, ensuring reliable message transmission.
 *   **⏱️ Exponential Backoff**: Implemented smart retry timing (1s, 2s, 4s intervals) to prevent system overload during recovery attempts.
 *   **🎯 Max Retry Limit**: Configurable retry attempts (default: 3) with automatic cleanup of expired messages after 5 minutes.
