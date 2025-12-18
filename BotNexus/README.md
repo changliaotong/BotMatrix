@@ -38,7 +38,7 @@ BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器�
 - `POST /api/bot/toggle` - 切换机器人状态
 
 ### WebSocket接口
-- `ws://localhost:3005` - 实时消息推送与系统监控
+- `/ws/subscriber` - 实时消息推送与系统监控 (需JWT认证)
 
 ## 🚀 部署说明
 
@@ -66,6 +66,7 @@ BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器�
 - [x] 登录页面无法在移动端输入
 - [x] 系统统计数据 undefined 显示问题
 - [x] 登录按钮点击无反应问题
+- [x] WebSocket 持续重连与连接错误问题
 
 ## 📚 相关文档
 

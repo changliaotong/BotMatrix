@@ -143,6 +143,9 @@ func (m *Manager) createWebUIHandler() http.Handler {
 	mux.HandleFunc("/api/system/stats", m.JWTMiddleware(m.handleGetSystemStats))
 	mux.HandleFunc("/api/logs", m.JWTMiddleware(m.handleGetLogs))
 
+	// --- WebSocket 接口 (供 WebUI 使用) ---
+	mux.HandleFunc("/ws/subscriber", m.JWTMiddleware(m.handleSubscriberWebSocket))
+
 	// --- 需要管理员权限的接口 ---
 	mux.HandleFunc("/api/admin/routing", m.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

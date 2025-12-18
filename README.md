@@ -20,6 +20,7 @@
 *   **🔗 SSO Integration**: Seamless single sign-on (SSO) between BotNexus and Overmind web UI via secure token passing.
 *   **🌐 Localization Fixes**: Fixed login button functionality and multi-language support for the unified login page.
 *   **📈 Real-time Monitoring**: Added missing system stats endpoints and implemented auto-refresh logic for the monitoring dashboard.
+*   **📡 WebSocket Stability**: Fixed persistent WebSocket connection errors by correcting URL construction and ensuring proper endpoint mapping in the backend.
 
 ### v1.1.80 - UI & Overmind Integration
 *   **🎨 UI Modernization**: Comprehensive overhaul of the management dashboard with improved responsiveness and dark mode support.

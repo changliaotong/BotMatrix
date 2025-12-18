@@ -3272,13 +3272,9 @@
             }
             
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            // Use the same port as the page (external mapped port) instead of hardcoded 3001
-            // Because docker maps 3005:3001, we should connect to window.location.port (which is 3005 if accessing via 3005, or whatever nginx sets)
-            // But wait, the web dashboard is served on 5000.
-            // The user accesses dashboard via 5000.
-            // The WS is on 3005 (external) / 3001 (internal).
-            // We must explicitly use 3005 for WS connection from browser.
-            let wsUrl = `${protocol}//${window.location.hostname}:3005/?role=subscriber`;
+            // Use the same port as the current page and the correct path
+            const wsPort = window.location.port ? `:${window.location.port}` : '';
+            let wsUrl = `${protocol}//${window.location.hostname}${wsPort}/ws/subscriber?role=subscriber`;
             if (authToken) {
                 wsUrl += `&token=${encodeURIComponent(authToken)}`;
             }
@@ -3330,88 +3326,88 @@
                     wsReconnectAttempts++;
                     setTimeout(initWebSocket, WS_RECONNECT_DELAY);
                 };
+
+                wsSubscriber.onmessage = (evt) => {
+                    try {
+                        const data = JSON.parse(evt.data);
+                        console.log("WS Recv:", data); // Debug Log
+
+                        // Handle API Responses
+                        if (data.echo && pendingRequests.has(data.echo)) {
+                            const req = pendingRequests.get(data.echo);
+                            clearTimeout(req.timeout);
+                            pendingRequests.delete(data.echo);
+                            req.resolve(data);
+                            // Optional: Don't log API responses to event log to reduce noise
+                            // return; 
+                        }
+
+                        // Auto-refresh bot list on connection/nickname update
+                        if (data.echo === 'internal_get_login_info' || 
+                            (data.post_type === 'meta_event' && data.meta_event_type === 'lifecycle')) {
+                            setTimeout(updateBots, 500); // Wait a bit for state to settle
+                        }
+
+                        if (data.post_type === 'log') {
+                            // Check filter
+                            const selector = document.getElementById('log-bot-selector');
+                            const filter = selector ? selector.value : '';
+                            const log = data.data;
+                            const selfId = data.self_id || '';
+                            
+                            // Auto-refresh bot list on client connection logs
+                            if (log.message && log.message.includes('Client connected:')) {
+                                setTimeout(updateBots, 1000); // Wait a bit longer for connection to settle
+                            }
+
+                            if (filter === '' || (filter === 'system' && !selfId) || filter === selfId) {
+                                const container = document.getElementById('log-container');
+                                if (container) {
+                                    const div = document.createElement('div');
+                                    div.className = 'log-entry';
+                                    div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
+                                    container.appendChild(div);
+                                    if (container.children.length > 500) { // 限制日志条目数量
+                                        container.removeChild(container.firstChild);
+                                    }
+                                    if (document.getElementById('auto-refresh-logs').checked) {
+                                        container.scrollTop = container.scrollHeight;
+                                    }
+                                }
+                            }
+
+                            // Full Page Log Update
+                            const selectorFull = document.getElementById('log-bot-selector-full');
+                            const filterFull = selectorFull ? selectorFull.value : '';
+                            if (filterFull === '' || (filterFull === 'system' && !selfId) || filterFull === selfId) {
+                                const containerFull = document.getElementById('log-container-full');
+                                if (containerFull) {
+                                    const div = document.createElement('div');
+                                    div.className = 'log-entry';
+                                    div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
+                                    containerFull.appendChild(div);
+                                    if (containerFull.children.length > 500) { // 减少日志条目限制，节省内存
+                                        containerFull.removeChild(containerFull.firstChild);
+                                    }
+                                    if (document.getElementById('auto-refresh-logs-full').checked) {
+                                        containerFull.scrollTop = containerFull.scrollHeight;
+                                    }
+                                }
+                            }
+                            return;
+                        }
+                        addEventLog(data);
+                    } catch (e) {
+                        console.error('WS Parse Error', e);
+                    }
+                };
                 
             } catch (error) {
                 console.error('创建WebSocket失败:', error);
                 wsReconnectAttempts++;
                 setTimeout(initWebSocket, WS_RECONNECT_DELAY);
             }
-        };
-        
-        wsSubscriber.onmessage = (evt) => {
-            try {
-                const data = JSON.parse(evt.data);
-                console.log("WS Recv:", data); // Debug Log
-
-                // Handle API Responses
-                if (data.echo && pendingRequests.has(data.echo)) {
-                    const req = pendingRequests.get(data.echo);
-                    clearTimeout(req.timeout);
-                    pendingRequests.delete(data.echo);
-                    req.resolve(data);
-                    // Optional: Don't log API responses to event log to reduce noise
-                    // return; 
-                }
-
-                // Auto-refresh bot list on connection/nickname update
-                if (data.echo === 'internal_get_login_info' || 
-                    (data.post_type === 'meta_event' && data.meta_event_type === 'lifecycle')) {
-                    setTimeout(updateBots, 500); // Wait a bit for state to settle
-                }
-
-                if (data.post_type === 'log') {
-                    // Check filter
-                    const selector = document.getElementById('log-bot-selector');
-                    const filter = selector ? selector.value : '';
-                    const log = data.data;
-                    const selfId = data.self_id || '';
-                    
-                    // Auto-refresh bot list on client connection logs
-                    if (log.message && log.message.includes('Client connected:')) {
-                        setTimeout(updateBots, 1000); // Wait a bit longer for connection to settle
-                    }
-
-                    if (filter === '' || (filter === 'system' && !selfId) || filter === selfId) {
-                        const container = document.getElementById('log-container');
-                        if (container) {
-                            const div = document.createElement('div');
-                            div.className = 'log-entry';
-                            div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
-                            container.appendChild(div);
-                            if (container.children.length > 500) { // 限制日志条目数量
-                                container.removeChild(container.firstChild);
-                            }
-                            if (document.getElementById('auto-refresh-logs').checked) {
-                                container.scrollTop = container.scrollHeight;
-                            }
-                        }
-                    }
-
-                    // Full Page Log Update
-                    const selectorFull = document.getElementById('log-bot-selector-full');
-                    const filterFull = selectorFull ? selectorFull.value : '';
-                    if (filterFull === '' || (filterFull === 'system' && !selfId) || filterFull === selfId) {
-                        const containerFull = document.getElementById('log-container-full');
-                        if (containerFull) {
-                            const div = document.createElement('div');
-                            div.className = 'log-entry';
-                            div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
-                            containerFull.appendChild(div);
-                            if (containerFull.children.length > 500) { // 减少日志条目限制，节省内存
-                                containerFull.removeChild(containerFull.firstChild);
-                            }
-                            if (document.getElementById('auto-refresh-logs-full').checked) {
-                                containerFull.scrollTop = containerFull.scrollHeight;
-                            }
-                        }
-                    }
-                    return;
-                }
-                addEventLog(data);
-            } catch (e) {
-                console.error('WS Parse Error', e);
-            }
-        };
+        }
 
         // --- API Helper ---
         async function callBotApi(action, params = {}) {
