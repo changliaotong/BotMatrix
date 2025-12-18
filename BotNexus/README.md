@@ -18,96 +18,54 @@ BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器�
 ## 🔐 认证机制
 
 ### 登录流程
-1. 前端发送POST请求到 `/login`
-2. 后端验证用户名密码
+1. 前端发送POST请求到 `/api/login`
+2. 后端验证用户名密码（从 SQLite 数据库加载）
 3. 返回JWT令牌
 4. 前端存储令牌到localStorage
 
-### 已知问题
-- 前端使用 `/api/login`，后端实际为 `/login`
-- Redis重启后密码丢失问题
-
-### 解决方案
-```javascript
-// 临时解决方案 - 直接设置token
-localStorage.setItem('token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
-
-// 或者使用正确的登录端点
-fetch('/login', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({username: 'admin', password: 'admin123'})
-});
-```
+### 安全特性
+- **SQLite 持久化**: 用户数据永久存储在本地数据库，解决 Redis 重启导致的数据丢失。
+- **密码加密**: 使用 bcrypt 强哈希算法存储密码。
+- **SSO 登录**: 支持跨系统（BotNexus & Overmind）的令牌透传。
 
 ## 📡 API接口
 
 ### 认证相关
-- `POST /login` - 用户登录
-- `GET /api/stats` - 系统状态
+- `POST /api/login` - 用户登录
+- `GET /api/user/info` - 获取当前用户信息
+- `GET /api/system/stats` - 系统运行详细统计
 - `GET /api/bots` - 机器人列表
 - `POST /api/bot/toggle` - 切换机器人状态
 
 ### WebSocket接口
-- `ws://localhost:3005` - 实时消息推送
+- `ws://localhost:3005` - 实时消息推送与系统监控
 
 ## 🚀 部署说明
 
 ### 环境要求
 - Go 1.19+
-- Redis 6.0+
-- Node.js 16+ (开发环境)
+- SQLite 3 (自动初始化)
+- Redis 6.0+ (用于消息缓存，非必须)
 
 ### 启动步骤
-1. 启动Redis服务
-2. 运行BotNexus主程序
-3. 访问Web界面
-
-### 配置说明
-- 端口配置: 默认5000 (HTTP), 3005 (WebSocket)
-- Redis配置: 默认localhost:6379
-- 日志配置: 支持文件和控制台输出
-
-## 🔧 开发指南
-
-### 前端开发
-- 使用原生JavaScript
-- 支持现代浏览器
-- 响应式设计
-
-### API开发
-- RESTful API设计
-- JSON数据格式
-- 统一的错误处理
-
-### WebSocket开发
-- 实时状态推送
-- 断线重连机制
-- 消息队列处理
-
-## 🐛 已知问题
-
-1. **认证问题**: 前端/后端登录端点不匹配
-2. **Redis依赖**: 密码存储在Redis，重启后丢失
-3. **错误处理**: 部分API错误信息不够友好
-4. **性能优化**: 大量机器人时性能待优化
+1. 运行BotNexus主程序
+2. 首次启动会自动创建 `bot_nexus.db` 数据库文件
+3. 默认管理员账号: `admin`, 默认密码: `admin123` (可在 `config.go` 修改)
+4. 访问Web界面: `http://localhost:5000`
 
 ## 🎯 未来规划
-
-### 短期目标
-- [ ] 修复认证端点不匹配问题
-- [ ] 改进密码存储机制
-- [ ] 优化错误处理
-
-### 中期目标
-- [ ] 支持更多机器人平台
-- [ ] 增加权限管理
-- [ ] 完善日志系统
 
 ### 长期目标
 - [ ] 插件化架构
 - [ ] 分布式部署
 - [ ] AI智能管理
+
+## 🐛 已修复问题
+- [x] 前端/后端登录端点不匹配
+- [x] Redis 依赖导致的密码丢失
+- [x] 登录页面无法在移动端输入
+- [x] 系统统计数据 undefined 显示问题
+- [x] 登录按钮点击无反应问题
 
 ## 📚 相关文档
 

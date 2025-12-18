@@ -12,6 +12,20 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.81 - Unified Login & SQLite Persistence
+*   **🔐 Unified Login System**: Redesigned a modern, full-page responsive login interface consistent across the ecosystem.
+*   **💾 SQLite Database Integration**: Replaced temporary Redis user storage with persistent SQLite database, resolving the issue of losing passwords after service restarts.
+*   **🛡️ Enhanced Security**: Improved admin initialization with automatic password hashing (bcrypt) and secure session management.
+*   **📊 Comprehensive Dashboard**: Fixed system statistics rendering, ensuring all metrics (CPU, Memory, Goroutines, Bot Count) are displayed accurately without "undefined" values.
+*   **🔗 SSO Integration**: Seamless single sign-on (SSO) between BotNexus and Overmind web UI via secure token passing.
+*   **🌐 Localization Fixes**: Fixed login button functionality and multi-language support for the unified login page.
+*   **📈 Real-time Monitoring**: Added missing system stats endpoints and implemented auto-refresh logic for the monitoring dashboard.
+
+### v1.1.80 - UI & Overmind Integration
+*   **🎨 UI Modernization**: Comprehensive overhaul of the management dashboard with improved responsiveness and dark mode support.
+*   **🧠 Overmind Web Integration**: Embedded Overmind's powerful management tools directly into the BotNexus dashboard.
+*   **📊 Trend Visualization**: Added historical trend charts for CPU, Memory, and Message throughput.
+
 ### v1.1.70 - Message Retry Mechanism
 *   **🔄 Automatic Message Retry**: Added intelligent retry mechanism for failed bot message deliveries, ensuring reliable message transmission.
 *   **⏱️ Exponential Backoff**: Implemented smart retry timing (1s, 2s, 4s intervals) to prevent system overload during recovery attempts.
@@ -338,7 +352,7 @@ docker-compose up -d --build
 ```
 
 ### 2. Access
-*   **Dashboard**: `http://localhost:5000` (Default Account: `admin` / `123456`)
+*   **Dashboard**: `http://localhost:5000` (Default Account: `admin` / `admin123`)
 *   **WebSocket Gateway**: `ws://localhost:3005`
 
 ### 3. Connect a Bot

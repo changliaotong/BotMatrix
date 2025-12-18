@@ -1,16 +1,19 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
-	"github.com/redis/go-redis/v9"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -33,118 +36,51 @@ func checkPassword(password, hash string) bool {
 	return err == nil
 }
 
-// saveUsersToRedis 将用户数据保存到Redis
-func (m *Manager) saveUsersToRedis() error {
-	if m.rdb == nil {
-		return nil // Redis未连接，跳过保存
-	}
-
-	// 锁定用户存储
-	m.usersMutex.RLock()
-	defer m.usersMutex.RUnlock()
-
-	// 将用户数据转换为JSON
-	usersJSON, err := json.Marshal(m.users)
-	if err != nil {
-		return err
-	}
-
-	// 保存到Redis，过期时间设为7天
-	err = m.rdb.Set(context.Background(), "botnexus:users", usersJSON, 7*24*time.Hour).Err()
-	if err != nil {
-		return err
-	}
-
-	log.Printf("用户数据已保存到Redis，共 %d 个用户", len(m.users))
-	return nil
-}
-
-// loadUsersFromRedis 从Redis加载用户数据
-func (m *Manager) loadUsersFromRedis() error {
-	if m.rdb == nil {
-		return nil // Redis未连接，跳过加载
-	}
-
-	// 从Redis获取用户数据
-	usersJSON, err := m.rdb.Get(context.Background(), "botnexus:users").Result()
-	if err != nil {
-		if err == redis.Nil {
-			log.Printf("Redis中无用户数据，将使用默认配置")
-			return nil // Redis中没有用户数据，正常返回
-		}
-		return err
-	}
-
-	// 解析JSON到用户映射
-	users := make(map[string]*User)
-	err = json.Unmarshal([]byte(usersJSON), &users)
-	if err != nil {
-		return err
-	}
-
-	// 验证用户数据完整性
-	validUsers := make(map[string]*User)
-	for username, user := range users {
-		// 检查必要字段
-		if user.Username == "" || user.PasswordHash == "" {
-			log.Printf("从Redis加载的用户数据不完整，忽略用户: %s", username)
-			continue
-		}
-		validUsers[username] = user
-	}
-
-	// 锁定并更新用户存储
-	m.usersMutex.Lock()
-	defer m.usersMutex.Unlock()
-
-	// 更新用户数据
-	m.users = validUsers
-	log.Printf("从Redis加载用户数据成功，共 %d 个有效用户", len(m.users))
-
-	// 如果没有有效用户，初始化默认管理员
-	if len(m.users) == 0 {
-		log.Printf("Redis中没有有效用户，将重新初始化默认管理员")
-		m.initDefaultAdmin()
-	}
-
-	return nil
-}
-
 // initDefaultAdmin 初始化默认管理员用户
 // 注意：调用此函数时需要确保已经持有usersMutex锁
 func (m *Manager) initDefaultAdmin() {
-	// 检查是否已存在管理员用户
+	log.Printf("[INFO] 正在初始化默认管理员检测...")
+
+	// 检查是否已存在管理员用户 (先查缓存)
 	if _, exists := m.users["admin"]; exists {
-		return // 已存在，无需初始化
+		log.Printf("[INFO] 管理员用户 'admin' 已存在于内存缓存中，跳过初始化")
+		return
+	}
+
+	// 再次检查数据库 (双重检查)
+	var count int
+	err := m.db.QueryRow("SELECT COUNT(*) FROM users WHERE username = 'admin'").Scan(&count)
+	if err == nil && count > 0 {
+		log.Printf("[INFO] 管理员用户 'admin' 已存在于数据库中，正在重新加载...")
+		m.loadUsersFromDBNoLock()
+		return
 	}
 
 	// 对默认密码进行哈希处理
 	hashedPassword, err := hashPassword(DEFAULT_ADMIN_PASSWORD)
 	if err != nil {
-		log.Printf("初始化默认管理员密码哈希失败: %v", err)
+		log.Printf("[ERROR] 初始化默认管理员密码哈希失败: %v", err)
 		return
 	}
 
 	// 创建默认管理员用户
 	adminUser := &User{
-		ID:           1,
-		Username:     "admin",
-		PasswordHash: hashedPassword,
-		IsAdmin:      true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		Username:       "admin",
+		PasswordHash:   hashedPassword,
+		IsAdmin:        true,
+		SessionVersion: 1,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	// 存储到用户映射
 	m.users["admin"] = adminUser
-	log.Printf("默认管理员用户已初始化，用户名: admin, 密码: %s", DEFAULT_ADMIN_PASSWORD)
+	log.Printf("[INFO] 默认管理员用户已创建，用户名: admin, 初始密码: %s", DEFAULT_ADMIN_PASSWORD)
 
-	// 保存到Redis
-	go func() {
-		if err := m.saveUsersToRedis(); err != nil {
-			log.Printf("保存默认管理员用户到Redis失败: %v", err)
-		}
-	}()
+	// 保存到数据库
+	if err := m.saveUserToDB(adminUser); err != nil {
+		log.Printf("[ERROR] 保存默认管理员用户到数据库失败: %v", err)
+	}
 }
 
 // generateToken 生成JWT token
@@ -172,7 +108,6 @@ func (m *Manager) generateToken(user *User) (string, error) {
 // handleLogin 处理登录请求
 func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	log.Printf("收到登录请求，客户端地址: %s", r.RemoteAddr)
 
 	// 解析请求体
 	var loginData struct {
@@ -182,7 +117,7 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&loginData)
 	if err != nil {
-		log.Printf("登录请求解析失败: %v", err)
+		log.Printf("[WARN] 登录请求解析失败: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -191,15 +126,41 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("登录尝试 - 用户名: %s", loginData.Username)
+	log.Printf("[INFO] 登录尝试 - 用户名: %s, 客户端IP: %s", loginData.Username, r.RemoteAddr)
 
 	// 验证用户名和密码
 	m.usersMutex.RLock()
 	user, exists := m.users[loginData.Username]
 	m.usersMutex.RUnlock()
 
+	// 如果内存中不存在，尝试从数据库加载
 	if !exists {
-		log.Printf("登录失败 - 用户不存在: %s", loginData.Username)
+		log.Printf("[INFO] 用户 %s 不在内存缓存中，尝试从数据库查询...", loginData.Username)
+		// 简单的单用户查询
+		row := m.db.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", loginData.Username)
+		var u User
+		var createdAt, updatedAt string
+		err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.SessionVersion, &createdAt, &updatedAt)
+		if err == nil {
+			if createdAt != "" {
+				u.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+			}
+			if updatedAt != "" {
+				u.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+			}
+			user = &u
+			exists = true
+
+			// 更新内存缓存
+			m.usersMutex.Lock()
+			m.users[u.Username] = &u
+			m.usersMutex.Unlock()
+			log.Printf("[INFO] 从数据库成功加载用户: %s", u.Username)
+		}
+	}
+
+	if !exists {
+		log.Printf("[WARN] 登录失败 - 用户不存在: %s", loginData.Username)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -208,8 +169,9 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 验证密码
 	if !checkPassword(loginData.Password, user.PasswordHash) {
-		log.Printf("登录失败 - 密码错误: %s", loginData.Username)
+		log.Printf("[WARN] 登录失败 - 密码不匹配: %s", loginData.Username)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -221,6 +183,7 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// 生成JWT token
 	token, err := m.generateToken(user)
 	if err != nil {
+		log.Printf("[ERROR] Token生成失败: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -229,11 +192,18 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role := "user"
+	if user.IsAdmin {
+		role = "admin"
+	}
+
+	log.Printf("[INFO] 登录成功 - 用户: %s, 角色: %s", user.Username, role)
+
 	// 返回成功响应
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"token":   token,
-		"role":    user.IsAdmin,
+		"role":    role,
 		"user": map[string]interface{}{
 			"id":         user.ID,
 			"username":   user.Username,
@@ -247,32 +217,147 @@ func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// 获取连接统计
-	m.connectionStats.Mutex.Lock()
-	botDurations := make(map[string]string)
-	workerDurations := make(map[string]string)
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 
-	for k, v := range m.connectionStats.BotConnectionDurations {
-		botDurations[k] = v.String()
+	m.connectionStats.Mutex.RLock()
+	defer m.connectionStats.Mutex.RUnlock()
+
+	m.statsMutex.RLock()
+	defer m.statsMutex.RUnlock()
+
+	// 计算在线/离线机器人
+	onlineBots := len(m.bots)
+	totalBots := len(m.BotStats)
+	offlineBots := totalBots - onlineBots
+	if offlineBots < 0 {
+		offlineBots = 0
 	}
-	for k, v := range m.connectionStats.WorkerConnectionDurations {
-		workerDurations[k] = v.String()
+
+	// 系统运行时信息
+	var mStats runtime.MemStats
+	runtime.ReadMemStats(&mStats)
+
+	// CPU 信息
+	cpuInfos, _ := cpu.Info()
+	cpuModel := "Unknown"
+	cpuCoresPhysical := 0
+	cpuCoresLogical := 0
+	cpuFreq := 0.0
+	if len(cpuInfos) > 0 {
+		cpuModel = cpuInfos[0].ModelName
+		cpuCoresPhysical = int(cpuInfos[0].Cores)
+		// 逻辑核心通常通过 cpu.Counts(true) 获取
+		logical, _ := cpu.Counts(true)
+		cpuCoresLogical = logical
+		cpuFreq = cpuInfos[0].Mhz
+	}
+
+	// CPU 使用率
+	cpuPercent, _ := cpu.Percent(0, false)
+	var cpuUsage float64
+	if len(cpuPercent) > 0 {
+		cpuUsage = cpuPercent[0]
+	}
+
+	// OS 信息
+	hi, _ := host.Info()
+
+	m.HistoryMutex.RLock()
+	cpuTrend := append([]float64{}, m.CPUTrend...)
+	memTrend := append([]uint64{}, m.MemTrend...)
+	msgTrend := append([]int64{}, m.MsgTrend...)
+	sentTrend := append([]int64{}, m.SentTrend...)
+	recvTrend := append([]int64{}, m.RecvTrend...)
+	m.HistoryMutex.RUnlock()
+
+	stats := map[string]interface{}{
+		"goroutines":          runtime.NumGoroutine(),
+		"memory_alloc":        mStats.Alloc,
+		"memory_total":        mStats.Sys,
+		"bot_count":           onlineBots,
+		"bot_count_offline":   offlineBots,
+		"bot_count_total":     totalBots,
+		"active_groups_today": len(m.GroupStatsToday),
+		"active_groups":       len(m.GroupStats),
+		"active_users_today":  len(m.UserStatsToday),
+		"active_users":        len(m.UserStats),
+		"message_count":       m.TotalMessages,
+		"sent_message_count":  m.SentMessages,
+		"cpu_usage":           cpuUsage,
+		"cpu_model":           cpuModel,
+		"cpu_cores_physical":  cpuCoresPhysical,
+		"cpu_cores_logical":   cpuCoresLogical,
+		"cpu_freq":            cpuFreq,
+		"os_platform":         hi.Platform,
+		"os_version":          hi.PlatformVersion,
+		"os_arch":             hi.KernelArch,
+		"timestamp":           time.Now().Format("2006-01-02 15:04:05"),
+		// 详情数据
+		"bots_detail": m.BotDetailedStats,
+		// 趋势数据
+		"cpu_trend":  cpuTrend,
+		"mem_trend":  memTrend,
+		"msg_trend":  msgTrend,
+		"sent_trend": sentTrend,
+		"recv_trend": recvTrend,
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}
+
+// handleGetSystemStats 获取详细的系统运行统计
+func (m *Manager) handleGetSystemStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// 获取CPU使用率
+	cpuPercent, _ := cpu.Percent(time.Second, false)
+	var cpuUsage float64
+	if len(cpuPercent) > 0 {
+		cpuUsage = cpuPercent[0]
+	}
+
+	// 获取内存使用情况
+	vm, _ := mem.VirtualMemory()
+
+	// 获取主机信息
+	hi, _ := host.Info()
+
+	// 获取前5个CPU消耗最高的进程
+	procs, _ := process.Processes()
+	type procInfo struct {
+		Pid    int32   `json:"pid"`
+		Name   string  `json:"name"`
+		CPU    float64 `json:"cpu"`
+		Memory uint64  `json:"memory"`
+	}
+	var processList []procInfo
+	for i, p := range procs {
+		if i > 50 {
+			break
+		} // 限制扫描数量
+		name, _ := p.Name()
+		cp, _ := p.CPUPercent()
+		mp, _ := p.MemoryInfo()
+		if mp != nil {
+			processList = append(processList, procInfo{
+				Pid:    p.Pid,
+				Name:   name,
+				CPU:    cp,
+				Memory: mp.RSS,
+			})
+		}
 	}
 
 	stats := map[string]interface{}{
-		"bots": map[string]interface{}{
-			"count":       len(m.bots),
-			"durations":   botDurations,
-			"disconnects": m.connectionStats.BotDisconnectReasons,
-		},
-		"workers": map[string]interface{}{
-			"count":       len(m.workers),
-			"durations":   workerDurations,
-			"disconnects": m.connectionStats.WorkerDisconnectReasons,
-		},
-		"timestamp": time.Now().Format("2006-01-02 15:04:05"),
+		"cpu_usage": cpuUsage,
+		"mem_usage": vm.UsedPercent,
+		"mem_total": vm.Total,
+		"mem_free":  vm.Free,
+		"host_info": hi,
+		"processes": processList,
+		"timestamp": time.Now().Unix(),
 	}
-	m.connectionStats.Mutex.Unlock()
 
 	json.NewEncoder(w).Encode(stats)
 }
@@ -852,11 +937,33 @@ func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// 初始化Bot详细统计
+	m.statsMutex.Lock()
+	defer m.statsMutex.Unlock()
+
+	// 初始化统计数据结构 (如果需要)
 	if m.BotDetailedStats == nil {
 		m.BotDetailedStats = make(map[string]*BotStatDetail)
 	}
+	if m.UserStats == nil {
+		m.UserStats = make(map[int64]int64)
+	}
+	if m.GroupStats == nil {
+		m.GroupStats = make(map[int64]int64)
+	}
+	if m.BotStats == nil {
+		m.BotStats = make(map[string]int64)
+	}
+	if m.UserStatsToday == nil {
+		m.UserStatsToday = make(map[int64]int64)
+	}
+	if m.GroupStatsToday == nil {
+		m.GroupStatsToday = make(map[int64]int64)
+	}
+	if m.BotStatsToday == nil {
+		m.BotStatsToday = make(map[string]int64)
+	}
 
+	// 更新Bot详细统计
 	if _, exists := m.BotDetailedStats[botID]; !exists {
 		m.BotDetailedStats[botID] = &BotStatDetail{
 			Users:  make(map[int64]int64),
@@ -870,32 +977,71 @@ func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
 
 	if userID > 0 {
 		stats.Users[userID]++
+		m.UserStats[userID]++
+		m.UserStatsToday[userID]++
 	}
 	if groupID > 0 {
 		stats.Groups[groupID]++
+		m.GroupStats[groupID]++
+		m.GroupStatsToday[groupID]++
 	}
 
-	// 更新全局统计
-	if m.UserStats == nil {
-		m.UserStats = make(map[int64]int64)
-	}
-	if m.GroupStats == nil {
-		m.GroupStats = make(map[int64]int64)
-	}
-
-	m.UserStats[userID]++
-	m.GroupStats[groupID]++
+	// 更新全局和今日统计
+	m.BotStats[botID]++
+	m.BotStatsToday[botID]++
 	m.TotalMessages++
 }
 
 // StartTrendCollection 启动趋势收集
 func (m *Manager) StartTrendCollection() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// 趋势收集逻辑（静默执行，不打印日志）
-		// m.LogDebug("Collecting trends...")
+		m.HistoryMutex.Lock()
+
+		// 获取系统指标
+		var mStats runtime.MemStats
+		runtime.ReadMemStats(&mStats)
+
+		cpuPercent, _ := cpu.Percent(0, false)
+		var currentCPU float64
+		if len(cpuPercent) > 0 {
+			currentCPU = cpuPercent[0]
+		}
+
+		// 更新趋势数组
+		m.CPUTrend = append(m.CPUTrend, currentCPU)
+		m.MemTrend = append(m.MemTrend, mStats.Alloc)
+
+		// 消息增量计算
+		m.statsMutex.RLock()
+		total := m.TotalMessages
+		sent := m.SentMessages
+		m.statsMutex.RUnlock()
+		
+		if len(m.MsgTrend) > 0 {
+			// 这里我们存的是增量，但前端代码逻辑可能需要处理
+			// 实际上前端 index.html 2402行 在做 Moving Sum，所以我们这里存增量是对的
+		}
+
+		// 简单起见，我们先存当前的 Total，然后在 GetStats 里计算增量或者让前端处理
+		// 修正：前端期望的是每个时间点的消息数，它会自己计算增量
+		m.MsgTrend = append(m.MsgTrend, total)
+		m.SentTrend = append(m.SentTrend, sent)
+		m.RecvTrend = append(m.RecvTrend, total-sent)
+
+		// 保持长度，限制为 60 个点 (5秒一个点，共5分钟)
+		maxPoints := 60
+		if len(m.CPUTrend) > maxPoints {
+			m.CPUTrend = m.CPUTrend[1:]
+			m.MemTrend = m.MemTrend[1:]
+			m.MsgTrend = m.MsgTrend[1:]
+			m.SentTrend = m.SentTrend[1:]
+			m.RecvTrend = m.RecvTrend[1:]
+		}
+
+		m.HistoryMutex.Unlock()
 	}
 }
 
@@ -918,6 +1064,29 @@ func (m *Manager) handleGetUserInfo(w http.ResponseWriter, r *http.Request) {
 	m.usersMutex.RLock()
 	user, exists := m.users[claims.Username]
 	m.usersMutex.RUnlock()
+
+	// 如果内存中不存在，尝试从数据库加载
+	if !exists {
+		row := m.db.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", claims.Username)
+		var u User
+		var createdAt, updatedAt string
+		err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.SessionVersion, &createdAt, &updatedAt)
+		if err == nil {
+			if createdAt != "" {
+				u.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+			}
+			if updatedAt != "" {
+				u.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+			}
+			user = &u
+			exists = true
+
+			// 更新内存缓存
+			m.usersMutex.Lock()
+			m.users[u.Username] = &u
+			m.usersMutex.Unlock()
+		}
+	}
 
 	if !exists {
 		w.WriteHeader(http.StatusNotFound)
@@ -1006,8 +1175,10 @@ func (m *Manager) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	user.PasswordHash = newHash
 	user.UpdatedAt = time.Now()
 
-	// 保存到Redis
-	go m.saveUsersToRedis()
+	// 保存到数据库
+	if err := m.saveUserToDB(user); err != nil {
+		log.Printf("更新密码到数据库失败: %v", err)
+	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,

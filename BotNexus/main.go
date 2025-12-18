@@ -27,24 +27,25 @@ const VERSION = "80"
 func main() {
 	log.Printf("启动 BotNexus 服务... 版本号: %s", VERSION)
 
-	// 创建管理器
+	// 创建管理器 (内部会初始化数据库和管理员)
 	manager := NewManager()
 
 	// 启动超时检测
 	go manager.StartWorkerTimeoutDetection()
 	go manager.StartBotTimeoutDetection()
 
+	// 启动统计信息收集
+	go manager.StartTrendCollection()
+
 	// 启动统计信息重置定时器
 	go manager.StartStatsResetTimer()
 
-	// 定期保存用户数据到Redis
+	// 定期保存统计数据 (如果需要)
 	go func() {
-		ticker := time.NewTicker(30 * time.Minute) // 每30分钟保存一次
+		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			if err := manager.saveUsersToRedis(); err != nil {
-				log.Printf("[WARN] 定期保存用户数据失败: %v", err)
-			}
+			// 这里可以保存其他非持久化数据
 		}
 	}()
 
@@ -52,6 +53,7 @@ func main() {
 	http.HandleFunc("/login", manager.handleLogin)
 	http.HandleFunc("/api/login", manager.handleLogin)
 	http.HandleFunc("/api/stats", manager.JWTMiddleware(manager.handleGetStats))
+	http.HandleFunc("/api/system/stats", manager.JWTMiddleware(manager.handleGetSystemStats))
 	http.HandleFunc("/api/me", manager.JWTMiddleware(manager.handleGetUserInfo))
 	http.HandleFunc("/api/user/info", manager.JWTMiddleware(manager.handleGetUserInfo))
 	http.HandleFunc("/api/user/password", manager.JWTMiddleware(manager.handleChangePassword))
@@ -108,11 +110,10 @@ func main() {
 	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 保存用户数据到Redis
-	if err := manager.saveUsersToRedis(); err != nil {
-		log.Printf("[WARN] 关闭时保存用户数据失败: %v", err)
-	} else {
-		log.Printf("[INFO] 关闭时已保存用户数据到Redis")
+	// 关闭数据库连接
+	if manager.db != nil {
+		manager.db.Close()
+		log.Printf("[INFO] 数据库已关闭")
 	}
 
 	// 关闭Redis连接
@@ -139,6 +140,7 @@ func (m *Manager) createWebUIHandler() http.Handler {
 	mux.HandleFunc("/api/bots", m.JWTMiddleware(m.handleGetBots))
 	mux.HandleFunc("/api/workers", m.JWTMiddleware(m.handleGetWorkers))
 	mux.HandleFunc("/api/stats", m.JWTMiddleware(m.handleGetStats))
+	mux.HandleFunc("/api/system/stats", m.JWTMiddleware(m.handleGetSystemStats))
 	mux.HandleFunc("/api/logs", m.JWTMiddleware(m.handleGetLogs))
 
 	// --- 需要管理员权限的接口 ---
@@ -163,7 +165,7 @@ func (m *Manager) createWebUIHandler() http.Handler {
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
 
 	// Overmind (Flutter Web) 服务
-	overmindDir := "./overmind"
+	overmindDir := "../Overmind/build/web"
 	if _, err := os.Stat("/app/overmind"); err == nil {
 		overmindDir = "/app/overmind"
 	}
@@ -247,13 +249,22 @@ func NewManager() *Manager {
 		users:      make(map[string]*User),
 		usersMutex: sync.RWMutex{},
 	}
+	// 初始化数据库
+	if err := m.initDB(); err != nil {
+		log.Printf("[ERROR] 数据库初始化失败: %v", err)
+	} else {
+		// 从数据库加载用户
+		if err := m.loadUsersFromDB(); err != nil {
+			log.Printf("[WARN] 从数据库加载用户失败: %v", err)
+		}
+	}
 
-	// 确保默认管理员用户被初始化
+	// 初始化默认管理员用户 (如果不存在)
 	m.usersMutex.Lock()
 	m.initDefaultAdmin()
 	m.usersMutex.Unlock()
 
-	// 初始化Redis
+	// 初始化Redis (用于统计信息等非持久化数据)
 	m.rdb = redis.NewClient(&redis.Options{
 		Addr:     REDIS_ADDR,
 		Password: REDIS_PWD,
@@ -268,16 +279,7 @@ func NewManager() *Manager {
 		m.rdb = nil
 	} else {
 		log.Printf("[INFO] 已连接到Redis")
-		// 从Redis加载用户数据
-		if err := m.loadUsersFromRedis(); err != nil {
-			log.Printf("[WARN] 从Redis加载用户数据失败: %v", err)
-		}
 	}
-
-	// 初始化默认管理员用户
-	m.usersMutex.Lock()
-	m.initDefaultAdmin()
-	m.usersMutex.Unlock()
 
 	return m
 }

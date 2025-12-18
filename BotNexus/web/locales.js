@@ -2,6 +2,9 @@ const translations = {
     "zh-CN": {
         "app_title": "BotMatrix Manager",
         "login_title": "系统登录",
+        "login_subtitle": "统一管理平台",
+        "login_placeholder_user": "请输入用户名",
+        "login_placeholder_pass": "请输入密码",
         "username": "用户名",
         "password": "密码",
         "login_btn": "登录",
@@ -745,6 +748,9 @@ const translations = {
     "en": {
         "app_title": "BotMatrix Manager",
         "login_title": "System Login",
+        "login_subtitle": "Unified Management Platform",
+        "login_placeholder_user": "Enter username",
+        "login_placeholder_pass": "Enter password",
         "username": "Username",
         "password": "Password",
         "login_btn": "Login",

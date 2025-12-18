@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"sync"
 	"time"
 
@@ -139,6 +140,12 @@ type Manager struct {
 
 	// Time Series Stats (New)
 	HistoryMutex sync.RWMutex
+	CPUTrend     []float64 `json:"cpu_trend"`
+	MemTrend     []uint64  `json:"mem_trend"`
+	MsgTrend     []int64   `json:"msg_trend"`
+	SentTrend    []int64   `json:"sent_trend"`
+	RecvTrend    []int64   `json:"recv_trend"`
+	TrendLabels  []string  `json:"trend_labels"`
 
 	// Connection Stats (New)
 	connectionStats ConnectionStats
@@ -146,4 +153,5 @@ type Manager struct {
 	// User Management
 	users      map[string]*User // 用户名 -> 用户信息
 	usersMutex sync.RWMutex     // 用户存储的并发保护
+	db         *sql.DB          // SQLite 数据库连接
 }

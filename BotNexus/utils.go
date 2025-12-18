@@ -12,32 +12,13 @@ import (
 
 // JWT相关 - UserClaims定义已从types.go导入
 
-// JWT密钥 - 应该从环境变量读取
-var jwtSecret = []byte("your-secret-key-change-this")
-
-// 生成JWT令牌
-func GenerateToken(userID int64, username string, isAdmin bool) (string, error) {
-	claims := UserClaims{
-		UserID:   userID,
-		Username: username,
-		IsAdmin:  isAdmin,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
-}
-
 // 验证JWT令牌
 func ValidateToken(tokenString string) (*UserClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return jwtSecret, nil
+		return []byte(JWT_SECRET), nil
 	})
 
 	if err != nil {

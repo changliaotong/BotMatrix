@@ -161,6 +161,68 @@
         .log-level-ERROR { color: var(--color-log-error); }
         .log-level-DEBUG { color: var(--color-log-debug); }
 
+        /* Login Page Styles */
+        .login-page {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: all 0.5s ease;
+            opacity: 1;
+            visibility: visible;
+        }
+        [data-theme="dark"] .login-page {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .login-card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 1rem 3rem rgba(0,0,0,0.175);
+            width: 100%;
+            max-width: 450px;
+            animation: slideUp 0.5s ease-out;
+            position: relative;
+            z-index: 10000;
+        }
+        [data-theme="dark"] .login-card {
+            background: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .login-logo {
+            width: 80px;
+            height: 80px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin: 0 auto 1rem;
+            box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.3);
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .login-page.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         /* Mobile Responsive */
         .mobile-nav { display: none; }
         .overlay { display: none; }
@@ -202,10 +264,10 @@
                 z-index: 999;
             }
             .overlay.show {
-                display: block;
-            }
-            
-            /* Group Management Mobile */
+            display: block;
+        }
+
+        /* Group Management Mobile */
         .group-manage-container {
             height: auto !important;
         }
@@ -277,31 +339,45 @@
 
 
     <!-- Login Modal -->
-    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" data-i18n="login_title">系统登录</h5>
+    <div id="loginPage" class="login-page">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-logo">
+                    <i class="bi bi-robot"></i>
                 </div>
-                <div class="modal-body">
-                    <form id="loginForm">
-                        <div class="mb-3">
-                            <label class="form-label" data-i18n="username">用户名</label>
-                            <input type="text" class="form-control" id="loginUser" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" data-i18n="password">密码</label>
-                            <input type="password" class="form-control" id="loginPass" required>
-                        </div>
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary" data-i18n="login_btn">登录</button>
-                        </div>
-                    </form>
-                    <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
+                <h3>BotMatrix</h3>
+                <p class="text-muted" data-i18n="login_subtitle">统一管理平台</p>
+            </div>
+            <form id="loginForm">
+                <div class="mb-3">
+                    <label class="form-label" data-i18n="username">用户名</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" class="form-control" id="loginUser" required data-i18n-placeholder="login_placeholder_user" placeholder="admin">
+                    </div>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label" data-i18n="password">密码</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input type="password" class="form-control" id="loginPass" required data-i18n-placeholder="login_placeholder_pass" placeholder="******">
+                    </div>
+                </div>
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <span id="loginBtnText" data-i18n="login_btn">登录</span>
+                        <span id="loginBtnLoading" class="spinner-border spinner-border-sm d-none"></span>
+                    </button>
+                </div>
+            </form>
+            <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
+            <div class="login-footer mt-4 text-center">
+                <small class="text-muted">&copy; 2025 BotMatrix Team. All Rights Reserved.</small>
             </div>
         </div>
     </div>
+
+    <!-- 移除旧的 loginModal -->
 
     <!-- Mobile Nav -->
     <div class="mobile-nav">
@@ -1027,6 +1103,11 @@
         </div>
 
 
+        <!-- Overmind Tab -->
+        <div id="tab-overmind" class="content-section" style="display: none; height: calc(100vh - 100px);">
+            <iframe id="overmind-iframe" src="" style="width: 100%; height: 100%; border: none; border-radius: 0.75rem;"></iframe>
+        </div>
+
         <!-- Docker Tab -->
         <div id="tab-docker" class="content-section" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -1624,6 +1705,10 @@
                     // Clear URL params
                     window.history.replaceState({}, document.title, window.location.pathname);
                     
+                    document.getElementById('loginPage').classList.add('hidden');
+                    setTimeout(() => {
+                        document.getElementById('loginPage').style.display = 'none';
+                    }, 500);
                     startApp();
                 })
                 .catch(err => {
@@ -1633,27 +1718,25 @@
                     // Clean URL
                     window.history.replaceState({}, document.title, window.location.pathname);
                     // Show login
-                    const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-                    loginModal.show();
+                    document.getElementById('loginPage').classList.remove('hidden');
+                    document.getElementById('loginPage').style.display = 'flex';
                 });
                 return;
             }
 
             if (!authToken) {
-                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-                loginModal.show();
+                document.getElementById('loginPage').classList.remove('hidden');
+                document.getElementById('loginPage').style.display = 'flex';
             } else {
+                document.getElementById('loginPage').classList.add('hidden');
+                setTimeout(() => {
+                    document.getElementById('loginPage').style.display = 'none';
+                }, 500);
                 startApp();
             }
             } catch (e) {
                 console.error('DOMContentLoaded error:', e);
-                // Try to show login modal even if there was an error
-                try {
-                    const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-                    loginModal.show();
-                } catch (modalError) {
-                    console.error('Failed to show login modal:', modalError);
-                }
+                document.getElementById('loginPage').style.display = 'flex';
             }
         });
 
@@ -1688,6 +1771,16 @@
                 }
             }
         }
+
+        function showOvermind() {
+             const iframe = document.getElementById('overmind-iframe');
+             if (!iframe.src || iframe.src === 'about:blank') {
+                 // 传递当前 token 给 Overmind
+                 const token = localStorage.getItem('wxbot_token');
+                 iframe.src = `/overmind/#/?token=${token}`;
+             }
+             showTab('overmind');
+         }
 
         function showTab(tabId) {
             try {
@@ -1836,6 +1929,9 @@
                     try {
                         updateStats();
                         updateSystemStats();
+                        
+                        // 定时更新统计数据已经通过下面的 safeSetInterval 启动
+                        // 移除冗余的 setInterval 调用
                     } catch (error) {
                         console.error('系统数据加载失败:', error);
                     }
@@ -1902,21 +1998,33 @@
 
                 // Update Dashboard Cards
                 if (document.getElementById('metric-cpu')) {
-                    document.getElementById('metric-cpu').innerText = data.cpu_usage.toFixed(1) + '%';
+                    const cpu = (data.cpu_usage !== undefined && data.cpu_usage !== null) ? data.cpu_usage : 0;
+                    document.getElementById('metric-cpu').innerText = cpu.toFixed(1) + '%';
                 }
 
                 // OS Info
-                if (data.host_info) {
-                    // Hardcoded per user request
+                if (data.os_platform || data.host_info) {
                     if (document.getElementById('metric-os-plat')) {
-                        document.getElementById('metric-os-plat').innerText = 'alpine 3.23.0';
-                        document.getElementById('metric-os-plat').title = 'alpine 3.23.0';
+                        const plat = data.os_platform || (data.host_info ? data.host_info.platform : 'Unknown');
+                        const ver = data.os_version || (data.host_info ? data.host_info.platformVersion : '');
+                        const full = `${plat} ${ver}`.trim() || 'alpine 3.23.0'; // Fallback to user requested default if both missing
+                        document.getElementById('metric-os-plat').innerText = full;
+                        document.getElementById('metric-os-plat').title = full;
                     }
                     if (document.getElementById('metric-os-ver')) {
-                         document.getElementById('metric-os-ver').innerText = '内核: 6.8.0-86-generic';
+                         const kernel = data.host_info ? `内核: ${data.host_info.kernelVersion}` : '内核: 6.8.0-86-generic';
+                         document.getElementById('metric-os-ver').innerText = kernel;
                     }
                     if (document.getElementById('metric-os-arch')) {
-                         document.getElementById('metric-os-arch').innerText = data.host_info.kernelArch;
+                         document.getElementById('metric-os-arch').innerText = data.os_arch || (data.host_info ? data.host_info.kernelArch : '');
+                    }
+                }
+
+                // Update Memory if provided in system stats
+                if (data.mem_usage !== undefined && data.mem_usage !== null) {
+                    // This might overlap with updateStats, but ensures system stats also update it
+                    if (document.getElementById('metric-mem-percent')) {
+                        document.getElementById('metric-mem-percent').innerText = data.mem_usage.toFixed(1) + '%';
                     }
                 }
 
@@ -1926,14 +2034,18 @@
                     if (data.processes.length === 0) {
                         procBody.innerHTML = '<tr><td colspan="4" class="text-center">暂无数据</td></tr>';
                     } else {
-                        procBody.innerHTML = data.processes.map(p => `
-                            <tr>
-                                <td>${p.pid}</td>
-                                <td class="text-truncate" style="max-width: 150px;" title="${p.name}">${p.name}</td>
-                                <td>${p.cpu.toFixed(1)}%</td>
-                                <td>${(p.memory / 1024 / 1024).toFixed(1)}</td>
-                            </tr>
-                        `).join('');
+                        procBody.innerHTML = data.processes.map(p => {
+                            const cpu = (p.cpu !== undefined && p.cpu !== null) ? p.cpu : 0;
+                            const mem = (p.memory !== undefined && p.memory !== null) ? p.memory : 0;
+                            return `
+                                <tr>
+                                    <td>${p.pid}</td>
+                                    <td class="text-truncate" style="max-width: 150px;" title="${p.name}">${p.name || 'unknown'}</td>
+                                    <td>${cpu.toFixed(1)}%</td>
+                                    <td>${(mem / 1024 / 1024).toFixed(1)}</td>
+                                </tr>
+                            `;
+                        }).join('');
                     }
                 }
                 
@@ -1957,8 +2069,12 @@
             const username = document.getElementById('loginUser').value;
             const password = document.getElementById('loginPass').value;
             const errorBox = document.getElementById('loginError');
+            const btnText = document.getElementById('loginBtnText');
+            const btnLoading = document.getElementById('loginBtnLoading');
             
             errorBox.classList.add('d-none');
+            btnText.classList.add('d-none');
+            btnLoading.classList.remove('d-none');
             
             try {
                 const res = await fetch('/api/login', {
@@ -1968,7 +2084,8 @@
                 });
                 
                 if (!res.ok) {
-                    throw new Error('登录失败：用户名或密码错误');
+                    const data = await res.json();
+                    throw new Error(data.message || '登录失败：用户名或密码错误');
                 }
                 
                 const data = await res.json();
@@ -1979,10 +2096,11 @@
                 
                 applyRoleUI(authRole);
 
-                // Hide Modal
-                const loginModalEl = document.getElementById('loginModal');
-                const modal = bootstrap.Modal.getInstance(loginModalEl);
-                modal.hide();
+                // Hide Login Page
+                document.getElementById('loginPage').classList.add('hidden');
+                setTimeout(() => {
+                    document.getElementById('loginPage').style.display = 'none';
+                }, 500);
                 
                 // Init
                 startApp();
@@ -1990,6 +2108,9 @@
             } catch (err) {
                 errorBox.innerText = err.message;
                 errorBox.classList.remove('d-none');
+            } finally {
+                btnText.classList.remove('d-none');
+                btnLoading.classList.add('d-none');
             }
         });
 
@@ -2207,10 +2328,11 @@
         initCharts();
 
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
+            if (i < 0 || isNaN(i)) return '0 B';
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
@@ -2223,23 +2345,23 @@
                 .then(data => {
                     window.latestStats = data; // Store globally for details view
                     if (document.getElementById('metric-goroutines')) {
-                        document.getElementById('metric-goroutines').innerText = data.goroutines;
+                        document.getElementById('metric-goroutines').innerText = data.goroutines !== undefined ? data.goroutines : '0';
                     }
                     if (document.getElementById('metric-mem')) {
-                        document.getElementById('metric-mem').innerText = formatBytes(data.memory_alloc);
+                        document.getElementById('metric-mem').innerText = data.memory_alloc !== undefined ? formatBytes(data.memory_alloc) : '0 B';
                     }
-                    if (document.getElementById('metric-mem-total') && data.memory_total) {
-                        document.getElementById('metric-mem-total').innerText = formatBytes(data.memory_total);
+                    if (document.getElementById('metric-mem-total')) {
+                        document.getElementById('metric-mem-total').innerText = data.memory_total !== undefined ? formatBytes(data.memory_total) : '0 B';
                     }
 
                     if (document.getElementById('metric-bots')) {
-                        document.getElementById('metric-bots').innerText = data.bot_count;
+                        document.getElementById('metric-bots').innerText = data.bot_count !== undefined ? data.bot_count : '0';
                     }
                     if (document.getElementById('metric-bots-offline')) {
-                        document.getElementById('metric-bots-offline').innerText = data.bot_count_offline || 0;
+                        document.getElementById('metric-bots-offline').innerText = data.bot_count_offline !== undefined ? data.bot_count_offline : '0';
                     }
                     if (document.getElementById('metric-bots-total')) {
-                        document.getElementById('metric-bots-total').innerText = data.bot_count_total || 0;
+                        document.getElementById('metric-bots-total').innerText = data.bot_count_total !== undefined ? data.bot_count_total : '0';
                     }
 
                     // CPU Details
@@ -2260,12 +2382,12 @@
                     }
 
                     // New metrics
-                    if (document.getElementById('metric-groups-today')) document.getElementById('metric-groups-today').innerText = data.active_groups_today;
-                    if (document.getElementById('metric-groups-total')) document.getElementById('metric-groups-total').innerText = data.active_groups;
-                    if (document.getElementById('metric-users-today')) document.getElementById('metric-users-today').innerText = data.active_users_today;
-                    if (document.getElementById('metric-users-total')) document.getElementById('metric-users-total').innerText = data.active_users;
-                    if (document.getElementById('metric-msgs-total')) document.getElementById('metric-msgs-total').innerText = data.message_count;
-                    if (document.getElementById('metric-sent-total')) document.getElementById('metric-sent-total').innerText = data.sent_message_count;
+                    if (document.getElementById('metric-groups-today')) document.getElementById('metric-groups-today').innerText = (data.active_groups_today !== undefined && data.active_groups_today !== null) ? data.active_groups_today : 0;
+                    if (document.getElementById('metric-groups-total')) document.getElementById('metric-groups-total').innerText = (data.active_groups !== undefined && data.active_groups !== null) ? data.active_groups : 0;
+                    if (document.getElementById('metric-users-today')) document.getElementById('metric-users-today').innerText = (data.active_users_today !== undefined && data.active_users_today !== null) ? data.active_users_today : 0;
+                    if (document.getElementById('metric-users-total')) document.getElementById('metric-users-total').innerText = (data.active_users !== undefined && data.active_users !== null) ? data.active_users : 0;
+                    if (document.getElementById('metric-msgs-total')) document.getElementById('metric-msgs-total').innerText = (data.message_count !== undefined && data.message_count !== null) ? data.message_count : 0;
+                    if (document.getElementById('metric-sent-total')) document.getElementById('metric-sent-total').innerText = (data.sent_message_count !== undefined && data.sent_message_count !== null) ? data.sent_message_count : 0;
 
                     const now = new Date().toLocaleTimeString();
 

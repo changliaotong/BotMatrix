@@ -26,17 +26,17 @@ class BotNexusService extends ChangeNotifier {
   String get _wsUrl {
     if (kIsWeb) {
       // In development, assume backend is on localhost:3001
-      if (kDebugMode) return 'ws://localhost:3001/?role=subscriber';
+      if (kDebugMode) return 'ws://localhost:3001/ws/subscriber?role=subscriber';
 
       // In production (served by BotNexus), use the same origin
       final scheme = Uri.base.scheme == 'https' ? 'wss' : 'ws';
       final host = Uri.base.host;
-      final port = Uri.base.port;
+      final port = 3001; // WebSocket port is usually 3001 in this setup
       final effectiveHost = host.isEmpty ? 'localhost' : host;
-      return '$scheme://$effectiveHost:$port/ws?role=subscriber';
+      return '$scheme://$effectiveHost:$port/ws/subscriber?role=subscriber';
     }
-    if (Platform.isAndroid) return 'ws://10.0.2.2:3001/?role=subscriber';
-    return 'ws://localhost:3001/?role=subscriber';
+    if (Platform.isAndroid) return 'ws://10.0.2.2:3001/ws/subscriber?role=subscriber';
+    return 'ws://localhost:3001/ws/subscriber?role=subscriber';
   }
 
   String get _apiBaseUrl {
@@ -61,8 +61,36 @@ class BotNexusService extends ChangeNotifier {
     try {
       if (_isConnected) return;
       
+      // On Web, try to get token from URL if not already set
+      if (kIsWeb && _token.isEmpty) {
+        // Try standard query parameters
+        var token = Uri.base.queryParameters['token'];
+        
+        // Try fragment parameters (common in Flutter hash routing)
+        if (token == null || token.isEmpty) {
+          final fragment = Uri.base.fragment;
+          if (fragment.contains('token=')) {
+            final regExp = RegExp(r'token=([^&]+)');
+            final match = regExp.firstMatch(fragment);
+            if (match != null) {
+              token = match.group(1);
+            }
+          }
+        }
+
+        if (token != null && token.isNotEmpty) {
+          _token = token;
+          print('Token found in URL: $token');
+        }
+      }
+
       print('Connecting to $_wsUrl');
-      _channel = WebSocketChannel.connect(Uri.parse(_wsUrl));
+      // Add token to WebSocket URL if available
+      String wsUrl = _wsUrl;
+      if (_token.isNotEmpty) {
+          wsUrl += "&token=$_token";
+      }
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       _isConnected = true;
       notifyListeners();
 
@@ -162,7 +190,7 @@ class BotNexusService extends ChangeNotifier {
     try {
       // Auto-login if needed (dev convenience)
       if (_token.isEmpty) {
-        await login('admin', 'admin888');
+        await login('admin', 'admin123');
       }
 
       final response = await http.get(

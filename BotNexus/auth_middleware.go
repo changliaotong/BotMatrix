@@ -45,6 +45,23 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		user, exists := m.users[claims.Username]
 		m.usersMutex.RUnlock()
 
+		// 如果内存中不存在，尝试从数据库加载
+		if !exists {
+			row := m.db.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", claims.Username)
+			var u User
+			var createdAt, updatedAt string
+			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.SessionVersion, &createdAt, &updatedAt)
+			if err == nil {
+				user = &u
+				exists = true
+				
+				// 更新内存缓存
+				m.usersMutex.Lock()
+				m.users[u.Username] = &u
+				m.usersMutex.Unlock()
+			}
+		}
+
 		if !exists || user.SessionVersion != claims.SessionVersion {
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, `{"success": false, "message": "Session expired or invalidated"}`)
