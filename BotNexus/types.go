@@ -36,6 +36,12 @@ type WorkerClient struct {
 	Connected     time.Time
 	HandledCount  int64
 	LastHeartbeat time.Time
+
+	// RTT Tracking
+	AvgRTT     time.Duration `json:"avg_rtt"`
+	LastRTT    time.Duration `json:"last_rtt"`
+	RTTSamples []time.Duration
+	MaxSamples int
 }
 
 // Subscriber represents a UI or other consumer
@@ -110,8 +116,9 @@ type Manager struct {
 	logMutex    sync.RWMutex
 
 	// Pending Requests (Echo -> Channel)
-	pendingRequests map[string]chan map[string]interface{}
-	pendingMutex    sync.Mutex
+	pendingRequests   map[string]chan map[string]interface{}
+	pendingTimestamps map[string]time.Time // Echo -> Send Time for RTT tracking
+	pendingMutex      sync.Mutex
 
 	// Redis
 	rdb *redis.Client
@@ -124,6 +131,7 @@ type Manager struct {
 
 	// Chat Stats
 	statsMutex      sync.RWMutex
+	StartTime       time.Time        `json:"start_time"`        // Server start time
 	TotalMessages   int64            `json:"total_messages"`    // Global counter
 	SentMessages    int64            `json:"sent_messages"`     // Global sent counter
 	UserStats       map[int64]int64  `json:"user_stats"`        // UserID -> Count (Total)
@@ -145,6 +153,8 @@ type Manager struct {
 	MsgTrend     []int64   `json:"msg_trend"`
 	SentTrend    []int64   `json:"sent_trend"`
 	RecvTrend    []int64   `json:"recv_trend"`
+	NetSentTrend []uint64  `json:"net_sent_trend"`
+	NetRecvTrend []uint64  `json:"net_recv_trend"`
 	TrendLabels  []string  `json:"trend_labels"`
 
 	// Connection Stats (New)
@@ -154,4 +164,14 @@ type Manager struct {
 	users      map[string]*User // 用户名 -> 用户信息
 	usersMutex sync.RWMutex     // 用户存储的并发保护
 	db         *sql.DB          // SQLite 数据库连接
+
+	// Message Cache (For when no workers are available)
+	messageCache      []map[string]interface{}
+	messageCacheMutex sync.Mutex
+
+	// Bot Data Cache
+	groupCache  map[string]map[string]interface{} // group_id -> data
+	memberCache map[string]map[string]interface{} // group_id:user_id -> data
+	friendCache map[string]map[string]interface{} // user_id -> data
+	cacheMutex  sync.RWMutex
 }

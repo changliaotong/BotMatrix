@@ -2,17 +2,23 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -228,6 +234,7 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 
 	// 计算在线/离线机器人
 	onlineBots := len(m.bots)
+	onlineWorkers := len(m.workers)
 	totalBots := len(m.BotStats)
 	offlineBots := totalBots - onlineBots
 	if offlineBots < 0 {
@@ -269,6 +276,8 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	msgTrend := append([]int64{}, m.MsgTrend...)
 	sentTrend := append([]int64{}, m.SentTrend...)
 	recvTrend := append([]int64{}, m.RecvTrend...)
+	netSentTrend := append([]uint64{}, m.NetSentTrend...)
+	netRecvTrend := append([]uint64{}, m.NetRecvTrend...)
 	m.HistoryMutex.RUnlock()
 
 	stats := map[string]interface{}{
@@ -276,6 +285,7 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		"memory_alloc":        mStats.Alloc,
 		"memory_total":        mStats.Sys,
 		"bot_count":           onlineBots,
+		"worker_count":        onlineWorkers,
 		"bot_count_offline":   offlineBots,
 		"bot_count_total":     totalBots,
 		"active_groups_today": len(m.GroupStatsToday),
@@ -285,6 +295,7 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		"message_count":       m.TotalMessages,
 		"sent_message_count":  m.SentMessages,
 		"cpu_usage":           cpuUsage,
+		"start_time":          m.StartTime.Unix(),
 		"cpu_model":           cpuModel,
 		"cpu_cores_physical":  cpuCoresPhysical,
 		"cpu_cores_logical":   cpuCoresLogical,
@@ -296,11 +307,13 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 		// 详情数据
 		"bots_detail": m.BotDetailedStats,
 		// 趋势数据
-		"cpu_trend":  cpuTrend,
-		"mem_trend":  memTrend,
-		"msg_trend":  msgTrend,
-		"sent_trend": sentTrend,
-		"recv_trend": recvTrend,
+		"cpu_trend":      cpuTrend,
+		"mem_trend":      memTrend,
+		"msg_trend":      msgTrend,
+		"sent_trend":     sentTrend,
+		"recv_trend":     recvTrend,
+		"net_sent_trend": netSentTrend,
+		"net_recv_trend": netRecvTrend,
 	}
 
 	json.NewEncoder(w).Encode(stats)
@@ -322,6 +335,63 @@ func (m *Manager) handleGetSystemStats(w http.ResponseWriter, r *http.Request) {
 
 	// 获取主机信息
 	hi, _ := host.Info()
+
+	// 获取磁盘使用情况
+	partitions, _ := disk.Partitions(true) // 获取所有分区，包括物理分区
+	var diskUsage []map[string]interface{}
+	seenMounts := make(map[string]bool)
+	for _, p := range partitions {
+		// 过滤掉常见的非物理文件系统和重复挂载点
+		if seenMounts[p.Mountpoint] {
+			continue
+		}
+		// 排除一些虚拟文件系统 (Linux 常用)
+		if strings.HasPrefix(p.Device, "/dev/loop") ||
+			p.Fstype == "tmpfs" ||
+			p.Fstype == "devtmpfs" ||
+			p.Fstype == "overlay" {
+			continue
+		}
+
+		usage, err := disk.Usage(p.Mountpoint)
+		if err == nil && usage.Total > 0 {
+			diskUsage = append(diskUsage, map[string]interface{}{
+				"path":        p.Mountpoint,
+				"total":       usage.Total,
+				"free":        usage.Free,
+				"used":        usage.Used,
+				"usedPercent": usage.UsedPercent,
+			})
+			seenMounts[p.Mountpoint] = true
+		}
+	}
+
+	// 获取网络 IO
+	netIO, _ := net.IOCounters(false)
+	var netUsage []map[string]interface{}
+	for _, io := range netIO {
+		netUsage = append(netUsage, map[string]interface{}{
+			"name":      io.Name,
+			"bytesSent": io.BytesSent,
+			"bytesRecv": io.BytesRecv,
+		})
+	}
+
+	// 获取网络接口
+	interfaces, _ := net.Interfaces()
+	var netInterfaces []map[string]interface{}
+	for _, i := range interfaces {
+		var addrs []map[string]interface{}
+		for _, addr := range i.Addrs {
+			addrs = append(addrs, map[string]interface{}{
+				"addr": addr.Addr,
+			})
+		}
+		netInterfaces = append(netInterfaces, map[string]interface{}{
+			"name":  i.Name,
+			"addrs": addrs,
+		})
+	}
 
 	// 获取前5个CPU消耗最高的进程
 	procs, _ := process.Processes()
@@ -350,13 +420,16 @@ func (m *Manager) handleGetSystemStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := map[string]interface{}{
-		"cpu_usage": cpuUsage,
-		"mem_usage": vm.UsedPercent,
-		"mem_total": vm.Total,
-		"mem_free":  vm.Free,
-		"host_info": hi,
-		"processes": processList,
-		"timestamp": time.Now().Unix(),
+		"cpu_usage":      cpuUsage,
+		"mem_usage":      vm.UsedPercent,
+		"mem_total":      vm.Total,
+		"mem_free":       vm.Free,
+		"disk_usage":     diskUsage,
+		"net_io":         netUsage,
+		"net_interfaces": netInterfaces,
+		"host_info":      hi,
+		"processes":      processList,
+		"timestamp":      time.Now().Unix(),
 	}
 
 	json.NewEncoder(w).Encode(stats)
@@ -500,9 +573,41 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 		// 这是API响应，需要回传给对应的Worker
 		m.pendingMutex.Lock()
 		respChan, exists := m.pendingRequests[echo]
+		sendTime, timeExists := m.pendingTimestamps[echo]
+		delete(m.pendingTimestamps, echo)
 		m.pendingMutex.Unlock()
 
 		if exists {
+			// 记录 RTT
+			if timeExists {
+				rtt := time.Since(sendTime)
+				// 找到对应的 Worker 并更新 RTT
+				// 注意：这里需要知道响应是哪个 Worker 发起的，或者简单地在 echo 中包含 workerID
+				if parts := strings.Split(echo, ":"); len(parts) >= 2 {
+					workerID := parts[0]
+					m.mutex.RLock()
+					for _, w := range m.workers {
+						if w.ID == workerID {
+							w.Mutex.Lock()
+							w.LastRTT = rtt
+							w.RTTSamples = append(w.RTTSamples, rtt)
+							if len(w.RTTSamples) > 20 { // 最多保留20个样本
+								w.RTTSamples = w.RTTSamples[1:]
+							}
+							var total time.Duration
+							for _, s := range w.RTTSamples {
+								total += s
+							}
+							w.AvgRTT = total / time.Duration(len(w.RTTSamples))
+							w.Mutex.Unlock()
+							log.Printf("[RTT] Worker %s AvgRTT: %v, LastRTT: %v", workerID, w.AvgRTT, w.LastRTT)
+							break
+						}
+					}
+					m.mutex.RUnlock()
+				}
+			}
+
 			// 将响应发送给等待的Worker请求
 			select {
 			case respChan <- msg:
@@ -551,6 +656,69 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 
 	// 转发给Worker处理
 	m.forwardMessageToWorker(msg)
+
+	// 缓存群/成员/好友信息 (基于消息)
+	m.cacheBotDataFromMessage(bot, msg)
+}
+
+// cacheBotDataFromMessage 从消息中提取并缓存数据 (特别针对腾讯频道机器人)
+func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interface{}) {
+	postType, _ := msg["post_type"].(string)
+	if postType != "message" {
+		return
+	}
+
+	m.cacheMutex.Lock()
+	defer m.cacheMutex.Unlock()
+
+	// 缓存群信息
+	if groupID, ok := msg["group_id"].(float64); ok {
+		gID := fmt.Sprintf("%.0f", groupID)
+		if _, exists := m.groupCache[gID]; !exists {
+			m.groupCache[gID] = map[string]interface{}{
+				"group_id":   groupID,
+				"group_name": fmt.Sprintf("Group %s (Cached)", gID),
+				"bot_id":     bot.SelfID,
+				"is_cached":  true,
+				"reason":     "Automatically cached from message (Bot might not support get_group_info)",
+			}
+		}
+
+		// 缓存成员信息
+		if userID, ok := msg["user_id"].(float64); ok {
+			uID := fmt.Sprintf("%.0f", userID)
+			key := fmt.Sprintf("%s:%s", gID, uID)
+			sender, _ := msg["sender"].(map[string]interface{})
+			nickname := ""
+			card := ""
+			if sender != nil {
+				nickname, _ = sender["nickname"].(string)
+				card, _ = sender["card"].(string)
+			}
+			m.memberCache[key] = map[string]interface{}{
+				"group_id":  groupID,
+				"user_id":   userID,
+				"nickname":  nickname,
+				"card":      card,
+				"is_cached": true,
+			}
+		}
+	} else if userID, ok := msg["user_id"].(float64); ok {
+		// 缓存好友信息 (私聊)
+		uID := fmt.Sprintf("%.0f", userID)
+		if _, exists := m.friendCache[uID]; !exists {
+			sender, _ := msg["sender"].(map[string]interface{})
+			nickname := ""
+			if sender != nil {
+				nickname, _ = sender["nickname"].(string)
+			}
+			m.friendCache[uID] = map[string]interface{}{
+				"user_id":   userID,
+				"nickname":  nickname,
+				"is_cached": true,
+			}
+		}
+	}
 }
 
 // handleBotMessageEvent 处理Bot消息事件
@@ -577,6 +745,46 @@ func (m *Manager) removeBot(botID string) {
 	}
 }
 
+// cacheMessage 缓存无法立即处理的消息
+func (m *Manager) cacheMessage(msg map[string]interface{}) {
+	m.messageCacheMutex.Lock()
+	defer m.messageCacheMutex.Unlock()
+
+	// 限制缓存大小，防止内存溢出
+	if len(m.messageCache) > 1000 {
+		m.messageCache = m.messageCache[1:] // 丢弃最旧的消息
+	}
+	m.messageCache = append(m.messageCache, msg)
+	log.Printf("[CACHE] No workers available, message cached (Total: %d)", len(m.messageCache))
+}
+
+// flushMessageCache 当有新 Worker 连接时，发送缓存的消息
+func (m *Manager) flushMessageCache() {
+	m.mutex.RLock()
+	workerCount := len(m.workers)
+	m.mutex.RUnlock()
+
+	if workerCount == 0 {
+		return
+	}
+
+	m.messageCacheMutex.Lock()
+	if len(m.messageCache) == 0 {
+		m.messageCacheMutex.Unlock()
+		return
+	}
+
+	cache := m.messageCache
+	m.messageCache = nil
+	m.messageCacheMutex.Unlock()
+
+	log.Printf("[CACHE] Flushing %d cached messages to workers", len(cache))
+	for _, msg := range cache {
+		// 重新通过路由发送
+		go m.forwardMessageToWorker(msg)
+	}
+}
+
 // forwardMessageToWorker 将消息转发给Worker处理
 func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 	m.mutex.RLock()
@@ -585,29 +793,72 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 	m.mutex.RUnlock()
 
 	if len(workers) == 0 {
-		log.Printf("No workers available to handle message")
+		m.cacheMessage(msg)
 		return
 	}
 
-	// 简单的轮询选择Worker
+	// 智能路由逻辑：优先选择从未处理过消息的，其次选 AvgRTT 最小且健康的 Worker
+	var selectedWorker *WorkerClient
 	m.mutex.Lock()
-	if m.workerIndex >= len(workers) {
-		m.workerIndex = 0
+
+	// 如果只有一个 worker，直接选它
+	if len(workers) == 1 {
+		selectedWorker = workers[0]
+	} else {
+		// 1. 优先选择从未处理过消息的 Worker (以便它们能获得 RTT 样本)
+		var unhandledWorkers []*WorkerClient
+		for _, w := range workers {
+			if w.HandledCount == 0 {
+				unhandledWorkers = append(unhandledWorkers, w)
+			}
+		}
+
+		if len(unhandledWorkers) > 0 {
+			// 从未处理过的 Worker 中轮询选择
+			if m.workerIndex >= len(unhandledWorkers) {
+				m.workerIndex = 0
+			}
+			selectedWorker = unhandledWorkers[m.workerIndex]
+			m.workerIndex++
+		} else {
+			// 2. 所有 Worker 都处理过消息，选择 AvgRTT 最小的
+			var minRTT time.Duration = -1
+			for _, w := range workers {
+				if w.AvgRTT > 0 {
+					if minRTT == -1 || w.AvgRTT < minRTT {
+						minRTT = w.AvgRTT
+						selectedWorker = w
+					}
+				}
+			}
+
+			// 3. 如果还是没选到 (例如所有 AvgRTT 都是 0)，退回到全局轮询
+			if selectedWorker == nil {
+				if m.workerIndex >= len(workers) {
+					m.workerIndex = 0
+				}
+				selectedWorker = workers[m.workerIndex]
+				m.workerIndex++
+			}
+		}
 	}
-	worker := workers[m.workerIndex]
-	m.workerIndex++
 	m.mutex.Unlock()
 
 	// 发送消息给选中的Worker
-	worker.Mutex.Lock()
-	err := worker.Conn.WriteJSON(msg)
-	worker.Mutex.Unlock()
+	selectedWorker.Mutex.Lock()
+	err := selectedWorker.Conn.WriteJSON(msg)
+	selectedWorker.Mutex.Unlock()
 
 	if err != nil {
-		log.Printf("Failed to forward message to worker %s: %v", worker.ID, err)
+		log.Printf("Failed to forward message to worker %s: %v. Retrying with other workers...", selectedWorker.ID, err)
+		// 尝试从列表中移除故障 Worker 并重试
+		m.removeWorker(selectedWorker.ID)
+		m.forwardMessageToWorker(msg) // 递归重试 (如果还是没 worker 就会进入缓存)
 	} else {
-		worker.HandledCount++
-		log.Printf("Forwarded message to worker %s", worker.ID)
+		m.mutex.Lock()
+		selectedWorker.HandledCount++
+		m.mutex.Unlock()
+		log.Printf("Forwarded message to worker %s (AvgRTT: %v)", selectedWorker.ID, selectedWorker.AvgRTT)
 	}
 }
 
@@ -651,6 +902,9 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	m.connectionStats.Mutex.Unlock()
 
 	log.Printf("Worker WebSocket connected: %s (ID: %s)", conn.RemoteAddr(), workerID)
+
+	// 尝试发送缓存的消息
+	go m.flushMessageCache()
 
 	// 启动连接处理循环
 	go m.handleWorkerConnection(worker)
@@ -1014,12 +1268,19 @@ func (m *Manager) StartTrendCollection() {
 		m.CPUTrend = append(m.CPUTrend, currentCPU)
 		m.MemTrend = append(m.MemTrend, mStats.Alloc)
 
+		// 网络 IO 增量
+		netIO, _ := net.IOCounters(false)
+		if len(netIO) > 0 {
+			m.NetSentTrend = append(m.NetSentTrend, netIO[0].BytesSent)
+			m.NetRecvTrend = append(m.NetRecvTrend, netIO[0].BytesRecv)
+		}
+
 		// 消息增量计算
 		m.statsMutex.RLock()
 		total := m.TotalMessages
 		sent := m.SentMessages
 		m.statsMutex.RUnlock()
-		
+
 		if len(m.MsgTrend) > 0 {
 			// 这里我们存的是增量，但前端代码逻辑可能需要处理
 			// 实际上前端 index.html 2402行 在做 Moving Sum，所以我们这里存增量是对的
@@ -1039,10 +1300,122 @@ func (m *Manager) StartTrendCollection() {
 			m.MsgTrend = m.MsgTrend[1:]
 			m.SentTrend = m.SentTrend[1:]
 			m.RecvTrend = m.RecvTrend[1:]
+			if len(m.NetSentTrend) > 0 {
+				m.NetSentTrend = m.NetSentTrend[1:]
+			}
+			if len(m.NetRecvTrend) > 0 {
+				m.NetRecvTrend = m.NetRecvTrend[1:]
+			}
 		}
 
 		m.HistoryMutex.Unlock()
 	}
+}
+
+// ==================== Docker 管理接口 ====================
+
+// handleDockerList 获取 Docker 容器列表
+func (m *Manager) handleDockerList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if m.dockerClient == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": "Docker 客户端未初始化",
+		})
+		return
+	}
+
+	containers, err := m.dockerClient.ContainerList(r.Context(), types.ContainerListOptions{All: true})
+	if err != nil {
+		log.Printf("[ERROR] 获取 Docker 容器列表失败: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(containers)
+}
+
+// handleDockerAction 处理 Docker 容器操作 (start/stop/restart)
+func (m *Manager) handleDockerAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		ContainerID string `json:"container_id"`
+		Action      string `json:"action"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": "请求格式错误",
+		})
+		return
+	}
+
+	if m.dockerClient == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": "Docker 客户端未初始化",
+		})
+		return
+	}
+
+	var err error
+	switch req.Action {
+	case "start":
+		err = m.dockerClient.ContainerStart(r.Context(), req.ContainerID, types.ContainerStartOptions{})
+	case "stop":
+		timeout := 10
+		err = m.dockerClient.ContainerStop(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
+	case "restart":
+		timeout := 10
+		err = m.dockerClient.ContainerRestart(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
+	default:
+		err = fmt.Errorf("不支持的操作: %s", req.Action)
+	}
+
+	if err != nil {
+		log.Printf("[ERROR] Docker 操作 %s 失败: %v", req.Action, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "ok",
+		"id":     req.ContainerID,
+	})
+}
+
+// handleDockerAddBot 添加机器人容器 (演示用，实际需要根据配置创建)
+func (m *Manager) handleDockerAddBot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// 这里可以实现根据参数创建 WxBot 或其他类型的 Bot 容器
+	// 暂时返回一个模拟成功，实际逻辑需要根据 docker-compose.yml 里的配置来创建
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "error",
+		"message": "自动部署机器人功能正在开发中，请手动使用 docker-compose 部署",
+	})
+}
+
+// handleDockerAddWorker 添加 Worker 容器
+func (m *Manager) handleDockerAddWorker(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "error",
+		"message": "自动部署 Worker 功能正在开发中，请手动使用 docker-compose 部署",
+	})
 }
 
 // ==================== 用户管理相关接口 ====================
@@ -1183,6 +1556,162 @@ func (m *Manager) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "密码修改成功",
+	})
+}
+
+// handleAdminListUsers 获取所有用户列表 (仅限管理员)
+func (m *Manager) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	m.usersMutex.RLock()
+	users := make([]*User, 0, len(m.users))
+	for _, user := range m.users {
+		users = append(users, user)
+	}
+	m.usersMutex.RUnlock()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"users":   users,
+	})
+}
+
+// handleAdminCreateUser 创建新用户 (仅限管理员)
+func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var data struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		IsAdmin  bool   `json:"is_admin"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "请求格式错误",
+		})
+		return
+	}
+
+	if data.Username == "" || data.Password == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "用户名和密码不能为空",
+		})
+		return
+	}
+
+	m.usersMutex.Lock()
+	defer m.usersMutex.Unlock()
+
+	if _, exists := m.users[data.Username]; exists {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "用户已存在",
+		})
+		return
+	}
+
+	hashedPassword, err := hashPassword(data.Password)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "密码哈希失败",
+		})
+		return
+	}
+
+	newUser := &User{
+		Username:       data.Username,
+		PasswordHash:   hashedPassword,
+		IsAdmin:        data.IsAdmin,
+		SessionVersion: 1,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := m.saveUserToDB(newUser); err != nil {
+		log.Printf("保存新用户到数据库失败: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "保存用户失败",
+		})
+		return
+	}
+
+	m.users[newUser.Username] = newUser
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "用户创建成功",
+		"user":    newUser,
+	})
+}
+
+// handleAdminResetPassword 重置用户密码 (仅限管理员)
+func (m *Manager) handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var data struct {
+		Username    string `json:"username"`
+		NewPassword string `json:"new_password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "请求格式错误",
+		})
+		return
+	}
+
+	m.usersMutex.Lock()
+	defer m.usersMutex.Unlock()
+
+	user, exists := m.users[data.Username]
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "用户不存在",
+		})
+		return
+	}
+
+	hashedPassword, err := hashPassword(data.NewPassword)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "密码哈希失败",
+		})
+		return
+	}
+
+	user.PasswordHash = hashedPassword
+	user.SessionVersion++ // 强制该用户重新登录
+	user.UpdatedAt = time.Now()
+
+	if err := m.saveUserToDB(user); err != nil {
+		log.Printf("重置密码保存到数据库失败: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "保存密码失败",
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "密码重置成功",
 	})
 }
 

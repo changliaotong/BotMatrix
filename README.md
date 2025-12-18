@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.82 - Dashboard Metrics & API Alignment
+*   **📊 Worker Metrics Integration**: Added a dedicated "Workers" metric card to the dashboard and updated the global stats API to include real-time worker counts.
+*   **🔧 API Contract Alignment**: Fixed `/api/bots` and `/api/workers` endpoints to return raw arrays, ensuring compatibility with frontend rendering logic.
+*   **✅ Bot Data Enrichment**: Added `self_id` and `is_alive` fields to bot responses, fixing the global bot selection dropdown and status badges.
+*   **💾 State Persistence**: Enhanced dashboard state persistence by including worker counts in local storage cache for immediate display.
+
 ### v1.1.81 - Unified Login & SQLite Persistence
 *   **🔐 Unified Login System**: Redesigned a modern, full-page responsive login interface consistent across the ecosystem.
 *   **💾 SQLite Database Integration**: Replaced temporary Redis user storage with persistent SQLite database, resolving the issue of losing passwords after service restarts.

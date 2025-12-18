@@ -4,15 +4,16 @@
 
 BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器人统一管理。
 
-### 核心组件
-- **BotNexus**: 主服务，提供API接口和Web界面
-- **Overmind**: Flutter移动端管理应用
-- **小程序**: 微信/QQ小程序版本
+### 核心特性
+- **智能路由**: 动态 RTT 感知路由，优先从未处理过消息的节点开始轮询，确保负载均衡。
+- **高可靠性**: 消息转发失败自动重试，无可用节点时支持消息自动缓存与上线后自动冲刷。
+- **用户管理**: 完善的用户管理体系，支持管理员创建用户、重置密码及用户自助修改密码。
+- **现代化 UI**: 响应式设计，实时系统资源监控，独立的运行时间与系统时间显示。
 
 ### 技术栈
-- **后端**: Go语言
-- **前端**: HTML/CSS/JavaScript
-- **移动端**: Flutter
+- **后端**: Go 1.19+, SQLite 3 (持久化), JWT (身份认证), bcrypt (密码加密)
+- **前端**: HTML5/CSS3/JS, Bootstrap 5, Chart.js, BI Icons
+- **移动端**: Flutter (Overmind)
 - **小程序**: 原生小程序框架
 
 ## 🔐 认证机制
@@ -26,15 +27,23 @@ BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器�
 ### 安全特性
 - **SQLite 持久化**: 用户数据永久存储在本地数据库，解决 Redis 重启导致的数据丢失。
 - **密码加密**: 使用 bcrypt 强哈希算法存储密码。
+- **会话失效**: 密码修改或重置后，通过递增 `session_version` 强制旧 Token 失效。
 - **SSO 登录**: 支持跨系统（BotNexus & Overmind）的令牌透传。
 
 ## 📡 API接口
 
-### 认证相关
+### 认证与用户
 - `POST /api/login` - 用户登录
 - `GET /api/user/info` - 获取当前用户信息
+- `POST /api/user/password` - 用户修改密码
+- `GET /api/admin/users` - (Admin) 获取用户列表
+- `POST /api/admin/user/reset-password` - (Admin) 重置用户密码
+
+### 监控与管理
 - `GET /api/system/stats` - 系统运行详细统计
+- `GET /api/stats` - 业务统计数据 (群/用户/消息)
 - `GET /api/bots` - 机器人列表
+- `GET /api/workers` - 处理端 (Workers) 列表
 - `POST /api/bot/toggle` - 切换机器人状态
 
 ### WebSocket接口
@@ -61,6 +70,15 @@ BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器�
 - [ ] AI智能管理
 
 ## 🐛 已修复问题
+- [x] 后台用户管理 (添加、修改、重置密码)
+- [x] 智能路由未处理节点轮询问题
+- [x] 消息转发确认、重发、自动更换节点与离线缓存
+- [x] 运行时间及现在时间实时刷新
+- [x] UI 布局优化 (OS 信息独立, 群/用户数量合并)
+- [x] Overmind 链接跳转当前页面的 Bug
+- [x] 处理端 (Workers) 数量在仪表盘显示为 undefined
+- [x] 机器人 (Bots) 统计数据在某些情况下显示为 0
+- [x] 机器人选择下拉菜单无法显示头像或昵称 (缺失 self_id)
 - [x] 前端/后端登录端点不匹配
 - [x] Redis 依赖导致的密码丢失
 - [x] 登录页面无法在移动端输入

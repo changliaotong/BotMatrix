@@ -152,7 +152,7 @@
         
         .sidebar a { color: var(--text-muted); padding: 12px 24px; display: block; text-decoration: none; border-left: 3px solid transparent; }
         .sidebar a:hover, .sidebar a.active { color: var(--primary-color); background-color: rgba(13, 110, 253, 0.1); border-left-color: var(--primary-color); font-weight: 500; }
-        .main-content { margin-left: 250px; padding: 25px; }
+        .main-content { margin-left: 250px; padding: 25px; padding-top: 10px; }
         .metric-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
         .log-box { background-color: var(--bg-console); color: var(--text-console); font-family: monospace; padding: 15px; overflow-y: auto; border-radius: 0.5rem; font-size: 0.85rem; border: 1px solid var(--border-color); }
         .log-entry { margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 2px; }
@@ -169,7 +169,7 @@
             width: 100%;
             height: 100%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
+            display: none; /* 修改：初始隐藏，防止闪现 */
             align-items: center;
             justify-content: center;
             z-index: 9999;
@@ -280,15 +280,15 @@
     /* Custom Stats Grid */
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 1rem;
         margin-bottom: 1.5rem;
     }
     @media (min-width: 768px) {
-        .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        .stats-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
     }
     @media (min-width: 1400px) {
-        .stats-grid { grid-template-columns: repeat(8, 1fr); }
+        .stats-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     }
     .icon-circle {
         width: 42px;
@@ -332,6 +332,32 @@
         font-weight: 700;
         color: var(--text-main);
         line-height: 1;
+    }
+    /* Message Flow Animation */
+    @keyframes flowRight {
+        0% { transform: translateX(-100%); opacity: 0; }
+        50% { opacity: 1; }
+        100% { transform: translateX(100%); opacity: 0; }
+    }
+    .message-flow-line {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+        animation: flowRight 2s infinite linear;
+        pointer-events: none;
+    }
+    .stat-card {
+        position: relative;
+        overflow: hidden;
+    }
+    .stat-card.active-flow .message-flow-line {
+        display: block;
+    }
+    .stat-card .message-flow-line {
+        display: none;
     }
 </style>
 </head>
@@ -434,7 +460,7 @@
             <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
             <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
             <a href="#routing" id="nav-routing" class="nav-link" onclick="showTab('routing')"><i class="bi bi-diagram-3"></i> <span data-i18n="sidebar_routing">路由管理</span></a>
-            <a href="#overmind" id="nav-overmind" class="nav-link" onclick="showOvermind()"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
+            <a href="/overmind/" id="nav-overmind" class="nav-link" onclick="showOvermind(event)"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
             <a href="#logs" id="nav-logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> <span data-i18n="sidebar_logs">日志中心</span></a>
             <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> <span data-i18n="sidebar_debug">调试测试</span></a>
             <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> <span data-i18n="sidebar_settings">系统设置</span></a>
@@ -488,46 +514,49 @@
                     </div>
                 </div>
 
-                <!-- 2. CPU -->
-                <div class="stat-card" title="CPU详情">
+                <!-- 1.1 Workers -->
+                <div class="stat-card">
+                    <div class="icon-circle bg-info bg-opacity-10 text-info">
+                        <i class="bi bi-cpu"></i>
+                    </div>
+                    <div class="stat-info w-100">
+                        <div class="stat-label" data-i18n="stat_workers">处理端 (Workers)</div>
+                        <div class="stat-value">
+                            <span id="metric-workers">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. System Resources (CPU, Memory Merged) -->
+                <div class="stat-card" title="系统资源详情">
                     <div class="icon-circle bg-warning bg-opacity-10 text-warning">
                         <i class="bi bi-cpu-fill"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label" id="metric-cpu-model">CPU 使用率</div>
-                        <div class="stat-value" id="metric-cpu">0%</div>
-                        <div class="d-flex justify-content-between mt-1" style="font-size: 0.65rem; color: var(--text-muted);">
-                             <span id="metric-cpu-cores">0 核</span>
-                             <span id="metric-cpu-freq">0 MHz</span>
+                        <div class="stat-label" id="metric-cpu-model">系统资源</div>
+                        <div class="d-flex flex-column gap-1 mt-1">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold" style="font-size: 0.9rem;">CPU: <span id="metric-cpu">0%</span></span>
+                                <span id="metric-cpu-cores" style="font-size: 0.7rem; color: var(--text-muted);">0 核</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold" style="font-size: 0.9rem;">内存: <span id="metric-mem">0 MB</span> / <span id="metric-mem-total" class="text-muted fw-normal">0 GB</span></span>
+                                <span id="metric-cpu-freq" style="font-size: 0.7rem; color: var(--text-muted);">0 MHz</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 3. System Info (New) -->
-                <div class="stat-card" title="主机系统">
-                    <div class="icon-circle bg-info bg-opacity-10 text-info">
-                        <i class="bi bi-pc-display"></i>
-                    </div>
-                    <div class="stat-info w-100">
-                        <div class="stat-label" data-i18n="stat_os">主机系统</div>
-                        <div class="stat-value" style="font-size: 0.9rem;" id="metric-os-plat">alpine 3.23.0</div>
-                        <div class="d-flex justify-content-between mt-1" style="font-size: 0.65rem; color: var(--text-muted);">
-                             <span id="metric-os-ver">内核: 6.8.0-86-generic</span>
-                             <span id="metric-os-arch"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 3. Mem -->
+                <!-- 2.1 Operating System -->
                 <div class="stat-card">
-                    <div class="icon-circle bg-success bg-opacity-10 text-success">
-                        <i class="bi bi-memory"></i>
+                    <div class="icon-circle bg-secondary bg-opacity-10 text-secondary">
+                        <i class="bi bi-window"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label" data-i18n="stat_mem">系统内存</div>
-                        <div class="stat-value">
-                            <span id="metric-mem">0 MB</span>
-                            <span id="metric-mem-total" class="text-muted fs-6 fw-normal ms-1">0 GB</span>
+                        <div class="stat-label">操作系统</div>
+                        <div class="d-flex flex-column" style="font-size: 0.75rem;">
+                            <span id="metric-os-plat" class="fw-bold">...</span>
+                            <span id="metric-os-ver" style="font-size: 0.65rem; color: var(--text-muted);">...</span>
                         </div>
                     </div>
                 </div>
@@ -543,28 +572,34 @@
                     </div>
                 </div>
 
-                <!-- 5. Groups -->
+                <!-- 4.1 Time Info -->
                 <div class="stat-card">
                     <div class="icon-circle bg-primary bg-opacity-10 text-primary">
-                        <i class="bi bi-people"></i>
+                        <i class="bi bi-clock"></i>
                     </div>
-                    <div class="stat-info">
-                        <div class="stat-label" data-i18n="stat_active_groups">活跃群组 (今日/总计)</div>
-                        <div class="stat-value">
-                            <span id="metric-groups-today">0</span> <span class="text-muted fs-6 fw-normal">/</span> <span id="metric-groups-total" class="text-muted fs-6 fw-normal">0</span>
+                    <div class="stat-info w-100">
+                        <div class="stat-label" data-i18n="stat_runtime">运行时间 / 当前时间</div>
+                        <div class="stat-value" style="font-size: 0.85rem;">
+                            <span id="metric-uptime">00:00:00</span>
+                            <span class="text-muted fs-6 fw-normal mx-1">|</span>
+                            <span id="metric-current-time" class="text-muted fs-6 fw-normal">00:00:00</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- 6. Users -->
+                <!-- 5. Groups & Users (Merged) -->
                 <div class="stat-card">
-                    <div class="icon-circle bg-success bg-opacity-10 text-success">
-                        <i class="bi bi-person"></i>
+                    <div class="icon-circle bg-primary bg-opacity-10 text-primary">
+                        <i class="bi bi-people"></i>
                     </div>
-                    <div class="stat-info">
-                        <div class="stat-label" data-i18n="stat_active_users">活跃用户 (今日/总计)</div>
-                        <div class="stat-value">
-                             <span id="metric-users-today">0</span> <span class="text-muted fs-6 fw-normal">/</span> <span id="metric-users-total" class="text-muted fs-6 fw-normal">0</span>
+                    <div class="stat-info w-100">
+                        <div class="stat-label" data-i18n="stat_active_groups_users">活跃 (群组 / 用户)</div>
+                        <div class="d-flex flex-column">
+                            <div class="stat-value" style="font-size: 1rem;">
+                                <span id="metric-groups-today">0</span><small class="text-muted"> / </small><span id="metric-groups-total" class="text-muted fw-normal" style="font-size: 0.8rem;">0</span>
+                                <span class="mx-2 text-muted">|</span>
+                                <span id="metric-users-today">0</span><small class="text-muted"> / </small><span id="metric-users-total" class="text-muted fw-normal" style="font-size: 0.8rem;">0</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1113,10 +1148,10 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h4 class="mb-0" data-i18n="sidebar_docker">Docker管理</h4>
                 <div>
-                    <button class="btn btn-sm btn-outline-primary me-2" onclick="addBotNode()">
+                    <button class="btn btn-sm btn-outline-primary me-2" onclick="addBotContainer()">
                         <i class="bi bi-plus-lg"></i> <span data-i18n="docker_add_bot">添加机器人</span>
                     </button>
-                    <button class="btn btn-sm btn-outline-success me-2" onclick="addBotNode()">
+                    <button class="btn btn-sm btn-outline-success me-2" onclick="addWorkerContainer()">
                         <i class="bi bi-plus-lg"></i> <span data-i18n="docker_add_node">添加节点</span>
                     </button>
                     <button class="btn btn-sm btn-primary" onclick="loadDockerContainers()">
@@ -1495,7 +1530,13 @@
                         </div>
                         <div class="mb-3">
                             <label for="routing-target" class="form-label" data-i18n="routing_target">目标地址</label>
-                            <input type="text" class="form-control" id="routing-target" placeholder="ws://localhost:8080, http://example.com" data-i18n-placeholder="routing_target_placeholder">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="routing-target" placeholder="ws://localhost:8080, http://example.com" data-i18n-placeholder="routing_target_placeholder">
+                                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-i18n="select_worker">选择节点</button>
+                                <ul class="dropdown-menu dropdown-menu-end" id="worker-select-dropdown">
+                                    <!-- Workers will be populated here -->
+                                </ul>
+                            </div>
                             <div class="form-text" data-i18n="routing_target_help">消息转发目标地址</div>
                         </div>
                         <div class="mb-3">
@@ -1685,7 +1726,12 @@
             // Check for Magic Link
             const magicToken = urlParams.get('magic_token');
 
-            if (magicToken) {
+                // 修改：在检查认证前，先根据是否有 token 决定是否显示登录页
+                if (!magicToken && !authToken) {
+                    document.getElementById('loginPage').style.display = 'flex';
+                }
+
+                if (magicToken) {
                 // Attempt Magic Login
                 fetch('/api/login/magic', {
                     method: 'POST',
@@ -1772,15 +1818,11 @@
             }
         }
 
-        function showOvermind() {
-             const iframe = document.getElementById('overmind-iframe');
-             if (!iframe.src || iframe.src === 'about:blank') {
-                 // 传递当前 token 给 Overmind
-                 const token = localStorage.getItem('wxbot_token');
-                 iframe.src = `/overmind/#/?token=${token}`;
-             }
-             showTab('overmind');
-         }
+        function showOvermind(e) {
+            if (e) e.preventDefault();
+            const lang = currentLang || 'zh-CN';
+            window.open(`/overmind/?lang=${lang}`, '_blank');
+        }
 
         function showTab(tabId) {
             try {
@@ -2363,14 +2405,15 @@
                     if (document.getElementById('metric-bots-total')) {
                         document.getElementById('metric-bots-total').innerText = data.bot_count_total !== undefined ? data.bot_count_total : '0';
                     }
+                    if (document.getElementById('metric-workers')) {
+                        document.getElementById('metric-workers').innerText = data.worker_count !== undefined ? data.worker_count : '0';
+                    }
 
-                    // CPU Details
+                    // CPU & OS Details
                     if (document.getElementById('metric-cpu-model') && data.cpu_model) {
                          let model = data.cpu_model;
-                         // Keep it reasonably short for the label
                          if (model.length > 25) model = model.substring(0, 25) + '...';
                          document.getElementById('metric-cpu-model').innerText = model;
-                         // Set title on the card container (grandparent)
                          const card = document.getElementById('metric-cpu-model').closest('.stat-card');
                          if (card) card.title = data.cpu_model;
                     }
@@ -2379,6 +2422,25 @@
                     }
                     if (document.getElementById('metric-cpu-freq')) {
                          document.getElementById('metric-cpu-freq').innerText = (data.cpu_freq || 0).toFixed(0) + ' MHz';
+                    }
+                    if (document.getElementById('metric-os-plat')) {
+                        document.getElementById('metric-os-plat').innerText = data.os_platform || 'Unknown';
+                    }
+                    if (document.getElementById('metric-os-ver')) {
+                        document.getElementById('metric-os-ver').innerText = '版本: ' + (data.os_version || 'Unknown');
+                    }
+
+                    // Time Metrics
+                    if (document.getElementById('metric-current-time')) {
+                        document.getElementById('metric-current-time').innerText = new Date().toLocaleTimeString();
+                    }
+                    if (document.getElementById('metric-uptime') && data.start_time) {
+                        const uptimeSeconds = Math.floor(Date.now() / 1000 - data.start_time);
+                        const h = Math.floor(uptimeSeconds / 3600);
+                        const m = Math.floor((uptimeSeconds % 3600) / 60);
+                        const s = uptimeSeconds % 60;
+                        document.getElementById('metric-uptime').innerText = 
+                            `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                     }
 
                     // New metrics
@@ -2540,6 +2602,9 @@
                     }
                     if (document.getElementById('metric-bots-total')) {
                         document.getElementById('metric-bots-total').innerText = stats.bot_count_total || 0;
+                    }
+                    if (document.getElementById('metric-workers')) {
+                        document.getElementById('metric-workers').innerText = stats.worker_count || 0;
                     }
                     
                     if (document.getElementById('metric-mem-total') && stats.memory_total) {
@@ -2943,6 +3008,11 @@
                     // Update Badge
                     const badge = document.getElementById('badge-workers');
                     if (badge) badge.innerText = workers.length;
+
+                    // Update Metrics
+                    if (document.getElementById('metric-workers')) {
+                        document.getElementById('metric-workers').innerText = workers.length;
+                    }
 
                     renderWorkers();
                 });
@@ -3727,6 +3797,8 @@
             let recvDataBuffer = [];
             let sentDataBuffer = [];
             let msgDataBuffer = [];
+            let netSentTrend = [];
+            let netRecvTrend = [];
             let sourceIsRaw = false;
 
             if (window.latestStats) {
@@ -3736,6 +3808,8 @@
                 msgDataBuffer = window.latestStats.msg_trend || [];
                 sentDataBuffer = window.latestStats.sent_trend || [];
                 recvDataBuffer = window.latestStats.recv_trend || [];
+                netSentTrend = window.latestStats.net_sent_trend || [];
+                netRecvTrend = window.latestStats.net_recv_trend || [];
                 sourceIsRaw = true;
             } else {
                 cpuDataBuffer = cpuChart ? cpuChart.data.datasets[0].data : [];
@@ -3844,9 +3918,39 @@
                     datasets = [{label: 'No Data', data: []}];
                 }
             } else if (currentDetailType === 'net') {
-                 // Net IO - currently we don't have trend for Net IO in backend
-                 // We can show current cumulative counters
-                 if (window.lastSystemStats && window.lastSystemStats.net_io && window.lastSystemStats.net_io.length > 0) {
+                 // Net IO Trend - showing throughput (diff between samples)
+                 if (netSentTrend.length > 1) {
+                     labels = Array.from({length: netSentTrend.length - 1}, (_, i) => i);
+                     const sentThroughput = [];
+                     const recvThroughput = [];
+                     
+                     for (let i = 1; i < netSentTrend.length; i++) {
+                         // Bytes -> KB/s (assuming 5s interval)
+                         const s = (netSentTrend[i] - netSentTrend[i-1]) / 1024 / 5;
+                         const r = (netRecvTrend[i] - netRecvTrend[i-1]) / 1024 / 5;
+                         sentThroughput.push(s.toFixed(2));
+                         recvThroughput.push(r.toFixed(2));
+                     }
+
+                     datasets = [
+                         {
+                             label: 'Sent (KB/s)',
+                             data: sentThroughput,
+                             borderColor: '#0dcaf0',
+                             backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                             fill: true,
+                             tension: 0.4
+                         },
+                         {
+                             label: 'Recv (KB/s)',
+                             data: recvThroughput,
+                             borderColor: '#ffc107',
+                             backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                             fill: true,
+                             tension: 0.4
+                         }
+                     ];
+                 } else if (window.lastSystemStats && window.lastSystemStats.net_io && window.lastSystemStats.net_io.length > 0) {
                      type = 'bar';
                      const io = window.lastSystemStats.net_io[0];
                      labels = ['Total Sent', 'Total Recv'];
@@ -5109,15 +5213,50 @@
             });
         }
 
-        function addBotNode() {
+        function addBotContainer() {
             const t = translations[currentLang] || translations['zh-CN'];
-            // Placeholder for now
-            alert("Feature coming soon: Auto-execute commands to deploy new bots/nodes.\n(需要后端支持自动部署脚本)");
+            if (!confirm("确定要部署新的机器人容器吗？")) return;
+            
+            fetch('/api/docker/add-bot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'ok') {
+                    alert("机器人容器已在后台开始部署");
+                    loadDockerContainers(true);
+                } else {
+                    alert(res.message || "部署请求失败");
+                }
+            })
+            .catch(err => alert("Error: " + err));
         }
 
-        // --- Overmind ---
-        function showOvermind() {
-            window.open('/overmind/', '_blank');
+        function addWorkerContainer() {
+            const t = translations[currentLang] || translations['zh-CN'];
+            if (!confirm("确定要部署新的 Worker 节点容器吗？")) return;
+            
+            fetch('/api/docker/add-worker', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'ok') {
+                    alert("Worker 节点容器已在后台开始部署");
+                    loadDockerContainers(true);
+                } else {
+                    alert(res.message || "部署请求失败");
+                }
+            })
+            .catch(err => alert("Error: " + err));
         }
 
         // --- Routing Management ---
@@ -5241,6 +5380,18 @@
             document.getElementById('routing-target').value = '';
             document.getElementById('routing-enabled').checked = true;
             
+            // Populate worker dropdown
+            const dropdown = document.getElementById('worker-select-dropdown');
+            if (dropdown && window.currentWorkers) {
+                if (window.currentWorkers.length === 0) {
+                    dropdown.innerHTML = '<li><a class="dropdown-item disabled" href="#">无在线节点</a></li>';
+                } else {
+                    dropdown.innerHTML = window.currentWorkers.map(w => 
+                        `<li><a class="dropdown-item" href="javascript:void(0)" onclick="document.getElementById('routing-target').value='${w.id}'">${w.id} (${w.addr})</a></li>`
+                    ).join('');
+                }
+            }
+
             // Update modal title for adding new rule
             const modalTitle = document.querySelector('#routingRuleModal .modal-title');
             if (modalTitle) {
@@ -5331,7 +5482,7 @@
         }
 
         function editRoutingRule(ruleId) {
-            const rule = routingRules.find(r => r.id === ruleId);
+            const rule = routingRules.find(r => r.key === ruleId);
             if (!rule) {
                 alert('规则不存在');
                 return;
@@ -5341,9 +5492,9 @@
             
             // Pre-fill the form after modal is shown
             setTimeout(() => {
-                document.getElementById('routing-pattern').value = rule.pattern || '';
-                document.getElementById('routing-target').value = rule.target || '';
-                document.getElementById('routing-enabled').checked = rule.enabled;
+                document.getElementById('routing-pattern').value = rule.key || '';
+                document.getElementById('routing-target').value = rule.worker_id || '';
+                document.getElementById('routing-enabled').checked = true;
                 
                 // Change modal title
                 const modalTitle = document.querySelector('#routingRuleModal .modal-title');

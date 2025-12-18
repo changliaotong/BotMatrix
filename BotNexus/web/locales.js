@@ -54,6 +54,7 @@ const translations = {
         "disabled": "已禁用",
         "worker_id": "工作节点ID",
         "target_worker": "目标工作节点",
+        "select_worker": "选择节点",
         "disabled": "已禁用",
         "edit": "编辑",
         "delete": "删除",

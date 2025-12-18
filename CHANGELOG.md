@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.82 (2025-12-19)
+*   **System Dashboard & API Fixes (系统仪表盘与API修复)**:
+    *   **🔧 API Response Format Fix**: Corrected `/api/bots` and `/api/workers` endpoints to return raw JSON arrays instead of wrapped objects, aligning with frontend expectations.
+    *   **📊 Worker Metrics Addition**: Added `worker_count` to global system stats API (`/api/stats`) and implemented a new "Workers" metric card in the Web UI dashboard.
+    *   **✅ Bot Data Enrichment**: Added missing `self_id` and `is_alive` fields to bot API responses, fixing the bot selection dropdown and online status filtering.
+    *   **⚡ Real-time Stat Updates**: Updated frontend logic to correctly synchronize bot and worker counts across badges and dashboard metrics.
+    *   **💾 Cache & Persistence**: Enhanced state persistence by including worker counts in local storage cache for immediate display on page load.
+
 ## v1.1.69 (2025-12-18)
 *   **Worker-Bot Bidirectional Communication (Worker-Bot双向通信)**:
     *   **🔧 Request-Response Mapping**: Implemented complete request-response mapping system using echo field to track pending requests.

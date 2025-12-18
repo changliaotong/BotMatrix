@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	dclient "github.com/docker/docker/client"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
@@ -61,6 +62,12 @@ func main() {
 	http.HandleFunc("/api/workers", manager.JWTMiddleware(manager.handleGetWorkers))
 	http.HandleFunc("/api/logs", manager.JWTMiddleware(manager.handleGetLogs))
 
+	// Docker 接口
+	http.HandleFunc("/api/docker/list", manager.JWTMiddleware(manager.handleDockerList))
+	http.HandleFunc("/api/docker/action", manager.JWTMiddleware(manager.handleDockerAction))
+	http.HandleFunc("/api/docker/add-bot", manager.JWTMiddleware(manager.handleDockerAddBot))
+	http.HandleFunc("/api/docker/add-worker", manager.JWTMiddleware(manager.handleDockerAddWorker))
+
 	// 管理员接口
 	http.HandleFunc("/api/admin/routing", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -74,6 +81,19 @@ func main() {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
+
+	// 用户管理接口 (仅限管理员)
+	http.HandleFunc("/api/admin/users", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			manager.handleAdminListUsers(w, r)
+		case http.MethodPost:
+			manager.handleAdminCreateUser(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	http.HandleFunc("/api/admin/user/reset-password", manager.AdminMiddleware(manager.handleAdminResetPassword))
 
 	http.HandleFunc("/ws/bots", manager.handleBotWebSocket)
 	http.HandleFunc("/ws/workers", manager.handleWorkerWebSocket)
@@ -160,6 +180,19 @@ func (m *Manager) createWebUIHandler() http.Handler {
 		}
 	}))
 
+	// 用户管理接口 (仅限管理员)
+	mux.HandleFunc("/api/admin/users", m.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			m.handleAdminListUsers(w, r)
+		case http.MethodPost:
+			m.handleAdminCreateUser(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/user/reset-password", m.AdminMiddleware(m.handleAdminResetPassword))
+
 	// 静态文件服务 - 同时支持本地开发和Docker环境
 	webDir := "./web"
 	if _, err := os.Stat("/app/web"); err == nil {
@@ -186,19 +219,18 @@ func (m *Manager) handleGetBots(w http.ResponseWriter, r *http.Request) {
 	for id, bot := range m.bots {
 		bots = append(bots, map[string]interface{}{
 			"id":           id,
+			"self_id":      bot.SelfID,
 			"nickname":     bot.Nickname,
 			"platform":     bot.Platform,
 			"connected":    bot.Connected.Format("2006-01-02 15:04:05"),
 			"group_count":  bot.GroupCount,
 			"friend_count": bot.FriendCount,
+			"is_alive":     true, // 当前连接的都是在线的
 		})
 	}
 	m.mutex.RUnlock()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"bots":  bots,
-		"count": len(bots),
-	})
+	json.NewEncoder(w).Encode(bots)
 }
 
 // handleGetWorkers 处理获取Worker列表的请求
@@ -212,32 +244,32 @@ func (m *Manager) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 			"id":            worker.ID,
 			"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
 			"handled_count": worker.HandledCount,
+			"is_alive":      true,
 		})
 	}
 	m.mutex.RUnlock()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"workers": workers,
-		"count":   len(workers),
-	})
+	json.NewEncoder(w).Encode(workers)
 }
 
 // 简化的管理器创建函数
 func NewManager() *Manager {
 	m := &Manager{
-		bots:            make(map[string]*BotClient),
-		subscribers:     make(map[*websocket.Conn]*Subscriber),
-		workers:         make([]*WorkerClient, 0),
-		pendingRequests: make(map[string]chan map[string]interface{}),
-		routingRules:    make(map[string]string),
-		UserStats:       make(map[int64]int64),
-		GroupStats:      make(map[int64]int64),
-		BotStats:        make(map[string]int64),
-		BotStatsSent:    make(map[string]int64),
-		UserStatsToday:  make(map[int64]int64),
-		GroupStatsToday: make(map[int64]int64),
-		BotStatsToday:   make(map[string]int64),
-		LastResetDate:   time.Now().Format("2006-01-02"),
+		bots:              make(map[string]*BotClient),
+		subscribers:       make(map[*websocket.Conn]*Subscriber),
+		workers:           make([]*WorkerClient, 0),
+		pendingRequests:   make(map[string]chan map[string]interface{}),
+		pendingTimestamps: make(map[string]time.Time),
+		routingRules:      make(map[string]string),
+		UserStats:         make(map[int64]int64),
+		GroupStats:        make(map[int64]int64),
+		BotStats:          make(map[string]int64),
+		BotStatsSent:      make(map[string]int64),
+		UserStatsToday:    make(map[int64]int64),
+		GroupStatsToday:   make(map[int64]int64),
+		BotStatsToday:     make(map[string]int64),
+		LastResetDate:     time.Now().Format("2006-01-02"),
+		StartTime:         time.Now(),
 		connectionStats: ConnectionStats{
 			BotConnectionDurations:    make(map[string]time.Duration),
 			WorkerConnectionDurations: make(map[string]time.Duration),
@@ -248,7 +280,13 @@ func NewManager() *Manager {
 		},
 		statsMutex: sync.RWMutex{},
 		mutex:      sync.RWMutex{},
-		// 初始化用户存储
+		// Bot Data Cache
+		groupCache:  make(map[string]map[string]interface{}),
+		memberCache: make(map[string]map[string]interface{}),
+		friendCache: make(map[string]map[string]interface{}),
+		cacheMutex:  sync.RWMutex{},
+
+		// User Management
 		users:      make(map[string]*User),
 		usersMutex: sync.RWMutex{},
 	}
@@ -282,6 +320,15 @@ func NewManager() *Manager {
 		m.rdb = nil
 	} else {
 		log.Printf("[INFO] 已连接到Redis")
+	}
+
+	// 初始化Docker客户端
+	cli, err := dclient.NewClientWithOpts(dclient.FromEnv, dclient.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Printf("[WARN] 无法初始化Docker客户端: %v", err)
+	} else {
+		m.dockerClient = cli
+		log.Printf("[INFO] Docker客户端已初始化")
 	}
 
 	return m
