@@ -61,6 +61,7 @@ func main() {
 	http.HandleFunc("/api/bots", manager.JWTMiddleware(manager.handleGetBots))
 	http.HandleFunc("/api/workers", manager.JWTMiddleware(manager.handleGetWorkers))
 	http.HandleFunc("/api/logs", manager.JWTMiddleware(manager.handleGetLogs))
+	http.HandleFunc("/api/contacts", manager.JWTMiddleware(manager.handleGetContacts))
 	http.HandleFunc("/api/admin/config", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -174,6 +175,7 @@ func (m *Manager) createWebUIHandler() http.Handler {
 	mux.HandleFunc("/api/stats", m.JWTMiddleware(m.handleGetStats))
 	mux.HandleFunc("/api/system/stats", m.JWTMiddleware(m.handleGetSystemStats))
 	mux.HandleFunc("/api/logs", m.JWTMiddleware(m.handleGetLogs))
+	mux.HandleFunc("/api/contacts", m.JWTMiddleware(m.handleGetContacts))
 	mux.HandleFunc("/api/admin/config", m.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -322,6 +324,10 @@ func NewManager() *Manager {
 		if err := m.loadUsersFromDB(); err != nil {
 			log.Printf("[WARN] 从数据库加载用户失败: %v", err)
 		}
+		// 确保默认管理员存在
+		m.usersMutex.Lock()
+		m.initDefaultAdmin()
+		m.usersMutex.Unlock()
 		// 从数据库加载路由规则
 		if err := m.loadRoutingRulesFromDB(); err != nil {
 			log.Printf("[WARN] 从数据库加载路由规则失败: %v", err)

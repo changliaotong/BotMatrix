@@ -27,6 +27,7 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, `{"success": false, "message": "Missing or invalid authorization header"}`)
 			return
@@ -35,6 +36,7 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := ValidateToken(tokenString)
 		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, `{"success": false, "message": "Invalid or expired token"}`)
 			return
@@ -54,7 +56,7 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			if err == nil {
 				user = &u
 				exists = true
-				
+
 				// 更新内存缓存
 				m.usersMutex.Lock()
 				m.users[u.Username] = &u
@@ -63,6 +65,7 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if !exists || user.SessionVersion != claims.SessionVersion {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprintf(w, `{"success": false, "message": "Session expired or invalidated"}`)
 			return
@@ -79,6 +82,7 @@ func (m *Manager) AdminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return m.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := r.Context().Value(UserClaimsKey).(*UserClaims)
 		if !ok || !claims.IsAdmin {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			fmt.Fprintf(w, `{"success": false, "message": "Admin privileges required"}`)
 			return

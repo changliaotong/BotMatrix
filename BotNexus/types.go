@@ -75,6 +75,7 @@ type UserClaims struct {
 type LogEntry struct {
 	Level     string    `json:"level"`
 	Message   string    `json:"message"`
+	Time      string    `json:"time"`
 	Timestamp time.Time `json:"timestamp"`
 }
 

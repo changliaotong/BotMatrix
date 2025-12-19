@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.87 (2025-12-19)
+*   **UI Refresh & Routing Resilience (UI刷新与路由弹性增强)**:
+    *   **📊 5-Column Stats Grid**: Re-engineered the dashboard statistics layout with a responsive 5-column grid, improving data density and visual balance for key metrics.
+    *   **📅 Enhanced Time Display**: Added full date (YYYY-MM-DD) to the system time display on the dashboard for better temporal context.
+    *   **⚡ Auto-Compact View Mode**: Implemented intelligent list rendering for Bots (>12) and Workers (>8). The system now automatically switches to "Compact Mode" to maintain usability with large terminal counts, while still allowing manual overrides.
+    *   **🧩 Robust Sorting & Validation**: Fixed critical JavaScript errors in Group and Friend lists (`localeCompare` of undefined, `contacts.filter` is not a function) by adding strict array validation and undefined checks.
+    *   **🛡️ Self-Healing Group Routing**: Optimized `forwardWorkerRequestToBot` to automatically clear stale group-bot mappings when "Not in Group" (retcode: 1200) or "Removed" errors are detected.
+    *   **🔄 Real-time Cache Sync**: Enhanced message processing to update group-bot associations on every incoming message and asynchronously trigger bot info refreshes after routing failures.
+    *   **📈 Resource Visualization**: Added intuitive CPU and Memory usage progress bars to the dashboard for at-a-glance system health monitoring.
+    *   **🌍 I18n Standardization**: Synchronized internationalization labels across the entire dashboard, specifically adding missing worker and runtime stats for both Chinese and English locales.
+    *   **⏱️ RTT Tracking Fix**: Resolved a delimiter conflict (switching from `:` to `|`) and fixed missing timestamps to ensure accurate Round-Trip Time (RTT) monitoring for all worker connections.
+
 ## v1.1.86 (2025-12-19)
 *   **Intelligent API Routing & Group Awareness (智能API路由与群组感知)**:
     *   **🎯 Context-Aware API Routing**: Significantly improved `forwardWorkerRequestToBot` to intelligently route API requests (like `get_group_member_info`) based on `self_id` or `group_id`. This resolves the "Group member does not exist" (retcode: 1200) error caused by routing requests to the wrong bot.

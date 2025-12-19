@@ -1,14 +1,28 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
 )
+
+// ReadJSONWithNumber 从WebSocket读取JSON并使用json.Number保留大数字精度
+func ReadJSONWithNumber(conn *websocket.Conn, v interface{}) error {
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(message))
+	decoder.UseNumber()
+	return decoder.Decode(v)
+}
 
 // JWT相关 - UserClaims定义已从types.go导入
 
@@ -43,15 +57,22 @@ func GenerateRandomToken(length int) string {
 
 // 安全转换接口到字符串
 func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
 	switch val := v.(type) {
 	case string:
 		return val
+	case json.Number:
+		return val.String()
 	case float64:
-		return fmt.Sprintf("%.0f", val)
+		return strconv.FormatFloat(val, 'f', -1, 64)
 	case int64:
-		return fmt.Sprintf("%d", val)
+		return strconv.FormatInt(val, 10)
 	case int:
-		return fmt.Sprintf("%d", val)
+		return strconv.Itoa(val)
+	case uint64:
+		return strconv.FormatUint(val, 10)
 	default:
 		return fmt.Sprintf("%v", val)
 	}
@@ -59,7 +80,17 @@ func toString(v interface{}) string {
 
 // 安全转换接口到int64
 func toInt64(v interface{}) int64 {
+	if v == nil {
+		return 0
+	}
 	switch val := v.(type) {
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			return i
+		}
+		if f, err := val.Float64(); err == nil {
+			return int64(f)
+		}
 	case float64:
 		return int64(val)
 	case int64:

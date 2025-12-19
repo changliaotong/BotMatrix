@@ -302,15 +302,18 @@
     /* Custom Stats Grid */
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        grid-template-columns: repeat(5, 1fr);
         gap: 1rem;
         margin-bottom: 1.5rem;
     }
-    @media (min-width: 768px) {
-        .stats-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+    @media (max-width: 1400px) {
+        .stats-grid { grid-template-columns: repeat(3, 1fr); }
     }
-    @media (min-width: 1400px) {
-        .stats-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    @media (max-width: 992px) {
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 576px) {
+        .stats-grid { grid-template-columns: 1fr; }
     }
     .icon-circle {
         width: 42px;
@@ -595,15 +598,21 @@
                         <i class="bi bi-cpu-fill"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label" id="metric-cpu-model">系统资源</div>
+                        <div class="stat-label" id="metric-cpu-model" data-i18n="system_resource_details">系统资源</div>
                         <div class="d-flex flex-column gap-1 mt-1">
                             <div class="d-flex justify-content-between align-items-center">
-                                <span class="fw-bold" style="font-size: 0.9rem;">CPU: <span id="metric-cpu">0%</span></span>
-                                <span id="metric-cpu-cores" style="font-size: 0.7rem; color: var(--text-muted);">0 核</span>
+                                <span class="fw-bold" style="font-size: 0.85rem;"><span data-i18n="cpu_label">CPU:</span> <span id="metric-cpu">0%</span></span>
+                                <div class="progress flex-grow-1 mx-2" style="height: 4px; background-color: rgba(0,0,0,0.05);">
+                                    <div id="metric-cpu-bar" class="progress-bar bg-warning" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <span style="font-size: 0.7rem; color: var(--text-muted);"><span id="metric-cpu-cores">0</span><span data-i18n="cores_label">核</span></span>
                             </div>
                             <div class="d-flex justify-content-between align-items-center">
-                                <span class="fw-bold" style="font-size: 0.9rem;">内存: <span id="metric-mem">0 MB</span> / <span id="metric-mem-total" class="text-muted fw-normal">0 GB</span></span>
-                                <span id="metric-cpu-freq" style="font-size: 0.7rem; color: var(--text-muted);">0 MHz</span>
+                                <span class="fw-bold" style="font-size: 0.85rem;"><span data-i18n="mem_label">内存:</span> <span id="metric-mem">0 MB</span></span>
+                                <div class="progress flex-grow-1 mx-2" style="height: 4px; background-color: rgba(0,0,0,0.05);">
+                                    <div id="metric-mem-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <span id="metric-mem-total" style="font-size: 0.7rem; color: var(--text-muted);">0 GB</span>
                             </div>
                         </div>
                     </div>
@@ -1071,63 +1080,66 @@
 
         <!-- Bots Tab -->
         <div id="tab-bots" class="content-section" style="display:none;">
-            <ul class="nav nav-tabs mb-4">
-                <li class="nav-item">
-                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#view-bots">
-                        <span data-i18n="tab_access_bots">接入端 (Bots)</span> <span id="badge-bots" class="badge bg-secondary ms-1">0</span>
-                    </button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers(currentWorkers.length === 0)">
-                        <span data-i18n="tab_process_workers">处理端 (Workers)</span> <span id="badge-workers" class="badge bg-secondary ms-1">0</span>
-                    </button>
-                </li>
-            </ul>
-
-            <div class="tab-content">
-                <div class="tab-pane fade show active" id="view-bots">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div class="d-flex gap-2 align-items-center w-100">
-                            <input type="text" class="form-control form-control-sm" placeholder="搜索机器人..." data-i18n-placeholder="search_bots_placeholder" style="width: 200px;" onkeyup="filterBots(this.value)">
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary" onclick="sortBots('name')" id="btn-sort-bot-name" data-i18n="sort_name">名称</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('id')" id="btn-sort-bot-id" data-i18n="sort_id">ID</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('platform')" id="btn-sort-bot-platform" data-i18n="sort_protocol">协议</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('count')" id="btn-sort-bot-count" data-i18n="sort_group_count">群数</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('msg')" id="btn-sort-bot-msg" data-i18n="sort_messages">消息</button>
-                                <button class="btn btn-outline-secondary" onclick="sortBots('time')" id="btn-sort-bot-time" data-i18n="sort_time">时间</button>
+            <div class="row g-4">
+                <!-- Left Column: Bots -->
+                <div class="col-xl-7 col-lg-6">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-robot me-2"></i><span data-i18n="tab_access_bots">接入端 (Bots)</span> <span id="badge-bots" class="badge bg-secondary ms-1">0</span></h5>
+                            <div class="d-flex gap-2">
+                                <input type="text" class="form-control form-control-sm" placeholder="搜索机器人..." data-i18n-placeholder="search_bots_placeholder" style="width: 150px;" onkeyup="filterBots(this.value)">
+                                <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()" data-i18n="refresh">刷新</button>
                             </div>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary active" id="btn-bot-view-detail" onclick="setBotViewMode('detail')" title="详细模式" data-i18n-title="view_mode_detail"><i class="bi bi-card-text"></i></button>
-                                <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()" data-i18n="refresh">刷新</button>
                         </div>
-                    </div>
-                    <div class="row" id="bot-list-container">
-                        <!-- Bot Cards -->
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" onclick="sortBots('name')" id="btn-sort-bot-name" data-i18n="sort_name">名称</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortBots('id')" id="btn-sort-bot-id" data-i18n="sort_id">ID</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortBots('platform')" id="btn-sort-bot-platform" data-i18n="sort_protocol">协议</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortBots('count')" id="btn-sort-bot-count" data-i18n="sort_group_count">群数</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortBots('msg')" id="btn-sort-bot-msg" data-i18n="sort_messages">消息</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortBots('time')" id="btn-sort-bot-time" data-i18n="sort_time">时间</button>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary active" id="btn-bot-view-detail" onclick="setBotViewMode('detail')" title="详细模式" data-i18n-title="view_mode_detail"><i class="bi bi-card-text"></i></button>
+                                    <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
+                                </div>
+                            </div>
+                            <div class="row g-3" id="bot-list-container" style="max-height: calc(100vh - 350px); overflow-y: auto;">
+                                <!-- Bot Cards -->
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="tab-pane fade" id="view-workers">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div class="d-flex gap-2 align-items-center w-100">
-                            <input type="text" class="form-control form-control-sm" placeholder="搜索Worker..." data-i18n-placeholder="search_workers_placeholder" style="width: 200px;" onkeyup="filterWorkers(this.value)">
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('addr')" id="btn-sort-worker-addr" data-i18n="sort_address">地址</button>
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('time')" id="btn-sort-worker-time" data-i18n="sort_time">时间</button>
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('msg')" id="btn-sort-worker-msg" data-i18n="sort_processed">处理</button>
-                                <button class="btn btn-outline-secondary" onclick="sortWorkers('status')" id="btn-sort-worker-status" data-i18n="sort_status">状态</button>
+
+                <!-- Right Column: Workers -->
+                <div class="col-xl-5 col-lg-6">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-cpu me-2"></i><span data-i18n="tab_process_workers">处理端 (Workers)</span> <span id="badge-workers" class="badge bg-secondary ms-1">0</span></h5>
+                            <div class="d-flex gap-2">
+                                <input type="text" class="form-control form-control-sm" placeholder="搜索Worker..." data-i18n-placeholder="search_workers_placeholder" style="width: 150px;" onkeyup="filterWorkers(this.value)">
+                                <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()" data-i18n="refresh">刷新</button>
                             </div>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-secondary active" id="btn-worker-view-detail" onclick="setWorkerViewMode('detail')" title="详细模式" data-i18n-title="view_mode_detail"><i class="bi bi-card-text"></i></button>
-                                <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()" data-i18n="refresh">刷新</button>
                         </div>
-                    </div>
-                    <div class="row" id="worker-list-container">
-                        <!-- Worker Cards -->
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" onclick="sortWorkers('addr')" id="btn-sort-worker-addr" data-i18n="sort_address">地址</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortWorkers('time')" id="btn-sort-worker-time" data-i18n="sort_time">时间</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortWorkers('msg')" id="btn-sort-worker-msg" data-i18n="sort_processed">处理</button>
+                                    <button class="btn btn-outline-secondary" onclick="sortWorkers('status')" id="btn-sort-worker-status" data-i18n="sort_status">状态</button>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary active" id="btn-worker-view-detail" onclick="setWorkerViewMode('detail')" title="详细模式" data-i18n-title="view_mode_detail"><i class="bi bi-card-text"></i></button>
+                                    <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
+                                </div>
+                            </div>
+                            <div class="row g-3" id="worker-list-container" style="max-height: calc(100vh - 350px); overflow-y: auto;">
+                                <!-- Worker Cards -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1594,7 +1606,7 @@
                 <div class="col-md-12 admin-only" style="display:none;">
                     <div class="card mb-4 border-primary">
                         <div class="card-header bg-primary text-white">
-                            <i class="bi bi-server me-2"></i> 后端服务配置 (管理员)
+                            <i class="bi bi-server me-2"></i> <span data-i18n="backend_config_title">后端服务配置 (管理员)</span>
                         </div>
                         <div class="card-body">
                             <form id="backend-config-form">
@@ -1827,11 +1839,10 @@
             if (!oldPwd) return alert(t.enter_current_pwd || '请输入当前密码');
 
             try {
-                const res = await fetch('/api/user/password', {
+                const res = await fetchWithAuth('/api/user/password', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
                 });
@@ -1854,9 +1865,7 @@
             if (authRole !== 'admin' && authRole !== 'super') return;
             
             try {
-                const res = await fetch('/api/admin/config', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
+                const res = await fetchWithAuth('/api/admin/config');
                 if (!res.ok) throw new Error('Failed to load config');
                 
                 const config = await res.json();
@@ -1886,11 +1895,10 @@
             if (!confirm('确定要保存后端配置吗？部分修改（如端口）需要重启服务后生效。')) return;
 
             try {
-                const res = await fetch('/api/admin/config', {
+                const res = await fetchWithAuth('/api/admin/config', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(config)
                 });
@@ -1910,6 +1918,33 @@
         let authToken = localStorage.getItem('wxbot_token');
         let authRole = localStorage.getItem('wxbot_role');
         let currentBotId = '';
+
+        /**
+         * 封装带认证的 fetch 请求
+         */
+        async function fetchWithAuth(url, options = {}) {
+            if (!authToken) {
+                console.error('No auth token found');
+                throw new Error('未登录');
+            }
+            
+            const defaultOptions = {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            };
+            
+            // 合并 options
+            const mergedOptions = {
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...(options.headers || {})
+                }
+            };
+            
+            return fetch(url, mergedOptions);
+        }
 
         // Check Auth on Load
         document.addEventListener('DOMContentLoaded', () => {
@@ -2188,7 +2223,7 @@
                 const hash = window.location.hash;
                 if (hash) {
                     const tabId = hash.substring(1);
-                    const validTabs = ['dashboard', 'bots', 'groups', 'monitor', 'workers', 'docker', 'routing', 'logs', 'debug', 'settings'];
+                    const validTabs = ['dashboard', 'bots', 'groups', 'monitor', 'workers', 'docker', 'routing', 'logs', 'debug', 'users', 'settings'];
                     const isValidTab = validTabs.includes(tabId) && document.getElementById('tab-' + tabId);
                     
                     if (isValidTab) {
@@ -2276,9 +2311,12 @@
         let serverStartTime = null;
 
         function updateTimeDisplay() {
-            // Current Time
+            // Current Time & Date
             if (document.getElementById('metric-current-time')) {
-                document.getElementById('metric-current-time').innerText = new Date().toLocaleTimeString();
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+                const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+                document.getElementById('metric-current-time').innerText = `${dateStr} ${timeStr}`;
             }
             // Up Time
             if (document.getElementById('metric-uptime') && serverStartTime) {
@@ -2294,9 +2332,7 @@
         async function fetchSystemStats(updateDetails = false) {
             if (!authToken) return;
             try {
-                const res = await fetch('/api/system/stats', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
+                const res = await fetchWithAuth('/api/system/stats');
                 if (!res.ok) throw new Error(res.statusText);
                 const data = await res.json();
                 lastSystemStats = data;
@@ -2306,6 +2342,9 @@
                 if (document.getElementById('metric-cpu')) {
                     const cpu = (data.cpu_usage !== undefined && data.cpu_usage !== null) ? data.cpu_usage : 0;
                     document.getElementById('metric-cpu').innerText = cpu.toFixed(1) + '%';
+                    if (document.getElementById('metric-cpu-bar')) {
+                        document.getElementById('metric-cpu-bar').style.width = cpu.toFixed(1) + '%';
+                    }
                 }
 
                 // OS Info
@@ -2331,6 +2370,9 @@
                     // This might overlap with updateStats, but ensures system stats also update it
                     if (document.getElementById('metric-mem-percent')) {
                         document.getElementById('metric-mem-percent').innerText = data.mem_usage.toFixed(1) + '%';
+                    }
+                    if (document.getElementById('metric-mem-bar')) {
+                        document.getElementById('metric-mem-bar').style.width = data.mem_usage.toFixed(1) + '%';
                     }
                 }
 
@@ -2643,9 +2685,7 @@
 
         function updateStats() {
             if (!authToken) return;
-            fetch('/api/stats', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
+            fetchWithAuth('/api/stats')
                 .then(r => r.json())
                 .then(data => {
                     window.latestStats = data; // Store globally for details view
@@ -2653,7 +2693,12 @@
                         document.getElementById('metric-goroutines').innerText = data.goroutines !== undefined ? data.goroutines : '0';
                     }
                     if (document.getElementById('metric-mem')) {
-                        document.getElementById('metric-mem').innerText = data.memory_alloc !== undefined ? formatBytes(data.memory_alloc) : '0 B';
+                        const used = data.memory_used !== undefined ? data.memory_used : (data.memory_alloc !== undefined ? data.memory_alloc : 0);
+                        document.getElementById('metric-mem').innerText = formatBytes(used);
+                        if (data.memory_total && document.getElementById('metric-mem-bar')) {
+                            const pct = (used / data.memory_total) * 100;
+                            document.getElementById('metric-mem-bar').style.width = pct.toFixed(1) + '%';
+                        }
                     }
                     if (document.getElementById('metric-mem-total')) {
                         document.getElementById('metric-mem-total').innerText = data.memory_total !== undefined ? formatBytes(data.memory_total) : '0 B';
@@ -2681,7 +2726,7 @@
                          if (card) card.title = data.cpu_model;
                     }
                     if (document.getElementById('metric-cpu-cores')) {
-                         document.getElementById('metric-cpu-cores').innerText = (data.cpu_cores_physical || 0) + 'P/' + (data.cpu_cores_logical || 0) + 'L 核';
+                         document.getElementById('metric-cpu-cores').innerText = (data.cpu_cores_physical || 0) + 'P/' + (data.cpu_cores_logical || 0) + 'L';
                     }
                     if (document.getElementById('metric-cpu-freq')) {
                          document.getElementById('metric-cpu-freq').innerText = (data.cpu_freq || 0).toFixed(0) + ' MHz';
@@ -2690,7 +2735,8 @@
                         document.getElementById('metric-os-plat').innerText = data.os_platform || 'Unknown';
                     }
                     if (document.getElementById('metric-os-ver')) {
-                        document.getElementById('metric-os-ver').innerText = '版本: ' + (data.os_version || 'Unknown');
+                        const t = translations[currentLang] || translations['zh-CN'];
+                        document.getElementById('metric-os-ver').innerText = (t.version_label || '版本: ') + (data.os_version || 'Unknown');
                     }
 
                     if (data.start_time) {
@@ -2909,6 +2955,7 @@
 
         function setBotViewMode(mode) {
             botViewMode = mode;
+            window._botViewModeManuallySet = true;
             localStorage.setItem('bot_view_mode', mode);
             updateViewModeUI('bot', mode);
             renderBots();
@@ -2916,6 +2963,7 @@
 
         function setWorkerViewMode(mode) {
             workerViewMode = mode;
+            window._workerViewModeManuallySet = true;
             localStorage.setItem('worker_view_mode', mode);
             updateViewModeUI('worker', mode);
             renderWorkers();
@@ -2973,9 +3021,7 @@
                 }
             }
 
-            fetch('/api/bots', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
+            fetchWithAuth('/api/bots')
                 .then(r => r.json())
                 .then(bots => {
                     currentBots = bots;
@@ -3127,6 +3173,13 @@
                        (b.platform || '').toLowerCase().includes(botFilterText);
             });
 
+            // Auto switch to compact mode if many bots
+            if (bots.length > 12 && botViewMode === 'detail' && !window._botViewModeManuallySet) {
+                botViewMode = 'compact';
+                document.getElementById('btn-bot-view-detail').classList.remove('active');
+                document.getElementById('btn-bot-view-compact').classList.add('active');
+            }
+
             // Sort
             bots.sort((a, b) => {
                 // Always put online bots first
@@ -3210,7 +3263,7 @@
                     }
 
                     return `
-                        <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                        <div class="col-sm-12 col-md-6 col-lg-4 col-xl-4 col-xxl-3 mb-3">
                             <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
                                 <div class="d-flex align-items-center mb-2">
                                     <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 48px; height: 48px; overflow: hidden; background: var(--bg-list-item);">
@@ -3283,9 +3336,7 @@
                 }
             }
 
-            fetch('/api/workers', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
+            fetchWithAuth('/api/workers')
                 .then(r => r.json())
                 .then(workers => {
                     currentWorkers = workers;
@@ -3356,6 +3407,12 @@
                        (w.status || '').toLowerCase().includes(workerFilterText);
             });
 
+            // Auto switch to compact mode if many workers
+            if (workers.length > 8 && workerViewMode === 'detail' && !window._workerViewModeManuallySet) {
+                workerViewMode = 'compact';
+                updateViewModeUI('worker', 'compact');
+            }
+
             // Sort
             workers.sort((a, b) => {
                 let res = 0;
@@ -3385,7 +3442,7 @@
                 
                 if (workerViewMode === 'compact') {
                     return `
-                    <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                    <div class="col-sm-6 col-md-6 col-lg-4 col-xl-4 col-xxl-3 mb-3">
                         <div class="card p-2 h-100 shadow-sm">
                             <div class="d-flex align-items-center mb-2">
                                 <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px;">
@@ -3411,7 +3468,7 @@
                 }
 
                 return `
-                    <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
+                    <div class="col-sm-12 col-md-6 col-lg-6 col-xl-6 col-xxl-4 mb-3">
                         <div class="card p-2 h-100 shadow-sm">
                             <div class="d-flex align-items-center mb-2">
                                 <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
@@ -3498,11 +3555,10 @@
             const selector = document.getElementById('log-bot-selector-full');
             const botId = selector ? selector.value : '';
 
-            fetch(`/api/logs?bot_id=${botId}`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
+            fetchWithAuth(`/api/logs?bot_id=${botId}`)
                 .then(r => r.json())
-                .then(logs => {
+                .then(data => {
+                    const logs = data.logs || [];
                     const container = document.getElementById('log-container-full');
                     if (!container) return;
                     
@@ -3562,11 +3618,10 @@
             const selector = document.getElementById('log-bot-selector');
             const botId = selector ? selector.value : '';
 
-            fetch(`/api/logs?bot_id=${botId}`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
+            fetchWithAuth(`/api/logs?bot_id=${botId}`)
                 .then(r => r.json())
-                .then(logs => {
+                .then(data => {
+                    const logs = data.logs || [];
                     const container = document.getElementById('log-container');
                     container.innerHTML = logs.map(log => `
                         <div class="log-entry">
@@ -3602,11 +3657,10 @@
                 return;
             }
 
-            fetch('/api/action', {
+            fetchWithAuth('/api/action', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     bot_id: botId,
@@ -3797,16 +3851,11 @@
                 }
             }
 
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-            if (authToken) {
-                headers['Authorization'] = `Bearer ${authToken}`;
-            }
-
-            const res = await fetch('/api/action', {
+            const res = await fetchWithAuth('/api/action', {
                 method: 'POST',
-                headers: headers,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     bot_id: currentBotId,
                     action: action,
@@ -3929,11 +3978,22 @@
             listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
             
             try {
-                const response = await fetch('/api/contacts');
-                const contacts = await response.json();
+                const response = await fetchWithAuth('/api/contacts');
+                const text = await response.text();
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                }
+                let contacts = [];
+                try {
+                    contacts = JSON.parse(text);
+                    if (!Array.isArray(contacts)) contacts = [];
+                } catch (e) {
+                    console.error("Failed to parse contacts JSON:", e, "Raw text:", text);
+                    throw new Error("JSON 解析错误: " + e.message);
+                }
                 
                 // Filter by current Bot and type private
-                const friends = contacts.filter(c => c.bot_id === currentBotId && c.type === 'private');
+                const friends = contacts.filter(c => c && c.bot_id === currentBotId && c.type === 'private');
                 
                 currentFriends = friends;
                 renderFriends(friends);
@@ -3947,8 +4007,9 @@
             if (!friends) friends = currentFriends;
             
             // Filter
-            const keyword = document.getElementById('friend-search').value.toLowerCase();
-            let filtered = friends.filter(f => {
+            const keyword = (document.getElementById('friend-search').value || '').toLowerCase();
+            let filtered = (friends || []).filter(f => {
+                if (!f) return false;
                 const name = (f.name || '').toLowerCase();
                 const id = (f.id || '').toString();
                 return name.includes(keyword) || id.includes(keyword);
@@ -3958,11 +4019,11 @@
             filtered.sort((a, b) => {
                 let res = 0;
                 if (friendSortBy === 'name') {
-                    const nameA = a.name || '';
-                    const nameB = b.name || '';
+                    const nameA = a ? (a.name || '') : '';
+                    const nameB = b ? (b.name || '') : '';
                     res = nameA.localeCompare(nameB, 'zh');
                 } else if (friendSortBy === 'id') {
-                    res = String(a.id).localeCompare(String(b.id));
+                    res = String(a ? a.id : '').localeCompare(String(b ? b.id : ''));
                 }
                 return friendSortAsc ? res : -res;
             });
@@ -4382,11 +4443,22 @@
             
             try {
                 // Fetch from new contacts API
-                const response = await fetch('/api/contacts');
-                const contacts = await response.json();
+                const response = await fetchWithAuth('/api/contacts');
+                const text = await response.text();
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                }
+                let contacts = [];
+                try {
+                    contacts = JSON.parse(text);
+                    if (!Array.isArray(contacts)) contacts = [];
+                } catch (e) {
+                    console.error("Failed to parse contacts JSON:", e, "Raw text:", text);
+                    throw new Error("JSON 解析错误: " + e.message);
+                }
                 
                 // Filter by current Bot
-                const filtered = contacts.filter(c => c.bot_id === currentBotId);
+                const filtered = contacts.filter(c => c && c.bot_id === currentBotId);
                 
                 currentGroups = filtered;
                 renderGroups(filtered);
@@ -4439,20 +4511,21 @@
         function renderGroups(groups) {
             const listEl = document.getElementById('group-list');
             const t = translations[currentLang] || translations['zh-CN'];
-            if (groups.length === 0) {
-                listEl.innerHTML = `<div class="text-center p-4 text-muted">${t.no_groups}</div>`;
+            if (!groups || groups.length === 0) {
+                listEl.innerHTML = `<div class="text-center p-4 text-muted">${t.no_groups || '未找到会话'}</div>`;
                 return;
             }
 
             // Sort logic
             const sortedGroups = [...groups].sort((a, b) => {
                 let res = 0;
+                if (!a || !b) return 0;
                 if (groupSortBy === 'name') {
-                    res = a.name.localeCompare(b.name, 'zh-CN');
+                    res = (a.name || '').localeCompare(b.name || '', 'zh-CN');
                 } else if (groupSortBy === 'count') {
                     res = 0; // Not available in session
                 } else if (groupSortBy === 'id') {
-                    res = String(a.id).localeCompare(String(b.id));
+                    res = String(a.id || '').localeCompare(String(b.id || ''));
                 } else if (groupSortBy === 'msg_today') {
                     const statA = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[a.id] || 0) : 0;
                     const statB = latestChatStats.group_stats_today ? (latestChatStats.group_stats_today[b.id] || 0) : 0;
@@ -4822,11 +4895,10 @@
                     auto_recall: autoRecall
                 };
 
-                const res = await fetch('/api/action', {
+                const res = await fetchWithAuth('/api/action', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(body)
                 });
@@ -4862,11 +4934,10 @@
             btn.disabled = true;
 
             try {
-                const res = await fetch('/api/smart_action', {
+                const res = await fetchWithAuth('/api/smart_action', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + authToken
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         action: 'send_group_msg',
@@ -5049,9 +5120,7 @@
 
         function updateChatStats() {
             if (!authToken) return;
-            fetch('/api/stats/chat', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
+            fetchWithAuth('/api/stats/chat')
                 .then(r => r.json())
                 .then(data => {
                     latestChatStats = data;
@@ -5443,11 +5512,9 @@
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" data-i18n="loading">Loading...</td></tr>';
             }
             
-            fetch('/api/docker/list', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            })
-            .then(r => r.json())
-            .then(containers => {
+            fetchWithAuth('/api/docker/list')
+                .then(r => r.json())
+                .then(containers => {
                  if (!containers || containers.length === 0) {
                      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" data-i18n="no_data">No Data</td></tr>';
                      return;
@@ -5494,11 +5561,10 @@
             // For now, simple alert or just proceed. 
             // Ideally we should disable the button.
             
-            fetch('/api/docker/action', {
+            fetchWithAuth('/api/docker/action', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     container_id: id,
@@ -5523,11 +5589,10 @@
             const t = translations[currentLang] || translations['zh-CN'];
             if (!confirm("确定要部署新的机器人容器吗？")) return;
             
-            fetch('/api/docker/add-bot', {
+            fetchWithAuth('/api/docker/add-bot', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
+                    'Content-Type': 'application/json'
                 }
             })
             .then(r => r.json())
@@ -5546,11 +5611,10 @@
             const t = translations[currentLang] || translations['zh-CN'];
             if (!confirm("确定要部署新的 Worker 节点容器吗？")) return;
             
-            fetch('/api/docker/add-worker', {
+            fetchWithAuth('/api/docker/add-worker', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
+                    'Content-Type': 'application/json'
                 }
             })
             .then(r => r.json())
@@ -5582,9 +5646,7 @@
             `;
             
             try {
-                const response = await fetch('/api/admin/routing', {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
+                const response = await fetchWithAuth('/api/admin/routing');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -5728,11 +5790,10 @@
             }
             
             try {
-                const response = await fetch('/api/admin/routing', {
+                const response = await fetchWithAuth('/api/admin/routing', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         key: pattern,
@@ -5763,11 +5824,10 @@
             }
             
             try {
-                const response = await fetch('/api/admin/routing', {
+                const response = await fetchWithAuth('/api/admin/routing', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         key: ruleId,
@@ -5830,11 +5890,10 @@
             }
             
             try {
-                const response = await fetch(`/api/admin/routing/${ruleId}`, {
+                const response = await fetchWithAuth(`/api/admin/routing/${ruleId}`, {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         pattern: pattern,
@@ -5956,7 +6015,7 @@
             users.forEach(user => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${user.username}</td>
+                    <td>${user.id}</td>
                     <td>${user.username}</td>
                     <td><span class="badge ${user.is_admin ? 'bg-danger' : 'bg-info'}">${user.is_admin ? 'Admin' : 'User'}</span></td>
                     <td>${new Date(user.created_at).toLocaleString()}</td>

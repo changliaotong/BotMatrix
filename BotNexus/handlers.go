@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -282,10 +283,16 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	netRecvTrend := append([]uint64{}, m.NetRecvTrend...)
 	m.HistoryMutex.RUnlock()
 
+	// 获取内存使用情况
+	vm, _ := mem.VirtualMemory()
+
 	stats := map[string]interface{}{
 		"goroutines":          runtime.NumGoroutine(),
 		"memory_alloc":        mStats.Alloc,
-		"memory_total":        mStats.Sys,
+		"memory_total":        vm.Total,
+		"memory_used":         vm.Used,
+		"memory_free":         vm.Free,
+		"memory_used_percent": vm.UsedPercent,
 		"bot_count":           onlineBots,
 		"worker_count":        onlineWorkers,
 		"bot_count_offline":   offlineBots,
@@ -440,9 +447,32 @@ func (m *Manager) handleGetSystemStats(w http.ResponseWriter, r *http.Request) {
 // handleGetLogs 处理获取日志的请求
 func (m *Manager) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	logs := m.GetLogs(100) // 获取最近100条日志
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"logs": []string{"日志功能开发中..."},
+		"success": true,
+		"logs":    logs,
 	})
+}
+
+// handleGetContacts 处理获取联系人/群组信息的请求
+func (m *Manager) handleGetContacts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	m.cacheMutex.RLock()
+	defer m.cacheMutex.RUnlock()
+
+	// 整合群组和好友信息
+	contacts := make([]map[string]interface{}, 0)
+
+	for _, group := range m.groupCache {
+		contacts = append(contacts, group)
+	}
+
+	for _, friend := range m.friendCache {
+		contacts = append(contacts, friend)
+	}
+
+	json.NewEncoder(w).Encode(contacts)
 }
 
 // handleGetConfig 获取当前配置
@@ -647,10 +677,8 @@ func (m *Manager) fetchBotInfo(bot *BotClient) {
 				if nickname, ok := data["nickname"].(string); ok {
 					newNickname = nickname
 				}
-				if userID, ok := data["user_id"].(string); ok {
-					newSelfID = userID
-				} else if userIDNum, ok := data["user_id"].(float64); ok {
-					newSelfID = fmt.Sprintf("%.0f", userIDNum)
+				if userID, ok := data["user_id"]; ok {
+					newSelfID = toString(userID)
 				}
 
 				if newSelfID != "" && newSelfID != bot.SelfID {
@@ -689,10 +717,8 @@ func (m *Manager) fetchBotInfo(bot *BotClient) {
 				for _, item := range data {
 					if group, ok := item.(map[string]interface{}); ok {
 						var gID string
-						if id, ok := group["group_id"].(float64); ok {
-							gID = fmt.Sprintf("%.0f", id)
-						} else if id, ok := group["group_id"].(string); ok {
-							gID = id
+						if idVal, ok := group["group_id"]; ok {
+							gID = toString(idVal)
 						}
 
 						if gID != "" {
@@ -762,7 +788,7 @@ func (m *Manager) handleBotConnection(bot *BotClient) {
 
 	for {
 		var msg map[string]interface{}
-		err := bot.Conn.ReadJSON(&msg)
+		err := ReadJSONWithNumber(bot.Conn, &msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Bot %s read error: %v", bot.SelfID, err)
@@ -836,8 +862,8 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 			if timeExists {
 				rtt := time.Since(sendTime)
 				// 找到对应的 Worker 并更新 RTT
-				// 注意：这里需要知道响应是哪个 Worker 发起的，或者简单地在 echo 中包含 workerID
-				if parts := strings.Split(echo, ":"); len(parts) >= 2 {
+				// 使用 | 作为分隔符: workerID|originalEcho
+				if parts := strings.Split(echo, "|"); len(parts) >= 2 {
 					workerID := parts[0]
 					m.mutex.RLock()
 					for _, w := range m.workers {
@@ -926,21 +952,23 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 	defer m.cacheMutex.Unlock()
 
 	// 缓存群信息
-	if groupID, ok := msg["group_id"].(float64); ok {
-		gID := fmt.Sprintf("%.0f", groupID)
-		if _, exists := m.groupCache[gID]; !exists {
-			m.groupCache[gID] = map[string]interface{}{
-				"group_id":   groupID,
-				"group_name": fmt.Sprintf("Group %s (Cached)", gID),
-				"bot_id":     bot.SelfID,
-				"is_cached":  true,
-				"reason":     "Automatically cached from message (Bot might not support get_group_info)",
-			}
+	if groupIDVal, ok := msg["group_id"]; ok && groupIDVal != nil {
+		groupID := toInt64(groupIDVal)
+		gID := toString(groupIDVal)
+		// 更新或添加群组缓存
+		m.groupCache[gID] = map[string]interface{}{
+			"group_id":   groupID,
+			"group_name": fmt.Sprintf("Group %s (Cached)", gID),
+			"bot_id":     bot.SelfID,
+			"is_cached":  true,
+			"reason":     "Automatically updated from message",
+			"last_seen":  time.Now(),
 		}
 
 		// 缓存成员信息
-		if userID, ok := msg["user_id"].(float64); ok {
-			uID := fmt.Sprintf("%.0f", userID)
+		if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
+			userID := toInt64(userIDVal)
+			uID := toString(userIDVal)
 			key := fmt.Sprintf("%s:%s", gID, uID)
 			sender, _ := msg["sender"].(map[string]interface{})
 			nickname := ""
@@ -957,9 +985,10 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 				"is_cached": true,
 			}
 		}
-	} else if userID, ok := msg["user_id"].(float64); ok {
+	} else if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
 		// 缓存好友信息 (私聊)
-		uID := fmt.Sprintf("%.0f", userID)
+		userID := toInt64(userIDVal)
+		uID := toString(userIDVal)
 		if _, exists := m.friendCache[uID]; !exists {
 			sender, _ := msg["sender"].(map[string]interface{})
 			nickname := ""
@@ -978,14 +1007,14 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 // handleBotMessageEvent 处理Bot消息事件
 func (m *Manager) handleBotMessageEvent(bot *BotClient, msg map[string]interface{}) {
 	// 提取消息信息
-	userID, _ := msg["user_id"].(float64)
-	groupID, _ := msg["group_id"].(float64)
+	userID := toInt64(msg["user_id"])
+	groupID := toInt64(msg["group_id"])
 	message, _ := msg["message"].(string)
 
-	log.Printf("Bot %s received message from user %d: %s", bot.SelfID, int64(userID), message)
+	log.Printf("Bot %s received message from user %d: %s", bot.SelfID, userID, message)
 
 	// 更新详细统计
-	m.updateBotStats(bot.SelfID, int64(userID), int64(groupID))
+	m.updateBotStats(bot.SelfID, userID, groupID)
 }
 
 // removeBot 移除Bot连接
@@ -1072,6 +1101,17 @@ func (m *Manager) findWorkerByID(workerID string) *WorkerClient {
 
 // forwardMessageToWorker 将消息转发给Worker处理
 func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
+	m.forwardMessageToWorkerWithRetry(msg, 0)
+}
+
+// forwardMessageToWorkerWithRetry 带重试限制的消息转发
+func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, retryCount int) {
+	if retryCount > 3 {
+		log.Printf("[ROUTING] [ERROR] Maximum retry count exceeded for message. Caching message.")
+		m.cacheMessage(msg)
+		return
+	}
+
 	// 1. 尝试使用路由规则
 	var targetWorkerID string
 	var matchKeys []string
@@ -1079,28 +1119,38 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 	// 提取匹配键
 	// 用户 ID 匹配: user_123456
 	if userID, ok := msg["user_id"]; ok {
-		uID := fmt.Sprintf("user_%v", userID)
-		matchKeys = append(matchKeys, uID)
-		// 同时也支持纯数字 ID
-		matchKeys = append(matchKeys, fmt.Sprintf("%v", userID))
+		sID := toString(userID)
+		if sID != "0" && sID != "" {
+			uID := fmt.Sprintf("user_%s", sID)
+			matchKeys = append(matchKeys, uID)
+			matchKeys = append(matchKeys, sID)
+		}
 	}
 
 	// 群组 ID 匹配: group_789012
 	if groupID, ok := msg["group_id"]; ok {
-		gID := fmt.Sprintf("group_%v", groupID)
-		matchKeys = append(matchKeys, gID)
+		sID := toString(groupID)
+		if sID != "0" && sID != "" {
+			gID := fmt.Sprintf("group_%s", sID)
+			matchKeys = append(matchKeys, gID)
+			matchKeys = append(matchKeys, sID)
+		}
 	}
 
 	// 机器人 ID 匹配: bot_123 or self_id
-	if selfID, ok := msg["self_id"].(string); ok {
-		matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", selfID))
-		matchKeys = append(matchKeys, selfID)
+	if selfID, ok := msg["self_id"]; ok {
+		sID := toString(selfID)
+		if sID != "" {
+			matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", sID))
+			matchKeys = append(matchKeys, sID)
+		}
 	}
 
-	// 查找匹配规则 (精确匹配优先)
+	// 查找匹配规则
 	m.mutex.RLock()
 	var matchedKey string
-	// 先尝试所有 key 的精确匹配
+
+	// A. 精确匹配优先
 	for _, key := range matchKeys {
 		if wID, exists := m.routingRules[key]; exists && wID != "" {
 			targetWorkerID = wID
@@ -1109,13 +1159,30 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 		}
 	}
 
-	// 如果没有精确匹配，尝试通配符匹配
+	// B. 如果没有精确匹配，尝试通配符匹配 (按长度倒序排序，确保最具体匹配优先且结果确定)
 	if targetWorkerID == "" {
-		for pattern, wID := range m.routingRules {
+		// 收集并排序通配符规则
+		type rule struct {
+			pattern string
+			wID     string
+		}
+		var wildcards []rule
+		for p, w := range m.routingRules {
+			if strings.Contains(p, "*") {
+				wildcards = append(wildcards, rule{p, w})
+			}
+		}
+
+		// 按模式长度降序排列，越长的模式通常越具体
+		sort.Slice(wildcards, func(i, j int) bool {
+			return len(wildcards[i].pattern) > len(wildcards[j].pattern)
+		})
+
+		for _, r := range wildcards {
 			for _, key := range matchKeys {
-				if matchRoutePattern(pattern, key) {
-					targetWorkerID = wID
-					matchedKey = fmt.Sprintf("%s (via pattern %s)", key, pattern)
+				if matchRoutePattern(r.pattern, key) {
+					targetWorkerID = r.wID
+					matchedKey = fmt.Sprintf("%s (via pattern %s)", key, r.pattern)
 					break
 				}
 			}
@@ -1132,9 +1199,12 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 			log.Printf("[ROUTING] Rule Matched: %s -> Target Worker: %s", matchedKey, targetWorkerID)
 			w.Mutex.Lock()
 			err := w.Conn.WriteJSON(msg)
-			w.HandledCount++
 			w.Mutex.Unlock()
+
 			if err == nil {
+				m.mutex.Lock()
+				w.HandledCount++
+				m.mutex.Unlock()
 				return
 			}
 			log.Printf("[ROUTING] [ERROR] Failed to send to target worker %s: %v. Falling back to load balancer.", targetWorkerID, err)
@@ -1143,43 +1213,47 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 		}
 	}
 
+	// 2. 负载均衡转发
 	m.mutex.RLock()
-	workers := make([]*WorkerClient, len(m.workers))
-	copy(workers, m.workers)
+	// 过滤出健康的 worker
+	var healthyWorkers []*WorkerClient
+	for _, w := range m.workers {
+		// 简单检查：如果 60 秒没有心跳且不是刚连接，视为不健康
+		if time.Since(w.LastHeartbeat) < 60*time.Second || time.Since(w.Connected) < 10*time.Second {
+			healthyWorkers = append(healthyWorkers, w)
+		}
+	}
 	m.mutex.RUnlock()
 
-	if len(workers) == 0 {
+	if len(healthyWorkers) == 0 {
+		log.Printf("[ROUTING] [WARNING] No healthy workers available. Caching message.")
 		m.cacheMessage(msg)
 		return
 	}
 
-	// 智能路由逻辑：优先选择从未处理过消息的，其次选 AvgRTT 最小且健康的 Worker
 	var selectedWorker *WorkerClient
 	m.mutex.Lock()
 
-	// 如果只有一个 worker，直接选它
-	if len(workers) == 1 {
-		selectedWorker = workers[0]
+	// 负载均衡算法
+	if len(healthyWorkers) == 1 {
+		selectedWorker = healthyWorkers[0]
 	} else {
-		// 1. 优先选择从未处理过消息的 Worker (以便它们能获得 RTT 样本)
-		var unhandledWorkers []*WorkerClient
-		for _, w := range workers {
+		// 1. 优先选择从未处理过消息的 Worker (以便获取 RTT)
+		var unhandled []*WorkerClient
+		for _, w := range healthyWorkers {
 			if w.HandledCount == 0 {
-				unhandledWorkers = append(unhandledWorkers, w)
+				unhandled = append(unhandled, w)
 			}
 		}
 
-		if len(unhandledWorkers) > 0 {
-			// 从未处理过的 Worker 中轮询选择
-			if m.workerIndex >= len(unhandledWorkers) {
-				m.workerIndex = 0
-			}
-			selectedWorker = unhandledWorkers[m.workerIndex]
+		if len(unhandled) > 0 {
+			idx := m.workerIndex % len(unhandled)
+			selectedWorker = unhandled[idx]
 			m.workerIndex++
 		} else {
-			// 2. 所有 Worker 都处理过消息，选择 AvgRTT 最小的
+			// 2. 选择 AvgRTT 最小的 Worker
 			var minRTT time.Duration = -1
-			for _, w := range workers {
+			for _, w := range healthyWorkers {
 				if w.AvgRTT > 0 {
 					if minRTT == -1 || w.AvgRTT < minRTT {
 						minRTT = w.AvgRTT
@@ -1188,12 +1262,10 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 				}
 			}
 
-			// 3. 如果还是没选到 (例如所有 AvgRTT 都是 0)，退回到全局轮询
+			// 3. 退回到全局轮询
 			if selectedWorker == nil {
-				if m.workerIndex >= len(workers) {
-					m.workerIndex = 0
-				}
-				selectedWorker = workers[m.workerIndex]
+				idx := m.workerIndex % len(healthyWorkers)
+				selectedWorker = healthyWorkers[idx]
 				m.workerIndex++
 			}
 		}
@@ -1206,15 +1278,14 @@ func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
 	selectedWorker.Mutex.Unlock()
 
 	if err != nil {
-		log.Printf("Failed to forward message to worker %s: %v. Retrying with other workers...", selectedWorker.ID, err)
-		// 尝试从列表中移除故障 Worker 并重试
+		log.Printf("[ROUTING] [ERROR] Failed to forward to worker %s: %v. Removing and retrying...", selectedWorker.ID, err)
 		m.removeWorker(selectedWorker.ID)
-		m.forwardMessageToWorker(msg) // 递归重试 (如果还是没 worker 就会进入缓存)
+		m.forwardMessageToWorkerWithRetry(msg, retryCount+1)
 	} else {
 		m.mutex.Lock()
 		selectedWorker.HandledCount++
 		m.mutex.Unlock()
-		log.Printf("Forwarded message to worker %s (AvgRTT: %v)", selectedWorker.ID, selectedWorker.AvgRTT)
+		log.Printf("[ROUTING] Forwarded to worker %s (AvgRTT: %v, Handled: %d)", selectedWorker.ID, selectedWorker.AvgRTT, selectedWorker.HandledCount)
 	}
 }
 
@@ -1299,7 +1370,7 @@ func (m *Manager) handleWorkerConnection(worker *WorkerClient) {
 
 	for {
 		var msg map[string]interface{}
-		err := worker.Conn.ReadJSON(&msg)
+		err := ReadJSONWithNumber(worker.Conn, &msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Worker %s read error: %v", worker.ID, err)
@@ -1413,11 +1484,19 @@ func (m *Manager) handleSubscriberWebSocket(w http.ResponseWriter, r *http.Reque
 }
 
 // forwardWorkerRequestToBot 将Worker请求转发给Bot
-func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string]interface{}, echo string) {
-	// 保存请求映射：echo -> worker
+func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string]interface{}, originalEcho string) {
+	// 构造内部 echo，包含 worker ID 以便追踪和记录 RTT
+	// 使用 | 作为分隔符，因为 worker ID 可能包含 : (如 IP:Port)
+	internalEcho := fmt.Sprintf("%s|%s", worker.ID, originalEcho)
+
+	// 保存请求映射
 	m.pendingMutex.Lock()
-	m.pendingRequests[echo] = make(chan map[string]interface{}, 1)
+	m.pendingRequests[internalEcho] = make(chan map[string]interface{}, 1)
+	m.pendingTimestamps[internalEcho] = time.Now() // 记录发送时间
 	m.pendingMutex.Unlock()
+
+	// 修改消息中的 echo 为内部 echo
+	msg["echo"] = internalEcho
 
 	// 智能路由逻辑：根据 self_id 或 group_id 选择正确的 Bot
 	var targetBot *BotClient
@@ -1466,7 +1545,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 		}
 	}
 
-	// 3. 兜底方案：如果还是找不到，选第一个可用的 Bot (保持原逻辑)
+	// 3. 兜底方案：如果还是找不到，选第一个可用的 Bot
 	if targetBot == nil {
 		for _, bot := range m.bots {
 			targetBot = bot
@@ -1477,14 +1556,14 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 	m.mutex.RUnlock()
 
 	if targetBot == nil {
-		log.Printf("[ROUTING] [ERROR] No available Bot to handle Worker %s request (echo: %s, type: %v)", worker.ID, echo, msg["action"])
+		log.Printf("[ROUTING] [ERROR] No available Bot to handle Worker %s request (echo: %s, type: %v)", worker.ID, originalEcho, msg["action"])
 
 		// 返回错误响应给Worker
 		response := map[string]interface{}{
 			"status":  "failed",
 			"retcode": 1404,
 			"msg":     "No Bot available",
-			"echo":    echo,
+			"echo":    originalEcho,
 			"data":    nil,
 		}
 
@@ -1494,7 +1573,8 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 
 		// 清理映射
 		m.pendingMutex.Lock()
-		delete(m.pendingRequests, echo)
+		delete(m.pendingRequests, internalEcho)
+		delete(m.pendingTimestamps, internalEcho)
 		m.pendingMutex.Unlock()
 		return
 	}
@@ -1505,30 +1585,52 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 	targetBot.Mutex.Unlock()
 
 	if err != nil {
-		log.Printf("Failed to forward Worker request to Bot %s: %v", targetBot.SelfID, err)
+		log.Printf("[ROUTING] [ERROR] Failed to forward Worker %s request to Bot %s: %v. Attempting fallback...", worker.ID, targetBot.SelfID, err)
 
-		// 返回错误响应给Worker
-		response := map[string]interface{}{
-			"status":  "failed",
-			"retcode": 1400,
-			"msg":     "Failed to forward to Bot",
-			"echo":    echo,
-			"data":    nil,
+		// 移除失效的 Bot 并尝试另一个
+		m.removeBot(targetBot.SelfID)
+
+		// 简单的重试逻辑：找另一个可用的 Bot
+		var fallbackBot *BotClient
+		m.mutex.RLock()
+		for _, bot := range m.bots {
+			fallbackBot = bot
+			break
+		}
+		m.mutex.RUnlock()
+
+		if fallbackBot != nil {
+			log.Printf("[ROUTING] Falling back to Bot %s", fallbackBot.SelfID)
+			fallbackBot.Mutex.Lock()
+			err = fallbackBot.Conn.WriteJSON(msg)
+			fallbackBot.Mutex.Unlock()
 		}
 
-		worker.Mutex.Lock()
-		worker.Conn.WriteJSON(response)
-		worker.Mutex.Unlock()
+		if fallbackBot == nil || err != nil {
+			// 返回错误响应给Worker
+			response := map[string]interface{}{
+				"status":  "failed",
+				"retcode": 1400,
+				"msg":     "Failed to forward to any Bot",
+				"echo":    originalEcho,
+				"data":    nil,
+			}
 
-		// 清理映射
-		m.pendingMutex.Lock()
-		delete(m.pendingRequests, echo)
-		m.pendingMutex.Unlock()
-		return
+			worker.Mutex.Lock()
+			worker.Conn.WriteJSON(response)
+			worker.Mutex.Unlock()
+
+			// 清理映射
+			m.pendingMutex.Lock()
+			delete(m.pendingRequests, internalEcho)
+			delete(m.pendingTimestamps, internalEcho)
+			m.pendingMutex.Unlock()
+			return
+		}
 	}
 
 	log.Printf("[ROUTING] Forwarded Worker %s request (action: %v, echo: %s) to Bot %s via %s",
-		worker.ID, msg["action"], echo, targetBot.SelfID, routeSource)
+		worker.ID, msg["action"], originalEcho, targetBot.SelfID, routeSource)
 
 	// 启动超时处理（30秒内必须收到响应）
 	go func() {
@@ -1536,22 +1638,62 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 		defer timeout.Stop()
 
 		select {
-		case response := <-m.pendingRequests[echo]:
-			// 收到响应，转发给Worker
-			worker.Mutex.Lock()
-			worker.Conn.WriteJSON(response)
-			worker.Mutex.Unlock()
-			log.Printf("Forwarded Bot response (echo: %s) to Worker %s", echo, worker.ID)
+		case response := <-m.pendingRequests[internalEcho]:
+			// 收到响应，还原原始 echo 并转发给 Worker
+			if response != nil {
+				// 检查响应状态，如果发现 Bot 不在群组中，清除缓存
+				retcode := toInt64(response["retcode"])
+				status, _ := response["status"].(string)
+
+				if retcode == 1200 || status == "failed" {
+					// 尝试提取 group_id
+					var groupID string
+					if gid, ok := msg["group_id"]; ok {
+						groupID = fmt.Sprintf("%v", gid)
+					} else if params, ok := msg["params"].(map[string]interface{}); ok {
+						if gid, ok := params["group_id"]; ok {
+							groupID = fmt.Sprintf("%v", gid)
+						}
+					}
+
+					if groupID != "" {
+						// 检查错误信息是否包含“不在群”或类似提示
+						respMsg, _ := response["msg"].(string)
+						if strings.Contains(respMsg, "不在群") || strings.Contains(respMsg, "移出") || retcode == 1200 {
+							log.Printf("[ROUTING] Bot %s reported group error for %s: %s (retcode: %d). Clearing cache.",
+								targetBot.SelfID, groupID, respMsg, retcode)
+
+							m.cacheMutex.Lock()
+							if data, exists := m.groupCache[groupID]; exists {
+								if cachedBotID, _ := data["bot_id"].(string); cachedBotID == targetBot.SelfID {
+									delete(m.groupCache, groupID)
+									log.Printf("[ROUTING] Removed stale group cache for %s (Bot: %s)", groupID, targetBot.SelfID)
+								}
+							}
+							m.cacheMutex.Unlock()
+
+							// 异步触发刷新该 Bot 的信息和群列表
+							go m.fetchBotInfo(targetBot)
+						}
+					}
+				}
+
+				response["echo"] = originalEcho
+				worker.Mutex.Lock()
+				worker.Conn.WriteJSON(response)
+				worker.Mutex.Unlock()
+				log.Printf("Forwarded Bot response (echo: %s) to Worker %s", originalEcho, worker.ID)
+			}
 
 		case <-timeout.C:
 			// 超时，返回错误响应
-			log.Printf("Worker request (echo: %s) timed out", echo)
+			log.Printf("Worker request (echo: %s) timed out", originalEcho)
 
 			response := map[string]interface{}{
 				"status":  "failed",
 				"retcode": 1401,
 				"msg":     "Request timeout",
-				"echo":    echo,
+				"echo":    originalEcho,
 				"data":    nil,
 			}
 
@@ -1562,7 +1704,8 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 
 		// 清理映射
 		m.pendingMutex.Lock()
-		delete(m.pendingRequests, echo)
+		delete(m.pendingRequests, internalEcho)
+		delete(m.pendingTimestamps, internalEcho)
 		m.pendingMutex.Unlock()
 	}()
 }

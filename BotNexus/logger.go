@@ -11,10 +11,12 @@ func (m *Manager) AddLog(level string, message string) {
 	m.logMutex.Lock()
 	defer m.logMutex.Unlock()
 
+	now := time.Now()
 	entry := LogEntry{
 		Level:     level,
 		Message:   message,
-		Timestamp: time.Now(),
+		Time:      now.Format("15:04:05"),
+		Timestamp: now,
 	}
 
 	m.logBuffer = append(m.logBuffer, entry)
