@@ -2859,3 +2859,161 @@ func (m *Manager) handleProxyAvatar(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
 }
+
+// handleSendAction 处理发送 API 动作的请求
+func (m *Manager) handleSendAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		BotID  string                 `json:"bot_id"`
+		Action string                 `json:"action"`
+		Params map[string]interface{} `json:"params"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "failed",
+			"message": "请求格式错误",
+		})
+		return
+	}
+
+	// 如果没有指定 bot_id，尝试寻找一个可用的
+	m.mutex.RLock()
+	var bot *BotClient
+	if req.BotID != "" {
+		bot = m.bots[req.BotID]
+	} else {
+		// 选第一个
+		for _, b := range m.bots {
+			bot = b
+			break
+		}
+	}
+	m.mutex.RUnlock()
+
+	if bot == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "failed",
+			"message": "未找到可用的 Bot",
+		})
+		return
+	}
+
+	// 构造 echo
+	echo := fmt.Sprintf("web|%d|%s", time.Now().UnixNano(), req.Action)
+
+	// 注册等待响应
+	respChan := make(chan map[string]interface{}, 1)
+	m.pendingMutex.Lock()
+	m.pendingRequests[echo] = respChan
+	m.pendingTimestamps[echo] = time.Now()
+	m.pendingMutex.Unlock()
+
+	defer func() {
+		m.pendingMutex.Lock()
+		delete(m.pendingRequests, echo)
+		delete(m.pendingTimestamps, echo)
+		m.pendingMutex.Unlock()
+	}()
+
+	// 构造消息
+	msg := map[string]interface{}{
+		"action": req.Action,
+		"params": req.Params,
+		"echo":   echo,
+	}
+
+	// 发送给 Bot
+	bot.Mutex.Lock()
+	err := bot.Conn.WriteJSON(msg)
+	bot.Mutex.Unlock()
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "failed",
+			"message": "发送请求到 Bot 失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 等待响应
+	select {
+	case resp := <-respChan:
+		json.NewEncoder(w).Encode(resp)
+	case <-time.After(30 * time.Second):
+		w.WriteHeader(http.StatusGatewayTimeout)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "failed",
+			"message": "等待 Bot 响应超时",
+		})
+	}
+}
+
+// handleGetChatStats 获取聊天统计信息
+func (m *Manager) handleGetChatStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	m.cacheMutex.RLock()
+	defer m.cacheMutex.RUnlock()
+
+	// 提取群组名称
+	groupNames := make(map[string]string)
+	for id, g := range m.groupCache {
+		if name, ok := g["group_name"].(string); ok {
+			groupNames[id] = name
+		}
+	}
+
+	// 提取用户名称
+	userNames := make(map[string]string)
+	for id, u := range m.memberCache {
+		if name, ok := u["nickname"].(string); ok {
+			userNames[id] = name
+		}
+	}
+	for id, f := range m.friendCache {
+		if name, ok := f["nickname"].(string); ok {
+			userNames[id] = name
+		}
+	}
+
+	// 转换为 map[string]int64 以便前端使用 (前端可能预期 string key)
+	gs := make(map[string]int64)
+	for k, v := range m.GroupStats {
+		gs[fmt.Sprintf("%d", k)] = v
+	}
+	us := make(map[string]int64)
+	for k, v := range m.UserStats {
+		us[fmt.Sprintf("%d", k)] = v
+	}
+	gst := make(map[string]int64)
+	for k, v := range m.GroupStatsToday {
+		gst[fmt.Sprintf("%d", k)] = v
+	}
+	ust := make(map[string]int64)
+	for k, v := range m.UserStatsToday {
+		ust[fmt.Sprintf("%d", k)] = v
+	}
+
+	resp := map[string]interface{}{
+		"group_stats":       gs,
+		"user_stats":        us,
+		"group_stats_today": gst,
+		"user_stats_today":  ust,
+		"group_names":       groupNames,
+		"user_names":        userNames,
+	}
+
+	json.NewEncoder(w).Encode(resp)
+}

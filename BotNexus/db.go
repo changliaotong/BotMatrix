@@ -4,15 +4,23 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-const DB_FILE = "botnexus.db"
+const DB_FILE = "data/botnexus.db"
 
 // initDB 初始化数据库
 func (m *Manager) initDB() error {
+	// 确保目录存在
+	dbDir := filepath.Dir(DB_FILE)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return fmt.Errorf("无法创建数据库目录: %v", err)
+	}
+
 	db, err := sql.Open("sqlite", DB_FILE)
 	if err != nil {
 		return err

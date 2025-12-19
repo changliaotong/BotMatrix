@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.96 - Full-Screen Visualization & Persistence Fix
+*   **🖥️ Full-Screen Mode**: Added native full-screen support for the 3D routing map, enabling immersive real-time monitoring.
+*   **💾 Docker Persistence**: Refactored database storage to a dedicated `data/` directory with persistent volume mapping, ensuring user data survives container restarts.
+*   **🛡️ Permission Hardening**: Fixed database initialization errors in Docker by properly configuring directory ownership and non-root user permissions.
+*   **🌐 Localization**: Integrated full-screen UI controls with multi-language support (CN/TW/EN).
+
 ### v1.1.95 - 3D Group Clustering & Persistence
 *   **👥 Group Clustering**: Group members now automatically gather around their respective group nodes in 3D space for better topological structure.
 *   **🌲 Link Optimization**: Reduced visual noise by implementing a tree-like connection structure (User -> Group -> Nexus).

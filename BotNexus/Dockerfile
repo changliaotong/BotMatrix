@@ -53,6 +53,10 @@ ENV REDIS_PWD=redis_zsYik8
 
 # Optional: run as non-root
 RUN addgroup -S appgroup && adduser -S -D -H -G appgroup appuser
+
+# Create data directory and ensure appuser owns the app directory
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app
+
 USER appuser
 
 # Run the application

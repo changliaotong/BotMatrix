@@ -76,10 +76,10 @@ func main() {
 	}))
 
 	// Docker 接口
-	http.HandleFunc("/api/docker/list", manager.JWTMiddleware(manager.handleDockerList))
-	http.HandleFunc("/api/docker/action", manager.JWTMiddleware(manager.handleDockerAction))
-	http.HandleFunc("/api/docker/add-bot", manager.JWTMiddleware(manager.handleDockerAddBot))
-	http.HandleFunc("/api/docker/add-worker", manager.JWTMiddleware(manager.handleDockerAddWorker))
+	http.HandleFunc("/api/docker/list", manager.AdminMiddleware(manager.handleDockerList))
+	http.HandleFunc("/api/docker/action", manager.AdminMiddleware(manager.handleDockerAction))
+	http.HandleFunc("/api/docker/add-bot", manager.AdminMiddleware(manager.handleDockerAddBot))
+	http.HandleFunc("/api/docker/add-worker", manager.AdminMiddleware(manager.handleDockerAddWorker))
 
 	// 管理员接口
 	http.HandleFunc("/api/admin/routing", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -170,15 +170,19 @@ func (m *Manager) createWebUIHandler() http.Handler {
 
 	// --- 需要登录的接口 ---
 	mux.HandleFunc("/api/me", m.JWTMiddleware(m.handleGetUserInfo))
+	mux.HandleFunc("/api/user/info", m.JWTMiddleware(m.handleGetUserInfo))
 	mux.HandleFunc("/api/user/password", m.JWTMiddleware(m.handleChangePassword))
 
 	mux.HandleFunc("/api/bots", m.JWTMiddleware(m.handleGetBots))
 	mux.HandleFunc("/api/workers", m.JWTMiddleware(m.handleGetWorkers))
 	mux.HandleFunc("/api/proxy/avatar", m.handleProxyAvatar)
 	mux.HandleFunc("/api/stats", m.JWTMiddleware(m.handleGetStats))
+	mux.HandleFunc("/api/stats/chat", m.JWTMiddleware(m.handleGetChatStats))
 	mux.HandleFunc("/api/system/stats", m.JWTMiddleware(m.handleGetSystemStats))
 	mux.HandleFunc("/api/logs", m.JWTMiddleware(m.handleGetLogs))
 	mux.HandleFunc("/api/contacts", m.JWTMiddleware(m.handleGetContacts))
+	mux.HandleFunc("/api/action", m.JWTMiddleware(m.handleSendAction))
+	mux.HandleFunc("/api/smart_action", m.JWTMiddleware(m.handleSendAction)) // 暂时复用相同的处理逻辑
 	mux.HandleFunc("/api/admin/config", m.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -189,6 +193,12 @@ func (m *Manager) createWebUIHandler() http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
+
+	// --- Docker 接口 ---
+	mux.HandleFunc("/api/docker/list", m.AdminMiddleware(m.handleDockerList))
+	mux.HandleFunc("/api/docker/action", m.AdminMiddleware(m.handleDockerAction))
+	mux.HandleFunc("/api/docker/add-bot", m.AdminMiddleware(m.handleDockerAddBot))
+	mux.HandleFunc("/api/docker/add-worker", m.AdminMiddleware(m.handleDockerAddWorker))
 
 	// --- WebSocket 接口 (供 WebUI 使用) ---
 	mux.HandleFunc("/ws/subscriber", m.JWTMiddleware(m.handleSubscriberWebSocket))
@@ -214,6 +224,8 @@ func (m *Manager) createWebUIHandler() http.Handler {
 			m.handleAdminListUsers(w, r)
 		case http.MethodPost:
 			m.handleAdminCreateUser(w, r)
+		case http.MethodDelete:
+			m.handleAdminDeleteUser(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}

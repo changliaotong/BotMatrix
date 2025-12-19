@@ -161,6 +161,12 @@
             border: 1px solid #30363d;
             box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
         }
+        #visualization-container:fullscreen {
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            border: none;
+        }
         #viz-nodes {
             position: absolute;
             top: 0;
@@ -1488,6 +1494,9 @@
                         <span class="badge bg-success ms-2 me-1" style="width: 12px; height: 12px; padding: 0; display: inline-block;"> </span> <span data-i18n="viz_nexus">Nexus</span>
                         <span class="badge bg-warning ms-2 me-1" style="width: 12px; height: 12px; padding: 0; display: inline-block;"> </span> <span data-i18n="viz_worker">Worker</span>
                     </div>
+                    <button id="btn-fullscreen" class="btn btn-outline-info btn-sm" onclick="toggleFullScreen()">
+                        <i id="icon-fullscreen" class="bi bi-arrows-fullscreen"></i> <span id="text-fullscreen" data-i18n="full_screen">全屏</span>
+                    </button>
                     <button class="btn btn-outline-secondary btn-sm" onclick="clearVisualization()">
                         <i class="bi bi-trash"></i> <span data-i18n="clear">清除</span>
                     </button>
@@ -2397,7 +2406,7 @@
                 this.renderer.setSize(width, height);
             }
 
-            getOrCreateNode(id, type, label, avatar, groupId = null) {
+            getOrCreateNode(id, type, label, avatar, groupId = null, botId = null) {
                 if (this.nodes.has(id)) {
                     const node = this.nodes.get(id);
                     node.lastActive = Date.now();
@@ -2421,6 +2430,13 @@
                             this.resetUserPosition(node);
                         }
                     }
+                    // Update botId if provided and changed
+                    if (botId && node.botId !== botId) {
+                        node.botId = botId;
+                        if (node.type === 'group') {
+                            this.resetGroupPosition(node);
+                        }
+                    }
 
                     if (needsUpdate) {
                         this.updateNodeTexture(node);
@@ -2429,14 +2445,14 @@
                 }
 
                 const node = {
-                    id, type, label, avatar, groupId,
+                    id, type, label, avatar, groupId, botId,
                     mesh: null,
                     orbs: [], // Color orbiting orbs
                     nexusLine: null, // Virtual line to Nexus
                     lastActive: Date.now(),
                     floatingOffset: Math.random() * Math.PI * 2,
                     targetPos: new THREE.Vector3(0, 0, 0),
-                    clusterOffset: new THREE.Vector3(0, 0, 0) // Offset relative to group center
+                    clusterOffset: new THREE.Vector3(0, 0, 0) // Offset relative to center
                 };
 
                 // 3D Space Partitioning (Hierarchy Layout)
@@ -2446,29 +2462,22 @@
                     // Workers: Closest to Nexus, forming a tight processing core
                     const angle = Math.random() * Math.PI * 2;
                     const radius = 100 + Math.random() * 50;
-                node.targetPos.set(
-                    Math.cos(angle) * radius,
-                    (Math.random() - 0.5) * 80,
-                    Math.sin(angle) * radius
-                );
-            } else if (type === 'bot') {
-                // Bots: Inner layer, very close to Nexus
-                const angle = Math.random() * Math.PI * 2;
-                const radius = 220 + Math.random() * 100;
+                    node.targetPos.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 80,
+                        Math.sin(angle) * radius
+                    );
+                } else if (type === 'bot') {
+                    // Bots: Inner layer, very close to Nexus
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 220 + Math.random() * 100;
                     node.targetPos.set(
                         Math.cos(angle) * radius,
                         (Math.random() - 0.5) * 120,
                         Math.sin(angle) * radius
                     );
                 } else if (type === 'group') {
-                    // Groups: Middle layer, forming clusters for users
-                    const angle = Math.random() * Math.PI * 2;
-                    const radius = 450 + Math.random() * 100;
-                    node.targetPos.set(
-                        Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 150,
-                        Math.sin(angle) * radius
-                    );
+                    this.resetGroupPosition(node);
                 } else if (type === 'user') {
                     this.resetUserPosition(node);
                 }
@@ -2476,6 +2485,31 @@
                 this.updateNodeTexture(node, true);
                 this.nodes.set(id, node);
                 return node;
+            }
+
+            resetGroupPosition(node) {
+                if (node.botId && this.nodes.has(node.botId)) {
+                    // Cluster around bot: Medium relative offset
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 180 + Math.random() * 80;
+                    node.clusterOffset.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 120,
+                        Math.sin(angle) * radius
+                    );
+                    const bot = this.nodes.get(node.botId);
+                    node.targetPos.copy(bot.targetPos).add(node.clusterOffset);
+                } else {
+                    // Lone group: Middle layer
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 450 + Math.random() * 100;
+                    node.targetPos.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 150,
+                        Math.sin(angle) * radius
+                    );
+                    node.clusterOffset.set(0, 0, 0);
+                }
             }
 
             resetUserPosition(node) {
@@ -2813,7 +2847,7 @@
                     const botNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar, event.group_id);
 
                     if (event.group_id) {
-                        const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`);
+                        const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`, null, null, event.target);
                         // Routing: User -> Group -> Bot
                         this.createParticle(userNode, groupNode, event.msg_type, event.content);
                         setTimeout(() => {
@@ -2830,7 +2864,7 @@
                     const userNode = this.getOrCreateNode(event.target, 'user', event.user_name || event.target, userAvatar, event.group_id);
 
                     if (event.group_id) {
-                        const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`);
+                        const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`, null, null, event.source);
                         // Routing: Bot -> Group -> User
                         this.createParticle(botNode, groupNode, event.msg_type, event.content);
                         setTimeout(() => {
@@ -3076,13 +3110,19 @@
                             node.targetPos.multiplyScalar(nextRadius / currentRadius);
                         }
                     } else if (node.type === 'group') {
-                        // Groups: Middle layer stability
-                        const targetRadius = 450;
-                        const currentRadius = node.targetPos.length();
-                        const lerpFactor = 0.005;
-                        const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
-                        if (currentRadius > 0.1) {
-                            node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                        if (node.botId && this.nodes.has(node.botId)) {
+                            // Cluster around bot: Update targetPos relative to bot
+                            const bot = this.nodes.get(node.botId);
+                            node.targetPos.copy(bot.targetPos).add(node.clusterOffset);
+                        } else {
+                            // Lone group: Middle layer stability
+                            const targetRadius = 450;
+                            const currentRadius = node.targetPos.length();
+                            const lerpFactor = 0.005;
+                            const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
+                            if (currentRadius > 0.1) {
+                                node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                            }
                         }
                         
                         // Vanish if no activity for 2 hours
@@ -3400,7 +3440,7 @@
             // Sync groups
             if (data.groups) {
                 Object.values(data.groups).forEach(g => {
-                    visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`);
+                    visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`, null, null, g.bot_id);
                 });
             }
             
@@ -3437,6 +3477,45 @@
         function clearVisualization() {
             if (visualizer) visualizer.clear();
         }
+
+        function toggleFullScreen() {
+            const container = document.getElementById('visualization-container');
+            if (!container) return;
+
+            if (!document.fullscreenElement) {
+                container.requestFullscreen().catch(err => {
+                    console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Handle full screen change
+        document.addEventListener('fullscreenchange', () => {
+            const isFullScreen = !!document.fullscreenElement;
+            const btn = document.getElementById('btn-fullscreen');
+            const icon = document.getElementById('icon-fullscreen');
+            const text = document.getElementById('text-fullscreen');
+
+            if (btn && icon && text) {
+                if (isFullScreen) {
+                    icon.className = 'bi bi-fullscreen-exit';
+                    text.setAttribute('data-i18n', 'exit_full_screen');
+                } else {
+                    icon.className = 'bi bi-arrows-fullscreen';
+                    text.setAttribute('data-i18n', 'full_screen');
+                }
+                // Trigger re-translation
+                 if (typeof setLanguage === 'function') {
+                     setLanguage(currentLang);
+                 }
+            }
+
+            if (visualizer) {
+                setTimeout(() => visualizer.resize(), 100);
+            }
+        });
 
         function showTab(tabId) {
             if (!tabId) return;

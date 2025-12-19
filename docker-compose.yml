@@ -12,6 +12,7 @@ services:
       - "5000:5000"  # Web Dashboard / API
       - "3005:3001"  # WebSocket for Internal/External Communication
     volumes:
+      - ./BotNexus/data:/app/data
       - ./BotNexus/stats.json:/app/stats.json
       - /var/run/docker.sock:/var/run/docker.sock # Enable Docker Management
     environment:

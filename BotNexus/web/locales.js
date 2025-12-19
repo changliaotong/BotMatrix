@@ -25,6 +25,8 @@ const translations = {
         "viz_bot": "机器人",
         "viz_nexus": "核心枢纽",
         "viz_worker": "工作节点",
+        "full_screen": "全屏",
+        "exit_full_screen": "退出全屏",
         "viz_user": "用户",
         "viz_stats_title": "系统运行状态",
         "viz_active_nodes": "活动节点数",
@@ -496,6 +498,8 @@ const translations = {
         "viz_bot": "機器人",
         "viz_nexus": "核心樞紐",
         "viz_worker": "工作節點",
+        "full_screen": "全屏",
+        "exit_full_screen": "退出全屏",
         "total_messages": "消息總量",
 
         // Menu Groups
@@ -915,6 +919,8 @@ const translations = {
         "viz_bot": "Bot",
         "viz_nexus": "Nexus",
         "viz_worker": "Worker",
+        "full_screen": "Full Screen",
+        "exit_full_screen": "Exit Full Screen",
         "viz_user": "User",
         "viz_stats_title": "SYSTEM STATUS",
         "viz_active_nodes": "Active Nodes",
