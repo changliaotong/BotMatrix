@@ -28,12 +28,18 @@ class BotNexusService extends ChangeNotifier {
       // In development, assume backend is on localhost:3001
       if (kDebugMode) return 'ws://localhost:3001/ws/subscriber?role=subscriber';
 
-      // In production (served by BotNexus), use the same origin
+      // In production (served by BotNexus), use the same origin but possibly different port
+      // BotNexus handles /ws/subscriber on both its WS_PORT (3001) and WEBUI_PORT (5000)
       final scheme = Uri.base.scheme == 'https' ? 'wss' : 'ws';
       final host = Uri.base.host;
-      final port = 3001; // WebSocket port is usually 3001 in this setup
+      final port = Uri.base.port;
       final effectiveHost = host.isEmpty ? 'localhost' : host;
-      return '$scheme://$effectiveHost:$port/ws/subscriber?role=subscriber';
+      
+      // If port is specified in the URL, use it. Otherwise, use default for scheme
+      if (port != 0) {
+        return '$scheme://$effectiveHost:$port/ws/subscriber?role=subscriber';
+      }
+      return '$scheme://$effectiveHost/ws/subscriber?role=subscriber';
     }
     if (Platform.isAndroid) return 'ws://10.0.2.2:3001/ws/subscriber?role=subscriber';
     return 'ws://localhost:3001/ws/subscriber?role=subscriber';
@@ -279,7 +285,7 @@ class BotNexusService extends ChangeNotifier {
   Future<Map<String, dynamic>> getWorkers() async {
     try {
       final response = await http.get(
-        Uri.parse('$_apiBaseUrl/workers/list'),
+        Uri.parse('$_apiBaseUrl/workers'),
         headers: _token.isNotEmpty ? {'Authorization': 'Bearer $_token'} : {},
       );
 

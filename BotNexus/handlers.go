@@ -2841,7 +2841,22 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	m.usersMutex.Lock()
 	defer m.usersMutex.Unlock()
 
+	// 先检查内存
 	if _, exists := m.users[data.Username]; exists {
+		log.Printf("用户创建失败: 用户 %s 已存在于内存缓存中", data.Username)
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "用户已存在",
+		})
+		return
+	}
+
+	// 再检查数据库 (防止内存与数据库不同步)
+	var existingID int64
+	err := m.db.QueryRow("SELECT id FROM users WHERE username = ?", data.Username).Scan(&existingID)
+	if err == nil {
+		log.Printf("用户创建失败: 用户 %s 已存在于数据库中 (ID: %d)", data.Username, existingID)
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -2852,6 +2867,7 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 
 	hashedPassword, err := hashPassword(data.Password)
 	if err != nil {
+		log.Printf("密码哈希失败: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -2869,8 +2885,9 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		UpdatedAt:      time.Now(),
 	}
 
+	log.Printf("正在尝试保存新用户 %s 到数据库...", data.Username)
 	if err := m.saveUserToDB(newUser); err != nil {
-		log.Printf("保存新用户到数据库失败: %v", err)
+		log.Printf("保存新用户 %s 到数据库失败: %v", data.Username, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -2885,9 +2902,13 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		&dbUser.ID, &dbUser.Username, &dbUser.PasswordHash, &dbUser.IsAdmin, &dbUser.SessionVersion, &dbUser.CreatedAt, &dbUser.UpdatedAt)
 	if err == nil {
 		newUser = &dbUser
+		log.Printf("成功从数据库重新加载新用户 %s (ID: %d)", newUser.Username, newUser.ID)
+	} else {
+		log.Printf("创建用户后重新读取失败 (但不影响创建结果): %v", err)
 	}
 
 	m.users[newUser.Username] = newUser
+	log.Printf("用户 %s 创建成功并已加入内存缓存", data.Username)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -2919,10 +2940,23 @@ func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// 禁止删除自己
+	claims, ok := r.Context().Value(UserClaimsKey).(*UserClaims)
+	if ok && claims != nil && claims.Username == username {
+		log.Printf("用户 %s 尝试删除自己，操作被拒绝", username)
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "不能删除当前登录用户",
+		})
+		return
+	}
+
 	m.usersMutex.Lock()
 	defer m.usersMutex.Unlock()
 
 	if _, exists := m.users[username]; !exists {
+		log.Printf("尝试删除不存在的用户: %s", username)
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -2933,16 +2967,17 @@ func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	// 从数据库删除
 	if _, err := m.db.Exec("DELETE FROM users WHERE username = ?", username); err != nil {
-		log.Printf("从数据库删除用户失败: %v", err)
+		log.Printf("从数据库删除用户 %s 失败: %v", username, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "删除用户失败",
+			"message": "删除用户失败: " + err.Error(),
 		})
 		return
 	}
 
 	delete(m.users, username)
+	log.Printf("用户 %s 已被成功删除", username)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,

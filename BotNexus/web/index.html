@@ -598,23 +598,68 @@
         color: var(--text-main);
     }
     
-    /* Cloud Matrix Layout Adjustment */
-    #tab-bots {
-        min-height: auto !important;
-    }
-    #tab-bots .card {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-    }
-    .bot-list-container, .worker-list-container {
-        min-height: 100px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-    }
+        /* Cloud Matrix Layout Adjustment */
+        #tab-bots {
+            height: calc(100vh - 35px);
+            display: flex;
+            flex-direction: column;
+        }
+        #tab-bots > .row {
+            flex: 1;
+            height: 100%;
+        }
+        #tab-bots .col-xl-7, #tab-bots .col-xl-5 {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #tab-bots .card {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        #tab-bots .card-body {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+        .bot-list-container, .worker-list-container {
+             flex: 1;
+             overflow-y: auto;
+             background: rgba(0, 0, 0, 0.05);
+             border: 1px solid var(--border-color);
+             border-radius: 0.5rem;
+             padding: 1rem !important;
+             margin-bottom: 0 !important;
+             margin-left: 0 !important;
+             margin-right: 0 !important;
+             min-height: 0;
+         }
+         [data-theme="dark"] .bot-list-container, [data-theme="dark"] .worker-list-container {
+             background: rgba(0, 0, 0, 0.2);
+         }
+        /* Custom Scrollbar for list containers */
+        .bot-list-container::-webkit-scrollbar, .worker-list-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .bot-list-container::-webkit-scrollbar-track, .worker-list-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .bot-list-container::-webkit-scrollbar-thumb, .worker-list-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+        }
+        [data-theme="dark"] .bot-list-container::-webkit-scrollbar-thumb, [data-theme="dark"] .worker-list-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+        }
 </style>
 </head>
 <body>
@@ -1315,7 +1360,7 @@
         </div>
 
         <!-- Bots Tab -->
-        <div id="tab-bots" class="content-section" style="display:none; height: auto;">
+        <div id="tab-bots" class="content-section" style="display:none;">
             <div class="row g-4">
                 <!-- Left Column: Bots -->
                 <div class="col-xl-7 col-lg-6">
@@ -1342,7 +1387,7 @@
                                     <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
                                 </div>
                             </div>
-                            <div class="row g-3" id="bot-list-container">
+                            <div class="row g-3 bot-list-container" id="bot-list-container">
                                 <!-- Bot Cards -->
                             </div>
                         </div>
@@ -1372,7 +1417,7 @@
                                     <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
                                 </div>
                             </div>
-                            <div class="row g-3" id="worker-list-container">
+                            <div class="row g-3 worker-list-container" id="worker-list-container">
                                 <!-- Worker Cards -->
                             </div>
                         </div>
@@ -1383,9 +1428,7 @@
 
         <!-- Overmind Tab -->
         <div id="tab-overmind" class="content-section" style="display:none; height: calc(100vh - 100px);">
-            <div class="card h-100 shadow-sm overflow-hidden">
-                <iframe id="overmind-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
-            </div>
+            <iframe id="overmind-iframe" src="" style="width: 100%; height: 100%; border: none; border-radius: 0.75rem;"></iframe>
         </div>
 
         <!-- System Monitor (Merged Events & Logs) -->
@@ -1443,11 +1486,6 @@
 
 
 
-
-        <!-- Overmind Tab -->
-        <div id="tab-overmind" class="content-section" style="display: none; height: calc(100vh - 100px);">
-            <iframe id="overmind-iframe" src="" style="width: 100%; height: 100%; border: none; border-radius: 0.75rem;"></iframe>
-        </div>
 
         <!-- Docker Tab -->
         <div id="tab-docker" class="content-section" style="display: none;">
@@ -2040,9 +2078,15 @@
 
             // Update Overmind iframe if loaded
             const overmindIframe = document.getElementById('overmind-iframe');
-            if (overmindIframe && overmindIframe.src) {
+            if (overmindIframe && overmindIframe.src && overmindIframe.src !== 'about:blank' && !overmindIframe.src.endsWith('/')) {
                 const token = authToken || localStorage.getItem('wxbot_token');
-                overmindIframe.src = `/overmind/?lang=${lang}&token=${encodeURIComponent(token)}`;
+                const langParam = lang === 'zh-CN' ? 'zh' : 'en';
+                overmindIframe.src = `/overmind/?lang=${langParam}&token=${encodeURIComponent(token)}`;
+            }
+
+            // Update visualization if active
+            if (window.visualizer && typeof window.visualizer.updateLanguage === 'function') {
+                window.visualizer.updateLanguage();
             }
         }
 
@@ -2482,7 +2526,8 @@
                 this.addStars();
                 
                 // Add Nexus (Central Node)
-                this.getOrCreateNode('nexus', 'nexus', 'Nexus');
+                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                this.getOrCreateNode('nexus', 'nexus', t.viz_nexus || 'Nexus');
 
                 // Stats UI
                 this.statsEl = document.createElement('div');
@@ -2579,8 +2624,6 @@
             }
 
             createSettingsUI() {
-                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
-                
                 // 1. Create Settings Trigger Button (Gear icon)
                 if (!document.getElementById('viz-settings-trigger')) {
                     const trigger = document.createElement('div');
@@ -2620,29 +2663,42 @@
                     this.container.appendChild(trigger);
                 }
 
-                // 2. Create Settings Panel
-                const panel = document.createElement('div');
-                panel.id = 'viz-settings-panel';
-                panel.style.cssText = `
-                    position: absolute;
-                    top: 80px;
-                    right: 20px;
-                    width: 280px;
-                    background: rgba(0, 10, 5, 0.9);
-                    backdrop-filter: blur(15px);
-                    border: 1px solid rgba(0, 255, 65, 0.4);
-                    border-radius: 12px;
-                    padding: 18px;
-                    color: #00ff41;
-                    font-family: 'Courier New', Courier, monospace;
-                    font-size: 0.85rem;
-                    z-index: 1011;
-                    display: none;
-                    box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,255,65,0.1);
-                    max-height: calc(100% - 100px);
-                    overflow-y: auto;
-                `;
+                // 2. Create Settings Panel if not exists
+                let panel = document.getElementById('viz-settings-panel');
+                if (!panel) {
+                    panel = document.createElement('div');
+                    panel.id = 'viz-settings-panel';
+                    panel.style.cssText = `
+                        position: absolute;
+                        top: 80px;
+                        right: 20px;
+                        width: 280px;
+                        background: rgba(0, 10, 5, 0.9);
+                        backdrop-filter: blur(15px);
+                        border: 1px solid rgba(0, 255, 65, 0.4);
+                        border-radius: 12px;
+                        padding: 18px;
+                        color: #00ff41;
+                        font-family: 'Courier New', Courier, monospace;
+                        font-size: 0.85rem;
+                        z-index: 1011;
+                        display: none;
+                        box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,255,65,0.1);
+                        max-height: calc(100% - 100px);
+                        overflow-y: auto;
+                    `;
+                    this.container.appendChild(panel);
+                }
 
+                this.updateSettingsUIContent();
+            }
+
+            updateSettingsUIContent() {
+                const panel = document.getElementById('viz-settings-panel');
+                if (!panel) return;
+                
+                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                
                 const createSlider = (label, key, min, max, step = 1) => `
                     <div style="margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -2674,8 +2730,23 @@
                         <button onclick="window.visualizer.saveConfigToDisk()" style="flex: 1; background: rgba(0,255,65,0.2); border: 1px solid #00ff41; color: #00ff41; padding: 5px; cursor: pointer; border-radius: 4px;">${t.save || '保存'}</button>
                     </div>
                 `;
+            }
 
-                this.container.appendChild(panel);
+            updateLanguage() {
+                this.updateStatsUI();
+                this.updateSettingsUIContent();
+
+                // Update Nexus Label
+                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                const nexus = this.nodes.get('nexus');
+                if (nexus) {
+                    nexus.label = t.viz_nexus || 'Nexus';
+                }
+
+                // Update all node textures to reflect language change
+                this.nodes.forEach(node => {
+                    this.updateNodeTexture(node);
+                });
             }
 
             updateConfig(key, value) {
@@ -4123,10 +4194,11 @@
                         break;
                     case 'overmind':
                         const overmindIframe = document.getElementById('overmind-iframe');
-                        if (overmindIframe && !overmindIframe.src) {
+                        if (overmindIframe && (!overmindIframe.src || overmindIframe.src === window.location.href || overmindIframe.src.endsWith('/web/') || overmindIframe.src.endsWith('index.html'))) {
                             const lang = currentLang || 'zh-CN';
+                            const langParam = lang === 'zh-CN' ? 'zh' : 'en';
                             const token = authToken || localStorage.getItem('wxbot_token');
-                            overmindIframe.src = `/overmind/?lang=${lang}&token=${encodeURIComponent(token)}`;
+                            overmindIframe.src = `/overmind/?lang=${langParam}&token=${encodeURIComponent(token)}`;
                         }
                         break;
                 }

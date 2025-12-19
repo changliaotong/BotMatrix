@@ -12,6 +12,21 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.2.4 - Overmind Integration & Cloud Matrix UI
+*   **📡 Overmind Data Sync**: Fixed critical WebSocket port and API path issues in the Overmind Flutter service, ensuring real-time data flow in production environments.
+*   **🔐 Seamless Auth Integration**: Implemented automatic JWT token and language preference passing for the embedded Overmind iframe, removing the need for double login.
+*   **📐 Cloud Matrix UI Refinement**: Optimized the Cloud Matrix page with full-height layouts and independent scrollable lists for Workers and Bots; enhanced visual contrast with distinct background colors.
+*   **🚀 Automated Deployment**: Synchronized Overmind Flutter Web builds with the BotNexus static file server for a unified "one-click" deployment experience.
+
+### v1.2.3 - Visualization & Internationalization Fixes
+*   **🌐 Real-time i18n Sync**: Fixed an issue where the Routing Visualizer wouldn't update its language without a page refresh; implemented a dynamic update engine for 3D textures and UI components.
+*   **🎨 Dynamic 3D Textures**: Added automatic re-generation of node textures on language change to ensure all labels (Nexus, Bot, Group, etc.) are correctly translated.
+
+### v1.2.2 - User Management & Security Fixes
+*   **🛡️ Self-Deletion Protection**: Prevented administrators from deleting their own accounts to avoid accidental lockout.
+*   **⚡ Robust User Operations**: Fixed a critical issue where user creation/deletion might prompt "failure" despite succeeding; added dual-layer checks (memory + database) and enhanced logging.
+*   **📝 Improved Audit Logs**: Added detailed server-side logging for all administrative user management actions.
+
 ### v1.2.1 - Critical Build & Type Fixes
 *   **🛠️ Compilation Fixes**: Resolved duplicate method declaration for `sendWorkerHeartbeat` in `handlers.go`.
 *   **🔢 Type Safety**: Fixed map type mismatch in `NewManager` initialization within `main.go`, ensuring consistent use of `map[string]int64` for user and group statistics.
