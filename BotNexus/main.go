@@ -61,6 +61,7 @@ func main() {
 	http.HandleFunc("/api/user/password", manager.JWTMiddleware(manager.handleChangePassword))
 	http.HandleFunc("/api/bots", manager.JWTMiddleware(manager.handleGetBots))
 	http.HandleFunc("/api/workers", manager.JWTMiddleware(manager.handleGetWorkers))
+	http.HandleFunc("/api/proxy/avatar", manager.handleProxyAvatar)
 	http.HandleFunc("/api/logs", manager.JWTMiddleware(manager.handleGetLogs))
 	http.HandleFunc("/api/contacts", manager.JWTMiddleware(manager.handleGetContacts))
 	http.HandleFunc("/api/admin/config", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -173,6 +174,7 @@ func (m *Manager) createWebUIHandler() http.Handler {
 
 	mux.HandleFunc("/api/bots", m.JWTMiddleware(m.handleGetBots))
 	mux.HandleFunc("/api/workers", m.JWTMiddleware(m.handleGetWorkers))
+	mux.HandleFunc("/api/proxy/avatar", m.handleProxyAvatar)
 	mux.HandleFunc("/api/stats", m.JWTMiddleware(m.handleGetStats))
 	mux.HandleFunc("/api/system/stats", m.JWTMiddleware(m.handleGetSystemStats))
 	mux.HandleFunc("/api/logs", m.JWTMiddleware(m.handleGetLogs))
@@ -336,6 +338,14 @@ func NewManager() *Manager {
 		// 从数据库加载路由规则
 		if err := m.loadRoutingRulesFromDB(); err != nil {
 			log.Printf("[WARN] 从数据库加载路由规则失败: %v", err)
+		}
+		// 从数据库加载联系人缓存
+		if err := m.loadCachesFromDB(); err != nil {
+			log.Printf("[WARN] 从数据库加载联系人缓存失败: %v", err)
+		}
+		// 从数据库加载系统统计
+		if err := m.loadStatsFromDB(); err != nil {
+			log.Printf("[WARN] 从数据库加载系统统计失败: %v", err)
 		}
 	}
 

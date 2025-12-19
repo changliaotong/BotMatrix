@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.95 (2025-12-19)
+*   **🌌 3D Group Clustering & Persistence Sync (3D 群组聚类与持久化同步)**:
+    *   **👥 Group Member Clustering**: Implemented automatic spatial clustering where group members gather around their respective group nodes in the 3D space, significantly improving topological clarity.
+    *   **🌲 Tree-like Link Optimization**: Optimized the 3D visualization to use a hierarchical link structure (User -> Group -> Nexus -> Bot). This drastically reduces the number of overlapping lines and improves performance.
+    *   **💾 Robust Persistence Sync**: Added SQLite persistence for global message counts and contact caches (friends/members). The system now automatically reloads historical data on startup.
+    *   **📡 WebSocket Initial Sync**: Introduced a `SyncState` protocol for WebSocket connections. New subscribers now receive the complete historical cache (groups, friends, members, and stats) immediately upon connecting, ensuring no data loss on page refresh.
+    *   **⏱️ Advanced Visual Lifecycle**: Added fade-out animations for message trails and holographic hints, preventing visual clutter while maintaining high-speed message particle effects (speed: 0.12).
+
+## v1.1.94 (2025-12-19)
+*   **🖼️ Avatar Proxy (头像代理)**:
+    *   **解决跨域问题**: 新增后端头像代理接口 `/api/proxy/avatar`，解决 QQ 等第三方头像因 CORS 限制无法在 3D 画布显示的问题。
+    *   **智能切换**: 前端自动识别外部 URL 并通过代理加载，确保 3D 节点头像 100% 成功渲染。
+
+## v1.1.93 (2025-12-19)
+*   **⚡ High-Speed Communication (高速通信特效)**:
+    *   **🚀 Warp Particles**: Particle balls now travel at 5x speed to ensure visual synchronization with message delivery.
+    *   **🕸️ Virtual Links**: Added persistent "Link Lines" between nodes during message exchange to visualize the connection path.
+    *   **📍 Midpoint Anchoring**: Message text hints are now anchored at the midpoint of the link for better readability and structural clarity.
+    *   **⏱️ TTL-based Persistence**: Communication visuals now stay visible for 3 seconds before gracefully fading out, independent of particle movement.
+
+## v1.1.92 (2025-12-19)
+*   **👤 User Node Enhancements (用户节点强化)**:
+    *   **🖼️ Avatar Integration**: User avatars are now correctly fetched and displayed on user sprites in the 3D space.
+    *   **🧲 Proximity Attraction**: Users who send messages now automatically move closer to the Nexus (Hub Center) for better visibility.
+    *   **🌌 Dynamic Drifting**: Inactive users (no messages for >60s) smoothly drift back to the outer rim of the galaxy.
+    *   **💎 Visual Identity**: Added unique cyan glow effects for user nodes to distinguish them from service nodes.
+
+## v1.1.91 (2025-12-19)
+*   **🌌 Visualization Optimization (可视化优化)**:
+    *   **🧹 Aggressive Node Cleanup**: Offline Workers and Bots are now removed from the visualization almost immediately to prevent screen clutter.
+    *   **🛡️ Fail-safe Retention**: Added a short grace period if the API fails to return any active nodes, preventing accidental total wipes.
+
+## v1.1.90 (2025-12-19)
+*   **🌌 Visualization & Visualizer Enhancements (可视化与渲染优化)**:
+    *   **✨ Complete Flow Visualization**: Added missing `bot_to_user` routing event to complete the message flow visualization.
+    *   **🔮 High-Clarity Holographic Hints**: Significant improvement in text clarity for holographic message hints.
+        *   Increased canvas resolution by 2x.
+        *   Switched to high-quality Chinese fonts (`PingFang SC`, `Microsoft YaHei`).
+        *   Optimized texture filtering and disabled mipmaps for sharper rendering.
+        *   Replaced blurry chromatic aberration effect with a clean drop shadow.
+
 ## v1.1.89 (2025-12-19)
 *   **🌌 3D Visualization Refinement & Protocol Robustness (3D 可视化精细化与协议鲁棒性)**:
     *   **✨ Shaking Nexus Core**: Added a high-frequency shaking effect to the central Nexus node to symbolize its status as an active energy core.

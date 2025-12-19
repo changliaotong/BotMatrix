@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -732,6 +733,8 @@ func (m *Manager) fetchBotInfo(bot *BotClient) {
 								"is_cached":  true,
 								"source":     "get_group_list",
 							}
+							// 持久化到数据库
+							go m.saveGroupToDB(gID, name, bot.SelfID)
 						}
 					}
 				}
@@ -1051,15 +1054,18 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 	if groupIDVal, ok := msg["group_id"]; ok && groupIDVal != nil {
 		groupID := toInt64(groupIDVal)
 		gID := toString(groupIDVal)
+		groupName := fmt.Sprintf("Group %s (Cached)", gID)
 		// 更新或添加群组缓存
 		m.groupCache[gID] = map[string]interface{}{
 			"group_id":   groupID,
-			"group_name": fmt.Sprintf("Group %s (Cached)", gID),
+			"group_name": groupName,
 			"bot_id":     bot.SelfID,
 			"is_cached":  true,
 			"reason":     "Automatically updated from message",
 			"last_seen":  time.Now(),
 		}
+		// 持久化到数据库
+		go m.saveGroupToDB(gID, groupName, bot.SelfID)
 
 		// 缓存成员信息
 		if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
@@ -1080,6 +1086,8 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 				"card":      card,
 				"is_cached": true,
 			}
+			// 持久化到数据库
+			go m.saveMemberToDB(gID, uID, nickname, card)
 		}
 	} else if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
 		// 缓存好友信息 (私聊)
@@ -1096,6 +1104,8 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 				"nickname":  nickname,
 				"is_cached": true,
 			}
+			// 持久化到数据库
+			go m.saveFriendToDB(uID, nickname)
 		}
 	}
 }
@@ -1107,7 +1117,25 @@ func (m *Manager) handleBotMessageEvent(bot *BotClient, msg map[string]interface
 	groupID := toInt64(msg["group_id"])
 	message, _ := msg["message"].(string)
 
-	log.Printf("Bot %s received message from user %d: %s", bot.SelfID, userID, message)
+	// 广播路由事件: User -> Bot
+	extras := map[string]interface{}{
+		"user_id":  fmt.Sprintf("%v", userID),
+		"content":  message,
+		"platform": bot.Platform,
+	}
+	if groupID != 0 {
+		extras["group_id"] = fmt.Sprintf("%v", groupID)
+		// 尝试从缓存中获取群名
+		m.cacheMutex.RLock()
+		if group, ok := m.groupCache[fmt.Sprintf("%v", groupID)]; ok {
+			if name, ok := group["group_name"].(string); ok {
+				extras["group_name"] = name
+			}
+		}
+		m.cacheMutex.RUnlock()
+	}
+
+	m.broadcastRoutingEvent(fmt.Sprintf("%v", userID), bot.SelfID, "user_to_bot", "message", extras)
 
 	// 更新详细统计
 	m.updateBotStats(bot.SelfID, userID, groupID)
@@ -1664,6 +1692,23 @@ func (m *Manager) handleSubscriberWebSocket(w http.ResponseWriter, r *http.Reque
 
 	log.Printf("Subscriber WebSocket connected: %s (User: %s)", conn.RemoteAddr(), claims.Username)
 
+	// 发送初始同步状态
+	m.cacheMutex.RLock()
+	syncState := SyncState{
+		Type:          "sync_state",
+		Groups:        m.groupCache,
+		Friends:       m.friendCache,
+		Members:       m.memberCache,
+		TotalMessages: m.TotalMessages,
+	}
+	m.cacheMutex.RUnlock()
+
+	subscriber.Mutex.Lock()
+	if err := conn.WriteJSON(syncState); err != nil {
+		log.Printf("[SUBSCRIBER] 发送初始同步状态失败: %v", err)
+	}
+	subscriber.Mutex.Unlock()
+
 	// 启动读取循环以检测连接断开
 	defer func() {
 		m.mutex.Lock()
@@ -1712,6 +1757,12 @@ func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType strin
 			}
 			if platform, ok := data["platform"]; ok {
 				event.Platform = fmt.Sprintf("%v", platform)
+			}
+			if gid, ok := data["group_id"]; ok {
+				event.GroupID = fmt.Sprintf("%v", gid)
+			}
+			if gname, ok := data["group_name"]; ok {
+				event.GroupName = fmt.Sprintf("%v", gname)
 			}
 		}
 	}
@@ -1898,6 +1949,12 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 	}
 
 	m.broadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "request", extras)
+
+	// 如果是发送消息，额外广播一个从 Bot 到 User 的事件，让特效闭环
+	if userID, ok := extras["user_id"].(string); ok && userID != "" {
+		m.broadcastRoutingEvent(targetBot.SelfID, userID, "bot_to_user", "message", extras)
+	}
+
 	log.Printf("[ROUTING] Forwarded Worker %s request to Bot %s (Source: %s)", worker.ID, targetBot.SelfID, routeSource)
 
 	// 启动超时处理（30秒内必须收到响应）
@@ -2060,6 +2117,9 @@ func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
 	m.BotStats[botID]++
 	m.BotStatsToday[botID]++
 	m.TotalMessages++
+
+	// 持久化到数据库
+	go m.saveStatToDB("total_messages", m.TotalMessages)
 }
 
 // StartTrendCollection 启动趋势收集
@@ -2733,4 +2793,69 @@ func (m *Manager) handleDeleteRoutingRule(w http.ResponseWriter, r *http.Request
 		"success": true,
 		"message": "路由规则删除成功",
 	})
+}
+
+// handleProxyAvatar 代理头像请求，解决跨域问题
+func (m *Manager) handleProxyAvatar(w http.ResponseWriter, r *http.Request) {
+	// 处理 OPTIONS 预检请求
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	avatarURL := r.URL.Query().Get("url")
+	if avatarURL == "" {
+		http.Error(w, "Missing url parameter", http.StatusBadRequest)
+		return
+	}
+
+	// 验证 URL 协议
+	if !strings.HasPrefix(avatarURL, "http://") && !strings.HasPrefix(avatarURL, "https://") {
+		http.Error(w, "Invalid URL protocol", http.StatusBadRequest)
+		return
+	}
+
+	// 创建请求
+	req, err := http.NewRequest("GET", avatarURL, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 伪造 User-Agent 以防被拦截
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+	// 一些头像服务器需要特定的 Accept 头
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	// 移除 Referer 以防被防盗链拦截
+	req.Header.Del("Referer")
+
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[PROXY] Failed to fetch avatar: %v", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 复制关键响应头
+	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	if cacheControl := resp.Header.Get("Cache-Control"); cacheControl != "" {
+		w.Header().Set("Cache-Control", cacheControl)
+	}
+
+	// 强制允许跨域
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("X-Proxy-By", "BotNexus")
+
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }

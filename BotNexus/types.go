@@ -92,6 +92,15 @@ type LogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// SyncState represents the initial state for subscribers
+type SyncState struct {
+	Type          string                            `json:"type"` // Always "sync_state"
+	Groups        map[string]map[string]interface{} `json:"groups"`
+	Friends       map[string]map[string]interface{} `json:"friends"`
+	Members       map[string]map[string]interface{} `json:"members"`
+	TotalMessages int64                             `json:"total_messages"`
+}
+
 // RoutingEvent represents a message routing event for visualization
 type RoutingEvent struct {
 	Type          string    `json:"type"`      // Always "routing_event"
@@ -105,6 +114,8 @@ type RoutingEvent struct {
 	UserAvatar    string    `json:"user_avatar"`    // Optional: User Avatar URL
 	Content       string    `json:"content"`        // Optional: Message Content
 	Platform      string    `json:"platform"`       // Optional: Platform (QQ, WeChat, etc.)
+	GroupID       string    `json:"group_id"`       // Optional: Group ID
+	GroupName     string    `json:"group_name"`     // Optional: Group Name
 	TotalMessages int64     `json:"total_messages"` // Current total message count
 }
 

@@ -2397,7 +2397,7 @@
                 this.renderer.setSize(width, height);
             }
 
-            getOrCreateNode(id, type, label, avatar) {
+            getOrCreateNode(id, type, label, avatar, groupId = null) {
                 if (this.nodes.has(id)) {
                     const node = this.nodes.get(id);
                     node.lastActive = Date.now();
@@ -2413,6 +2413,14 @@
                         node.label = label;
                         needsUpdate = true;
                     }
+                    // Update groupId if provided and changed
+                    if (groupId && node.groupId !== groupId) {
+                        node.groupId = groupId;
+                        // For users, reset their position to cluster around new group
+                        if (node.type === 'user') {
+                            this.resetUserPosition(node);
+                        }
+                    }
 
                     if (needsUpdate) {
                         this.updateNodeTexture(node);
@@ -2421,48 +2429,79 @@
                 }
 
                 const node = {
-                    id, type, label, avatar,
+                    id, type, label, avatar, groupId,
                     mesh: null,
+                    orbs: [], // Color orbiting orbs
+                    nexusLine: null, // Virtual line to Nexus
                     lastActive: Date.now(),
                     floatingOffset: Math.random() * Math.PI * 2,
-                    targetPos: new THREE.Vector3(0, 0, 0)
+                    targetPos: new THREE.Vector3(0, 0, 0),
+                    clusterOffset: new THREE.Vector3(0, 0, 0) // Offset relative to group center
                 };
 
                 // 3D Space Partitioning (Hierarchy Layout)
                 if (id === 'nexus') {
                     node.targetPos.set(0, 0, 0);
                 } else if (type === 'worker') {
-                    // Workers: Closest to Nexus
+                    // Workers: Closest to Nexus, forming a tight processing core
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 150 + Math.random() * 100;
+                    const radius = 100 + Math.random() * 50;
+                node.targetPos.set(
+                    Math.cos(angle) * radius,
+                    (Math.random() - 0.5) * 80,
+                    Math.sin(angle) * radius
+                );
+            } else if (type === 'bot') {
+                // Bots: Inner layer, very close to Nexus
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 220 + Math.random() * 100;
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 100,
+                        (Math.random() - 0.5) * 120,
                         Math.sin(angle) * radius
                     );
-                } else if (type === 'bot') {
-                    // Bots: Middle layer
+                } else if (type === 'group') {
+                    // Groups: Middle layer, forming clusters for users
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 350 + Math.random() * 150;
+                    const radius = 450 + Math.random() * 100;
                     node.targetPos.set(
                         Math.cos(angle) * radius,
                         (Math.random() - 0.5) * 150,
                         Math.sin(angle) * radius
                     );
                 } else if (type === 'user') {
-                    // Users: Outer layer
-                    const angle = Math.random() * Math.PI * 2;
-                    const radius = 700 + Math.random() * 300;
-                    node.targetPos.set(
-                        Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 200,
-                        Math.sin(angle) * radius
-                    );
+                    this.resetUserPosition(node);
                 }
 
                 this.updateNodeTexture(node, true);
                 this.nodes.set(id, node);
                 return node;
+            }
+
+            resetUserPosition(node) {
+                if (node.groupId && this.nodes.has(node.groupId)) {
+                    // Cluster around group: Small relative offset
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 80 + Math.random() * 60;
+                    node.clusterOffset.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 100,
+                        Math.sin(angle) * radius
+                    );
+                    // Initial position
+                    const group = this.nodes.get(node.groupId);
+                    node.targetPos.copy(group.targetPos).add(node.clusterOffset);
+                } else {
+                    // Lone user: Outer layer
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 700 + Math.random() * 200;
+                    node.targetPos.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 200,
+                        Math.sin(angle) * radius
+                    );
+                    node.clusterOffset.set(0, 0, 0);
+                }
             }
 
             updateNodeTexture(node, isNew = false) {
@@ -2475,9 +2514,13 @@
                     ctx.clearRect(0, 0, 256, 256);
                     
                     // Glow effect
+                    let color = '0, 255, 65'; // Default green
+                    if (node.type === 'user') color = '0, 255, 255'; // Cyan for users
+                    if (node.type === 'group') color = '255, 215, 0'; // Gold for groups
+                    
                     const gradient = ctx.createRadialGradient(128, 128, 50, 128, 128, 120);
-                    gradient.addColorStop(0, 'rgba(0, 255, 65, 0.15)');
-                    gradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
+                    gradient.addColorStop(0, `rgba(${color}, 0.2)`);
+                    gradient.addColorStop(1, `rgba(${color}, 0)`);
                     ctx.fillStyle = gradient;
                     ctx.fillRect(0, 0, 256, 256);
 
@@ -2489,14 +2532,34 @@
                     
                     if (node.avatar) {
                         const img = new Image();
-                        img.crossOrigin = "anonymous";
-                        img.src = node.avatar;
+                        
+                        // Use backend proxy for external avatars (like QQ) to avoid CORS issues
+                        let finalAvatarUrl = node.avatar;
+                        if (node.avatar.startsWith('http')) {
+                            // Add cache buster to avoid browser caching broken images
+                            const separator = node.avatar.includes('?') ? '&' : '?';
+                            const proxiedUrl = `${node.avatar}${separator}t=${Date.now()}`;
+                            finalAvatarUrl = `/api/proxy/avatar?url=${encodeURIComponent(proxiedUrl)}`;
+                            // For proxied images, we MUST set crossOrigin because our proxy returns CORS headers
+                            img.crossOrigin = "anonymous";
+                        } else {
+                            // Local images don't need CORS
+                            img.crossOrigin = null;
+                        }
+                        
+                        img.src = finalAvatarUrl;
                         img.onload = () => {
+                            // Draw background for avatar
+                            ctx.fillStyle = '#000';
+                            ctx.fillRect(68, 40, 120, 120);
                             ctx.drawImage(img, 68, 40, 120, 120);
+                            ctx.restore(); // Restore clip state
                             this.drawDetails(ctx, node);
                             this.finishTexture(node, canvas, isNew);
                         };
-                        img.onerror = () => {
+                        img.onerror = (e) => {
+                            console.warn(`Failed to load avatar for ${node.id}: ${finalAvatarUrl}`, e);
+                            ctx.restore(); // Restore clip state
                             this.drawDefaultIcon(ctx, node.type);
                             this.drawDetails(ctx, node);
                             this.finishTexture(node, canvas, isNew);
@@ -2516,7 +2579,21 @@
 
             drawDetails(ctx, node) {
                 // Background scanlines (Matrix style)
-                ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)';
+                let primaryColor = '#00ff41';
+                let secondaryColor = 'rgba(0, 255, 65, 0.1)';
+                let glowColor = 'rgba(0, 255, 65, 0.5)';
+                
+                if (node.type === 'user') {
+                    primaryColor = '#00ffff';
+                    secondaryColor = 'rgba(0, 255, 255, 0.1)';
+                    glowColor = 'rgba(0, 255, 255, 0.5)';
+                } else if (node.type === 'group') {
+                    primaryColor = '#ffd700';
+                    secondaryColor = 'rgba(255, 215, 0, 0.1)';
+                    glowColor = 'rgba(255, 215, 0, 0.5)';
+                }
+
+                ctx.strokeStyle = secondaryColor;
                 ctx.lineWidth = 1;
                 for (let i = 0; i < 256; i += 4) {
                     ctx.beginPath();
@@ -2528,20 +2605,20 @@
                 // Border
                 ctx.beginPath();
                 ctx.arc(128, 100, 60, 0, Math.PI * 2);
-                ctx.strokeStyle = '#00ff41';
+                ctx.strokeStyle = primaryColor;
                 ctx.lineWidth = 4;
                 ctx.stroke();
                 
                 // Glow border
-                ctx.strokeStyle = 'rgba(0, 255, 65, 0.5)';
+                ctx.strokeStyle = glowColor;
                 ctx.lineWidth = 8;
                 ctx.stroke();
 
                 // Text Info (Matrix Style)
-                ctx.fillStyle = '#00ff41';
-                ctx.shadowColor = '#00ff41';
+                ctx.fillStyle = primaryColor;
+                ctx.shadowColor = primaryColor;
                 ctx.shadowBlur = 10;
-                ctx.font = 'bold 24px monospace';
+                ctx.font = 'bold 22px monospace';
                 ctx.textAlign = 'center';
                 
                 let displayLabel = node.label || node.id;
@@ -2551,18 +2628,28 @@
                 }
                 ctx.fillText(displayLabel, 128, 190);
                 
-                ctx.font = '16px monospace';
-                const idDisplay = node.id.length > 20 ? node.id.substring(0, 17) + '...' : node.id;
-                ctx.fillText(idDisplay, 128, 215);
+                ctx.font = '14px monospace';
+                ctx.fillStyle = secondaryColor.replace('0.1', '0.8');
+                const idDisplay = node.id === 'nexus' ? '' : `#${node.id}`;
+                if (idDisplay) {
+                    const truncatedId = idDisplay.length > 25 ? idDisplay.substring(0, 22) + '...' : idDisplay;
+                    ctx.fillText(truncatedId, 128, 212);
+                }
                 
                 if (node.type === 'bot' || node.type === 'worker') {
                     const typeLabel = node.type === 'worker' ? 'PROCESSOR' : 'MATRIX BOT';
-                    ctx.font = 'bold 14px monospace';
+                    ctx.font = 'bold 12px monospace';
+                    ctx.fillStyle = primaryColor;
                     ctx.fillText(typeLabel, 128, 235);
                 } else if (node.type === 'user') {
                     const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
-                    ctx.font = '14px monospace';
+                    ctx.font = '12px monospace';
+                    ctx.fillStyle = primaryColor;
                     ctx.fillText(t.viz_user || 'USER', 128, 235);
+                } else if (node.type === 'group') {
+                    ctx.font = 'bold 12px monospace';
+                    ctx.fillStyle = primaryColor;
+                    ctx.fillText('GROUP HUB', 128, 235);
                 }
             }
 
@@ -2579,14 +2666,39 @@
                 }
 
                 ctx.fillStyle = '#00ff41';
-                ctx.font = '80px serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                let icon = '👤';
-                if (type === 'nexus') icon = '🕸️';
-                if (type === 'bot') icon = '🤖';
-                if (type === 'worker') icon = '⚙️';
-                ctx.fillText(icon, 128, 100);
+                
+                if (type === 'bot') {
+                    // Draw a more high-tech robot icon using lines/shapes
+                    ctx.strokeStyle = '#00ff41';
+                    ctx.lineWidth = 4;
+                    // Head
+                    ctx.strokeRect(88, 60, 80, 70);
+                    // Eyes
+                    ctx.fillStyle = '#00ff41';
+                    ctx.fillRect(105, 85, 15, 15);
+                    ctx.fillRect(135, 85, 15, 15);
+                    // Mouth
+                    ctx.fillRect(108, 115, 40, 5);
+                    // Antennas
+                    ctx.beginPath();
+                    ctx.moveTo(128, 60);
+                    ctx.lineTo(128, 40);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(128, 35, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (type === 'group') {
+                    ctx.font = '80px serif';
+                    ctx.fillText('🏘️', 128, 100);
+                } else {
+                    ctx.font = '80px serif';
+                    let icon = '👤';
+                    if (type === 'nexus') icon = '🕸️';
+                    if (type === 'worker') icon = '⚙️';
+                    ctx.fillText(icon, 128, 100);
+                }
             }
 
             finishTexture(node, canvas, isNew) {
@@ -2602,6 +2714,48 @@
                     sprite.position.copy(node.targetPos);
                     node.mesh = sprite;
                     this.scene.add(sprite);
+
+                    // Add Orbiting Orbs for Bots and Workers
+                    if (node.type === 'bot' || node.type === 'worker') {
+                        const orbColors = [0x00ff41, 0x00d2ff, 0xff00ff, 0xffff00];
+                        const orbCount = node.type === 'bot' ? 3 : 2;
+                        for (let i = 0; i < orbCount; i++) {
+                            const orbGeom = new THREE.SphereGeometry(3, 8, 8);
+                            const orbMat = new THREE.MeshBasicMaterial({ color: orbColors[i % orbColors.length] });
+                            const orb = new THREE.Mesh(orbGeom, orbMat);
+                            
+                            // Add small light to orb
+                            const orbLight = new THREE.PointLight(orbColors[i % orbColors.length], 1, 30);
+                            orb.add(orbLight);
+                            
+                            orb.orbitData = {
+                                radius: 45 + Math.random() * 15,
+                                speed: (Math.random() + 0.5) * 2,
+                                angle: Math.random() * Math.PI * 2,
+                                axis: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize()
+                            };
+                            this.scene.add(orb);
+                            node.orbs.push(orb);
+                        }
+
+                        // Add permanent virtual dashed line to Nexus
+                        const lineMat = new THREE.LineDashedMaterial({ 
+                            color: 0x00ff41, 
+                            transparent: true, 
+                            opacity: 0.1,
+                            dashSize: 5,
+                            gapSize: 3,
+                            blending: THREE.AdditiveBlending
+                        });
+                        const lineGeom = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(0, 0, 0),
+                            node.mesh.position.clone()
+                        ]);
+                        const line = new THREE.Line(lineGeom, lineMat);
+                        line.computeLineDistances();
+                        this.scene.add(line);
+                        node.nexusLine = line;
+                    }
                 }
             }
 
@@ -2622,7 +2776,7 @@
                             let avatarUrl = null;
                             const platform = (platformFromEvent || bot.platform || '').toUpperCase();
                             if (platform === 'QQ') {
-                                avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
+                                avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`;
                             } else if (platform === 'WECHAT' || platform === 'WX') {
                                 avatarUrl = '/static/avatars/wechat_default.png';
                             } else if (bot.user_avatar) {
@@ -2635,18 +2789,57 @@
                     if (platformFromEvent) {
                         const platform = platformFromEvent.toUpperCase();
                         if (platform === 'QQ') {
-                            return { nickname: botId, avatar: `https://q1.qlogo.cn/g?b=qq&nk=${botId}&s=100` };
-                        } else if (platform === 'WECHAT' || platform === 'WX') {
-                            return { nickname: botId, avatar: '/static/avatars/wechat_default.png' };
+                            return { nickname: botId, avatar: `https://q1.qlogo.cn/g?b=qq&nk=${botId}&s=640` };
                         }
                     }
                     return { nickname: botId, avatar: null };
                 };
 
+                const formatUserAvatar = (avatar, source, platform) => {
+                    if (avatar && avatar.startsWith('http')) return avatar;
+                    if (platform && platform.toUpperCase() === 'QQ') {
+                        const qq = avatar || source;
+                        if (/^\d+$/.test(qq)) {
+                            return `https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=640`;
+                        }
+                    }
+                    return avatar;
+                };
+
                 if (event.direction === 'user_to_bot') {
-                    startNode = this.getOrCreateNode(event.source, 'user', event.user_name || event.source, event.user_avatar);
+                    const userAvatar = formatUserAvatar(event.user_avatar, event.source, event.platform);
+                    const userNode = this.getOrCreateNode(event.source, 'user', event.user_name || event.source, userAvatar, event.group_id);
                     const botInfo = findBotInfo(event.target, event.platform);
-                    endNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar);
+                    const botNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar, event.group_id);
+
+                    if (event.group_id) {
+                        const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`);
+                        // Routing: User -> Group -> Bot
+                        this.createParticle(userNode, groupNode, event.msg_type, event.content);
+                        setTimeout(() => {
+                            this.createParticle(groupNode, botNode, event.msg_type);
+                        }, 400); // Slight delay for second leg
+                    } else {
+                        this.createParticle(userNode, botNode, event.msg_type, event.content);
+                    }
+                    return;
+                } else if (event.direction === 'bot_to_user') {
+                    const botInfo = findBotInfo(event.source, event.platform);
+                    const botNode = this.getOrCreateNode(event.source, 'bot', botInfo.nickname, botInfo.avatar, event.group_id);
+                    const userAvatar = formatUserAvatar(event.user_avatar, event.target, event.platform);
+                    const userNode = this.getOrCreateNode(event.target, 'user', event.user_name || event.target, userAvatar, event.group_id);
+
+                    if (event.group_id) {
+                        const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`);
+                        // Routing: Bot -> Group -> User
+                        this.createParticle(botNode, groupNode, event.msg_type, event.content);
+                        setTimeout(() => {
+                            this.createParticle(groupNode, userNode, event.msg_type);
+                        }, 400);
+                    } else {
+                        this.createParticle(botNode, userNode, event.msg_type, event.content);
+                    }
+                    return;
                 } else if (event.direction === 'bot_to_nexus') {
                     const botInfo = findBotInfo(event.source, event.platform);
                     startNode = this.getOrCreateNode(event.source, 'bot', botInfo.nickname, botInfo.avatar);
@@ -2681,41 +2874,68 @@
                 };
                 const color = colors[msgType] || 0x00ff41;
 
-                // Create Particle Mesh
-                const geometry = new THREE.SphereGeometry(4, 8, 8);
+                // 1. Create fast traveling sphere
+                const geometry = new THREE.SphereGeometry(8, 16, 16);
                 const material = new THREE.MeshBasicMaterial({ color: color });
-                const mesh = new THREE.Mesh(geometry, material);
+                const ballMesh = new THREE.Mesh(geometry, material);
                 
-                // Add Glow to particle
-                const light = new THREE.PointLight(color, 1, 50);
-                mesh.add(light);
-                
-                mesh.position.copy(start.mesh.position);
-                this.scene.add(mesh);
+                // Add Glow to ball
+                const light = new THREE.PointLight(color, 3, 100);
+                ballMesh.add(light);
+                ballMesh.position.copy(start.mesh.position);
+                this.scene.add(ballMesh);
 
+                // 2. Create dashed connection
+                const startPos = start.mesh.position.clone();
+                const endPos = end.mesh.position.clone();
+                
+                // Create a dashed line connection
+                const lineGeom = new THREE.BufferGeometry().setFromPoints([startPos, endPos]);
+                const lineMat = new THREE.LineDashedMaterial({ 
+                    color: color, 
+                    transparent: true, 
+                    opacity: 0.6,
+                    dashSize: 15,
+                    gapSize: 8,
+                    blending: THREE.AdditiveBlending
+                });
+                const lineMesh = new THREE.Line(lineGeom, lineMat);
+                lineMesh.computeLineDistances(); // Required for dashed lines
+                this.scene.add(lineMesh);
+
+                // 3. Create static message hint at midpoint
                 let hintMesh = null;
-                // Create floating hint if content exists
+                const midpoint = new THREE.Vector3().lerpVectors(start.mesh.position, end.mesh.position, 0.5);
                 if (content) {
-                    hintMesh = this.createMessageHint(start.mesh.position, content, color);
+                    hintMesh = this.createMessageHint(midpoint, content, color);
+                    // Move it slightly above the line
+                    hintMesh.position.y += 40;
                 }
 
                 this.particles.push({
-                    mesh: mesh,
+                    mesh: ballMesh,
+                    lineMesh: lineMesh,
                     hintMesh: hintMesh,
                     startPos: start.mesh.position.clone(),
                     endPos: end.mesh.position.clone(),
+                    startNode: start, // Keep reference to track node movement
+                    endNode: end,     // Keep reference to track node movement
                     progress: 0,
-                    speed: 0.015,
-                    content: content,
-                    msgType: msgType
+                    speed: 0.12, // Faster speed for better performance (less concurrent particles)
+                    ttl: 5000, // Messages and lines vanish after 5 seconds to keep scene clean
+                    createdAt: Date.now(),
+                    color: color
                 });
             }
 
             createMessageHint(pos, content, color) {
                 const canvas = document.createElement('canvas');
-                canvas.width = 512;
-                canvas.height = 128;
+                // Increase resolution for clearer text
+                const resolutionScale = 2;
+                canvas.width = 512 * resolutionScale;
+                canvas.height = 128 * resolutionScale;
                 const ctx = canvas.getContext('2d');
+                ctx.scale(resolutionScale, resolutionScale);
                 
                 // Holographic grid background
                 ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)';
@@ -2734,7 +2954,7 @@
                 }
 
                 // Draw background with holographic glow
-                ctx.fillStyle = 'rgba(0, 15, 0, 0.85)';
+                ctx.fillStyle = 'rgba(0, 15, 0, 0.9)';
                 ctx.beginPath();
                 ctx.roundRect(10, 10, 492, 108, 15);
                 ctx.fill();
@@ -2742,45 +2962,49 @@
                 // Double border for high-tech look
                 const colorStr = '#' + color.toString(16).padStart(6, '0');
                 ctx.strokeStyle = colorStr;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 3; // Thicker border
                 ctx.stroke();
                 
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.roundRect(15, 15, 482, 98, 12);
                 ctx.stroke();
 
-                ctx.shadowColor = colorStr;
-                ctx.shadowBlur = 20;
-
-                // Text
+                // Text styling - use better fonts and clear rendering
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 24px monospace';
+                ctx.font = 'bold 28px "PingFang SC", "Microsoft YaHei", "Segoe UI", monospace';
                 ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
                 
                 let text = content;
                 if (text.length > 40) text = text.substring(0, 37) + '...';
                 
-                // Display text with subtle offset for "chromatic aberration" effect
-                ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
-                if (text.length > 20) {
-                    ctx.fillText(text.substring(0, 20), 258, 57);
-                    ctx.fillText(text.substring(20), 258, 87);
-                } else {
-                    ctx.fillText(text, 258, 72);
-                }
+                // Shadow for depth instead of aberration which can blur
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
 
-                ctx.fillStyle = '#ffffff';
                 if (text.length > 20) {
-                    ctx.fillText(text.substring(0, 20), 256, 55);
+                    ctx.fillText(text.substring(0, 20), 256, 45);
                     ctx.fillText(text.substring(20), 256, 85);
                 } else {
-                    ctx.fillText(text, 256, 70);
+                    ctx.fillText(text, 256, 64);
                 }
 
                 const texture = new THREE.CanvasTexture(canvas);
-                const material = new THREE.SpriteMaterial({ map: texture, transparent: true, blending: THREE.AdditiveBlending });
+                // Important for clarity
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.generateMipmaps = false;
+                
+                const material = new THREE.SpriteMaterial({ 
+                    map: texture, 
+                    transparent: true, 
+                    blending: THREE.AdditiveBlending,
+                    opacity: 0.9
+                });
                 const sprite = new THREE.Sprite(material);
                 
                 sprite.position.copy(pos);
@@ -2824,16 +3048,48 @@
                     const offset = node.floatingOffset;
                     const inactivity = (Date.now() - node.lastActive) / 1000;
 
-                    // Update target position based on inactivity and wandering
+                    // Update target position based on inactivity and clustering
                     if (node.type === 'user') {
-                        const targetRadius = (inactivity > 120) ? 1400 : 800;
+                        if (node.groupId && this.nodes.has(node.groupId)) {
+                            // Cluster around group: Update targetPos relative to group
+                            const group = this.nodes.get(node.groupId);
+                            node.targetPos.copy(group.targetPos).add(node.clusterOffset);
+                        } else {
+                            // Lone user: Outer rim drifting
+                            const isActive = inactivity < 10;
+                            const targetRadius = isActive ? 380 : 850;
+                            const currentRadius = node.targetPos.length();
+                            const lerpFactor = isActive ? 0.08 : 0.002;
+                            
+                            const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
+                            if (currentRadius > 0.1) {
+                                node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                            }
+                        }
+                    } else if (node.type === 'bot') {
+                        // Bots: Keep them stable and close to Nexus, no drifting
+                        const targetRadius = 220;
                         const currentRadius = node.targetPos.length();
-                        const lerpFactor = (inactivity > 120) ? 0.002 : 0.01;
-                        
-                        // Smoothly adjust radius
+                        const lerpFactor = 0.01;
                         const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
                         if (currentRadius > 0.1) {
                             node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                        }
+                    } else if (node.type === 'group') {
+                        // Groups: Middle layer stability
+                        const targetRadius = 450;
+                        const currentRadius = node.targetPos.length();
+                        const lerpFactor = 0.005;
+                        const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
+                        if (currentRadius > 0.1) {
+                            node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                        }
+                        
+                        // Vanish if no activity for 2 hours
+                        if (inactivity > 7200) {
+                            node.mesh.visible = false;
+                        } else {
+                            node.mesh.visible = true;
                         }
                     }
 
@@ -2854,41 +3110,172 @@
                     const baseScale = node.type === 'user' ? 70 : 90;
                     const pulse = 1 + Math.sin(time * 1.2 + offset) * 0.08;
                     node.mesh.scale.set(baseScale * pulse, baseScale * pulse, 1);
+
+                    // Update Orbs Animation
+                    if (node.orbs.length > 0) {
+                        node.orbs.forEach(orb => {
+                            orb.orbitData.angle += orb.orbitData.speed * 0.01;
+                            const x = Math.cos(orb.orbitData.angle) * orb.orbitData.radius;
+                            const y = Math.sin(orb.orbitData.angle) * orb.orbitData.radius;
+                            
+                            // Rotate around node position
+                            orb.position.copy(node.mesh.position);
+                            const relativePos = new THREE.Vector3(x, y, 0);
+                            relativePos.applyAxisAngle(orb.orbitData.axis, orb.orbitData.angle);
+                            orb.position.add(relativePos);
+                        });
+                    }
+
+                    // Update Nexus Connection Line
+                    if (node.nexusLine) {
+                        const positions = node.nexusLine.geometry.attributes.position.array;
+                        // Index 0,1,2 is center (0,0,0)
+                        // Index 3,4,5 is node position
+                        positions[3] = node.mesh.position.x;
+                        positions[4] = node.mesh.position.y;
+                        positions[5] = node.mesh.position.z;
+                        node.nexusLine.geometry.attributes.position.needsUpdate = true;
+                        
+                        // Update dashed line distances
+                        if (node.nexusLine.computeLineDistances) {
+                            node.nexusLine.computeLineDistances();
+                        }
+                        
+                        // Pulse the line opacity
+                        node.nexusLine.material.opacity = 0.05 + Math.sin(time * 2 + offset) * 0.03;
+
+                        // PERFORMANCE OPTIMIZATION: Hide nexus line if node has a group line
+                        // This ensures each node only has ONE primary permanent connection
+                        if (node.groupLine && node.groupLine.visible) {
+                            node.nexusLine.visible = false;
+                        } else {
+                            node.nexusLine.visible = node.mesh.visible;
+                        }
+                    }
+
+                    // Update Group Connection Line
+                    if (node.groupId && this.nodes.has(node.groupId)) {
+                        const group = this.nodes.get(node.groupId);
+                        if (!node.groupLine) {
+                            const lineMat = new THREE.LineDashedMaterial({ 
+                                color: 0xffd700, // Golden for group connections
+                                transparent: true, 
+                                opacity: 0.1,
+                                dashSize: 4,
+                                gapSize: 2,
+                                blending: THREE.AdditiveBlending
+                            });
+                            const lineGeom = new THREE.BufferGeometry().setFromPoints([
+                                group.mesh.position.clone(),
+                                node.mesh.position.clone()
+                            ]);
+                            node.groupLine = new THREE.Line(lineGeom, lineMat);
+                            node.groupLine.computeLineDistances();
+                            this.scene.add(node.groupLine);
+                        } else {
+                            const positions = node.groupLine.geometry.attributes.position.array;
+                            positions[0] = group.mesh.position.x;
+                            positions[1] = group.mesh.position.y;
+                            positions[2] = group.mesh.position.z;
+                            positions[3] = node.mesh.position.x;
+                            positions[4] = node.mesh.position.y;
+                            positions[5] = node.mesh.position.z;
+                            node.groupLine.geometry.attributes.position.needsUpdate = true;
+                            node.groupLine.computeLineDistances();
+                            node.groupLine.material.opacity = 0.15 + Math.sin(time * 3 + offset) * 0.05; // Slightly brighter
+                            node.groupLine.visible = group.mesh.visible && node.mesh.visible;
+                        }
+                    } else if (node.groupLine) {
+                        this.scene.remove(node.groupLine);
+                        node.groupLine = null;
+                    }
                 });
 
                 // Update Particles and Hints
+                const nowMs = Date.now();
                 for (let i = this.particles.length - 1; i >= 0; i--) {
                     const p = this.particles[i];
-                    p.progress += p.speed;
+                    const elapsed = nowMs - p.createdAt;
                     
-                    if (p.progress >= 1) {
-                        this.scene.remove(p.mesh);
-                        if (p.hintMesh) {
-                            this.scene.remove(p.hintMesh);
-                            if (p.hintMesh.material.map) p.hintMesh.material.map.dispose();
-                            p.hintMesh.material.dispose();
+                    // Update dynamic start/end positions from nodes
+                    if (p.startNode && p.startNode.mesh) p.startPos.copy(p.startNode.mesh.position);
+                    if (p.endNode && p.endNode.mesh) p.endPos.copy(p.endNode.mesh.position);
+
+                    // Update Line Mesh (Dashed Line) to connect moving nodes
+                    if (p.lineMesh) {
+                        if (p.lineMesh.isLine) {
+                            // Update Line segments
+                            const positions = p.lineMesh.geometry.attributes.position.array;
+                            positions[0] = p.startPos.x;
+                            positions[1] = p.startPos.y;
+                            positions[2] = p.startPos.z;
+                            positions[3] = p.endPos.x;
+                            positions[4] = p.endPos.y;
+                            positions[5] = p.endPos.z;
+                            p.lineMesh.geometry.attributes.position.needsUpdate = true;
+                            p.lineMesh.computeLineDistances(); // Update dash scaling for moving distance
+                        } else {
+                            // Fallback for Cylinder (if any old ones remain)
+                            const direction = new THREE.Vector3().subVectors(p.endPos, p.startPos);
+                            const distance = direction.length();
+                            if (distance > 0.1) {
+                                p.lineMesh.scale.set(1, distance / p.lineMesh.geometry.parameters.height, 1);
+                                p.lineMesh.position.copy(p.startPos).add(direction.clone().multiplyScalar(0.5));
+                                p.lineMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+                            }
                         }
-                        this.particles.splice(i, 1);
-                        continue;
                     }
 
-                    const t = p.progress;
-                    const easedT = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-                    
-                    const pos = new THREE.Vector3().lerpVectors(p.startPos, p.endPos, easedT);
-                    
-                    // Arc height
-                    const dist = p.startPos.distanceTo(p.endPos);
-                    const arcHeight = Math.sin(Math.PI * t) * (dist * 0.15);
-                    pos.y += arcHeight;
-                    
-                    p.mesh.position.copy(pos);
-                    
-                    // Update hint position to follow particle
+                    // 1. Update Particle Ball Position (Fast travel)
+                    if (p.progress < 1) {
+                        p.progress += p.speed;
+                        const t = Math.min(1, p.progress);
+                        // Eased position for smooth but fast travel
+                        const easedT = t * (2 - t); // Simple quad out
+                        const pos = new THREE.Vector3().lerpVectors(p.startPos, p.endPos, easedT);
+                        
+                        // Arc height (less dramatic than before for speed)
+                        const dist = p.startPos.distanceTo(p.endPos);
+                        const arcHeight = Math.sin(Math.PI * t) * (dist * 0.05);
+                        pos.y += arcHeight;
+                        
+                        p.mesh.position.copy(pos);
+                        
+                        // If just reached destination, hide ball
+                        if (p.progress >= 1) {
+                            p.mesh.visible = false;
+                        }
+                    }
+
+                    // 2. Lifecycle management and Fading
+                    if (p.ttl !== Infinity) {
+                        const remaining = p.ttl - elapsed;
+                        if (remaining <= 0) {
+                            // Cleanup
+                            this.scene.remove(p.mesh);
+                            if (p.lineMesh) this.scene.remove(p.lineMesh);
+                            if (p.hintMesh) {
+                                this.scene.remove(p.hintMesh);
+                                if (p.hintMesh.material.map) p.hintMesh.material.map.dispose();
+                                p.hintMesh.material.dispose();
+                            }
+                            this.particles.splice(i, 1);
+                            continue;
+                        }
+
+                        // Fade out lines and hints in last 1s
+                        if (remaining < 1000) {
+                            const opacity = remaining / 1000;
+                            if (p.lineMesh) p.lineMesh.material.opacity = opacity * 0.6;
+                            if (p.hintMesh) p.hintMesh.material.opacity = opacity * 0.9;
+                        }
+                    }
+
+                    // 3. Update Hint position
                     if (p.hintMesh) {
-                        p.hintMesh.position.copy(pos);
-                        p.hintMesh.position.y += 50; // Offset above particle
-                        p.hintMesh.material.opacity = Math.sin(Math.PI * t); // Fade in/out
+                        const midpoint = new THREE.Vector3().lerpVectors(p.startPos, p.endPos, 0.5);
+                        p.hintMesh.position.copy(midpoint);
+                        p.hintMesh.position.y += 40;
                     }
                 }
 
@@ -2927,11 +3314,35 @@
                     if (node.type === 'user') {
                         // Users never vanish
                         shouldRemove = false;
+                    } else if (node.type === 'group') {
+                        // Groups: Remove if no activity for 2 hours
+                        if (idleTime > 7200000) {
+                            shouldRemove = true;
+                        }
                     } else if (node.type === 'bot') {
-                        // Service node: remove if offline AND inactive for long
-                        if (activeBotIds.size > 0 && !activeBotIds.has(id) && idleTime > serviceIdleLimit) shouldRemove = true;
+                        // Service node: remove if offline
+                        // We check if we have data about active bots
+                        const isKnownActive = activeBotIds.has(id);
+                        if (!isKnownActive) {
+                            // If we have other active bots, but not this one, it's definitely offline
+                            if (activeBotIds.size > 0) {
+                                shouldRemove = true; 
+                            } else if (idleTime > 60000) {
+                                // If we don't see ANY active bots, maybe API failed? 
+                                // Give it 1 minute before removing
+                                shouldRemove = true;
+                            }
+                        }
                     } else if (node.type === 'worker') {
-                        if (activeWorkerIds.size > 0 && !activeWorkerIds.has(id) && idleTime > serviceIdleLimit) shouldRemove = true;
+                        // Worker node: remove if offline
+                        const isKnownActive = activeWorkerIds.has(id);
+                        if (!isKnownActive) {
+                            if (activeWorkerIds.size > 0) {
+                                shouldRemove = true;
+                            } else if (idleTime > 30000) {
+                                shouldRemove = true;
+                            }
+                        }
                     }
 
                     if (shouldRemove) {
@@ -2965,12 +3376,61 @@
             if (!visualizer) {
                 visualizer = new RoutingVisualizer();
                 visualizer.getOrCreateNode('nexus', 'nexus');
+                
+                // Apply last sync state if available
+                if (lastSyncState) {
+                    handleSyncState(lastSyncState);
+                }
             }
         }
 
         function handleRoutingEvent(data) {
             if (visualizer) {
                 visualizer.addEvent(data);
+            }
+        }
+
+        let lastSyncState = null;
+
+        function handleSyncState(data) {
+            lastSyncState = data;
+            if (!visualizer) return;
+            console.log("Syncing state:", data);
+            
+            // Sync groups
+            if (data.groups) {
+                Object.values(data.groups).forEach(g => {
+                    visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`);
+                });
+            }
+            
+            // Sync friends
+            if (data.friends) {
+                Object.values(data.friends).forEach(f => {
+                    visualizer.getOrCreateNode(f.user_id, 'user', f.nickname || f.user_id, null);
+                });
+            }
+            
+            // Sync members
+            if (data.members) {
+                Object.values(data.members).forEach(m => {
+                    visualizer.getOrCreateNode(m.user_id, 'user', m.card || m.nickname || m.user_id, null, m.group_id);
+                });
+            }
+            
+            if (data.total_messages) {
+                const el = document.getElementById('metric-msgs-total');
+                if (el) el.innerText = data.total_messages;
+            }
+            
+            // Update other counts if available
+            if (data.groups) {
+                const el = document.getElementById('metric-groups-total');
+                if (el) el.innerText = Object.keys(data.groups).length;
+            }
+            if (data.friends) {
+                const el = document.getElementById('metric-users-total');
+                if (el) el.innerText = Object.keys(data.friends).length;
             }
         }
 
@@ -3926,15 +4386,22 @@
                             const badge = isOffline ? `<span class="badge bg-secondary ms-auto">${t.bot_status_offline}</span>` : `<span class="badge bg-success ms-auto">${t.bot_status_online}</span>`;
                             const platform = bot.platform || 'QQ';
                             let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
+                            let avatarBg = 'var(--bg-list-item)';
+                            
                             if (platform === 'QQ') {
                                 avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
                             }
                             
+                            // Use proxy for external avatars
+                            if (avatarUrl.startsWith('http')) {
+                                avatarUrl = `/api/proxy/avatar?url=${encodeURIComponent(avatarUrl)}`;
+                            }
+
                             return `
                                 <li>
                                     <a class="dropdown-item d-flex align-items-center p-2 ${isOffline ? 'disabled' : ''}" href="#" onclick="${isOffline ? 'return false;' : `selectBotFromDropdown('${bot.self_id}')`}">
                                         <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: ${avatarBg};">
-                                            <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+                                            <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';">
                                         </div>
                                         <div class="flex-grow-1 overflow-hidden">
                                             <div class="d-flex align-items-center">
@@ -4119,6 +4586,12 @@
                         avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/lightning-charge.svg`;
                         avatarBg = '#007FFF22';
                     }
+                    
+                    // Use proxy for external avatars
+                    if (avatarUrl.startsWith('http')) {
+                        avatarUrl = `/api/proxy/avatar?url=${encodeURIComponent(avatarUrl)}`;
+                    }
+                    
                     const platformBadge = `<span class="badge bg-info ms-1">${platform}</span>`;
 
                     if (botViewMode === 'compact') {
@@ -4664,6 +5137,11 @@
                         
                         if (data.type === 'routing_event') {
                             handleRoutingEvent(data);
+                            return;
+                        }
+
+                        if (data.type === 'sync_state') {
+                            handleSyncState(data);
                             return;
                         }
 

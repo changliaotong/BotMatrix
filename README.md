@@ -12,6 +12,35 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.95 - 3D Group Clustering & Persistence
+*   **👥 Group Clustering**: Group members now automatically gather around their respective group nodes in 3D space for better topological structure.
+*   **🌲 Link Optimization**: Reduced visual noise by implementing a tree-like connection structure (User -> Group -> Nexus).
+*   **💾 Database Persistence**: Added SQLite persistence for message counts and contact caches, resolving data loss on page refresh.
+*   **📡 SyncState Protocol**: New WebSocket subscribers now receive a full initial state sync upon connection.
+
+### v1.1.94 - Avatar CORS Fix
+*   **🖼️ Proxy Solution**: Added a backend avatar proxy to bypass CORS restrictions for QQ and other platforms.
+*   **👤 Identity Consistency**: Ensured user and bot avatars display correctly in the 3D visualization.
+
+### v1.1.93 - High-Speed Links & Persistence
+*   **🚀 Warp Speed**: Drastically increased message particle speed to match real-time chat feel.
+*   **🕸️ Virtual Linkage**: Nodes now stay connected by a virtual "data link" line during communication.
+*   **📍 Static Context**: Text hints are now fixed at the center of links for 3 seconds, making them much easier to read.
+
+### v1.1.92 - User Avatars & Proximity Logic
+*   **🖼️ Avatar Sprites**: Integrated user avatars directly into the 3D visualization for immediate identity recognition.
+*   **🧲 Active Attraction**: Users who send messages are now physically pulled closer to the Nexus core, making active conversations stand out.
+*   **💎 Cyan User Glow**: Introduced a distinct cyan aura for user nodes to clearly differentiate them from green service nodes.
+
+### v1.1.91 - Node Cleanup & UI Tidiness
+*   **🧹 Smart Cleanup**: Offline workers and bots now vanish from the 3D map as soon as they disconnect, keeping the visualization clean and focused.
+*   **🛡️ Robust Tracking**: Implemented a fail-safe mechanism to distinguish between a node going offline and a temporary API data gap.
+
+### v1.1.90 - Visualization Flow & Text Clarity
+*   **🌌 Complete Message Loop**: Added `bot_to_user` events to ensure the visual message flow completes its journey back to the user.
+*   **🔮 High-Definition Hints**: Revamped holographic text rendering with 2x resolution and optimized font engines for crystal-clear Chinese characters.
+*   **🛠️ Rendering Optimization**: Tuned texture filters and shadow effects to eliminate blurriness in the 3D environment.
+
 ### v1.1.89 - 3D Visualization Refinement & Protocol Robustness
 *   **✨ Shaking Nexus Core**: Added a high-frequency shaking effect to the central Nexus node to symbolize its status as an active energy core.
 *   **🌌 Dynamic Cosmic Scaling**: Inactive user nodes now smoothly drift to a further "Outer Rim", while active users stay in the core area.
