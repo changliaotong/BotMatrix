@@ -29,11 +29,17 @@ docker-compose up -d --build
 BotMatrix uses a modular architecture. You only need to configure and enable the bots you intend to use.
 
 ### 🧠 BotNexus (Core Manager)
-*   **File**: `docker-compose.yml` (environment variables)
-*   **Port**: `5000` (Web Dashboard), `3005` (WebSocket Gateway)
+*   **File**: `docker-compose.yml` (environment variables) or `config.json` (persistent config)
+*   **Port**: `5000` (Web Dashboard), `3001` (WebSocket Gateway - Default)
 *   **Config**:
-    *   `REDIS_ADDR`: Redis server address.
-    *   `REDIS_PWD`: Redis password.
+    *   **Persistent Config**: Support for `config.json` file in the same directory. This file can be managed via the WebUI (Admin settings).
+    *   **Environment Variables** (Overrides `config.json`):
+        *   `WS_PORT`: WebSocket gateway port (e.g., `:3001`).
+        *   `WEBUI_PORT`: Web Dashboard port (e.g., `:5000`).
+        *   `REDIS_ADDR`: Redis server address (e.g., `127.0.0.1:6379`).
+        *   `REDIS_PWD`: Redis password.
+        *   `JWT_SECRET`: Secret for JWT token generation.
+    *   **WebUI Config**: Once logged in as an administrator, you can modify these settings directly in the **System Settings** tab. Most changes (like Redis) take effect immediately, while port changes require a service restart.
 
 ### 🟢 WxBot (WeChat)
 *   **Type**: Python / OneBot

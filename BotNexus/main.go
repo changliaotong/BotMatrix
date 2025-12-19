@@ -20,7 +20,7 @@ import (
 )
 
 // 版本号定义
-const VERSION = "80"
+const VERSION = "86"
 
 // 注意：常量和upgrader定义从其他文件导入，此处不再重复定义
 
@@ -61,6 +61,16 @@ func main() {
 	http.HandleFunc("/api/bots", manager.JWTMiddleware(manager.handleGetBots))
 	http.HandleFunc("/api/workers", manager.JWTMiddleware(manager.handleGetWorkers))
 	http.HandleFunc("/api/logs", manager.JWTMiddleware(manager.handleGetLogs))
+	http.HandleFunc("/api/admin/config", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			manager.handleGetConfig(w, r)
+		case http.MethodPost:
+			manager.handleUpdateConfig(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
 
 	// Docker 接口
 	http.HandleFunc("/api/docker/list", manager.JWTMiddleware(manager.handleDockerList))
@@ -89,6 +99,8 @@ func main() {
 			manager.handleAdminListUsers(w, r)
 		case http.MethodPost:
 			manager.handleAdminCreateUser(w, r)
+		case http.MethodDelete:
+			manager.handleAdminDeleteUser(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -162,6 +174,16 @@ func (m *Manager) createWebUIHandler() http.Handler {
 	mux.HandleFunc("/api/stats", m.JWTMiddleware(m.handleGetStats))
 	mux.HandleFunc("/api/system/stats", m.JWTMiddleware(m.handleGetSystemStats))
 	mux.HandleFunc("/api/logs", m.JWTMiddleware(m.handleGetLogs))
+	mux.HandleFunc("/api/admin/config", m.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			m.handleGetConfig(w, r)
+		case http.MethodPost:
+			m.handleUpdateConfig(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
 
 	// --- WebSocket 接口 (供 WebUI 使用) ---
 	mux.HandleFunc("/ws/subscriber", m.JWTMiddleware(m.handleSubscriberWebSocket))
@@ -300,12 +322,21 @@ func NewManager() *Manager {
 		if err := m.loadUsersFromDB(); err != nil {
 			log.Printf("[WARN] 从数据库加载用户失败: %v", err)
 		}
+		// 从数据库加载路由规则
+		if err := m.loadRoutingRulesFromDB(); err != nil {
+			log.Printf("[WARN] 从数据库加载路由规则失败: %v", err)
+		}
 	}
 
 	// 初始化默认管理员用户 (如果不存在)
 	m.usersMutex.Lock()
 	m.initDefaultAdmin()
 	m.usersMutex.Unlock()
+
+	// 加载路由规则
+	if err := m.loadRoutingRulesFromDB(); err != nil {
+		log.Printf("[WARN] 加载路由规则失败: %v", err)
+	}
 
 	// 初始化Redis (用于统计信息等非持久化数据)
 	m.rdb = redis.NewClient(&redis.Options{

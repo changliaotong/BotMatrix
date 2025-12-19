@@ -24,6 +24,9 @@ Worker处理 → 返回消息 (带self_id) → BotNexus → 根据self_id → �
 3. **智能负载均衡 (RTT-based LB)**：无匹配规则时，根据 Worker 的平均响应时间 (AvgRTT) 和健康状态选择最优节点。
 4. **故障回退 (Fallback)**：若指定 Worker 离线，系统将自动回退到智能负载均衡，确保消息不丢失。
 
+### 持久化存储 (Persistence)
+所有通过 API 设置的路由规则都会自动持久化到 `botnexus.db` (SQLite 数据库) 中。系统重启后会自动从数据库重新加载所有规则，确保配置不丢失。
+
 ## 🔧 路由规则配置
 
 ### 规则格式
@@ -91,11 +94,12 @@ curl -X POST http://localhost:8080/api/admin/routing \
 3. 发送测试消息验证路由效果
 
 ### 日志监控
-在BotNexus控制台查看路由日志：
+在BotNexus控制台查看详细的路由调试日志：
 ```
-[SUCCESS] Successfully routed message to worker1 via routing rule
-[WARN] No routing rule found for group 123456, using random worker
-[ERROR] Target worker worker1 unavailable, falling back to random selection
+[ROUTING] Rule Matched: user_123456 -> Target Worker: worker1
+[ROUTING] Rule Matched: group_789012 (via pattern group_*) -> Target Worker: worker2
+[ROUTING] No target worker worker1 for rule user_123456, falling back to load balancer
+[ROUTING] Failed to send to target worker worker1 for rule user_123456: connection closed
 ```
 
 ## ⚠️ 注意事项

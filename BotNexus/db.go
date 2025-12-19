@@ -37,8 +37,70 @@ func (m *Manager) initDB() error {
 		return err
 	}
 
+	// 创建路由规则表
+	routingQuery := `
+	CREATE TABLE IF NOT EXISTS routing_rules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		pattern TEXT UNIQUE NOT NULL,
+		target_worker_id TEXT NOT NULL,
+		created_at DATETIME,
+		updated_at DATETIME
+	);`
+
+	_, err = m.db.Exec(routingQuery)
+	if err != nil {
+		log.Printf("创建路由规则表失败: %v", err)
+		return err
+	}
+
 	log.Printf("数据库初始化成功: %s", DB_FILE)
 	return nil
+}
+
+// loadRoutingRulesFromDB 从数据库加载所有路由规则到内存缓存
+func (m *Manager) loadRoutingRulesFromDB() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	rows, err := m.db.Query("SELECT pattern, target_worker_id FROM routing_rules")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	m.routingRules = make(map[string]string)
+	count := 0
+	for rows.Next() {
+		var pattern, target string
+		if err := rows.Scan(&pattern, &target); err != nil {
+			log.Printf("[ERROR] 解析路由规则行失败: %v", err)
+			continue
+		}
+		m.routingRules[pattern] = target
+		count++
+	}
+	log.Printf("[INFO] 从数据库加载了 %d 条路由规则", count)
+	return nil
+}
+
+// saveRoutingRuleToDB 保存路由规则到数据库
+func (m *Manager) saveRoutingRuleToDB(pattern, target string) error {
+	query := `
+	INSERT INTO routing_rules (pattern, target_worker_id, created_at, updated_at)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(pattern) DO UPDATE SET
+		target_worker_id = excluded.target_worker_id,
+		updated_at = excluded.updated_at;
+	`
+	now := time.Now().Format(time.RFC3339)
+	_, err := m.db.Exec(query, pattern, target, now, now)
+	return err
+}
+
+// deleteRoutingRuleFromDB 从数据库删除路由规则
+func (m *Manager) deleteRoutingRuleFromDB(pattern string) error {
+	_, err := m.db.Exec("DELETE FROM routing_rules WHERE pattern = ?", pattern)
+	return err
 }
 
 // loadUsersFromDB 从数据库加载所有用户到内存缓存

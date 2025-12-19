@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotMatrix Manager v1.1.80</title>
+    <title>BotMatrix Manager v1.1.84</title>
     <!-- Use Staticfile CDN (Reliable in China) -->
     <link href="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.staticfile.org/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -152,6 +152,15 @@
         
         .sidebar a { color: var(--text-muted); padding: 12px 24px; display: block; text-decoration: none; border-left: 3px solid transparent; }
         .sidebar a:hover, .sidebar a.active { color: var(--primary-color); background-color: rgba(13, 110, 253, 0.1); border-left-color: var(--primary-color); font-weight: 500; }
+        .nav-section-label {
+            padding: 1rem 1.5rem 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.05rem;
+            opacity: 0.7;
+        }
         .main-content { margin-left: 250px; padding: 25px; padding-top: 10px; }
         .metric-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
         .log-box { background-color: var(--bg-console); color: var(--text-console); font-family: monospace; padding: 15px; overflow-y: auto; border-radius: 0.5rem; font-size: 0.85rem; border: 1px solid var(--border-color); }
@@ -277,6 +286,19 @@
         }
     }
     
+    /* Stats Card Slides */
+    .stats-slide {
+        transition: all 0.5s ease-in-out;
+    }
+    .stats-slide.fade-out {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    .stats-slide.fade-in {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
     /* Custom Stats Grid */
     .stats-grid {
         display: grid;
@@ -371,7 +393,7 @@
                 <div class="login-logo">
                     <i class="bi bi-robot"></i>
                 </div>
-                <h3>BotMatrix</h3>
+                 <h3>BotMatrix</h3>
                 <p class="text-muted" data-i18n="login_subtitle">统一管理平台</p>
             </div>
             <form id="loginForm">
@@ -410,7 +432,7 @@
         <button class="btn btn-outline-secondary me-3" onclick="toggleSidebar()">
             <i class="bi bi-list fs-4"></i>
         </button>
-        <h5 class="m-0">BotMatrix <small class="text-muted fs-6">v1.1.80</small></h5>
+        <h5 class="m-0">BotMatrix <small class="text-muted fs-6">v1.1.84</small></h5>
     </div>
     
     <!-- Overlay -->
@@ -442,28 +464,68 @@
         </div>
     </div>
 
+    <!-- Create User Modal -->
+    <div class="modal fade" id="createUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="modal_create_user_title">创建新用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createUserForm">
+                        <div class="mb-3">
+                            <label class="form-label" data-i18n="username">用户名</label>
+                            <input type="text" class="form-control" id="new-username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" data-i18n="password">密码</label>
+                            <input type="password" class="form-control" id="new-password" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="new-is-admin">
+                            <label class="form-check-label" for="new-is-admin" data-i18n="is_admin_label">管理员权限</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="cancel_btn">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="createUser()" data-i18n="confirm_create_btn">确认创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="sidebar" id="sidebar">
         <div class="px-3 mb-4">
             <h4>🚀 BotMatrix</h4>
             <div class="d-flex justify-content-between align-items-center">
                 <small class="text-muted" data-i18n="sidebar_subtitle">Enterprise Bot Manager</small>
-                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.80</span>
+                <span class="badge bg-secondary" style="font-size: 0.7em;">v1.1.84</span>
             </div>
         </div>
         
         <!-- Bot Selector Removed -->
         
         <nav class="nav flex-column">
+            <div class="nav-section-label" data-i18n="menu_group_overview">总览</div>
             <a href="#dashboard" id="nav-dashboard" class="nav-link active" onclick="showTab('dashboard')"><i class="bi bi-speedometer2"></i> <span data-i18n="sidebar_dashboard">运行状态</span></a>
+            
+            <div class="nav-section-label" data-i18n="menu_group_management">业务管理</div>
             <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> <span data-i18n="sidebar_bots">云端矩阵</span></a>
             <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> <span data-i18n="sidebar_groups">群组好友</span></a>
-            <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
-            <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
             <a href="#routing" id="nav-routing" class="nav-link" onclick="showTab('routing')"><i class="bi bi-diagram-3"></i> <span data-i18n="sidebar_routing">路由管理</span></a>
+            
+            <div class="nav-section-label" data-i18n="menu_group_infrastructure">基础设施</div>
+            <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
             <a href="/overmind/" id="nav-overmind" class="nav-link" onclick="showOvermind(event)"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
+            
+            <div class="nav-section-label" data-i18n="menu_group_system">系统维护</div>
+            <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
             <a href="#logs" id="nav-logs" class="nav-link" onclick="showTab('logs')"><i class="bi bi-journal-text"></i> <span data-i18n="sidebar_logs">日志中心</span></a>
             <a href="#debug" id="nav-debug" class="nav-link" onclick="showTab('debug')"><i class="bi bi-bug"></i> <span data-i18n="sidebar_debug">调试测试</span></a>
-            <a href="#settings" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="bi bi-gear"></i> <span data-i18n="sidebar_settings">系统设置</span></a>
+            <a href="#users" id="nav-users" class="nav-link admin-only" onclick="showTab('users')"><i class="bi bi-people-fill"></i> <span data-i18n="sidebar_users">用户管理</span></a>
+            <a href="#settings" id="nav-settings" class="nav-link admin-only" onclick="showTab('settings')"><i class="bi bi-gear"></i> <span data-i18n="sidebar_settings">系统设置</span></a>
         </nav>
 
         <div class="mt-auto p-3 border-top d-flex justify-content-around align-items-center flex-wrap">
@@ -561,14 +623,33 @@
                     </div>
                 </div>
 
-                <!-- 4. Goroutines -->
-                <div class="stat-card">
-                    <div class="icon-circle bg-info bg-opacity-10 text-info">
+                <!-- 4. Combined Stats (Goroutines, Active, Messages) -->
+                <div class="stat-card" id="combined-stats-card">
+                    <div class="icon-circle bg-info bg-opacity-10 text-info" id="combined-stats-icon">
                         <i class="bi bi-activity"></i>
                     </div>
-                    <div class="stat-info">
-                        <div class="stat-label" data-i18n="stat_goroutines">Goroutines</div>
-                        <div class="stat-value" id="metric-goroutines">0</div>
+                    <div class="stat-info w-100" id="combined-stats-container">
+                        <!-- Content will be rotated by JS -->
+                        <div class="stats-slide active" id="slide-goroutines">
+                            <div class="stat-label" data-i18n="stat_goroutines">Goroutines</div>
+                            <div class="stat-value" id="metric-goroutines">0</div>
+                        </div>
+                        <div class="stats-slide" id="slide-active" style="display: none;">
+                            <div class="stat-label" data-i18n="stat_active_groups_users">活跃 (群组 / 用户)</div>
+                            <div class="stat-value" style="font-size: 0.95rem;">
+                                <span id="metric-groups-today">0</span><small class="text-muted">/</small><span id="metric-groups-total" class="text-muted fw-normal">0</span>
+                                <span class="mx-1 text-muted">|</span>
+                                <span id="metric-users-today">0</span><small class="text-muted">/</small><span id="metric-users-total" class="text-muted fw-normal">0</span>
+                            </div>
+                        </div>
+                        <div class="stats-slide" id="slide-messages" style="display: none;">
+                            <div class="stat-label" data-i18n="stat_messages">消息统计 (接收/发送)</div>
+                            <div class="stat-value" style="font-size: 0.95rem;">
+                                <span id="metric-msgs-total">0</span>
+                                <span class="text-muted mx-1">/</span>
+                                <span id="metric-sent-total" class="text-muted fw-normal">0</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -583,38 +664,6 @@
                             <span id="metric-uptime">00:00:00</span>
                             <span class="text-muted fs-6 fw-normal mx-1">|</span>
                             <span id="metric-current-time" class="text-muted fs-6 fw-normal">00:00:00</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 5. Groups & Users (Merged) -->
-                <div class="stat-card">
-                    <div class="icon-circle bg-primary bg-opacity-10 text-primary">
-                        <i class="bi bi-people"></i>
-                    </div>
-                    <div class="stat-info w-100">
-                        <div class="stat-label" data-i18n="stat_active_groups_users">活跃 (群组 / 用户)</div>
-                        <div class="d-flex flex-column">
-                            <div class="stat-value" style="font-size: 1rem;">
-                                <span id="metric-groups-today">0</span><small class="text-muted"> / </small><span id="metric-groups-total" class="text-muted fw-normal" style="font-size: 0.8rem;">0</span>
-                                <span class="mx-2 text-muted">|</span>
-                                <span id="metric-users-today">0</span><small class="text-muted"> / </small><span id="metric-users-total" class="text-muted fw-normal" style="font-size: 0.8rem;">0</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 7. Messages (Merged) -->
-                <div class="stat-card">
-                    <div class="icon-circle bg-info bg-opacity-10 text-info">
-                        <i class="bi bi-chat-text"></i>
-                    </div>
-                    <div class="stat-info w-100">
-                        <div class="stat-label" data-i18n="stat_messages">消息统计 (接收/发送)</div>
-                        <div class="stat-value">
-                            <span id="metric-msgs-total">0</span>
-                            <span class="text-muted fs-6 fw-normal">/</span>
-                            <span id="metric-sent-total" class="text-muted fs-6 fw-normal">0</span>
                         </div>
                     </div>
                 </div>
@@ -1442,6 +1491,37 @@
         </div>
 
 
+        <!-- Users Tab -->
+        <div id="tab-users" class="content-section" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="m-0" data-i18n="users_title">用户管理</h4>
+                <button class="btn btn-primary" onclick="showCreateUserModal()">
+                    <i class="bi bi-person-plus"></i> <span data-i18n="add_user_btn">添加用户</span>
+                </button>
+            </div>
+            
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th data-i18n="user_col_id">ID</th>
+                                    <th data-i18n="user_col_username">用户名</th>
+                                    <th data-i18n="user_col_role">角色</th>
+                                    <th data-i18n="user_col_created">创建时间</th>
+                                    <th class="text-end" data-i18n="user_col_actions">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <!-- Users list will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Settings Tab -->
         <div id="tab-settings" class="content-section" style="display:none;">
             <h4 class="mb-4" data-i18n="settings_title">系统设置</h4>
@@ -1505,6 +1585,74 @@
                                     <input type="password" id="pwd-confirm" class="form-control" placeholder="确认新密码" data-i18n-placeholder="confirm_pwd_placeholder">
                                 </div>
                                 <button type="button" class="btn btn-primary" onclick="updatePassword()" data-i18n="save_personal_settings_btn">保存个人设置</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backend Configuration (Admin Only) -->
+                <div class="col-md-12 admin-only" style="display:none;">
+                    <div class="card mb-4 border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <i class="bi bi-server me-2"></i> 后端服务配置 (管理员)
+                        </div>
+                        <div class="card-body">
+                            <form id="backend-config-form">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label" data-i18n="config_ws_port">WebSocket 服务端口</label>
+                                            <input type="text" id="cfg-ws-port" class="form-control" placeholder=":3001">
+                                            <div class="form-text" data-i18n="config_ws_port_help">Bot 和 Worker 连接使用的端口，需包含冒号 (例如 :3001)</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label" data-i18n="config_webui_port">WebUI 服务端口</label>
+                                            <input type="text" id="cfg-webui-port" class="form-control" placeholder=":5000">
+                                            <div class="form-text" data-i18n="config_webui_port_help">管理后台界面访问端口，需包含冒号 (例如 :5000)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label" data-i18n="config_redis_addr">Redis 地址</label>
+                                            <input type="text" id="cfg-redis-addr" class="form-control" placeholder="127.0.0.1:6379">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label" data-i18n="config_redis_pwd">Redis 密码</label>
+                                            <input type="password" id="cfg-redis-pwd" class="form-control" placeholder="******">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label" data-i18n="config_admin_pwd">默认管理员密码</label>
+                                            <input type="text" id="cfg-admin-pwd" class="form-control" placeholder="admin123">
+                                            <div class="form-text" data-i18n="config_admin_pwd_help">新部署系统时的默认密码</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label" data-i18n="config_stats_file">统计数据存储文件</label>
+                                            <input type="text" id="cfg-stats-file" class="form-control" placeholder="stats.json">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" data-i18n="config_jwt_secret">JWT 密钥 (慎改)</label>
+                                    <input type="text" id="cfg-jwt-secret" class="form-control">
+                                    <div class="form-text" data-i18n="config_jwt_secret_help">修改此项会导致所有已登录用户 Token 失效</div>
+                                </div>
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i> <span data-i18n="config_restart_warning">注意：修改端口或 Redis 配置后，通常需要手动重启后端服务才能完全生效。</span>
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="updateBackendConfig()" data-i18n="config_save">保存后端配置</button>
+                                <button type="button" class="btn btn-outline-secondary ms-2" onclick="loadBackendConfig()" data-i18n="config_reload">重新加载</button>
                             </form>
                         </div>
                     </div>
@@ -1702,6 +1850,62 @@
             }
         }
 
+        async function loadBackendConfig() {
+            if (authRole !== 'admin' && authRole !== 'super') return;
+            
+            try {
+                const res = await fetch('/api/admin/config', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!res.ok) throw new Error('Failed to load config');
+                
+                const config = await res.json();
+                document.getElementById('cfg-ws-port').value = config.ws_port || '';
+                document.getElementById('cfg-webui-port').value = config.webui_port || '';
+                document.getElementById('cfg-redis-addr').value = config.redis_addr || '';
+                document.getElementById('cfg-redis-pwd').value = config.redis_pwd || '';
+                document.getElementById('cfg-jwt-secret').value = config.jwt_secret || '';
+                document.getElementById('cfg-admin-pwd').value = config.default_admin_password || '';
+                document.getElementById('cfg-stats-file').value = config.stats_file || '';
+            } catch (e) {
+                console.error('Error loading backend config:', e);
+            }
+        }
+
+        async function updateBackendConfig() {
+            const config = {
+                ws_port: document.getElementById('cfg-ws-port').value,
+                webui_port: document.getElementById('cfg-webui-port').value,
+                redis_addr: document.getElementById('cfg-redis-addr').value,
+                redis_pwd: document.getElementById('cfg-redis-pwd').value,
+                jwt_secret: document.getElementById('cfg-jwt-secret').value,
+                default_admin_password: document.getElementById('cfg-admin-pwd').value,
+                stats_file: document.getElementById('cfg-stats-file').value
+            };
+
+            if (!confirm('确定要保存后端配置吗？部分修改（如端口）需要重启服务后生效。')) return;
+
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message || '配置已更新');
+                } else {
+                    alert('更新失败: ' + data.message);
+                }
+            } catch (e) {
+                alert('更新出错: ' + e.message);
+            }
+        }
+
         // --- Auth & Login ---
         let authToken = localStorage.getItem('wxbot_token');
         let authRole = localStorage.getItem('wxbot_role');
@@ -1797,6 +2001,16 @@
 
             // Sidebar
             toggle('nav-debug', isAdmin);
+            toggle('nav-users', isAdmin);
+            toggle('nav-settings', isAdmin);
+            toggle('nav-routing', isAdmin);
+            toggle('nav-docker', isAdmin);
+            toggle('nav-overmind', isAdmin);
+            
+            // Admin only sections by class
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.style.display = isAdmin ? '' : 'none';
+            });
             
             // Monitor Tabs
             toggle('monitor-logs-tab', isAdmin);
@@ -1823,6 +2037,46 @@
             const lang = currentLang || 'zh-CN';
             window.open(`/overmind/?lang=${lang}`, '_blank');
         }
+
+        let currentSlideIndex = 0;
+        const totalSlides = 3;
+
+        function rotateStatsSlide() {
+            const container = document.getElementById('combined-stats-container');
+            if (!container) return;
+
+            const slides = container.querySelectorAll('.stats-slide');
+            const icon = document.getElementById('combined-stats-icon').querySelector('i');
+            if (!slides.length || !icon) return;
+            
+            // Fade out current
+            slides[currentSlideIndex].classList.remove('fade-in');
+            slides[currentSlideIndex].classList.add('fade-out');
+            
+            setTimeout(() => {
+                slides[currentSlideIndex].style.display = 'none';
+                slides[currentSlideIndex].classList.remove('fade-out');
+                
+                currentSlideIndex = (currentSlideIndex + 1) % totalSlides;
+                
+                // Update icon based on slide
+                if (currentSlideIndex === 0) { // Goroutines
+                    icon.className = 'bi bi-activity';
+                } else if (currentSlideIndex === 1) { // Active
+                    icon.className = 'bi bi-people';
+                } else if (currentSlideIndex === 2) { // Messages
+                    icon.className = 'bi bi-chat-text';
+                }
+                
+                slides[currentSlideIndex].style.display = 'block';
+                // Trigger reflow
+                slides[currentSlideIndex].offsetHeight;
+                slides[currentSlideIndex].classList.add('fade-in');
+            }, 500);
+        }
+
+        // Start rotation every 5 seconds
+        setInterval(rotateStatsSlide, 5000);
 
         function showTab(tabId) {
             if (!tabId) return;
@@ -1899,7 +2153,11 @@
                     case 'debug':
                         if (typeof loadTestGroups === 'function') loadTestGroups();
                         break;
+                    case 'users':
+                        if (typeof fetchUsers === 'function') fetchUsers();
+                        break;
                     case 'settings':
+                        if (typeof loadBackendConfig === 'function') loadBackendConfig();
                         break;
                 }
                 
@@ -1995,9 +2253,13 @@
                 
                 window.updateInterval = safeSetInterval(updateStats, 2000, 'updateStats');
                 window.systemStatsInterval = safeSetInterval(updateSystemStats, 2000, 'updateSystemStats');
+                window.timeUpdateInterval = safeSetInterval(updateTimeDisplay, 500, 'updateTimeDisplay');
                 window.chatStatsInterval = safeSetInterval(updateChatStats, 5000, 'updateChatStats');
                 window.botsInterval = safeSetInterval(updateBots, 5000, 'updateBots');
                 window.workersInterval = safeSetInterval(fetchWorkers, 5000, 'fetchWorkers');
+                
+                // Start combined stats rotation
+                window.combinedStatsInterval = safeSetInterval(rotateCombinedStats, 3000, 'rotateCombinedStats');
                 
             } catch (error) {
                 console.error('startApp初始化失败:', error);
@@ -2011,6 +2273,23 @@
         }
 
         let lastSystemStats = null;
+        let serverStartTime = null;
+
+        function updateTimeDisplay() {
+            // Current Time
+            if (document.getElementById('metric-current-time')) {
+                document.getElementById('metric-current-time').innerText = new Date().toLocaleTimeString();
+            }
+            // Up Time
+            if (document.getElementById('metric-uptime') && serverStartTime) {
+                const uptimeSeconds = Math.floor(Date.now() / 1000 - serverStartTime);
+                const h = Math.floor(uptimeSeconds / 3600);
+                const m = Math.floor((uptimeSeconds % 3600) / 60);
+                const s = uptimeSeconds % 60;
+                document.getElementById('metric-uptime').innerText = 
+                    `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
+        }
 
         async function fetchSystemStats(updateDetails = false) {
             if (!authToken) return;
@@ -2324,6 +2603,44 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        function rotateCombinedStats() {
+            const container = document.getElementById('combined-stats-container');
+            if (!container) return;
+            
+            const slides = container.querySelectorAll('.stats-slide');
+            if (slides.length <= 1) return;
+            
+            let activeIndex = -1;
+            for (let i = 0; i < slides.length; i++) {
+                if (slides[i].classList.contains('active')) {
+                    activeIndex = i;
+                    break;
+                }
+            }
+            
+            if (activeIndex === -1) {
+                slides[0].classList.add('active');
+                slides[0].style.display = 'block';
+                return;
+            }
+            
+            // Hide current
+            slides[activeIndex].classList.remove('active');
+            slides[activeIndex].style.display = 'none';
+            
+            // Show next
+            const nextIndex = (activeIndex + 1) % slides.length;
+            slides[nextIndex].classList.add('active');
+            slides[nextIndex].style.display = 'block';
+            
+            // Update icon
+            const iconElement = document.querySelector('#combined-stats-icon i');
+            if (iconElement) {
+                const icons = ['bi-activity', 'bi-people', 'bi-chat-text'];
+                iconElement.className = `bi ${icons[nextIndex]}`;
+            }
+        }
+
         function updateStats() {
             if (!authToken) return;
             fetch('/api/stats', {
@@ -2376,17 +2693,8 @@
                         document.getElementById('metric-os-ver').innerText = '版本: ' + (data.os_version || 'Unknown');
                     }
 
-                    // Time Metrics
-                    if (document.getElementById('metric-current-time')) {
-                        document.getElementById('metric-current-time').innerText = new Date().toLocaleTimeString();
-                    }
-                    if (document.getElementById('metric-uptime') && data.start_time) {
-                        const uptimeSeconds = Math.floor(Date.now() / 1000 - data.start_time);
-                        const h = Math.floor(uptimeSeconds / 3600);
-                        const m = Math.floor((uptimeSeconds % 3600) / 60);
-                        const s = uptimeSeconds % 60;
-                        document.getElementById('metric-uptime').innerText = 
-                            `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                    if (data.start_time) {
+                        serverStartTime = data.start_time;
                     }
 
                     // New metrics
@@ -5588,6 +5896,99 @@
         window.addEventListener('beforeunload', cleanupBeforeUnload);
         window.addEventListener('pagehide', cleanupBeforeUnload);
         
+        function showCreateUserModal() {
+            const modal = new bootstrap.Modal(document.getElementById('createUserModal'));
+            modal.show();
+        }
+
+        async function createUser() {
+            const username = document.getElementById('new-username').value;
+            const password = document.getElementById('new-password').value;
+            const isAdmin = document.getElementById('new-is-admin').checked;
+
+            if (!username || !password) {
+                alert('请填写用户名和密码');
+                return;
+            }
+
+            try {
+                const response = await fetchWithAuth('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, is_admin: isAdmin })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showToast('用户创建成功', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+                    fetchUsers(); // 刷新列表
+                    // 清空表单
+                    document.getElementById('new-username').value = '';
+                    document.getElementById('new-password').value = '';
+                    document.getElementById('new-is-admin').checked = false;
+                } else {
+                    alert('创建失败: ' + result.message);
+                }
+            } catch (err) {
+                console.error('Create user error:', err);
+                alert('创建用户时出错');
+            }
+        }
+
+        async function fetchUsers() {
+            if (currentUserRole !== 'admin') return;
+            
+            try {
+                const response = await fetchWithAuth('/api/admin/users');
+                const result = await response.json();
+                if (result.success) {
+                    renderUsers(result.users);
+                }
+            } catch (err) {
+                console.error('Fetch users error:', err);
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('users-table-body');
+            tbody.innerHTML = '';
+            
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${user.username}</td>
+                    <td>${user.username}</td>
+                    <td><span class="badge ${user.is_admin ? 'bg-danger' : 'bg-info'}">${user.is_admin ? 'Admin' : 'User'}</span></td>
+                    <td>${new Date(user.created_at).toLocaleString()}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')" ${user.username === 'admin' ? 'disabled' : ''}>
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`确定要删除用户 ${username} 吗？`)) return;
+            
+            try {
+                const response = await fetchWithAuth(`/api/admin/users?username=${encodeURIComponent(username)}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showToast('用户删除成功', 'success');
+                    fetchUsers();
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            } catch (err) {
+                console.error('Delete user error:', err);
+            }
+        }
+
         // 监听页面可见性变化，优化性能
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {

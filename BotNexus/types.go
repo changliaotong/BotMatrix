@@ -104,8 +104,20 @@ type BotStatDetail struct {
 
 // ==================== 管理器结构体 ====================
 
+// AppConfig represents the backend configuration
+type AppConfig struct {
+	WSPort               string `json:"ws_port"`
+	WebUIPort            string `json:"webui_port"`
+	RedisAddr            string `json:"redis_addr"`
+	RedisPwd             string `json:"redis_pwd"`
+	JWTSecret            string `json:"jwt_secret"`
+	DefaultAdminPassword string `json:"default_admin_password"`
+	StatsFile            string `json:"stats_file"`
+}
+
 // Manager holds the state
 type Manager struct {
+	config      *AppConfig
 	bots        map[string]*BotClient
 	subscribers map[*websocket.Conn]*Subscriber // UI or other consumers (Broadcast)
 	workers     []*WorkerClient                 // Business logic workers (Round-Robin)

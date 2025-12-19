@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.86 (2025-12-19)
+*   **Intelligent API Routing & Group Awareness (智能API路由与群组感知)**:
+    *   **🎯 Context-Aware API Routing**: Significantly improved `forwardWorkerRequestToBot` to intelligently route API requests (like `get_group_member_info`) based on `self_id` or `group_id`. This resolves the "Group member does not exist" (retcode: 1200) error caused by routing requests to the wrong bot.
+    *   **📂 Group-Bot Mapping Cache**: Enhanced the bot initialization process to automatically fetch and cache the entire group list (`get_group_list`) for each bot. This ensures the system knows which bot manages which group even before any messages are exchanged.
+    *   **🔍 Routing Debug Transparency**: Added detailed `[ROUTING]` logs for API requests, showing the target bot, the action being performed, and the routing source (self_id, group_id cache, or fallback).
+    *   **🛡️ Robust Error Handling**: Added explicit error reporting for cases where no bot can be found for a specific group, preventing silent failures and providing clear feedback to workers.
+
+## v1.1.85 (2025-12-19)
+*   **Routing & UI Optimization (路由与UI优化)**:
+    *   **💾 Routing Rule Persistence**: Implemented SQLite-based persistence for routing rules. Rules are now saved to `botnexus.db` and automatically reloaded on system restart, resolving the issue where rules disappeared.
+    *   **🛡️ Enhanced Routing Resilience**: Improved `forwardMessageToWorker` to handle cases where a routing rule points to a non-existent or offline worker. The system now logs a warning and automatically falls back to the load balancer.
+    *   **🔍 Detailed Routing Logs**: Added explicit logging for routing decisions, including matched rules (exact/pattern), target workers, and fallback scenarios to assist in debugging.
+    *   **📊 Dashboard UI Consolidation**: Merged Goroutines, active groups/users, and message statistics into a single rotating "Combined Stats" block on the dashboard, optimizing screen real estate.
+    *   **🆔 Bot Info Synchronization**: Fixed a critical issue where bot IDs and nicknames were not correctly updated in the global map after fetching login info from QQ API. This ensures consistent avatar display and identification.
+
+## v1.1.84 (2025-12-19)
+*   **Persistent Configuration System (持久化配置系统)**:
+    *   **⚙️ Dynamic Config Management**: Implemented a structured configuration system with persistent storage support via `config.json`.
+    *   **🔌 Port Configuration UI**: Added a dedicated "Backend Configuration" section in the system settings for admin users to modify WebSocket and WebUI ports dynamically.
+    *   **💾 Multi-layered Config Loading**: Established a robust config loading priority: Default Values → `config.json` → Environment Variables (highest priority).
+    *   **🛡️ Secure Admin API**: Added protected REST API endpoints (`/api/admin/config`) for retrieving and updating system settings with admin-only access control.
+    *   **🔧 Backward Compatibility**: Retained support for existing environment variables (`WS_PORT`, `WEBUI_PORT`, etc.) to ensure seamless upgrades and deployment flexibility.
+
 ## v1.1.83 (2025-12-19)
 *   **Bot ID Display & Routing Enhancements (机器人ID显示与路由增强)**:
     *   **🆔 Bot Identification Fix**: Fixed issue where bot `self_id` was displayed as IP/Port. Bots now correctly identify themselves via handshake headers or dynamic message analysis, switching from temporary IP-based IDs to real QQ IDs automatically.
