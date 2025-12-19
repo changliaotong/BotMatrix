@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.99 - Interactive Visualization Configuration
+*   **⚙️ Live Config Panel**: Added a real-time settings panel to adjust 3D visualization parameters (distances, multipliers, spread, etc.).
+*   **💾 Persistent Settings**: Visualization preferences are now saved to local storage and persist across refreshes.
+*   **🎨 Dynamic Layout Engine**: Refactored the positioning logic to use configurable parameters, allowing for custom cosmic layouts.
+*   **🛠️ Reset & Save**: Included quick reset to defaults and manual save options for the 3D universe.
+
 ### v1.1.98 - Drastic 3D Universe Scaling
 *   **🌌 Galactic Scale Expansion**: Increased all 3D node distances and distribution radii by a full order of magnitude (10x - 100x larger scene).
 *   **🔭 Enhanced Camera Optics**: Adjusted camera far-plane and zoom limits (up to 50,000 units) to accommodate the massive new cosmic scale.

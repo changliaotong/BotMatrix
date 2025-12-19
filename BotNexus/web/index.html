@@ -2345,6 +2345,21 @@
                 this.running = true;
                 this.totalMessages = 0;
 
+                // Configuration for visualization (can be adjusted by user)
+                this.config = {
+                    botRadius: 1750,
+                    botGroupMultiplier: 200,
+                    groupRadius: 15000,
+                    groupCountMultiplier: 2000,
+                    groupSpread: 8000,
+                    userRadius: 8000,
+                    userCountMultiplier: 500,
+                    userSpread: 4000,
+                    wanderScale: 1.0,
+                    verticalSpread: 1.0
+                };
+                this.loadConfig();
+
                 // Add Stars
                 this.addStars();
                 
@@ -2356,6 +2371,9 @@
                 this.statsEl.className = 'viz-stats';
                 this.container.appendChild(this.statsEl);
                 this.updateStatsUI();
+
+                // Settings UI
+                this.createSettingsUI();
 
                 this.raycaster = new THREE.Raycaster();
                 this.mouse = new THREE.Vector2();
@@ -2399,7 +2417,140 @@
                     <div>${t.total_messages || '消息总量'}: <span style="color: #fff; text-shadow: 0 0 5px #00ff41;">${this.totalMessages}</span></div>
                     <div>${t.viz_active_nodes || '活动节点'}: ${activeNodes}</div>
                     <div>${t.viz_active_tasks || '处理中任务'}: ${activeParticles}</div>
+                    <div style="margin-top: 10px; text-align: right;">
+                        <button onclick="window.visualizer.toggleSettings()" style="background: rgba(0,255,65,0.2); border: 1px solid #00ff41; color: #00ff41; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-size: 0.8rem;">
+                            <i class="bi bi-gear-fill"></i> ${t.viz_settings || '设置'}
+                        </button>
+                    </div>
                 `;
+            }
+
+            loadConfig() {
+                const saved = localStorage.getItem('botmatrix_viz_config');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        this.config = { ...this.config, ...parsed };
+                    } catch (e) { console.error("Failed to load viz config", e); }
+                }
+            }
+
+            saveConfig() {
+                localStorage.setItem('botmatrix_viz_config', JSON.stringify(this.config));
+                // Recalculate all positions
+                this.nodes.forEach(node => {
+                    if (node.type === 'bot') {
+                        // Keep current angle, but update radius
+                        const angle = Math.atan2(node.targetPos.z, node.targetPos.x);
+                        let groupCount = 0;
+                        this.nodes.forEach(n => { if (n.type === 'group' && n.botId === node.id) groupCount++; });
+                        const radius = this.config.botRadius + (groupCount * this.config.botGroupMultiplier);
+                        node.targetPos.set(Math.cos(angle) * radius, (Math.random() - 0.5) * 1500 * this.config.verticalSpread, Math.sin(angle) * radius);
+                    } else if (node.type === 'group') {
+                        this.resetGroupPosition(node);
+                    } else if (node.type === 'user') {
+                        this.resetUserPosition(node);
+                    }
+                });
+            }
+
+            toggleSettings() {
+                const el = document.getElementById('viz-settings-panel');
+                if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+
+            createSettingsUI() {
+                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                const panel = document.createElement('div');
+                panel.id = 'viz-settings-panel';
+                panel.style.cssText = `
+                    position: absolute;
+                    top: 100px;
+                    right: 20px;
+                    width: 280px;
+                    background: rgba(0, 20, 10, 0.85);
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(0, 255, 65, 0.3);
+                    border-radius: 8px;
+                    padding: 15px;
+                    color: #00ff41;
+                    font-family: 'Courier New', Courier, monospace;
+                    font-size: 0.85rem;
+                    z-index: 1000;
+                    display: none;
+                    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+                `;
+
+                const createSlider = (label, key, min, max, step = 1) => `
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span>${label}</span>
+                            <span id="val-${key}">${this.config[key]}</span>
+                        </div>
+                        <input type="range" min="${min}" max="${max}" step="${step}" value="${this.config[key]}" 
+                            style="width: 100%; accent-color: #00ff41; cursor: pointer;"
+                            oninput="window.visualizer.updateConfig('${key}', this.value)">
+                    </div>
+                `;
+
+                panel.innerHTML = `
+                    <div style="font-weight: bold; border-bottom: 1px solid rgba(0,255,65,0.3); margin-bottom: 15px; padding-bottom: 5px; display: flex; justify-content: space-between;">
+                        <span>${t.viz_settings_title || 'VISUALIZATION CONFIG'}</span>
+                        <i class="bi bi-x-lg" onclick="window.visualizer.toggleSettings()" style="cursor: pointer;"></i>
+                    </div>
+                    ${createSlider(t.viz_bot_dist || '机器人距离', 'botRadius', 500, 10000, 50)}
+                    ${createSlider(t.viz_bot_mult || '机器人间距系数', 'botGroupMultiplier', 0, 1000, 10)}
+                    ${createSlider(t.viz_group_dist || '群组距离', 'groupRadius', 1000, 40000, 100)}
+                    ${createSlider(t.viz_group_mult || '群组间距系数', 'groupCountMultiplier', 0, 5000, 100)}
+                    ${createSlider(t.viz_group_spread || '群组离散度', 'groupSpread', 0, 20000, 100)}
+                    ${createSlider(t.viz_user_dist || '用户距离', 'userRadius', 1000, 30000, 100)}
+                    ${createSlider(t.viz_user_spread || '用户离散度', 'userSpread', 0, 10000, 100)}
+                    ${createSlider(t.viz_wander || '浮动幅度', 'wanderScale', 0, 5, 0.1)}
+                    ${createSlider(t.viz_vertical || '垂直分布', 'verticalSpread', 0, 3, 0.1)}
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <button onclick="window.visualizer.resetConfig()" style="flex: 1; background: rgba(255,0,0,0.2); border: 1px solid #ff4444; color: #ff4444; padding: 5px; cursor: pointer; border-radius: 4px;">${t.reset || '重置'}</button>
+                        <button onclick="window.visualizer.saveConfigToDisk()" style="flex: 1; background: rgba(0,255,65,0.2); border: 1px solid #00ff41; color: #00ff41; padding: 5px; cursor: pointer; border-radius: 4px;">${t.save || '保存'}</button>
+                    </div>
+                `;
+
+                this.container.appendChild(panel);
+            }
+
+            updateConfig(key, value) {
+                this.config[key] = parseFloat(value);
+                const valEl = document.getElementById(`val-${key}`);
+                if (valEl) valEl.innerText = value;
+                this.saveConfig(); // Real-time update in scene
+            }
+
+            resetConfig() {
+                this.config = {
+                    botRadius: 1750,
+                    botGroupMultiplier: 200,
+                    groupRadius: 15000,
+                    groupCountMultiplier: 2000,
+                    groupSpread: 8000,
+                    userRadius: 8000,
+                    userCountMultiplier: 500,
+                    userSpread: 4000,
+                    wanderScale: 1.0,
+                    verticalSpread: 1.0
+                };
+                localStorage.removeItem('botmatrix_viz_config');
+                // Update UI sliders
+                Object.keys(this.config).forEach(key => {
+                    const el = document.querySelector(`input[oninput*="'${key}'"]`);
+                    if (el) el.value = this.config[key];
+                    const valEl = document.getElementById(`val-${key}`);
+                    if (valEl) valEl.innerText = this.config[key];
+                });
+                this.saveConfig();
+            }
+
+            saveConfigToDisk() {
+                this.saveConfig();
+                alert('设置已保存到本地存储 / Settings saved to local storage');
+                this.toggleSettings();
             }
 
             resize() {
@@ -2482,12 +2633,11 @@
 
                     // Bots: Inner layer, distance depends on group count
                     const angle = Math.random() * Math.PI * 2;
-                    // Base 3500 (10x), plus extra distance for each group
-                    const baseRadius = 3500 + (groupCount * 400); // Increased 10x
-                    const radius = baseRadius + Math.random() * 1000; // Increased 10x
+                    const baseRadius = this.config.botRadius + (groupCount * this.config.botGroupMultiplier);
+                    const radius = baseRadius + Math.random() * 500; 
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 1500, // Increased 10x
+                        (Math.random() - 0.5) * 1500 * this.config.verticalSpread,
                         Math.sin(angle) * radius
                     );
                 } else if (type === 'group') {
@@ -2511,12 +2661,12 @@
 
                     // Cluster around bot: Dynamic relative offset
                     const angle = Math.random() * Math.PI * 2;
-                    // Base radius increases significantly with group count
-                    const baseRadius = 15000 + (groupCount * 2000); 
-                    const radius = baseRadius + Math.random() * 8000;
+                    // Base radius increases with group count
+                    const baseRadius = this.config.groupRadius + (groupCount * this.config.groupCountMultiplier); 
+                    const radius = baseRadius + Math.random() * this.config.groupSpread;
                     node.clusterOffset.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 6000, // More vertical spread
+                        (Math.random() - 0.5) * 6000 * this.config.verticalSpread,
                         Math.sin(angle) * radius
                     );
                     const bot = this.nodes.get(node.botId);
@@ -2524,10 +2674,10 @@
                 } else {
                     // Lone group: Middle layer
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 35000 + Math.random() * 10000; 
+                    const radius = (this.config.groupRadius * 2) + Math.random() * 10000; 
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 5000,
+                        (Math.random() - 0.5) * 5000 * this.config.verticalSpread,
                         Math.sin(angle) * radius
                     );
                     node.clusterOffset.set(0, 0, 0);
@@ -2544,11 +2694,11 @@
 
                     // Cluster around group: Small relative offset
                     const angle = Math.random() * Math.PI * 2;
-                    const baseRadius = 8000 + (userCount * 500);
-                    const radius = baseRadius + Math.random() * 4000;
+                    const baseRadius = this.config.userRadius + (userCount * this.config.userCountMultiplier);
+                    const radius = baseRadius + Math.random() * this.config.userSpread;
                     node.clusterOffset.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 3000,
+                        (Math.random() - 0.5) * 3000 * this.config.verticalSpread,
                         Math.sin(angle) * radius
                     );
                     // Initial position
@@ -2557,10 +2707,10 @@
                 } else {
                     // Lone user: Outer layer
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 65000 + Math.random() * 15000; 
+                    const radius = (this.config.userRadius * 8) + Math.random() * 15000; 
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 8000,
+                        (Math.random() - 0.5) * 8000 * this.config.verticalSpread,
                         Math.sin(angle) * radius
                     );
                     node.clusterOffset.set(0, 0, 0);
@@ -3157,7 +3307,7 @@
                         } else {
                             // Lone user: Outer rim drifting
                             const isActive = inactivity < 10;
-                            const targetRadius = isActive ? 15000 : 65000;
+                            const targetRadius = isActive ? this.config.userRadius * 2 : this.config.userRadius * 8;
                             
                             // Optimization: If it's a bot, update its targetPos based on group count periodically
                             if (node.type === 'bot') {
@@ -3165,7 +3315,7 @@
                                 this.nodes.forEach(n => {
                                     if (n.type === 'group' && n.botId === node.id) groupCount++;
                                 });
-                                const dynamicRadius = 3500 + (groupCount * 400);
+                                const dynamicRadius = this.config.botRadius + (groupCount * this.config.botGroupMultiplier);
                                 const currentRadius = node.targetPos.length();
                                 if (currentRadius > 0.1) {
                                     node.targetPos.multiplyScalar(dynamicRadius / currentRadius);
@@ -3185,7 +3335,7 @@
                         this.nodes.forEach(n => {
                             if (n.type === 'group' && n.botId === node.id) groupCount++;
                         });
-                        const targetRadius = 3500 + (groupCount * 400);
+                        const targetRadius = this.config.botRadius + (groupCount * this.config.botGroupMultiplier);
                         const currentRadius = node.targetPos.length();
                         const lerpFactor = 0.01;
                         const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
@@ -3199,7 +3349,7 @@
                             node.targetPos.copy(bot.targetPos).add(node.clusterOffset);
                         } else {
                             // Lone group: Middle layer stability
-                            const targetRadius = 35000; 
+                            const targetRadius = this.config.groupRadius * 2; 
                             const currentRadius = node.targetPos.length();
                             const lerpFactor = 0.005;
                             const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
@@ -3218,7 +3368,7 @@
 
                     // Common wandering logic
                     const wanderSpeed = 0.2;
-                    const wanderRadius = node.type === 'worker' ? 200 : (node.type === 'bot' ? 400 : 600); // Increased 10x
+                    const wanderRadius = (node.type === 'worker' ? 200 : (node.type === 'bot' ? 400 : 600)) * this.config.wanderScale;
                     
                     const wanderX = Math.sin(time * wanderSpeed + offset) * wanderRadius;
                     const wanderY = Math.cos(time * (wanderSpeed * 0.8) + offset) * wanderRadius;
