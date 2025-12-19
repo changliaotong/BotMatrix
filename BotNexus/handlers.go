@@ -1664,31 +1664,6 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	}()
 }
 
-// sendWorkerHeartbeat 定期发送心跳包给Worker
-func (m *Manager) sendWorkerHeartbeat(worker *WorkerClient, stop chan struct{}) {
-	ticker := time.NewTicker(30 * time.Second) // 每30秒发送一次心跳
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// 发送ping帧
-			worker.Mutex.Lock()
-			err := worker.Conn.WriteMessage(websocket.PingMessage, []byte{})
-			worker.Mutex.Unlock()
-
-			if err != nil {
-				// log.Printf("Failed to send ping to Worker %s: %v", worker.ID, err)
-				return
-			}
-			// log.Printf("Sent ping to Worker %s", worker.ID)
-
-		case <-stop:
-			return
-		}
-	}
-}
-
 // handleWorkerConnection 处理单个Worker连接的消息循环
 func (m *Manager) handleWorkerConnection(worker *WorkerClient) {
 	// 启动心跳协程

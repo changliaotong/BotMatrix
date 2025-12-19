@@ -12,6 +12,10 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.2.1 - Critical Build & Type Fixes
+*   **🛠️ Compilation Fixes**: Resolved duplicate method declaration for `sendWorkerHeartbeat` in `handlers.go`.
+*   **🔢 Type Safety**: Fixed map type mismatch in `NewManager` initialization within `main.go`, ensuring consistent use of `map[string]int64` for user and group statistics.
+
 ### v1.2.0 - Core Reliability & UX Refinement
 *   **🛡️ Docker Reliability**: Removed unstable `python:3.9-slim` image fallback in container management, replaced with clear error messaging for `botmatrix-wxbot` image availability.
 *   **👥 Contact Data Consistency**: Fixed an issue where group and friend interfaces showed cached data without name/id; implemented explicit field mapping for consistent frontend display.
