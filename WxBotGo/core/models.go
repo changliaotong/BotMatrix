@@ -3,7 +3,7 @@ package core
 // OneBot Event Structure
 type OneBotEvent struct {
 	Time        int64       `json:"time"`
-	SelfID      int64       `json:"self_id"`
+	SelfID      string      `json:"self_id"`
 	PostType    string      `json:"post_type"`
 	MessageType string      `json:"message_type,omitempty"` // private, group
 	SubType     string      `json:"sub_type,omitempty"`

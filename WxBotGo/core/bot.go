@@ -207,8 +207,7 @@ func (b *WxBot) sendEvent(event OneBotEvent) {
 	}
 	// Fill Common Fields
 	event.Time = time.Now().Unix()
-	id, _ := strconv.ParseInt(b.SelfID, 10, 64)
-	event.SelfID = id
+	event.SelfID = b.SelfID
 
 	bytes, _ := json.Marshal(event)
 	b.wsConn.WriteMessage(websocket.TextMessage, bytes)

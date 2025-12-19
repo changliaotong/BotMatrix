@@ -346,7 +346,7 @@ func loadConfig() {
 		log.Fatal("Missing configuration. Please check config.json or environment variables (TENCENT_APP_ID, TENCENT_TOKEN, TENCENT_SECRET).")
 	}
 	if config.NexusAddr == "" {
-		config.NexusAddr = "ws://192.168.0.167:3005"
+		config.NexusAddr = "ws://192.168.0.167:3005/ws/bots"
 	}
 }
 

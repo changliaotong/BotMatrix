@@ -17,19 +17,19 @@ class wx_group(MetaData):
 
     @staticmethod
     def get_group_id(group_uid):
-        if not group_uid: return 0
+        if not group_uid: return ""
         sql = f"SELECT TOP 1 group_id FROM wx_group WHERE group_uid = '{group_uid}'"
         res = SQLConn.Query(sql)
         # Debug: check if we found it
         # if not res and len(group_uid) > 50:
         #    print(f"[wxgroup] get_group_id FAILED for long uid ({len(group_uid)}). SQL={sql}")
-        return int(res) if res else 0  
+        return str(res) if res else ""
 
     @staticmethod
     def update_name(group_id, new_name):
         """Update group name only"""
         new_name = new_name.replace("'", "''")
-        sql = f"UPDATE wx_group SET group_name = N'{new_name}', update_date = getdate() WHERE group_id = {group_id}"
+        sql = f"UPDATE wx_group SET group_name = N'{new_name}', update_date = getdate() WHERE group_id = '{group_id}'"
         return SQLConn.Exec(sql)
 
     @staticmethod
@@ -38,24 +38,24 @@ class wx_group(MetaData):
         group_name = group_name.replace("'", "''")
         
         # If client_qq is 0, try to preserve existing value
-        if client_qq == 0:
+        if not client_qq or client_qq == "0":
             existing_client_qq = wx_group.get_int("client_qq", group_id)
             if existing_client_qq > 0:
-                client_qq = existing_client_qq
+                client_qq = str(existing_client_qq)
         
-        sql = f"UPDATE wx_group SET group_uid = '{group_uid}', group_name = '{group_name}', robot_qq = {robot_qq}, client_qq = {client_qq}, update_date = getdate() WHERE group_id = {group_id}"
+        sql = f"UPDATE wx_group SET group_uid = '{group_uid}', group_name = '{group_name}', robot_qq = '{robot_qq}', client_qq = '{client_qq}', update_date = getdate() WHERE group_id = '{group_id}'"
         return SQLConn.Exec(sql)
 
     @staticmethod
     def exists(robot_qq, group_uid, group_id, group_name):
         group_name = group_name.replace("'", "''")
         # Ensure parameters are handled safely
-        sql = f"SELECT TOP 1 group_id FROM wx_group WHERE group_uid = '{group_uid}' OR group_id = {group_id or 0} OR (robot_qq = {robot_qq} AND group_name = '{group_name}')"
+        sql = f"SELECT TOP 1 group_id FROM wx_group WHERE group_uid = '{group_uid}' OR group_id = '{group_id or ""}' OR (robot_qq = '{robot_qq}' AND group_name = '{group_name}')"
         res = SQLConn.Query(sql)
         if res is None or res == "":
-            return 0
+            return ""
         else:
-            return int(res)
+            return str(res)
 
     @staticmethod
     def get_member(robot_qq, group_id, client_uid, client_name, display_name, remark_name, nick_name, attr_status):
@@ -84,7 +84,7 @@ class wx_group(MetaData):
         # print(f"[wxgroup] Appending group: uid_len={len(group_uid)} name={group_name}")
         group_name = group_name.replace("'", "''")
         
-        sql = f"INSERT INTO wx_group (group_uid, group_name, robot_qq, client_qq) VALUES ('{group_uid}', N'{group_name}', {robot_qq}, {client_qq}); SELECT @@IDENTITY"
+        sql = f"INSERT INTO wx_group (group_uid, group_name, robot_qq, client_qq) VALUES ('{group_uid}', N'{group_name}', '{robot_qq}', '{client_qq}'); SELECT @@IDENTITY"
         
         conn = None
         try:
@@ -116,8 +116,8 @@ class wx_group(MetaData):
 
             conn.commit()
             if row and row[0]:
-                return int(row[0])
-            return 0
+                return str(row[0])
+            return ""
         except Exception as e:
             print(f"[wxgroup] Append Failed: {e}")
             if conn: conn.rollback()
@@ -131,7 +131,7 @@ class wx_group(MetaData):
 
     @staticmethod
     def is_admin(group_id):
-        sql = str.format("select top 1 is_admin from wx_group where group_id = {0}", group_id)
+        sql = str.format("select top 1 is_admin from wx_group where group_id = '{0}'", group_id)
         res = SQLConn.Query(sql)
         return bool(res)
 
@@ -143,14 +143,14 @@ class wx_group(MetaData):
         """
         group_name = group_name.replace("'", "''")
         # Find the most recently updated group with this name for this robot
-        sql = f"SELECT TOP 1 group_id FROM wx_group WHERE robot_qq = {robot_qq} AND group_name = N'{group_name}' ORDER BY update_date DESC"
+        sql = f"SELECT TOP 1 group_id FROM wx_group WHERE robot_qq = '{robot_qq}' AND group_name = N'{group_name}' ORDER BY update_date DESC"
         res = SQLConn.Query(sql)
         
         if res:
-            group_id = int(res)
+            group_id = str(res)
             # Update the UID for this group
-            update_sql = f"UPDATE wx_group SET group_uid = '{new_uid}', update_date = getdate() WHERE group_id = {group_id}"
+            update_sql = f"UPDATE wx_group SET group_uid = '{new_uid}', update_date = getdate() WHERE group_id = '{group_id}'"
             if SQLConn.Exec(update_sql):
                 return group_id
-        return 0
+        return ""
 

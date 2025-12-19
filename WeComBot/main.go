@@ -24,7 +24,7 @@ import (
 // Config holds the bot configuration
 type Config struct {
 	CorpID         string `json:"corp_id"`
-	AgentID        int64  `json:"agent_id"`
+	AgentID        string `json:"agent_id"`
 	Secret         string `json:"secret"`
 	Token          string `json:"token"`
 	EncodingAESKey string `json:"encoding_aes_key"`
@@ -50,7 +50,7 @@ func loadConfig() {
 	if err != nil {
 		log.Fatalf("Error decoding config.json: %v", err)
 	}
-	selfID = fmt.Sprintf("%d", config.AgentID)
+	selfID = config.AgentID
 }
 
 func connectToNexus() {
@@ -148,7 +148,7 @@ func handleAction(msg []byte) {
 			SendRequestCommon: &message.SendRequestCommon{
 				ToUser:  userID,
 				MsgType: "text",
-				AgentID: strconv.FormatInt(config.AgentID, 10),
+				AgentID: config.AgentID,
 			},
 			Text: message.TextField{
 				Content: msgContent,

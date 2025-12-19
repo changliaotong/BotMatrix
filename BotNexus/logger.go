@@ -24,6 +24,24 @@ func (m *Manager) AddLog(level string, message string) {
 		m.logBuffer = m.logBuffer[len(m.logBuffer)-1000:]
 	}
 
+	// 广播给所有订阅者
+	go func() {
+		m.mutex.RLock()
+		defer m.mutex.RUnlock()
+		
+		msg := map[string]interface{}{
+			"post_type": "log",
+			"data":      entry,
+			"self_id":   "", // 系统日志没有 self_id
+		}
+		
+		for _, sub := range m.subscribers {
+			sub.Mutex.Lock()
+			sub.Conn.WriteJSON(msg)
+			sub.Mutex.Unlock()
+		}
+	}()
+
 	// 同时打印到控制台
 	log.Printf("[%s] %s", level, message)
 }

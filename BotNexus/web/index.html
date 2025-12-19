@@ -106,8 +106,10 @@
             border-bottom-color: var(--border-color);
             color: var(--text-main);
         }
-        [data-theme="dark"] .bg-white {
+        [data-theme="dark"] .bg-white,
+        [data-theme="dark"] .bg-light {
             background-color: var(--bg-card) !important;
+            color: var(--text-main) !important;
         }
 
         /* Dark Mode Modal & Table */
@@ -139,6 +141,15 @@
         [data-theme="dark"] .table > :not(caption) > * > * {
             border-color: var(--border-color);
         }
+
+        .time-display { display: flex; align-items: center; gap: 15px; }
+        .time-item { display: flex; flex-direction: column; }
+        .time-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 1px; }
+        .time-value { font-size: 1rem; font-weight: 700; line-height: 1.1; font-family: 'Consolas', 'Monaco', monospace; }
+        .uptime-value { color: #198754; }
+        [data-theme="dark"] .uptime-value { color: #20c997; }
+        .current-time-value { color: #0d6efd; }
+        [data-theme="dark"] .current-time-value { color: #3d8bfd; }
 
         body { background-color: var(--bg-body); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; transition: background-color 0.3s, color 0.3s; }
         .sidebar { display: flex; flex-direction: column; height: 100vh; position: fixed; top: 0; left: 0; width: 250px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); padding-top: 20px; z-index: 1000; transition: background-color 0.3s, border-color 0.3s; }
@@ -448,22 +459,36 @@
     }
     
     /* Stats Card Slides */
-    .stats-slide {
-        transition: all 0.5s ease-in-out;
-        height: 100%;
+    #combined-stats-container {
+        min-height: 48px;
         display: flex;
         flex-direction: column;
         justify-content: center;
+        overflow: hidden;
+        position: relative;
     }
-    .stats-slide.fade-out {
+    .stats-slide {
+        transition: all 0.5s ease-in-out;
+        height: 100%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    .stats-slide:not(.active) {
         opacity: 0;
-        transform: translateY(-10px);
+        pointer-events: none;
+        transform: translateY(10px);
     }
-    .stats-slide.fade-in {
+    .stats-slide.active {
         opacity: 1;
         transform: translateY(0);
+        position: relative;
     }
-    
+
     /* Custom Stats Grid */
     .stats-grid {
         display: grid;
@@ -509,12 +534,6 @@
         overflow: hidden;
         margin-left: 0.75rem;
     }
-    #combined-stats-container {
-        min-height: 40px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
     .stat-label {
         font-size: 0.7rem;
         color: var(--text-muted);
@@ -554,6 +573,47 @@
     }
     .stat-card .message-flow-line {
         display: none;
+    }
+    .time-display {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 100%;
+    }
+    .time-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 2px 0;
+    }
+    .time-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-right: 10px;
+    }
+    .time-value {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+    
+    /* Cloud Matrix Layout Adjustment */
+    #tab-bots {
+        min-height: auto !important;
+    }
+    #tab-bots .card {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
+    .bot-list-container, .worker-list-container {
+        min-height: 100px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
     }
 </style>
 </head>
@@ -693,7 +753,7 @@
             
             <div class="nav-section-label" data-i18n="menu_group_infrastructure">基础设施</div>
             <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
-            <a href="/overmind/" id="nav-overmind" class="nav-link" onclick="showOvermind(event)"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
+            <a href="#overmind" id="nav-overmind" class="nav-link" onclick="showTab('overmind')"><i class="bi bi-grid-3x3-gap"></i> <span data-i18n="sidebar_overmind">Overmind</span></a>
             
             <div class="nav-section-label" data-i18n="menu_group_system">系统维护</div>
             <a href="#monitor" id="nav-monitor" class="nav-link" onclick="showTab('monitor')"><i class="bi bi-display"></i> <span data-i18n="sidebar_monitor">系统监控</span></a>
@@ -840,11 +900,15 @@
                         <i class="bi bi-clock"></i>
                     </div>
                     <div class="stat-info w-100">
-                        <div class="stat-label" data-i18n="stat_runtime">运行时间 / 当前时间</div>
-                        <div class="stat-value" style="font-size: 0.85rem;">
-                            <span id="metric-uptime">00:00:00</span>
-                            <span class="text-muted fs-6 fw-normal mx-1">|</span>
-                            <span id="metric-current-time" class="text-muted fs-6 fw-normal">00:00:00</span>
+                        <div class="time-display">
+                            <div class="time-item">
+                                <span class="time-label" data-i18n="time_uptime">运行时长</span>
+                                <span id="metric-uptime" class="time-value uptime-value">00:00:00</span>
+                            </div>
+                            <div class="time-item">
+                                <span class="time-label" data-i18n="time_current">当前时间</span>
+                                <span id="metric-current-time" class="time-value current-time-value">00:00:00</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1251,20 +1315,20 @@
         </div>
 
         <!-- Bots Tab -->
-        <div id="tab-bots" class="content-section" style="display:none;">
+        <div id="tab-bots" class="content-section" style="display:none; height: auto;">
             <div class="row g-4">
                 <!-- Left Column: Bots -->
                 <div class="col-xl-7 col-lg-6">
-                    <div class="card h-100 shadow-sm">
-                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <div class="card shadow-sm d-flex flex-column">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-shrink-0">
                             <h5 class="mb-0"><i class="bi bi-robot me-2"></i><span data-i18n="tab_access_bots">接入端 (Bots)</span> <span id="badge-bots" class="badge bg-secondary ms-1">0</span></h5>
                             <div class="d-flex gap-2">
                                 <input type="text" class="form-control form-control-sm" placeholder="搜索机器人..." data-i18n-placeholder="search_bots_placeholder" style="width: 150px;" onkeyup="filterBots(this.value)">
                                 <button class="btn btn-sm btn-outline-primary" onclick="fetchBots()" data-i18n="refresh">刷新</button>
                             </div>
                         </div>
-                        <div class="card-body">
-                            <div class="d-flex flex-wrap gap-2 mb-3">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex flex-wrap gap-2 mb-3 flex-shrink-0">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" onclick="sortBots('name')" id="btn-sort-bot-name" data-i18n="sort_name">名称</button>
                                     <button class="btn btn-outline-secondary" onclick="sortBots('id')" id="btn-sort-bot-id" data-i18n="sort_id">ID</button>
@@ -1278,7 +1342,7 @@
                                     <button class="btn btn-outline-secondary" id="btn-bot-view-compact" onclick="setBotViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
                                 </div>
                             </div>
-                            <div class="row g-3" id="bot-list-container" style="max-height: calc(100vh - 350px); overflow-y: auto;">
+                            <div class="row g-3" id="bot-list-container">
                                 <!-- Bot Cards -->
                             </div>
                         </div>
@@ -1287,16 +1351,16 @@
 
                 <!-- Right Column: Workers -->
                 <div class="col-xl-5 col-lg-6">
-                    <div class="card h-100 shadow-sm">
-                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <div class="card shadow-sm d-flex flex-column">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-shrink-0">
                             <h5 class="mb-0"><i class="bi bi-cpu me-2"></i><span data-i18n="tab_process_workers">处理端 (Workers)</span> <span id="badge-workers" class="badge bg-secondary ms-1">0</span></h5>
                             <div class="d-flex gap-2">
                                 <input type="text" class="form-control form-control-sm" placeholder="搜索Worker..." data-i18n-placeholder="search_workers_placeholder" style="width: 150px;" onkeyup="filterWorkers(this.value)">
                                 <button class="btn btn-sm btn-outline-primary" onclick="fetchWorkers()" data-i18n="refresh">刷新</button>
                             </div>
                         </div>
-                        <div class="card-body">
-                            <div class="d-flex flex-wrap gap-2 mb-3">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex flex-wrap gap-2 mb-3 flex-shrink-0">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" onclick="sortWorkers('addr')" id="btn-sort-worker-addr" data-i18n="sort_address">地址</button>
                                     <button class="btn btn-outline-secondary" onclick="sortWorkers('time')" id="btn-sort-worker-time" data-i18n="sort_time">时间</button>
@@ -1308,12 +1372,19 @@
                                     <button class="btn btn-outline-secondary" id="btn-worker-view-compact" onclick="setWorkerViewMode('compact')" title="精简模式" data-i18n-title="view_mode_compact"><i class="bi bi-grid-fill"></i></button>
                                 </div>
                             </div>
-                            <div class="row g-3" id="worker-list-container" style="max-height: calc(100vh - 350px); overflow-y: auto;">
+                            <div class="row g-3" id="worker-list-container">
                                 <!-- Worker Cards -->
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Overmind Tab -->
+        <div id="tab-overmind" class="content-section" style="display:none; height: calc(100vh - 100px);">
+            <div class="card h-100 shadow-sm overflow-hidden">
+                <iframe id="overmind-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
             </div>
         </div>
 
@@ -1371,6 +1442,8 @@
         </div>
 
 
+
+
         <!-- Overmind Tab -->
         <div id="tab-overmind" class="content-section" style="display: none; height: calc(100vh - 100px);">
             <iframe id="overmind-iframe" src="" style="width: 100%; height: 100%; border: none; border-radius: 0.75rem;"></iframe>
@@ -1380,7 +1453,11 @@
         <div id="tab-docker" class="content-section" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h4 class="mb-0" data-i18n="sidebar_docker">Docker管理</h4>
-                <div>
+                <div class="d-flex align-items-center">
+                    <div class="input-group input-group-sm me-2" style="width: 200px;">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="docker-search-input" placeholder="搜索容器..." data-i18n-placeholder="search_placeholder" oninput="filterDockerContainers()">
+                    </div>
                     <button class="btn btn-sm btn-outline-primary me-2" onclick="addBotContainer()">
                         <i class="bi bi-plus-lg"></i> <span data-i18n="docker_add_bot">添加机器人</span>
                     </button>
@@ -1751,7 +1828,7 @@
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label" data-i18n="refresh_rate_label">数据刷新频率</label>
-                                    <select class="form-select">
+                                    <select id="setting-refresh-rate" class="form-select" onchange="updateRefreshRate(this.value)">
                                         <option value="2000" data-i18n="rate_fast">2 秒 (快速)</option>
                                         <option value="5000" data-i18n="rate_normal">5 秒 (正常)</option>
                                         <option value="10000" data-i18n="rate_slow">10 秒 (省流)</option>
@@ -1770,12 +1847,12 @@
                 <!-- Personal Preferences -->
                 <div class="col-md-6">
                     <div class="card mb-4">
-                        <div class="card-header" data-i18n="personal_settings_title">个人偏好设置</div>
+                        <div class="card-header"><i class="bi bi-person-gear me-2"></i><span data-i18n="personal_settings_title">个人偏好设置</span></div>
                         <div class="card-body">
                              <form>
                                 <div class="mb-3">
                                     <label class="form-label" data-i18n="default_home_label">默认首页</label>
-                                    <select class="form-select">
+                                    <select id="setting-default-home" class="form-select" onchange="localStorage.setItem('default_home', this.value)">
                                         <option value="dashboard" data-i18n="dashboard_label">仪表盘</option>
                                         <option value="bots" data-i18n="bot_list_label">机器人列表</option>
                                         <option value="groups" data-i18n="group_manage_label">群组管理</option>
@@ -1783,16 +1860,22 @@
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label" data-i18n="items_per_page_label">每页显示条数</label>
-                                    <input type="number" class="form-control" value="20">
+                                    <input type="number" id="setting-items-per-page" class="form-control" value="20" onchange="localStorage.setItem('items_per_page', this.value)">
                                 </div>
-                                <hr>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4 border-warning">
+                        <div class="card-header bg-warning text-dark"><i class="bi bi-shield-lock me-2"></i><span data-i18n="change_password_label">修改密码</span></div>
+                        <div class="card-body">
+                            <form onsubmit="event.preventDefault(); updatePassword();">
                                 <div class="mb-3">
-                                    <label class="form-label" data-i18n="change_password_label">修改密码</label>
                                     <input type="password" id="pwd-current" class="form-control mb-2" placeholder="当前密码" data-i18n-placeholder="current_pwd_placeholder">
                                     <input type="password" id="pwd-new" class="form-control mb-2" placeholder="新密码" data-i18n-placeholder="new_pwd_placeholder">
                                     <input type="password" id="pwd-confirm" class="form-control" placeholder="确认新密码" data-i18n-placeholder="confirm_pwd_placeholder">
                                 </div>
-                                <button type="button" class="btn btn-primary" onclick="updatePassword()" data-i18n="save_personal_settings_btn">保存个人设置</button>
+                                <button type="submit" class="btn btn-warning w-100" data-i18n="save_password_btn">更新登录密码</button>
                             </form>
                         </div>
                     </div>
@@ -1951,9 +2034,16 @@
             document.querySelectorAll('[data-i18n-title]').forEach(el => {
                 const key = el.getAttribute('data-i18n-title');
                 if (translations[lang] && translations[lang][key]) {
-                    el.title = translations[lang][key];
+                     el.title = translations[lang][key];
                 }
             });
+
+            // Update Overmind iframe if loaded
+            const overmindIframe = document.getElementById('overmind-iframe');
+            if (overmindIframe && overmindIframe.src) {
+                const token = authToken || localStorage.getItem('wxbot_token');
+                overmindIframe.src = `/overmind/?lang=${lang}&token=${encodeURIComponent(token)}`;
+            }
         }
 
         // --- Theme Management ---
@@ -2021,6 +2111,33 @@
 
         function setTheme(theme) {
             applyTheme(theme);
+            // 同步更新设置页面的下拉框
+            const select = document.querySelector('select[onchange="setTheme(this.value)"]');
+            if (select) select.value = theme;
+        }
+
+        function updateRefreshRate(rate) {
+            rate = parseInt(rate);
+            localStorage.setItem('refresh_rate', rate);
+            
+            // 重新启动定时器
+            if (window.updateInterval) clearInterval(window.updateInterval);
+            if (window.systemStatsInterval) clearInterval(window.systemStatsInterval);
+            
+            const safeSetInterval = (fn, interval, name) => {
+                return setInterval(() => {
+                    try {
+                        fn();
+                    } catch (error) {
+                        console.error(`${name}定时器执行失败:`, error);
+                    }
+                }, interval);
+            };
+            
+            window.updateInterval = safeSetInterval(updateStats, rate, 'updateStats');
+            window.systemStatsInterval = safeSetInterval(updateSystemStats, rate, 'updateSystemStats');
+            
+            showToast('刷新频率已更新', 'info');
         }
 
         async function updatePassword() {
@@ -2266,7 +2383,8 @@
         function showOvermind(e) {
             if (e) e.preventDefault();
             const lang = currentLang || 'zh-CN';
-            window.open(`/overmind/?lang=${lang}`, '_blank');
+            const token = authToken || localStorage.getItem('wxbot_token');
+            window.open(`/overmind/?lang=${lang}&token=${encodeURIComponent(token)}`, '_blank');
         }
 
         let currentSlideIndex = 0;
@@ -2394,8 +2512,8 @@
                 const starsGeometry = new THREE.BufferGeometry();
                 const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1, transparent: true });
                 const starsVertices = [];
-                for (let i = 0; i < 15000; i++) { // More stars
-                    const x = (Math.random() - 0.5) * 100000; // Increased spread
+                for (let i = 0; i < 5000; i++) { // Reduced star count
+                    const x = (Math.random() - 0.5) * 100000;
                     const y = (Math.random() - 0.5) * 100000;
                     const z = (Math.random() - 0.5) * 100000;
                     starsVertices.push(x, y, z);
@@ -2417,11 +2535,6 @@
                     <div>${t.total_messages || '消息总量'}: <span style="color: #fff; text-shadow: 0 0 5px #00ff41;">${this.totalMessages}</span></div>
                     <div>${t.viz_active_nodes || '活动节点'}: ${activeNodes}</div>
                     <div>${t.viz_active_tasks || '处理中任务'}: ${activeParticles}</div>
-                    <div style="margin-top: 10px; text-align: right;">
-                        <button onclick="window.visualizer.toggleSettings()" style="background: rgba(0,255,65,0.2); border: 1px solid #00ff41; color: #00ff41; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-size: 0.8rem;">
-                            <i class="bi bi-gear-fill"></i> ${t.viz_settings || '设置'}
-                        </button>
-                    </div>
                 `;
             }
 
@@ -2456,29 +2569,78 @@
 
             toggleSettings() {
                 const el = document.getElementById('viz-settings-panel');
-                if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                if (el) {
+                    const isHidden = (el.style.display === 'none' || el.style.display === '');
+                    el.style.display = isHidden ? 'block' : 'none';
+                    console.log("[Visualizer] Settings panel toggled. Now visible:", !isHidden);
+                } else {
+                    console.error("[Visualizer] Settings panel element not found!");
+                }
             }
 
             createSettingsUI() {
                 const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                
+                // 1. Create Settings Trigger Button (Gear icon)
+                if (!document.getElementById('viz-settings-trigger')) {
+                    const trigger = document.createElement('div');
+                    trigger.id = 'viz-settings-trigger';
+                    trigger.innerHTML = `<i class="bi bi-gear-fill"></i>`;
+                    trigger.style.cssText = `
+                        position: absolute;
+                        bottom: 20px;
+                        right: 20px;
+                        width: 44px;
+                        height: 44px;
+                        background: rgba(0, 255, 65, 0.2);
+                        border: 1px solid #00ff41;
+                        color: #00ff41;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        cursor: pointer;
+                        z-index: 1010;
+                        transition: all 0.3s;
+                        box-shadow: 0 0 15px rgba(0,255,65,0.4);
+                        font-size: 1.2rem;
+                    `;
+                    trigger.onmouseover = () => {
+                        trigger.style.background = 'rgba(0, 255, 65, 0.4)';
+                        trigger.style.transform = 'rotate(30deg) scale(1.1)';
+                    };
+                    trigger.onmouseout = () => {
+                        trigger.style.background = 'rgba(0, 255, 65, 0.2)';
+                        trigger.style.transform = 'rotate(0) scale(1)';
+                    };
+                    trigger.onclick = (e) => {
+                        e.stopPropagation();
+                        this.toggleSettings();
+                    };
+                    this.container.appendChild(trigger);
+                }
+
+                // 2. Create Settings Panel
                 const panel = document.createElement('div');
                 panel.id = 'viz-settings-panel';
                 panel.style.cssText = `
                     position: absolute;
-                    top: 100px;
+                    top: 80px;
                     right: 20px;
                     width: 280px;
-                    background: rgba(0, 20, 10, 0.85);
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(0, 255, 65, 0.3);
-                    border-radius: 8px;
-                    padding: 15px;
+                    background: rgba(0, 10, 5, 0.9);
+                    backdrop-filter: blur(15px);
+                    border: 1px solid rgba(0, 255, 65, 0.4);
+                    border-radius: 12px;
+                    padding: 18px;
                     color: #00ff41;
                     font-family: 'Courier New', Courier, monospace;
                     font-size: 0.85rem;
-                    z-index: 1000;
+                    z-index: 1011;
                     display: none;
-                    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+                    box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 10px rgba(0,255,65,0.1);
+                    max-height: calc(100% - 100px);
+                    overflow-y: auto;
                 `;
 
                 const createSlider = (label, key, min, max, step = 1) => `
@@ -2549,7 +2711,8 @@
 
             saveConfigToDisk() {
                 this.saveConfig();
-                alert('设置已保存到本地存储 / Settings saved to local storage');
+                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                alert(t.viz_save_success || 'Settings saved to local storage');
                 this.toggleSettings();
             }
 
@@ -2887,19 +3050,21 @@
                 }
                 
                 if (node.type === 'bot' || node.type === 'worker') {
-                    const typeLabel = node.type === 'worker' ? 'PROCESSOR' : 'MATRIX BOT';
+                    const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                    const typeLabel = node.type === 'worker' ? (t.viz_worker || 'PROCESSOR') : (t.viz_bot || 'MATRIX BOT');
                     ctx.font = 'bold 12px monospace';
                     ctx.fillStyle = primaryColor;
-                    ctx.fillText(typeLabel, 128, 235);
+                    ctx.fillText(typeLabel.toUpperCase(), 128, 235);
                 } else if (node.type === 'user') {
                     const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
                     ctx.font = '12px monospace';
                     ctx.fillStyle = primaryColor;
-                    ctx.fillText(t.viz_user || 'USER', 128, 235);
+                    ctx.fillText((t.viz_user || 'USER').toUpperCase(), 128, 235);
                 } else if (node.type === 'group') {
+                    const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
                     ctx.font = 'bold 12px monospace';
                     ctx.fillStyle = primaryColor;
-                    ctx.fillText('GROUP HUB', 128, 235);
+                    ctx.fillText((t.viz_group || 'GROUP HUB').toUpperCase(), 128, 235);
                 }
             }
 
@@ -3064,13 +3229,19 @@
 
                     if (event.group_id) {
                         const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`, null, null, event.target);
-                        // Routing: User -> Group -> Bot
+                        // Routing: User -> Group -> Bot -> Nexus
                         this.createParticle(userNode, groupNode, event.msg_type, event.content);
                         setTimeout(() => {
                             this.createParticle(groupNode, botNode, event.msg_type);
+                            setTimeout(() => {
+                                this.createParticle(botNode, nexus, event.msg_type);
+                            }, 400);
                         }, 400); // Slight delay for second leg
                     } else {
                         this.createParticle(userNode, botNode, event.msg_type, event.content);
+                        setTimeout(() => {
+                            this.createParticle(botNode, nexus, event.msg_type);
+                        }, 400);
                     }
                     return;
                 } else if (event.direction === 'bot_to_user') {
@@ -3081,13 +3252,19 @@
 
                     if (event.group_id) {
                         const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`, null, null, event.source);
-                        // Routing: Bot -> Group -> User
-                        this.createParticle(botNode, groupNode, event.msg_type, event.content);
+                        // Routing: Nexus -> Bot -> Group -> User
+                        this.createParticle(nexus, botNode, event.msg_type, event.content);
                         setTimeout(() => {
-                            this.createParticle(groupNode, userNode, event.msg_type);
+                            this.createParticle(botNode, groupNode, event.msg_type);
+                            setTimeout(() => {
+                                this.createParticle(groupNode, userNode, event.msg_type);
+                            }, 400);
                         }, 400);
                     } else {
-                        this.createParticle(botNode, userNode, event.msg_type, event.content);
+                        this.createParticle(nexus, botNode, event.msg_type, event.content);
+                        setTimeout(() => {
+                            this.createParticle(botNode, userNode, event.msg_type);
+                        }, 400);
                     }
                     return;
                 } else if (event.direction === 'bot_to_nexus') {
@@ -3101,13 +3278,49 @@
                     startNode = this.getOrCreateNode(event.source, 'worker', event.source);
                     endNode = nexus;
                 } else if (event.direction === 'nexus_to_bot') {
-                    startNode = nexus;
                     const botInfo = findBotInfo(event.target, event.platform);
-                    endNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar);
+                    const botNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar, event.group_id);
+                    
+                    // Routing: Nexus -> Bot -> (Group -> User)
+                    this.createParticle(nexus, botNode, event.msg_type, event.content);
+                    if (event.group_id && event.user_id) {
+                        setTimeout(() => {
+                            const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`, null, null, event.target);
+                            const userAvatar = formatUserAvatar(event.user_avatar, event.user_id, event.platform);
+                            const userNode = this.getOrCreateNode(event.user_id, 'user', event.user_name || event.user_id, userAvatar, event.group_id);
+                            
+                            this.createParticle(botNode, groupNode, event.msg_type);
+                            setTimeout(() => {
+                                this.createParticle(groupNode, userNode, event.msg_type);
+                            }, 400);
+                        }, 400);
+                    }
+                    return;
                 } else if (event.direction === 'worker_to_bot') {
-                    startNode = this.getOrCreateNode(event.source, 'worker', event.source);
+                    const workerNode = this.getOrCreateNode(event.source, 'worker', event.source);
                     const botInfo = findBotInfo(event.target, event.platform);
-                    endNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar);
+                    const botNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar, event.group_id);
+                    
+                    // Full path: Worker -> Nexus -> Bot
+                    this.createParticle(workerNode, nexus, event.msg_type, event.content);
+                    setTimeout(() => {
+                        this.createParticle(nexus, botNode, event.msg_type);
+                        
+                        // If it's a group message, continue the path: Bot -> Group -> User
+                        if (event.group_id && event.user_id) {
+                            setTimeout(() => {
+                                const groupNode = this.getOrCreateNode(event.group_id, 'group', event.group_name || `Group ${event.group_id}`, null, null, event.target);
+                                const userAvatar = formatUserAvatar(event.user_avatar, event.user_id, event.platform);
+                                const userNode = this.getOrCreateNode(event.user_id, 'user', event.user_name || event.user_id, userAvatar, event.group_id);
+                                
+                                this.createParticle(botNode, groupNode, event.msg_type);
+                                setTimeout(() => {
+                                    this.createParticle(groupNode, userNode, event.msg_type);
+                                }, 400);
+                            }, 400);
+                        }
+                    }, 400);
+                    return;
                 }
 
                 if (startNode && endNode) {
@@ -3399,34 +3612,7 @@
                         });
                     }
 
-                    // Update Nexus Connection Line
-                    if (node.nexusLine) {
-                        const positions = node.nexusLine.geometry.attributes.position.array;
-                        // Index 0,1,2 is center (0,0,0)
-                        // Index 3,4,5 is node position
-                        positions[3] = node.mesh.position.x;
-                        positions[4] = node.mesh.position.y;
-                        positions[5] = node.mesh.position.z;
-                        node.nexusLine.geometry.attributes.position.needsUpdate = true;
-                        
-                        // Update dashed line distances
-                        if (node.nexusLine.computeLineDistances) {
-                            node.nexusLine.computeLineDistances();
-                        }
-                        
-                        // Pulse the line opacity
-                        node.nexusLine.material.opacity = 0.05 + Math.sin(time * 2 + offset) * 0.03;
-
-                        // PERFORMANCE OPTIMIZATION: Hide nexus line if node has a group line
-                        // This ensures each node only has ONE primary permanent connection
-                        if (node.groupLine && node.groupLine.visible) {
-                            node.nexusLine.visible = false;
-                        } else {
-                            node.nexusLine.visible = node.mesh.visible;
-                        }
-                    }
-
-                    // Update Group Connection Line
+                    // Update Group Connection Line (User -> Group)
                     if (node.groupId && this.nodes.has(node.groupId)) {
                         const group = this.nodes.get(node.groupId);
                         if (!node.groupLine) {
@@ -3434,8 +3620,8 @@
                                 color: 0xffd700, // Golden for group connections
                                 transparent: true, 
                                 opacity: 0.1,
-                                dashSize: 4,
-                                gapSize: 2,
+                                dashSize: 40, // Scaled for 10x
+                                gapSize: 20,
                                 blending: THREE.AdditiveBlending
                             });
                             const lineGeom = new THREE.BufferGeometry().setFromPoints([
@@ -3455,12 +3641,83 @@
                             positions[5] = node.mesh.position.z;
                             node.groupLine.geometry.attributes.position.needsUpdate = true;
                             node.groupLine.computeLineDistances();
-                            node.groupLine.material.opacity = 0.15 + Math.sin(time * 3 + offset) * 0.05; // Slightly brighter
+                            node.groupLine.material.opacity = 0.15 + Math.sin(time * 3 + offset) * 0.05;
                             node.groupLine.visible = group.mesh.visible && node.mesh.visible;
                         }
                     } else if (node.groupLine) {
                         this.scene.remove(node.groupLine);
                         node.groupLine = null;
+                    }
+
+                    // Update Bot Connection Line (Group -> Bot)
+                    if (node.type === 'group' && node.botId && this.nodes.has(node.botId)) {
+                        const bot = this.nodes.get(node.botId);
+                        if (!node.botLine) {
+                            const lineMat = new THREE.LineDashedMaterial({ 
+                                color: 0x00d2ff, // Cyan for bot connections
+                                transparent: true, 
+                                opacity: 0.15,
+                                dashSize: 60,
+                                gapSize: 30,
+                                blending: THREE.AdditiveBlending
+                            });
+                            const lineGeom = new THREE.BufferGeometry().setFromPoints([
+                                bot.mesh.position.clone(),
+                                node.mesh.position.clone()
+                            ]);
+                            node.botLine = new THREE.Line(lineGeom, lineMat);
+                            node.botLine.computeLineDistances();
+                            this.scene.add(node.botLine);
+                        } else {
+                            const positions = node.botLine.geometry.attributes.position.array;
+                            positions[0] = bot.mesh.position.x;
+                            positions[1] = bot.mesh.position.y;
+                            positions[2] = bot.mesh.position.z;
+                            positions[3] = node.mesh.position.x;
+                            positions[4] = node.mesh.position.y;
+                            positions[5] = node.mesh.position.z;
+                            node.botLine.geometry.attributes.position.needsUpdate = true;
+                            node.botLine.computeLineDistances();
+                            node.botLine.material.opacity = 0.2 + Math.sin(time * 2.5 + offset) * 0.08;
+                            node.botLine.visible = bot.mesh.visible && node.mesh.visible;
+                        }
+                    } else if (node.botLine) {
+                        this.scene.remove(node.botLine);
+                        node.botLine = null;
+                    }
+
+                    // Update Nexus Line (Bot -> Nexus)
+                    if (node.type === 'bot') {
+                        const nexus = this.nodes.get('nexus');
+                        if (nexus) {
+                            if (!node.nexusLine) {
+                                const lineMat = new THREE.LineDashedMaterial({ 
+                                    color: 0x00ff41, // Green for core connections
+                                    transparent: true, 
+                                    opacity: 0.2,
+                                    dashSize: 100,
+                                    gapSize: 50,
+                                    blending: THREE.AdditiveBlending
+                                });
+                                const lineGeom = new THREE.BufferGeometry().setFromPoints([
+                                    new THREE.Vector3(0,0,0),
+                                    node.mesh.position.clone()
+                                ]);
+                                node.nexusLine = new THREE.Line(lineGeom, lineMat);
+                                node.nexusLine.computeLineDistances();
+                                this.scene.add(node.nexusLine);
+                            } else {
+                                const positions = node.nexusLine.geometry.attributes.position.array;
+                                positions[0] = 0; positions[1] = 0; positions[2] = 0;
+                                positions[3] = node.mesh.position.x;
+                                positions[4] = node.mesh.position.y;
+                                positions[5] = node.mesh.position.z;
+                                node.nexusLine.geometry.attributes.position.needsUpdate = true;
+                                node.nexusLine.computeLineDistances();
+                                node.nexusLine.material.opacity = 0.25 + Math.sin(time * 2 + offset) * 0.1;
+                                node.nexusLine.visible = node.mesh.visible;
+                            }
+                        }
                     }
                 });
 
@@ -3644,11 +3901,11 @@
             }
         }
 
-        let visualizer = null;
+        window.visualizer = null;
         function initVisualizer() {
-            if (!visualizer) {
-                visualizer = new RoutingVisualizer();
-                visualizer.getOrCreateNode('nexus', 'nexus');
+            if (!window.visualizer) {
+                window.visualizer = new RoutingVisualizer();
+                window.visualizer.getOrCreateNode('nexus', 'nexus');
                 
                 // Apply last sync state if available
                 if (lastSyncState) {
@@ -3658,8 +3915,22 @@
         }
 
         function handleRoutingEvent(data) {
-            if (visualizer) {
-                visualizer.addEvent(data);
+            if (window.visualizer) {
+                window.visualizer.addEvent(data);
+            }
+            // 同时在最近活动中显示消息
+            if (data.msg_type === 'message') {
+                const logData = {
+                    post_type: 'message',
+                    user_id: data.user_id,
+                    group_id: data.group_id,
+                    message: data.content,
+                    sender: {
+                        nickname: data.user_name || data.user_id
+                    },
+                    platform: data.platform
+                };
+                addEventLog(logData);
             }
         }
 
@@ -3667,28 +3938,37 @@
 
         function handleSyncState(data) {
             lastSyncState = data;
-            if (!visualizer) return;
-            console.log("Syncing state:", data);
-            
-            // Sync groups
-            if (data.groups) {
-                Object.values(data.groups).forEach(g => {
-                    visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`, null, null, g.bot_id);
-                });
+            if (window.visualizer) {
+                console.log("Syncing state:", data);
+                
+                // Sync groups
+                if (data.groups) {
+                    Object.values(data.groups).forEach(g => {
+                        window.visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`, null, null, g.bot_id);
+                    });
+                }
+                
+                // Sync friends
+                if (data.friends) {
+                    Object.values(data.friends).forEach(f => {
+                        window.visualizer.getOrCreateNode(f.user_id, 'user', f.nickname || f.user_id, null);
+                    });
+                }
+                
+                // Sync members
+                if (data.members) {
+                    Object.values(data.members).forEach(m => {
+                        window.visualizer.getOrCreateNode(m.user_id, 'user', m.card || m.nickname || m.user_id, null, m.group_id);
+                    });
+                }
             }
             
-            // Sync friends
-            if (data.friends) {
-                Object.values(data.friends).forEach(f => {
-                    visualizer.getOrCreateNode(f.user_id, 'user', f.nickname || f.user_id, null);
-                });
-            }
-            
-            // Sync members
-            if (data.members) {
-                Object.values(data.members).forEach(m => {
-                    visualizer.getOrCreateNode(m.user_id, 'user', m.card || m.nickname || m.user_id, null, m.group_id);
-                });
+            // Auto-refresh contact lists if we receive sync state
+            const currentTab = window.location.hash.substring(1);
+            if (currentTab === 'groups' || currentTab === 'debug') {
+                if (typeof refreshGroupList === 'function') refreshGroupList();
+            } else if (currentTab === 'friends') {
+                 if (typeof refreshFriendList === 'function') refreshFriendList();
             }
             
             if (data.total_messages) {
@@ -3708,7 +3988,7 @@
         }
 
         function clearVisualization() {
-            if (visualizer) visualizer.clear();
+            if (window.visualizer) window.visualizer.clear();
         }
 
         function toggleFullScreen() {
@@ -3745,8 +4025,8 @@
                  }
             }
 
-            if (visualizer) {
-                setTimeout(() => visualizer.resize(), 100);
+            if (window.visualizer) {
+                setTimeout(() => window.visualizer.resize(), 100);
             }
         });
 
@@ -3775,8 +4055,8 @@
                     targetTab.style.display = 'block';
                     
                     // Visualization resize after tab becomes visible
-                    if (tabId === 'visualization' && visualizer) {
-                        setTimeout(() => visualizer.resize(), 50);
+                    if (tabId === 'visualization' && window.visualizer) {
+                        setTimeout(() => window.visualizer.resize(), 50);
                     }
                 }
                 
@@ -3840,6 +4120,14 @@
                         break;
                     case 'settings':
                         if (typeof loadBackendConfig === 'function') loadBackendConfig();
+                        break;
+                    case 'overmind':
+                        const overmindIframe = document.getElementById('overmind-iframe');
+                        if (overmindIframe && !overmindIframe.src) {
+                            const lang = currentLang || 'zh-CN';
+                            const token = authToken || localStorage.getItem('wxbot_token');
+                            overmindIframe.src = `/overmind/?lang=${lang}&token=${encodeURIComponent(token)}`;
+                        }
                         break;
                 }
                 
@@ -3923,6 +4211,11 @@
                 }, 600);
                 
                 // 启动定时器
+                const rate = parseInt(localStorage.getItem('refresh_rate')) || 2000;
+                // 同步设置页面下拉框
+                const rateSelect = document.getElementById('setting-refresh-rate');
+                if (rateSelect) rateSelect.value = rate.toString();
+
                 const safeSetInterval = (fn, interval, name) => {
                     return setInterval(() => {
                         try {
@@ -3933,8 +4226,8 @@
                     }, interval);
                 };
                 
-                window.updateInterval = safeSetInterval(updateStats, 2000, 'updateStats');
-                window.systemStatsInterval = safeSetInterval(updateSystemStats, 2000, 'updateSystemStats');
+                window.updateInterval = safeSetInterval(updateStats, rate, 'updateStats');
+                window.systemStatsInterval = safeSetInterval(updateSystemStats, rate, 'updateSystemStats');
                 window.timeUpdateInterval = safeSetInterval(updateTimeDisplay, 500, 'updateTimeDisplay');
                 window.chatStatsInterval = safeSetInterval(updateChatStats, 5000, 'updateChatStats');
                 window.botsInterval = safeSetInterval(updateBots, 5000, 'updateBots');
@@ -4910,7 +5203,9 @@
                          return `
                         <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
                             <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
-                                <div class="d-flex align-items-center mb-2">
+                                <div class="d-flex align-items-center mb-2 ${isOffline ? '' : 'cursor-pointer'}" 
+                                     ${isOffline ? '' : `onclick="setGlobalBot('${bot.self_id}')"`}
+                                     ${isOffline ? '' : 'onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1"'}>
                                     <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: ${avatarBg};">
                                         <img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';this.style.padding='4px';">
                                     </div>
@@ -4932,9 +5227,6 @@
                                         <span class="text-primary fw-bold">${bot.msg_count || 0}</span>
                                     </div>
                                 </div>
-                                <div class="mt-auto">
-                                    <button class="btn btn-sm btn-outline-primary w-100 py-0" style="font-size: 0.75rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>${t.btn_manage}</button>
-                                </div>
                             </div>
                         </div>`;
                     }
@@ -4942,7 +5234,9 @@
                     return `
                         <div class="col-sm-12 col-md-6 col-lg-4 col-xl-4 col-xxl-3 mb-3">
                             <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
-                                <div class="d-flex align-items-center mb-2">
+                                <div class="d-flex align-items-center mb-2 ${isOffline ? '' : 'cursor-pointer'}"
+                                     ${isOffline ? '' : `onclick="setGlobalBot('${bot.self_id}')"`}
+                                     ${isOffline ? '' : 'onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1"'}>
                                     <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 48px; height: 48px; overflow: hidden; background: ${avatarBg};">
                                         <img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';this.style.padding='8px';">
                                     </div>
@@ -4985,9 +5279,6 @@
                                         <span class="text-muted">${t.card_label_owner}:</span>
                                         <span>${bot.owner}</span>
                                     </div>` : ''}
-                                </div>
-                                <div class="mt-auto">
-                                    <button class="btn btn-sm btn-outline-primary w-100 py-1" style="font-size: 0.8rem;" onclick="setGlobalBot('${bot.self_id}')" ${isOffline ? 'disabled' : ''}>${t.btn_manage}</button>
                                 </div>
                             </div>
                         </div>
@@ -5121,7 +5412,7 @@
                     return `
                     <div class="col-sm-6 col-md-6 col-lg-4 col-xl-4 col-xxl-3 mb-3">
                         <div class="card p-2 h-100 shadow-sm">
-                            <div class="d-flex align-items-center mb-2">
+                            <div class="d-flex align-items-center mb-2 cursor-pointer" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
                                 <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px;">
                                     <i class="bi bi-gear-wide-connected fs-6"></i>
                                 </div>
@@ -5151,7 +5442,7 @@
                 return `
                     <div class="col-sm-12 col-md-6 col-lg-6 col-xl-6 col-xxl-4 mb-3">
                         <div class="card p-2 h-100 shadow-sm">
-                            <div class="d-flex align-items-center mb-2">
+                            <div class="d-flex align-items-center mb-2 cursor-pointer" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
                                 <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 36px; height: 36px;">
                                     <i class="bi bi-gear-wide-connected fs-5"></i>
                                 </div>
@@ -5519,7 +5810,6 @@
                                     }
                                 }
                             }
-                            return;
                         }
                         addEventLog(data);
                     } catch (e) {
@@ -5673,7 +5963,9 @@
             listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
             
             try {
-                const response = await fetchWithAuth('/api/contacts');
+                // Fetch from new contacts API with refresh
+                const url = `/api/contacts?bot_id=${encodeURIComponent(currentBotId)}&refresh=true`;
+                const response = await fetchWithAuth(url);
                 const text = await response.text();
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${text}`);
@@ -6138,8 +6430,9 @@
             listEl.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
             
             try {
-                // Fetch from new contacts API
-                const response = await fetchWithAuth('/api/contacts');
+                // Fetch from new contacts API with refresh
+                const url = `/api/contacts?bot_id=${encodeURIComponent(currentBotId)}&refresh=true`;
+                const response = await fetchWithAuth(url);
                 const text = await response.text();
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${text}`);
@@ -6153,8 +6446,8 @@
                     throw new Error("JSON 解析错误: " + e.message);
                 }
                 
-                // Filter by current Bot
-                const filtered = contacts.filter(c => c && c.bot_id === currentBotId);
+                // Filter by current Bot and type group
+                const filtered = contacts.filter(c => c && c.bot_id === currentBotId && c.type === 'group');
                 
                 currentGroups = filtered;
                 renderGroups(filtered);
@@ -6730,7 +7023,11 @@
         async function callSystemAction(action) {
             const t = translations[currentLang] || translations['zh-CN'];
             if (action === 'clean_logs') {
-                document.getElementById('recent-logs').innerHTML = '';
+                const dashLog = document.getElementById('recent-logs');
+                if (dashLog) dashLog.innerHTML = '';
+                
+                clearEvents();
+                
                 addEventLog({type: 'system', message: t.log_cleaned});
                 return;
             }
@@ -6768,6 +7065,10 @@
                     msg = JSON.stringify(msg);
                 }
                 content = `<span class="text-success">[MSG]</span> ${group}<span class="fw-bold text-warning">${sender}</span>: ${msg}`;
+            } else if (data.post_type === 'log') {
+                const log = data.data;
+                const levelClass = log.level === 'ERROR' ? 'text-danger' : (log.level === 'WARN' ? 'text-warning' : 'text-info');
+                content = `<span class="${levelClass}">[${log.level}]</span> ${log.message}`;
             } else if (data.post_type === 'meta_event') {
                 if (data.meta_event_type === 'heartbeat') return; // Ignore heartbeat
                 content = `<span class="text-secondary">[META]</span> ${data.meta_event_type}`;
@@ -7201,6 +7502,8 @@
         });
 
         // --- Docker Management ---
+        let dockerContainers = []; // Cache for filtering
+
         function loadDockerContainers(isSilent = false) {
             const tbody = document.getElementById('docker-container-list');
             if (!tbody) return;
@@ -7221,37 +7524,62 @@
                      }
                  }
 
-                 if (!containers || !Array.isArray(containers) || containers.length === 0) {
-                     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" data-i18n="no_data">No Data</td></tr>';
-                     return;
-                 }
-                 
-                 const t = translations[currentLang] || translations['zh-CN'];
-                 
-                 tbody.innerHTML = containers.map(c => {
-                    const isRunning = c.State === 'running';
-                    const shortId = c.Id.substring(0, 12);
-                    return `
-                    <tr>
-                        <td><span class="font-monospace">${shortId}</span></td>
-                        <td>${(c.Names || []).join(', ')}</td>
-                        <td>${c.Image}</td>
-                        <td><span class="badge bg-${isRunning ? 'success' : 'secondary'}">${c.State}</span></td>
-                        <td>${c.Status}</td>
-                        <td>
-                            ${isRunning ? 
-                                `<button class="btn btn-sm btn-outline-danger me-1" onclick="controlContainer('${c.Id}', 'stop')"><i class="bi bi-stop-fill"></i> ${t.docker_stop}</button>
-                                 <button class="btn btn-sm btn-outline-warning" onclick="controlContainer('${c.Id}', 'restart')"><i class="bi bi-arrow-repeat"></i> ${t.docker_restart}</button>` 
-                                : 
-                                `<button class="btn btn-sm btn-outline-success" onclick="controlContainer('${c.Id}', 'start')"><i class="bi bi-play-fill"></i> ${t.docker_start}</button>`
-                            }
-                        </td>
-                    </tr>
-                 `}).join('');
+                 dockerContainers = Array.isArray(containers) ? containers : [];
+                 renderDockerContainers(dockerContainers);
             })
             .catch(err => {
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error: ${err}</td></tr>`;
             });
+        }
+
+        function renderDockerContainers(containers) {
+            const tbody = document.getElementById('docker-container-list');
+            if (!tbody) return;
+
+            if (!containers || containers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" data-i18n="no_data">No Data</td></tr>';
+                return;
+            }
+            
+            const t = translations[currentLang] || translations['zh-CN'];
+            const searchTerm = document.getElementById('docker-search-input')?.value.toLowerCase() || '';
+            
+            const filtered = containers.filter(c => {
+                const names = (c.Names || []).join(', ').toLowerCase();
+                const image = (c.Image || '').toLowerCase();
+                const id = (c.Id || '').toLowerCase();
+                return names.includes(searchTerm) || image.includes(searchTerm) || id.includes(searchTerm);
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">没有匹配的结果</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(c => {
+                const isRunning = c.State === 'running';
+                const shortId = c.Id.substring(0, 12);
+                return `
+                <tr>
+                    <td><span class="font-monospace">${shortId}</span></td>
+                    <td>${(c.Names || []).join(', ')}</td>
+                    <td>${c.Image}</td>
+                    <td><span class="badge bg-${isRunning ? 'success' : 'secondary'}">${c.State}</span></td>
+                    <td>${c.Status}</td>
+                    <td>
+                        ${isRunning ? 
+                            `<button class="btn btn-sm btn-outline-danger me-1" onclick="controlContainer('${c.Id}', 'stop')"><i class="bi bi-stop-fill"></i> ${t.docker_stop}</button>
+                             <button class="btn btn-sm btn-outline-warning" onclick="controlContainer('${c.Id}', 'restart')"><i class="bi bi-arrow-repeat"></i> ${t.docker_restart}</button>` 
+                            : 
+                            `<button class="btn btn-sm btn-outline-success" onclick="controlContainer('${c.Id}', 'start')"><i class="bi bi-play-fill"></i> ${t.docker_start}</button>`
+                        }
+                    </td>
+                </tr>
+             `}).join('');
+        }
+
+        function filterDockerContainers() {
+            renderDockerContainers(dockerContainers);
         }
 
         function controlContainer(id, action) {
@@ -7454,16 +7782,24 @@
             document.getElementById('routing-target').value = '';
             document.getElementById('routing-enabled').checked = true;
             
+            // 确保获取最新的节点列表
+            fetchWorkers();
+            
             // Populate worker dropdown
             const dropdown = document.getElementById('worker-select-dropdown');
-            if (dropdown && window.currentWorkers) {
-                if (window.currentWorkers.length === 0) {
-                    dropdown.innerHTML = '<li><a class="dropdown-item disabled" href="#">无在线节点</a></li>';
-                } else {
-                    dropdown.innerHTML = window.currentWorkers.map(w => 
-                        `<li><a class="dropdown-item" href="javascript:void(0)" onclick="document.getElementById('routing-target').value='${w.id}'">${w.id} (${w.addr})</a></li>`
-                    ).join('');
-                }
+            if (dropdown) {
+                const updateDropdown = () => {
+                    if (!window.currentWorkers || window.currentWorkers.length === 0) {
+                        dropdown.innerHTML = '<li><a class="dropdown-item disabled" href="#">无在线节点</a></li>';
+                    } else {
+                        dropdown.innerHTML = window.currentWorkers.map(w => 
+                            `<li><a class="dropdown-item" href="javascript:void(0)" onclick="document.getElementById('routing-target').value='${w.id}'">${w.id} (${w.addr})</a></li>`
+                        ).join('');
+                    }
+                };
+                updateDropdown();
+                // 监听 currentWorkers 的变化可能太复杂，这里简单延迟一下或者依赖 fetchWorkers 的回调
+                setTimeout(updateDropdown, 500); 
             }
 
             // Update modal title for adding new rule
@@ -7530,19 +7866,13 @@
             }
             
             try {
-                const response = await fetchWithAuth('/api/admin/routing', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        key: ruleId,
-                        worker_id: '' // Empty worker_id means delete
-                    })
+                const response = await fetchWithAuth(`/api/admin/routing?key=${encodeURIComponent(ruleId)}`, {
+                    method: 'DELETE'
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    const error = await response.json();
+                    throw new Error(error.message || `HTTP ${response.status}`);
                 }
                 
                 fetchRoutingRules(); // Refresh the list
@@ -7575,53 +7905,18 @@
                     modalTitle.setAttribute('data-i18n', 'routing_edit_rule');
                 }
                 
-                // Change save button to update
+                // Change save button to call saveRoutingRule (backend POST handles both)
                 const saveButton = document.querySelector('#routingRuleModal .modal-footer .btn-primary');
                 if (saveButton) {
-                    saveButton.textContent = '更新';
-                    saveButton.setAttribute('data-i18n', 'update');
-                    saveButton.onclick = () => updateRoutingRule(ruleId);
+                    saveButton.textContent = '保存';
+                    saveButton.setAttribute('data-i18n', 'save');
+                    saveButton.onclick = () => saveRoutingRule();
                 }
-            }, 100);
+            }, 200);
         }
 
         async function updateRoutingRule(ruleId) {
-            const pattern = document.getElementById('routing-pattern').value.trim();
-            const target = document.getElementById('routing-target').value.trim();
-            const enabled = document.getElementById('routing-enabled').checked;
-            
-            if (!pattern || !target) {
-                alert('请填写完整信息');
-                return;
-            }
-            
-            try {
-                const response = await fetchWithAuth(`/api/admin/routing/${ruleId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        pattern: pattern,
-                        target: target,
-                        enabled: enabled
-                    })
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || '更新失败');
-                }
-                
-                const modal = bootstrap.Modal.getInstance(document.getElementById('routingRuleModal'));
-                modal.hide();
-                
-                fetchRoutingRules(); // Refresh the list
-                
-            } catch (error) {
-                console.error('Failed to update routing rule:', error);
-                alert('更新失败: ' + error.message);
-            }
+            return saveRoutingRule();
         }
         
         // 页面刷新时的清理逻辑
@@ -7701,13 +7996,13 @@
         }
 
         async function fetchUsers() {
-            if (currentUserRole !== 'admin') return;
+            if (authRole !== 'admin' && authRole !== 'super') return;
             
             try {
                 const response = await fetchWithAuth('/api/admin/users');
                 const result = await response.json();
                 if (result.success) {
-                    renderUsers(result.users);
+                    renderUsers(result.users || []);
                 }
             } catch (err) {
                 console.error('Fetch users error:', err);

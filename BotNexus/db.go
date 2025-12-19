@@ -28,6 +28,12 @@ func (m *Manager) initDB() error {
 
 	m.db = db
 
+	// 设置繁忙超时，解决数据库锁定问题
+	_, err = m.db.Exec("PRAGMA busy_timeout = 5000")
+	if err != nil {
+		log.Printf("设置数据库繁忙超时失败: %v", err)
+	}
+
 	// 创建用户表
 	query := `
 	CREATE TABLE IF NOT EXISTS users (
@@ -362,8 +368,8 @@ func (m *Manager) saveUserToDB(user *User) error {
 		user.PasswordHash,
 		user.IsAdmin,
 		user.SessionVersion,
-		user.CreatedAt.Format(time.RFC3339),
-		user.UpdatedAt.Format(time.RFC3339),
+		user.CreatedAt,
+		user.UpdatedAt,
 	)
 
 	return err

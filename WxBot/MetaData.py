@@ -90,9 +90,9 @@ class MetaData(object):
     def get_sql_upd_self(self, field_name, field_value):
         field_value = str(field_value).replace("'", "''")
         if (self.key_field2 == ""):
-            return str.format("update {0}.dbo.{1} set {2} = '{3}' where {4} = {5}", self.database, self.table_name, field_name, field_value, self.key_field, self.key_value)
+            return str.format("update {0}.dbo.{1} set {2} = '{3}' where {4} = '{5}'", self.database, self.table_name, field_name, field_value, self.key_field, self.key_value)
         else: 
-            return str.format("update {0}.dbo.{1} set {2} = '{3}' where {4} = {5} and {6} = {7}", self.database, self.table_name, field_name, field_value, self.key_field, self.key_value, self.key_field2, self.key_value2)  
+            return str.format("update {0}.dbo.{1} set {2} = '{3}' where {4} = '{5}' and {6} = '{7}'", self.database, self.table_name, field_name, field_value, self.key_field, self.key_value, self.key_field2, self.key_value2)  
     
     def set_value_self(self, field_name, field_value):
         sql = self.get_sql_upd_self(field_name, field_value)

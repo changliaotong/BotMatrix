@@ -136,11 +136,11 @@ type ConnectionStats struct {
 
 // BotStatDetail represents detailed stats for a bot
 type BotStatDetail struct {
-	Sent     int64           `json:"sent"`
-	Received int64           `json:"received"`
-	Users    map[int64]int64 `json:"users"`  // UserID -> Count
-	Groups   map[int64]int64 `json:"groups"` // GroupID -> Count
-	LastMsg  time.Time       `json:"last_msg"`
+	Sent     int64            `json:"sent"`
+	Received int64            `json:"received"`
+	Users    map[string]int64 `json:"users"`  // UserID -> Count
+	Groups   map[string]int64 `json:"groups"` // GroupID -> Count
+	LastMsg  time.Time        `json:"last_msg"`
 }
 
 // ==================== 管理器结构体 ====================
@@ -191,12 +191,12 @@ type Manager struct {
 	StartTime       time.Time        `json:"start_time"`        // Server start time
 	TotalMessages   int64            `json:"total_messages"`    // Global counter
 	SentMessages    int64            `json:"sent_messages"`     // Global sent counter
-	UserStats       map[int64]int64  `json:"user_stats"`        // UserID -> Count (Total)
-	GroupStats      map[int64]int64  `json:"group_stats"`       // GroupID -> Count (Total)
+	UserStats       map[string]int64 `json:"user_stats"`        // UserID -> Count (Total)
+	GroupStats      map[string]int64 `json:"group_stats"`       // GroupID -> Count (Total)
 	BotStats        map[string]int64 `json:"bot_stats"`         // BotID -> Count (Total Recv)
 	BotStatsSent    map[string]int64 `json:"bot_stats_sent"`    // BotID -> Count (Total Sent)
-	UserStatsToday  map[int64]int64  `json:"user_stats_today"`  // UserID -> Count (Today)
-	GroupStatsToday map[int64]int64  `json:"group_stats_today"` // GroupID -> Count (Today)
+	UserStatsToday  map[string]int64 `json:"user_stats_today"`  // UserID -> Count (Today)
+	GroupStatsToday map[string]int64 `json:"group_stats_today"` // GroupID -> Count (Today)
 	BotStatsToday   map[string]int64 `json:"bot_stats_today"`   // BotID -> Count (Today)
 	LastResetDate   string           `json:"last_reset_date"`   // YYYY-MM-DD
 

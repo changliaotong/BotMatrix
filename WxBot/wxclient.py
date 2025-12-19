@@ -15,7 +15,7 @@ class User(MetaData):
     def append(robot_qq, group_id, client_qq, client_name, ref_qq):
         client_name = client_name.replace("'", "''")
         sql = str.format("insert into [User](BotUin, GroupId, Id, Name, RefUserId) \
-            values({0}, {1}, {2}, N'{3}', {4})", robot_qq, group_id, client_qq, client_name, ref_qq)
+            values('{0}', '{1}', '{2}', N'{3}', '{4}')", robot_qq, group_id, client_qq, client_name, ref_qq)
         return SQLConn.Exec(sql)
 
 class wx_client(MetaData):   
@@ -122,12 +122,12 @@ class wx_client(MetaData):
         attr_filter = f" AND attr_status = '{attr_status}'" if attr_status else ""
         
         # Prioritize most recently updated record
-        sql = f"SELECT TOP 1 client_qq FROM wx_client WHERE robot_qq = {robot_qq} AND ({where_clause}) {attr_filter} ORDER BY update_date DESC"
+        sql = f"SELECT TOP 1 client_qq FROM wx_client WHERE robot_qq = '{robot_qq}' AND ({where_clause}) {attr_filter} ORDER BY update_date DESC"
         
         res = SQLConn.Query(sql)
         if res:
-            return int(res)
-        return 0
+            return str(res)
+        return ""
     
     @staticmethod
     def append(robot_qq, group_id, client_uid, client_qq, client_name, display_name, remark_name, nick_name, attr_status):
@@ -178,13 +178,13 @@ class wx_client(MetaData):
 
     @staticmethod
     def get_client_qq_by_uid(robot_qq, client_uid):
-        if not client_uid: return 0
-        sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and client_uid = '{1}'", robot_qq, client_uid)
+        if not client_uid: return ""
+        sql = str.format("select top 1 client_qq from wx_client where robot_qq = '{0}' and client_uid = '{1}'", robot_qq, client_uid)
         client_qq = SQLConn.Query(sql)
         if not client_qq:
-            return 0
+            return ""
         else:
-            return int(client_qq)
+            return str(client_qq)
 
     @staticmethod
     def get_client_uid(client_qq):
@@ -217,19 +217,19 @@ class wx_client(MetaData):
         
         # Priority: NickName + AttrStatus
         if nick_name:
-            sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and nick_name = N'{1}' and attr_status = '{2}'", robot_qq, nick_name, attr_status)
+            sql = str.format("select top 1 client_qq from wx_client where robot_qq = '{0}' and nick_name = N'{1}' and attr_status = '{2}'", robot_qq, nick_name, attr_status)
             client_qq = SQLConn.Query(sql)
             if client_qq:
-                return int(client_qq)
+                return str(client_qq)
                 
         # Fallback: DisplayName (if stored in wx_client, though usually nick_name is better)
         if display_name:
-             sql = str.format("select top 1 client_qq from wx_client where robot_qq = {0} and display_name = N'{1}' and attr_status = '{2}'", robot_qq, display_name, attr_status)
+             sql = str.format("select top 1 client_qq from wx_client where robot_qq = '{0}' and display_name = N'{1}' and attr_status = '{2}'", robot_qq, display_name, attr_status)
              client_qq = SQLConn.Query(sql)
              if client_qq:
-                 return int(client_qq)
+                 return str(client_qq)
                  
-        return 0
+        return ""
 
     @staticmethod
     def sync_client_uid(robot_qq, new_uid, nick_name, remark_name, display_name):

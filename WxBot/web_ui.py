@@ -2451,7 +2451,7 @@ class WebUI:
             self_id = data.get("self_id")
             # 如果没有提供 ID，生成一个临时的
             if not self_id:
-                self_id = int(time.time())
+                self_id = str(int(time.time()))
             
             try:
                 self.manager.add_bot(self_id)

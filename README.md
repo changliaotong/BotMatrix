@@ -12,6 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.2.0 - Core Reliability & UX Refinement
+*   **🛡️ Docker Reliability**: Removed unstable `python:3.9-slim` image fallback in container management, replaced with clear error messaging for `botmatrix-wxbot` image availability.
+*   **👥 Contact Data Consistency**: Fixed an issue where group and friend interfaces showed cached data without name/id; implemented explicit field mapping for consistent frontend display.
+*   **🧠 Seamless Overmind Integration**: Embedded Overmind system now supports in-app loading with automatic language parameter passing and real-time data refreshing.
+*   **🌐 Localization Perfection**: Resolved duplicate i18n labels for home page time metrics; optimized layout for "Uptime" and "Current Time" displays.
+*   **📐 Adaptive Matrix Layout**: Refactored Cloud Matrix page background logic to use adaptive heights, ensuring the UI perfectly fits varied content lists.
+
 ### v1.1.99 - Interactive Visualization Configuration
 *   **⚙️ Live Config Panel**: Added a real-time settings panel to adjust 3D visualization parameters (distances, multipliers, spread, etc.).
 *   **💾 Persistent Settings**: Visualization preferences are now saved to local storage and persist across refreshes.

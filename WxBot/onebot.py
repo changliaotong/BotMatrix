@@ -66,14 +66,14 @@ class onebot(WXBot):
     - 保留 super().handle_msg_all(_msg)
     """
 
-    def __init__(self, self_id: int = None):
+    def __init__(self, self_id: str = None):
         super().__init__()
         
         # Override QR config: default to 'tty' for Docker environments
         self.conf['qr'] = os.getenv("WX_QR_MODE", "tty")
         print(f"[onebot] Configured QR Code Mode: {self.conf['qr']}")
 
-        self.self_id = int(self_id) if self_id else 0
+        self.self_id = str(self_id) if self_id else ""
         # Multi-account support removed. Always use default session.json and wxqr.png from WXBot base class.
         
         self.boot_ts = int(time.time())
@@ -1238,29 +1238,29 @@ class onebot(WXBot):
             # Resolve numeric IDs
             if is_group:
                 event["message_type"] = "group"
-                # Map group_uid to group_id (int)
+                # Map group_uid to group_id (string)
                 # We need a consistent mapping. 
                 # WXGroup.get_group_id uses hash or DB.
                 try:
                     group_id = wx_group.get_group_id(group_uid)
                     self._group_map_uid_by_id[group_id] = group_uid
                 except:
-                    group_id = 0
+                    group_id = ""
                 event["group_id"] = group_id
                 
                 # Sender
                 try:
                     user_id = wx_client.get_client_qq(self.self_id, group_id, sender_uid, "", "", "", "", "")
                 except:
-                    user_id = 0
+                    user_id = ""
                 event["user_id"] = user_id
                 
             else:
                 event["message_type"] = "private"
                 try:
-                    user_id = wx_client.get_client_qq_by_uid(sender_uid)
+                    user_id = wx_client.get_client_qq_by_uid(self.self_id, sender_uid)
                 except:
-                    user_id = 0
+                    user_id = ""
                 event["user_id"] = user_id
 
             # Ignore self messages
@@ -1463,23 +1463,20 @@ def main():
     # Priority 1: Environment Variable
     env_self_id = os.getenv("BOT_SELF_ID")
     if env_self_id:
-        try:
-            self_id = int(env_self_id)
-            print(f"[main] Using BOT_SELF_ID={self_id} from environment")
-        except:
-            print(f"[main] Invalid BOT_SELF_ID: {env_self_id}")
+        self_id = str(env_self_id)
+        print(f"[main] Using BOT_SELF_ID={self_id} from environment")
 
     # Priority 2: Config file
     if not self_id and bots_config:
         # Find first wechat bot
         target_conf = next((b for b in bots_config if b.get("type", "wechat") == "wechat"), None)
         if target_conf:
-            self_id = target_conf.get("self_id")
+            self_id = str(target_conf.get("self_id"))
             print(f"[main] Using self_id={self_id} from config")
     
     # Priority 3: Default fallback
     if not self_id:
-        self_id = 1098299491 
+        self_id = "1098299491" 
         print(f"[main] Using default fallback self_id={self_id}")
     
     print(f"[main] Initializing WXBot for self_id={self_id}...")

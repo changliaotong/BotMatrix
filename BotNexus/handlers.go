@@ -467,6 +467,107 @@ func (m *Manager) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 func (m *Manager) handleGetContacts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	botID := r.URL.Query().Get("bot_id")
+	refresh := r.URL.Query().Get("refresh") == "true"
+
+	if refresh && botID != "" {
+		m.mutex.RLock()
+		bot, ok := m.bots[botID]
+		m.mutex.RUnlock()
+
+		if ok {
+			// 如果需要刷新，先尝试从机器人获取最新数据
+			// 注意：这里是同步等待，但带超时
+			log.Printf("[Contacts] Refreshing contacts for bot: %s", botID)
+
+			// 1. 获取群列表
+			echoGroups := "refresh_groups_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			m.pendingMutex.Lock()
+			respChanGroups := make(chan map[string]interface{}, 1)
+			m.pendingRequests[echoGroups] = respChanGroups
+			m.pendingMutex.Unlock()
+
+			bot.Mutex.Lock()
+			bot.Conn.WriteJSON(map[string]interface{}{
+				"action": "get_group_list",
+				"params": map[string]interface{}{},
+				"echo":   echoGroups,
+			})
+			bot.Mutex.Unlock()
+
+			// 2. 获取好友列表
+			echoFriends := "refresh_friends_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			m.pendingMutex.Lock()
+			respChanFriends := make(chan map[string]interface{}, 1)
+			m.pendingRequests[echoFriends] = respChanFriends
+			m.pendingMutex.Unlock()
+
+			bot.Mutex.Lock()
+			bot.Conn.WriteJSON(map[string]interface{}{
+				"action": "get_friend_list",
+				"params": map[string]interface{}{},
+				"echo":   echoFriends,
+			})
+			bot.Mutex.Unlock()
+
+			// 等待响应，最长 5 秒
+			timeout := time.After(5 * time.Second)
+			groupsDone := false
+			friendsDone := false
+
+			for !groupsDone || !friendsDone {
+				select {
+				case resp := <-respChanGroups:
+					if data, ok := resp["data"].([]interface{}); ok {
+						m.cacheMutex.Lock()
+						for _, item := range data {
+							if group, ok := item.(map[string]interface{}); ok {
+								gID := toString(group["group_id"])
+								group["id"] = gID
+								group["name"] = toString(group["group_name"])
+								group["bot_id"] = botID
+								group["type"] = "group" // Add type
+								group["last_seen"] = time.Now()
+								m.groupCache[gID] = group
+								go m.saveGroupToDB(gID, toString(group["group_name"]), botID)
+							}
+						}
+						m.cacheMutex.Unlock()
+					}
+					m.pendingMutex.Lock()
+					delete(m.pendingRequests, echoGroups)
+					m.pendingMutex.Unlock()
+					groupsDone = true
+				case resp := <-respChanFriends:
+					if data, ok := resp["data"].([]interface{}); ok {
+						m.cacheMutex.Lock()
+						for _, item := range data {
+							if friend, ok := item.(map[string]interface{}); ok {
+								uID := toString(friend["user_id"])
+								friend["id"] = uID
+								friend["name"] = toString(friend["nickname"])
+								friend["bot_id"] = botID
+								friend["type"] = "private" // Add type
+								friend["last_seen"] = time.Now()
+								m.friendCache[uID] = friend
+								go m.saveFriendToDB(uID, toString(friend["nickname"]))
+							}
+						}
+						m.cacheMutex.Unlock()
+					}
+					m.pendingMutex.Lock()
+					delete(m.pendingRequests, echoFriends)
+					m.pendingMutex.Unlock()
+					friendsDone = true
+				case <-timeout:
+					log.Printf("[Contacts] Refresh timeout for bot: %s", botID)
+					groupsDone = true
+					friendsDone = true
+				}
+			}
+		}
+	}
+
 	m.cacheMutex.RLock()
 	defer m.cacheMutex.RUnlock()
 
@@ -474,11 +575,37 @@ func (m *Manager) handleGetContacts(w http.ResponseWriter, r *http.Request) {
 	contacts := make([]map[string]interface{}, 0)
 
 	for _, group := range m.groupCache {
-		contacts = append(contacts, group)
+		if botID == "" || group["bot_id"] == botID {
+			item := make(map[string]interface{})
+			for k, v := range group {
+				item[k] = v
+			}
+			// 确保有通用的 name 和 id 字段供前端使用
+			if name, ok := item["group_name"]; ok {
+				item["name"] = name
+			}
+			if id, ok := item["group_id"]; ok {
+				item["id"] = id
+			}
+			contacts = append(contacts, item)
+		}
 	}
 
 	for _, friend := range m.friendCache {
-		contacts = append(contacts, friend)
+		if botID == "" || friend["bot_id"] == botID {
+			item := make(map[string]interface{})
+			for k, v := range friend {
+				item[k] = v
+			}
+			// 确保有通用的 name 和 id 字段供前端使用
+			if nickname, ok := item["nickname"]; ok {
+				item["name"] = nickname
+			}
+			if userID, ok := item["user_id"]; ok {
+				item["id"] = userID
+			}
+			contacts = append(contacts, item)
+		}
 	}
 
 	json.NewEncoder(w).Encode(contacts)
@@ -843,6 +970,31 @@ func (m *Manager) sendBotHeartbeat(bot *BotClient, stop chan struct{}) {
 	}
 }
 
+// sendWorkerHeartbeat 定期发送心跳包给Worker
+func (m *Manager) sendWorkerHeartbeat(worker *WorkerClient, stop chan struct{}) {
+	ticker := time.NewTicker(30 * time.Second) // 每30秒发送一次心跳
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// 发送ping帧
+			worker.Mutex.Lock()
+			err := worker.Conn.WriteMessage(websocket.PingMessage, []byte{})
+			worker.Mutex.Unlock()
+
+			if err != nil {
+				log.Printf("Failed to send ping to Worker %s: %v", worker.ID, err)
+				return
+			}
+			log.Printf("Sent ping to Worker %s", worker.ID)
+
+		case <-stop:
+			return
+		}
+	}
+}
+
 // handleBotMessage 处理Bot消息
 func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 	// 检查是否包含 self_id 并更新（如果当前是临时 ID）
@@ -1000,32 +1152,18 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 	// 转发给Worker处理
 	// 确保消息格式符合 OneBot 11 标准 (特别是 ID 类型)
 	if userID, ok := msg["user_id"]; ok {
-		msg["user_id"] = toInt64(userID)
+		msg["user_id"] = toString(userID)
 	}
 	if groupID, ok := msg["group_id"]; ok {
-		msg["group_id"] = toInt64(groupID)
+		msg["group_id"] = toString(groupID)
 	}
 
 	// 补全并标准化 self_id (OneBot 11 标准应为 int64，但我们兼容字符串)
 	if selfID, ok := msg["self_id"]; ok {
-		// 如果是数字格式，转换为 int64
-		if num, ok := selfID.(json.Number); ok {
-			if i, err := num.Int64(); err == nil {
-				msg["self_id"] = i
-			}
-		} else if s, ok := selfID.(string); ok {
-			// 尝试将字符串 ID 转换为数字，如果成功则使用数字，否则保留字符串
-			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-				msg["self_id"] = i
-			}
-		}
+		msg["self_id"] = toString(selfID)
 	} else {
 		// 补全 self_id
-		if i, err := strconv.ParseInt(bot.SelfID, 10, 64); err == nil {
-			msg["self_id"] = i
-		} else {
-			msg["self_id"] = bot.SelfID
-		}
+		msg["self_id"] = bot.SelfID
 	}
 
 	// 补全 time (int64 unix timestamp)
@@ -1061,12 +1199,28 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 
 	// 缓存群信息
 	if groupIDVal, ok := msg["group_id"]; ok && groupIDVal != nil {
-		groupID := toInt64(groupIDVal)
 		gID := toString(groupIDVal)
-		groupName := fmt.Sprintf("Group %s (Cached)", gID)
+
+		// 如果缓存中已存在该群组，则保留原有名称，除非原有名称包含 "(Cached)" 而当前消息提供了更准确的信息
+		existingGroup, exists := m.groupCache[gID]
+		groupName := ""
+		if exists {
+			if name, ok := existingGroup["group_name"].(string); ok {
+				groupName = name
+			}
+		}
+
+		// 如果没有名称或者名称包含 "(Cached)"，尝试设置一个默认值
+		if groupName == "" || strings.Contains(groupName, "(Cached)") {
+			// 只有在完全没有名称时才设置 (Cached) 格式
+			if groupName == "" {
+				groupName = fmt.Sprintf("Group %s", gID)
+			}
+		}
+
 		// 更新或添加群组缓存
 		m.groupCache[gID] = map[string]interface{}{
-			"group_id":   groupID,
+			"group_id":   gID,
 			"group_name": groupName,
 			"bot_id":     bot.SelfID,
 			"is_cached":  true,
@@ -1078,7 +1232,6 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 
 		// 缓存成员信息
 		if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
-			userID := toInt64(userIDVal)
 			uID := toString(userIDVal)
 			key := fmt.Sprintf("%s:%s", gID, uID)
 			sender, _ := msg["sender"].(map[string]interface{})
@@ -1089,8 +1242,8 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 				card, _ = sender["card"].(string)
 			}
 			m.memberCache[key] = map[string]interface{}{
-				"group_id":  groupID,
-				"user_id":   userID,
+				"group_id":  gID,
+				"user_id":   uID,
 				"nickname":  nickname,
 				"card":      card,
 				"is_cached": true,
@@ -1100,7 +1253,6 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 		}
 	} else if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
 		// 缓存好友信息 (私聊)
-		userID := toInt64(userIDVal)
 		uID := toString(userIDVal)
 		if _, exists := m.friendCache[uID]; !exists {
 			sender, _ := msg["sender"].(map[string]interface{})
@@ -1109,7 +1261,7 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 				nickname, _ = sender["nickname"].(string)
 			}
 			m.friendCache[uID] = map[string]interface{}{
-				"user_id":   userID,
+				"user_id":   uID,
 				"nickname":  nickname,
 				"is_cached": true,
 			}
@@ -1122,21 +1274,21 @@ func (m *Manager) cacheBotDataFromMessage(bot *BotClient, msg map[string]interfa
 // handleBotMessageEvent 处理Bot消息事件
 func (m *Manager) handleBotMessageEvent(bot *BotClient, msg map[string]interface{}) {
 	// 提取消息信息
-	userID := toInt64(msg["user_id"])
-	groupID := toInt64(msg["group_id"])
+	userID := toString(msg["user_id"])
+	groupID := toString(msg["group_id"])
 	message, _ := msg["message"].(string)
 
 	// 广播路由事件: User -> Bot
 	extras := map[string]interface{}{
-		"user_id":  fmt.Sprintf("%v", userID),
+		"user_id":  userID,
 		"content":  message,
 		"platform": bot.Platform,
 	}
-	if groupID != 0 {
-		extras["group_id"] = fmt.Sprintf("%v", groupID)
+	if groupID != "" {
+		extras["group_id"] = groupID
 		// 尝试从缓存中获取群名
 		m.cacheMutex.RLock()
-		if group, ok := m.groupCache[fmt.Sprintf("%v", groupID)]; ok {
+		if group, ok := m.groupCache[groupID]; ok {
 			if name, ok := group["group_name"].(string); ok {
 				extras["group_name"] = name
 			}
@@ -1144,7 +1296,7 @@ func (m *Manager) handleBotMessageEvent(bot *BotClient, msg map[string]interface
 		m.cacheMutex.RUnlock()
 	}
 
-	m.broadcastRoutingEvent(fmt.Sprintf("%v", userID), bot.SelfID, "user_to_bot", "message", extras)
+	m.broadcastRoutingEvent(userID, bot.SelfID, "user_to_bot", "message", extras)
 
 	// 更新详细统计
 	m.updateBotStats(bot.SelfID, userID, groupID)
@@ -1501,13 +1653,50 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	// 尝试发送缓存的消息
 	go m.flushMessageCache()
 
+	// 启动心跳包循环
+	stopChan := make(chan struct{})
+	go m.sendWorkerHeartbeat(worker, stopChan)
+
 	// 启动连接处理循环
-	go m.handleWorkerConnection(worker)
+	go func() {
+		m.handleWorkerConnection(worker)
+		close(stopChan) // 当连接处理结束时停止心跳
+	}()
+}
+
+// sendWorkerHeartbeat 定期发送心跳包给Worker
+func (m *Manager) sendWorkerHeartbeat(worker *WorkerClient, stop chan struct{}) {
+	ticker := time.NewTicker(30 * time.Second) // 每30秒发送一次心跳
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// 发送ping帧
+			worker.Mutex.Lock()
+			err := worker.Conn.WriteMessage(websocket.PingMessage, []byte{})
+			worker.Mutex.Unlock()
+
+			if err != nil {
+				// log.Printf("Failed to send ping to Worker %s: %v", worker.ID, err)
+				return
+			}
+			// log.Printf("Sent ping to Worker %s", worker.ID)
+
+		case <-stop:
+			return
+		}
+	}
 }
 
 // handleWorkerConnection 处理单个Worker连接的消息循环
 func (m *Manager) handleWorkerConnection(worker *WorkerClient) {
+	// 启动心跳协程
+	stopHeartbeat := make(chan struct{})
+	go m.sendWorkerHeartbeat(worker, stopHeartbeat)
+
 	defer func() {
+		close(stopHeartbeat)
 		// 连接关闭时的清理工作
 		m.removeWorker(worker.ID)
 		worker.Conn.Close()
@@ -1753,25 +1942,25 @@ func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType strin
 	if len(extras) > 0 {
 		if data, ok := extras[0].(map[string]interface{}); ok {
 			if uid, ok := data["user_id"]; ok {
-				event.UserID = fmt.Sprintf("%v", uid)
+				event.UserID = toString(uid)
 			}
 			if uname, ok := data["user_name"]; ok {
-				event.UserName = fmt.Sprintf("%v", uname)
+				event.UserName = toString(uname)
 			}
 			if uavatar, ok := data["user_avatar"]; ok {
-				event.UserAvatar = fmt.Sprintf("%v", uavatar)
+				event.UserAvatar = toString(uavatar)
 			}
 			if content, ok := data["content"]; ok {
-				event.Content = fmt.Sprintf("%v", content)
+				event.Content = toString(content)
 			}
 			if platform, ok := data["platform"]; ok {
-				event.Platform = fmt.Sprintf("%v", platform)
+				event.Platform = toString(platform)
 			}
 			if gid, ok := data["group_id"]; ok {
-				event.GroupID = fmt.Sprintf("%v", gid)
+				event.GroupID = toString(gid)
 			}
 			if gname, ok := data["group_name"]; ok {
-				event.GroupName = fmt.Sprintf("%v", gname)
+				event.GroupName = toString(gname)
 			}
 		}
 	}
@@ -1815,10 +2004,10 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 	// 1. 尝试从请求参数中提取 self_id
 	var selfID string
 	if sid, ok := msg["self_id"]; ok {
-		selfID = fmt.Sprintf("%v", sid)
+		selfID = toString(sid)
 	} else if params, ok := msg["params"].(map[string]interface{}); ok {
 		if sid, ok := params["self_id"]; ok {
-			selfID = fmt.Sprintf("%v", sid)
+			selfID = toString(sid)
 		}
 	}
 
@@ -1834,10 +2023,10 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 	if targetBot == nil {
 		var groupID string
 		if gid, ok := msg["group_id"]; ok {
-			groupID = fmt.Sprintf("%v", gid)
+			groupID = toString(gid)
 		} else if params, ok := msg["params"].(map[string]interface{}); ok {
 			if gid, ok := params["group_id"]; ok {
-				groupID = fmt.Sprintf("%v", gid)
+				groupID = toString(gid)
 			}
 		}
 
@@ -1950,10 +2139,10 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 	// 尝试从消息中提取内容用于展示
 	if params, ok := msg["params"].(map[string]interface{}); ok {
 		if content, ok := params["message"]; ok {
-			extras["content"] = fmt.Sprintf("%v", content)
+			extras["content"] = toString(content)
 		}
 		if userID, ok := params["user_id"]; ok {
-			extras["user_id"] = fmt.Sprintf("%v", userID)
+			extras["user_id"] = toString(userID)
 		}
 	}
 
@@ -1983,10 +2172,10 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 					// 尝试提取 group_id
 					var groupID string
 					if gid, ok := msg["group_id"]; ok {
-						groupID = fmt.Sprintf("%v", gid)
+						groupID = toString(gid)
 					} else if params, ok := msg["params"].(map[string]interface{}); ok {
 						if gid, ok := params["group_id"]; ok {
-							groupID = fmt.Sprintf("%v", gid)
+							groupID = toString(gid)
 						}
 					}
 
@@ -2069,7 +2258,7 @@ func (m *Manager) StartPeriodicStatsSave() {
 }
 
 // updateBotStats 更新Bot统计信息
-func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
+func (m *Manager) updateBotStats(botID string, userID, groupID string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -2081,19 +2270,19 @@ func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
 		m.BotDetailedStats = make(map[string]*BotStatDetail)
 	}
 	if m.UserStats == nil {
-		m.UserStats = make(map[int64]int64)
+		m.UserStats = make(map[string]int64)
 	}
 	if m.GroupStats == nil {
-		m.GroupStats = make(map[int64]int64)
+		m.GroupStats = make(map[string]int64)
 	}
 	if m.BotStats == nil {
 		m.BotStats = make(map[string]int64)
 	}
 	if m.UserStatsToday == nil {
-		m.UserStatsToday = make(map[int64]int64)
+		m.UserStatsToday = make(map[string]int64)
 	}
 	if m.GroupStatsToday == nil {
-		m.GroupStatsToday = make(map[int64]int64)
+		m.GroupStatsToday = make(map[string]int64)
 	}
 	if m.BotStatsToday == nil {
 		m.BotStatsToday = make(map[string]int64)
@@ -2102,8 +2291,8 @@ func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
 	// 更新Bot详细统计
 	if _, exists := m.BotDetailedStats[botID]; !exists {
 		m.BotDetailedStats[botID] = &BotStatDetail{
-			Users:  make(map[int64]int64),
-			Groups: make(map[int64]int64),
+			Users:  make(map[string]int64),
+			Groups: make(map[string]int64),
 		}
 	}
 
@@ -2111,12 +2300,12 @@ func (m *Manager) updateBotStats(botID string, userID, groupID int64) {
 	stats.Received++
 	stats.LastMsg = time.Now()
 
-	if userID > 0 {
+	if userID != "" && userID != "0" {
 		stats.Users[userID]++
 		m.UserStats[userID]++
 		m.UserStatsToday[userID]++
 	}
-	if groupID > 0 {
+	if groupID != "" && groupID != "0" {
 		stats.Groups[groupID]++
 		m.GroupStats[groupID]++
 		m.GroupStatsToday[groupID]++
@@ -2340,23 +2529,151 @@ func (m *Manager) handleDockerAction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleDockerAddBot 添加机器人容器 (演示用，实际需要根据配置创建)
+// handleDockerAddBot 添加机器人容器
 func (m *Manager) handleDockerAddBot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	// 这里可以实现根据参数创建 WxBot 或其他类型的 Bot 容器
-	// 暂时返回一个模拟成功，实际逻辑需要根据 docker-compose.yml 里的配置来创建
+
+	if m.dockerClient == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": "Docker 客户端未初始化",
+		})
+		return
+	}
+
+	ctx := context.Background()
+	imageName := "botmatrix-wxbot" // 假设已经构建好的镜像名
+
+	// 1. 检查镜像是否存在，不存在则尝试拉取
+	_, _, err := m.dockerClient.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		log.Printf("[Docker] 镜像 %s 在本地未找到，正在尝试从仓库拉取...", imageName)
+		reader, err := m.dockerClient.ImagePull(ctx, imageName, types.ImagePullOptions{})
+		if err != nil {
+			log.Printf("[Docker] 无法拉取镜像 %s: %v", imageName, err)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("镜像 %s 不存在且无法拉取。请确保镜像已正确构建或存在于仓库中。错误: %v", imageName, err),
+			})
+			return
+		}
+		defer reader.Close()
+		io.Copy(io.Discard, reader)
+		log.Printf("[Docker] 镜像 %s 拉取成功", imageName)
+	}
+
+	// 2. 生成唯一的容器名
+	containerName := fmt.Sprintf("wxbot-%d", time.Now().Unix())
+
+	// 3. 配置容器
+	config := &container.Config{
+		Image: imageName,
+		Env: []string{
+			"TZ=Asia/Shanghai",
+			"MANAGER_URL=ws://btmgr:3001", // 假设在同一个网络中
+			"BOT_SELF_ID=" + strconv.FormatInt(time.Now().Unix()%1000000, 10),
+		},
+		Cmd: []string{"python", "onebot.py"},
+	}
+
+	hostConfig := &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "always"},
+	}
+
+	// 4. 创建容器
+	resp, err := m.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("创建容器失败: %v", err),
+		})
+		return
+	}
+
+	// 5. 启动容器
+	if err := m.dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("启动容器失败: %v", err),
+		})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "error",
-		"message": "自动部署机器人功能正在开发中，请手动使用 docker-compose 部署",
+		"status":  "ok",
+		"message": "机器人容器部署成功",
+		"id":      resp.ID,
 	})
 }
 
 // handleDockerAddWorker 添加 Worker 容器
 func (m *Manager) handleDockerAddWorker(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	if m.dockerClient == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": "Docker 客户端未初始化",
+		})
+		return
+	}
+
+	ctx := context.Background()
+	imageName := "botmatrix-system-worker"
+
+	// 检查镜像
+	_, _, err := m.dockerClient.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		log.Printf("[Docker] 镜像 %s 在本地未找到，正在尝试从仓库拉取...", imageName)
+		reader, err := m.dockerClient.ImagePull(ctx, imageName, types.ImagePullOptions{})
+		if err != nil {
+			log.Printf("[Docker] 无法拉取镜像 %s: %v", imageName, err)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("镜像 %s 不存在且无法拉取。请确保镜像已正确构建或存在于仓库中。错误: %v", imageName, err),
+			})
+			return
+		}
+		defer reader.Close()
+		io.Copy(io.Discard, reader)
+		log.Printf("[Docker] 镜像 %s 拉取成功", imageName)
+	}
+
+	containerName := fmt.Sprintf("sysworker-%d", time.Now().Unix())
+
+	config := &container.Config{
+		Image: imageName,
+		Env: []string{
+			"TZ=Asia/Shanghai",
+			"BOT_MANAGER_URL=ws://btmgr:3001",
+		},
+	}
+
+	hostConfig := &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "always"},
+	}
+
+	resp, err := m.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("创建容器失败: %v", err),
+		})
+		return
+	}
+
+	if err := m.dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("启动容器失败: %v", err),
+		})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "error",
-		"message": "自动部署 Worker 功能正在开发中，请手动使用 docker-compose 部署",
+		"status":  "ok",
+		"message": "Worker 容器部署成功",
+		"id":      resp.ID,
 	})
 }
 
@@ -2582,9 +2899,17 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "保存用户失败",
+			"message": "保存用户失败: " + err.Error(),
 		})
 		return
+	}
+
+	// 重新从数据库读取以获取生成的 ID
+	var dbUser User
+	err = m.db.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", newUser.Username).Scan(
+		&dbUser.ID, &dbUser.Username, &dbUser.PasswordHash, &dbUser.IsAdmin, &dbUser.SessionVersion, &dbUser.CreatedAt, &dbUser.UpdatedAt)
+	if err == nil {
+		newUser = &dbUser
 	}
 
 	m.users[newUser.Username] = newUser

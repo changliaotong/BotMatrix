@@ -33,7 +33,7 @@ type Config struct {
 	ClientSecret string `json:"client_secret"` // AppSecret
 
 	NexusAddr string `json:"nexus_addr"`
-	SelfID    int64  `json:"self_id"` // Optional: manually set SelfID
+	SelfID    string `json:"self_id"` // Optional: manually set SelfID
 }
 
 var (
@@ -64,7 +64,7 @@ func (l *LogManager) Write(p []byte) (n int, err error) {
 			"level":     "INFO",
 			"message":   strings.TrimSpace(m),
 			"time":      time.Now().Format("15:04:05"),
-			"self_id":   fmt.Sprintf("%d", config.SelfID),
+			"self_id":   config.SelfID,
 		})
 	}(msg)
 
@@ -106,7 +106,7 @@ func loadConfig() {
 	}
 
 	// Generate a SelfID if not set
-	if config.SelfID == 0 {
+	if config.SelfID == "" {
 		// Use a hash of the token or client_id as a pseudo ID
 		key := config.AccessToken
 		if key == "" {
@@ -119,11 +119,8 @@ func loadConfig() {
 		h.Write([]byte(key))
 		bs := h.Sum(nil)
 		// Take first 4 bytes
-		config.SelfID = int64(bs[0])<<24 | int64(bs[1])<<16 | int64(bs[2])<<8 | int64(bs[3])
-		if config.SelfID < 0 {
-			config.SelfID = -config.SelfID
-		}
-		log.Printf("Auto-generated SelfID: %d", config.SelfID)
+		config.SelfID = fmt.Sprintf("%x", bs[:4])
+		log.Printf("Auto-generated SelfID: %s", config.SelfID)
 	}
 }
 
@@ -269,7 +266,7 @@ func connectNexus() {
 	for {
 		log.Printf("Connecting to BotNexus at %s...", config.NexusAddr)
 		header := http.Header{}
-		header.Add("X-Self-ID", fmt.Sprintf("%d", config.SelfID))
+		header.Add("X-Self-ID", config.SelfID)
 		header.Add("X-Client-Role", "Universal") // Generic OneBot Client
 
 		conn, _, err := websocket.DefaultDialer.Dial(config.NexusAddr, header)
