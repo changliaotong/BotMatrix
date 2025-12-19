@@ -2317,7 +2317,7 @@
 
                 // 3D Scene Setup
                 this.scene = new THREE.Scene();
-                this.camera = new THREE.PerspectiveCamera(75, this.container.clientWidth / this.container.clientHeight, 0.1, 2000);
+                this.camera = new THREE.PerspectiveCamera(75, this.container.clientWidth / this.container.clientHeight, 0.1, 100000);
                 this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
                 this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -2328,7 +2328,7 @@
                 this.controls.enableDamping = true;
                 this.controls.dampingFactor = 0.05;
                 this.controls.minDistance = 50;  // Allow zooming in very close
-                this.controls.maxDistance = 3000; // Allow zooming out far
+                this.controls.maxDistance = 50000; // Increased significantly for larger scene
 
                 // Camera Position
                 this.camera.position.z = 500;
@@ -2376,10 +2376,10 @@
                 const starsGeometry = new THREE.BufferGeometry();
                 const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1, transparent: true });
                 const starsVertices = [];
-                for (let i = 0; i < 8000; i++) {
-                    const x = (Math.random() - 0.5) * 3000;
-                    const y = (Math.random() - 0.5) * 3000;
-                    const z = (Math.random() - 0.5) * 3000;
+                for (let i = 0; i < 15000; i++) { // More stars
+                    const x = (Math.random() - 0.5) * 100000; // Increased spread
+                    const y = (Math.random() - 0.5) * 100000;
+                    const z = (Math.random() - 0.5) * 100000;
                     starsVertices.push(x, y, z);
                 }
                 starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
@@ -2465,12 +2465,12 @@
                 if (id === 'nexus') {
                     node.targetPos.set(0, 0, 0);
                 } else if (type === 'worker') {
-                    // Workers: Closest to Nexus, forming a tight processing core
+                    // Workers: Closest to Nexus
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 100 + Math.random() * 50;
+                    const radius = 1000 + Math.random() * 500; // Increased 10x
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 80,
+                        (Math.random() - 0.5) * 800, // Increased 10x
                         Math.sin(angle) * radius
                     );
                 } else if (type === 'bot') {
@@ -2482,12 +2482,12 @@
 
                     // Bots: Inner layer, distance depends on group count
                     const angle = Math.random() * Math.PI * 2;
-                    // Base 350, plus extra distance for each group to make space for the group cluster
-                    const baseRadius = 350 + (groupCount * 40);
-                    const radius = baseRadius + Math.random() * 100;
+                    // Base 3500 (10x), plus extra distance for each group
+                    const baseRadius = 3500 + (groupCount * 400); // Increased 10x
+                    const radius = baseRadius + Math.random() * 1000; // Increased 10x
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 150,
+                        (Math.random() - 0.5) * 1500, // Increased 10x
                         Math.sin(angle) * radius
                     );
                 } else if (type === 'group') {
@@ -2511,13 +2511,12 @@
 
                     // Cluster around bot: Dynamic relative offset
                     const angle = Math.random() * Math.PI * 2;
-                    // Base radius increases significantly with group count to prevent overcrowding
-                    // Use a larger multiplier for the bot-group distance as well
-                    const baseRadius = 450 + (groupCount * 60); 
-                    const radius = baseRadius + Math.random() * 250;
+                    // Base radius increases significantly with group count
+                    const baseRadius = 15000 + (groupCount * 2000); 
+                    const radius = baseRadius + Math.random() * 8000;
                     node.clusterOffset.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 250, // More vertical spread
+                        (Math.random() - 0.5) * 6000, // More vertical spread
                         Math.sin(angle) * radius
                     );
                     const bot = this.nodes.get(node.botId);
@@ -2525,10 +2524,10 @@
                 } else {
                     // Lone group: Middle layer
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 950 + Math.random() * 250; 
+                    const radius = 35000 + Math.random() * 10000; 
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 200,
+                        (Math.random() - 0.5) * 5000,
                         Math.sin(angle) * radius
                     );
                     node.clusterOffset.set(0, 0, 0);
@@ -2545,11 +2544,11 @@
 
                     // Cluster around group: Small relative offset
                     const angle = Math.random() * Math.PI * 2;
-                    const baseRadius = 250 + (userCount * 10);
-                    const radius = baseRadius + Math.random() * 150;
+                    const baseRadius = 8000 + (userCount * 500);
+                    const radius = baseRadius + Math.random() * 4000;
                     node.clusterOffset.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 150,
+                        (Math.random() - 0.5) * 3000,
                         Math.sin(angle) * radius
                     );
                     // Initial position
@@ -2558,10 +2557,10 @@
                 } else {
                     // Lone user: Outer layer
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 1500 + Math.random() * 400; 
+                    const radius = 65000 + Math.random() * 15000; 
                     node.targetPos.set(
                         Math.cos(angle) * radius,
-                        (Math.random() - 0.5) * 300,
+                        (Math.random() - 0.5) * 8000,
                         Math.sin(angle) * radius
                     );
                     node.clusterOffset.set(0, 0, 0);
@@ -2581,7 +2580,7 @@
                     
                     // Zoom towards the clicked node
                     const direction = new THREE.Vector3().subVectors(this.camera.position, targetPos).normalize();
-                    const newCameraPos = targetPos.clone().add(direction.multiplyScalar(200));
+                    const newCameraPos = targetPos.clone().add(direction.multiplyScalar(2000)); // Increased 10x
                     
                     // Animate camera and controls target
                     const startPos = this.camera.position.clone();
@@ -2976,12 +2975,12 @@
                 const color = colors[msgType] || 0x00ff41;
 
                 // 1. Create fast traveling sphere
-                const geometry = new THREE.SphereGeometry(8, 16, 16);
+                const geometry = new THREE.SphereGeometry(80, 16, 16); // Increased 10x
                 const material = new THREE.MeshBasicMaterial({ color: color });
                 const ballMesh = new THREE.Mesh(geometry, material);
                 
                 // Add Glow to ball
-                const light = new THREE.PointLight(color, 3, 100);
+                const light = new THREE.PointLight(color, 3, 1000); // Increased 10x
                 ballMesh.add(light);
                 ballMesh.position.copy(start.mesh.position);
                 this.scene.add(ballMesh);
@@ -2996,8 +2995,8 @@
                     color: color, 
                     transparent: true, 
                     opacity: 0.6,
-                    dashSize: 15,
-                    gapSize: 8,
+                    dashSize: 150, // Increased 10x
+                    gapSize: 80,   // Increased 10x
                     blending: THREE.AdditiveBlending
                 });
                 const lineMesh = new THREE.Line(lineGeom, lineMat);
@@ -3010,7 +3009,7 @@
                 if (content) {
                     hintMesh = this.createMessageHint(midpoint, content, color);
                     // Move it slightly above the line
-                    hintMesh.position.y += 40;
+                    hintMesh.position.y += 400; // Increased 10x
                 }
 
                 this.particles.push({
@@ -3109,8 +3108,8 @@
                 const sprite = new THREE.Sprite(material);
                 
                 sprite.position.copy(pos);
-                sprite.position.y += 80;
-                sprite.scale.set(160, 40, 1);
+                sprite.position.y += 800; // Increased 10x
+                sprite.scale.set(1600, 400, 1); // Increased 10x
                 
                 this.scene.add(sprite);
                 return sprite;
@@ -3158,31 +3157,35 @@
                         } else {
                             // Lone user: Outer rim drifting
                             const isActive = inactivity < 10;
-                    const targetRadius = isActive ? 380 : 850;
-                    
-                    // Optimization: If it's a bot, update its targetPos based on group count periodically
-                    if (node.type === 'bot') {
+                            const targetRadius = isActive ? 15000 : 65000;
+                            
+                            // Optimization: If it's a bot, update its targetPos based on group count periodically
+                            if (node.type === 'bot') {
+                                let groupCount = 0;
+                                this.nodes.forEach(n => {
+                                    if (n.type === 'group' && n.botId === node.id) groupCount++;
+                                });
+                                const dynamicRadius = 3500 + (groupCount * 400);
+                                const currentRadius = node.targetPos.length();
+                                if (currentRadius > 0.1) {
+                                    node.targetPos.multiplyScalar(dynamicRadius / currentRadius);
+                                }
+                            } else {
+                                const currentRadius = node.targetPos.length();
+                                const lerpFactor = isActive ? 0.08 : 0.002;
+                                const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
+                                if (currentRadius > 0.1) {
+                                    node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                                }
+                            }
+                        }
+                    } else if (node.type === 'bot') {
+                        // Bots: Keep them stable
                         let groupCount = 0;
                         this.nodes.forEach(n => {
                             if (n.type === 'group' && n.botId === node.id) groupCount++;
                         });
-                        const dynamicRadius = 350 + (groupCount * 40);
-                        const currentRadius = node.targetPos.length();
-                        if (currentRadius > 0.1) {
-                            node.targetPos.multiplyScalar(dynamicRadius / currentRadius);
-                        }
-                    } else {
-                        const currentRadius = node.targetPos.length();
-                        const lerpFactor = isActive ? 0.08 : 0.002;
-                        const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
-                        if (currentRadius > 0.1) {
-                            node.targetPos.multiplyScalar(nextRadius / currentRadius);
-                        }
-                    }
-                        }
-                    } else if (node.type === 'bot') {
-                        // Bots: Keep them stable and close to Nexus, no drifting
-                        const targetRadius = 350; // Increased from 220
+                        const targetRadius = 3500 + (groupCount * 400);
                         const currentRadius = node.targetPos.length();
                         const lerpFactor = 0.01;
                         const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
@@ -3196,7 +3199,7 @@
                             node.targetPos.copy(bot.targetPos).add(node.clusterOffset);
                         } else {
                             // Lone group: Middle layer stability
-                            const targetRadius = 750; // Increased from 450
+                            const targetRadius = 35000; 
                             const currentRadius = node.targetPos.length();
                             const lerpFactor = 0.005;
                             const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
@@ -3215,7 +3218,7 @@
 
                     // Common wandering logic
                     const wanderSpeed = 0.2;
-                    const wanderRadius = node.type === 'worker' ? 20 : (node.type === 'bot' ? 40 : 60);
+                    const wanderRadius = node.type === 'worker' ? 200 : (node.type === 'bot' ? 400 : 600); // Increased 10x
                     
                     const wanderX = Math.sin(time * wanderSpeed + offset) * wanderRadius;
                     const wanderY = Math.cos(time * (wanderSpeed * 0.8) + offset) * wanderRadius;
@@ -3227,7 +3230,7 @@
                     
                     // Gentle swaying and pulsing
                     node.mesh.material.rotation = Math.sin(time * 0.3 + offset) * 0.2;
-                    const baseScale = node.type === 'user' ? 70 : 90;
+                    const baseScale = node.type === 'user' ? 700 : 900; // Increased 10x
                     const pulse = 1 + Math.sin(time * 1.2 + offset) * 0.08;
                     node.mesh.scale.set(baseScale * pulse, baseScale * pulse, 1);
 

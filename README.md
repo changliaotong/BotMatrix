@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.98 - Drastic 3D Universe Scaling
+*   **🌌 Galactic Scale Expansion**: Increased all 3D node distances and distribution radii by a full order of magnitude (10x - 100x larger scene).
+*   **🔭 Enhanced Camera Optics**: Adjusted camera far-plane and zoom limits (up to 50,000 units) to accommodate the massive new cosmic scale.
+*   **✨ Massive Visual Overhaul**: Scaled up node sizes, particle effects, message hints, and star fields to match the expanded universe.
+*   **🚀 High-Speed Interstellar Travel**: Optimized message particle speeds and dashed line dash sizes for the larger distances.
+
 ### v1.1.97 - Dynamic 3D Layout & Navigation Persistence
 *   **🌌 Dynamic Bot-Nexus Distance**: Bots now automatically adjust their distance from the Nexus core based on their group count, preventing central overcrowding.
 *   **👥 Adaptive Group Clustering**: Group-to-Bot distance now scales dynamically with the total number of groups, ensuring a clear and spacious layout even for high-load bots.
