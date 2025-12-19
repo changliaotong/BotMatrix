@@ -26,7 +26,7 @@ def pack_project():
     # Files and directories to include
     include_patterns = [
         # Core files
-        "go.mod", "go.sum", "docker-compose.yml", "docker-compose.prod.yml",
+        "BotNexus/go.mod", "BotNexus/go.sum", "docker-compose.yml", "docker-compose.prod.yml",
         "README.md", "CHANGELOG.md", ".env.example", "VERSION",
         
         # Root scripts (new location)
