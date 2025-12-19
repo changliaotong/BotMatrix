@@ -241,7 +241,16 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	// 计算在线/离线机器人
 	onlineBots := len(m.bots)
 	onlineWorkers := len(m.workers)
+
+	// totalBots 应该是在数据库中或统计列表中的所有机器人
+	// 这里使用 m.BotStats 作为基准，它记录了所有见过的机器人
 	totalBots := len(m.BotStats)
+
+	// 修正逻辑：如果当前在线的大于总数（可能由于内存状态未同步），则更新总数
+	if onlineBots > totalBots {
+		totalBots = onlineBots
+	}
+
 	offlineBots := totalBots - onlineBots
 	if offlineBots < 0 {
 		offlineBots = 0

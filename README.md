@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.97 - Dynamic 3D Layout & Navigation Persistence
+*   **🌌 Dynamic Bot-Nexus Distance**: Bots now automatically adjust their distance from the Nexus core based on their group count, preventing central overcrowding.
+*   **👥 Adaptive Group Clustering**: Group-to-Bot distance now scales dynamically with the total number of groups, ensuring a clear and spacious layout even for high-load bots.
+*   **🧭 Navigation Persistence**: Fixed a critical issue where refreshing the "Visualization" page would redirect users back to the dashboard.
+*   **✨ Smooth Real-time Re-positioning**: Implemented smooth lerp transitions for nodes as they dynamically shift their target positions in 3D space.
+
 ### v1.1.96 - Full-Screen Visualization & Persistence Fix
 *   **🖥️ Full-Screen Mode**: Added native full-screen support for the 3D routing map, enabling immersive real-time monitoring.
 *   **💾 Docker Persistence**: Refactored database storage to a dedicated `data/` directory with persistent volume mapping, ensuring user data survives container restarts.

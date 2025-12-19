@@ -51,13 +51,14 @@ ENV WEBUI_PORT=:5000
 ENV REDIS_ADDR=192.168.0.126:6379
 ENV REDIS_PWD=redis_zsYik8
 
-# Optional: run as non-root
+# Optional: run as non-root (but default to root for Docker socket access)
 RUN addgroup -S appgroup && adduser -S -D -H -G appgroup appuser
 
 # Create data directory and ensure appuser owns the app directory
 RUN mkdir -p /app/data && chown -R appuser:appgroup /app
 
-USER appuser
+# USER appuser # Commented out to allow Docker socket access by default
+# If you want to run as non-root, ensure /var/run/docker.sock has correct permissions
 
 # Run the application
 CMD ["./BotNexus"]
