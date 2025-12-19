@@ -1,4 +1,4 @@
-module BotNexus
+module BotNexus // forced cache invalidation
 
 go 1.24.0
 
