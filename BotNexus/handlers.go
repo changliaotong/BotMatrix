@@ -455,16 +455,26 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 生成Bot ID
+	selfID := r.Header.Get("X-Self-ID")
+	platform := r.Header.Get("X-Platform")
+	if platform == "" {
+		platform = "qq" // 默认平台
+	}
+
+	// 如果没有提供 ID，使用连接地址作为临时ID
+	if selfID == "" {
+		selfID = conn.RemoteAddr().String()
+	}
+
 	// 创建Bot客户端
 	bot := &BotClient{
 		Conn:          conn,
 		Connected:     time.Now(),
 		LastHeartbeat: time.Now(),
-		Platform:      "qq", // 默认平台为QQ
+		Platform:      platform,
+		SelfID:        selfID,
 	}
-
-	// 生成Bot ID（使用连接地址作为临时ID）
-	bot.SelfID = conn.RemoteAddr().String()
 
 	// 注册Bot
 	m.mutex.Lock()
@@ -568,6 +578,20 @@ func (m *Manager) sendBotHeartbeat(bot *BotClient, stop chan struct{}) {
 
 // handleBotMessage 处理Bot消息
 func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
+	// 检查是否包含 self_id 并更新（如果当前是临时 ID）
+	if msgSelfID, ok := msg["self_id"].(string); ok && msgSelfID != "" {
+		if bot.SelfID != msgSelfID && strings.Contains(bot.SelfID, ":") {
+			// 当前是临时 IP ID，收到正式 ID，进行更新
+			oldID := bot.SelfID
+			m.mutex.Lock()
+			delete(m.bots, oldID)
+			bot.SelfID = msgSelfID
+			m.bots[bot.SelfID] = bot
+			m.mutex.Unlock()
+			log.Printf("[Bot] Updated Bot ID from %s to %s", oldID, msgSelfID)
+		}
+	}
+
 	// 检查是否是API响应（有echo字段）
 	if echo, ok := msg["echo"].(string); ok && echo != "" {
 		// 这是API响应，需要回传给对应的Worker
@@ -785,10 +809,109 @@ func (m *Manager) flushMessageCache() {
 	}
 }
 
+// matchRoutePattern 检查字符串是否匹配模式 (支持 * 通配符)
+func matchRoutePattern(pattern, value string) bool {
+	if pattern == value {
+		return true
+	}
+	if pattern == "*" {
+		return true
+	}
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(value, prefix)
+	}
+	if strings.HasPrefix(pattern, "*") {
+		suffix := strings.TrimPrefix(pattern, "*")
+		return strings.HasSuffix(value, suffix)
+	}
+	return false
+}
+
+// findWorkerByID 根据ID查找Worker
+func (m *Manager) findWorkerByID(workerID string) *WorkerClient {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	for _, w := range m.workers {
+		if w.ID == workerID {
+			return w
+		}
+	}
+	return nil
+}
+
 // forwardMessageToWorker 将消息转发给Worker处理
 func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
+	// 1. 尝试使用路由规则
+	var targetWorkerID string
+	var matchKeys []string
+
+	// 提取匹配键
+	// 用户 ID 匹配: user_123456
+	if userID, ok := msg["user_id"]; ok {
+		uID := fmt.Sprintf("user_%v", userID)
+		matchKeys = append(matchKeys, uID)
+		// 同时也支持纯数字 ID
+		matchKeys = append(matchKeys, fmt.Sprintf("%v", userID))
+	}
+
+	// 群组 ID 匹配: group_789012
+	if groupID, ok := msg["group_id"]; ok {
+		gID := fmt.Sprintf("group_%v", groupID)
+		matchKeys = append(matchKeys, gID)
+	}
+
+	// 机器人 ID 匹配: bot_123 or self_id
+	if selfID, ok := msg["self_id"].(string); ok {
+		matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", selfID))
+		matchKeys = append(matchKeys, selfID)
+	}
+
+	// 查找匹配规则 (精确匹配优先)
 	m.mutex.RLock()
-	workers := make([]*WorkerClient, len(m.workers))
+	// 先尝试所有 key 的精确匹配
+	for _, key := range matchKeys {
+		if wID, exists := m.routingRules[key]; exists && wID != "" {
+			targetWorkerID = wID
+			break
+		}
+	}
+
+	// 如果没有精确匹配，尝试通配符匹配
+	if targetWorkerID == "" {
+		for pattern, wID := range m.routingRules {
+			for _, key := range matchKeys {
+				if matchRoutePattern(pattern, key) {
+					targetWorkerID = wID
+					break
+				}
+			}
+			if targetWorkerID != "" {
+				break
+			}
+		}
+	}
+	m.mutex.RUnlock()
+
+	// 如果找到了目标 Worker，尝试获取它
+	if targetWorkerID != "" {
+		if w := m.findWorkerByID(targetWorkerID); w != nil {
+			log.Printf("[ROUTING] Routed message to specified worker: %s", targetWorkerID)
+			w.Mutex.Lock()
+			err := w.Conn.WriteJSON(msg)
+			w.HandledCount++
+			w.Mutex.Unlock()
+			if err == nil {
+				return
+			}
+			log.Printf("[ROUTING] Failed to send to target worker %s, falling back to load balancer", targetWorkerID)
+		} else {
+			log.Printf("[ROUTING] Target worker %s not found or offline, falling back to load balancer", targetWorkerID)
+		}
+	}
+
+	m.mutex.RLock()
+	workers = make([]*WorkerClient, len(m.workers))
 	copy(workers, m.workers)
 	m.mutex.RUnlock()
 

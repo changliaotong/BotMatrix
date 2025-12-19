@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.83 (2025-12-19)
+*   **Bot ID Display & Routing Enhancements (机器人ID显示与路由增强)**:
+    *   **🆔 Bot Identification Fix**: Fixed issue where bot `self_id` was displayed as IP/Port. Bots now correctly identify themselves via handshake headers or dynamic message analysis, switching from temporary IP-based IDs to real QQ IDs automatically.
+    *   **🎯 Robust Routing Rules**: Fully implemented and fixed the routing rule engine. Supported patterns include exact matches (`user_123456`, `group_789012`) and wildcard matches (`*_test`, `123*`).
+    *   **⚡ Priority-Based Routing**: Implemented a strict priority system: Exact Match > Wildcard Match > RTT-based Load Balancing.
+    *   **🙈 UI Privacy Update**: Hidden sensitive operating system information from the dashboard stat cards for better privacy and cleaner interface.
+    *   **🛡️ Routing Resilience**: Added automatic fallback to load balancer if a rule-designated worker is offline or fails to respond.
+
 ## v1.1.82 (2025-12-19)
 *   **System Dashboard & API Fixes (系统仪表盘与API修复)**:
     *   **🔧 API Response Format Fix**: Corrected `/api/bots` and `/api/workers` endpoints to return raw JSON arrays instead of wrapped objects, aligning with frontend expectations.

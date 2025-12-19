@@ -12,6 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.83 - Bot ID & Routing Engine
+*   **🆔 Dynamic Bot Identification**: Bots now automatically transition from temporary IP-based IDs to real QQ IDs using handshake headers or real-time message metadata.
+*   **🎯 Advanced Routing Engine**: Fixed and enhanced routing rules with support for exact matches (`user_`, `group_`) and wildcard patterns (`*`).
+*   **⚡ Priority Routing System**: New routing logic follows a strict hierarchy: Exact Match > Wildcard Match > Intelligent RTT Load Balancing.
+*   **🛡️ High Availability**: Improved routing resilience with automatic fallback to healthy workers if a rule-targeted worker becomes unavailable.
+*   **🙈 UI Privacy**: Refined dashboard by hiding operating system details for a cleaner and more secure management interface.
+
 ### v1.1.82 - Dashboard Metrics & API Alignment
 *   **📊 Worker Metrics Integration**: Added a dedicated "Workers" metric card to the dashboard and updated the global stats API to include real-time worker counts.
 *   **🔧 API Contract Alignment**: Fixed `/api/bots` and `/api/workers` endpoints to return raw arrays, ensuring compatibility with frontend rendering logic.

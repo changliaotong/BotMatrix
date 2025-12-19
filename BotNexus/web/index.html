@@ -494,7 +494,7 @@
 
     <div class="main-content">
         <!-- Dashboard Tab -->
-        <div id="tab-dashboard" class="tab-content">
+        <div id="tab-dashboard" class="tab-content" style="display: none;">
             <!-- Stats Grid -->
             <div class="stats-grid" id="dash-system-stats">
                 <!-- 1. Bots -->
@@ -548,7 +548,7 @@
                 </div>
 
                 <!-- 2.1 Operating System -->
-                <div class="stat-card">
+                <div class="stat-card" style="display: none;">
                     <div class="icon-circle bg-secondary bg-opacity-10 text-secondary">
                         <i class="bi bi-window"></i>
                     </div>
@@ -1021,7 +1021,7 @@
         </div>
 
         <!-- Bots Tab -->
-        <div id="tab-bots" style="display:none;">
+        <div id="tab-bots" class="content-section" style="display:none;">
             <ul class="nav nav-tabs mb-4">
                 <li class="nav-item">
                     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#view-bots">
@@ -1029,7 +1029,7 @@
                     </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers()">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#view-workers" onclick="fetchWorkers(currentWorkers.length === 0)">
                         <span data-i18n="tab_process_workers">处理端 (Workers)</span> <span id="badge-workers" class="badge bg-secondary ms-1">0</span>
                     </button>
                 </li>
@@ -1278,7 +1278,7 @@
         </div>
 
         <!-- Debug & Test (Merged) -->
-        <div id="tab-debug" style="display:none;">
+        <div id="tab-debug" class="content-section" style="display:none;">
             <h4 class="mb-4" data-i18n="debug_test_title">调试测试</h4>
             
             <ul class="nav nav-tabs mb-3" id="debug-tabs" role="tablist">
@@ -1442,8 +1442,8 @@
         </div>
 
 
-        <!-- Settings -->
-        <div id="tab-settings" style="display:none;">
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="content-section" style="display:none;">
             <h4 class="mb-4" data-i18n="settings_title">系统设置</h4>
             
             <div class="row">
@@ -1825,9 +1825,15 @@
         }
 
         function showTab(tabId) {
+            if (!tabId) return;
+            // Handle #hash
+            if (tabId.startsWith('#')) tabId = tabId.substring(1);
+            // Handle tab- prefix
+            if (tabId.startsWith('tab-')) tabId = tabId.replace('tab-', '');
+            
             try {
                 // 隐藏所有内容区域
-                const contentSections = document.querySelectorAll('.content-section');
+                const contentSections = document.querySelectorAll('.main-content > div[id^="tab-"]');
                 contentSections.forEach(section => {
                     section.style.display = 'none';
                 });
@@ -1835,76 +1841,80 @@
                 // 显示目标内容区域
                 const targetTab = document.getElementById('tab-' + tabId);
                 if (targetTab) {
-                    targetTab.style.display = '';
+                    targetTab.style.display = 'block';
                 }
                 
                 // 更新导航状态
-                const navLinks = document.querySelectorAll('.nav-link');
+                const navLinks = document.querySelectorAll('.sidebar .nav-link');
                 navLinks.forEach(link => {
                     link.classList.remove('active');
                 });
                 
-                const targetNav = document.getElementById('nav-' + tabId);
+                const targetNav = document.getElementById('nav-' + tabId) || 
+                                  document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`);
                 if (targetNav) {
                     targetNav.classList.add('active');
                 }
                 
-                // 更新URL hash（不触发hashchange事件）
+                // 更新URL hash (使用 replaceState 避免触发 hashchange 事件)
                 const newHash = '#' + tabId;
                 if (window.location.hash !== newHash) {
-                    window.location.hash = newHash;
+                    window.history.replaceState(null, null, newHash);
                 }
                 
                 // 根据tab触发相应的初始化函数
                 switch(tabId) {
                     case 'dashboard':
-                        // 仪表板已在startApp中初始化
+                        // 仪表板数据在 startApp 中定时更新
                         break;
                     case 'bots':
-                        if (typeof fetchBots === 'function') {
-                            fetchBots();
-                        }
+                        if (typeof fetchBots === 'function') fetchBots(currentBots.length === 0);
+                        if (typeof fetchWorkers === 'function') fetchWorkers(currentWorkers.length === 0);
                         break;
                     case 'groups':
-                        if (typeof loadGroups === 'function') {
-                            loadGroups();
+                        if (typeof loadGroups === 'function') loadGroups();
+                        const listEl = document.getElementById('group-list');
+                        if (window.currentBotId && (!window.currentGroups || window.currentGroups.length === 0) && listEl && !listEl.innerHTML.includes('切换机器人中')) {
+                            if (typeof refreshGroupList === 'function') refreshGroupList();
+                        }
+                        break;
+                    case 'monitor':
+                        const activeMonitorTab = document.querySelector('#monitor-tabs .nav-link.active');
+                        if (activeMonitorTab && activeMonitorTab.id === 'monitor-logs-tab') {
+                            if (typeof fetchLogs === 'function') fetchLogs();
                         }
                         break;
                     case 'workers':
-                        if (typeof fetchWorkers === 'function') {
-                            fetchWorkers();
-                        }
+                        if (typeof fetchWorkers === 'function') fetchWorkers(currentWorkers.length === 0);
                         break;
                     case 'docker':
-                        if (typeof loadDockerContainers === 'function') {
-                            loadDockerContainers();
-                        }
+                        if (typeof loadDockerContainers === 'function') loadDockerContainers();
                         break;
                     case 'routing':
-                        if (typeof fetchRoutingRules === 'function') {
-                            fetchRoutingRules();
-                        }
+                        if (typeof fetchRoutingRules === 'function') fetchRoutingRules();
                         break;
                     case 'logs':
-                        if (typeof fetchLogsFull === 'function') {
-                            fetchLogsFull();
-                        }
+                        if (typeof fetchLogsFull === 'function') fetchLogsFull();
                         break;
                     case 'debug':
-                        if (typeof loadTestGroups === 'function') {
-                            loadTestGroups();
-                        }
+                        if (typeof loadTestGroups === 'function') loadTestGroups();
                         break;
                     case 'settings':
-                        // 设置页面不需要额外初始化
                         break;
+                }
+                
+                // 移动端关闭侧边栏
+                if (window.innerWidth <= 768) {
+                    const sidebar = document.getElementById('sidebar');
+                    const overlay = document.getElementById('sidebar-overlay');
+                    if (sidebar) sidebar.classList.remove('show');
+                    if (overlay) overlay.classList.remove('show');
                 }
                 
                 console.log('切换到标签页:', tabId);
                 
             } catch (error) {
                 console.error('切换标签页失败:', error);
-                // 如果切换失败，尝试回到仪表板
                 if (tabId !== 'dashboard') {
                     showTab('dashboard');
                 }
@@ -1915,49 +1925,28 @@
             try {
                 applyRoleUI(authRole);
                 
-                // Restore tab from hash - 增加错误处理防止卡死
-                try {
-                    const hash = window.location.hash;
-                    if (hash) {
-                        let tabId = hash.substring(1);
-                        
-                        // 验证tabId是否有效
-                        const validTabs = ['dashboard', 'bots', 'groups', 'workers', 'docker', 'logs', 'debug', 'settings'];
-                        const isValidTab = validTabs.includes(tabId) && document.getElementById('tab-' + tabId);
-                        
-                        if (isValidTab) {
-                            const isAdmin = (authRole === 'super' || authRole === 'admin');
-                            
-                            // 权限检查
-                            if (tabId === 'debug' && !isAdmin) {
-                                tabId = 'dashboard';
-                            }
-                            
-                            // 延迟执行tab切换，避免在页面加载时立即执行导致卡死
-                            setTimeout(() => {
-                                try {
-                                    showTab(tabId);
-                                } catch (tabError) {
-                                    console.error('Tab切换失败:', tabError);
-                                    // 如果切换失败，回到仪表板
-                                    showTab('dashboard');
-                                }
-                            }, 50);
+                // 获取初始标签页
+                let initialTab = 'dashboard';
+                const hash = window.location.hash;
+                if (hash) {
+                    const tabId = hash.substring(1);
+                    const validTabs = ['dashboard', 'bots', 'groups', 'monitor', 'workers', 'docker', 'routing', 'logs', 'debug', 'settings'];
+                    const isValidTab = validTabs.includes(tabId) && document.getElementById('tab-' + tabId);
+                    
+                    if (isValidTab) {
+                        const isAdmin = (authRole === 'super' || authRole === 'admin');
+                        if (tabId === 'debug' && !isAdmin) {
+                            initialTab = 'dashboard';
                         } else {
-                            // 如果hash无效，默认显示仪表板
-                            setTimeout(() => showTab('dashboard'), 50);
+                            initialTab = tabId;
                         }
-                    } else {
-                        // 没有hash时默认显示仪表板
-                        setTimeout(() => showTab('dashboard'), 50);
                     }
-                } catch (hashError) {
-                    console.error('Hash解析失败:', hashError);
-                    // 出错时默认显示仪表板
-                    setTimeout(() => showTab('dashboard'), 50);
                 }
+                
+                // 立即显示初始标签页，防止闪烁
+                showTab(initialTab);
 
-                // 延迟初始化，防止页面卡死
+                // 延迟初始化其他组件，防止页面卡死
                 setTimeout(() => {
                     try {
                         initWebSocket();
@@ -1966,14 +1955,11 @@
                     }
                 }, 100);
                 
-                // 分批加载数据，避免同时请求导致卡死
+                // 分批加载数据
                 setTimeout(() => {
                     try {
                         updateStats();
                         updateSystemStats();
-                        
-                        // 定时更新统计数据已经通过下面的 safeSetInterval 启动
-                        // 移除冗余的 setInterval 调用
                     } catch (error) {
                         console.error('系统数据加载失败:', error);
                     }
@@ -1996,7 +1982,7 @@
                     }
                 }, 600);
                 
-                // 启动定时器，添加错误处理
+                // 启动定时器
                 const safeSetInterval = (fn, interval, name) => {
                     return setInterval(() => {
                         try {
@@ -2015,7 +2001,6 @@
                 
             } catch (error) {
                 console.error('startApp初始化失败:', error);
-                // 尝试显示错误信息
                 try {
                     const t = translations[currentLang] || translations['zh-CN'];
                     alert(t.startup_error || '应用初始化失败，请刷新页面重试');
@@ -2195,45 +2180,6 @@
             
             sidebar.classList.toggle('show');
             overlay.classList.toggle('show');
-        }
-
-        function showTab(tabId) {
-            // Handle #hash
-            if (tabId.startsWith('#')) tabId = tabId.substring(1);
-
-            document.querySelectorAll('.main-content > div[id^="tab-"]').forEach(el => el.style.display = 'none');
-            document.getElementById('tab-' + tabId).style.display = 'block';
-            document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
-            const activeLink = document.querySelector(`.sidebar .nav-link[href="#${tabId}"]`);
-            if (activeLink) activeLink.classList.add('active');
-            
-            if (tabId === 'logs') fetchLogsFull();
-            if (tabId === 'docker') loadDockerContainers();
-            if (tabId === 'bots') {
-                fetchBots();
-                fetchWorkers();
-            }
-            if (tabId === 'groups') {
-                 // If we have a bot selected but no data loaded, try to load
-                 // Avoid double-fetch if we are currently switching bots (indicated by "切换机器人中" in the list)
-                 const listEl = document.getElementById('group-list');
-                 if (currentBotId && currentGroups.length === 0 && listEl && !listEl.innerHTML.includes('切换机器人中')) {
-                     refreshGroupList();
-                 }
-            }
-
-            // Close sidebar on mobile
-            if (window.innerWidth <= 768) {
-                const sidebar = document.getElementById('sidebar');
-                const overlay = document.getElementById('sidebar-overlay');
-                if (sidebar) sidebar.classList.remove('show');
-                if (overlay) overlay.classList.remove('show');
-            }
-
-            // Update URL hash
-            if (window.location.hash !== '#' + tabId) {
-                window.history.replaceState(null, null, '#' + tabId);
-            }
         }
 
         // --- Dashboard & Stats ---
@@ -2701,9 +2647,24 @@
             fetchBots();
         }
 
-        function fetchBots() {
+        function fetchBots(showLoading = false) {
             if (!authToken) return;
             const t = translations[currentLang] || translations['zh-CN'];
+            
+            if (showLoading) {
+                const container = document.getElementById('bot-list-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="col-12 text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <div class="mt-2 text-muted">${t.loading || '加载中...'}</div>
+                        </div>
+                    `;
+                }
+            }
+
             fetch('/api/bots', {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             })
@@ -2996,8 +2957,24 @@
             }
         }
 
-        function fetchWorkers() {
+        function fetchWorkers(showLoading = false) {
             if (!authToken) return;
+            const t = translations[currentLang] || translations['zh-CN'];
+
+            if (showLoading) {
+                const container = document.getElementById('worker-list-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="col-12 text-center py-5">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <div class="mt-2 text-muted">${t.loading || '加载中...'}</div>
+                        </div>
+                    `;
+                }
+            }
+
             fetch('/api/workers', {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             })
@@ -3094,6 +3071,9 @@
             container.innerHTML = workers.map(w => {
                 const connDate = new Date(w.connected);
                 const timeStr = timeAgo(w.connected);
+                const addr = w.remote_addr || w.id || 'Unknown';
+                const status = w.status || 'Online';
+                const addrDisplay = addr.includes(':') ? addr.split(':')[0] : addr;
                 
                 if (workerViewMode === 'compact') {
                     return `
@@ -3105,13 +3085,13 @@
                                 </div>
                                 <div class="overflow-hidden w-100">
                                     <div class="fw-bold text-truncate" style="font-size: 0.85rem;">${t.worker_node_title}</div>
-                                    <div class="text-muted text-truncate" style="font-size: 0.7rem;">${w.remote_addr.split(':')[0]}</div>
+                                    <div class="text-muted text-truncate" style="font-size: 0.7rem;">${addrDisplay}</div>
                                 </div>
                             </div>
                             <div class="bg-light rounded p-1 mb-2 flex-grow-1" style="font-size: 0.75rem;">
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">${t.card_label_status}:</span>
-                                    <span class="text-success">${w.status}</span>
+                                    <span class="text-success">${status}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">${t.card_label_processed}:</span>
@@ -3137,7 +3117,7 @@
                             <div class="bg-light rounded p-2 mb-2 flex-grow-1" style="font-size: 0.75rem;">
                                 <div class="d-flex justify-content-between mb-1">
                                     <span class="text-muted">${t.card_label_ip}:</span>
-                                    <span class="text-truncate" style="max-width: 80px;" title="${w.remote_addr}">${w.remote_addr.split(':')[0]}</span>
+                                    <span class="text-truncate" style="max-width: 80px;" title="${addr}">${addrDisplay}</span>
                                 </div>
                                 <div class="d-flex justify-content-between mb-1">
                                     <span class="text-muted">${t.card_label_connected}:</span>
@@ -3145,7 +3125,7 @@
                                 </div>
                                 <div class="d-flex justify-content-between mb-1">
                                     <span class="text-muted">${t.card_label_status}:</span>
-                                    <span class="text-success">${w.status}</span>
+                                    <span class="text-success">${status}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">${t.card_label_processed_msgs}:</span>
@@ -3198,6 +3178,15 @@
         // --- Logs (Full Page) ---
         function fetchLogsFull() {
             if (!authToken) return;
+            const t = translations[currentLang] || translations['zh-CN'];
+            const container = document.getElementById('log-container-full');
+            if (!container) return;
+
+            // Show loading if container is empty or we want to show it
+            if (!container.innerHTML || container.innerHTML.trim() === '') {
+                container.innerHTML = `<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>${t.loading || '加载中...'}</div>`;
+            }
+
             const selector = document.getElementById('log-bot-selector-full');
             const botId = selector ? selector.value : '';
 
@@ -3253,6 +3242,15 @@
         // --- Logs (Widget) ---
         function fetchLogs() {
             if (!authToken) return;
+            const t = translations[currentLang] || translations['zh-CN'];
+            const container = document.getElementById('log-container');
+            if (!container) return;
+
+            // Show loading if container is empty
+            if (!container.innerHTML || container.innerHTML.trim() === '') {
+                container.innerHTML = `<div class="text-center py-4 text-muted small"><div class="spinner-border spinner-border-sm me-2" style="width: 1rem; height: 1rem;"></div>${t.loading || '加载中...'}</div>`;
+            }
+
             const selector = document.getElementById('log-bot-selector');
             const botId = selector ? selector.value : '';
 

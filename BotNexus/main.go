@@ -242,9 +242,11 @@ func (m *Manager) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 	for _, worker := range m.workers {
 		workers = append(workers, map[string]interface{}{
 			"id":            worker.ID,
+			"remote_addr":   worker.ID,
 			"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
 			"handled_count": worker.HandledCount,
 			"is_alive":      true,
+			"status":        "Online",
 		})
 	}
 	m.mutex.RUnlock()
