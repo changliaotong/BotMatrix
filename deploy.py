@@ -168,6 +168,8 @@ def main():
     remote_cmds = [
         f"echo '--> Creating directory {REMOTE_DEPLOY_DIR} ...'",
         f"sudo mkdir -p {REMOTE_DEPLOY_DIR}",
+        f"echo '--> Cleaning up stale Go files in BotNexus...'",
+        f"sudo rm -f {REMOTE_DEPLOY_DIR}/BotNexus/*.go || true",
         f"echo '--> Checking for directory/file conflicts...'",
         f"sudo find {REMOTE_DEPLOY_DIR} -name config.json -type d -exec rm -rf {{}} + || true",
         f"echo '--> Unzipping files...'",
