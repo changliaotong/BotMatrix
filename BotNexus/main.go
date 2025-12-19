@@ -17,6 +17,7 @@ import (
 	dclient "github.com/docker/docker/client"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // 版本号定义
@@ -269,6 +270,8 @@ func (m *Manager) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
 			"remote_addr":   worker.ID,
 			"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
 			"handled_count": worker.HandledCount,
+			"avg_rtt":       worker.AvgRTT.String(),
+			"last_rtt":      worker.LastRTT.String(),
 			"is_alive":      true,
 			"status":        "Online",
 		})
@@ -313,8 +316,10 @@ func NewManager() *Manager {
 		cacheMutex:  sync.RWMutex{},
 
 		// User Management
-		users:      make(map[string]*User),
-		usersMutex: sync.RWMutex{},
+		users:              make(map[string]*User),
+		usersMutex:         sync.RWMutex{},
+		procMap:            make(map[int32]*process.Process),
+		workerRequestTimes: make(map[string]time.Time),
 	}
 	// 初始化数据库
 	if err := m.initDB(); err != nil {

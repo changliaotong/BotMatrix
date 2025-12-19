@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.1.89 (2025-12-19)
+*   **🌌 3D Visualization Refinement & Protocol Robustness (3D 可视化精细化与协议鲁棒性)**:
+    *   **✨ Shaking Nexus Core**: Added a high-frequency shaking effect to the central Nexus node to symbolize its status as an active energy core.
+    *   **🌌 Dynamic Cosmic Scaling**: Inactive user nodes now smoothly drift to a further "Outer Rim" (radius > 1400), while active users stay in the core area (radius 800).
+    *   **🌠 Full Trajectory Content Sync**: Message holographic hints now follow the exact 3D arc trajectory of the message particles, ensuring content stays with the visual representation.
+    *   **♾️ Permanent User Nodes**: Changed the lifecycle management to keep user nodes permanently in the scene, using distance to represent activity level instead of removing them.
+    *   **🔧 OneBot 11 Echo Normalization**: Fixed a critical issue where non-string `echo` fields (e.g., integers) caused type assertion failures. All echo fields are now normalized to strings.
+    *   **📡 Consistent Platform Forwarding**: Added missing `platform` field to `RoutingEvent` to ensure consistent avatar matching and message tracking across different platforms.
+    *   **🛡️ Undefined Variable Fix**: Resolved a compile error in `handlers.go` where `hasEcho` was used without being defined.
+    *   **👥 WxBot Group Member Fix**: Fixed `get_group_member_info` in `WxBot` to correctly identify group members by mapping IDs through `wx_client.get_client_uid`.
+
+## v1.1.88 (2025-12-19)
+*   **🌌 3D Cosmic Visualization & Load Balancing Optimization (3D宇宙可视化与负载均衡优化)**:
+    *   **✨ 3D Routing Visualizer**: Refactored the forwarding path page into a high-performance Three.js 3D environment. Nodes now float organically in a cosmic starfield with smooth drifting animations and procedural star backgrounds.
+    *   **🔮 Holographic Message Hints**: Introduced animated holographic message hints that float up from nodes, displaying message content and type in real-time with smooth fading effects.
+    *   **⚖️ Intelligent Load Balancing**: Upgraded the worker selection algorithm to prioritize `AvgProcessTime` (message processing time) over RTT. This ensures that workers with lower computational load are selected for message handling, optimizing overall system throughput.
+    *   **🖼️ High-Tech Avatar System**: Implemented matrix-inspired 3D node sprites with integrated platform avatars. Features glow effects, centered labels, and dynamic type indicators (e.g., "PROCESSOR", "MATRIX BOT").
+    *   **👤 Dynamic User Clustering**: Added user nodes to the 3D space. Implemented a "drifting" logic where inactive users slowly move to the periphery of the galaxy, while active ones stay near the core.
+    *   **🛡️ Automated Scene Management**: Optimized node lifecycle management to automatically remove offline nodes and cleanup resources (textures, materials) to prevent memory leaks in long-running sessions.
+    *   **🔢 Normalized Resource Tracking**: Fixed an issue where CPU usage could exceed 100% in multi-core systems by normalizing process CPU usage against total core count.
+    *   **📊 Real-time System Metrics**: Added a 3D overlay displaying global message counts, active node statistics, and ongoing processing tasks.
+    *   **🛠️ Message Forwarding & Avatar Fixes**:
+        *   Fixed an issue where passive replies from workers failed due to missing `self_id` and incorrect ID types.
+        *   Enhanced avatar support for non-QQ platforms (WeChat, Tencent) and ensured avatars are correctly synchronized in the 3D view.
+        *   Improved bot info retrieval to handle both `self_id` and `id` formats.
+        *   Updated `getOrCreateNode` to dynamically update labels and avatars for existing nodes.
+
 ## v1.1.87 (2025-12-19)
 *   **UI Refresh & Routing Resilience (UI刷新与路由弹性增强)**:
     *   **📊 5-Column Stats Grid**: Re-engineered the dashboard statistics layout with a responsive 5-column grid, improving data density and visual balance for key metrics.

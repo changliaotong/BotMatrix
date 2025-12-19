@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -264,10 +266,19 @@ func (m *Manager) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// CPU 使用率
+	cpuCount, _ := cpu.Counts(true)
+	if cpuCount <= 0 {
+		cpuCount = 1
+	}
+
 	cpuPercent, _ := cpu.Percent(0, false)
 	var cpuUsage float64
 	if len(cpuPercent) > 0 {
 		cpuUsage = cpuPercent[0]
+		// 如果 CPU 使用率超过 100 且有多个核心，说明是总和，需要归一化
+		if cpuUsage > 100 && cpuCount > 1 {
+			cpuUsage = cpuUsage / float64(cpuCount)
+		}
 	}
 
 	// OS 信息
@@ -333,10 +344,19 @@ func (m *Manager) handleGetSystemStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// 获取CPU使用率
+	cpuCount, _ := cpu.Counts(true)
+	if cpuCount <= 0 {
+		cpuCount = 1
+	}
+
 	cpuPercent, _ := cpu.Percent(time.Second, false)
 	var cpuUsage float64
 	if len(cpuPercent) > 0 {
 		cpuUsage = cpuPercent[0]
+		// 如果 CPU 使用率超过 100 且有多个核心，说明是总和，需要归一化
+		if cpuUsage > 100 && cpuCount > 1 {
+			cpuUsage = cpuUsage / float64(cpuCount)
+		}
 	}
 
 	// 获取内存使用情况
@@ -402,31 +422,10 @@ func (m *Manager) handleGetSystemStats(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// 获取前5个CPU消耗最高的进程
-	procs, _ := process.Processes()
-	type procInfo struct {
-		Pid    int32   `json:"pid"`
-		Name   string  `json:"name"`
-		CPU    float64 `json:"cpu"`
-		Memory uint64  `json:"memory"`
-	}
-	var processList []procInfo
-	for i, p := range procs {
-		if i > 50 {
-			break
-		} // 限制扫描数量
-		name, _ := p.Name()
-		cp, _ := p.CPUPercent()
-		mp, _ := p.MemoryInfo()
-		if mp != nil {
-			processList = append(processList, procInfo{
-				Pid:    p.Pid,
-				Name:   name,
-				CPU:    cp,
-				Memory: mp.RSS,
-			})
-		}
-	}
+	// 获取缓存的 Top 进程
+	m.HistoryMutex.RLock()
+	processList := m.TopProcesses
+	m.HistoryMutex.RUnlock()
 
 	stats := map[string]interface{}{
 		"cpu_usage":      cpuUsage,
@@ -835,7 +834,8 @@ func (m *Manager) sendBotHeartbeat(bot *BotClient, stop chan struct{}) {
 // handleBotMessage 处理Bot消息
 func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 	// 检查是否包含 self_id 并更新（如果当前是临时 ID）
-	if msgSelfID, ok := msg["self_id"].(string); ok && msgSelfID != "" {
+	msgSelfID := toString(msg["self_id"])
+	if msgSelfID != "" {
 		if bot.SelfID != msgSelfID && strings.Contains(bot.SelfID, ":") {
 			// 当前是临时 IP ID，收到正式 ID，进行更新
 			oldID := bot.SelfID
@@ -849,7 +849,11 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 	}
 
 	// 检查是否是API响应（有echo字段）
-	if echo, ok := msg["echo"].(string); ok && echo != "" {
+	echo := toString(msg["echo"])
+	if echo != "" {
+		// 广播路由事件: Bot -> Nexus (Response)
+		m.broadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "response")
+
 		// 这是API响应，需要回传给对应的Worker
 		m.pendingMutex.Lock()
 		respChan, exists := m.pendingRequests[echo]
@@ -885,6 +889,9 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 						}
 					}
 					m.mutex.RUnlock()
+
+					// 广播路由事件: Nexus -> Worker (Response Forward)
+					m.broadcastRoutingEvent("Nexus", workerID, "nexus_to_worker", "response")
 				}
 			}
 
@@ -903,12 +910,56 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 
 	// 原有的消息处理逻辑
 	// 获取消息类型
-	msgType, ok := msg["post_type"].(string)
-	if !ok {
+	msgType := toString(msg["post_type"])
+	if msgType == "" {
+		log.Printf("[Bot] Warning: Received message from Bot %s without echo or post_type: %v", bot.SelfID, msg)
 		return
 	}
 
 	log.Printf("Received %s message from Bot %s", msgType, bot.SelfID)
+
+	// 广播路由事件: User -> Bot -> Nexus (Message)
+	userExtras := map[string]interface{}{}
+	userIDStr := ""
+	if userID, ok := msg["user_id"]; ok {
+		userIDStr = toString(userID)
+		userExtras["user_id"] = userIDStr
+		// 尝试获取用户名和头像
+		if sender, ok := msg["sender"].(map[string]interface{}); ok {
+			if nickname, ok := sender["nickname"].(string); ok {
+				userExtras["user_name"] = nickname
+			}
+			// 平台特定的头像逻辑
+			switch strings.ToUpper(bot.Platform) {
+			case "QQ":
+				userExtras["user_avatar"] = fmt.Sprintf("https://q1.qlogo.cn/g?b=qq&nk=%s&s=640", userIDStr)
+			case "WECHAT", "WX":
+				// 微信头像通常无法直接通过 ID 拼接，这里先预留
+				userExtras["user_avatar"] = "/static/avatars/wechat_default.png"
+			case "TENCENT":
+				// 腾讯频道头像通常在 sender 中直接提供
+				if avatar, ok := sender["avatar"].(string); ok && avatar != "" {
+					userExtras["user_avatar"] = avatar
+				}
+			default:
+				// 其他平台尝试从消息中直接获取头像
+				if avatar, ok := sender["avatar"].(string); ok && avatar != "" {
+					userExtras["user_avatar"] = avatar
+				}
+			}
+		}
+		if rawMsg, ok := msg["raw_message"].(string); ok {
+			userExtras["content"] = rawMsg
+		} else if message, ok := msg["message"].(string); ok {
+			userExtras["content"] = message
+		}
+		userExtras["platform"] = bot.Platform
+	}
+
+	if userIDStr != "" {
+		m.broadcastRoutingEvent(userIDStr, bot.SelfID, "user_to_bot", "message", userExtras)
+	}
+	m.broadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "message", userExtras)
 
 	// 更新统计信息
 	m.mutex.Lock()
@@ -935,6 +986,51 @@ func (m *Manager) handleBotMessage(bot *BotClient, msg map[string]interface{}) {
 	}
 
 	// 转发给Worker处理
+	// 确保消息格式符合 OneBot 11 标准 (特别是 ID 类型)
+	if userID, ok := msg["user_id"]; ok {
+		msg["user_id"] = toInt64(userID)
+	}
+	if groupID, ok := msg["group_id"]; ok {
+		msg["group_id"] = toInt64(groupID)
+	}
+
+	// 补全并标准化 self_id (OneBot 11 标准应为 int64，但我们兼容字符串)
+	if selfID, ok := msg["self_id"]; ok {
+		// 如果是数字格式，转换为 int64
+		if num, ok := selfID.(json.Number); ok {
+			if i, err := num.Int64(); err == nil {
+				msg["self_id"] = i
+			}
+		} else if s, ok := selfID.(string); ok {
+			// 尝试将字符串 ID 转换为数字，如果成功则使用数字，否则保留字符串
+			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+				msg["self_id"] = i
+			}
+		}
+	} else {
+		// 补全 self_id
+		if i, err := strconv.ParseInt(bot.SelfID, 10, 64); err == nil {
+			msg["self_id"] = i
+		} else {
+			msg["self_id"] = bot.SelfID
+		}
+	}
+
+	// 补全 time (int64 unix timestamp)
+	if _, ok := msg["time"]; !ok {
+		msg["time"] = time.Now().Unix()
+	}
+
+	// 补全 post_type 如果缺失
+	if _, ok := msg["post_type"]; !ok {
+		msg["post_type"] = "message"
+	}
+
+	// 补全 platform
+	if _, ok := msg["platform"]; !ok {
+		msg["platform"] = bot.Platform
+	}
+
 	m.forwardMessageToWorker(msg)
 
 	// 缓存群/成员/好友信息 (基于消息)
@@ -1193,6 +1289,11 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 	}
 	m.mutex.RUnlock()
 
+	// 确保消息有一个唯一的 echo，用于追踪处理耗时和回复匹配
+	if _, ok := msg["echo"]; !ok {
+		msg["echo"] = fmt.Sprintf("evt_%d_%d", time.Now().UnixNano(), rand.Intn(1000))
+	}
+
 	// 如果找到了目标 Worker，尝试获取它
 	if targetWorkerID != "" {
 		if w := m.findWorkerByID(targetWorkerID); w != nil {
@@ -1205,6 +1306,9 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 				m.mutex.Lock()
 				w.HandledCount++
 				m.mutex.Unlock()
+
+				// 广播路由事件: Nexus -> Worker (Message Forward - Rule Match)
+				m.broadcastRoutingEvent("Nexus", targetWorkerID, "nexus_to_worker", "message")
 				return
 			}
 			log.Printf("[ROUTING] [ERROR] Failed to send to target worker %s: %v. Falling back to load balancer.", targetWorkerID, err)
@@ -1251,18 +1355,31 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 			selectedWorker = unhandled[idx]
 			m.workerIndex++
 		} else {
-			// 2. 选择 AvgRTT 最小的 Worker
-			var minRTT time.Duration = -1
+			// 2. 优先选择 AvgProcessTime 最小的 Worker (负载最低)
+			var minProcessTime time.Duration = -1
 			for _, w := range healthyWorkers {
-				if w.AvgRTT > 0 {
-					if minRTT == -1 || w.AvgRTT < minRTT {
-						minRTT = w.AvgRTT
+				if w.AvgProcessTime > 0 {
+					if minProcessTime == -1 || w.AvgProcessTime < minProcessTime {
+						minProcessTime = w.AvgProcessTime
 						selectedWorker = w
 					}
 				}
 			}
 
-			// 3. 退回到全局轮询
+			// 3. 如果 AvgProcessTime 都没数据，或者没选出，选择 AvgRTT 最小的 Worker
+			if selectedWorker == nil {
+				var minRTT time.Duration = -1
+				for _, w := range healthyWorkers {
+					if w.AvgRTT > 0 {
+						if minRTT == -1 || w.AvgRTT < minRTT {
+							minRTT = w.AvgRTT
+							selectedWorker = w
+						}
+					}
+				}
+			}
+
+			// 4. 退回到全局轮询
 			if selectedWorker == nil {
 				idx := m.workerIndex % len(healthyWorkers)
 				selectedWorker = healthyWorkers[idx]
@@ -1277,6 +1394,16 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 	err := selectedWorker.Conn.WriteJSON(msg)
 	selectedWorker.Mutex.Unlock()
 
+	if err == nil {
+		// 记录发送给 Worker 的时间，用于计算处理耗时
+		echo := toString(msg["echo"])
+		if echo != "" {
+			m.workerRequestMutex.Lock()
+			m.workerRequestTimes[echo] = time.Now()
+			m.workerRequestMutex.Unlock()
+		}
+	}
+
 	if err != nil {
 		log.Printf("[ROUTING] [ERROR] Failed to forward to worker %s: %v. Removing and retrying...", selectedWorker.ID, err)
 		m.removeWorker(selectedWorker.ID)
@@ -1285,6 +1412,10 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 		m.mutex.Lock()
 		selectedWorker.HandledCount++
 		m.mutex.Unlock()
+
+		// 广播路由事件: Nexus -> Worker (Message Forward - LB)
+		m.broadcastRoutingEvent("Nexus", selectedWorker.ID, "nexus_to_worker", "message")
+
 		log.Printf("[ROUTING] Forwarded to worker %s (AvgRTT: %v, Handled: %d)", selectedWorker.ID, selectedWorker.AvgRTT, selectedWorker.HandledCount)
 	}
 }
@@ -1392,25 +1523,94 @@ func (m *Manager) handleWorkerConnection(worker *WorkerClient) {
 // handleWorkerMessage 处理Worker消息
 func (m *Manager) handleWorkerMessage(worker *WorkerClient, msg map[string]interface{}) {
 	// 只记录关键信息，不打印完整消息
-	msgType, _ := msg["type"].(string)
-	echo, hasEcho := msg["echo"].(string)
+	msgType := toString(msg["type"])
+	action := toString(msg["action"])
+	echo := toString(msg["echo"])
 
-	if hasEcho {
-		log.Printf("Worker %s request: type=%s, echo=%s", worker.ID, msgType, echo)
-
+	if action != "" || (echo != "" && msgType == "") {
 		// 这是一个Worker发起的API请求，需要转发给Bot
+		log.Printf("Worker %s API request: action=%s, echo=%s", worker.ID, action, echo)
+
+		// 广播路由事件: Worker -> Nexus (Request)
+		m.broadcastRoutingEvent(worker.ID, "Nexus", "worker_to_nexus", "request")
+
 		m.forwardWorkerRequestToBot(worker, msg, echo)
 	} else {
-		log.Printf("Worker %s response: type=%s", worker.ID, msgType)
+		log.Printf("Worker %s event/response: type=%s", worker.ID, msgType)
 
 		// 更新统计信息
 		m.mutex.Lock()
 		worker.HandledCount++
 		m.mutex.Unlock()
 
-		// 这里可以处理Worker的响应消息
-		// 例如：将响应转发回对应的Bot，或者处理业务逻辑
+		// 1. 统计处理耗时
+		if echo != "" {
+			m.workerRequestMutex.Lock()
+			if startTime, exists := m.workerRequestTimes[echo]; exists {
+				duration := time.Since(startTime)
+				delete(m.workerRequestTimes, echo)
+				m.workerRequestMutex.Unlock()
+
+				worker.Mutex.Lock()
+				worker.LastProcessTime = duration
+				worker.ProcessTimeSamples = append(worker.ProcessTimeSamples, duration)
+				if len(worker.ProcessTimeSamples) > 20 {
+					worker.ProcessTimeSamples = worker.ProcessTimeSamples[1:]
+				}
+				var total time.Duration
+				for _, s := range worker.ProcessTimeSamples {
+					total += s
+				}
+				worker.AvgProcessTime = total / time.Duration(len(worker.ProcessTimeSamples))
+				worker.Mutex.Unlock()
+				log.Printf("[METRIC] Worker %s processed message in %v (Avg: %v)", worker.ID, duration, worker.AvgProcessTime)
+			} else {
+				m.workerRequestMutex.Unlock()
+			}
+		}
+
+		// 2. 检查是否包含回复内容 (一些框架允许在事件响应中直接返回回复)
+		reply := toString(msg["reply"])
+		if reply != "" {
+			log.Printf("Worker %s sent passive reply: %s", worker.ID, reply)
+			// 构造一个 send_msg 请求转发给 Bot
+			m.handleWorkerPassiveReply(worker, msg)
+		}
 	}
+}
+
+// handleWorkerPassiveReply 处理Worker的被动回复
+func (m *Manager) handleWorkerPassiveReply(worker *WorkerClient, msg map[string]interface{}) {
+	// 提取 echo (如果 Worker 在被动回复中带了 echo)
+	echo := toString(msg["echo"])
+
+	// 构造 OneBot 11 的 send_msg 请求
+	params := make(map[string]interface{})
+	action := map[string]interface{}{
+		"action": "send_msg",
+		"params": params,
+	}
+
+	// 遍历并转发所有 Worker 返回的字段
+	for k, v := range msg {
+		switch k {
+		case "reply":
+			params["message"] = v
+		case "action", "echo":
+			// 忽略，action 已固定为 send_msg，echo 另外提取
+			continue
+		case "self_id", "platform":
+			// 路由关键字段，放在顶层也放在 params
+			action[k] = v
+			params[k] = v
+		default:
+			// 其他字段透传到 params (如 group_id, user_id, message_type, auto_escape 等)
+			params[k] = v
+		}
+	}
+
+	// 转发给 Bot
+	m.forwardWorkerRequestToBot(worker, action, echo)
 }
 
 // removeWorker 移除Worker连接
@@ -1483,15 +1683,65 @@ func (m *Manager) handleSubscriberWebSocket(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// broadcastRoutingEvent 向所有订阅者广播路由事件
+func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType string, extras ...interface{}) {
+	event := RoutingEvent{
+		Type:          "routing_event",
+		Source:        source,
+		Target:        target,
+		Direction:     direction,
+		MsgType:       msgType,
+		Timestamp:     time.Now(),
+		TotalMessages: m.TotalMessages,
+	}
+
+	// 处理额外参数
+	if len(extras) > 0 {
+		if data, ok := extras[0].(map[string]interface{}); ok {
+			if uid, ok := data["user_id"]; ok {
+				event.UserID = fmt.Sprintf("%v", uid)
+			}
+			if uname, ok := data["user_name"]; ok {
+				event.UserName = fmt.Sprintf("%v", uname)
+			}
+			if uavatar, ok := data["user_avatar"]; ok {
+				event.UserAvatar = fmt.Sprintf("%v", uavatar)
+			}
+			if content, ok := data["content"]; ok {
+				event.Content = fmt.Sprintf("%v", content)
+			}
+			if platform, ok := data["platform"]; ok {
+				event.Platform = fmt.Sprintf("%v", platform)
+			}
+		}
+	}
+
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	for _, sub := range m.subscribers {
+		go func(s *Subscriber, e RoutingEvent) {
+			s.Mutex.Lock()
+			defer s.Mutex.Unlock()
+			err := s.Conn.WriteJSON(e)
+			if err != nil {
+				// 记录错误但继续广播
+				log.Printf("[SUBSCRIBER] Failed to send routing event to subscriber: %v", err)
+			}
+		}(sub, event)
+	}
+}
+
 // forwardWorkerRequestToBot 将Worker请求转发给Bot
 func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string]interface{}, originalEcho string) {
 	// 构造内部 echo，包含 worker ID 以便追踪和记录 RTT
-	// 使用 | 作为分隔符，因为 worker ID 可能包含 : (如 IP:Port)
-	internalEcho := fmt.Sprintf("%s|%s", worker.ID, originalEcho)
+	// 加上时间戳确保即使 originalEcho 为空或重复，internalEcho 也是唯一的
+	internalEcho := fmt.Sprintf("%s|%s|%d", worker.ID, originalEcho, time.Now().UnixNano())
 
 	// 保存请求映射
+	respChan := make(chan map[string]interface{}, 1)
 	m.pendingMutex.Lock()
-	m.pendingRequests[internalEcho] = make(chan map[string]interface{}, 1)
+	m.pendingRequests[internalEcho] = respChan
 	m.pendingTimestamps[internalEcho] = time.Now() // 记录发送时间
 	m.pendingMutex.Unlock()
 
@@ -1604,9 +1854,12 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 			fallbackBot.Mutex.Lock()
 			err = fallbackBot.Conn.WriteJSON(msg)
 			fallbackBot.Mutex.Unlock()
+			if err == nil {
+				targetBot = fallbackBot
+			}
 		}
 
-		if fallbackBot == nil || err != nil {
+		if targetBot == nil || err != nil {
 			// 返回错误响应给Worker
 			response := map[string]interface{}{
 				"status":  "failed",
@@ -1629,8 +1882,23 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 		}
 	}
 
-	log.Printf("[ROUTING] Forwarded Worker %s request (action: %v, echo: %s) to Bot %s via %s",
-		worker.ID, msg["action"], originalEcho, targetBot.SelfID, routeSource)
+	// 成功发送到 Bot，开始处理响应
+	// 广播路由事件: Nexus -> Bot (Request Forward)
+	extras := map[string]interface{}{
+		"platform": targetBot.Platform,
+	}
+	// 尝试从消息中提取内容用于展示
+	if params, ok := msg["params"].(map[string]interface{}); ok {
+		if content, ok := params["message"]; ok {
+			extras["content"] = fmt.Sprintf("%v", content)
+		}
+		if userID, ok := params["user_id"]; ok {
+			extras["user_id"] = fmt.Sprintf("%v", userID)
+		}
+	}
+
+	m.broadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "request", extras)
+	log.Printf("[ROUTING] Forwarded Worker %s request to Bot %s (Source: %s)", worker.ID, targetBot.SelfID, routeSource)
 
 	// 启动超时处理（30秒内必须收到响应）
 	go func() {
@@ -1638,7 +1906,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *WorkerClient, msg map[string
 		defer timeout.Stop()
 
 		select {
-		case response := <-m.pendingRequests[internalEcho]:
+		case response := <-respChan:
 			// 收到响应，还原原始 echo 并转发给 Worker
 			if response != nil {
 				// 检查响应状态，如果发现 Bot 不在群组中，清除缓存
@@ -1806,10 +2074,23 @@ func (m *Manager) StartTrendCollection() {
 		var mStats runtime.MemStats
 		runtime.ReadMemStats(&mStats)
 
+		// 获取 CPU 核心数用于归一化处理，防止超过 100%
+		cpuCount, err := cpu.Counts(true)
+		if err != nil || cpuCount <= 0 {
+			cpuCount = runtime.NumCPU()
+			if cpuCount <= 0 {
+				cpuCount = 1
+			}
+		}
+
 		cpuPercent, _ := cpu.Percent(0, false)
 		var currentCPU float64
 		if len(cpuPercent) > 0 {
 			currentCPU = cpuPercent[0]
+			// 如果 CPU 使用率超过 100 且有多个核心，说明是总和，需要归一化
+			if currentCPU > 100 && cpuCount > 1 {
+				currentCPU = currentCPU / float64(cpuCount)
+			}
 		}
 
 		// 更新趋势数组
@@ -1839,6 +2120,50 @@ func (m *Manager) StartTrendCollection() {
 		m.MsgTrend = append(m.MsgTrend, total)
 		m.SentTrend = append(m.SentTrend, sent)
 		m.RecvTrend = append(m.RecvTrend, total-sent)
+
+		// 获取 Top 进程
+		procs, _ := process.Processes()
+		var allProcs []ProcInfo
+
+		newProcMap := make(map[int32]*process.Process)
+		for _, p := range procs {
+			// 只追踪 CPU 较高的前 200 个进程
+			name, _ := p.Name()
+
+			// 尝试从缓存获取，以获得准确的 CPU 百分比
+			var procObj *process.Process
+			if cached, ok := m.procMap[p.Pid]; ok {
+				procObj = cached
+			} else {
+				procObj = p
+			}
+			newProcMap[p.Pid] = procObj
+
+			cp, _ := procObj.CPUPercent()
+			// 归一化处理：除以核心数
+			cp = cp / float64(cpuCount)
+
+			mp, _ := procObj.MemoryInfo()
+			if mp != nil {
+				allProcs = append(allProcs, ProcInfo{
+					Pid:    p.Pid,
+					Name:   name,
+					CPU:    cp,
+					Memory: mp.RSS,
+				})
+			}
+		}
+		m.procMap = newProcMap
+
+		// 按 CPU 排序
+		sort.Slice(allProcs, func(i, j int) bool {
+			return allProcs[i].CPU > allProcs[j].CPU
+		})
+		if len(allProcs) > 10 {
+			m.TopProcesses = allProcs[:10]
+		} else {
+			m.TopProcesses = allProcs
+		}
 
 		// 保持长度，限制为 60 个点 (5秒一个点，共5分钟)
 		maxPoints := 60

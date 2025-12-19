@@ -12,12 +12,28 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### v1.1.89 - 3D Visualization Refinement & Protocol Robustness
+*   **✨ Shaking Nexus Core**: Added a high-frequency shaking effect to the central Nexus node to symbolize its status as an active energy core.
+*   **🌌 Dynamic Cosmic Scaling**: Inactive user nodes now smoothly drift to a further "Outer Rim", while active users stay in the core area.
+*   **🌠 Full Trajectory Content Sync**: Message holographic hints now follow the exact 3D arc trajectory of the message particles.
+*   **🔧 OneBot 11 Echo Normalization**: Fixed a critical issue where non-string `echo` fields caused type assertion failures.
+*   **📡 Consistent Platform Forwarding**: Added missing `platform` field to `RoutingEvent` for consistent avatar matching.
+*   **🛡️ Undefined Variable Fix**: Resolved a compile error in `handlers.go`.
+*   **👥 WxBot Group Member Fix**: Fixed `get_group_member_info` in `WxBot` for correct ID mapping.
+
+### v1.1.88 - 3D Cosmic Visualization & Load Balancing Optimization
+*   **✨ 3D Routing Visualizer**: Refactored the forwarding path page into a high-performance Three.js 3D environment with smooth drifting animations.
+*   **🔮 Holographic Message Hints**: Introduced animated holographic message hints that float up from nodes in real-time.
+*   **⚖️ Intelligent Load Balancing**: Upgraded worker selection algorithm to prioritize `AvgProcessTime` over RTT.
+*   **🖼️ High-Tech Avatar System**: Implemented matrix-inspired 3D node sprites with integrated platform avatars and glow effects.
+*   **👤 Dynamic User Clustering**: Added user nodes with "drifting" logic where inactive users slowly move to the periphery.
+
 ### v1.1.83 - Bot ID & Routing Engine
-*   **🆔 Dynamic Bot Identification**: Bots now automatically transition from temporary IP-based IDs to real QQ IDs using handshake headers or real-time message metadata.
-*   **🎯 Advanced Routing Engine**: Fixed and enhanced routing rules with support for exact matches (`user_`, `group_`) and wildcard patterns (`*`).
-*   **⚡ Priority Routing System**: New routing logic follows a strict hierarchy: Exact Match > Wildcard Match > Intelligent RTT Load Balancing.
-*   **🛡️ High Availability**: Improved routing resilience with automatic fallback to healthy workers if a rule-targeted worker becomes unavailable.
-*   **🙈 UI Privacy**: Refined dashboard by hiding operating system details for a cleaner and more secure management interface.
+*   **🆔 Dynamic Bot Identification**: Bots now automatically transition from temporary IP-based IDs to real QQ IDs using handshake headers.
+*   **🎯 Advanced Routing Engine**: Fixed and enhanced routing rules with support for exact matches and wildcard patterns.
+*   **⚡ Priority Routing System**: New routing logic follows a strict hierarchy: Exact Match > Wildcard Match > Intelligent Load Balancing.
+*   **🛡️ High Availability**: Improved routing resilience with automatic fallback to healthy workers.
+*   **🙈 UI Privacy**: Refined dashboard by hiding operating system details for a cleaner management interface.
 
 ### v1.1.82 - Dashboard Metrics & API Alignment
 *   **📊 Worker Metrics Integration**: Added a dedicated "Workers" metric card to the dashboard and updated the global stats API to include real-time worker counts.

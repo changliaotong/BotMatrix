@@ -9,6 +9,8 @@
     <link href="https://cdn.staticfile.org/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="https://cdn.staticfile.org/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.staticfile.org/Chart.js/3.7.1/chart.min.js"></script>
+    <script src="https://cdn.staticfile.org/three.js/0.141.0/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/examples/js/controls/OrbitControls.js"></script>
     <script src="locales.js"></script>
     
     <!-- Error handling for external scripts -->
@@ -147,6 +149,159 @@
         .dropdown-item { color: var(--text-main); }
         .dropdown-item:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-main); }
         .list-group-item { background-color: var(--bg-card); color: var(--text-main); border-color: var(--border-color); }
+
+        /* Visualization Styles */
+        #visualization-container {
+            width: 100%;
+            height: calc(100vh - 160px);
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #30363d;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+        #viz-nodes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .viz-node {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff41;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #00ff41;
+            font-size: 0.7rem;
+            z-index: 2;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            pointer-events: auto;
+            text-align: center;
+        }
+        .viz-node i {
+            font-size: 1.4rem;
+            margin-bottom: 2px;
+            color: #00ff41;
+        }
+        .viz-node span {
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 0 5px;
+            color: #00ff41;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 5px #00ff41;
+        }
+        .viz-node img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid #00ff41;
+            margin-bottom: 2px;
+        }
+        .viz-node.nexus {
+            width: 100px;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.8);
+            border-color: #00ff41;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+            font-weight: bold;
+        }
+        .viz-node.worker {
+            background: rgba(0, 0, 0, 0.7);
+            border-color: #00ff41;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+        }
+        .viz-node.user {
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.6);
+            border-color: #00ff41;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+        }
+        .viz-stats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            z-index: 10;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+        }
+        .viz-msg-hint {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            pointer-events: none;
+            z-index: 5;
+            white-space: nowrap;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-family: 'Courier New', Courier, monospace;
+            animation: fadeUp 2s forwards;
+        }
+        @keyframes fadeUp {
+            0% { opacity: 0; transform: translateY(0); }
+            20% { opacity: 1; transform: translateY(-20px); }
+            80% { opacity: 1; transform: translateY(-40px); }
+            100% { opacity: 0; transform: translateY(-60px); }
+        }
+        #viz-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .viz-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 3;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -120%);
+        }
+        .viz-particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #fff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2;
+            box-shadow: 0 0 10px #fff;
+        }
         .table { color: var(--text-main); border-color: var(--border-color); }
         .nav-link { color: var(--text-muted); }
         
@@ -289,6 +444,10 @@
     /* Stats Card Slides */
     .stats-slide {
         transition: all 0.5s ease-in-out;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .stats-slide.fade-out {
         opacity: 0;
@@ -343,6 +502,12 @@
     .stat-info {
         overflow: hidden;
         margin-left: 0.75rem;
+    }
+    #combined-stats-container {
+        min-height: 40px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .stat-label {
         font-size: 0.7rem;
@@ -518,6 +683,7 @@
             <a href="#bots" id="nav-bots" class="nav-link" onclick="showTab('bots')"><i class="bi bi-robot"></i> <span data-i18n="sidebar_bots">云端矩阵</span></a>
             <a href="#groups" id="nav-groups" class="nav-link" onclick="showTab('groups')"><i class="bi bi-people"></i> <span data-i18n="sidebar_groups">群组好友</span></a>
             <a href="#routing" id="nav-routing" class="nav-link" onclick="showTab('routing')"><i class="bi bi-diagram-3"></i> <span data-i18n="sidebar_routing">路由管理</span></a>
+            <a href="#visualization" id="nav-visualization" class="nav-link" onclick="showTab('visualization')"><i class="bi bi-broadcast"></i> <span data-i18n="sidebar_visualization">转发可视化</span></a>
             
             <div class="nav-section-label" data-i18n="menu_group_infrastructure">基础设施</div>
             <a href="#docker" id="nav-docker" class="nav-link" onclick="showTab('docker')"><i class="bi bi-box"></i> <span data-i18n="sidebar_docker">Docker管理</span></a>
@@ -1309,6 +1475,27 @@
                     </div>
                     <p class="mt-2" data-i18n="loading_routing_rules">正在加载路由规则...</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Visualization Tab -->
+        <div id="tab-visualization" class="content-section" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0"><i class="bi bi-broadcast"></i> <span data-i18n="sidebar_visualization">转发可视化</span></h4>
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="text-muted small">
+                        <span class="badge bg-primary me-1" style="width: 12px; height: 12px; padding: 0; display: inline-block;"> </span> <span data-i18n="viz_bot">Bot</span>
+                        <span class="badge bg-success ms-2 me-1" style="width: 12px; height: 12px; padding: 0; display: inline-block;"> </span> <span data-i18n="viz_nexus">Nexus</span>
+                        <span class="badge bg-warning ms-2 me-1" style="width: 12px; height: 12px; padding: 0; display: inline-block;"> </span> <span data-i18n="viz_worker">Worker</span>
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="clearVisualization()">
+                        <i class="bi bi-trash"></i> <span data-i18n="clear">清除</span>
+                    </button>
+                </div>
+            </div>
+            <div id="visualization-container">
+                <canvas id="viz-canvas"></canvas>
+                <div id="viz-nodes"></div>
             </div>
         </div>
 
@@ -2113,8 +2300,691 @@
         // Start rotation every 5 seconds
         setInterval(rotateStatsSlide, 5000);
 
+        // --- Visualization Engine ---
+        class RoutingVisualizer {
+            constructor() {
+                this.container = document.getElementById('visualization-container');
+                if (!this.container) return;
+
+                // 3D Scene Setup
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, this.container.clientWidth / this.container.clientHeight, 0.1, 2000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.container.appendChild(this.renderer.domElement);
+
+                // Controls
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+
+                // Camera Position
+                this.camera.position.z = 500;
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                this.scene.add(ambientLight);
+                const pointLight = new THREE.PointLight(0x00ff41, 1, 1000);
+                pointLight.position.set(0, 0, 100);
+                this.scene.add(pointLight);
+
+                this.nodes = new Map(); // ID -> {mesh, type, label, lastActive, floatingOffset}
+                this.particles = [];
+                this.running = true;
+                this.totalMessages = 0;
+
+                // Add Stars
+                this.addStars();
+                
+                // Add Nexus (Central Node)
+                this.getOrCreateNode('nexus', 'nexus', 'Nexus');
+
+                // Stats UI
+                this.statsEl = document.createElement('div');
+                this.statsEl.className = 'viz-stats';
+                this.container.appendChild(this.statsEl);
+                this.updateStatsUI();
+
+                window.addEventListener('resize', () => this.resize());
+                
+                // Start Animation Loop
+                this.animate();
+
+                // Periodic cleanup
+                this.cleanupInterval = setInterval(() => {
+                    this.cleanupNodes();
+                }, 10000);
+            }
+
+            addStars() {
+                const starsGeometry = new THREE.BufferGeometry();
+                const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1, transparent: true });
+                const starsVertices = [];
+                for (let i = 0; i < 8000; i++) {
+                    const x = (Math.random() - 0.5) * 3000;
+                    const y = (Math.random() - 0.5) * 3000;
+                    const z = (Math.random() - 0.5) * 3000;
+                    starsVertices.push(x, y, z);
+                }
+                starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+                this.stars = new THREE.Points(starsGeometry, starsMaterial);
+                this.scene.add(this.stars);
+            }
+
+            updateStatsUI() {
+                const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                const activeNodes = this.nodes.size;
+                const activeParticles = this.particles.length;
+                
+                this.statsEl.innerHTML = `
+                    <div style="font-size: 1.1rem; border-bottom: 1px solid rgba(0,255,65,0.3); margin-bottom: 5px; padding-bottom: 2px;">
+                        ${t.viz_stats_title || 'SYSTEM STATUS'}
+                    </div>
+                    <div>${t.total_messages || '消息总量'}: <span style="color: #fff; text-shadow: 0 0 5px #00ff41;">${this.totalMessages}</span></div>
+                    <div>${t.viz_active_nodes || '活动节点'}: ${activeNodes}</div>
+                    <div>${t.viz_active_tasks || '处理中任务'}: ${activeParticles}</div>
+                `;
+            }
+
+            resize() {
+                if (!this.container || !this.renderer) return;
+                const width = this.container.clientWidth;
+                const height = this.container.clientHeight;
+                if (width <= 0 || height <= 0) return;
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(width, height);
+            }
+
+            getOrCreateNode(id, type, label, avatar) {
+                if (this.nodes.has(id)) {
+                    const node = this.nodes.get(id);
+                    node.lastActive = Date.now();
+                    
+                    let needsUpdate = false;
+                    // Update avatar if changed
+                    if (avatar && node.avatar !== avatar) {
+                        node.avatar = avatar;
+                        needsUpdate = true;
+                    }
+                    // Update label if changed
+                    if (label && node.label !== label) {
+                        node.label = label;
+                        needsUpdate = true;
+                    }
+
+                    if (needsUpdate) {
+                        this.updateNodeTexture(node);
+                    }
+                    return node;
+                }
+
+                const node = {
+                    id, type, label, avatar,
+                    mesh: null,
+                    lastActive: Date.now(),
+                    floatingOffset: Math.random() * Math.PI * 2,
+                    targetPos: new THREE.Vector3(0, 0, 0)
+                };
+
+                // 3D Space Partitioning (Hierarchy Layout)
+                if (id === 'nexus') {
+                    node.targetPos.set(0, 0, 0);
+                } else if (type === 'worker') {
+                    // Workers: Closest to Nexus
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 150 + Math.random() * 100;
+                    node.targetPos.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 100,
+                        Math.sin(angle) * radius
+                    );
+                } else if (type === 'bot') {
+                    // Bots: Middle layer
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 350 + Math.random() * 150;
+                    node.targetPos.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 150,
+                        Math.sin(angle) * radius
+                    );
+                } else if (type === 'user') {
+                    // Users: Outer layer
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 700 + Math.random() * 300;
+                    node.targetPos.set(
+                        Math.cos(angle) * radius,
+                        (Math.random() - 0.5) * 200,
+                        Math.sin(angle) * radius
+                    );
+                }
+
+                this.updateNodeTexture(node, true);
+                this.nodes.set(id, node);
+                return node;
+            }
+
+            updateNodeTexture(node, isNew = false) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+
+                const draw = () => {
+                    ctx.clearRect(0, 0, 256, 256);
+                    
+                    // Glow effect
+                    const gradient = ctx.createRadialGradient(128, 128, 50, 128, 128, 120);
+                    gradient.addColorStop(0, 'rgba(0, 255, 65, 0.15)');
+                    gradient.addColorStop(1, 'rgba(0, 255, 65, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, 256, 256);
+
+                    // Avatar or Icon Circle
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(128, 100, 60, 0, Math.PI * 2);
+                    ctx.clip();
+                    
+                    if (node.avatar) {
+                        const img = new Image();
+                        img.crossOrigin = "anonymous";
+                        img.src = node.avatar;
+                        img.onload = () => {
+                            ctx.drawImage(img, 68, 40, 120, 120);
+                            this.drawDetails(ctx, node);
+                            this.finishTexture(node, canvas, isNew);
+                        };
+                        img.onerror = () => {
+                            this.drawDefaultIcon(ctx, node.type);
+                            this.drawDetails(ctx, node);
+                            this.finishTexture(node, canvas, isNew);
+                        };
+                        return; // Async handling
+                    } else {
+                        this.drawDefaultIcon(ctx, node.type);
+                    }
+                    ctx.restore();
+
+                    this.drawDetails(ctx, node);
+                    this.finishTexture(node, canvas, isNew);
+                };
+
+                draw();
+            }
+
+            drawDetails(ctx, node) {
+                // Background scanlines (Matrix style)
+                ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 256; i += 4) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(256, i);
+                    ctx.stroke();
+                }
+
+                // Border
+                ctx.beginPath();
+                ctx.arc(128, 100, 60, 0, Math.PI * 2);
+                ctx.strokeStyle = '#00ff41';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                
+                // Glow border
+                ctx.strokeStyle = 'rgba(0, 255, 65, 0.5)';
+                ctx.lineWidth = 8;
+                ctx.stroke();
+
+                // Text Info (Matrix Style)
+                ctx.fillStyle = '#00ff41';
+                ctx.shadowColor = '#00ff41';
+                ctx.shadowBlur = 10;
+                ctx.font = 'bold 24px monospace';
+                ctx.textAlign = 'center';
+                
+                let displayLabel = node.label || node.id;
+                if (node.id === 'nexus') {
+                    const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                    displayLabel = t.viz_nexus || 'Nexus';
+                }
+                ctx.fillText(displayLabel, 128, 190);
+                
+                ctx.font = '16px monospace';
+                const idDisplay = node.id.length > 20 ? node.id.substring(0, 17) + '...' : node.id;
+                ctx.fillText(idDisplay, 128, 215);
+                
+                if (node.type === 'bot' || node.type === 'worker') {
+                    const typeLabel = node.type === 'worker' ? 'PROCESSOR' : 'MATRIX BOT';
+                    ctx.font = 'bold 14px monospace';
+                    ctx.fillText(typeLabel, 128, 235);
+                } else if (node.type === 'user') {
+                    const t = (typeof translations !== 'undefined') ? (translations[currentLang] || translations['zh-CN']) : {};
+                    ctx.font = '14px monospace';
+                    ctx.fillText(t.viz_user || 'USER', 128, 235);
+                }
+            }
+
+            drawDefaultIcon(ctx, type) {
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(0, 0, 256, 256);
+                
+                // Add some random binary code in background
+                ctx.fillStyle = 'rgba(0, 255, 65, 0.15)';
+                ctx.font = '10px monospace';
+                for(let i=0; i<10; i++) {
+                    const binary = Math.random() > 0.5 ? "1010101" : "0101010";
+                    ctx.fillText(binary, Math.random() * 256, Math.random() * 256);
+                }
+
+                ctx.fillStyle = '#00ff41';
+                ctx.font = '80px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                let icon = '👤';
+                if (type === 'nexus') icon = '🕸️';
+                if (type === 'bot') icon = '🤖';
+                if (type === 'worker') icon = '⚙️';
+                ctx.fillText(icon, 128, 100);
+            }
+
+            finishTexture(node, canvas, isNew) {
+                const texture = new THREE.CanvasTexture(canvas);
+                if (node.mesh) {
+                    node.mesh.material.map = texture;
+                    node.mesh.material.needsUpdate = true;
+                } else {
+                    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                    const sprite = new THREE.Sprite(material);
+                    const size = node.id === 'nexus' ? 120 : 80;
+                    sprite.scale.set(size, size, 1);
+                    sprite.position.copy(node.targetPos);
+                    node.mesh = sprite;
+                    this.scene.add(sprite);
+                }
+            }
+
+            addEvent(event) {
+                if (event.total_messages !== undefined) {
+                    this.totalMessages = event.total_messages;
+                    this.updateStatsUI();
+                }
+
+                const nexus = this.getOrCreateNode('nexus', 'nexus', 'Nexus');
+                let startNode, endNode;
+
+                // Try to find bot info from currentBots global or event platform
+                const findBotInfo = (botId, platformFromEvent) => {
+                    if (typeof currentBots !== 'undefined') {
+                        const bot = currentBots.find(b => b.self_id === botId || b.id === botId);
+                        if (bot) {
+                            let avatarUrl = null;
+                            const platform = (platformFromEvent || bot.platform || '').toUpperCase();
+                            if (platform === 'QQ') {
+                                avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=100`;
+                            } else if (platform === 'WECHAT' || platform === 'WX') {
+                                avatarUrl = '/static/avatars/wechat_default.png';
+                            } else if (bot.user_avatar) {
+                                avatarUrl = bot.user_avatar;
+                            }
+                            return { nickname: bot.nickname || bot.name || botId, avatar: avatarUrl };
+                        }
+                    }
+                    // Fallback using platform from event
+                    if (platformFromEvent) {
+                        const platform = platformFromEvent.toUpperCase();
+                        if (platform === 'QQ') {
+                            return { nickname: botId, avatar: `https://q1.qlogo.cn/g?b=qq&nk=${botId}&s=100` };
+                        } else if (platform === 'WECHAT' || platform === 'WX') {
+                            return { nickname: botId, avatar: '/static/avatars/wechat_default.png' };
+                        }
+                    }
+                    return { nickname: botId, avatar: null };
+                };
+
+                if (event.direction === 'user_to_bot') {
+                    startNode = this.getOrCreateNode(event.source, 'user', event.user_name || event.source, event.user_avatar);
+                    const botInfo = findBotInfo(event.target, event.platform);
+                    endNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar);
+                } else if (event.direction === 'bot_to_nexus') {
+                    const botInfo = findBotInfo(event.source, event.platform);
+                    startNode = this.getOrCreateNode(event.source, 'bot', botInfo.nickname, botInfo.avatar);
+                    endNode = nexus;
+                } else if (event.direction === 'nexus_to_worker') {
+                    startNode = nexus;
+                    endNode = this.getOrCreateNode(event.target, 'worker', event.target);
+                } else if (event.direction === 'worker_to_nexus') {
+                    startNode = this.getOrCreateNode(event.source, 'worker', event.source);
+                    endNode = nexus;
+                } else if (event.direction === 'nexus_to_bot') {
+                    startNode = nexus;
+                    const botInfo = findBotInfo(event.target, event.platform);
+                    endNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar);
+                } else if (event.direction === 'worker_to_bot') {
+                    startNode = this.getOrCreateNode(event.source, 'worker', event.source);
+                    const botInfo = findBotInfo(event.target, event.platform);
+                    endNode = this.getOrCreateNode(event.target, 'bot', botInfo.nickname, botInfo.avatar);
+                }
+
+                if (startNode && endNode) {
+                    this.createParticle(startNode, endNode, event.msg_type, event.content);
+                }
+            }
+
+            createParticle(start, end, msgType, content) {
+                const colors = {
+                    'message': 0x00ff41,
+                    'request': 0x00d2ff,
+                    'response': 0xff00ff,
+                    'image': 0xffff00
+                };
+                const color = colors[msgType] || 0x00ff41;
+
+                // Create Particle Mesh
+                const geometry = new THREE.SphereGeometry(4, 8, 8);
+                const material = new THREE.MeshBasicMaterial({ color: color });
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                // Add Glow to particle
+                const light = new THREE.PointLight(color, 1, 50);
+                mesh.add(light);
+                
+                mesh.position.copy(start.mesh.position);
+                this.scene.add(mesh);
+
+                let hintMesh = null;
+                // Create floating hint if content exists
+                if (content) {
+                    hintMesh = this.createMessageHint(start.mesh.position, content, color);
+                }
+
+                this.particles.push({
+                    mesh: mesh,
+                    hintMesh: hintMesh,
+                    startPos: start.mesh.position.clone(),
+                    endPos: end.mesh.position.clone(),
+                    progress: 0,
+                    speed: 0.015,
+                    content: content,
+                    msgType: msgType
+                });
+            }
+
+            createMessageHint(pos, content, color) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                
+                // Holographic grid background
+                ctx.strokeStyle = 'rgba(0, 255, 65, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 512; i += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, 128);
+                    ctx.stroke();
+                }
+                for (let i = 0; i < 128; i += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(512, i);
+                    ctx.stroke();
+                }
+
+                // Draw background with holographic glow
+                ctx.fillStyle = 'rgba(0, 15, 0, 0.85)';
+                ctx.beginPath();
+                ctx.roundRect(10, 10, 492, 108, 15);
+                ctx.fill();
+                
+                // Double border for high-tech look
+                const colorStr = '#' + color.toString(16).padStart(6, '0');
+                ctx.strokeStyle = colorStr;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.roundRect(15, 15, 482, 98, 12);
+                ctx.stroke();
+
+                ctx.shadowColor = colorStr;
+                ctx.shadowBlur = 20;
+
+                // Text
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 24px monospace';
+                ctx.textAlign = 'center';
+                
+                let text = content;
+                if (text.length > 40) text = text.substring(0, 37) + '...';
+                
+                // Display text with subtle offset for "chromatic aberration" effect
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+                if (text.length > 20) {
+                    ctx.fillText(text.substring(0, 20), 258, 57);
+                    ctx.fillText(text.substring(20), 258, 87);
+                } else {
+                    ctx.fillText(text, 258, 72);
+                }
+
+                ctx.fillStyle = '#ffffff';
+                if (text.length > 20) {
+                    ctx.fillText(text.substring(0, 20), 256, 55);
+                    ctx.fillText(text.substring(20), 256, 85);
+                } else {
+                    ctx.fillText(text, 256, 70);
+                }
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture, transparent: true, blending: THREE.AdditiveBlending });
+                const sprite = new THREE.Sprite(material);
+                
+                sprite.position.copy(pos);
+                sprite.position.y += 80;
+                sprite.scale.set(160, 40, 1);
+                
+                this.scene.add(sprite);
+                return sprite;
+            }
+
+            animate() {
+                if (!this.running) return;
+                requestAnimationFrame(() => this.animate());
+
+                const time = Date.now() * 0.001;
+
+                // Rotate stars slowly
+                if (this.stars) {
+                    this.stars.rotation.y += 0.0002;
+                    this.stars.rotation.x += 0.0001;
+                }
+
+                // Update Nodes Animation
+                this.nodes.forEach(node => {
+                    if (node.id === 'nexus') {
+                        // Nexus: Stable center but shaking
+                        const shakeFreq = 15;
+                        const shakeAmp = 2;
+                        node.mesh.position.set(
+                            Math.sin(time * shakeFreq) * shakeAmp,
+                            Math.cos(time * (shakeFreq + 1)) * shakeAmp,
+                            Math.sin(time * (shakeFreq - 1)) * shakeAmp
+                        );
+                        
+                        const scale = 120 + Math.sin(time * 2) * 5;
+                        node.mesh.scale.set(scale, scale, 1);
+                        node.mesh.material.rotation = Math.sin(time * 0.5) * 0.1;
+                        return;
+                    }
+
+                    const offset = node.floatingOffset;
+                    const inactivity = (Date.now() - node.lastActive) / 1000;
+
+                    // Update target position based on inactivity and wandering
+                    if (node.type === 'user') {
+                        const targetRadius = (inactivity > 120) ? 1400 : 800;
+                        const currentRadius = node.targetPos.length();
+                        const lerpFactor = (inactivity > 120) ? 0.002 : 0.01;
+                        
+                        // Smoothly adjust radius
+                        const nextRadius = currentRadius + (targetRadius - currentRadius) * lerpFactor;
+                        if (currentRadius > 0.1) {
+                            node.targetPos.multiplyScalar(nextRadius / currentRadius);
+                        }
+                    }
+
+                    // Common wandering logic
+                    const wanderSpeed = 0.2;
+                    const wanderRadius = node.type === 'worker' ? 20 : (node.type === 'bot' ? 40 : 60);
+                    
+                    const wanderX = Math.sin(time * wanderSpeed + offset) * wanderRadius;
+                    const wanderY = Math.cos(time * (wanderSpeed * 0.8) + offset) * wanderRadius;
+                    const wanderZ = Math.sin(time * (wanderSpeed * 1.2) + offset) * wanderRadius;
+
+                    node.mesh.position.x = node.targetPos.x + wanderX;
+                    node.mesh.position.y = node.targetPos.y + wanderY;
+                    node.mesh.position.z = node.targetPos.z + wanderZ;
+                    
+                    // Gentle swaying and pulsing
+                    node.mesh.material.rotation = Math.sin(time * 0.3 + offset) * 0.2;
+                    const baseScale = node.type === 'user' ? 70 : 90;
+                    const pulse = 1 + Math.sin(time * 1.2 + offset) * 0.08;
+                    node.mesh.scale.set(baseScale * pulse, baseScale * pulse, 1);
+                });
+
+                // Update Particles and Hints
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.progress += p.speed;
+                    
+                    if (p.progress >= 1) {
+                        this.scene.remove(p.mesh);
+                        if (p.hintMesh) {
+                            this.scene.remove(p.hintMesh);
+                            if (p.hintMesh.material.map) p.hintMesh.material.map.dispose();
+                            p.hintMesh.material.dispose();
+                        }
+                        this.particles.splice(i, 1);
+                        continue;
+                    }
+
+                    const t = p.progress;
+                    const easedT = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                    
+                    const pos = new THREE.Vector3().lerpVectors(p.startPos, p.endPos, easedT);
+                    
+                    // Arc height
+                    const dist = p.startPos.distanceTo(p.endPos);
+                    const arcHeight = Math.sin(Math.PI * t) * (dist * 0.15);
+                    pos.y += arcHeight;
+                    
+                    p.mesh.position.copy(pos);
+                    
+                    // Update hint position to follow particle
+                    if (p.hintMesh) {
+                        p.hintMesh.position.copy(pos);
+                        p.hintMesh.position.y += 50; // Offset above particle
+                        p.hintMesh.material.opacity = Math.sin(Math.PI * t); // Fade in/out
+                    }
+                }
+
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            cleanupNodes() {
+                const now = Date.now();
+                
+                // Dynamic retention based on system load (node count)
+                const nodeCount = this.nodes.size;
+                let userIdleLimit = 300000; // Default 5 mins
+                let serviceIdleLimit = 1800000; // Default 30 mins
+                
+                if (nodeCount > 100) {
+                    // High load: clean up faster to keep performance
+                    userIdleLimit = 120000; // 2 mins
+                    serviceIdleLimit = 600000; // 10 mins
+                } else if (nodeCount < 30) {
+                    // Low load: keep nodes longer to make it look "busy"
+                    userIdleLimit = 1200000; // 20 mins
+                    serviceIdleLimit = 3600000; // 60 mins
+                }
+
+                // Use self_id for bots as that's what's used in events
+                const activeBotIds = new Set(currentBots.filter(b => b.is_alive).map(b => b.self_id || b.id));
+                const activeWorkerIds = new Set(currentWorkers.map(w => w.id));
+
+                this.nodes.forEach((node, id) => {
+                    if (id === 'nexus') return;
+                    
+                    let shouldRemove = false;
+                    const idleTime = now - node.lastActive;
+
+                    if (node.type === 'user') {
+                        // Users never vanish
+                        shouldRemove = false;
+                    } else if (node.type === 'bot') {
+                        // Service node: remove if offline AND inactive for long
+                        if (activeBotIds.size > 0 && !activeBotIds.has(id) && idleTime > serviceIdleLimit) shouldRemove = true;
+                    } else if (node.type === 'worker') {
+                        if (activeWorkerIds.size > 0 && !activeWorkerIds.has(id) && idleTime > serviceIdleLimit) shouldRemove = true;
+                    }
+
+                    if (shouldRemove) {
+                        if (node.mesh) {
+                            this.scene.remove(node.mesh);
+                            if (node.mesh.material.map) node.mesh.material.map.dispose();
+                            node.mesh.material.dispose();
+                        }
+                        this.nodes.delete(id);
+                    }
+                });
+            }
+
+            clear() {
+                this.nodes.forEach(node => {
+                    if (node.id !== 'nexus') {
+                        this.scene.remove(node.mesh);
+                    }
+                });
+                const nexus = this.nodes.get('nexus');
+                this.nodes.clear();
+                if (nexus) this.nodes.set('nexus', nexus);
+                
+                this.particles.forEach(p => this.scene.remove(p.mesh));
+                this.particles = [];
+            }
+        }
+
+        let visualizer = null;
+        function initVisualizer() {
+            if (!visualizer) {
+                visualizer = new RoutingVisualizer();
+                visualizer.getOrCreateNode('nexus', 'nexus');
+            }
+        }
+
+        function handleRoutingEvent(data) {
+            if (visualizer) {
+                visualizer.addEvent(data);
+            }
+        }
+
+        function clearVisualization() {
+            if (visualizer) visualizer.clear();
+        }
+
         function showTab(tabId) {
             if (!tabId) return;
+
+            // Handle visualization init
+            if (tabId === 'visualization') {
+                initVisualizer();
+            }
             // Handle #hash
             if (tabId.startsWith('#')) tabId = tabId.substring(1);
             // Handle tab- prefix
@@ -2131,6 +3001,11 @@
                 const targetTab = document.getElementById('tab-' + tabId);
                 if (targetTab) {
                     targetTab.style.display = 'block';
+                    
+                    // Visualization resize after tab becomes visible
+                    if (tabId === 'visualization' && visualizer) {
+                        setTimeout(() => visualizer.resize(), 50);
+                    }
                 }
                 
                 // 更新导航状态
@@ -3058,7 +3933,7 @@
                             return `
                                 <li>
                                     <a class="dropdown-item d-flex align-items-center p-2 ${isOffline ? 'disabled' : ''}" href="#" onclick="${isOffline ? 'return false;' : `selectBotFromDropdown('${bot.self_id}')`}">
-                                        <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: var(--bg-list-item);">
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: ${avatarBg};">
                                             <img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover;">
                                         </div>
                                         <div class="flex-grow-1 overflow-hidden">
@@ -3224,8 +4099,25 @@
                     const timeLabel = isOffline ? t.card_status_offline_since : t.card_status_connected_at;
                     const platform = bot.platform || 'QQ';
                     let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
-                    if (platform === 'QQ') {
+                    let avatarBg = 'var(--bg-list-item)';
+                    
+                    if (platform.toUpperCase() === 'QQ') {
                         avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`;
+                    } else if (platform.toUpperCase().includes('TELEGRAM') || platform.toUpperCase() === 'TG') {
+                        avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/telegram.svg`;
+                        avatarBg = '#0088cc22';
+                    } else if (platform.toUpperCase().includes('DISCORD')) {
+                        avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/discord.svg`;
+                        avatarBg = '#5865F222';
+                    } else if (platform.toUpperCase().includes('WECHAT') || platform.toUpperCase().includes('WX')) {
+                        avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/wechat.svg`;
+                        avatarBg = '#07C16022';
+                    } else if (platform.toUpperCase().includes('FEISHU') || platform.toUpperCase().includes('LARK')) {
+                        avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/chat-dots.svg`;
+                        avatarBg = '#3370ff22';
+                    } else if (platform.toUpperCase().includes('DING')) {
+                        avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/lightning-charge.svg`;
+                        avatarBg = '#007FFF22';
                     }
                     const platformBadge = `<span class="badge bg-info ms-1">${platform}</span>`;
 
@@ -3234,7 +4126,7 @@
                         <div class="col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-3">
                             <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
                                 <div class="d-flex align-items-center mb-2">
-                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: var(--bg-list-item);">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; overflow: hidden; background: ${avatarBg};">
                                         <img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';this.style.padding='4px';">
                                     </div>
                                     <div class="overflow-hidden w-100">
@@ -3266,7 +4158,7 @@
                         <div class="col-sm-12 col-md-6 col-lg-4 col-xl-4 col-xxl-3 mb-3">
                             <div class="card p-2 h-100 shadow-sm" style="${cardStyle}">
                                 <div class="d-flex align-items-center mb-2">
-                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 48px; height: 48px; overflow: hidden; background: var(--bg-list-item);">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 48px; height: 48px; overflow: hidden; background: ${avatarBg};">
                                         <img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';this.style.padding='8px';">
                                     </div>
                                     <div class="overflow-hidden w-100">
@@ -3454,9 +4346,13 @@
                                 </div>
                             </div>
                             <div class="bg-light rounded p-1 mb-2 flex-grow-1" style="font-size: 0.75rem;">
-                                <div class="d-flex justify-content-between">
+                                <div class="d-flex justify-content-between mb-1">
                                     <span class="text-muted">${t.card_label_status}:</span>
                                     <span class="text-success">${status}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">${t.card_label_latency}:</span>
+                                    <span class="text-info fw-bold">${w.avg_rtt || '0s'}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">${t.card_label_processed}:</span>
@@ -3491,6 +4387,10 @@
                                 <div class="d-flex justify-content-between mb-1">
                                     <span class="text-muted">${t.card_label_status}:</span>
                                     <span class="text-success">${status}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">${t.card_label_latency}:</span>
+                                    <span class="text-info fw-bold">${w.avg_rtt || '0s'}</span>
                                 </div>
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted">${t.card_label_processed_msgs}:</span>
@@ -3761,6 +4661,11 @@
                     try {
                         const data = JSON.parse(evt.data);
                         console.log("WS Recv:", data); // Debug Log
+                        
+                        if (data.type === 'routing_event') {
+                            handleRoutingEvent(data);
+                            return;
+                        }
 
                         // Handle API Responses
                         if (data.echo && pendingRequests.has(data.echo)) {
@@ -4038,9 +4943,10 @@
                 const name = f.name || 'Unknown';
                 const id = f.id;
                 const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
+                const safeName = (name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 
                 return `
-                <button class="list-group-item list-group-item-action ${id == currentFriendId ? 'active' : ''}" onclick="selectFriend('${id}', '${name.replace(/'/g, "\\'")}')">
+                <button class="list-group-item list-group-item-action ${id == currentFriendId ? 'active' : ''}" onclick="selectFriend('${id}', '${safeName}')">
                     <div class="d-flex w-100 align-items-center">
                          <div class="rounded-circle me-2" style="width: 32px; height: 32px; overflow: hidden; background: #f0f0f0;">
                             <img src="${avatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/person.svg'">
@@ -4555,15 +5461,16 @@
                     avatarUrl = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/diagram-3.svg';
                 }
 
+                const safeName = (g.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 return `
-                <button class="list-group-item list-group-item-action ${g.id == currentGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}', '${g.name.replace(/'/g, "\\'")}', '${g.type}', '${g.guild_id || ''}')">
+                <button class="list-group-item list-group-item-action ${g.id == currentGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}', '${safeName}', '${g.type}', '${g.guild_id || ''}')">
                     <div class="d-flex w-100 align-items-center">
                         <div class="rounded-circle me-2 flex-shrink-0" style="width: 40px; height: 40px; overflow: hidden; background: #f0f0f0;">
                              <img src="${avatarUrl}" alt="${g.type}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/${g.type === 'private' ? 'person' : 'people'}.svg';this.style.padding='8px';">
                         </div>
                         <div class="flex-grow-1 overflow-hidden">
                             <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1 text-truncate" style="max-width: 140px;">${g.name}</h6>
+                                <h6 class="mb-1 text-truncate" style="max-width: 140px;">${g.name || 'Unknown'}</h6>
                                 <div>
                                     ${typeBadge}
                                 </div>
@@ -4579,10 +5486,10 @@
         }
 
         function filterGroups() {
-            const keyword = document.getElementById('group-search').value.toLowerCase();
+            const keyword = (document.getElementById('group-search').value || '').toLowerCase();
             const filtered = currentGroups.filter(g => 
-                g.name.toLowerCase().includes(keyword) || 
-                String(g.id).includes(keyword)
+                (g.name || '').toLowerCase().includes(keyword) || 
+                String(g.id || '').includes(keyword)
             );
             renderGroups(filtered);
         }
@@ -4623,8 +5530,8 @@
             
             // Highlight selection
             renderGroups(currentGroups.filter(g => {
-                const keyword = document.getElementById('group-search').value.toLowerCase();
-                return g.name.toLowerCase().includes(keyword) || String(g.id).includes(keyword);
+                const keyword = (document.getElementById('group-search').value || '').toLowerCase();
+                return (g.name || '').toLowerCase().includes(keyword) || String(g.id || '').includes(keyword);
             }));
 
             // Handle View switching
@@ -4735,6 +5642,7 @@
                 const roleKey = 'role_' + m.role;
                 const roleText = t[roleKey] || m.role;
                 const statsTooltip = t.stats_title_tooltip.replace('{today}', todayMsg).replace('{total}', totalMsg);
+                const safeName = (m.card || m.nickname || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
                 return `
                 <tr>
@@ -4772,7 +5680,7 @@
                                 ${t.action_ops}
                             </button>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#" onclick="setCard(${currentGroupId}, ${m.user_id}, '${m.card || m.nickname}')">${t.action_set_card}</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setCard(${currentGroupId}, ${m.user_id}, '${safeName}')">${t.action_set_card}</a></li>
                                 <li><a class="dropdown-item" href="#" onclick="banMember(${currentGroupId}, ${m.user_id})">${t.action_ban}</a></li>
                                 <li><a class="dropdown-item" href="#" onclick="unbanMember(${currentGroupId}, ${m.user_id})">${t.action_unban}</a></li>
                                 <li><hr class="dropdown-divider"></li>

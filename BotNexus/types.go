@@ -9,6 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // ==================== 基础结构体 ====================
@@ -42,6 +43,18 @@ type WorkerClient struct {
 	LastRTT    time.Duration `json:"last_rtt"`
 	RTTSamples []time.Duration
 	MaxSamples int
+
+	// Process Time Tracking (Worker processing duration)
+	AvgProcessTime     time.Duration `json:"avg_process_time"`
+	LastProcessTime    time.Duration `json:"last_process_time"`
+	ProcessTimeSamples []time.Duration
+}
+
+type ProcInfo struct {
+	Pid    int32   `json:"pid"`
+	Name   string  `json:"name"`
+	CPU    float64 `json:"cpu"`
+	Memory uint64  `json:"memory"`
 }
 
 // Subscriber represents a UI or other consumer
@@ -77,6 +90,22 @@ type LogEntry struct {
 	Message   string    `json:"message"`
 	Time      string    `json:"time"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// RoutingEvent represents a message routing event for visualization
+type RoutingEvent struct {
+	Type          string    `json:"type"`      // Always "routing_event"
+	Source        string    `json:"source"`    // BotID or WorkerID or UserID
+	Target        string    `json:"target"`    // WorkerID or BotID or "Nexus"
+	Direction     string    `json:"direction"` // "user_to_bot", "bot_to_nexus", "nexus_to_worker", etc.
+	MsgType       string    `json:"msg_type"`  // "message", "request", "response"
+	Timestamp     time.Time `json:"timestamp"`
+	UserID        string    `json:"user_id"`        // Optional: User ID
+	UserName      string    `json:"user_name"`      // Optional: User Nickname
+	UserAvatar    string    `json:"user_avatar"`    // Optional: User Avatar URL
+	Content       string    `json:"content"`        // Optional: Message Content
+	Platform      string    `json:"platform"`       // Optional: Platform (QQ, WeChat, etc.)
+	TotalMessages int64     `json:"total_messages"` // Current total message count
 }
 
 // ==================== 统计结构体 ====================
@@ -133,6 +162,10 @@ type Manager struct {
 	pendingTimestamps map[string]time.Time // Echo -> Send Time for RTT tracking
 	pendingMutex      sync.Mutex
 
+	// Worker Processing Tracking (Echo -> Send Time to Worker)
+	workerRequestTimes map[string]time.Time // Echo -> Time when message sent to worker
+	workerRequestMutex sync.Mutex
+
 	// Redis
 	rdb *redis.Client
 
@@ -159,16 +192,18 @@ type Manager struct {
 	// Granular Stats (Per Bot)
 	BotDetailedStats map[string]*BotStatDetail `json:"bot_detailed_stats"` // BotID -> Detail
 
-	// Time Series Stats (New)
+	// System Resource Stats
 	HistoryMutex sync.RWMutex
-	CPUTrend     []float64 `json:"cpu_trend"`
-	MemTrend     []uint64  `json:"mem_trend"`
-	MsgTrend     []int64   `json:"msg_trend"`
-	SentTrend    []int64   `json:"sent_trend"`
-	RecvTrend    []int64   `json:"recv_trend"`
-	NetSentTrend []uint64  `json:"net_sent_trend"`
-	NetRecvTrend []uint64  `json:"net_recv_trend"`
-	TrendLabels  []string  `json:"trend_labels"`
+	CPUTrend     []float64  `json:"cpu_trend"`
+	MemTrend     []uint64   `json:"mem_trend"`
+	MsgTrend     []int64    `json:"msg_trend"`
+	SentTrend    []int64    `json:"sent_trend"`
+	RecvTrend    []int64    `json:"recv_trend"`
+	NetSentTrend []uint64   `json:"net_sent_trend"`
+	NetRecvTrend []uint64   `json:"net_recv_trend"`
+	TrendLabels  []string   `json:"trend_labels"`
+	TopProcesses []ProcInfo `json:"top_processes"`
+	procMap      map[int32]*process.Process
 
 	// Connection Stats (New)
 	connectionStats ConnectionStats

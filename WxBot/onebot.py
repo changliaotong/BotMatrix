@@ -659,13 +659,7 @@ class onebot(WXBot):
                     result.update({"status": "failed", "retcode": 10003, "msg": "missing group_id or user_id"})
                 else:
                     # Convert user_id to wx uid
-                    wx_uid = self._uid_map_by_qq.get(str(user_id)) if hasattr(self, '_uid_map_by_qq') else None
-                    if not wx_uid:
-                        # Try to find in reverse mapping
-                        for uid, qq in (self._uid_map_by_qq.items() if hasattr(self, '_uid_map_by_qq') else {}):
-                            if qq == user_id:
-                                wx_uid = uid
-                                break
+                    wx_uid = wx_client.get_client_uid(user_id)
                     
                     gid_uid = (self._group_map_uid_by_id.get(group_id) if hasattr(self, '_group_map_uid_by_id') else None) or wx_group.get_group_uid(group_id)
                     
@@ -712,9 +706,9 @@ class onebot(WXBot):
                                 "card_changeable": False
                             }
                         else:
-                            result.update({"status": "failed", "retcode": 10004, "msg": "member not found"})
+                            result.update({"status": "failed", "retcode": 10004, "msg": "member not found in group cache"})
                     else:
-                        result.update({"status": "failed", "retcode": 10004, "msg": "group or member not found"})
+                        result.update({"status": "failed", "retcode": 10004, "msg": f"group {group_id} or user {user_id} not found/cached"})
             
             elif name == "get_login_info":
                  info = getattr(self, 'my_account', {})
