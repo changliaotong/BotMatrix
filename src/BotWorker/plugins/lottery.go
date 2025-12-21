@@ -16,6 +16,8 @@ type LotteryPlugin struct {
 	lastLotteryTime map[string]time.Time
 	// 签文列表
 	lotteries []Lottery
+	// 命令解析器
+	cmdParser *CommandParser
 }
 
 // Lottery 签文
@@ -68,6 +70,7 @@ func NewLotteryPlugin() *LotteryPlugin {
 	return &LotteryPlugin{
 		lastLotteryTime: make(map[string]time.Time),
 		lotteries:       lotteries,
+		cmdParser:       NewCommandParser(),
 	}
 }
 
@@ -93,8 +96,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为抽签命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!lottery" && msg != "!抽签" {
+		if match, _ := p.cmdParser.MatchCommand("lottery|抽签", event.RawMessage); !match {
 			return nil
 		}
 
@@ -122,7 +124,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		p.lastLotteryTime[userID] = now
 
 		// 发送抽签结果
-		msg = fmt.Sprintf("🎐 抽签结果 🎐\n")
+		msg := fmt.Sprintf("🎐 抽签结果 🎐\n")
 		msg += fmt.Sprintf("签名：%s\n", lottery.Name)
 		msg += fmt.Sprintf("签文：%s\n", lottery.Content)
 		msg += fmt.Sprintf("解签：%s\n", lottery.Interpretation)
@@ -139,8 +141,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为解签命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!interpret") && !strings.HasPrefix(msg, "!解签") {
+		if match, _ := p.cmdParser.MatchCommand("interpret|解签", event.RawMessage); !match {
 			return nil
 		}
 
@@ -161,7 +162,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		lottery := p.lotteries[rand.Intn(len(p.lotteries))]
 
 		// 发送解签结果
-		msg = fmt.Sprintf("📜 解签结果 📜\n")
+		msg := fmt.Sprintf("📜 解签结果 📜\n")
 		msg += fmt.Sprintf("签名：%s\n", lottery.Name)
 		msg += fmt.Sprintf("签文：%s\n", lottery.Content)
 		msg += fmt.Sprintf("解签：%s\n", lottery.Interpretation)

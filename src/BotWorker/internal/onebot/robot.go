@@ -12,6 +12,7 @@ type Robot interface {
 	SetGroupBan(params *SetGroupBanParams) (*Response, error)
 	GetGroupMemberList(params *GetGroupMemberListParams) (*Response, error)
 	GetGroupMemberInfo(params *GetGroupMemberInfoParams) (*Response, error)
+	SetGroupSpecialTitle(params *SetGroupSpecialTitleParams) (*Response, error)
 	Run() error
 	Stop() error
 }

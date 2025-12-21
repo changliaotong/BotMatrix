@@ -14,7 +14,8 @@ import (
 )
 
 type WeatherPlugin struct {
-	cfg *config.WeatherConfig
+	cfg       *config.WeatherConfig
+	cmdParser *CommandParser
 }
 
 func (p *WeatherPlugin) Name() string {
@@ -32,7 +33,8 @@ func (p *WeatherPlugin) Version() string {
 // NewWeatherPlugin 创建天气插件实例
 func NewWeatherPlugin(cfg *config.WeatherConfig) *WeatherPlugin {
 	return &WeatherPlugin{
-		cfg: cfg,
+		cfg:       cfg,
+		cmdParser: NewCommandParser(),
 	}
 }
 
@@ -45,23 +47,29 @@ func (p *WeatherPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为天气查询命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!weather ") && !strings.HasPrefix(msg, "!天气 ") {
-			return nil
-		}
-
-		// 解析城市名称
+		// 使用命令解析器检查并解析天气查询命令
 		var city string
-		if strings.HasPrefix(msg, "!weather ") {
-			city = strings.TrimSpace(msg[9:])
+		// 首先检查是否为带参数的天气查询命令
+		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams("weather|天气", "(.+)", event.RawMessage)
+		if matchWithParams && len(params) == 1 {
+			// 提取城市名称
+			city = strings.TrimSpace(params[0])
 		} else {
-			city = strings.TrimSpace(msg[4:])
+			// 检查是否为帮助请求（不带参数）
+			matchHelp, _ := p.cmdParser.MatchCommand("weather|天气", event.RawMessage)
+			if !matchHelp {
+				return nil
+			}
+
+			// 发送帮助信息
+			helpMsg := "天气查询命令格式：\n/weather 城市名\n/天气 城市名\n例如：/weather 北京"
+			p.sendMessage(robot, event, helpMsg)
+			return nil
 		}
 
 		if city == "" {
 			// 发送帮助信息
-			helpMsg := "天气查询命令格式：\n!weather 城市名\n!天气 城市名\n例如：!weather 北京"
+			helpMsg := "天气查询命令格式：\n/weather 城市名\n/天气 城市名\n例如：/weather 北京"
 			p.sendMessage(robot, event, helpMsg)
 			return nil
 		}
@@ -85,8 +93,6 @@ func (p *WeatherPlugin) Init(robot plugin.Robot) {
 	})
 }
 
-
-
 // sendMessage 发送消息
 func (p *WeatherPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	params := &onebot.SendMessageParams{
@@ -104,12 +110,12 @@ func (p *WeatherPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, mes
 type WeatherInfo struct {
 	Name string `json:"name"`
 	Main struct {
-		Temp     float64 `json:"temp"`
+		Temp      float64 `json:"temp"`
 		FeelsLike float64 `json:"feels_like"`
-		TempMin  float64 `json:"temp_min"`
-		TempMax  float64 `json:"temp_max"`
-		Pressure int     `json:"pressure"`
-		Humidity int     `json:"humidity"`
+		TempMin   float64 `json:"temp_min"`
+		TempMax   float64 `json:"temp_max"`
+		Pressure  int     `json:"pressure"`
+		Humidity  int     `json:"humidity"`
 	} `json:"main"`
 	Weather []struct {
 		Main        string `json:"main"`

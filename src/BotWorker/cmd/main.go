@@ -7,9 +7,14 @@ import (
 	"botworker/internal/server"
 	"botworker/plugins"
 	"log"
+	"os"
 )
 
 func main() {
+	// 测试日志输出
+	log.Println("=== 机器人启动 ===")
+	log.Println("当前工作目录:", func() string { dir, _ := os.Getwd(); return dir }())
+	
 	// 加载配置
 	cfg, _, err := config.LoadFromCLI()
 	if err != nil {
@@ -135,6 +140,12 @@ func main() {
 	musicPlugin := plugins.NewMusicPlugin()
 	if err := pluginManager.LoadPlugin(musicPlugin); err != nil {
 		log.Fatalf("加载点歌插件失败: %v", err)
+	}
+
+	// 加载宠物系统插件
+	petPlugin := plugins.NewPetPlugin()
+	if err := pluginManager.LoadPlugin(petPlugin); err != nil {
+		log.Fatalf("加载宠物系统插件失败: %v", err)
 	}
 
 	// 打印已加载的插件

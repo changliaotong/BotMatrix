@@ -12,6 +12,11 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### [v1.3.1] - 2025-12-22
+- **New BotWorker Features**: Added Pet System and advanced Command Parser plugins.
+- **Enhanced Testing**: Introduced comprehensive test plans and CLI tools for developers.
+- **Repository Consolidation**: Fully integrated BotWorker source into the main repository.
+
 ### [v1.3.0] - 2025-12-22
 - **Major Architectural Decoupling**: Separated Core Gateway (`BotNexus`) from Management Backend (`BotAdmin`).
 - **Core Optimization**: Leaner, faster message routing engine with removed redundant dependencies.

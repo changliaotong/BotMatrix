@@ -9,7 +9,9 @@ import (
 )
 
 // GreetingsPlugin 问候插件
-type GreetingsPlugin struct{}
+type GreetingsPlugin struct {
+	cmdParser *CommandParser
+}
 
 func (p *GreetingsPlugin) Name() string {
 	return "greetings"
@@ -25,7 +27,9 @@ func (p *GreetingsPlugin) Version() string {
 
 // NewGreetingsPlugin 创建问候插件实例
 func NewGreetingsPlugin() *GreetingsPlugin {
-	return &GreetingsPlugin{}
+	return &GreetingsPlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *GreetingsPlugin) Init(robot plugin.Robot) {
@@ -38,8 +42,7 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为早安命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!早安" && msg != "!goodmorning" {
+		if match, _ := p.cmdParser.MatchCommand("早安|goodmorning", event.RawMessage); !match {
 			return nil
 		}
 
@@ -57,8 +60,7 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为晚安命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!晚安" && msg != "!goodnight" {
+		if match, _ := p.cmdParser.MatchCommand("晚安|goodnight", event.RawMessage); !match {
 			return nil
 		}
 
@@ -76,17 +78,9 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为欢迎语命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!欢迎 ") && !strings.HasPrefix(msg, "!welcome ") {
+		match, _, welcomeUser := p.cmdParser.MatchCommandWithSingleParam("欢迎|welcome", event.RawMessage)
+		if !match {
 			return nil
-		}
-
-		// 解析欢迎对象
-		var welcomeUser string
-		if strings.HasPrefix(msg, "!欢迎 ") {
-			welcomeUser = strings.TrimSpace(msg[3:])
-		} else {
-			welcomeUser = strings.TrimSpace(msg[9:])
 		}
 
 		// 发送欢迎语

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -20,6 +19,8 @@ type PointsPlugin struct {
 	lastGetPointsTime map[string]time.Time
 	// 存储用户积分记录，key为用户ID，value为积分记录列表
 	pointsRecords map[string][]PointsRecord
+	// 命令解析器
+	cmdParser *CommandParser
 }
 
 // PointsRecord 积分记录
@@ -36,6 +37,7 @@ func NewPointsPlugin() *PointsPlugin {
 		lastSignInTime:    make(map[string]time.Time),
 		lastGetPointsTime: make(map[string]time.Time),
 		pointsRecords:     make(map[string][]PointsRecord),
+		cmdParser:         NewCommandParser(),
 	}
 }
 
@@ -61,8 +63,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为积分查询命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!points" && msg != "!积分" {
+		if match, _ := p.cmdParser.MatchCommand("points|积分", event.RawMessage); !match {
 			return nil
 		}
 
@@ -91,8 +92,8 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为签到命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!signpoints" && msg != "!签到积分" && msg != "!签到" && msg != "!早安" && msg != "!晚安" {
+		match, msg := p.cmdParser.MatchCommand("signpoints|签到积分|签到|早安|晚安", event.RawMessage)
+		if !match {
 			return nil
 		}
 
@@ -119,16 +120,16 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 发送签到成功消息
 		userPoints := p.points[userID]
-		var msg string
+		var rewardMsg string
 		switch msg {
-		case "!早安":
-			msg = fmt.Sprintf("☀️ 早安！签到成功！获得10积分\n当前积分：%d", userPoints)
-		case "!晚安":
-			msg = fmt.Sprintf("🌙 晚安！签到成功！获得10积分\n当前积分：%d", userPoints)
+		case "早安":
+			rewardMsg = fmt.Sprintf("☀️ 早安！签到成功！获得10积分\n当前积分：%d", userPoints)
+		case "晚安":
+			rewardMsg = fmt.Sprintf("🌙 晚安！签到成功！获得10积分\n当前积分：%d", userPoints)
 		default:
-			msg = fmt.Sprintf("签到成功！获得10积分\n当前积分：%d", userPoints)
+			rewardMsg = fmt.Sprintf("签到成功！获得10积分\n当前积分：%d", userPoints)
 		}
-		p.sendMessage(robot, event, msg)
+		p.sendMessage(robot, event, rewardMsg)
 
 		return nil
 	})
@@ -146,8 +147,8 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为命令消息（不奖励积分）
-		msg := strings.TrimSpace(event.RawMessage)
-		if strings.HasPrefix(msg, "!") {
+		// 检查所有插件的命令模式
+		if p.cmdParser.IsCommand("points|积分|signpoints|签到积分|签到|早安|晚安|rank|排行榜|积分榜|打赏|reward|领积分|getpoints", event.RawMessage) {
 			return nil
 		}
 
@@ -164,8 +165,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为排行榜命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!rank" && msg != "!排行榜" && msg != "!积分榜" {
+		if match, _ := p.cmdParser.MatchCommand("rank|排行榜|积分榜", event.RawMessage); !match {
 			return nil
 		}
 
@@ -178,7 +178,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		msg = "🏆 积分排行榜 🏆\n"
+		msg := "🏆 积分排行榜 🏆\n"
 		msg += "------------------------\n"
 		for i, item := range rank {
 			var medal string
@@ -209,26 +209,15 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为打赏命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!打赏 ") && !strings.HasPrefix(msg, "!reward ") {
+		match, _, params := p.cmdParser.MatchCommandWithParams("打赏|reward", "(\\S+)\\s+(\\S+)", event.RawMessage)
+		if !match || len(params) != 2 {
+			p.sendMessage(robot, event, "打赏命令格式：/打赏 <用户ID> <积分数量>")
 			return nil
 		}
 
 		// 解析打赏信息
-		var parts []string
-		if strings.HasPrefix(msg, "!打赏 ") {
-			parts = strings.SplitN(msg[3:], " ", 2)
-		} else {
-			parts = strings.SplitN(msg[8:], " ", 2)
-		}
-
-		if len(parts) != 2 {
-			p.sendMessage(robot, event, "打赏命令格式：!打赏 <用户ID> <积分数量>")
-			return nil
-		}
-
-		toUserID := parts[0]
-		pointsStr := parts[1]
+		toUserID := params[0]
+		pointsStr := params[1]
 		points, err := strconv.Atoi(pointsStr)
 		if err != nil || points <= 0 {
 			p.sendMessage(robot, event, "积分数量必须为正整数")
@@ -253,8 +242,8 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		p.addPoints(toUserID, points, fmt.Sprintf("收到用户%s打赏", fromUserID))
 
 		// 发送打赏成功消息
-		msg = fmt.Sprintf("打赏成功！用户%s 打赏用户%s %d积分", fromUserID, toUserID, points)
-		p.sendMessage(robot, event, msg)
+		rewardMsg := fmt.Sprintf("打赏成功！用户%s 打赏用户%s %d积分", fromUserID, toUserID, points)
+		p.sendMessage(robot, event, rewardMsg)
 
 		return nil
 	})
@@ -266,8 +255,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为领积分命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!领积分" && msg != "!getpoints" {
+		if match, _ := p.cmdParser.MatchCommand("领积分|getpoints", event.RawMessage); !match {
 			return nil
 		}
 
@@ -292,7 +280,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 发送领取成功消息
 		userPoints := p.points[userID]
-		msg = fmt.Sprintf("领取成功！获得5积分\n当前积分：%d", userPoints)
+		msg := fmt.Sprintf("领取成功！获得5积分\n当前积分：%d", userPoints)
 		p.sendMessage(robot, event, msg)
 
 		return nil

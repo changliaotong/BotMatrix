@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.1 (2025-12-22)
+*   **🐾 BotWorker Feature Expansion**: Introduced a new **Pet System** plugin (`pets.go`), allowing users to adopt, feed, and interact with virtual pets.
+*   **⌨️ Command Parsing Engine**: Added a robust `CommandParser` utility to handle structured bot commands with optional prefixes and parameters.
+*   **🛡️ Group Management Testing**: Implemented a comprehensive testing suite for group management features, including a new `GROUP_MANAGER_TEST_PLAN.md`.
+*   **🛠️ Developer Tooling**: Added several new testing scripts and CLI tools (`test_cli.go`, `test_pets.go`, etc.) to streamline plugin development and verification.
+*   **📦 Integration Fix**: Formally integrated the `BotWorker` source code into the main repository by resolving nested Git repository conflicts.
+
 ## v1.3.0 (2025-12-22)
 *   **🏗️ Architectural Decoupling**: Successfully separated `BotNexus` (Core Gateway) and `BotAdmin` (Management Backend). `BotNexus` is now dedicated to high-performance WebSocket routing and message proxying.
 *   **🚀 Gateway Optimization**: Removed redundant Docker management dependencies and legacy Admin HTTP handlers from `BotNexus`, reducing its footprint and improving stability.

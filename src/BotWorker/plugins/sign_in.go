@@ -17,6 +17,8 @@ type SignInPlugin struct {
 	continuousDays map[string]int
 	// 积分插件引用
 	pointsPlugin *PointsPlugin
+	// 命令解析器
+	cmdParser *CommandParser
 }
 
 // NewSignInPlugin 创建签到插件实例
@@ -25,6 +27,7 @@ func NewSignInPlugin(pointsPlugin *PointsPlugin) *SignInPlugin {
 		signInRecords:  make(map[string]time.Time),
 		continuousDays: make(map[string]int),
 		pointsPlugin:   pointsPlugin,
+		cmdParser:      NewCommandParser(),
 	}
 }
 
@@ -50,8 +53,7 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为签到命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!sign" && msg != "!签到" {
+		if match, _ := p.cmdParser.MatchCommand("sign|签到", event.RawMessage); !match {
 			return nil
 		}
 
@@ -101,8 +103,7 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!signstats" && msg != "!签到统计" {
+		if match, _ := p.cmdParser.MatchCommand("signstats|签到统计", event.RawMessage); !match {
 			return nil
 		}
 

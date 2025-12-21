@@ -9,7 +9,10 @@ import (
 )
 
 // MusicPlugin 点歌插件
-type MusicPlugin struct{}
+type MusicPlugin struct {
+	// 命令解析器
+	cmdParser *CommandParser
+}
 
 func (p *MusicPlugin) Name() string {
 	return "music"
@@ -25,7 +28,9 @@ func (p *MusicPlugin) Version() string {
 
 // NewMusicPlugin 创建点歌插件实例
 func NewMusicPlugin() *MusicPlugin {
-	return &MusicPlugin{}
+	return &MusicPlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *MusicPlugin) Init(robot plugin.Robot) {
@@ -38,27 +43,27 @@ func (p *MusicPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为点歌命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if strings.HasPrefix(msg, "!点歌 ") || strings.HasPrefix(msg, "!music ") {
+		var songName string
+		// 首先检查是否为带参数的点歌命令
+		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams("点歌|music", "(.+)", event.RawMessage)
+		if matchWithParams && len(params) == 1 {
 			// 解析歌曲名称
-			var songName string
-			if strings.HasPrefix(msg, "!点歌 ") {
-				songName = strings.TrimSpace(msg[4:])
-			} else {
-				songName = strings.TrimSpace(msg[7:])
-			}
-
-			if songName == "" {
-				// 发送帮助信息
-				helpMsg := "点歌命令格式：\n!点歌 <歌曲名称> - 搜索并播放指定歌曲\n!music <歌曲名称> - 搜索并播放指定歌曲\n例如：!点歌 晴天"
-				p.sendMessage(robot, event, helpMsg)
+			songName = strings.TrimSpace(params[0])
+		} else {
+			// 检查是否为不带参数的点歌命令（显示帮助信息）
+			matchHelp, _ := p.cmdParser.MatchCommand("点歌|music", event.RawMessage)
+			if !matchHelp {
 				return nil
 			}
-
-			// 模拟点歌功能
-			musicMsg := fmt.Sprintf("🎵 正在为您点歌：%s\n请点击链接播放：https://music.163.com/#/search/m=%s", songName, songName)
-			p.sendMessage(robot, event, musicMsg)
+			// 发送帮助信息
+			helpMsg := "点歌命令格式：\n/点歌 <歌曲名称> - 搜索并播放指定歌曲\n/music <歌曲名称> - 搜索并播放指定歌曲\n例如：/点歌 晴天"
+			p.sendMessage(robot, event, helpMsg)
+			return nil
 		}
+
+		// 模拟点歌功能
+		musicMsg := fmt.Sprintf("🎵 正在为您点歌：%s\n请点击链接播放：https://music.163.com/#/search/m=%s", songName, songName)
+		p.sendMessage(robot, event, musicMsg)
 
 		return nil
 	})

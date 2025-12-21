@@ -22,6 +22,10 @@ type Robot interface {
 	SendLike(params *onebot.SendLikeParams) (*onebot.Response, error)
 	SetGroupKick(params *onebot.SetGroupKickParams) (*onebot.Response, error)
 	SetGroupBan(params *onebot.SetGroupBanParams) (*onebot.Response, error)
+	GetGroupMemberList(params *onebot.GetGroupMemberListParams) (*onebot.Response, error)
+	GetGroupMemberInfo(params *onebot.GetGroupMemberInfoParams) (*onebot.Response, error)
+	SetGroupSpecialTitle(params *onebot.SetGroupSpecialTitleParams) (*onebot.Response, error)
+	GetSelfID() int64
 }
 
 type Manager struct {

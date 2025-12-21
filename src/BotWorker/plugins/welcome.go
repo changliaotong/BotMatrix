@@ -7,7 +7,10 @@ import (
 	"log"
 )
 
-type WelcomePlugin struct{}
+type WelcomePlugin struct {
+	// 命令解析器
+	cmdParser *CommandParser
+}
 
 func (p *WelcomePlugin) Name() string {
 	return "welcome"
@@ -19,6 +22,13 @@ func (p *WelcomePlugin) Description() string {
 
 func (p *WelcomePlugin) Version() string {
 	return "1.0.0"
+}
+
+// NewWelcomePlugin 创建欢迎插件实例
+func NewWelcomePlugin() *WelcomePlugin {
+	return &WelcomePlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *WelcomePlugin) Init(robot plugin.Robot) {

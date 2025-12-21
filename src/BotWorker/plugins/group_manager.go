@@ -20,12 +20,15 @@ type GroupManagerPlugin struct {
 	db *sql.DB
 	// Redis客户端
 	redisClient *redis.Client
+	// 命令解析器
+	cmdParser *CommandParser
 }
 
 func NewGroupManagerPlugin(database *sql.DB, redisClient *redis.Client) *GroupManagerPlugin {
 	return &GroupManagerPlugin{
 		db:          database,
 		redisClient: redisClient,
+		cmdParser:   NewCommandParser(),
 	}
 }
 
@@ -87,14 +90,13 @@ func (p *GroupManagerPlugin) Init(robot plugin.Robot) {
 			})
 
 			// 记录日志
-			log.Printf("用户 %d 在群 %d 发送了敏感消息: %s", event.UserID, event.GroupID, event.RawMessage)
-		}
+		log.Printf("用户 %d 在群 %d 发送了敏感消息: %s", event.UserID, event.GroupID, event.RawMessage)
+	}
 
 		// 检查是否是命令
-		switch strings.ToLower(strings.TrimSpace(event.RawMessage)) {
-		case "群规":
+		if match, _ := p.cmdParser.MatchCommand("群规", event.RawMessage); match {
 			p.sendGroupRules(robot, event)
-		case "help":
+		} else if match, _ := p.cmdParser.MatchCommand("help", event.RawMessage); match {
 			p.sendHelp(robot, event)
 		}
 
@@ -120,8 +122,8 @@ func (p *GroupManagerPlugin) isAdminCommand(event *onebot.Event) bool {
 		return false
 	}
 
-	// 检查消息是否以 "!" 或 "/" 开头
-	return strings.HasPrefix(event.RawMessage, "!") || strings.HasPrefix(event.RawMessage, "/")
+	// 使用CommandParser检查是否是命令，支持可选的/前缀
+	return p.cmdParser.IsCommand("\\w+", event.RawMessage)
 }
 
 // 处理管理员命令
@@ -135,37 +137,41 @@ func (p *GroupManagerPlugin) handleAdminCommand(robot plugin.Robot, event *onebo
 		return nil
 	}
 
-	// 解析命令
-	parts := strings.Fields(event.RawMessage)
-	if len(parts) < 1 {
+	// 提取命令和参数 - 使用CommandParser的通用模式匹配
+	pattern := `(\w+)` // 匹配命令名
+	paramPattern := `(.*)` // 匹配所有参数
+	match, command, paramMatches := p.cmdParser.MatchCommandWithParams(pattern, paramPattern, event.RawMessage)
+	if !match || len(command) == 0 {
 		return nil
 	}
 
-	command := strings.ToLower(parts[0])
-	args := parts[1:]
+	command = strings.ToLower(command)
+	args := strings.Fields(paramMatches[0])
 
 	// 处理不同的命令
 	switch command {
-	case "!kick", "/kick":
+	case "kick":
 		p.handleKickCommand(robot, event, args)
-	case "!ban", "/ban":
+	case "ban":
 		p.handleBanCommand(robot, event, args)
-	case "!unban", "/unban":
+	case "unban":
 		p.handleUnbanCommand(robot, event, args)
-	case "!addadmin", "/addadmin":
+	case "addadmin":
 		p.handleAddAdminCommand(robot, event, args)
-	case "!deladmin", "/deladmin":
+	case "deladmin":
 		p.handleDelAdminCommand(robot, event, args)
-	case "!setrules", "/setrules":
+	case "setrules":
 		p.handleSetRulesCommand(robot, event, args)
-	case "!addword", "/addword":
+	case "addword":
 		p.handleAddWordCommand(robot, event, args)
-	case "!delword", "/delword":
+	case "delword":
 		p.handleDelWordCommand(robot, event, args)
-	case "!members", "/members":
+	case "members":
 		p.handleGetMembersCommand(robot, event, args)
-	case "!memberinfo", "/memberinfo":
+	case "memberinfo":
 		p.handleGetMemberInfoCommand(robot, event, args)
+	case "settitle":
+		p.handleSetTitleCommand(robot, event, args)
 	}
 
 	return nil
@@ -176,7 +182,7 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !kick <用户ID> [是否拒绝入群]",
+			Message: "用法: /kick <用户ID> [是否拒绝入群]",
 		})
 		return
 	}
@@ -253,7 +259,7 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !ban <用户ID> [时长(分钟)]",
+			Message: "用法: /ban <用户ID> [时长(分钟)]",
 		})
 		return
 	}
@@ -369,7 +375,7 @@ func (p *GroupManagerPlugin) handleUnbanCommand(robot plugin.Robot, event *onebo
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !unban <用户ID>",
+			Message: "用法: /unban <用户ID>",
 		})
 		return
 	}
@@ -464,7 +470,7 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !addadmin <用户ID>",
+			Message: "用法: /addadmin <用户ID>",
 		})
 		return
 	}
@@ -559,7 +565,7 @@ func (p *GroupManagerPlugin) handleDelAdminCommand(robot plugin.Robot, event *on
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !deladmin <用户ID>",
+			Message: "用法: /deladmin <用户ID>",
 		})
 		return
 	}
@@ -627,7 +633,7 @@ func (p *GroupManagerPlugin) handleSetRulesCommand(robot plugin.Robot, event *on
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !setrules <群规内容>",
+			Message: "用法: /setrules <群规内容>",
 		})
 		return
 	}
@@ -681,7 +687,7 @@ func (p *GroupManagerPlugin) handleAddWordCommand(robot plugin.Robot, event *one
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !addword <敏感词>",
+			Message: "用法: /addword <敏感词>",
 		})
 		return
 	}
@@ -743,7 +749,7 @@ func (p *GroupManagerPlugin) handleDelWordCommand(robot plugin.Robot, event *one
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !delword <敏感词>",
+			Message: "用法: /delword <敏感词>",
 		})
 		return
 	}
@@ -829,6 +835,122 @@ func (p *GroupManagerPlugin) isSuperAdmin(groupID, userID int64) bool {
 	}
 
 	return isSuperAdmin
+}
+
+// 处理设置头衔命令
+func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *onebot.Event, args []string) {
+	// 只有群主可以设置头衔
+	if !p.isOwner(robot, event.GroupID, event.UserID) {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "权限不足，只有群主可以设置头衔！",
+		})
+		log.Printf("[GroupManager] 用户 %d 尝试在群 %d 中设置头衔，但不是群主，操作被拒绝", event.UserID, event.GroupID)
+		return
+	}
+
+	if len(args) < 2 {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "用法: /settitle <用户ID> <头衔>",
+		})
+		return
+	}
+
+	// 解析用户ID
+	userID, err := parseUserID(args[0])
+	if err != nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "无效的用户ID！",
+		})
+		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		return
+	}
+
+	// 检查目标用户是否存在
+	_, err = robot.GetGroupMemberInfo(&onebot.GetGroupMemberInfoParams{
+		GroupID: event.GroupID,
+		UserID:  userID,
+	})
+	if err != nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: fmt.Sprintf("获取用户信息失败: %v", err),
+		})
+		log.Printf("[GroupManager] 获取群 %d 中用户 %d 的信息失败: %v", event.GroupID, userID, err)
+		return
+	}
+
+	// 解析头衔
+	title := strings.Join(args[1:], " ")
+	if len(title) > 12 {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "头衔长度不能超过12个字符！",
+		})
+		return
+	}
+
+	// 执行设置头衔操作
+	_, err = robot.SetGroupSpecialTitle(&onebot.SetGroupSpecialTitleParams{
+		GroupID:     event.GroupID,
+		UserID:      userID,
+		SpecialTitle: title,
+	})
+
+	if err != nil {
+		log.Printf("[GroupManager] 为群 %d 中用户 %d 设置头衔 '%s' 失败: %v", event.GroupID, userID, title, err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: fmt.Sprintf("设置头衔失败: %v", err),
+		})
+		return
+	}
+
+	// 记录成功操作
+	log.Printf("[GroupManager] 已成功为用户 %d 设置头衔 '%s'", userID, title)
+	robot.SendMessage(&onebot.SendMessageParams{
+		GroupID: event.GroupID,
+		Message: fmt.Sprintf("已为用户 %d 设置头衔 '%s'", userID, title),
+	})
+
+	// 记录审核日志
+	if p.db != nil {
+		auditLog := &db.AuditLog{
+			GroupID:      fmt.Sprintf("%d", event.GroupID),
+			AdminID:      fmt.Sprintf("%d", event.UserID),
+			Action:       "set_title",
+			TargetUserID: fmt.Sprintf("%d", userID),
+			Description:  fmt.Sprintf("为用户 %d 设置头衔 '%s'", userID, title),
+		}
+		if err := db.AddAuditLog(p.db, auditLog); err != nil {
+			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+		}
+	}
+}
+
+// 检查是否为群主
+func (p *GroupManagerPlugin) isOwner(robot plugin.Robot, groupID, userID int64) bool {
+	// 获取用户的群成员信息
+	memberInfo, err := robot.GetGroupMemberInfo(&onebot.GetGroupMemberInfoParams{
+		GroupID: groupID,
+		UserID:  userID,
+	})
+	if err != nil {
+		log.Printf("[GroupManager] 获取用户 %d 在群 %d 中的成员信息失败: %v", userID, groupID, err)
+		return false
+	}
+
+	// 检查用户是否为群主
+	if memberData, ok := memberInfo.Data.(map[string]interface{}); ok {
+		if role, ok := memberData["role"].(string); ok {
+			return role == "owner"
+		}
+	}
+
+	// 如果无法获取角色信息，返回false
+	return false
 }
 
 // 检查消息是否包含敏感词
@@ -959,7 +1081,8 @@ func (p *GroupManagerPlugin) sendHelp(robot plugin.Robot, event *onebot.Event) {
 - !addword <敏感词>：添加敏感词
 - !delword <敏感词>：删除敏感词
 - !members：查看群成员列表
-- !memberinfo <用户ID>：查看特定成员信息`
+- !memberinfo <用户ID>：查看特定成员信息
+- !settitle <用户ID> <头衔>：设置群成员头衔（仅群主可用）`
 
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,

@@ -12,7 +12,10 @@ import (
 )
 
 // UtilsPlugin 工具插件
-type UtilsPlugin struct{}
+type UtilsPlugin struct {
+	// 命令解析器
+	cmdParser *CommandParser
+}
 
 func (p *UtilsPlugin) Name() string {
 	return "utils"
@@ -28,7 +31,9 @@ func (p *UtilsPlugin) Version() string {
 
 // NewUtilsPlugin 创建工具插件实例
 func NewUtilsPlugin() *UtilsPlugin {
-	return &UtilsPlugin{}
+	return &UtilsPlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *UtilsPlugin) Init(robot plugin.Robot) {
@@ -41,8 +46,7 @@ func (p *UtilsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为报时命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!报时" && msg != "!time" {
+		if match, _ := p.cmdParser.MatchCommand("报时|time", event.RawMessage); !match {
 			return nil
 		}
 
@@ -60,19 +64,20 @@ func (p *UtilsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为计算命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!计算 ") && !strings.HasPrefix(msg, "!calc ") {
+		// 检查是否为带参数的计算命令
+		match, _, expr := p.cmdParser.MatchCommandWithSingleParam("计算|calc", event.RawMessage)
+		if !match {
+			// 检查是否为帮助请求（不带参数）
+			if helpMatch, _ := p.cmdParser.MatchCommand("计算|calc", event.RawMessage); !helpMatch {
+				return nil
+			}
+			// 发送帮助信息
+			helpMsg := "计算命令格式：\n/计算 表达式\n/calc 表达式\n例如：/计算 1+2*3"
+			p.sendMessage(robot, event, helpMsg)
 			return nil
 		}
 
-		// 解析计算表达式
-		var expr string
-		if strings.HasPrefix(msg, "!计算 ") {
-			expr = strings.TrimSpace(msg[3:])
-		} else {
-			expr = strings.TrimSpace(msg[6:])
-		}
+		// 表达式已经被TrimSpace处理过
 
 		// 简单计算（仅支持加减乘除）
 		result, err := p.calculate(expr)
@@ -94,9 +99,8 @@ func (p *UtilsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为笑话命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!笑话" && msg != "!joke" {
+		// 使用命令解析器检查是否为笑话命令
+		if match, _ := p.cmdParser.MatchCommand("笑话|joke", event.RawMessage); !match {
 			return nil
 		}
 
@@ -121,9 +125,8 @@ func (p *UtilsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为鬼故事命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!鬼故事" && msg != "!horror" {
+		// 使用命令解析器检查是否为鬼故事命令
+		if match, _ := p.cmdParser.MatchCommand("鬼故事|horror", event.RawMessage); !match {
 			return nil
 		}
 
@@ -147,19 +150,20 @@ func (p *UtilsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为成语接龙命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!成语接龙 ") && !strings.HasPrefix(msg, "!idiom ") {
+		// 检查是否为带参数的成语接龙命令
+		match, _, idiom := p.cmdParser.MatchCommandWithSingleParam("成语接龙|idiom", event.RawMessage)
+		if !match {
+			// 检查是否为帮助请求（不带参数）
+			if helpMatch, _ := p.cmdParser.MatchCommand("成语接龙|idiom", event.RawMessage); !helpMatch {
+				return nil
+			}
+			// 发送帮助信息
+			helpMsg := "成语接龙命令格式：\n/成语接龙 成语\n/idiom 成语\n例如：/成语接龙 一心一意"
+			p.sendMessage(robot, event, helpMsg)
 			return nil
 		}
 
-		// 解析成语
-		var idiom string
-		if strings.HasPrefix(msg, "!成语接龙 ") {
-			idiom = strings.TrimSpace(msg[5:])
-		} else {
-			idiom = strings.TrimSpace(msg[7:])
-		}
+		// 成语已经被TrimSpace处理过
 
 		// 随机选择接龙成语
 		idioms := []string{
@@ -181,7 +185,7 @@ func (p *UtilsPlugin) calculate(expr string) (float64, error) {
 	// 简单实现，仅支持加减乘除
 	// 实际应用中应该使用更安全的表达式解析库
 	// 这里仅做演示
-	
+
 	// 替换中文运算符
 	expr = strings.ReplaceAll(expr, "加", "+")
 	expr = strings.ReplaceAll(expr, "减", "-")
@@ -191,7 +195,7 @@ func (p *UtilsPlugin) calculate(expr string) (float64, error) {
 	// 简单计算（仅支持两个操作数）
 	// 实际应用中应该使用更复杂的解析
 	// 这里仅做演示
-	
+
 	// 尝试解析加减乘除
 	if strings.Contains(expr, "+") {
 		parts := strings.Split(expr, "+")

@@ -60,3 +60,13 @@ type GetGroupMemberInfoParams struct {
 	UserID     int64 `json:"user_id"`
 	NoCache    bool  `json:"no_cache,omitempty"`
 }
+
+// SetGroupSpecialTitleParams 设置群成员头衔参数
+// https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_special_title-%E8%AE%BE%E7%BD%AE%E7%BE%A4%E6%88%90%E5%91%98%E5%A4%B4%E8%A1%94
+
+type SetGroupSpecialTitleParams struct {
+	GroupID    int64  `json:"group_id"`
+	UserID     int64  `json:"user_id"`
+	SpecialTitle string `json:"special_title"`
+	Duration   int    `json:"duration,omitempty"`
+}

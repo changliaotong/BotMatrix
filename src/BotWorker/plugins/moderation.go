@@ -18,6 +18,8 @@ type ModerationPlugin struct {
 	blacklist []string
 	// 群配置
 	groupConfigs map[string]*GroupConfig
+	// 命令解析器
+	cmdParser *CommandParser
 }
 
 // GroupConfig 群配置
@@ -51,6 +53,7 @@ func NewModerationPlugin() *ModerationPlugin {
 		whitelist:      []string{},
 		blacklist:      []string{},
 		groupConfigs:   make(map[string]*GroupConfig),
+		cmdParser:      NewCommandParser(),
 	}
 }
 
@@ -116,18 +119,13 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为拉黑命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!拉黑 ") && !strings.HasPrefix(msg, "!ban ") {
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("拉黑|ban", `(.+)`, event.RawMessage)
+		if !match || len(paramMatches) < 1 {
 			return nil
 		}
 
 		// 解析用户ID
-		var userID string
-		if strings.HasPrefix(msg, "!拉黑 ") {
-			userID = strings.TrimSpace(msg[3:])
-		} else {
-			userID = strings.TrimSpace(msg[5:])
-		}
+		userID := strings.TrimSpace(paramMatches[0])
 
 		// 添加到黑名单
 		p.blacklist = append(p.blacklist, userID)
@@ -145,18 +143,13 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为踢出命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!踢出 ") && !strings.HasPrefix(msg, "!kick ") {
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("踢出|kick", `(.+)`, event.RawMessage)
+		if !match || len(paramMatches) < 1 {
 			return nil
 		}
 
 		// 解析用户ID
-		var userID string
-		if strings.HasPrefix(msg, "!踢出 ") {
-			userID = strings.TrimSpace(msg[3:])
-		} else {
-			userID = strings.TrimSpace(msg[6:])
-		}
+		userID := strings.TrimSpace(paramMatches[0])
 
 		// 模拟踢出
 		p.sendMessage(robot, event, fmt.Sprintf("用户%s已被踢出群聊", userID))
@@ -171,18 +164,13 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为禁言命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!禁言 ") && !strings.HasPrefix(msg, "!mute ") {
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("禁言|mute", `(.+)`, event.RawMessage)
+		if !match || len(paramMatches) < 1 {
 			return nil
 		}
 
 		// 解析用户ID
-		var userID string
-		if strings.HasPrefix(msg, "!禁言 ") {
-			userID = strings.TrimSpace(msg[3:])
-		} else {
-			userID = strings.TrimSpace(msg[6:])
-		}
+		userID := strings.TrimSpace(paramMatches[0])
 
 		// 模拟禁言
 		p.sendMessage(robot, event, fmt.Sprintf("用户%s已被禁言", userID))
@@ -197,8 +185,8 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为撤回命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!撤回" && msg != "!recall" {
+		match, _ := p.cmdParser.MatchCommand("撤回|recall", event.RawMessage)
+		if !match {
 			return nil
 		}
 
@@ -215,13 +203,13 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为群配置命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!群配置 ") {
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("群配置", `(.+)`, event.RawMessage)
+		if !match || len(paramMatches) < 1 {
 			return nil
 		}
 
 		// 解析配置
-		configStr := strings.TrimSpace(msg[5:])
+		configStr := strings.TrimSpace(paramMatches[0])
 		groupID := event.GroupID
 
 		// 获取或创建群配置

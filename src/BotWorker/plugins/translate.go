@@ -14,7 +14,8 @@ import (
 
 // TranslatePlugin 翻译插件
 type TranslatePlugin struct {
-	cfg *config.TranslateConfig
+	cfg       *config.TranslateConfig
+	cmdParser *CommandParser
 }
 
 func (p *TranslatePlugin) Name() string {
@@ -32,7 +33,8 @@ func (p *TranslatePlugin) Version() string {
 // NewTranslatePlugin 创建翻译插件实例
 func NewTranslatePlugin(cfg *config.TranslateConfig) *TranslatePlugin {
 	return &TranslatePlugin{
-		cfg: cfg,
+		cfg:       cfg,
+		cmdParser: NewCommandParser(),
 	}
 }
 
@@ -46,36 +48,36 @@ func (p *TranslatePlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为翻译命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if strings.HasPrefix(msg, "!翻译 ") || strings.HasPrefix(msg, "!translate ") {
+		var content string
+		// 首先检查是否为带参数的翻译命令
+		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams("翻译|translate", "(.+)", event.RawMessage)
+		if matchWithParams && len(params) == 1 {
 			// 解析翻译内容
-			var content string
-			if strings.HasPrefix(msg, "!翻译 ") {
-				content = strings.TrimSpace(msg[4:])
-			} else {
-				content = strings.TrimSpace(msg[11:])
-			}
-
-			if content == "" {
-				// 发送帮助信息
-				helpMsg := "翻译命令格式：\n!翻译 <文本> - 翻译指定文本\n!translate <文本> - 翻译指定文本\n例如：!translate Hello world"
-				p.sendMessage(robot, event, helpMsg)
+			content = strings.TrimSpace(params[0])
+		} else {
+			// 检查是否为不带参数的翻译命令（显示帮助信息）
+			matchHelp, _ := p.cmdParser.MatchCommand("翻译|translate", event.RawMessage)
+			if !matchHelp {
 				return nil
 			}
-
-			// 进行翻译
-			translation, err := p.translate(content)
-			if err != nil {
-				log.Printf("翻译失败: %v\n", err)
-				errorMsg := fmt.Sprintf("翻译失败：%v", err)
-				p.sendMessage(robot, event, errorMsg)
-				return err
-			}
-
-			// 发送翻译结果
-			translateMsg := fmt.Sprintf("翻译结果：\n原文：%s\n译文：%s", content, translation)
-			p.sendMessage(robot, event, translateMsg)
+			// 发送帮助信息
+			helpMsg := "翻译命令格式：\n/翻译 <文本> - 翻译指定文本\n/translate <文本> - 翻译指定文本\n例如：/translate Hello world"
+			p.sendMessage(robot, event, helpMsg)
+			return nil
 		}
+
+		// 进行翻译
+		translation, err := p.translate(content)
+		if err != nil {
+			log.Printf("翻译失败: %v\n", err)
+			errorMsg := fmt.Sprintf("翻译失败：%v", err)
+			p.sendMessage(robot, event, errorMsg)
+			return err
+		}
+
+		// 发送翻译结果
+		translateMsg := fmt.Sprintf("翻译结果：\n原文：%s\n译文：%s", content, translation)
+		p.sendMessage(robot, event, translateMsg)
 
 		return nil
 	})

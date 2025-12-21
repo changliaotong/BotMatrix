@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"regexp"
 	"strings"
-	"time"
 )
 
 // GamesPlugin 游戏插件
-type GamesPlugin struct{}
+type GamesPlugin struct {
+	// 命令解析器
+	cmdParser *CommandParser
+}
 
 func (p *GamesPlugin) Name() string {
 	return "games"
@@ -27,7 +30,9 @@ func (p *GamesPlugin) Version() string {
 
 // NewGamesPlugin 创建游戏插件实例
 func NewGamesPlugin() *GamesPlugin {
-	return &GamesPlugin{}
+	return &GamesPlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *GamesPlugin) Init(robot plugin.Robot) {
@@ -40,17 +45,9 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为猜拳命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!猜拳 ") && !strings.HasPrefix(msg, "!rock ") {
+		match, _, playerChoice := p.cmdParser.MatchCommandWithSingleParam("猜拳|rock", event.RawMessage)
+		if !match {
 			return nil
-		}
-
-		// 解析玩家选择
-		var playerChoice string
-		if strings.HasPrefix(msg, "!猜拳 ") {
-			playerChoice = strings.TrimSpace(msg[3:])
-		} else {
-			playerChoice = strings.TrimSpace(msg[6:])
 		}
 
 		// 验证玩家选择
@@ -81,17 +78,9 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为猜大小命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!猜大小 ") && !strings.HasPrefix(msg, "!bigsmall ") {
+		match, _, playerChoice := p.cmdParser.MatchCommandWithSingleParam("猜大小|bigsmall", event.RawMessage)
+		if !match {
 			return nil
-		}
-
-		// 解析玩家选择
-		var playerChoice string
-		if strings.HasPrefix(msg, "!猜大小 ") {
-			playerChoice = strings.TrimSpace(msg[4:])
-		} else {
-			playerChoice = strings.TrimSpace(msg[9:])
 		}
 
 		// 验证玩家选择
@@ -132,8 +121,7 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为抽奖命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!抽奖" && msg != "!lottery" {
+		if match, _ := p.cmdParser.MatchCommand("抽奖|lottery", event.RawMessage); !match {
 			return nil
 		}
 

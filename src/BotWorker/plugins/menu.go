@@ -9,7 +9,10 @@ import (
 )
 
 // MenuPlugin 菜单插件
-type MenuPlugin struct{}
+type MenuPlugin struct {
+	// 命令解析器
+	cmdParser *CommandParser
+}
 
 func (p *MenuPlugin) Name() string {
 	return "menu"
@@ -25,7 +28,9 @@ func (p *MenuPlugin) Version() string {
 
 // NewMenuPlugin 创建菜单插件实例
 func NewMenuPlugin() *MenuPlugin {
-	return &MenuPlugin{}
+	return &MenuPlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *MenuPlugin) Init(robot plugin.Robot) {
@@ -38,10 +43,9 @@ func (p *MenuPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为菜单命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg == "!菜单" || msg == "!menu" || msg == "help" || msg == "!help" {
+		if match, _ := p.cmdParser.MatchCommand("菜单|menu|help", event.RawMessage); match {
 			// 显示菜单
-			menuMsg := p.getMenu()
+			menuMsg := p.GetMenu()
 			p.sendMessage(robot, event, menuMsg)
 		}
 
@@ -67,25 +71,31 @@ func (p *MenuPlugin) GetMenu() string {
 	menu := "🤖 机器人命令菜单\n"
 	menu += "====================\n\n"
 	menu += "📊 积分系统:\n"
-	menu += "!积分 查询 - 查询当前积分\n"
-	menu += "!积分排行 - 查看积分排行榜\n\n"
+	menu += "/积分 查询 - 查询当前积分\n"
+	menu += "/积分排行 - 查看积分排行榜\n\n"
 	menu += "📅 签到系统:\n"
-	menu += "!签到 - 每日签到获取积分\n\n"
+	menu += "/签到 - 每日签到获取积分\n\n"
 	menu += "🌤️ 天气查询:\n"
-	menu += "!天气 <城市名> - 查询指定城市天气\n"
-	menu += "!weather <城市名> - 查询指定城市天气\n\n"
+	menu += "/天气 <城市名> - 查询指定城市天气\n"
+	menu += "/weather <城市名> - 查询指定城市天气\n\n"
 	menu += "🎲 抽签功能:\n"
-	menu += "!抽签 - 进行一次抽签\n"
-	menu += "!解签 <签文> - 解析签文含义\n\n"
+	menu += "/抽签 - 进行一次抽签\n"
+	menu += "/解签 <签文> - 解析签文含义\n\n"
 	menu += "🌐 翻译功能:\n"
-	menu += "!翻译 <文本> - 翻译指定文本\n"
-	menu += "!translate <文本> - 翻译指定文本\n\n"
+	menu += "/翻译 <文本> - 翻译指定文本\n"
+	menu += "/translate <文本> - 翻译指定文本\n\n"
 	menu += "🎵 点歌功能:\n"
-	menu += "!点歌 <歌曲名称> - 搜索并播放指定歌曲\n"
-	menu += "!music <歌曲名称> - 搜索并播放指定歌曲\n\n"
+	menu += "/点歌 <歌曲名称> - 搜索并播放指定歌曲\n"
+	menu += "/music <歌曲名称> - 搜索并播放指定歌曲\n\n"
+	menu += "🐾 宠物系统:\n"
+	menu += "/领养 - 领养一只新宠物\n"
+	menu += "/我的宠物 - 查看所有宠物信息\n"
+	menu += "/喂食 [宠物编号] - 给宠物喂食\n"
+	menu += "/玩耍 [宠物编号] - 和宠物玩耍\n"
+	menu += "/洗澡 [宠物编号] - 给宠物洗澡\n\n"
 	menu += "ℹ️ 其他命令:\n"
-	menu += "!菜单 - 显示此帮助菜单\n"
-	menu += "!help - 显示帮助信息\n"
+	menu += "/菜单 - 显示此帮助菜单\n"
+	menu += "/help - 显示帮助信息\n"
 	menu += "====================\n"
 	menu += "💡 提示: 所有命令支持中文和英文两种格式"
 

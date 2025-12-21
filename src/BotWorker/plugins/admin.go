@@ -14,6 +14,8 @@ type AdminPlugin struct {
 	admins []string
 	// 功能开关
 	featureSwitches map[string]bool
+	// 命令解析器
+	cmdParser *CommandParser
 }
 
 func (p *AdminPlugin) Name() string {
@@ -44,6 +46,7 @@ func NewAdminPlugin() *AdminPlugin {
 			"utils":      true,
 			"moderation": true,
 		},
+		cmdParser: NewCommandParser(),
 	}
 }
 
@@ -57,22 +60,21 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为后台命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!后台" && msg != "!admin" {
+		if match, _ := p.cmdParser.MatchCommand("后台|admin", event.RawMessage); !match {
 			return nil
 		}
 
 		// 发送后台菜单
 		adminMenu := "🔧 后台管理菜单\n"
 		adminMenu += "====================\n"
-		adminMenu += "!开启 <功能> - 开启指定功能\n"
-		adminMenu += "!关闭 <功能> - 关闭指定功能\n"
-		adminMenu += "!设置 <参数> <值> - 设置参数\n"
-		adminMenu += "!教学 - 查看使用教程\n"
-		adminMenu += "!本群 - 查看本群信息\n"
-		adminMenu += "!话唠 - 开启话唠模式\n"
-		adminMenu += "!终极 - 开启终极模式\n"
-		adminMenu += "!智能体 - 开启智能体模式\n"
+		adminMenu += "/开启 <功能> - 开启指定功能\n"
+		adminMenu += "/关闭 <功能> - 关闭指定功能\n"
+		adminMenu += "/设置 <参数> <值> - 设置参数\n"
+		adminMenu += "/教学 - 查看使用教程\n"
+		adminMenu += "/本群 - 查看本群信息\n"
+		adminMenu += "/话唠 - 开启话唠模式\n"
+		adminMenu += "/终极 - 开启终极模式\n"
+		adminMenu += "/智能体 - 开启智能体模式\n"
 		p.sendMessage(robot, event, adminMenu)
 
 		return nil
@@ -85,18 +87,13 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为开启命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!开启 ") && !strings.HasPrefix(msg, "!enable ") {
+		match, _, params := p.cmdParser.MatchCommandWithParams("开启|enable", `(.*)`, event.RawMessage)
+		if !match || len(params) < 1 {
 			return nil
 		}
 
 		// 解析功能名称
-		var feature string
-		if strings.HasPrefix(msg, "!开启 ") {
-			feature = strings.TrimSpace(msg[3:])
-		} else {
-			feature = strings.TrimSpace(msg[8:])
-		}
+		feature := params[0]
 
 		// 检查功能是否存在
 		if _, ok := p.featureSwitches[feature]; !ok {
@@ -118,18 +115,13 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为关闭命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!关闭 ") && !strings.HasPrefix(msg, "!disable ") {
+		match, _, params := p.cmdParser.MatchCommandWithParams("关闭|disable", `(.*)`, event.RawMessage)
+		if !match || len(params) < 1 {
 			return nil
 		}
 
 		// 解析功能名称
-		var feature string
-		if strings.HasPrefix(msg, "!关闭 ") {
-			feature = strings.TrimSpace(msg[3:])
-		} else {
-			feature = strings.TrimSpace(msg[9:])
-		}
+		feature := params[0]
 
 		// 检查功能是否存在
 		if _, ok := p.featureSwitches[feature]; !ok {
@@ -151,26 +143,14 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为设置命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if !strings.HasPrefix(msg, "!设置 ") && !strings.HasPrefix(msg, "!set ") {
+		match, _, params := p.cmdParser.MatchCommandWithParams("设置|set", `([^\s]+)\s+(.+)`, event.RawMessage)
+		if !match || len(params) < 2 {
 			return nil
 		}
 
 		// 解析参数和值
-		var parts []string
-		if strings.HasPrefix(msg, "!设置 ") {
-			parts = strings.SplitN(msg[3:], " ", 2)
-		} else {
-			parts = strings.SplitN(msg[5:], " ", 2)
-		}
-
-		if len(parts) != 2 {
-			p.sendMessage(robot, event, "设置命令格式：!设置 <参数> <值>")
-			return nil
-		}
-
-		param := parts[0]
-		value := parts[1]
+		param := params[0]
+		value := params[1]
 
 		// 模拟设置
 		p.sendMessage(robot, event, fmt.Sprintf("参数%s已设置为%s", param, value))
@@ -185,31 +165,30 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为教学命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!教学" && msg != "!help" {
+		if match, _ := p.cmdParser.MatchCommand("教学|help", event.RawMessage); !match {
 			return nil
 		}
 
 		// 发送教学内容
 		teaching := "📚 使用教程\n"
 		teaching += "====================\n"
-		teaching += "!菜单 - 查看所有命令\n"
-		teaching += "!help - 查看帮助信息\n"
-		teaching += "!签到 - 每日签到\n"
-		teaching += "!积分 - 查询积分\n"
-		teaching += "!天气 <城市> - 查询天气\n"
-		teaching += "!翻译 <文本> - 翻译文本\n"
-		teaching += "!点歌 <歌曲> - 点歌\n"
-		teaching += "!猜拳 <选择> - 猜拳\n"
-		teaching += "!猜大小 <选择> - 猜大小\n"
-		teaching += "!抽奖 - 抽奖\n"
-		teaching += "!早安 - 早安问候\n"
-		teaching += "!晚安 - 晚安问候\n"
-		teaching += "!报时 - 查看当前时间\n"
-		teaching += "!计算 <表达式> - 计算\n"
-		teaching += "!笑话 - 讲笑话\n"
-		teaching += "!鬼故事 - 讲鬼故事\n"
-		teaching += "!成语接龙 <成语> - 成语接龙\n"
+		teaching += "/菜单 - 查看所有命令\n"
+		teaching += "/help - 查看帮助信息\n"
+		teaching += "/签到 - 每日签到\n"
+		teaching += "/积分 - 查询积分\n"
+		teaching += "/天气 <城市> - 查询天气\n"
+		teaching += "/翻译 <文本> - 翻译文本\n"
+		teaching += "/点歌 <歌曲> - 点歌\n"
+		teaching += "/猜拳 <选择> - 猜拳\n"
+		teaching += "/猜大小 <选择> - 猜大小\n"
+		teaching += "/抽奖 - 抽奖\n"
+		teaching += "/早安 - 早安问候\n"
+		teaching += "/晚安 - 晚安问候\n"
+		teaching += "/报时 - 查看当前时间\n"
+		teaching += "/计算 <表达式> - 计算\n"
+		teaching += "/笑话 - 讲笑话\n"
+		teaching += "/鬼故事 - 讲鬼故事\n"
+		teaching += "/成语接龙 <成语> - 成语接龙\n"
 		p.sendMessage(robot, event, teaching)
 
 		return nil
@@ -222,8 +201,7 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为本群命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!本群" && msg != "!group" {
+		if match, _ := p.cmdParser.MatchCommand("本群|group", event.RawMessage); !match {
 			return nil
 		}
 
@@ -246,8 +224,7 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为话唠命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!话唠" && msg != "!chatty" {
+		if match, _ := p.cmdParser.MatchCommand("话唠|chatty", event.RawMessage); !match {
 			return nil
 		}
 
@@ -264,8 +241,7 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为终极命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!终极" && msg != "!ultimate" {
+		if match, _ := p.cmdParser.MatchCommand("终极|ultimate", event.RawMessage); !match {
 			return nil
 		}
 
@@ -282,8 +258,7 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为智能体命令
-		msg := strings.TrimSpace(event.RawMessage)
-		if msg != "!智能体" && msg != "!agent" {
+		if match, _ := p.cmdParser.MatchCommand("智能体|agent", event.RawMessage); !match {
 			return nil
 		}
 

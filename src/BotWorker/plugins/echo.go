@@ -6,7 +6,9 @@ import (
 	"log"
 )
 
-type EchoPlugin struct{}
+type EchoPlugin struct {
+	cmdParser *CommandParser
+}
 
 func (p *EchoPlugin) Name() string {
 	return "echo"
@@ -18,6 +20,13 @@ func (p *EchoPlugin) Description() string {
 
 func (p *EchoPlugin) Version() string {
 	return "1.0.0"
+}
+
+// NewEchoPlugin 创建回声插件实例
+func NewEchoPlugin() *EchoPlugin {
+	return &EchoPlugin{
+		cmdParser: NewCommandParser(),
+	}
 }
 
 func (p *EchoPlugin) Init(robot plugin.Robot) {
@@ -42,10 +51,10 @@ func (p *EchoPlugin) Init(robot plugin.Robot) {
 
 	// 处理帮助命令
 	robot.OnMessage(func(event *onebot.Event) error {
-		if event.RawMessage == "help" {
+		if match, _ := p.cmdParser.MatchCommand("help", event.RawMessage); match {
 			params := &onebot.SendMessageParams{
 				UserID:  event.UserID,
-				Message: "可用命令:\n- help: 显示帮助信息\n- echo [内容]: 回复相同内容",
+				Message: "可用命令:\n- /help: 显示帮助信息\n- /echo [内容]: 回复相同内容",
 			}
 			robot.SendMessage(params)
 		}
