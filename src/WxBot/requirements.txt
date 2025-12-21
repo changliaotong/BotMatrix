@@ -1,0 +1,8 @@
+websockets
+pyodbc
+pymssql
+flask
+psutil
+requests
+pyqrcode
+pypng

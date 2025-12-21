@@ -75,8 +75,10 @@ func (m *Manager) GetConnectionStats() map[string]interface{} {
 		"last_worker_activity":        m.connectionStats.LastWorkerActivity,
 	}
 
-	m.LogDebug("[Stats] Retrieved connection stats: %d bots, %d workers",
-		m.connectionStats.TotalBotConnections, m.connectionStats.TotalWorkerConnections)
+	/*
+		m.LogDebug("[Stats] Retrieved connection stats: %d bots, %d workers",
+			m.connectionStats.TotalBotConnections, m.connectionStats.TotalWorkerConnections)
+	*/
 
 	return stats
 }
@@ -97,34 +99,12 @@ func (m *Manager) GetStatsSummary() map[string]interface{} {
 		"timestamp":                time.Now().Format("2006-01-02 15:04:05"),
 	}
 
-	m.LogDebug("[Stats] Retrieved stats summary: %v", summary)
+	/*
+		m.LogDebug("[Stats] Retrieved stats summary: %v", summary)
+	*/
 
 	return summary
 }
 
-// StartStatsResetTimer 启动统计信息重置定时器
-func (m *Manager) StartStatsResetTimer() {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
 
-	for range ticker.C {
-		m.resetDailyStats()
-	}
-}
 
-// resetDailyStats 重置每日统计
-func (m *Manager) resetDailyStats() {
-	now := time.Now()
-	currentDate := now.Format("2006-01-02")
-
-	m.statsMutex.Lock()
-	defer m.statsMutex.Unlock()
-
-	if m.LastResetDate != currentDate {
-		m.LogInfo("[Stats] 重置每日统计信息: %s -> %s", m.LastResetDate, currentDate)
-		m.UserStatsToday = make(map[string]int64)
-		m.GroupStatsToday = make(map[string]int64)
-		m.BotStatsToday = make(map[string]int64)
-		m.LastResetDate = currentDate
-	}
-}

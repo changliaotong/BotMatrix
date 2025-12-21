@@ -1,11 +1,8 @@
 // BotNexus - 统一构建入口文件
-// 这个文件用于Docker构建，整合所有模块但避免重复定义
-
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -23,8 +20,6 @@ import (
 // 版本号定义
 const VERSION = "86"
 
-// 注意：常量和upgrader定义从其他文件导入，此处不再重复定义
-
 // 主函数 - 整合所有功能
 func main() {
 	log.Printf("启动 BotNexus 服务... 版本号: %s", VERSION)
@@ -39,17 +34,8 @@ func main() {
 	// 启动统计信息收集
 	go manager.StartTrendCollection()
 
-	// 启动统计信息重置定时器
-	go manager.StartStatsResetTimer()
-
-	// 定期保存统计数据 (如果需要)
-	go func() {
-		ticker := time.NewTicker(30 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			// 这里可以保存其他非持久化数据
-		}
-	}()
+	// 启动统计信息重置和定期保存
+	go manager.StartPeriodicStatsSave()
 
 	// 设置HTTP路由
 	http.HandleFunc("/login", manager.handleLogin)
@@ -126,6 +112,17 @@ func main() {
 		if err := http.ListenAndServe(WS_PORT, nil); err != nil {
 			log.Fatal("WebSocket 服务启动失败:", err)
 		}
+	}()
+
+	// 监听信号以优雅退出
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		sig := <-stop
+		log.Printf("接收到信号 %v, 正在保存数据并退出...", sig)
+		manager.saveAllStatsToDB()
+		os.Exit(0)
 	}()
 
 	// 启动WebUI服务器 (暂时注释掉以避免端口冲突)
@@ -241,58 +238,14 @@ func (m *Manager) createWebUIHandler() http.Handler {
 
 	// Overmind (Flutter Web) 服务
 	overmindDir := "../Overmind/build/web"
-	if _, err := os.Stat("/app/overmind"); err == nil {
+	if _, err := os.Stat("./overmind"); err == nil {
+		overmindDir = "./overmind"
+	} else if _, err := os.Stat("/app/overmind"); err == nil {
 		overmindDir = "/app/overmind"
 	}
 	mux.Handle("/overmind/", http.StripPrefix("/overmind/", http.FileServer(http.Dir(overmindDir))))
 
 	return mux
-}
-
-// handleGetBots 处理获取Bot列表的请求
-func (m *Manager) handleGetBots(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	m.mutex.RLock()
-	bots := make([]map[string]interface{}, 0, len(m.bots))
-	for id, bot := range m.bots {
-		bots = append(bots, map[string]interface{}{
-			"id":           id,
-			"self_id":      bot.SelfID,
-			"nickname":     bot.Nickname,
-			"platform":     bot.Platform,
-			"connected":    bot.Connected.Format("2006-01-02 15:04:05"),
-			"group_count":  bot.GroupCount,
-			"friend_count": bot.FriendCount,
-			"is_alive":     true, // 当前连接的都是在线的
-		})
-	}
-	m.mutex.RUnlock()
-
-	json.NewEncoder(w).Encode(bots)
-}
-
-// handleGetWorkers 处理获取Worker列表的请求
-func (m *Manager) handleGetWorkers(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	m.mutex.RLock()
-	workers := make([]map[string]interface{}, 0, len(m.workers))
-	for _, worker := range m.workers {
-		workers = append(workers, map[string]interface{}{
-			"id":            worker.ID,
-			"remote_addr":   worker.ID,
-			"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
-			"handled_count": worker.HandledCount,
-			"avg_rtt":       worker.AvgRTT.String(),
-			"last_rtt":      worker.LastRTT.String(),
-			"is_alive":      true,
-			"status":        "Online",
-		})
-	}
-	m.mutex.RUnlock()
-
-	json.NewEncoder(w).Encode(workers)
 }
 
 // 简化的管理器创建函数
@@ -399,5 +352,3 @@ func NewManager() *Manager {
 
 	return m
 }
-
-// 注意：超时检测和统计重置方法已从其他文件导入，此处不再重复定义

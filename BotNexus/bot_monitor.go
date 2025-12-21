@@ -6,9 +6,9 @@ import (
 
 // 启动Bot超时检测
 func (m *Manager) StartBotTimeoutDetection() {
-	m.LogInfo("[Bot Monitor] Starting timeout detection (30s interval)")
+	m.LogInfo("[Bot Monitor] Starting timeout detection (60s interval)")
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -24,7 +24,9 @@ func (m *Manager) checkBotTimeouts() {
 	now := time.Now()
 	activeBots := make(map[string]*BotClient)
 
-	m.LogDebug("[Bot Monitor] Checking timeouts for %d bots", len(m.bots))
+	if len(m.bots) > 0 {
+		// m.LogDebug("[Bot Monitor] Checking timeouts for %d bots", len(m.bots))
+	}
 
 	for botID, bot := range m.bots {
 		bot.Mutex.Lock()
@@ -34,12 +36,14 @@ func (m *Manager) checkBotTimeouts() {
 		}
 
 		timeoutDuration := now.Sub(lastActive)
-		m.LogDebug("[Bot Monitor] Bot %s - Last active: %v, Timeout: %v",
-			botID, lastActive.Format("15:04:05"), timeoutDuration)
+		/*
+			m.LogDebug("[Bot Monitor] Bot %s - Last active: %v, Timeout: %v",
+				botID, lastActive.Format("15:04:05"), timeoutDuration)
+		*/
 
 		if timeoutDuration < 2*time.Minute {
 			activeBots[botID] = bot
-			m.LogDebug("[Bot Monitor] Bot %s is active", botID)
+			// m.LogDebug("[Bot Monitor] Bot %s is active", botID)
 		} else {
 			// 超时Bot，关闭连接
 			m.LogWarn("[Bot Monitor] Bot %s heartbeat timeout after %v, closing connection",

@@ -16,17 +16,17 @@ import (
 
 // BotClient represents a connected OneBot client
 type BotClient struct {
-	Conn          *websocket.Conn
-	SelfID        string
-	Nickname      string
-	GroupCount    int
-	FriendCount   int
-	Connected     time.Time
-	Platform      string
-	Mutex         sync.Mutex
-	SentCount     int64     // Track sent messages per bot session
-	RecvCount     int64     // Track received messages per bot session
-	LastHeartbeat time.Time // Track last heartbeat for timeout detection
+	Conn          *websocket.Conn `json:"-"`
+	SelfID        string          `json:"self_id"`
+	Nickname      string          `json:"nickname"`
+	GroupCount    int             `json:"group_count"`
+	FriendCount   int             `json:"friend_count"`
+	Connected     time.Time       `json:"connected"`
+	Platform      string          `json:"platform"`
+	Mutex         sync.Mutex      `json:"-"`
+	SentCount     int64           `json:"sent_count"`     // Track sent messages per bot session
+	RecvCount     int64           `json:"recv_count"`     // Track received messages per bot session
+	LastHeartbeat time.Time       `json:"last_heartbeat"` // Track last heartbeat for timeout detection
 }
 
 // WorkerClient represents a business logic worker
@@ -98,6 +98,7 @@ type SyncState struct {
 	Groups        map[string]map[string]interface{} `json:"groups"`
 	Friends       map[string]map[string]interface{} `json:"friends"`
 	Members       map[string]map[string]interface{} `json:"members"`
+	Bots          []BotClient                       `json:"bots"`
 	TotalMessages int64                             `json:"total_messages"`
 }
 
@@ -215,6 +216,10 @@ type Manager struct {
 	TrendLabels  []string   `json:"trend_labels"`
 	TopProcesses []ProcInfo `json:"top_processes"`
 	procMap      map[int32]*process.Process
+
+	// For delta calculation
+	lastTrendTotal int64
+	lastTrendSent  int64
 
 	// Connection Stats (New)
 	connectionStats ConnectionStats

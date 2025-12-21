@@ -1,0 +1,28 @@
+{
+    "admins": [
+        "wxid_placeholder_1"
+    ],
+    "database": {
+        "server": "127.0.0.1",
+        "name": "sz84_robot",
+        "user": "sa",
+        "password": "your_password"
+    },
+    "network": {
+        "ws_server": {
+            "name": "test",
+            "host": "0.0.0.0",
+            "port": 3001,
+            "heartbeat_interval": 5000,
+            "message_format": "string",
+            "report_self_message": true,
+            "force_push_event": true
+        }
+    },
+    "bots": [
+        {
+            "type": "wechat",
+            "self_id": 123456789
+        }
+    ]
+}

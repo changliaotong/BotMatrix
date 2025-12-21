@@ -1,0 +1,9 @@
+{
+    "app_id": 123456789,
+    "token": "YOUR_BOT_TOKEN",
+    "secret": "YOUR_APP_SECRET",
+    "nexus_addr": "ws://localhost:3001",
+    "log_port": 3133,
+    "file_host": "https://www.sz84.com",
+    "media_route": "/bot-files/"
+}

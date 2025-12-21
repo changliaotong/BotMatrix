@@ -30,6 +30,68 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>overmind</title>
+  <script>
+    (function() {
+        const OriginalMO = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+        if (!OriginalMO) return;
+        const nativeObserve = OriginalMO.prototype.observe;
+        const isSafeNode = (target) => {
+            try {
+                if (!target) return false;
+                if (target instanceof Node) return true;
+                return (typeof target === 'object' && typeof target.nodeType === 'number' && typeof target.nodeName === 'string');
+            } catch (e) { return false; }
+        };
+        const safeObserve = function(target, options) {
+            try {
+                let effectiveTarget = target;
+                if (typeof effectiveTarget === 'string') effectiveTarget = document.querySelector(effectiveTarget);
+                if (!isSafeNode(effectiveTarget)) return;
+                try {
+                    return nativeObserve.call(this, effectiveTarget, options || { childList: true, subtree: true });
+                } catch (inner) { return; }
+            } catch (e) { return; }
+        };
+        const ProxyMO = new Proxy(OriginalMO, {
+            construct(target, args) {
+                const instance = Reflect.construct(target, args);
+                try {
+                    Object.defineProperty(instance, 'observe', { value: safeObserve, writable: false, configurable: false });
+                } catch (e) {}
+                return instance;
+            },
+            get(target, prop) {
+                if (prop === 'prototype') return target.prototype;
+                if (prop === 'observe') return safeObserve;
+                const val = Reflect.get(target, prop);
+                return typeof val === 'function' ? (val.bind ? val.bind(target) : val) : val;
+            }
+        });
+        try {
+            Object.defineProperties(OriginalMO.prototype, {
+                'observe': { get() { return safeObserve; }, set(v) {}, configurable: false }
+            });
+            const names = ['MutationObserver', 'WebKitMutationObserver', 'MozMutationObserver'];
+            names.forEach(name => {
+                try {
+                    Object.defineProperty(window, name, { value: ProxyMO, configurable: false, writable: false });
+                } catch (e) { window[name] = ProxyMO; }
+            });
+        } catch (e) {}
+        window.addEventListener('error', (e) => {
+            const msg = (e.error && e.error.message) || e.message || "";
+            if (msg.includes("MutationObserver") || msg.includes("Node") || msg.includes("observe")) {
+                e.preventDefault(); e.stopImmediatePropagation();
+            }
+        }, true);
+        window.addEventListener('unhandledrejection', (e) => {
+            const msg = (e.reason && (e.reason.message || String(e.reason))) || "";
+            if (msg.includes("MutationObserver") || msg.includes("Node") || msg.includes("observe")) {
+                e.preventDefault(); e.stopImmediatePropagation();
+            }
+        }, true);
+    })();
+  </script>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>

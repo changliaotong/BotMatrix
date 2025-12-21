@@ -1,0 +1,9 @@
+{
+  "corp_id": "YOUR_CORP_ID",
+  "agent_id": 1000001,
+  "secret": "YOUR_APP_SECRET",
+  "token": "YOUR_TOKEN",
+  "encoding_aes_key": "YOUR_ENCODING_AES_KEY",
+  "listen_port": 8001,
+  "nexus_addr": "ws://bot-manager:3005"
+}

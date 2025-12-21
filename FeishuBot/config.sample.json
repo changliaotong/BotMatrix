@@ -1,7 +1,0 @@
-{
-    "app_id": "",
-    "app_secret": "",
-    "encrypt_key": "",
-    "verification_token": "",
-    "nexus_addr": "ws://bot-manager:3005"
-}

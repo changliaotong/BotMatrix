@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.2.5 (2025-12-21)
+*   **🌐 Comprehensive i18n Fixes**: Resolved internationalization issues for "More" button popups in statistics, cloud matrix sorting labels, and implemented real-time language refresh for all dynamic lists (Bots, Workers, Groups, Friends).
+*   **🖼️ Visual Identification Restored**: Re-integrated backend avatar proxy in the 3D routing visualizer and list views to fix CORS issues with QQ and group avatars.
+*   **👥 Robust Group Management**: Fixed group member list loading for guild-type channels using fallback API logic; resolved mass message delivery failures for guild channels.
+*   **🎨 UI/UX Polishing**: Optimized dashboard layout by reducing card spacing; repositioned access terminal status/protocol badges to the name suffix for better clarity.
+*   **⚡ Real-time Sync**: Exposed render functions to the global window object to ensure UI components react instantly to language changes.
+
+## v1.2.4 (2025-12-20)
+*   **📡 Overmind Data Sync**: Fixed critical WebSocket port and API path issues in the Overmind Flutter service, ensuring real-time data flow in production environments.
+*   **🔐 Seamless Auth Integration**: Implemented automatic JWT token and language preference passing for the embedded Overmind iframe, removing the need for double login.
+*   **📐 Cloud Matrix UI Refinement**: Optimized the Cloud Matrix page with full-height layouts and independent scrollable lists for Workers and Bots; enhanced visual contrast with distinct background colors.
+*   **🚀 Automated Deployment**: Synchronized Overmind Flutter Web builds with the BotNexus static file server for a unified "one-click" deployment experience.
+
+## v1.2.3 (2025-12-20)
+*   **🌐 Real-time i18n Sync**: Fixed an issue where the Routing Visualizer wouldn't update its language without a page refresh; implemented a dynamic update engine for 3D textures and UI components.
+*   **🎨 Dynamic 3D Textures**: Added automatic re-generation of node textures on language change to ensure all labels (Nexus, Bot, Group, etc.) are correctly translated.
+
+## v1.2.2 (2025-12-20)
+*   **🛡️ Self-Deletion Protection**: Prevented administrators from deleting their own accounts to avoid accidental lockout.
+*   **⚡ Robust User Operations**: Fixed a critical issue where user creation/deletion might prompt "failure" despite succeeding; added dual-layer checks (memory + database) and enhanced logging.
+*   **📝 Improved Audit Logs**: Added detailed server-side logging for all administrative user management actions.
+
+## v1.2.1 (2025-12-20)
+*   **🛠️ Compilation Fixes**: Resolved duplicate method declaration for `sendWorkerHeartbeat` in `handlers.go`.
+*   **🔢 Type Safety**: Fixed map type mismatch in `NewManager` initialization within `main.go`, ensuring consistent use of `map[string]int64` for user and group statistics.
+
+## v1.2.0 (2025-12-20)
+*   **🛡️ Docker Reliability**: Removed unstable `python:3.9-slim` image fallback in container management, replaced with clear error messaging for `botmatrix-wxbot` image availability.
+*   **👥 Contact Data Consistency**: Fixed an issue where group and friend interfaces showed cached data without name/id; implemented explicit field mapping for consistent frontend display.
+*   **🧠 Seamless Overmind Integration**: Embedded Overmind system now supports in-app loading with automatic language parameter passing and real-time data refreshing.
+*   **🌐 Localization Perfection**: Resolved duplicate i18n labels for home page time metrics; optimized layout for "Uptime" and "Current Time" displays.
+*   **📐 Adaptive Matrix Layout**: Refactored Cloud Matrix page background logic to use adaptive heights, ensuring the UI perfectly fits varied content lists.
+
+## v1.1.99 (2025-12-20)
+*   **⚙️ Live Config Panel**: Added a real-time settings panel to adjust 3D visualization parameters (distances, multipliers, spread, etc.).
+*   **💾 Persistent Settings**: Visualization preferences are now saved to local storage and persist across refreshes.
+*   **🎨 Dynamic Layout Engine**: Refactored the positioning logic to use configurable parameters, allowing for custom cosmic layouts.
+*   **🛠️ Reset & Save**: Included quick reset to defaults and manual save options for the 3D universe.
+
+## v1.1.98 (2025-12-20)
+*   **🌌 Galactic Scale Expansion**: Increased all 3D node distances and distribution radii by a full order of magnitude (10x - 100x larger scene).
+*   **🔭 Enhanced Camera Optics**: Adjusted camera far-plane and zoom limits (up to 50,000 units) to accommodate the massive new cosmic scale.
+*   **✨ Massive Visual Overhaul**: Scaled up node sizes, particle effects, message hints, and star fields to match the expanded universe.
+*   **🚀 High-Speed Interstellar Travel**: Optimized message particle speeds and dashed line dash sizes for the larger distances.
+
+## v1.1.97 (2025-12-20)
+*   **🌌 Dynamic Bot-Nexus Distance**: Bots now automatically adjust their distance from the Nexus core based on their group count, preventing central overcrowding.
+*   **👥 Adaptive Group Clustering**: Group-to-Bot distance now scales dynamically with the total number of groups, ensuring a clear and spacious layout even for high-load bots.
+*   **🧭 Navigation Persistence**: Fixed a critical issue where refreshing the "Visualization" page would redirect users back to the dashboard.
+*   **✨ Smooth Real-time Re-positioning**: Implemented smooth lerp transitions for nodes as they dynamically shift their target positions in 3D space.
+
+## v1.1.96 (2025-12-20)
+*   **🖥️ Full-Screen Mode**: Added native full-screen support for the 3D routing map, enabling immersive real-time monitoring.
+*   **💾 Docker Persistence**: Refactored database storage to a dedicated `data/` directory with persistent volume mapping, ensuring user data survives container restarts.
+*   **🛡️ Permission Hardening**: Fixed database initialization errors in Docker by properly configuring directory ownership and non-root user permissions.
+*   **🌐 Localization**: Integrated full-screen UI controls with multi-language support (CN/TW/EN).
+
 ## v1.1.95 (2025-12-19)
 *   **🌌 3D Group Clustering & Persistence Sync (3D 群组聚类与持久化同步)**:
     *   **👥 Group Member Clustering**: Implemented automatic spatial clustering where group members gather around their respective group nodes in the 3D space, significantly improving topological clarity.
@@ -121,6 +178,29 @@ All notable changes to this project will be documented in this file.
     *   **⚡ Real-time Stat Updates**: Updated frontend logic to correctly synchronize bot and worker counts across badges and dashboard metrics.
     *   **💾 Cache & Persistence**: Enhanced state persistence by including worker counts in local storage cache for immediate display on page load.
 
+## v1.1.81 (2025-12-19)
+*   **🔐 Unified Login System**: Redesigned a modern, full-page responsive login interface consistent across the ecosystem.
+*   **💾 SQLite Database Integration**: Replaced temporary Redis user storage with persistent SQLite database, resolving the issue of losing passwords after service restarts.
+*   **🛡️ Enhanced Security**: Improved admin initialization with automatic password hashing (bcrypt) and secure session management.
+*   **📊 Comprehensive Dashboard**: Fixed system statistics rendering, ensuring all metrics (CPU, Memory, Goroutines, Bot Count) are displayed accurately without "undefined" values.
+*   **🔗 SSO Integration**: Seamless single sign-on (SSO) between BotNexus and Overmind web UI via secure token passing.
+*   **🌐 Localization Fixes**: Fixed login button functionality and multi-language support for the unified login page.
+*   **📈 Real-time Monitoring**: Added missing system stats endpoints and implemented auto-refresh logic for the monitoring dashboard.
+*   **📡 WebSocket Stability**: Fixed persistent WebSocket connection errors by correcting URL construction and ensuring proper endpoint mapping in the backend.
+
+## v1.1.80 (2025-12-19)
+*   **🎨 UI Modernization**: Comprehensive overhaul of the management dashboard with improved responsiveness and dark mode support.
+*   **🧠 Overmind Web Integration**: Embedded Overmind's powerful management tools directly into the BotNexus dashboard.
+*   **📊 Trend Visualization**: Added historical trend charts for CPU, Memory, and Message throughput.
+
+## v1.1.70 (2025-12-18)
+*   **🔄 Automatic Message Retry**: Added intelligent retry mechanism for failed bot message deliveries, ensuring reliable message transmission.
+*   **⏱️ Exponential Backoff**: Implemented smart retry timing (1s, 2s, 4s intervals) to prevent system overload during recovery attempts.
+*   **🎯 Max Retry Limit**: Configurable retry attempts (default: 3) with automatic cleanup of expired messages after 5 minutes.
+*   **📊 Queue Management**: Enhanced `/api/queue/messages` API provides detailed retry queue status including retry count, next retry time, and error details.
+*   **⚡ Background Processing**: Dedicated background worker processes retry queue every 5 seconds for efficient message recovery.
+*   **🔒 Thread-Safe**: All retry operations are protected by mutex locks for concurrent access safety.
+
 ## v1.1.69 (2025-12-18)
 *   **Worker-Bot Bidirectional Communication (Worker-Bot双向通信)**:
     *   **🔧 Request-Response Mapping**: Implemented complete request-response mapping system using echo field to track pending requests.
@@ -217,35 +297,5 @@ All notable changes to this project will be documented in this file.
     *   **Performance**: Optimized bot info refresh interval to 1 hour with Redis caching for approximate tracking.
 *   **Dashboard UI Improvements (界面优化)**:
     *   **Smart Log Display**: Implemented log truncation (300 chars) with "Click to Expand" for better readability.
-    *   **Auto-Pause**: Log refreshing now automatically pauses when a user expands a log entry or selects text (e.g., for copying).
-*   **TencentBot**:
-    *   **Upload Logic**: Enhanced avatar uploading with automatic fallback from URL to multipart upload to bypass link blocking.
-*   **Message Routing (消息路由)**:
-    *   **API Response Broadcast**: Fixed an issue where API responses (Echo) were being load-balanced to random workers. They are now broadcast to all connected workers to ensure the requester receives the response.
-    *   **Self-ID Injection**: Ensured `self_id` is always present in broadcasted messages to guarantee correct permission filtering and routing.
-    *   **Group Member Check**: Added a new "Check Member" tool in the Group Actions tab, allowing admins to quickly verify if a specific user ID exists in the group (useful for checking status of users not in the cached list).
-    *   **Log Center i18n**: Added missing internationalization support for the Log Center, including log filtering options, titles, and expand/collapse actions.
-    *   **Float ID Routing**: Fixed a bug where `self_id` passed as a float (scientific notation) in API requests caused message routing failures (sending to wrong/random bot).
-
-## v1.1.45 (2025-12-15)
-*   **Centralized Log Management (集中式日志管理)**:
-    *   **BotNexus Dashboard**: Added a new real-time log viewer with per-bot filtering capabilities.
-    *   **Universal Streaming**: Bot clients (TencentBot, DingTalkBot, WxBot) now stream their console logs directly to BotNexus for centralized monitoring.
-    *   **Architecture**: Implemented a scalable log aggregation protocol via WebSocket "log" events.
-
-## v1.1.18 (2025-12-15)
-*   **Feature Highlights**:
-    *   **Burn After Reading (阅后即焚)**: Renamed and enhanced the Auto-Recall feature. Users can now set messages to self-destruct after 0-120s directly from the dashboard.
-    *   **Smart Robot Collaboration (机器人智能协作)**: Officially documented the "Smart Send" mechanism that allows ordinary bots to "wake up" guild bots, bypassing platform restrictions.
-
-## [Unreleased]
-
-### Fixed
-- Fixed WxBot displaying "unknown" for users and groups by prioritizing `RemarkName` (remark name) correctly in name resolution.
-
-## v1.1.17 (2025-12-15)
-*   **WxBot Core Improvements**:
-    *   **System Message Parsing**: Fixed parsing errors for system events (Invite, Group Rename, Tickle) to prevent junk data in `wx_client`.
-    *   **OneBot 11 Compliance**: Added native support for `group_increase` (Join/Invite), `group_update` (Name Change), and `poke` (Tickle) events.
-    *   **Data Integrity**: Implemented strict guard clauses and ID validation to ensure only valid User IDs are stored.
-    *   **Codebase Optimization**: Merged `wxclientv2` logic into the main `wxclient` to unify user matching algorithms and removed redundant files.
+    *   **Bot Status Badges**: Added intuitive status badges for bots (Online/Offline) in the bot list.
+    *   **Worker Load Indicator**: Added visual indicator for worker load based on current message processing count.

@@ -120,6 +120,12 @@ func (m *Manager) initDB() error {
 		log.Printf("创建系统统计表失败: %v", err)
 	}
 
+	// 创建详细统计表
+	m.db.Exec(`CREATE TABLE IF NOT EXISTS group_stats (id TEXT PRIMARY KEY, count INTEGER, updated_at DATETIME)`)
+	m.db.Exec(`CREATE TABLE IF NOT EXISTS user_stats (id TEXT PRIMARY KEY, count INTEGER, updated_at DATETIME)`)
+	m.db.Exec(`CREATE TABLE IF NOT EXISTS group_stats_today (id TEXT PRIMARY KEY, count INTEGER, day TEXT, updated_at DATETIME)`)
+	m.db.Exec(`CREATE TABLE IF NOT EXISTS user_stats_today (id TEXT PRIMARY KEY, count INTEGER, day TEXT, updated_at DATETIME)`)
+
 	log.Printf("数据库初始化成功: %s", DB_FILE)
 	return nil
 }
@@ -140,22 +146,83 @@ func (m *Manager) saveStatToDB(key string, value interface{}) error {
 
 // loadStatsFromDB 从数据库加载系统统计
 func (m *Manager) loadStatsFromDB() error {
-	rows, err := m.db.Query("SELECT key, value FROM system_stats")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
+	m.statsMutex.Lock()
+	defer m.statsMutex.Unlock()
 
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err == nil {
-			if key == "total_messages" {
-				var count int64
-				fmt.Sscanf(value, "%d", &count)
-				m.TotalMessages = count
+	// 初始化 Map
+	m.GroupStats = make(map[string]int64)
+	m.UserStats = make(map[string]int64)
+	m.GroupStatsToday = make(map[string]int64)
+	m.UserStatsToday = make(map[string]int64)
+
+	// 1. 加载系统统计
+	rows, err := m.db.Query("SELECT key, value FROM system_stats")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var key, value string
+			if err := rows.Scan(&key, &value); err == nil {
+				if key == "total_messages" {
+					fmt.Sscanf(value, "%d", &m.TotalMessages)
+				} else if key == "sent_messages" {
+					fmt.Sscanf(value, "%d", &m.SentMessages)
+				}
 			}
 		}
 	}
+
+	// 2. 加载群组/用户全量统计
+	rows, err = m.db.Query("SELECT id, count FROM group_stats")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			var count int64
+			if err := rows.Scan(&id, &count); err == nil {
+				m.GroupStats[id] = count
+			}
+		}
+	}
+
+	rows, err = m.db.Query("SELECT id, count FROM user_stats")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			var count int64
+			if err := rows.Scan(&id, &count); err == nil {
+				m.UserStats[id] = count
+			}
+		}
+	}
+
+	// 3. 加载今日统计
+	today := time.Now().Format("2006-01-02")
+	m.LastResetDate = today // 初始化重置日期
+	rows, err = m.db.Query("SELECT id, count FROM group_stats_today WHERE day = ?", today)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			var count int64
+			if err := rows.Scan(&id, &count); err == nil {
+				m.GroupStatsToday[id] = count
+			}
+		}
+	}
+
+	rows, err = m.db.Query("SELECT id, count FROM user_stats_today WHERE day = ?", today)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			var count int64
+			if err := rows.Scan(&id, &count); err == nil {
+				m.UserStatsToday[id] = count
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -288,6 +355,60 @@ func (m *Manager) loadRoutingRulesFromDB() error {
 	}
 	log.Printf("[INFO] 从数据库加载了 %d 条路由规则", count)
 	return nil
+}
+
+// saveAllStatsToDB 保存所有内存中的统计数据到数据库
+func (m *Manager) saveAllStatsToDB() {
+	m.statsMutex.RLock()
+	defer m.statsMutex.RUnlock()
+
+	tx, err := m.db.Begin()
+	if err != nil {
+		log.Printf("[DB] 开始事务失败: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	now := time.Now().Format(time.RFC3339)
+	today := time.Now().Format("2006-01-02")
+
+	// 1. 保存全量群组统计
+	for id, count := range m.GroupStats {
+		_, _ = tx.Exec(`INSERT INTO group_stats (id, count, updated_at) VALUES (?, ?, ?) 
+			ON CONFLICT(id) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at`,
+			id, count, now)
+	}
+
+	// 2. 保存全量用户统计
+	for id, count := range m.UserStats {
+		_, _ = tx.Exec(`INSERT INTO user_stats (id, count, updated_at) VALUES (?, ?, ?) 
+			ON CONFLICT(id) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at`,
+			id, count, now)
+	}
+
+	// 3. 保存今日群组统计
+	for id, count := range m.GroupStatsToday {
+		_, _ = tx.Exec(`INSERT INTO group_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
+			ON CONFLICT(id) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at, day = excluded.day`,
+			id, count, today, now)
+	}
+
+	// 4. 保存今日用户统计
+	for id, count := range m.UserStatsToday {
+		_, _ = tx.Exec(`INSERT INTO user_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
+			ON CONFLICT(id) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at, day = excluded.day`,
+			id, count, today, now)
+	}
+
+	// 5. 保存基本统计
+	_, _ = tx.Exec(`INSERT INTO system_stats (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		"total_messages", fmt.Sprintf("%d", m.TotalMessages), now)
+	_, _ = tx.Exec(`INSERT INTO system_stats (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		"sent_messages", fmt.Sprintf("%d", m.SentMessages), now)
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("[DB] 提交事务失败: %v", err)
+	}
 }
 
 // saveRoutingRuleToDB 保存路由规则到数据库

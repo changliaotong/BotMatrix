@@ -11,7 +11,8 @@ const translations = {
         "login_error_auth": "认证失败",
         "sidebar_dashboard": "运行状态",
         "sidebar_bots": "云端矩阵",
-        "sidebar_groups": "群组好友",
+        "sidebar_groups": "群组管理",
+        "sidebar_friends": "好友管理",
         "sidebar_monitor": "系统监控",
         "sidebar_docker": "Docker管理",
         "sidebar_routing": "路由管理",
@@ -22,6 +23,8 @@ const translations = {
         "sidebar_settings": "系统设置",
         "sidebar_logout": "退出登录",
         "sidebar_visualization": "转发可视化",
+        "startup_error": "应用初始化失败，请刷新页面重试",
+        "version_label": "版本: ",
         "viz_bot": "机器人",
         "viz_nexus": "核心枢纽",
         "viz_worker": "工作节点",
@@ -46,6 +49,7 @@ const translations = {
         "total_messages": "消息总量",
         "time_uptime": "运行时长",
         "time_current": "当前时间",
+        "time_days": "天",
 
         // Menu Groups
         "menu_group_overview": "总览",
@@ -183,6 +187,8 @@ const translations = {
         "modal_col_name": "名称",
         "modal_col_count": "数量",
         "group_name_default": "群组名称",
+        "group_id_label": "群 ID: 0",
+        "friend_id_label": "ID: 0",
         "group_stats_default": "今日: 0 / 总计: 0",
         "tab_members": "成员列表",
         "tab_actions": "快捷操作",
@@ -240,6 +246,9 @@ const translations = {
         "clear_logs": "清空日志",
         "auto_scroll": "自动滚动",
         "settings_title": "系统设置",
+        "settings_basic": "基础设置",
+        "settings_security": "安全设置",
+        "settings_server": "服务器配置",
         "common_settings_title": "常用设置",
         "theme_label": "界面主题",
         "theme_light": "浅色 (Light)",
@@ -262,6 +271,7 @@ const translations = {
         "new_pwd_placeholder": "新密码",
         "confirm_pwd_placeholder": "确认新密码",
         "save_personal_settings_btn": "保存个人设置",
+        "save_password_btn": "更新登录密码",
         "config_ws_port": "WebSocket 服务端口",
         "config_ws_port_help": "Bot 和 Worker 连接使用的端口，需包含冒号 (例如 :3001)",
         "config_webui_port": "WebUI 服务端口",
@@ -468,6 +478,8 @@ const translations = {
         "alert_enter_file_url": "请输入文件路径/URL",
         "col_member_id": "QQ/WXID",
         "btn_send": "发送",
+        "input_msg_placeholder": "在此输入消息内容...",
+        "mass_send_input_placeholder": "请输入要群发的消息内容...",
         "btn_smart_send": "智能发送 (WakeUp)",
         "check_member_label": "查询群成员",
         "check_member_placeholder": "输入用户 ID (QQ号)",
@@ -488,7 +500,16 @@ const translations = {
         "config_jwt_secret_help": "修改此项会导致所有已登录用户 Token 失效",
         "config_restart_warning": "注意：修改端口或 Redis 配置后，通常需要手动重启后端服务才能完全生效。",
         "config_save": "保存后端配置",
-        "config_reload": "重新加载"
+        "config_reload": "重新加载",
+        "select_all": "全选",
+        "mass_send_title": "批量群发消息",
+        "mass_send_group": "群发消息",
+        "mass_send_private": "群发私聊",
+        "mass_send_warning": "注意：群发消息可能导致机器人账号被封禁，请谨慎使用！",
+        "mass_send_content_label": "消息内容",
+        "mass_send_start_btn": "开始群发",
+        "mass_send_select_first": "请先选择要群发的目标",
+        "mass_send_input_content": "请输入消息内容"
     },
     "zh-TW": {
         "app_title": "BotMatrix Manager",
@@ -499,7 +520,9 @@ const translations = {
         "login_error_auth": "認證失敗",
         "sidebar_dashboard": "運行狀態",
         "sidebar_bots": "雲端矩陣",
-        "sidebar_groups": "群組好友",
+        "sidebar_groups": "群組管理",
+        "sidebar_friends": "好友管理",
+        "friend_id_label": "ID: 0",
         "sidebar_monitor": "系統監控",
         "sidebar_docker": "Docker管理",
         "sidebar_routing": "路由管理",
@@ -510,6 +533,8 @@ const translations = {
         "sidebar_settings": "系統設置",
         "sidebar_logout": "退出登錄",
         "sidebar_visualization": "轉發可视化",
+        "startup_error": "應用初始化失敗，請刷新頁面重試",
+        "version_label": "版本: ",
         "viz_bot": "機器人",
         "viz_nexus": "核心樞紐",
         "viz_worker": "工作節點",
@@ -901,6 +926,8 @@ const translations = {
         "alert_enter_file_url": "請輸入文件路徑/URL",
         "col_member_id": "QQ/WXID",
         "btn_send": "發送",
+        "input_msg_placeholder": "在此輸入消息內容...",
+        "mass_send_input_placeholder": "請輸入要群發的消息內容...",
         "btn_smart_send": "智能發送 (WakeUp)",
         "check_member_label": "查詢群成員",
         "check_member_placeholder": "輸入用戶 ID (QQ號)",
@@ -922,7 +949,16 @@ const translations = {
         "backend_config_title": "後端服務配置 (管理員)",
         "config_restart_warning": "注意：修改端口或 Redis 配置後，通常需要手動重啟後端服務才能完全生效。",
         "config_save": "保存後端配置",
-        "config_reload": "重新加載"
+        "config_reload": "重新加載",
+        "select_all": "全選",
+        "mass_send_title": "批量群發消息",
+        "mass_send_group": "群發消息",
+        "mass_send_private": "群發私聊",
+        "mass_send_warning": "注意：群發消息可能導致機器人帳號被封禁，請謹慎使用！",
+        "mass_send_content_label": "消息內容",
+        "mass_send_start_btn": "開始群發",
+        "mass_send_select_first": "請先選擇要群發的目标",
+        "mass_send_input_content": "請輸入消息內容"
     },
     "en": {
         "app_title": "BotMatrix Manager",
@@ -936,8 +972,10 @@ const translations = {
         "login_error_auth": "Authentication Failed",
         "sidebar_dashboard": "Dashboard",
         "sidebar_bots": "Bot Matrix",
-        "sidebar_groups": "Groups & Friends",
-        "sidebar_monitor": "System Monitor",
+        "sidebar_groups": "Groups",
+        "sidebar_friends": "Friends",
+        "friend_id_label": "ID: 0",
+        "sidebar_monitor": "Monitoring",
         "sidebar_docker": "Docker Management",
         "sidebar_routing": "Routing Management",
         "sidebar_overmind": "Overmind",
@@ -947,6 +985,8 @@ const translations = {
         "sidebar_settings": "Settings",
         "sidebar_logout": "Logout",
         "sidebar_visualization": "Routing Visualizer",
+        "startup_error": "App initialization failed, please refresh the page and try again",
+        "version_label": "Version: ",
         "viz_bot": "Bot",
         "viz_nexus": "Nexus",
         "viz_worker": "Worker",
@@ -969,6 +1009,9 @@ const translations = {
         "viz_vertical": "Vertical Spread",
         "viz_save_success": "Settings saved to local storage",
         "total_messages": "Total Messages",
+        "time_uptime": "Uptime",
+        "time_current": "Current Time",
+        "time_days": "d",
 
         // Menu Groups
         "menu_group_overview": "Overview",
@@ -1154,6 +1197,9 @@ const translations = {
         "clear_logs": "Clear Logs",
         "auto_scroll": "Auto Scroll",
         "settings_title": "System Settings",
+        "settings_basic": "Basic Settings",
+        "settings_security": "Security",
+        "settings_server": "Server Config",
         "theme_toggle": "Toggle Dark/Light Mode",
         "lang_select": "Select Language",
         "about": "About",
@@ -1247,6 +1293,7 @@ const translations = {
         "new_pwd_placeholder": "New Password",
         "confirm_pwd_placeholder": "Confirm New Password",
         "save_personal_settings_btn": "Save Personal Settings",
+        "save_password_btn": "Update Password",
         "enter_new_pwd": "Please enter new password",
         "pwd_mismatch": "Passwords do not match",
         "action_bot_id_placeholder": "Leave empty for random",
@@ -1352,6 +1399,8 @@ const translations = {
         "alert_enter_file_url": "Please enter file path/URL",
         "col_member_id": "ID",
         "btn_send": "Send",
+        "input_msg_placeholder": "Enter message content here...",
+        "mass_send_input_placeholder": "Enter message content for mass sending...",
         "btn_smart_send": "Smart Send (WakeUp)",
         "check_member_label": "Check Member",
         "check_member_placeholder": "User ID",
@@ -1396,6 +1445,26 @@ const translations = {
         "backend_config_title": "Backend Service Config (Admin)",
         "config_restart_warning": "Note: Changes to ports or Redis usually require manual restart of the backend service to take full effect.",
         "config_save": "Save Backend Config",
-        "config_reload": "Reload"
+        "config_reload": "Reload",
+        "select_all": "Select All",
+        "mass_send_title": "Mass Message Broadcast",
+        "mass_send_group": "Group Broadcast",
+        "mass_send_private": "Private Broadcast",
+        "mass_send_warning": "Warning: Mass broadcasting may lead to bot account suspension. Use with caution!",
+        "mass_send_content_label": "Message Content",
+        "mass_send_start_btn": "Start Broadcast",
+        "mass_send_select_first": "Please select targets first",
+        "mass_send_input_content": "Please enter message content"
     }
 };
+
+// Export for ES modules and global window
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { translations };
+} else {
+    window.translations = translations;
+}
+
+export { translations };
+
+
