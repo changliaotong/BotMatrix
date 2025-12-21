@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strconv"
 	"time"
 )
 
@@ -67,13 +68,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，领养失败")
 			return nil
 		}
 
 		// 检查用户是否已经有宠物
-		if _, ok := p.userPets[userID]; ok && len(p.userPets[userID]) >= 3 {
+		userIDStr := fmt.Sprintf("%d", userID)
+		if _, ok := p.userPets[userIDStr]; ok && len(p.userPets[userIDStr]) >= 3 {
 			p.sendMessage(robot, event, "你最多只能领养3只宠物")
 			return nil
 		}
@@ -83,13 +85,13 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		petType := petTypes[rand.Intn(len(petTypes))]
 
 		// 生成宠物ID
-		petID := fmt.Sprintf("pet_%d_%s", time.Now().Unix(), userID)
+		petID := fmt.Sprintf("pet_%d_%d", time.Now().Unix(), userID)
 
 		// 创建新宠物
 		pet := &Pet{
 			PetID:     petID,
-			UserID:    userID,
-			Name:      fmt.Sprintf("%s的%s", userID, petType),
+			UserID:    fmt.Sprintf("%d", userID),
+			Name:      fmt.Sprintf("%d的%s", userID, petType),
 			Type:      petType,
 			Level:     1,
 			Exp:       0,
@@ -102,7 +104,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 
 		// 存储宠物
 		p.pets[petID] = pet
-		p.userPets[userID] = append(p.userPets[userID], pet)
+		p.userPets[userIDStr] = append(p.userPets[userIDStr], pet)
 
 		p.sendMessage(robot, event, fmt.Sprintf("🎉 恭喜你领养了一只%s！\n宠物名字：%s\n等级：%d\n经验：%d\n饥饿值：%d\n快乐值：%d\n健康值：%d",
 			petType, pet.Name, pet.Level, pet.Exp, pet.Hunger, pet.Happiness, pet.Health))
@@ -122,20 +124,21 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID")
 			return nil
 		}
 
 		// 获取用户的宠物
-		userPets, ok := p.userPets[userID]
+		userIDStr := fmt.Sprintf("%d", userID)
+		userPets, ok := p.userPets[userIDStr]
 		if !ok || len(userPets) == 0 {
 			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
 			return nil
 		}
 
 		// 发送宠物列表
-		msg = "🐾 你的宠物 🐾\n"
+		msg := "🐾 你的宠物 🐾\n"
 		msg += "------------------------\n"
 		for i, pet := range userPets {
 			msg += fmt.Sprintf("%d. %s\n", i+1, pet.Name)
@@ -166,13 +169,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID")
 			return nil
 		}
 
 		// 获取用户的宠物
-		userPets, ok := p.userPets[userID]
+		userIDStr := fmt.Sprintf("%d", userID)
+		userPets, ok := p.userPets[userIDStr]
 		if !ok || len(userPets) == 0 {
 			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
 			return nil
@@ -181,7 +185,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 解析宠物编号
 		petIndex := 0
 		if len(params) > 0 && params[0] != "" {
-			index, err := fmt.Atoi(params[0])
+			index, err := strconv.Atoi(params[0])
 			if err == nil && index > 0 && index <= len(userPets) {
 				petIndex = index - 1
 			}
@@ -222,13 +226,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID")
 			return nil
 		}
 
 		// 获取用户的宠物
-		userPets, ok := p.userPets[userID]
+		userIDStr := fmt.Sprintf("%d", userID)
+		userPets, ok := p.userPets[userIDStr]
 		if !ok || len(userPets) == 0 {
 			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
 			return nil
@@ -237,7 +242,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 解析宠物编号
 		petIndex := 0
 		if len(params) > 0 && params[0] != "" {
-			index, err := fmt.Atoi(params[0])
+			index, err := strconv.Atoi(params[0])
 			if err == nil && index > 0 && index <= len(userPets) {
 				petIndex = index - 1
 			}
@@ -278,13 +283,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID")
 			return nil
 		}
 
 		// 获取用户的宠物
-		userPets, ok := p.userPets[userID]
+		userIDStr := fmt.Sprintf("%d", userID)
+		userPets, ok := p.userPets[userIDStr]
 		if !ok || len(userPets) == 0 {
 			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
 			return nil
@@ -293,7 +299,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 解析宠物编号
 		petIndex := 0
 		if len(params) > 0 && params[0] != "" {
-			index, err := fmt.Atoi(params[0])
+			index, err := strconv.Atoi(params[0])
 			if err == nil && index > 0 && index <= len(userPets) {
 				petIndex = index - 1
 			}
@@ -372,9 +378,15 @@ func (p *PetPlugin) updatePetStatus() {
 
 // sendMessage 发送消息
 func (p *PetPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, msg string) {
-	if event.MessageType == "group" {
-		robot.SendGroupMessage(event.GroupID, msg)
-	} else {
-		robot.SendPrivateMessage(event.UserID, msg)
+	params := &onebot.SendMessageParams{
+		Message: msg,
 	}
+	if event.MessageType == "group" {
+		params.GroupID = event.GroupID
+		params.MessageType = "group"
+	} else {
+		params.UserID = event.UserID
+		params.MessageType = "private"
+	}
+	robot.SendMessage(params)
 }

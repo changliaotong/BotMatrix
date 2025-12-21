@@ -302,7 +302,7 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 	_, err = robot.SetGroupBan(&onebot.SetGroupBanParams{
 		GroupID:  event.GroupID,
 		UserID:   userID,
-		Duration: int64(duration.Seconds()),
+		Duration: int(duration.Seconds()),
 	})
 
 	if err != nil {
@@ -519,7 +519,8 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 		return
 	}
 
-	// 添加管理员，默认权限级别为1（普通管理员）	if err := db.AddGroupAdmin(p.db, groupIDStr, userIDStr, 1); err != nil {
+	// 添加管理员，默认权限级别为1（普通管理员）
+	if err := db.AddGroupAdmin(p.db, groupIDStr, userIDStr, 1); err != nil {
 		log.Printf("[GroupManager] 向群 %d 添加管理员 %d 失败: %v", event.GroupID, userID, err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
@@ -1436,15 +1437,15 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 
 	// 格式化成员信息
 	memberDetail := fmt.Sprintf(
-		"成员信息:\n"
-		"ID: %d\n"
-		"昵称: %s\n"
-		"群名片: %s\n"
-		"性别: %s\n"
-		"年龄: %d\n"
-		"入群时间: %s\n"
-		"最后发言: %s\n"
-		"群等级: %d\n"
+		"成员信息:\n"+
+		"ID: %d\n"+
+		"昵称: %s\n"+
+		"群名片: %s\n"+
+		"性别: %s\n"+
+		"年龄: %d\n"+
+		"入群时间: %s\n"+
+		"最后发言: %s\n"+
+		"群等级: %d\n"+
 		"角色: %s",
 		int64(userIDFloat), name, card, sex, int(age), joinDate, lastSentDate, int(level), role)
 

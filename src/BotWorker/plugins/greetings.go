@@ -5,7 +5,6 @@ import (
 	"botworker/internal/plugin"
 	"fmt"
 	"log"
-	"strings"
 )
 
 // GreetingsPlugin 问候插件

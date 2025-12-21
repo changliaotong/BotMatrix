@@ -69,13 +69,14 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，查询失败")
 			return nil
 		}
 
 		// 获取用户积分
-		userPoints := p.points[userID]
+		userIDStr := fmt.Sprintf("%d", userID)
+		userPoints := p.points[userIDStr]
 		if userPoints == 0 {
 			p.sendMessage(robot, event, fmt.Sprintf("你当前的积分为：0"))
 		} else {
@@ -99,14 +100,15 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，签到失败")
 			return nil
 		}
 
 		// 检查是否已经签到
 		now := time.Now()
-		if lastSignIn, ok := p.lastSignInTime[userID]; ok {
+		userIDStr := fmt.Sprintf("%d", userID)
+		if lastSignIn, ok := p.lastSignInTime[userIDStr]; ok {
 			// 检查是否在同一天
 			if isSameDay(lastSignIn, now) {
 				p.sendMessage(robot, event, fmt.Sprintf("你今天已经签到过了！上次签到时间：%s", lastSignIn.Format("15:04:05")))
@@ -115,11 +117,11 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 增加积分（签到奖励10积分）
-		p.addPoints(userID, 10, "签到奖励")
-		p.lastSignInTime[userID] = now
+		p.addPoints(userIDStr, 10, "签到奖励")
+		p.lastSignInTime[userIDStr] = now
 
 		// 发送签到成功消息
-		userPoints := p.points[userID]
+		userPoints := p.points[userIDStr]
 		var rewardMsg string
 		switch msg {
 		case "早安":
@@ -142,7 +144,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			return nil
 		}
 
@@ -153,7 +155,8 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 发言奖励1积分
-		p.addPoints(userID, 1, "发言奖励")
+		userIDStr := fmt.Sprintf("%d", userID)
+		p.addPoints(userIDStr, 1, "发言奖励")
 
 		return nil
 	})
@@ -226,20 +229,22 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 获取打赏者ID
 		fromUserID := event.UserID
-		if fromUserID == "" {
+		if fromUserID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，打赏失败")
 			return nil
 		}
 
 		// 检查打赏者积分是否足够
-		if p.points[fromUserID] < points {
+		fromUserIDStr := fmt.Sprintf("%d", fromUserID)
+		if p.points[fromUserIDStr] < points {
 			p.sendMessage(robot, event, "积分不足，打赏失败")
 			return nil
 		}
 
 		// 执行打赏
-		p.addPoints(fromUserID, -points, fmt.Sprintf("打赏用户%s", toUserID))
-		p.addPoints(toUserID, points, fmt.Sprintf("收到用户%s打赏", fromUserID))
+		toUserIDStr := fmt.Sprintf("%d", toUserID)
+		p.addPoints(fromUserIDStr, -points, fmt.Sprintf("打赏用户%s", toUserID))
+		p.addPoints(toUserIDStr, points, fmt.Sprintf("收到用户%s打赏", fromUserID))
 
 		// 发送打赏成功消息
 		rewardMsg := fmt.Sprintf("打赏成功！用户%s 打赏用户%s %d积分", fromUserID, toUserID, points)
@@ -261,13 +266,14 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，领积分失败")
 			return nil
 		}
 
 		// 检查是否已经领取过
-		lastGetTime, ok := p.lastGetPointsTime[userID]
+		userIDStr := fmt.Sprintf("%d", userID)
+		lastGetTime, ok := p.lastGetPointsTime[userIDStr]
 		now := time.Now()
 		if ok && isSameDay(lastGetTime, now) {
 			p.sendMessage(robot, event, "你今天已经领取过积分了！")
@@ -275,11 +281,11 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 领取5积分
-		p.addPoints(userID, 5, "每日领积分")
-		p.lastGetPointsTime[userID] = now
+		p.addPoints(userIDStr, 5, "每日领积分")
+		p.lastGetPointsTime[userIDStr] = now
 
 		// 发送领取成功消息
-		userPoints := p.points[userID]
+		userPoints := p.points[userIDStr]
 		msg := fmt.Sprintf("领取成功！获得5积分\n当前积分：%d", userPoints)
 		p.sendMessage(robot, event, msg)
 
@@ -346,9 +352,4 @@ type PointsRankItem struct {
 	Points int    // 积分数量
 }
 
-// isSameDay 检查两个时间是否在同一天
-func isSameDay(t1, t2 time.Time) bool {
-	y1, m1, d1 := t1.Date()
-	y2, m2, d2 := t2.Date()
-	return y1 == y2 && m1 == m2 && d1 == d2
-}
+

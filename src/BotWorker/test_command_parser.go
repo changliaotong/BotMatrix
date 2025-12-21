@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"plugins"
+
+	"botworker/plugins"
 )
 
 func main() {

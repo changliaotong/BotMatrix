@@ -31,6 +31,9 @@ type Config struct {
 
 	// 天气API配置
 	Weather WeatherConfig `json:"weather"`
+
+	// 翻译API配置
+	Translate TranslateConfig `json:"translate"`
 }
 
 // HTTPConfig 定义HTTP服务器配置
@@ -110,6 +113,13 @@ type jsonConfig struct {
 		Endpoint string `json:"endpoint"`
 		Timeout  string `json:"timeout"`
 	} `json:"weather"`
+
+	Translate struct {
+		APIKey   string `json:"api_key"`
+		Endpoint string `json:"endpoint"`
+		Timeout  string `json:"timeout"`
+		Region   string `json:"region"`
+	} `json:"translate"`
 }
 
 // LogConfig 定义日志配置

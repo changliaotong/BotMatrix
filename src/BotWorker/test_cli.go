@@ -136,6 +136,7 @@ func simulateMessage(robot *MockRobot, userID, groupID, message string) {
 			log.Printf("处理消息时出错: %v", err)
 		}
 	}
+}
 
 func main() {
 	// 解析命令行参数

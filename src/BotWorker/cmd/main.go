@@ -14,7 +14,7 @@ func main() {
 	// 测试日志输出
 	log.Println("=== 机器人启动 ===")
 	log.Println("当前工作目录:", func() string { dir, _ := os.Getwd(); return dir }())
-	
+
 	// 加载配置
 	cfg, _, err := config.LoadFromCLI()
 	if err != nil {
@@ -131,7 +131,7 @@ func main() {
 	}
 
 	// 加载翻译插件
-	translatePlugin := plugins.NewTranslatePlugin()
+	translatePlugin := plugins.NewTranslatePlugin(&cfg.Translate)
 	if err := pluginManager.LoadPlugin(translatePlugin); err != nil {
 		log.Fatalf("加载翻译插件失败: %v", err)
 	}

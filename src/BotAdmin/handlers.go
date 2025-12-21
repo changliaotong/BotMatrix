@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"BotMatrix/common"
+
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/gorilla/websocket"
@@ -51,7 +52,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 
 		if !exists {
 			// 尝试从数据库加载
-			row := m.Db.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", loginData.Username)
+			row := m.DB.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", loginData.Username)
 			var u common.User
 			var createdAt, updatedAt string
 			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.SessionVersion, &createdAt, &updatedAt)
@@ -1084,7 +1085,7 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		rows, err := m.Db.Query("SELECT id, username, is_admin, active, created_at, updated_at FROM users")
+		rows, err := m.DB.Query("SELECT id, username, is_admin, active, created_at, updated_at FROM users")
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1218,7 +1219,7 @@ func handleAdminDeleteUser(m *common.Manager, w http.ResponseWriter, username st
 		return
 	}
 
-	if _, err := m.Db.Exec("DELETE FROM users WHERE username = ?", username); err != nil {
+	if _, err := m.DB.Exec("DELETE FROM users WHERE username = ?", username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -1257,7 +1258,7 @@ func handleAdminResetPassword(m *common.Manager, w http.ResponseWriter, username
 		return
 	}
 
-	if _, err := m.Db.Exec("UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?", hash, time.Now().Format(time.RFC3339), username); err != nil {
+	if _, err := m.DB.Exec("UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?", hash, time.Now().Format(time.RFC3339), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -1305,7 +1306,7 @@ func handleAdminToggleUser(m *common.Manager, w http.ResponseWriter, username st
 	user.Active = newStatus
 	m.UsersMutex.Unlock()
 
-	if _, err := m.Db.Exec("UPDATE users SET active = ? WHERE username = ?", newStatus, username); err != nil {
+	if _, err := m.DB.Exec("UPDATE users SET active = ? WHERE username = ?", newStatus, username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -1681,329 +1682,6 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 			}
 		}
 
-		gs := make(map[string]int64)
-		for k, v := range m.GroupStats {
-			gs[k] = v
-		}
-		us := make(map[string]int64)
-		for k, v := range m.UserStats {
-			us[k] = v
-		}
-		gst := make(map[string]int64)
-		for k, v := range m.GroupStatsToday {
-			gst[k] = v
-		}
-		ust := make(map[string]int64)
-		for k, v := range m.UserStatsToday {
-			ust[k] = v
-		}
-
-		resp := map[string]interface{}{
-			"group_stats":       gs,
-			"user_stats":        us,
-			"group_stats_today": gst,
-			"user_stats_today":  ust,
-			"group_names":       groupNames,
-			"user_names":        userNames,
-		}
-
-		json.NewEncoder(w).Encode(resp)
-	}
-}
-
-// HandleProxyAvatar 处理头像代理请求
-func HandleProxyAvatar(m *common.Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// 处理 OPTIONS 预检请求
-		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		avatarURL := r.URL.Query().Get("url")
-		if avatarURL == "" {
-			http.Error(w, "Missing url parameter", http.StatusBadRequest)
-			return
-		}
-
-		// 验证 URL 协议
-		if !strings.HasPrefix(avatarURL, "http://") && !strings.HasPrefix(avatarURL, "https://") {
-			http.Error(w, "Invalid URL protocol", http.StatusBadRequest)
-			return
-		}
-
-		// 创建请求
-		req, err := http.NewRequest("GET", avatarURL, nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// 伪造 User-Agent 以防被拦截
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-		// 一些头像服务器需要特定的 Accept 头
-		req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-		// 移除 Referer 以防被防盗链拦截
-		req.Header.Del("Referer")
-
-		client := &http.Client{
-			Timeout: 15 * time.Second,
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("[PROXY] Failed to fetch avatar: %v", err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		defer resp.Body.Close()
-
-		// 复制关键响应头
-		if contentType := resp.Header.Get("Content-Type"); contentType != "" {
-			w.Header().Set("Content-Type", contentType)
-		}
-		if cacheControl := resp.Header.Get("Cache-Control"); cacheControl != "" {
-			w.Header().Set("Cache-Control", cacheControl)
-		}
-
-		// 强制允许跨域
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("X-Proxy-By", "BotAdmin")
-
-		w.WriteHeader(resp.StatusCode)
-		io.Copy(w, resp.Body)
-	}
-}
-
-// HandleSendAction 处理发送 API 动作的请求
-func HandleSendAction(m *common.Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		var req struct {
-			BotID  string                 `json:"bot_id"`
-			Action string                 `json:"action"`
-			Params map[string]interface{} `json:"params"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": "请求格式错误",
-			})
-			return
-		}
-
-		// 支持批量发送功能
-		if req.Action == "batch_send_msg" {
-			targets, ok := req.Params["targets"].([]interface{})
-			message, _ := req.Params["message"].(string)
-			if !ok || message == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":  "failed",
-					"message": "批量发送参数错误",
-				})
-				return
-			}
-
-			// 异步处理批量发送，防止请求阻塞
-			go func() {
-				log.Printf("[BatchSend] Starting batch send for %d targets", len(targets))
-				success := 0
-				failed := 0
-				for _, t := range targets {
-					target, ok := t.(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					targetID := toString(target["id"])
-					targetBotID := toString(target["bot_id"])
-					targetType := toString(target["type"])
-
-					m.Mutex.RLock()
-					bot, exists := m.Bots[targetBotID]
-					m.Mutex.RUnlock()
-
-					if !exists {
-						log.Printf("[BatchSend] Bot %s not found for target %s", targetBotID, targetID)
-						failed++
-						continue
-					}
-
-					action := "send_group_msg"
-					params := map[string]interface{}{
-						"group_id": targetID,
-						"message":  message,
-					}
-					if targetType == "private" {
-						action = "send_private_msg"
-						params = map[string]interface{}{
-							"user_id": targetID,
-							"message": message,
-						}
-					} else if targetType == "guild" {
-						action = "send_msg"
-						params = map[string]interface{}{
-							"message_type": "guild",
-							"channel_id":   targetID,
-							"message":      message,
-						}
-						// 如果有 guild_id，也带上
-						if gid := toString(target["guild_id"]); gid != "" {
-							params["guild_id"] = gid
-						}
-					}
-
-					// 发送请求，不等待响应（或者设置短超时）
-					echo := fmt.Sprintf("batch|%d|%s", time.Now().UnixNano(), action)
-					msg := map[string]interface{}{
-						"action": action,
-						"params": params,
-						"echo":   echo,
-					}
-
-					bot.Mutex.Lock()
-					err := bot.Conn.WriteJSON(msg)
-					bot.Mutex.Unlock()
-
-					if err != nil {
-						log.Printf("[BatchSend] Failed to send to %s: %v", targetID, err)
-						failed++
-					} else {
-						success++
-					}
-					// 稍微停顿一下，防止发送过快被风控
-					time.Sleep(200 * time.Millisecond)
-				}
-				log.Printf("[BatchSend] Completed: %d success, %d failed", success, failed)
-			}()
-
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "ok",
-				"success": true,
-				"message": fmt.Sprintf("已启动批量发送任务，共 %d 个目标", len(targets)),
-			})
-			return
-		}
-
-		// 如果没有指定 bot_id，尝试寻找一个可用的
-		m.Mutex.RLock()
-		var bot *common.BotClient
-		if req.BotID != "" {
-			bot = m.Bots[req.BotID]
-		} else {
-			// 选第一个
-			for _, b := range m.Bots {
-				bot = b
-				break
-			}
-		}
-		m.Mutex.RUnlock()
-
-		if bot == nil {
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": "未找到可用的 Bot",
-			})
-			return
-		}
-
-		// 构造 echo
-		echo := fmt.Sprintf("web|%d|%s", time.Now().UnixNano(), req.Action)
-
-		// 注册等待响应
-		respChan := make(chan map[string]interface{}, 1)
-		m.PendingMutex.Lock()
-		m.PendingRequests[echo] = respChan
-		m.PendingTimestamps[echo] = time.Now()
-		m.PendingMutex.Unlock()
-
-		defer func() {
-			m.PendingMutex.Lock()
-			delete(m.PendingRequests, echo)
-			delete(m.PendingTimestamps, echo)
-			m.PendingMutex.Unlock()
-		}()
-
-		// 构造消息
-		msg := map[string]interface{}{
-			"action": req.Action,
-			"params": req.Params,
-			"echo":   echo,
-		}
-
-		// 发送给 Bot
-		bot.Mutex.Lock()
-		err := bot.Conn.WriteJSON(msg)
-		bot.Mutex.Unlock()
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": "发送请求到 Bot 失败: " + err.Error(),
-			})
-			return
-		}
-
-		// 等待响应
-		select {
-		case resp := <-respChan:
-			json.NewEncoder(w).Encode(resp)
-		case <-time.After(30 * time.Second):
-			w.WriteHeader(http.StatusGatewayTimeout)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": "等待 Bot 响应超时",
-			})
-		}
-	}
-}
-
-// HandleGetChatStats 获取聊天统计信息
-func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		m.Mutex.RLock()
-		defer m.Mutex.RUnlock()
-		m.CacheMutex.RLock()
-		defer m.CacheMutex.RUnlock()
-
-		// 提取群组名称
-		groupNames := make(map[string]string)
-		for id, g := range m.GroupCache {
-			if name, ok := g["group_name"].(string); ok {
-				groupNames[id] = name
-			}
-		}
-
-		// 提取用户名称
-		userNames := make(map[string]string)
-		for id, u := range m.MemberCache {
-			if name, ok := u["nickname"].(string); ok {
-				userNames[id] = name
-			}
-		}
-		for id, f := range m.FriendCache {
-			if name, ok := f["nickname"].(string); ok {
-				userNames[id] = name
-			}
-		}
-
-		// 转换为 map[string]int64 以便前端使用
 		gs := make(map[string]int64)
 		for k, v := range m.GroupStats {
 			gs[k] = v

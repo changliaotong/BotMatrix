@@ -5,7 +5,6 @@ import (
 	"botworker/internal/plugin"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -59,13 +58,14 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，签到失败")
 			return nil
 		}
 
 		// 执行签到
-		p.processSignIn(robot, event, userID)
+		userIDStr := fmt.Sprintf("%d", userID)
+		p.processSignIn(robot, event, userIDStr)
 
 		return nil
 	})
@@ -78,13 +78,14 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			return nil
 		}
 
 		// 检查是否已经签到
 		now := time.Now()
-		if lastSignIn, ok := p.signInRecords[userID]; ok {
+		userIDStr := fmt.Sprintf("%d", userID)
+		if lastSignIn, ok := p.signInRecords[userIDStr]; ok {
 			// 检查是否在同一天
 			if isSameDay(lastSignIn, now) {
 				return nil // 已经签到过了
@@ -92,7 +93,7 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 执行自动签到
-		p.processSignIn(robot, event, userID)
+		p.processSignIn(robot, event, userIDStr)
 
 		return nil
 	})
@@ -172,13 +173,6 @@ func (p *SignInPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, mess
 	if _, err := robot.SendMessage(params); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
-}
-
-// isSameDay 检查两个时间是否在同一天
-func isSameDay(t1, t2 time.Time) bool {
-	y1, m1, d1 := t1.Date()
-	y2, m2, d2 := t2.Date()
-	return y1 == y2 && m1 == m2 && d1 == d2
 }
 
 // isYesterday 检查t1是否是t2的前一天

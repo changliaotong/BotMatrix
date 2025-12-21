@@ -73,6 +73,22 @@ func (s *CombinedServer) SetGroupBan(params *onebot.SetGroupBanParams) (*onebot.
 	return s.wsServer.SetGroupBan(params)
 }
 
+func (s *CombinedServer) GetGroupMemberList(params *onebot.GetGroupMemberListParams) (*onebot.Response, error) {
+	return s.wsServer.GetGroupMemberList(params)
+}
+
+func (s *CombinedServer) GetGroupMemberInfo(params *onebot.GetGroupMemberInfoParams) (*onebot.Response, error) {
+	return s.wsServer.GetGroupMemberInfo(params)
+}
+
+func (s *CombinedServer) SetGroupSpecialTitle(params *onebot.SetGroupSpecialTitleParams) (*onebot.Response, error) {
+	return s.wsServer.SetGroupSpecialTitle(params)
+}
+
+func (s *CombinedServer) GetSelfID() int64 {
+	return s.wsServer.GetSelfID()
+}
+
 // 插件管理
 func (s *CombinedServer) GetPluginManager() *plugin.Manager {
 	return s.pluginManager

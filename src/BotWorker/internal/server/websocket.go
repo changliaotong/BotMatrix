@@ -241,6 +241,15 @@ func (s *WebSocketServer) GetGroupMemberInfo(params *onebot.GetGroupMemberInfoPa
 	return s.sendAPIRequest("get_group_member_info", params)
 }
 
+func (s *WebSocketServer) SetGroupSpecialTitle(params *onebot.SetGroupSpecialTitleParams) (*onebot.Response, error) {
+	return s.sendAPIRequest("set_group_special_title", params)
+}
+
+func (s *WebSocketServer) GetSelfID() int64 {
+	// 返回默认的机器人ID，实际实现中应该从配置或连接状态获取
+	return 123456789
+}
+
 func (s *WebSocketServer) sendAPIRequest(action string, params interface{}) (*onebot.Response, error) {
 	// 获取第一个客户端连接
 	s.clientsMutex.Lock()

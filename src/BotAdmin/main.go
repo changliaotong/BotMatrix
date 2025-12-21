@@ -142,8 +142,8 @@ func main() {
 	}
 
 	// 关闭数据库连接
-	if manager.Db != nil {
-		manager.Db.Close()
+	if manager.DB != nil {
+		manager.DB.Close()
 		log.Printf("[INFO] 数据库已关闭")
 	}
 

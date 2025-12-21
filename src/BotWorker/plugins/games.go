@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"regexp"
-	"strings"
 )
 
 // GamesPlugin 游戏插件

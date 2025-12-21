@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"time"
 )
 
@@ -22,10 +21,10 @@ type LotteryPlugin struct {
 
 // Lottery 签文
 type Lottery struct {
-	Name        string // 签名
-	Content     string // 签文内容
+	Name           string // 签名
+	Content        string // 签文内容
 	Interpretation string // 解签内容
-	Level       int    // 签的等级（1-5，1为上上签，5为下下签）
+	Level          int    // 签的等级（1-5，1为上上签，5为下下签）
 }
 
 // NewLotteryPlugin 创建抽签插件实例
@@ -36,34 +35,34 @@ func NewLotteryPlugin() *LotteryPlugin {
 	// 初始化签文列表
 	lotteries := []Lottery{
 		{
-			Name:        "上上签",
-			Content:     "久旱逢甘雨，他乡遇故知。洞房花烛夜，金榜题名时。",
+			Name:           "上上签",
+			Content:        "久旱逢甘雨，他乡遇故知。洞房花烛夜，金榜题名时。",
 			Interpretation: "此签为上上大吉，诸事顺遂，心想事成。",
-			Level:       1,
+			Level:          1,
 		},
 		{
-			Name:        "上签",
-			Content:     "春风得意马蹄疾，一日看尽长安花。",
+			Name:           "上签",
+			Content:        "春风得意马蹄疾，一日看尽长安花。",
 			Interpretation: "此签为上吉，事业有成，前程似锦。",
-			Level:       2,
+			Level:          2,
 		},
 		{
-			Name:        "中签",
-			Content:     "行到水穷处，坐看云起时。",
+			Name:           "中签",
+			Content:        "行到水穷处，坐看云起时。",
 			Interpretation: "此签为中平，遇事需耐心等待，转机将至。",
-			Level:       3,
+			Level:          3,
 		},
 		{
-			Name:        "下签",
-			Content:     "屋漏偏逢连夜雨，船迟又遇打头风。",
+			Name:           "下签",
+			Content:        "屋漏偏逢连夜雨，船迟又遇打头风。",
 			Interpretation: "此签为下凶，诸事不顺，需谨慎行事。",
-			Level:       4,
+			Level:          4,
 		},
 		{
-			Name:        "下下签",
-			Content:     "福无双至，祸不单行。",
+			Name:           "下下签",
+			Content:        "福无双至，祸不单行。",
 			Interpretation: "此签为下下大凶，遇事需格外小心，避免冲动。",
-			Level:       5,
+			Level:          5,
 		},
 	}
 
@@ -102,14 +101,14 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，抽签失败")
 			return nil
 		}
 
 		// 检查是否已经抽过签（每天限抽一次）
 		now := time.Now()
-		if lastLottery, ok := p.lastLotteryTime[userID]; ok {
+		if lastLottery, ok := p.lastLotteryTime[fmt.Sprintf("%d", userID)]; ok {
 			// 检查是否在同一天
 			if isSameDay(lastLottery, now) {
 				p.sendMessage(robot, event, fmt.Sprintf("你今天已经抽过签了！上次抽签时间：%s", lastLottery.Format("15:04:05")))
@@ -121,7 +120,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		lottery := p.lotteries[rand.Intn(len(p.lotteries))]
 
 		// 更新抽签记录
-		p.lastLotteryTime[userID] = now
+		p.lastLotteryTime[fmt.Sprintf("%d", userID)] = now
 
 		// 发送抽签结果
 		msg := fmt.Sprintf("🎐 抽签结果 🎐\n")
@@ -147,13 +146,13 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			p.sendMessage(robot, event, "无法获取用户ID，解签失败")
 			return nil
 		}
 
 		// 检查是否有抽签记录
-		if _, ok := p.lastLotteryTime[userID]; !ok {
+		if _, ok := p.lastLotteryTime[fmt.Sprintf("%d", userID)]; !ok {
 			p.sendMessage(robot, event, "你还没有抽过签，请先抽签！")
 			return nil
 		}
@@ -184,11 +183,4 @@ func (p *LotteryPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, mes
 	if _, err := robot.SendMessage(params); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
-}
-
-// isSameDay 检查两个时间是否在同一天
-func isSameDay(t1, t2 time.Time) bool {
-	y1, m1, d1 := t1.Date()
-	y2, m2, d2 := t2.Date()
-	return y1 == y2 && m1 == m2 && d1 == d2
 }

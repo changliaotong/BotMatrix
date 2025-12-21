@@ -68,18 +68,18 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 
 		// 获取用户ID
 		userID := event.UserID
-		if userID == "" {
+		if userID == 0 {
 			return nil
 		}
 
 		// 检查是否在白名单
-		if p.isWhitelisted(userID) {
+		if p.isWhitelisted(fmt.Sprintf("%d", userID)) {
 			// 白名单用户可以发送任何消息，包括敏感词、广告、图片、网址
 			return nil
 		}
 
 		// 检查是否在黑名单
-		if p.isBlacklisted(userID) {
+		if p.isBlacklisted(fmt.Sprintf("%d", userID)) {
 			p.sendMessage(robot, event, "你已被拉黑，无法发送消息")
 			return nil
 		}
@@ -211,9 +211,10 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		// 解析配置
 		configStr := strings.TrimSpace(paramMatches[0])
 		groupID := event.GroupID
+		groupIDStr := fmt.Sprintf("%d", groupID)
 
 		// 获取或创建群配置
-		config, ok := p.groupConfigs[groupID]
+		config, ok := p.groupConfigs[groupIDStr]
 		if !ok {
 			config = &GroupConfig{
 				kickToBlack:  true,
@@ -221,7 +222,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 				leaveToBlack: true,
 				leaveNotify:  true,
 			}
-			p.groupConfigs[groupID] = config
+			p.groupConfigs[groupIDStr] = config
 		}
 
 		// 处理配置
@@ -262,23 +263,24 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 	})
 
 	// 处理被踢事件
-	robot.OnNotice(func(event *onebot.NoticeEvent) error {
+	robot.OnNotice(func(event *onebot.Event) error {
 		if event.NoticeType != "group_decrease" || event.SubType != "kick" {
 			return nil
 		}
 
 		groupID := event.GroupID
 		userID := event.UserID
+		groupIDStr := fmt.Sprintf("%d", groupID)
 
 		// 获取群配置
-		config, ok := p.groupConfigs[groupID]
+		config, ok := p.groupConfigs[groupIDStr]
 		if !ok {
 			return nil
 		}
 
 		// 被踢加黑
 		if config.kickToBlack {
-			p.blacklist = append(p.blacklist, userID)
+			p.blacklist = append(p.blacklist, fmt.Sprintf("%d", userID))
 		}
 
 		// 被踢提示
@@ -290,23 +292,24 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 	})
 
 	// 处理退群事件
-	robot.OnNotice(func(event *onebot.NoticeEvent) error {
+	robot.OnNotice(func(event *onebot.Event) error {
 		if event.NoticeType != "group_decrease" || event.SubType != "leave" {
 			return nil
 		}
 
 		groupID := event.GroupID
 		userID := event.UserID
+		groupIDStr := fmt.Sprintf("%d", groupID)
 
 		// 获取群配置
-		config, ok := p.groupConfigs[groupID]
+		config, ok := p.groupConfigs[groupIDStr]
 		if !ok {
 			return nil
 		}
 
 		// 退群加黑
 		if config.leaveToBlack {
-			p.blacklist = append(p.blacklist, userID)
+			p.blacklist = append(p.blacklist, fmt.Sprintf("%d", userID))
 		}
 
 		// 退群提示

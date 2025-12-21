@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"botworker/internal/config"
 	"botworker/internal/onebot"
 )
 
@@ -71,7 +72,7 @@ func (s *HTTPServer) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 分发事件到对应的处理器
-	s.handleEvent(event)
+	s.dispatchEvent(event)
 
 	// 返回成功响应
 	w.WriteHeader(http.StatusOK)
@@ -125,7 +126,7 @@ func (s *HTTPServer) handleAPIRequest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (s *HTTPServer) handleEvent(event onebot.Event) {
+func (s *HTTPServer) dispatchEvent(event onebot.Event) {
 	// 分发到对应的事件处理器
 	switch event.PostType {
 	case "message":

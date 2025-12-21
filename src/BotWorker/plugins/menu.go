@@ -3,9 +3,7 @@ package plugins
 import (
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
-	"fmt"
 	"log"
-	"strings"
 )
 
 // MenuPlugin 菜单插件

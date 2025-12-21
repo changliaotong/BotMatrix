@@ -345,6 +345,46 @@ func CreateOrUpdateSession(db *sql.DB, session *Session) error {
 	return nil
 }
 
+// CreateUserTx 在事务中创建新用户
+func CreateUserTx(tx *sql.Tx, user *User) error {
+	query := `
+	INSERT INTO users (user_id, nickname, avatar, gender, updated_at)
+	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+	ON CONFLICT (user_id) DO UPDATE
+	SET nickname = $2, avatar = $3, gender = $4, updated_at = CURRENT_TIMESTAMP
+	`
+
+	_, err := tx.Exec(query, user.UserID, user.Nickname, user.Avatar, user.Gender)
+	if err != nil {
+		return fmt.Errorf("创建用户失败: %w", err)
+	}
+
+	return nil
+}
+
+// CreateOrUpdateSessionTx 在事务中创建或更新会话状态
+func CreateOrUpdateSessionTx(tx *sql.Tx, session *Session) error {
+	query := `
+	INSERT INTO sessions (session_id, user_id, group_id, state, data, updated_at)
+	VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+	ON CONFLICT (session_id) DO UPDATE
+	SET user_id = $2, group_id = $3, state = $4, data = $5, updated_at = CURRENT_TIMESTAMP
+	`
+
+	// 将Data转换为JSONB
+	dataJSON, err := json.Marshal(session.Data)
+	if err != nil {
+		return fmt.Errorf("序列化会话数据失败: %w", err)
+	}
+
+	_, err = tx.Exec(query, session.SessionID, session.UserID, session.GroupID, session.State, dataJSON)
+	if err != nil {
+		return fmt.Errorf("创建或更新会话失败: %w", err)
+	}
+
+	return nil
+}
+
 // GetSessionBySessionID 根据会话ID获取会话状态
 func GetSessionBySessionID(db *sql.DB, sessionID string) (*Session, error) {
 	query := `
@@ -800,12 +840,12 @@ func RegisterUserWithSession(db *sql.DB, user *User, session *Session) error {
 	}()
 
 	// 在事务中执行用户创建
-	if err = CreateUser(tx, user); err != nil {
+	if err = CreateUserTx(tx, user); err != nil {
 		return err
 	}
 
 	// 在事务中执行会话创建
-	if err = CreateOrUpdateSession(tx, session); err != nil {
+	if err = CreateOrUpdateSessionTx(tx, session); err != nil {
 		return err
 	}
 
