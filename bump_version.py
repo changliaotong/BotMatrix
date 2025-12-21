@@ -15,7 +15,12 @@ def bump_version(part='patch'):
     with open(version_file, 'r') as f:
         current_version = f.read().strip()
     
-    match = re.match(r'(\d+)\.(\d+)\.(\d+)', current_version)
+    # Handle optional 'v' prefix
+    version_str = current_version
+    if version_str.startswith('v'):
+        version_str = version_str[1:]
+    
+    match = re.match(r'(\d+)\.(\d+)\.(\d+)', version_str)
     if not match:
         print(f"Error: Invalid version format {current_version}")
         return None
@@ -34,6 +39,8 @@ def bump_version(part='patch'):
         patch += 1
     
     new_version = f"{major}.{minor}.{patch}"
+    if current_version.startswith('v'):
+        new_version = "v" + new_version
     print(f"Bumping version: {current_version} -> {new_version}")
 
     # 3. Write new version

@@ -53,14 +53,15 @@ For a detailed history of all changes and versions, please refer to the [CHANGEL
 
 | Directory | Description | Language |
 | :--- | :--- | :--- |
-| `BotNexus/` | Central Gateway & Management API | Go |
-| `Overmind/` | Cross-platform Management Dashboard | Flutter |
-| `WxBotGo/` | High-performance WeChat Bot (Android/UOS) | Go |
-| `WxBot/` | Legacy/Feature-rich WeChat Bot | Python |
-| `SystemWorker/` | System Monitoring & Remote Execution | Python |
-| `TencentBot/` | Official QQ Guild/Group Support | Go |
-| `DingTalkBot/` | Enterprise DingTalk Integration | Go |
-| `FeishuBot/` | Modern Feishu/Lark Integration | Go |
+| `src/BotNexus/` | High-performance WebSocket Gateway & Proxy | Go |
+| `src/BotAdmin/` | Management API & Dashboard Server | Go |
+| `src/BotWorker/` | Plugin-based Message Processing Worker | Go |
+| `src/Overmind/` | Cross-platform Management Dashboard (Mobile/Web) | Flutter |
+| `src/SystemWorker/` | System Monitoring & Remote Execution | Python |
+| `src/TencentBot/` | Official QQ Guild/Group Support | Go |
+| `src/DingTalkBot/` | Enterprise DingTalk Integration | Go |
+| `src/FeishuBot/` | Modern Feishu/Lark Integration | Go |
+| `src/Common/` | Shared Core Libraries & Types | Go |
 | `docs/` | Detailed Technical Documentation | Markdown |
 
 ---
@@ -74,7 +75,7 @@ We provide a unified deployment script `deploy.py` for simplified lifecycle mana
 python deploy.py --target all --mode full
 
 # Fast update (restart containers without rebuild)
-python deploy.py --target manager --mode fast
+python deploy.py --target nexus --mode fast
 ```
 
 Detailed deployment guides can be found in [docs/DEPLOY.md](docs/DEPLOY.md).
@@ -97,7 +98,9 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 **BotMatrix** is a high-performance, distributed robot management platform designed for enterprise scale. It decouples the connection layer from the logic layer, allowing for massive scalability and robust management.
 
-*   **BotNexus (The Core)**: A high-concurrency Gateway written in **Go**. It provides a unified WebSocket interface, REST API, and a powerful **Real-time Dashboard**.
+*   **BotNexus (The Core)**: A high-concurrency Gateway written in **Go**. It provides a unified WebSocket interface for bots and workers, handling message routing and load balancing.
+*   **BotAdmin (The Brain)**: The management backend that provides REST APIs, JWT authentication, and serves the **Real-time Dashboard**.
+*   **Overmind (The Eye)**: A cross-platform dashboard built with Flutter, allowing you to manage your bot fleet from anywhere.
 *   **SystemWorker (The Brain)**: A system-level **Python** worker. It handles global commands, visualizes status, and executes remote code.
 *   **WxBot (The Bot)**: A flexible Bot Node written in **Python**. It handles protocol adaptation (WeChat/OneBot) and executes business logic.
 *   **WeComBot (Enterprise)**: A **Go-based** implementation for WeChat Work (WeCom), supporting internal app integration via callbacks.
