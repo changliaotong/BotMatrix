@@ -1,106 +1,82 @@
 # BotNexus 系统文档
 
+BotNexus 是一个统一的机器人矩阵管理系统，采用 Go 语言后端与现代化 Web 前端，支持大规模机器人的拓扑可视化、实时监控、Docker 容器管理及智能路由分发。
+
 ## 🏗️ 系统架构
 
-BotNexus是一个多机器人管理系统，支持QQ、微信等平台的机器人统一管理。
+BotNexus 作为一个中心枢纽，连接并管理多个机器人实例（Bots）与处理节点（Workers）。
 
 ### 核心特性
-- **智能路由**: 动态 RTT 感知路由，支持基于用户/群组/机器人 ID 的精确及通配符匹配，规则支持数据库持久化，具备离线 Worker 自动回退机制。
-- **3D 拓扑可视化**: 基于 Three.js 的 3D 宇宙拓扑图，支持群组聚类（Clustering）、层次化连线优化、实时消息粒子特效及全景头像代理。
-- **高可靠性与持久化**: 消息转发失败自动重试，所有缓存（群组/好友/成员/统计）均支持 SQLite 持久化，支持 WebSocket 初始同步（SyncState）确保刷新不掉数。
-- **用户管理**: 完善的用户管理体系，支持管理员创建用户、重置密码及用户自助修改密码。
-- **现代化 UI**: 响应式设计，实时系统资源监控，独立的运行时间与系统时间显示，仪表盘集成轮播统计块。
+- **3D 拓扑可视化 (Matrix 3D)**: 基于 Three.js 的实时宇宙拓扑。支持节点聚类、实时消息粒子特效、自动连线优化及头像全景代理。
+- **Docker 容器化管理**: 直接在后台面板监控 Docker 容器状态（CPU/内存），支持一键 启动/停止/重启/删除 容器，并支持一键部署新的 Bot 或 Worker 实例。
+- **智能路由分发**: 具备 RTT 感知的动态路由算法，支持精确 ID 及通配符（*）匹配，规则持久化，支持节点离线自动回退。
+- **多语言支持 (i18n)**: 完整支持 中文/英文 界面切换，适配全球化管理需求。
+- **系统日志管理**: 实时流式日志展示，支持关键词过滤、日志一键清空及日志历史导出。
+- **用户管理体系**: 完善的 RBAC 权限模型。管理员可创建用户、重置密码、切换用户状态（启用/禁用）。支持 `session_version` 强制 Token 失效。
+- **数据持久化**: 核心缓存（联系人/统计/配置）均支持 SQLite 持久化，确保服务重启后数据秒级同步。
 
 ### 技术栈
-- **后端**: Go 1.19+, SQLite 3 (持久化), JWT (身份认证), bcrypt (密码加密)
-- **前端**: HTML5/CSS3/JS, Bootstrap 5, Chart.js, BI Icons
+- **后端**: Go 1.20+, SQLite 3, JWT (Auth), Docker SDK
+- **前端**: Vue 3 (Composition API), Three.js (3D), Tailwind CSS, Lucide Icons
 - **移动端**: Flutter (Overmind)
-- **小程序**: 原生小程序框架
 
-## 🔐 认证机制
-
-### 登录流程
-1. 前端发送POST请求到 `/api/login`
-2. 后端验证用户名密码（从 SQLite 数据库加载）
-3. 返回JWT令牌
-4. 前端存储令牌到localStorage
-
-### 安全特性
-- **SQLite 持久化**: 用户数据永久存储在本地数据库，解决 Redis 重启导致的数据丢失。
-- **密码加密**: 使用 bcrypt 强哈希算法存储密码。
-- **会话失效**: 密码修改或重置后，通过递增 `session_version` 强制旧 Token 失效。
-- **SSO 登录**: 支持跨系统（BotNexus & Overmind）的令牌透传。
-
-## 📡 API接口
-
-### 认证与用户
-- `POST /api/login` - 用户登录
-- `GET /api/user/info` - 获取当前用户信息
-- `POST /api/user/password` - 用户修改密码
-- `GET /api/admin/users` - (Admin) 获取用户列表
-- `POST /api/admin/user/reset-password` - (Admin) 重置用户密码
-
-### 监控与管理
-- `GET /api/system/stats` - 系统运行详细统计
-- `GET /api/stats` - 业务统计数据 (群/用户/消息)
-- `GET /api/bots` - 机器人列表
-- `GET /api/workers` - 处理端 (Workers) 列表
-- `POST /api/bot/toggle` - 切换机器人状态
-
-### WebSocket接口
-- `/ws/subscriber` - 实时消息推送与系统监控 (需JWT认证)
-
-## 🚀 部署说明
+## 🚀 快速开始
 
 ### 环境要求
-- Go 1.19+
-- SQLite 3 (自动初始化)
-- Redis 6.0+ (用于消息缓存，非必须)
+- **Docker**: 必须安装并运行（若需容器管理功能）
+- **Go**: 1.19+（本地编译）
+- **SQLite**: 自动初始化
 
 ### 启动步骤
-1. 运行BotNexus主程序
-2. 首次启动会自动创建 `bot_nexus.db` 数据库文件
-3. 默认管理员账号: `admin`, 默认密码: `admin123` (可在 `config.go` 修改)
-4. 访问Web界面: `http://localhost:5000`
+1. **获取代码**:
+   ```bash
+   git clone <repository_url>
+   cd BotNexus
+   ```
+2. **运行服务**:
+   ```bash
+   go run .
+   ```
+3. **访问后台**:
+   - URL: `http://localhost:5000`
+   - 默认账号: `admin`
+   - 默认密码: `admin123`
 
-## 🎯 未来规划
+## 📡 API 概览
 
-### 长期目标
-- [ ] 插件化架构
-- [ ] 分布式部署
-- [ ] AI智能管理
+### 认证
+- `POST /api/login` - 获取 JWT Token
+- `GET /api/me` - 获取个人信息
 
-## 🐛 已修复问题
-- [x] 3D 群组聚类与成员围绕分布 (Clustering)
-- [x] 3D 连线树状优化与性能提升 (Tree-like Links)
-- [x] WebSocket 初始状态同步与刷新数据恢复 (Initial Sync)
-- [x] SQLite 全局统计与联系人缓存持久化 (Persistence)
-- [x] 后台用户管理 (添加、修改、重置密码)
-- [x] 智能路由未处理节点轮询问题
-- [x] 消息转发确认、重发、自动更换节点与离线缓存
-- [x] 运行时间及现在时间实时刷新
-- [x] UI 布局优化 (OS 信息独立, 群/用户数量合并)
-- [x] Overmind 链接跳转当前页面的 Bug
-- [x] 处理端 (Workers) 数量在仪表盘显示为 undefined
-- [x] 机器人 (Bots) 统计数据在某些情况下显示为 0
-- [x] 机器人选择下拉菜单无法显示头像或昵称 (缺失 self_id)
-- [x] 前端/后端登录端点不匹配
-- [x] Redis 依赖导致的密码丢失
-- [x] 登录页面无法在移动端输入
-- [x] 系统统计数据 undefined 显示问题
-- [x] 登录按钮点击无反应问题
-- [x] WebSocket 持续重连与连接错误问题
+### Docker 管理
+- `GET /api/docker/list` - 获取容器列表
+- `POST /api/docker/action` - 执行容器操作 (start/stop/restart/delete)
+- `POST /api/docker/add-bot` - 部署机器人
+- `POST /api/docker/add-worker` - 部署处理节点
+- `GET /api/admin/docker/logs` - 获取容器日志
 
-## 📚 相关文档
+### 用户管理
+- `GET /api/admin/users` - 获取所有用户
+- `POST /api/admin/users` - 管理用户 (create/delete/reset_password/toggle_active)
 
-- [Go官方文档](https://golang.org/doc/)
-- [Redis文档](https://redis.io/documentation)
-- [WebSocket协议](https://developer.mozilla.org/zh-CN/docs/Web/API/WebSockets_API)
+### 系统日志
+- `GET /api/logs` - 获取流式日志
+- `POST /api/logs/clear` - 清空日志
 
-## 🤝 贡献指南
+## 🎯 核心逻辑
 
-欢迎提交Issues和Pull Requests来改进系统。
+### 3D 优化 (Performance)
+- **材质缓存**: 复用 GPU 纹理与材质，减少内存占用。
+- **光源限制**: 动态限制实时点光源数量，确保在消息量激增时维持 60 FPS。
+- **自动同步**: WebSocket `sync_state` 确保前端节点状态与后端严格一致。
 
-## 📞 支持
+### 安全模型
+- **JWT Middleware**: 全局接口权限校验。
+- **Admin Middleware**: 核心管理操作二次验证。
+- **Password Hashing**: 使用 bcrypt 进行高强度加密。
 
-如有问题，请在GitHub Issues中提交。
+## 🤝 贡献与反馈
+欢迎通过 GitHub Issues 提交建议或报告 Bug。
+
+---
+*BotNexus - Powering your bot matrix with elegance.*

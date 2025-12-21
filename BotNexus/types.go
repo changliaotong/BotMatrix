@@ -99,14 +99,26 @@ type SyncState struct {
 	Friends       map[string]map[string]interface{} `json:"friends"`
 	Members       map[string]map[string]interface{} `json:"members"`
 	Bots          []BotClient                       `json:"bots"`
+	Workers       []WorkerInfo                      `json:"workers"`
 	TotalMessages int64                             `json:"total_messages"`
+}
+
+type WorkerInfo struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Status   string `json:"status"`
+	LastSeen string `json:"last_seen"`
 }
 
 // RoutingEvent represents a message routing event for visualization
 type RoutingEvent struct {
 	Type          string    `json:"type"`      // Always "routing_event"
 	Source        string    `json:"source"`    // BotID or WorkerID or UserID
-	Target        string    `json:"target"`    // WorkerID or BotID or "Nexus"
+	SourceType    string    `json:"source_type"`
+	SourceLabel   string    `json:"source_label"`
+	Target        string    `json:"target"` // WorkerID or BotID or "Nexus"
+	TargetType    string    `json:"target_type"`
+	TargetLabel   string    `json:"target_label"`
 	Direction     string    `json:"direction"` // "user_to_bot", "bot_to_nexus", "nexus_to_worker", etc.
 	MsgType       string    `json:"msg_type"`  // "message", "request", "response"
 	Timestamp     time.Time `json:"timestamp"`
@@ -118,6 +130,15 @@ type RoutingEvent struct {
 	GroupID       string    `json:"group_id"`       // Optional: Group ID
 	GroupName     string    `json:"group_name"`     // Optional: Group Name
 	TotalMessages int64     `json:"total_messages"` // Current total message count
+}
+
+// DockerEvent represents a docker container state change
+type DockerEvent struct {
+	Type        string    `json:"type"` // Always "docker_event"
+	Action      string    `json:"action"`
+	ContainerID string    `json:"container_id"`
+	Status      string    `json:"status"`
+	Timestamp   time.Time `json:"timestamp"`
 }
 
 // ==================== 统计结构体 ====================

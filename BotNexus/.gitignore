@@ -1,0 +1,27 @@
+# BotNexus Git Ignore
+# Binaries
+botnexus
+botnexus.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+go.sum

@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Dashboard</title>
+    <!-- System Shield Protection -->
+    <script src="js/shield.js"></script>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        matrix: '#00ff41',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Vue 3 CDN (Production) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- THREE.js for Visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --matrix-green: #00ff41;
+            --matrix-dark: #0a0a0a;
+            --matrix-light: #f8fafc;
+            --matrix-glow: rgba(0, 255, 65, 0.2);
+        }
+
+        body {
+            background-color: var(--matrix-dark);
+            color: #e0e0e0;
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dark body {
+            background-color: var(--matrix-dark);
+            color: #e0e0e0;
+        }
+
+        html:not(.dark) body {
+            background-color: var(--matrix-light);
+            color: #1e293b;
+        }
+
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.05;
+            pointer-events: none;
+            display: block;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        html:not(.dark) .glass {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .neon-border {
+            border: 1px solid var(--matrix-green);
+            box-shadow: 0 0 10px var(--matrix-glow);
+        }
+
+        .neon-text {
+            color: var(--matrix-green);
+            text-shadow: 0 0 5px var(--matrix-glow);
+        }
+
+        .animate-pulse-slow {
+            animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(0, 255, 65, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        html:not(.dark) .card-hover:hover {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0, 255, 65, 0.5);
+        }
+
+        [v-cloak] {
+            display: none;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 65, 0.1);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 255, 65, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak class="min-h-screen flex text-gray-900 dark:text-gray-100 transition-colors duration-300">
+        <!-- Matrix Background Effect -->
+        <canvas id="matrixCanvas" class="matrix-bg" v-show="isDark"></canvas>
+
+        <!-- Mobile Sidebar Overlay -->
+        <div v-if="showMobileMenu" 
+             class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 lg:hidden transition-opacity"
+             @click="showMobileMenu = false">
+        </div>
+
+        <!-- Mobile Sidebar Content -->
+        <aside :class="showMobileMenu ? 'translate-x-0' : '-translate-x-full'"
+               class="fixed inset-y-0 left-0 w-72 glass border-r border-black/5 dark:border-white/5 flex flex-col z-[60] lg:hidden transition-transform duration-300 ease-in-out">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center neon-border">
+                            <i data-lucide="layout-grid" class="text-green-500 dark:text-green-400 w-6 h-6"></i>
+                        </div>
+                        <h1 class="text-xl font-bold tracking-tighter neon-text">MATRIX</h1>
+                    </div>
+                    <button @click="showMobileMenu = false" class="text-gray-500 hover:text-green-500">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+
+                <nav class="space-y-1">
+                    <button v-for="item in navItems" :key="item.id"
+                            @click="activeTab = item.id; showMobileMenu = false"
+                            :class="activeTab === item.id ? 'bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 dark:border-green-500/50' : 'text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 border-transparent'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all group">
+                        <i :data-lucide="item.icon" class="w-5 h-5 transition-transform group-hover:scale-110"></i>
+                        <span class="text-sm font-medium">{{ item.label }}</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div class="mt-auto p-6 border-t border-black/5 dark:border-white/5 space-y-4">
+                <button @click="goBack" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:text-green-600 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all text-sm">
+                    <i data-lucide="undo-2" class="w-5 h-5"></i>
+                    <span>{{ t('back') }}</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Desktop Sidebar Navigation -->
+        <aside class="hidden lg:flex w-64 glass border-r border-black/5 dark:border-white/5 flex-col z-20">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center neon-border">
+                        <i data-lucide="layout-grid" class="text-green-500 dark:text-green-400 w-6 h-6"></i>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tighter neon-text">MATRIX</h1>
+                </div>
+
+                <nav class="space-y-1">
+                    <button v-for="item in navItems" :key="item.id"
+                            @click="activeTab = item.id"
+                            :class="activeTab === item.id ? 'bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 dark:border-green-500/50' : 'text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 border-transparent'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all group">
+                        <i :data-lucide="item.icon" class="w-5 h-5 transition-transform group-hover:scale-110"></i>
+                        <span class="text-sm font-medium">{{ item.label }}</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div class="mt-auto p-6 border-t border-black/5 dark:border-white/5 space-y-4">
+                <button @click="goBack" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:text-green-600 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all text-sm">
+                    <i data-lucide="undo-2" class="w-5 h-5"></i>
+                    <span>{{ t('back') }}</span>
+                </button>
+                <div class="flex items-center gap-3 px-4 py-2">
+                    <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-[10px] font-bold text-green-600 dark:text-green-400">ADM</div>
+                    <div class="overflow-hidden">
+                        <p class="text-xs font-bold truncate dark:text-white">Administrator</p>
+                        <p class="text-[10px] text-gray-500 mono">v1.2.5-PRO</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col overflow-hidden relative z-10">
+            <!-- Top Header -->
+            <header class="h-20 flex justify-between items-center px-4 md:px-8 border-b border-black/5 dark:border-white/5 glass">
+                <div class="flex items-center gap-4">
+                    <!-- Mobile Menu Toggle -->
+                    <button @click="showMobileMenu = true" class="lg:hidden w-10 h-10 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center border border-black/5 dark:border-white/10 transition-all">
+                        <i data-lucide="menu" class="w-5 h-5 text-gray-500 dark:text-gray-400"></i>
+                    </button>
+
+                    <h2 class="text-sm md:text-lg font-bold uppercase tracking-widest mono dark:text-white">{{ activeNavItem?.label }}</h2>
+                    <span class="hidden sm:inline-block px-2 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-500 text-[10px] mono animate-pulse">LIVE SYNC</span>
+                </div>
+                
+                <div class="flex gap-2 md:gap-6 items-center">
+                    <!-- Theme & Lang Toggles -->
+                    <div class="flex items-center bg-black/5 dark:bg-white/5 rounded-2xl p-1 border border-black/5 dark:border-white/5">
+                        <button @click="toggleTheme" class="w-8 h-8 rounded-xl flex items-center justify-center transition-all" 
+                                :class="isDark ? 'text-gray-500 hover:text-white' : 'bg-white shadow-sm text-yellow-500'">
+                            <i :data-lucide="isDark ? 'moon' : 'sun'" class="w-4 h-4"></i>
+                        </button>
+                        <button @click="toggleLang" class="px-2 md:px-3 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all hover:bg-black/5 dark:hover:bg-white/5">
+                            {{ lang === 'zh-CN' ? '中文' : 'EN' }}
+                        </button>
+                    </div>
+
+                    <div class="hidden xl:flex items-center gap-2 mr-4">
+                        <!-- Shield Status -->
+                        <div v-if="shieldActive" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-green-500/10 border border-green-500/20">
+                            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-green-500"></i>
+                            <span class="text-[10px] text-green-500 font-bold uppercase tracking-wider mono">Shield Active</span>
+                        </div>
+                        <div v-else class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                            <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-yellow-500"></i>
+                            <span class="text-[10px] text-yellow-500 font-bold uppercase tracking-wider mono">Shield Inactive</span>
+                        </div>
+                    </div>
+
+                    <div class="hidden xl:flex flex-col items-end border-l border-black/5 dark:border-white/5 pl-6">
+                        <span class="text-[10px] text-gray-500 uppercase tracking-widest mono">{{ t('protocol_time') }}</span>
+                        <span class="text-sm font-bold mono text-green-600 dark:text-green-400">{{ currentTime }}</span>
+                    </div>
+
+                    <div class="flex gap-2 md:gap-3">
+                        <button class="hidden sm:flex w-10 h-10 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 flex items-center justify-center border border-black/5 dark:border-white/10 transition-all">
+                            <i data-lucide="bell" class="w-5 h-5 text-gray-500 dark:text-gray-400"></i>
+                        </button>
+                        <button @click="logout" class="w-10 h-10 rounded-xl bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center border border-red-500/20 transition-all">
+                            <i data-lucide="log-out" class="w-5 h-5 text-red-500"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Scrollable Content Area -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                <!-- Tab: Overview -->
+                <div v-if="activeTab === 'overview'" class="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                        <div v-for="(stat, index) in coreStats" :key="index" class="glass rounded-3xl p-6 border border-black/5 dark:border-white/5 hover:border-green-500/30 transition-all group">
+                            <div class="flex justify-between items-start mb-4">
+                                <div :class="`w-12 h-12 rounded-2xl flex items-center justify-center bg-${stat.color}-500/10 border border-${stat.color}-500/20`">
+                                    <i :data-lucide="stat.icon" :class="`text-${stat.color}-500 dark:text-${stat.color}-400 w-6 h-6`"></i>
+                                </div>
+                                <span class="text-[10px] text-gray-500 mono uppercase tracking-wider">{{ stat.trend || 'STABLE' }}</span>
+                            </div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">{{ stat.label }}</p>
+                            <h4 class="text-3xl font-bold mono text-gray-900 dark:text-white">{{ stat.value }}</h4>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+                        <!-- Network Pulse -->
+                        <div class="lg:col-span-2 glass rounded-3xl p-4 md:p-6 border border-black/5 dark:border-white/5">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-widest mono">{{ t('pulse_map') }}</h3>
+                                <div class="flex gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                                    <span class="text-[10px] text-green-600 dark:text-green-500 mono uppercase">{{ t('realtime_stream') }}</span>
+                                </div>
+                            </div>
+                            <div class="flex items-end gap-1 md:gap-1.5 h-48 md:h-64">
+                                <div v-for="(bar, i) in pulseBars" :key="i" 
+                                     :style="{ height: bar + '%' }"
+                                     class="flex-1 bg-gradient-to-t from-green-500/40 to-green-400/10 rounded-t-lg hover:from-green-500 transition-all cursor-help relative group">
+                                     <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-green-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity mono">
+                                         {{ bar }}%
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- System Logs Quick View -->
+                        <div class="glass rounded-3xl p-4 md:p-6 border border-black/5 dark:border-white/5 flex flex-col">
+                            <h3 class="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-6 mono">{{ t('node_events') }}</h3>
+                            <div class="flex-1 space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                <div v-for="i in 5" :key="i" class="flex gap-4 items-start border-l-2 border-green-500/20 pl-4 py-1">
+                                    <div class="flex-1">
+                                        <p class="text-xs text-gray-700 dark:text-white/80"><span class="text-green-600 dark:text-green-400 font-bold mono">BOT_0{{i}}</span> {{ t('secure_link') }}</p>
+                                        <p class="text-[10px] text-gray-500 mono">0{{i}}:24:1{{i}} SEC_ALPHA</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="mt-6 w-full py-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-widest transition-all border border-black/5 dark:border-white/5">
+                                {{ t('security_logs') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Bots Matrix -->
+                <div v-if="activeTab === 'bots'" class="space-y-4 md:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <!-- Search & Filters -->
+                    <div class="flex flex-col lg:flex-row gap-4 justify-between items-center glass rounded-2xl p-4 border border-black/5 dark:border-white/5">
+                        <div class="relative w-full lg:w-96">
+                            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4"></i>
+                            <input v-model="searchQuery" type="text" :placeholder="t('search_placeholder')" 
+                                   class="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl py-2 pl-12 pr-4 focus:outline-none focus:border-green-500/50 transition-all text-sm dark:text-white">
+                        </div>
+                        <div class="flex gap-2 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+                            <button v-for="tab in ['all', 'active', 'offline']" :key="tab"
+                                    @click="filterTab = tab"
+                                    :class="filterTab === tab ? 'bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 dark:border-green-500/50' : 'bg-black/5 dark:bg-white/5 text-gray-500 dark:text-gray-400 border-black/5 dark:border-white/10'"
+                                    class="flex-1 lg:flex-none px-4 py-2 rounded-xl border text-[10px] uppercase tracking-wider font-bold transition-all whitespace-nowrap">
+                                {{ t(tab + '_sectors') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bot Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                        <div v-for="bot in filteredBots" :key="bot.self_id" 
+                             class="glass rounded-3xl p-5 border border-black/5 dark:border-white/5 card-hover relative overflow-hidden group">
+                            
+                            <div :class="bot.is_alive ? 'bg-green-500/5' : 'bg-red-500/5'" class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+
+                            <div class="flex justify-between items-start mb-4 relative z-10">
+                                <div class="flex items-center gap-3">
+                                    <div class="relative">
+                                        <img :src="getAvatar(bot)" class="w-12 h-12 rounded-2xl object-cover border border-black/5 dark:border-white/10" @error="handleAvatarError">
+                                        <div :class="bot.is_alive ? 'bg-green-500' : 'bg-red-500'" 
+                                             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-white dark:border-[#0a0a0a]"></div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-gray-900 dark:text-white text-sm truncate w-32">{{ bot.nickname || bot.self_id }}</h4>
+                                        <p class="text-[10px] text-gray-500 mono uppercase">{{ bot.platform || 'Unknown' }}</p>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end">
+                                    <span class="text-[10px] text-gray-500 mono">{{ t('msgs') }}</span>
+                                    <span class="text-sm font-bold mono text-green-600 dark:text-green-400">{{ bot.msg_count_today || 0 }}</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3 mb-4 relative z-10">
+                                <div class="bg-black/5 dark:bg-white/5 rounded-2xl p-3 border border-black/5 dark:border-white/5">
+                                    <p class="text-[10px] text-gray-500 uppercase mb-1">{{ t('groups') }}</p>
+                                    <p class="text-lg font-bold mono dark:text-white">{{ bot.group_count || 0 }}</p>
+                                </div>
+                                <div class="bg-black/5 dark:bg-white/5 rounded-2xl p-3 border border-black/5 dark:border-white/5">
+                                    <p class="text-[10px] text-gray-500 uppercase mb-1">{{ t('friends') }}</p>
+                                    <p class="text-lg font-bold mono dark:text-white">{{ bot.friend_count || 0 }}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-between items-center pt-4 border-t border-black/5 dark:border-white/5 relative z-10">
+                                <span class="text-[10px] text-gray-500 mono">{{ t('id') }}: {{ bot.self_id }}</span>
+                                <div class="flex gap-2">
+                                    <button @click="manageBot(bot.self_id, 'restart')" class="w-8 h-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 flex items-center justify-center border border-blue-500/20 transition-all" title="Restart">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4 text-blue-500"></i>
+                                    </button>
+                                    <button v-if="bot.is_alive" @click="manageBot(bot.self_id, 'logout')" class="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center border border-red-500/20 transition-all" title="Logout">
+                                        <i data-lucide="square" class="w-4 h-4 text-red-500"></i>
+                                    </button>
+                                    <button v-else @click="manageBot(bot.self_id, 'login')" class="w-8 h-8 rounded-lg bg-green-500/10 hover:bg-green-500/20 flex items-center justify-center border border-green-500/20 transition-all" title="Login">
+                                        <i data-lucide="play" class="w-4 h-4 text-green-500"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div v-if="filteredBots.length === 0" class="flex flex-col items-center justify-center py-20 glass rounded-3xl border border-dashed border-black/10 dark:border-white/10">
+                        <i data-lucide="ghost" class="w-16 h-16 text-gray-400 dark:text-gray-600 mb-4"></i>
+                        <p class="text-gray-500 dark:text-gray-400 font-medium">{{ t('no_nodes') }}</p>
+                    </div>
+                </div>
+
+                <!-- Tab: Visualization -->
+                <div v-if="activeTab === 'visualization'" class="h-full relative animate-in fade-in duration-500 overflow-hidden rounded-3xl border border-black/5 dark:border-white/5 glass">
+                    <div id="visualizerContainer" class="w-full h-full"></div>
+                    
+                    <!-- Visualization Overlay UI -->
+                    <div class="absolute top-6 left-6 pointer-events-none">
+                        <div class="glass p-6 rounded-2xl border border-white/10 space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                <h3 class="text-xs font-bold mono tracking-[0.2em]">{{ t('neural_nodes') }}</h3>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center gap-8">
+                                    <span class="text-[10px] text-gray-500 mono">{{ t('active_routing') }}</span>
+                                    <span class="text-xs font-bold text-green-500 mono">{{ logs.filter(l => (l.msg || l.message || '').toLowerCase().includes('route')).length }}</span>
+                                </div>
+                                <div class="flex justify-between items-center gap-8">
+                                    <span class="text-[10px] text-gray-500 mono">{{ t('sync_status') }}</span>
+                                    <span class="text-xs font-bold text-blue-400 mono">ENCRYPTED</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls Overlay -->
+                    <div class="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+                        <div class="glass p-4 rounded-2xl border border-white/10 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span :class="wsStatus === 'online' ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full animate-pulse"></span>
+                                <span class="text-[10px] text-gray-400 mono uppercase">NEURAL LINK: {{ wsStatus }}</span>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="text-[10px] text-gray-500 mono uppercase">BOTS: {{ bots.length }}</div>
+                                <div class="text-[10px] text-gray-500 mono uppercase">NODES: {{ stats.active_workers }}</div>
+                            </div>
+                        </div>
+                        <button @click="resetCamera" class="px-6 py-3 rounded-2xl glass border border-white/10 text-[10px] font-bold mono tracking-widest hover:bg-white/5 transition-all flex items-center gap-2 text-white">
+                            <i data-lucide="maximize" class="w-3 h-3"></i>
+                            {{ t('reset_camera') }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab: Groups Matrix -->
+                <div v-if="activeTab === 'groups'" class="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="flex justify-between items-center shrink-0">
+                        <div class="flex items-center gap-4">
+                            <select v-model="selectedBotId" class="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-green-500/50 dark:text-white">
+                                <option value="" disabled>{{ t('select_bot') || 'Select Bot' }}</option>
+                                <option v-for="bot in bots" :key="bot.self_id" :value="bot.self_id">{{ bot.nickname || bot.self_id }}</option>
+                            </select>
+                            <button @click="fetchGroups(selectedBotId, true)" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/10 transition-all">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 text-gray-500"></i>
+                            </button>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="openMassSend('group')" class="px-4 py-2 rounded-xl bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 text-xs font-bold uppercase tracking-wider hover:bg-green-500/20 transition-all">
+                                {{ t('mass_send') || 'Mass Send' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="!selectedBotId" class="flex-1 flex flex-col items-center justify-center glass rounded-3xl border border-dashed border-black/10 dark:border-white/10">
+                        <i data-lucide="bot" class="w-12 h-12 text-gray-300 dark:text-gray-700 mb-4"></i>
+                        <p class="text-gray-500">{{ t('select_bot_hint') || 'Please select a bot to view groups' }}</p>
+                    </div>
+
+                    <div v-else class="flex-1 flex gap-6 overflow-hidden min-h-0">
+                        <!-- Groups Sidebar -->
+                        <div class="w-72 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 shrink-0">
+                            <div v-for="group in groups" :key="group.group_id" 
+                             @click="fetchGroupMembers(group.group_id || group.guild_id)"
+                             :class="currentGroup?.group_id === (group.group_id || group.guild_id) ? 'border-green-500/50 bg-green-500/5 shadow-lg shadow-green-500/5' : 'border-black/5 dark:border-white/5'"
+                             class="glass rounded-2xl p-4 border card-hover cursor-pointer transition-all shrink-0 relative group/card">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                    {{ (group.group_name || 'G')[0] }}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="text-xs font-bold text-gray-900 dark:text-white truncate">{{ group.group_name }}</h4>
+                                    <p class="text-[9px] text-gray-500 mono">{{ group.group_id || group.guild_id }}</p>
+                                </div>
+                                <button @click.stop="leaveGroup(group.group_id || group.guild_id)" class="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500 opacity-0 group-hover/card:opacity-100 transition-all" :title="t('confirm_leave_group')">
+                                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+                        </div>
+
+                        <!-- Member Management Area -->
+                        <div class="flex-1 glass rounded-3xl border border-black/5 dark:border-white/5 flex flex-col overflow-hidden min-h-0">
+                            <div v-if="!currentGroup" class="flex-1 flex flex-col items-center justify-center opacity-50">
+                                <i data-lucide="users" class="w-12 h-12 mb-4"></i>
+                                <p class="text-sm mono uppercase tracking-widest">{{ t('select_group_hint') || 'Select a group to manage members' }}</p>
+                            </div>
+                            
+                            <template v-else>
+                                <!-- Member Header/Filters -->
+                                <div class="p-6 border-b border-black/5 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
+                                    <div class="flex items-center gap-4 w-full md:w-auto">
+                                        <div class="relative flex-1 md:w-64">
+                                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"></i>
+                                            <input v-model="memberSearchQuery" type="text" :placeholder="t('search_members') || 'Search members...'" 
+                                                   class="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl py-2 pl-10 pr-4 text-xs dark:text-white focus:outline-none focus:border-green-500/50">
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-4 shrink-0">
+                                        <div class="flex bg-black/5 dark:bg-white/5 rounded-xl p-1 border border-black/5 dark:border-white/5">
+                                            <button v-for="sort in ['role', 'nickname', 'user_id']" :key="sort"
+                                                    @click="sortMembers(sort)"
+                                                    :class="memberSortBy === sort ? 'bg-white dark:bg-white/10 shadow-sm text-green-500' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'"
+                                                    class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-1">
+                                                {{ t('sort_' + sort) || sort }}
+                                                <i v-if="memberSortBy === sort" :data-lucide="memberSortAsc ? 'chevron-up' : 'chevron-down'" class="w-3 h-3"></i>
+                                            </button>
+                                        </div>
+                                        <button @click="checkGroupMember" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 transition-all" :title="t('prompt_check_member')">
+                                            <i data-lucide="user-plus" class="w-4 h-4"></i>
+                                        </button>
+                                        <button @click="fetchGroupMembers(currentGroup.group_id || currentGroup.guild_id)" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 transition-all">
+                                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Member List -->
+                                <div class="flex-1 overflow-y-auto custom-scrollbar p-6 min-h-0">
+                                    <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                                        <div v-for="member in filteredMembers" :key="member.user_id" 
+                                             class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 hover:border-green-500/30 transition-all group">
+                                            <div class="flex items-start justify-between">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="relative">
+                                                        <img :src="`https://q1.qlogo.cn/g?b=qq&nk=${member.user_id}&s=100`" 
+                                                             class="w-10 h-10 rounded-xl border border-black/5 dark:border-white/10"
+                                                             @error="handleAvatarError">
+                                                        <div :class="member.role === 'owner' ? 'bg-yellow-500' : (member.role === 'admin' ? 'bg-green-500' : 'bg-gray-500')" 
+                                                             class="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-[#1a1a1a]"></div>
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <h5 class="text-xs font-bold dark:text-white truncate max-w-[120px]">{{ member.card || member.nickname }}</h5>
+                                                        <p class="text-[9px] text-gray-500 mono">{{ member.user_id }}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button @click="showSingleMsgModal(member, 'private')" class="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 hover:bg-blue-500/20" :title="t('send_message')">
+                                                        <i data-lucide="send" class="w-3 h-3"></i>
+                                                    </button>
+                                                    <button @click="setMemberCard(currentGroup.group_id || currentGroup.guild_id, member.user_id, member.card || member.nickname)" class="p-1.5 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20" title="Set Card">
+                                                        <i data-lucide="edit-3" class="w-3 h-3"></i>
+                                                    </button>
+                                                    <button @click="banMember(currentGroup.group_id || currentGroup.guild_id, member.user_id)" class="p-1.5 rounded-lg bg-orange-500/10 text-orange-500 hover:bg-orange-500/20" title="Ban">
+                                                        <i data-lucide="user-minus" class="w-3 h-3"></i>
+                                                    </button>
+                                                    <button @click="kickMember(currentGroup.group_id || currentGroup.guild_id, member.user_id)" class="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20" title="Kick">
+                                                        <i data-lucide="user-x" class="w-3 h-3"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3 flex items-center justify-between">
+                                                <span :class="member.role === 'owner' ? 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20' : (member.role === 'admin' ? 'text-green-500 bg-green-500/10 border-green-500/20' : 'text-gray-500 bg-gray-500/10 border-gray-500/20')" 
+                                                      class="text-[9px] font-bold mono uppercase px-2 py-0.5 rounded border">
+                                                    {{ member.role }}
+                                                </span>
+                                                <span v-if="member.last_sent_time" class="text-[9px] text-gray-500 mono">
+                                                    {{ new Date(member.last_sent_time * 1000).toLocaleTimeString() }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Friends Matrix -->
+                <div v-if="activeTab === 'friends'" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-4">
+                            <select v-model="selectedBotId" class="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-green-500/50 dark:text-white">
+                                <option value="" disabled>{{ t('select_bot') || 'Select Bot' }}</option>
+                                <option v-for="bot in bots" :key="bot.self_id" :value="bot.self_id">{{ bot.nickname || bot.self_id }}</option>
+                            </select>
+                            <button @click="fetchFriends(selectedBotId, true)" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/5 dark:border-white/10 transition-all">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 text-gray-500"></i>
+                            </button>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="openMassSend('friend')" class="px-4 py-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-bold uppercase tracking-wider hover:bg-blue-500/20 transition-all">
+                                {{ t('mass_send') || 'Mass Send' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="!selectedBotId" class="h-64 flex flex-col items-center justify-center glass rounded-3xl border border-dashed border-black/10 dark:border-white/10">
+                        <i data-lucide="user-plus" class="w-12 h-12 text-gray-300 dark:text-gray-700 mb-4"></i>
+                        <p class="text-gray-500">{{ t('select_bot_hint') || 'Please select a bot to view friends' }}</p>
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                        <div v-for="friend in friends" :key="friend.user_id" class="glass rounded-3xl p-5 border border-black/5 dark:border-white/5 card-hover relative group">
+                            <div class="flex items-center gap-4">
+                                <img :src="getAvatar(friend)" class="w-12 h-12 rounded-2xl object-cover border border-black/5 dark:border-white/10" @error="handleAvatarError">
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-gray-900 dark:text-white truncate">{{ friend.nickname || friend.user_id }}</h4>
+                                    <p class="text-[10px] text-gray-500 mono">{{ friend.user_id }}</p>
+                                </div>
+                                <button @click="sendSingleMsg(friend, 'private')" class="p-2 rounded-lg hover:bg-blue-500/10 text-blue-500 opacity-0 group-hover:opacity-100 transition-all">
+                                    <i data-lucide="send" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: System Logs -->
+                <div v-if="activeTab === 'logs'" class="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="glass rounded-3xl p-6 border border-black/5 dark:border-white/5 min-h-[600px] flex flex-col">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-widest mono">{{ t('system_logs') }}</h3>
+                            <div class="flex gap-4">
+                                <div class="relative">
+                                    <input v-model="logFilter" type="text" 
+                                           class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-1.5 text-xs w-48 focus:outline-none focus:border-green-500/50 dark:text-white"
+                                           :placeholder="t('filter_logs') || 'Filter logs...'">
+                                    <i data-lucide="search" class="w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2"></i>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button @click="downloadLogs" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all border border-black/5 dark:border-white/5 text-gray-500 hover:text-green-500" :title="t('download')">
+                                        <i data-lucide="download" class="w-4 h-4"></i>
+                                    </button>
+                                    <button @click="if(confirm(t('confirm_clear_logs') || 'Clear all logs?')) logs = []" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all border border-black/5 dark:border-white/5">
+                                        <i data-lucide="trash-2" class="w-4 h-4 text-gray-500"></i>
+                                    </button>
+                                    <button @click="fetchLogs" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all border border-black/5 dark:border-white/5">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4 text-gray-500"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-1 bg-black/20 dark:bg-black/40 rounded-2xl p-4 font-mono text-xs overflow-y-auto custom-scrollbar border border-black/10 dark:border-white/5">
+                            <div v-for="(log, index) in filteredLogs" :key="index" class="mb-2 flex gap-4 opacity-80 hover:opacity-100 transition-opacity">
+                                <span class="text-gray-500 shrink-0">[{{ log.time || 'SYSTEM' }}]</span>
+                                <span :class="log.level === 'ERROR' ? 'text-red-500' : log.level === 'WARN' ? 'text-yellow-500' : 'text-green-500'" class="font-bold shrink-0">{{ log.level || 'INFO' }}</span>
+                                <span class="text-gray-300">{{ log.msg || log.message || log }}</span>
+                            </div>
+                            <div v-if="logs.length === 0" class="flex items-center justify-center h-full text-gray-600 italic">
+                                NO NEURAL LOGS DETECTED IN CURRENT SECTOR...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Docker Management -->
+                <div v-if="activeTab === 'docker'" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-widest mono">{{ t('docker_mgmt') }}</h3>
+                        <div class="flex gap-2">
+                            <button @click="addDockerBot" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-all border border-green-500/20 text-xs font-bold">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                {{ t('add_bot') }}
+                            </button>
+                            <button @click="addDockerWorker" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all border border-blue-500/20 text-xs font-bold">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                {{ t('add_worker') }}
+                            </button>
+                            <button @click="fetchDockerContainers" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all border border-black/5 dark:border-white/5">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 text-gray-500"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <div v-for="container in dockerContainers" :key="container.id" 
+                             :class="{'opacity-50 pointer-events-none': loadingContainers.has(container.id)}"
+                             class="glass rounded-3xl p-6 border border-black/5 dark:border-white/5 card-hover group relative overflow-hidden">
+                            
+                            <!-- Loading Overlay -->
+                            <div v-if="loadingContainers.has(container.id)" class="absolute inset-0 z-20 flex items-center justify-center bg-black/10 backdrop-blur-[1px]">
+                                <i data-lucide="refresh-cw" class="w-8 h-8 text-cyan-500 animate-spin"></i>
+                            </div>
+
+                            <div class="flex justify-between items-start mb-6 relative z-10">
+                                <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                                    <i data-lucide="container" class="w-6 h-6 text-cyan-500"></i>
+                                </div>
+                                <span :class="container.status.includes('Up') ? 'text-green-500 bg-green-500/10 border-green-500/20' : 'text-red-500 bg-red-500/10 border-red-500/20'" class="text-[10px] font-bold px-3 py-1 rounded-full border mono">
+                                    {{ container.status.includes('Up') ? 'RUNNING' : 'STOPPED' }}
+                                </span>
+                            </div>
+                            <h4 class="font-bold text-gray-900 dark:text-white mb-1 truncate">{{ container.name }}</h4>
+                            <p class="text-[10px] text-gray-500 mono mb-4">{{ container.image }}</p>
+                            
+                            <div class="grid grid-cols-2 gap-3 mb-6">
+                                <div class="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/10">
+                                    <p class="text-[9px] text-gray-500 uppercase mb-1">CPU</p>
+                                    <p class="text-xs font-bold mono text-blue-500">{{ container.cpu_usage || '0.00%' }}</p>
+                                </div>
+                                <div class="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-black/5 dark:border-white/10">
+                                    <p class="text-[9px] text-gray-500 uppercase mb-1">MEM</p>
+                                    <p class="text-xs font-bold mono text-purple-500">{{ container.mem_usage || '0.0MB' }}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button v-if="!container.status.includes('Up')" @click="manageDockerContainer(container.id, 'start')" class="flex-1 py-2 rounded-xl bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-widest hover:bg-green-500/20 transition-all border border-green-500/10">START</button>
+                                <button v-if="container.status.includes('Up')" @click="manageDockerContainer(container.id, 'stop')" class="flex-1 py-2 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-bold uppercase tracking-widest hover:bg-red-500/20 transition-all border border-red-500/10">STOP</button>
+                                <button @click="manageDockerContainer(container.id, 'restart')" class="flex-1 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-widest hover:bg-black/10 dark:hover:bg-white/10 transition-all border border-black/5 dark:border-white/10">RESTART</button>
+                                <button @click="manageDockerContainer(container.id, 'delete')" class="p-2 rounded-xl bg-red-500/5 text-red-500 hover:bg-red-500/10 transition-all border border-red-500/10" title="Delete Container">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                                <button @click="fetchDockerLogs(container)" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 text-gray-500 hover:bg-black/10 dark:hover:bg-white/10 transition-all border border-black/5 dark:border-white/10" title="View Logs">
+                                    <i data-lucide="terminal" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: User Management -->
+                <div v-if="activeTab === 'users'" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-widest mono">{{ t('user_mgmt') }}</h3>
+                        <div class="flex gap-2">
+                            <button @click="manageSystemUser(null, 'create')" class="px-4 py-2 rounded-xl bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 text-xs font-bold uppercase tracking-wider hover:bg-green-500/20 transition-all">
+                                {{ t('add_user') || 'Add User' }}
+                            </button>
+                            <button @click="fetchSystemUsers" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 text-gray-500"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="glass rounded-3xl border border-black/5 dark:border-white/5 overflow-hidden">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-black/5 dark:bg-white/5 text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                                <tr>
+                                    <th class="px-6 py-4">User</th>
+                                    <th class="px-6 py-4">Role</th>
+                                    <th class="px-6 py-4">Last Login</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-black/5 dark:divide-white/5">
+                                <tr v-for="user in systemUsers" :key="user.username" class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors group">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-xs font-bold text-orange-500 border border-orange-500/20">{{ user.username[0].toUpperCase() }}</div>
+                                            <span class="font-bold dark:text-white">{{ user.username }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span :class="user.role === 'admin' ? 'text-purple-500 bg-purple-500/10 border-purple-500/20' : 'text-blue-500 bg-blue-500/10 border-blue-500/20'" class="text-[10px] font-bold mono uppercase px-2 py-0.5 rounded border">{{ user.role }}</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-[10px] text-gray-500 mono">{{ user.last_login || 'NEVER_SYNCED' }}</td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2 cursor-pointer group/status" @click="manageSystemUser(user, 'toggle_active')">
+                                            <span :class="user.active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500'" class="w-2 h-2 rounded-full transition-all group-hover/status:scale-125"></span>
+                                            <span class="text-[10px] font-bold mono uppercase dark:text-gray-300 group-hover/status:text-blue-500 transition-colors">{{ user.active ? 'ACTIVE' : 'INACTIVE' }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 text-right">
+                                        <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                            <button @click="manageSystemUser(user, 'reset_password')" class="p-2 hover:bg-blue-500/10 text-gray-500 hover:text-blue-500 rounded-lg transition-all" :title="t('reset_pwd')">
+                                                <i data-lucide="key" class="w-4 h-4"></i>
+                                            </button>
+                                            <button @click="manageSystemUser(user, 'delete')" class="p-2 hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-lg transition-all" :title="t('delete')">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: System Settings -->
+                <div v-if="activeTab === 'settings'" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <!-- Routing Rules -->
+                        <div class="glass rounded-3xl p-6 border border-black/5 dark:border-white/5 flex flex-col h-fit">
+                            <div class="flex justify-between items-center mb-6">
+                                <div class="flex items-center gap-3">
+                                    <i data-lucide="split" class="text-blue-500 w-5 h-5"></i>
+                                    <h3 class="text-sm font-bold uppercase tracking-widest mono dark:text-white">{{ t('routing_rules') }}</h3>
+                                </div>
+                                <button @click="routingRules.push({pattern: '.*', target: 'worker-1'})" class="px-3 py-1.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500/20 transition-all">
+                                    {{ t('add_rule') }}
+                                </button>
+                            </div>
+                            <div class="space-y-3">
+                                <div v-for="(rule, idx) in routingRules" :key="idx" class="flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 group">
+                                    <div class="flex-1 grid grid-cols-2 gap-4">
+                                        <input v-model="rule.pattern" type="text" placeholder="Pattern" class="bg-transparent border-b border-white/10 focus:border-blue-500/50 outline-none text-xs dark:text-white mono">
+                                        <input v-model="rule.target" type="text" placeholder="Target" class="bg-transparent border-b border-white/10 focus:border-blue-500/50 outline-none text-xs dark:text-white mono">
+                                    </div>
+                                    <button @click="routingRules.splice(idx, 1)" class="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center ml-4">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                <button v-if="routingRules.length > 0" @click="saveRoutingRules" class="w-full py-2.5 mt-4 rounded-xl bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600 transition-all">
+                                    {{ t('save_changes') }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Backend Configuration -->
+                        <div class="glass rounded-3xl p-6 border border-black/5 dark:border-white/5 flex flex-col h-fit">
+                            <div class="flex items-center gap-3 mb-6">
+                                <i data-lucide="sliders" class="text-purple-500 w-5 h-5"></i>
+                                <h3 class="text-sm font-bold uppercase tracking-widest mono dark:text-white">{{ t('backend_config') }}</h3>
+                            </div>
+                            <div class="space-y-4">
+                                <div v-for="(val, key) in backendConfig" :key="key">
+                                    <label class="block text-[10px] text-gray-500 uppercase mb-1 ml-1">{{ key.replace(/_/g, ' ') }}</label>
+                                    <input v-model="backendConfig[key]" type="text" class="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl px-4 py-2 text-sm dark:text-white focus:border-purple-500/50 outline-none transition-all">
+                                </div>
+                                <button @click="saveBackendConfig" class="w-full py-3 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-500 border border-purple-500/20 text-xs font-bold uppercase tracking-widest hover:bg-purple-500/20 transition-all mt-4">
+                                    {{ t('save_changes') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Modals -->
+        <!-- System User Modal -->
+        <div v-if="showingUserModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showingUserModal = false"></div>
+            <div class="glass w-full max-w-md rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col relative z-10 animate-in zoom-in-95 duration-300">
+                <div class="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                            <i data-lucide="user-plus" class="w-5 h-5 text-indigo-500"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold dark:text-white">{{ t('add_user') || 'Add System User' }}</h3>
+                            <p class="text-[10px] text-gray-500 mono uppercase tracking-widest">{{ t('user_mgmt') }}</p>
+                        </div>
+                    </div>
+                    <button @click="showingUserModal = false" class="p-2 rounded-xl hover:bg-white/10 transition-all">
+                        <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6 space-y-6">
+                    <div class="space-y-4">
+                        <div class="space-y-1.5">
+                            <label class="text-[10px] text-gray-500 uppercase tracking-widest mono px-1">{{ t('username') || 'Username' }}</label>
+                            <input v-model="userModalData.username" type="text" 
+                                   class="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm dark:text-white focus:outline-none focus:border-indigo-500/50"
+                                   placeholder="Enter username">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[10px] text-gray-500 uppercase tracking-widest mono px-1">{{ t('password') || 'Password' }}</label>
+                            <input v-model="userModalData.password" type="password" 
+                                   class="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm dark:text-white focus:outline-none focus:border-indigo-500/50"
+                                   placeholder="Enter password">
+                        </div>
+                        <div class="flex items-center gap-3 px-1">
+                            <input v-model="userModalData.is_admin" type="checkbox" id="isAdminCheckbox"
+                                   class="w-4 h-4 rounded border-white/10 bg-black/40 text-indigo-500 focus:ring-indigo-500/50 focus:ring-offset-0">
+                            <label for="isAdminCheckbox" class="text-xs text-gray-400 cursor-pointer">{{ t('admin_privileges') || 'Administrator Privileges' }}</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+                    <button @click="showingUserModal = false" class="px-6 py-2 rounded-xl hover:bg-white/5 text-gray-400 text-xs font-bold uppercase tracking-widest transition-all">
+                        {{ t('cancel') }}
+                    </button>
+                    <button @click="submitUserModal" 
+                            class="px-8 py-2 rounded-xl bg-indigo-500 text-white text-xs font-bold uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20">
+                        {{ t('save_changes') || 'Create User' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Single Message Modal -->
+        <div v-if="singleMsgModal.show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="singleMsgModal.show = false"></div>
+            <div class="glass w-full max-w-md rounded-3xl border border-white/10 relative z-10 animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div class="p-6 border-b border-white/5 flex justify-between items-center bg-black/10">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center border border-green-500/20 shrink-0 overflow-hidden">
+                            <img :src="singleMsgModal.target?.group_id ? `https://p.qlogo.cn/gh/${singleMsgModal.target.group_id}/${singleMsgModal.target.group_id}/100` : `https://q1.qlogo.cn/g?b=qq&nk=${singleMsgModal.target?.user_id}&s=100`" class="w-full h-full object-cover" @error="handleAvatarError">
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="text-sm font-bold dark:text-white uppercase tracking-widest mono truncate">{{ t('send_message') }}</h3>
+                            <p class="text-[10px] text-gray-500 truncate mono">{{ singleMsgModal.target?.group_name || singleMsgModal.target?.nickname || singleMsgModal.target?.remark || singleMsgModal.target?.user_id }}</p>
+                        </div>
+                    </div>
+                    <button @click="singleMsgModal.show = false" class="text-gray-500 hover:text-white transition-colors">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6 space-y-4">
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-gray-500 uppercase tracking-widest mono">{{ t('message_content') }}</label>
+                        <textarea v-model="singleMsgModal.content" rows="4" 
+                                  class="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 focus:outline-none focus:border-green-500/50 transition-all text-sm dark:text-white resize-none"
+                                  :placeholder="t('enter_message')"></textarea>
+                    </div>
+                </div>
+
+                <div class="p-6 border-t border-white/5 flex gap-4 bg-black/5">
+                    <button @click="singleMsgModal.show = false" class="flex-1 py-3 rounded-2xl border border-black/10 dark:border-white/10 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all text-xs font-bold uppercase tracking-widest">
+                        {{ t('cancel') }}
+                    </button>
+                    <button @click="executeSingleSend" :disabled="!singleMsgModal.content || singleMsgModal.sending"
+                            class="flex-1 py-3 rounded-2xl bg-green-500 text-black hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs font-bold uppercase tracking-widest shadow-lg shadow-green-500/20">
+                        {{ singleMsgModal.sending ? t('sending') : t('send') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mass Send Modal -->
+        <div v-if="showingMassSend" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showingMassSend = false"></div>
+            <div class="glass w-full max-w-2xl max-h-[90vh] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col relative z-10 animate-in zoom-in-95 duration-300">
+                <div class="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20">
+                            <i data-lucide="send" class="w-5 h-5 text-orange-500"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold dark:text-white">{{ t('mass_send') }} - {{ massSendType === 'group' ? t('groups') : t('friends') }}</h3>
+                            <p class="text-[10px] text-gray-500 mono uppercase tracking-widest">{{ massSendSelectedTargets.length }} / {{ massSendTargets.length }} {{ t('selected') }}</p>
+                        </div>
+                    </div>
+                    <button @click="showingMassSend = false" class="p-2 rounded-xl hover:bg-white/10 transition-all">
+                        <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-hidden flex flex-col p-6 gap-6">
+                    <!-- Progress Bar (Visible when running) -->
+                    <div v-if="massSendStatus.running" class="space-y-2">
+                        <div class="flex justify-between text-[10px] mono uppercase tracking-widest">
+                            <span class="text-orange-500">{{ t('sending_progress') || 'Progress' }}</span>
+                            <span class="text-gray-500">{{ massSendStatus.current }} / {{ massSendStatus.total }}</span>
+                        </div>
+                        <div class="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                            <div class="h-full bg-orange-500 transition-all duration-300" :style="{ width: (massSendStatus.current / massSendStatus.total * 100) + '%' }"></div>
+                        </div>
+                    </div>
+
+                    <!-- Target Selection -->
+                    <div class="flex-1 flex flex-col gap-3 overflow-hidden">
+                        <div class="flex justify-between items-center px-1">
+                            <span class="text-[10px] text-gray-500 mono uppercase tracking-widest">{{ t('select_targets') || 'Select Targets' }}</span>
+                            <button @click="selectAllMassSendTargets" class="text-[10px] text-orange-500 hover:text-orange-400 mono uppercase tracking-widest">
+                                {{ massSendSelectedTargets.length === massSendTargets.length ? t('deselect_all') : t('select_all') }}
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto custom-scrollbar border border-white/5 rounded-2xl bg-black/20 p-2">
+                            <div v-for="target in massSendTargets" :key="target.group_id || target.guild_id || target.user_id" 
+                                 @click="toggleMassSendTarget(target.group_id || target.guild_id || target.user_id)"
+                                 :class="massSendSelectedTargets.includes(target.group_id || target.guild_id || target.user_id) ? 'bg-orange-500/10 border-orange-500/30' : 'border-transparent hover:bg-white/5'"
+                                 class="p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-black/20 flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0">
+                                    <img :src="target.group_id ? `https://p.qlogo.cn/gh/${target.group_id}/${target.group_id}/100` : `https://q1.qlogo.cn/g?b=qq&nk=${target.user_id}&s=100`" 
+                                         class="w-full h-full object-cover" @error="handleAvatarError">
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-bold dark:text-white truncate">{{ target.group_name || target.nickname || target.remark || target.user_id }}</p>
+                                    <p class="text-[9px] text-gray-500 mono">{{ target.group_id || target.guild_id || target.user_id }}</p>
+                                </div>
+                                <div class="w-4 h-4 rounded-md border border-white/10 flex items-center justify-center transition-all"
+                                     :class="massSendSelectedTargets.includes(target.group_id || target.guild_id || target.user_id) ? 'bg-orange-500 border-orange-500' : ''">
+                                    <i v-if="massSendSelectedTargets.includes(target.group_id || target.guild_id || target.user_id)" data-lucide="check" class="w-3 h-3 text-white"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Message Input -->
+                    <div class="space-y-3">
+                        <span class="text-[10px] text-gray-500 mono uppercase tracking-widest px-1">{{ t('message_content') || 'Message' }}</span>
+                        <textarea v-model="massSendMessage" rows="4" 
+                                  class="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm dark:text-white focus:outline-none focus:border-orange-500/50 resize-none custom-scrollbar"
+                                  placeholder="Enter message to send..."></textarea>
+                    </div>
+                </div>
+
+                <div class="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+                    <button @click="showingMassSend = false" class="px-6 py-2 rounded-xl hover:bg-white/5 text-gray-400 text-xs font-bold uppercase tracking-widest transition-all">
+                        {{ t('cancel') }}
+                    </button>
+                    <button @click="startMassSend" 
+                            :disabled="massSendStatus.running || !massSendMessage || massSendSelectedTargets.length === 0"
+                            class="px-8 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20">
+                        {{ massSendStatus.running ? t('sending') : t('start_send') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Docker Log Modal -->
+        <div v-if="showingDockerLogs" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showingDockerLogs = false"></div>
+            <div class="glass w-full max-w-4xl max-h-[80vh] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col relative z-10 animate-in zoom-in-95 duration-300">
+                <div class="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                            <i data-lucide="terminal" class="w-5 h-5 text-cyan-500"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold dark:text-white">{{ currentDockerContainer?.name }}</h3>
+                            <p class="text-[10px] text-gray-500 mono uppercase tracking-widest">{{ t('docker_logs') || 'Container Logs' }}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="relative">
+                            <input v-model="dockerLogFilter" type="text" 
+                                   class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs w-48 focus:outline-none focus:border-cyan-500/50"
+                                   :placeholder="t('filter_logs') || 'Filter logs...'">
+                            <i data-lucide="search" class="w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2"></i>
+                        </div>
+                        <button @click="downloadDockerLogs" class="p-2 rounded-xl hover:bg-white/10 transition-all text-gray-400 hover:text-cyan-500" :title="t('download')">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                        </button>
+                        <button @click="showingDockerLogs = false" class="p-2 rounded-xl hover:bg-white/10 transition-all">
+                            <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto p-6 bg-black/40 font-mono text-xs text-gray-300 custom-scrollbar">
+                    <pre class="whitespace-pre-wrap">{{ filteredDockerLogs }}</pre>
+                </div>
+                <div class="p-4 border-t border-white/10 bg-black/20 flex justify-end">
+                    <button @click="fetchDockerLogs(currentDockerContainer)" class="px-6 py-2 rounded-xl bg-cyan-500/10 text-cyan-500 text-xs font-bold uppercase tracking-widest hover:bg-cyan-500/20 transition-all border border-cyan-500/20">
+                        {{ t('refresh') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Node Details Modal -->
+        <div v-if="showingNodeDetails" class="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showingNodeDetails = false"></div>
+            <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
+                            <i :data-lucide="selectedNodeDetails.type === 'bot' ? 'bot' : (selectedNodeDetails.type === 'nexus' ? 'zap' : 'cpu')" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('node_details') || 'Node Details' }}</h3>
+                    </div>
+                    <button @click="showingNodeDetails = false" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                        <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('id') }}</span>
+                            <p class="text-sm font-mono font-medium text-gray-900 dark:text-white break-all">{{ selectedNodeDetails.id }}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('type') }}</span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full" :class="selectedNodeDetails.type === 'bot' ? 'bg-green-500' : 'bg-blue-500'"></span>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white capitalize">{{ selectedNodeDetails.type }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedNodeDetails.name" class="space-y-1">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('nickname') || 'Name' }}</span>
+                        <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedNodeDetails.name }}</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div v-if="selectedNodeDetails.status" class="space-y-1">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('status') }}</span>
+                            <p class="text-sm font-medium" :class="selectedNodeDetails.status === 'Online' || selectedNodeDetails.status === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                {{ selectedNodeDetails.status }}
+                            </p>
+                        </div>
+                        <div v-if="selectedNodeDetails.ip" class="space-y-1">
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">IP</span>
+                            <p class="text-sm font-mono text-gray-900 dark:text-white">{{ selectedNodeDetails.ip }}</p>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedNodeDetails.messages !== undefined" class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="message-square" class="w-4 h-4 text-gray-400"></i>
+                                <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('msgs') }}</span>
+                            </div>
+                            <span class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedNodeDetails.messages }}</span>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedNodeDetails.last_seen" class="text-xs text-gray-500 dark:text-gray-400 text-center italic">
+                        {{ t('last_seen') || 'Last seen' }}: {{ selectedNodeDetails.last_seen }}
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row gap-2 justify-end">
+                    <button v-if="selectedNodeDetails.type === 'bot'" 
+                            @click="activeTab = 'groups'; selectedBotId = selectedNodeDetails.id; showingNodeDetails = false" 
+                            class="w-full sm:w-auto px-4 py-2 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-widest hover:bg-green-500/20 transition-all border border-green-500/20">
+                        {{ t('manage_groups') || 'Manage Groups' }}
+                    </button>
+                    <button v-if="selectedNodeDetails.type === 'bot'" 
+                            @click="activeTab = 'friends'; selectedBotId = selectedNodeDetails.id; showingNodeDetails = false" 
+                            class="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-widest hover:bg-blue-500/20 transition-all border border-blue-500/20">
+                        {{ t('manage_friends') || 'Manage Friends' }}
+                    </button>
+                    <button v-if="selectedNodeDetails.type === 'worker'" 
+                            @click="activeTab = 'docker'; showingNodeDetails = false" 
+                            class="w-full sm:w-auto px-4 py-2 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-widest hover:bg-orange-500/20 transition-all border border-orange-500/20">
+                        {{ t('manage_docker') || 'Manage Docker' }}
+                    </button>
+                    <button @click="showingNodeDetails = false" class="w-full sm:w-auto px-6 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm">
+                        {{ t('close') || 'Close' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    <!-- Footer -->
+    <footer class="mt-8 text-center text-gray-600 text-[10px] mono uppercase tracking-[0.2em]">
+            &copy; 2025 BotMatrix // Vue-Powered Intelligence Layer // Secure Node Protocol
+        </footer>
+    </div>
+
+    <script src="js/matrix.js" type="module"></script>
+</body>
+</html>

@@ -87,14 +87,11 @@ func main() {
 		case http.MethodGet:
 			manager.handleAdminListUsers(w, r)
 		case http.MethodPost:
-			manager.handleAdminCreateUser(w, r)
-		case http.MethodDelete:
-			manager.handleAdminDeleteUser(w, r)
+			manager.handleAdminManageUsers(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
-	http.HandleFunc("/api/admin/user/reset-password", manager.AdminMiddleware(manager.handleAdminResetPassword))
 
 	http.HandleFunc("/ws/bots", manager.handleBotWebSocket)
 	http.HandleFunc("/ws/workers", manager.handleWorkerWebSocket)
@@ -187,6 +184,18 @@ func (m *Manager) createWebUIHandler() http.Handler {
 		case http.MethodPost:
 			m.handleUpdateConfig(w, r)
 		default:
+			m.handleGetConfig(w, r)
+		}
+	}))
+
+	// --- 用户管理接口 ---
+	mux.HandleFunc("/api/admin/users", m.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			m.handleAdminListUsers(w, r)
+		case http.MethodPost:
+			m.handleAdminManageUsers(w, r)
+		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
@@ -220,14 +229,12 @@ func (m *Manager) createWebUIHandler() http.Handler {
 		case http.MethodGet:
 			m.handleAdminListUsers(w, r)
 		case http.MethodPost:
-			m.handleAdminCreateUser(w, r)
-		case http.MethodDelete:
-			m.handleAdminDeleteUser(w, r)
+			m.handleAdminManageUsers(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
-	mux.HandleFunc("/api/admin/user/reset-password", m.AdminMiddleware(m.handleAdminResetPassword))
+	mux.HandleFunc("/api/admin/user/reset-password", m.AdminMiddleware(m.handleAdminManageUsers))
 
 	// 静态文件服务 - 同时支持本地开发和Docker环境
 	webDir := "./web"

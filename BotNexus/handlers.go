@@ -2116,6 +2116,15 @@ func (m *Manager) handleSubscriberWebSocket(w http.ResponseWriter, r *http.Reque
 	for _, bot := range m.bots {
 		bots = append(bots, *bot)
 	}
+	workers := make([]WorkerInfo, 0, len(m.workers))
+	for _, w := range m.workers {
+		workers = append(workers, WorkerInfo{
+			ID:       w.ID,
+			Type:     "worker",
+			Status:   "online",
+			LastSeen: time.Now().Format("15:04:05"),
+		})
+	}
 	m.mutex.RUnlock()
 
 	m.cacheMutex.RLock()
@@ -2125,6 +2134,7 @@ func (m *Manager) handleSubscriberWebSocket(w http.ResponseWriter, r *http.Reque
 		Friends:       m.friendCache,
 		Members:       m.memberCache,
 		Bots:          bots,
+		Workers:       workers,
 		TotalMessages: m.TotalMessages,
 	}
 	m.cacheMutex.RUnlock()
@@ -2156,6 +2166,7 @@ func (m *Manager) handleSubscriberWebSocket(w http.ResponseWriter, r *http.Reque
 
 // broadcastRoutingEvent 向所有订阅者广播路由事件
 func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType string, extras ...interface{}) {
+	m.mutex.RLock()
 	event := RoutingEvent{
 		Type:          "routing_event",
 		Source:        source,
@@ -2166,7 +2177,60 @@ func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType strin
 		TotalMessages: m.TotalMessages,
 	}
 
-	// 处理额外参数
+	// Determine Source Type and Label
+	if source == "Nexus" {
+		event.SourceType = "nexus"
+		event.SourceLabel = "NEXUS"
+	} else if bot, ok := m.bots[source]; ok {
+		event.SourceType = "bot"
+		event.SourceLabel = bot.Nickname
+		if event.SourceLabel == "" {
+			event.SourceLabel = bot.SelfID
+		}
+	} else {
+		isWorker := false
+		for _, w := range m.workers {
+			if w.ID == source {
+				event.SourceType = "worker"
+				event.SourceLabel = "WORKER"
+				isWorker = true
+				break
+			}
+		}
+		if !isWorker {
+			event.SourceType = "user"
+			event.SourceLabel = source
+		}
+	}
+
+	// Determine Target Type and Label
+	if target == "Nexus" {
+		event.TargetType = "nexus"
+		event.TargetLabel = "NEXUS"
+	} else if bot, ok := m.bots[target]; ok {
+		event.TargetType = "bot"
+		event.TargetLabel = bot.Nickname
+		if event.TargetLabel == "" {
+			event.TargetLabel = bot.SelfID
+		}
+	} else {
+		isWorker := false
+		for _, w := range m.workers {
+			if w.ID == target {
+				event.TargetType = "worker"
+				event.TargetLabel = "WORKER"
+				isWorker = true
+				break
+			}
+		}
+		if !isWorker {
+			event.TargetType = "user"
+			event.TargetLabel = target
+		}
+	}
+	m.mutex.RUnlock()
+
+	// Handle extra data
 	if len(extras) > 0 {
 		if data, ok := extras[0].(map[string]interface{}); ok {
 			if uid, ok := data["user_id"]; ok {
@@ -2190,6 +2254,10 @@ func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType strin
 			if gname, ok := data["group_name"]; ok {
 				event.GroupName = toString(gname)
 			}
+			if color, ok := data["color"]; ok {
+				// Allow passing custom color via extras
+				// Frontend will use it if present
+			}
 		}
 	}
 
@@ -2202,8 +2270,32 @@ func (m *Manager) broadcastRoutingEvent(source, target, direction, msgType strin
 			defer s.Mutex.Unlock()
 			err := s.Conn.WriteJSON(e)
 			if err != nil {
-				// 记录错误但继续广播
 				log.Printf("[SUBSCRIBER] Failed to send routing event to subscriber: %v", err)
+			}
+		}(sub, event)
+	}
+}
+
+// broadcastDockerEvent 向所有订阅者广播 Docker 事件
+func (m *Manager) broadcastDockerEvent(action, containerID, status string) {
+	event := DockerEvent{
+		Type:        "docker_event",
+		Action:      action,
+		ContainerID: containerID,
+		Status:      status,
+		Timestamp:   time.Now(),
+	}
+
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	for _, sub := range m.subscribers {
+		go func(s *Subscriber, e DockerEvent) {
+			s.Mutex.Lock()
+			defer s.Mutex.Unlock()
+			err := s.Conn.WriteJSON(e)
+			if err != nil {
+				log.Printf("[SUBSCRIBER] Failed to send docker event to subscriber: %v", err)
 			}
 		}(sub, event)
 	}
@@ -2829,6 +2921,11 @@ func (m *Manager) handleDockerAction(w http.ResponseWriter, r *http.Request) {
 	case "restart":
 		timeout := 10
 		err = m.dockerClient.ContainerRestart(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
+	case "delete":
+		// 先停止容器再删除
+		timeout := 5
+		m.dockerClient.ContainerStop(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
+		err = m.dockerClient.ContainerRemove(r.Context(), req.ContainerID, types.ContainerRemoveOptions{Force: true})
 	default:
 		err = fmt.Errorf("不支持的操作: %s", req.Action)
 	}
@@ -2842,6 +2939,15 @@ func (m *Manager) handleDockerAction(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// 广播 Docker 事件
+	status := "running"
+	if req.Action == "stop" {
+		status = "exited"
+	} else if req.Action == "delete" {
+		status = "deleted"
+	}
+	m.broadcastDockerEvent(req.Action, req.ContainerID, status)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "ok",
@@ -2919,6 +3025,9 @@ func (m *Manager) handleDockerAddBot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 广播 Docker 事件
+	m.broadcastDockerEvent("create", resp.ID, "running")
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "ok",
 		"message": "机器人容器部署成功",
@@ -2990,9 +3099,12 @@ func (m *Manager) handleDockerAddWorker(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// 广播 Docker 事件
+	m.broadcastDockerEvent("create", resp.ID, "running")
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "ok",
-		"message": "Worker 容器部署成功",
+		"message": "Worker容器部署成功",
 		"id":      resp.ID,
 	})
 }
@@ -3155,17 +3267,27 @@ func (m *Manager) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAdminCreateUser 创建新用户 (仅限管理员)
-func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
+// handleAdminManageUsers 统一处理用户管理操作 (创建/删除/重置密码)
+func (m *Manager) handleAdminManageUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var data struct {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Action   string `json:"action"`
 		Username string `json:"username"`
-		Password string `json:"password"`
+		Password string `json:"password"` // 对应 create 和 reset_password
 		IsAdmin  bool   `json:"is_admin"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3174,7 +3296,27 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if data.Username == "" || data.Password == "" {
+	switch req.Action {
+	case "create":
+		m.processAdminCreateUser(w, req.Username, req.Password, req.IsAdmin)
+	case "delete":
+		m.processAdminDeleteUser(w, r, req.Username)
+	case "reset_password":
+		m.processAdminResetPassword(w, req.Username, req.Password)
+	case "toggle_active":
+		m.processAdminToggleUser(w, req.Username)
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "不支持的操作: " + req.Action,
+		})
+	}
+}
+
+// processAdminCreateUser 内部处理创建用户
+func (m *Manager) processAdminCreateUser(w http.ResponseWriter, username, password string, isAdmin bool) {
+	if username == "" || password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3186,9 +3328,7 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	m.usersMutex.Lock()
 	defer m.usersMutex.Unlock()
 
-	// 先检查内存
-	if _, exists := m.users[data.Username]; exists {
-		log.Printf("用户创建失败: 用户 %s 已存在于内存缓存中", data.Username)
+	if _, exists := m.users[username]; exists {
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3197,11 +3337,10 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 再检查数据库 (防止内存与数据库不同步)
+	// 检查数据库
 	var existingID int64
-	err := m.db.QueryRow("SELECT id FROM users WHERE username = ?", data.Username).Scan(&existingID)
+	err := m.db.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&existingID)
 	if err == nil {
-		log.Printf("用户创建失败: 用户 %s 已存在于数据库中 (ID: %d)", data.Username, existingID)
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3210,9 +3349,8 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	hashedPassword, err := hashPassword(data.Password)
+	hashedPassword, err := hashPassword(password)
 	if err != nil {
-		log.Printf("密码哈希失败: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3222,17 +3360,15 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	newUser := &User{
-		Username:       data.Username,
+		Username:       username,
 		PasswordHash:   hashedPassword,
-		IsAdmin:        data.IsAdmin,
+		IsAdmin:        isAdmin,
 		SessionVersion: 1,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
 
-	log.Printf("正在尝试保存新用户 %s 到数据库...", data.Username)
 	if err := m.saveUserToDB(newUser); err != nil {
-		log.Printf("保存新用户 %s 到数据库失败: %v", data.Username, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3241,32 +3377,19 @@ func (m *Manager) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 重新从数据库读取以获取生成的 ID
-	var dbUser User
-	err = m.db.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", newUser.Username).Scan(
-		&dbUser.ID, &dbUser.Username, &dbUser.PasswordHash, &dbUser.IsAdmin, &dbUser.SessionVersion, &dbUser.CreatedAt, &dbUser.UpdatedAt)
-	if err == nil {
-		newUser = &dbUser
-		log.Printf("成功从数据库重新加载新用户 %s (ID: %d)", newUser.Username, newUser.ID)
-	} else {
-		log.Printf("创建用户后重新读取失败 (但不影响创建结果): %v", err)
-	}
+	// 重新读取 ID
+	m.db.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&newUser.ID)
+	m.users[username] = newUser
 
-	m.users[newUser.Username] = newUser
-	log.Printf("用户 %s 创建成功并已加入内存缓存", data.Username)
-
+	log.Printf("[ADMIN] Created user: %s (Admin: %v)", username, isAdmin)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "用户创建成功",
-		"user":    newUser,
 	})
 }
 
-// handleAdminDeleteUser 删除用户 (仅限管理员)
-func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	username := r.URL.Query().Get("username")
+// processAdminDeleteUser 内部处理删除用户
+func (m *Manager) processAdminDeleteUser(w http.ResponseWriter, r *http.Request, username string) {
 	if username == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3288,7 +3411,6 @@ func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	// 禁止删除自己
 	claims, ok := r.Context().Value(UserClaimsKey).(*UserClaims)
 	if ok && claims != nil && claims.Username == username {
-		log.Printf("用户 %s 尝试删除自己，操作被拒绝", username)
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3301,7 +3423,6 @@ func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	defer m.usersMutex.Unlock()
 
 	if _, exists := m.users[username]; !exists {
-		log.Printf("尝试删除不存在的用户: %s", username)
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -3310,19 +3431,17 @@ func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 从数据库删除
 	if _, err := m.db.Exec("DELETE FROM users WHERE username = ?", username); err != nil {
-		log.Printf("从数据库删除用户 %s 失败: %v", username, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "删除用户失败: " + err.Error(),
+			"message": "删除失败: " + err.Error(),
 		})
 		return
 	}
 
 	delete(m.users, username)
-	log.Printf("用户 %s 已被成功删除", username)
+	log.Printf("[ADMIN] Deleted user: %s", username)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -3330,20 +3449,13 @@ func (m *Manager) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// handleAdminResetPassword 重置用户密码 (仅限管理员)
-func (m *Manager) handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var data struct {
-		Username    string `json:"username"`
-		NewPassword string `json:"new_password"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+// processAdminResetPassword 内部处理重置密码
+func (m *Manager) processAdminResetPassword(w http.ResponseWriter, username, newPassword string) {
+	if username == "" || newPassword == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "请求格式错误",
+			"message": "用户名和新密码不能为空",
 		})
 		return
 	}
@@ -3351,7 +3463,7 @@ func (m *Manager) handleAdminResetPassword(w http.ResponseWriter, r *http.Reques
 	m.usersMutex.Lock()
 	defer m.usersMutex.Unlock()
 
-	user, exists := m.users[data.Username]
+	user, exists := m.users[username]
 	if !exists {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3361,7 +3473,7 @@ func (m *Manager) handleAdminResetPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	hashedPassword, err := hashPassword(data.NewPassword)
+	hashedPassword, err := hashPassword(newPassword)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3372,22 +3484,81 @@ func (m *Manager) handleAdminResetPassword(w http.ResponseWriter, r *http.Reques
 	}
 
 	user.PasswordHash = hashedPassword
-	user.SessionVersion++ // 强制该用户重新登录
+	user.SessionVersion++
 	user.UpdatedAt = time.Now()
 
 	if err := m.saveUserToDB(user); err != nil {
-		log.Printf("重置密码保存到数据库失败: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": "保存密码失败",
+			"message": "保存失败",
 		})
 		return
 	}
 
+	log.Printf("[ADMIN] Reset password for user: %s", username)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "密码重置成功",
+	})
+}
+
+// processAdminToggleUser 内部处理切换用户状态
+func (m *Manager) processAdminToggleUser(w http.ResponseWriter, username string) {
+	if username == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "未提供用户名",
+		})
+		return
+	}
+
+	if username == "admin" {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "不能禁用默认管理员",
+		})
+		return
+	}
+
+	m.usersMutex.Lock()
+	user, exists := m.users[username]
+	if !exists {
+		m.usersMutex.Unlock()
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "用户不存在",
+		})
+		return
+	}
+
+	newStatus := !user.Active
+	user.Active = newStatus
+	m.usersMutex.Unlock()
+
+	// 更新数据库
+	activeInt := 0
+	if newStatus {
+		activeInt = 1
+	}
+	if _, err := m.db.Exec("UPDATE users SET active = ? WHERE username = ?", activeInt, username); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "更新失败: " + err.Error(),
+		})
+		return
+	}
+
+	log.Printf("[ADMIN] Toggled user status: %s (Active: %v)", username, newStatus)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "用户状态已更新",
+		"active":  newStatus,
 	})
 }
 
