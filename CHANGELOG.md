@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.0 (2025-12-22)
+*   **🏗️ Architectural Decoupling**: Successfully separated `BotNexus` (Core Gateway) and `BotAdmin` (Management Backend). `BotNexus` is now dedicated to high-performance WebSocket routing and message proxying.
+*   **🚀 Gateway Optimization**: Removed redundant Docker management dependencies and legacy Admin HTTP handlers from `BotNexus`, reducing its footprint and improving stability.
+*   **📏 Code Standardization**: Enforced PascalCase across all shared types and methods in the `Common` package and handlers to ensure seamless cross-package integration.
+*   **🧹 Logic Consolidation**: Migrated duplicate statistics and monitoring functions to the `Common` package, establishing a single source of truth for system metrics.
+*   **🔧 Routing Refinement**: Simplified wildcard routing logic in the gateway for better performance and easier maintenance.
+
 ## v1.2.5 (2025-12-21)
 *   **🌐 Comprehensive i18n Fixes**: Resolved internationalization issues for "More" button popups in statistics, cloud matrix sorting labels, and implemented real-time language refresh for all dynamic lists (Bots, Workers, Groups, Friends).
 *   **🖼️ Visual Identification Restored**: Re-integrated backend avatar proxy in the 3D routing visualizer and list views to fix CORS issues with QQ and group avatars.

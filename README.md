@@ -12,6 +12,11 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### [v1.3.0] - 2025-12-22
+- **Major Architectural Decoupling**: Separated Core Gateway (`BotNexus`) from Management Backend (`BotAdmin`).
+- **Core Optimization**: Leaner, faster message routing engine with removed redundant dependencies.
+- **Code Standardization**: Full PascalCase enforcement and logic consolidation in `Common` library.
+
 For a detailed history of all changes and versions, please refer to the [CHANGELOG.md](CHANGELOG.md) file.
 
 详细的更新历史和版本说明请参阅 [CHANGELOG.md](CHANGELOG.md) 文件。
