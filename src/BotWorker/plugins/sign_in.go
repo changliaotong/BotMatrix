@@ -51,6 +51,14 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "signin") {
+				HandleFeatureDisabled(robot, event, "signin")
+				return nil
+			}
+		}
+
 		// 检查是否为签到命令
 		if match, _ := p.cmdParser.MatchCommand("sign|签到", event.RawMessage); !match {
 			return nil
@@ -74,6 +82,14 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "signin") {
+				HandleFeatureDisabled(robot, event, "signin")
+				return nil
+			}
 		}
 
 		// 获取用户ID
@@ -102,6 +118,14 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "signin") {
+				HandleFeatureDisabled(robot, event, "signin")
+				return nil
+			}
 		}
 
 		if match, _ := p.cmdParser.MatchCommand("signstats|签到统计", event.RawMessage); !match {
@@ -153,7 +177,7 @@ func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, us
 
 	// 添加积分
 	if p.pointsPlugin != nil {
-		p.pointsPlugin.addPoints(userID, totalPoints, fmt.Sprintf("签到奖励（连续%d天）", continuousDay))
+		p.pointsPlugin.AddPoints(userID, totalPoints, fmt.Sprintf("签到奖励（连续%d天）", continuousDay), "sign_in")
 	}
 
 	// 发送签到成功消息
@@ -164,13 +188,7 @@ func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, us
 
 // sendMessage 发送消息
 func (p *SignInPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
-	}
-
-	if _, err := robot.SendMessage(params); err != nil {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
 }

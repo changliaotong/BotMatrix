@@ -12,6 +12,8 @@ The Admin plugin provides administrative features for the bot, including:
 - 开启 (Enable)
 - 关闭 (Disable)
 - 敏感词 (Sensitive Words)
+ - 语音回复 (AI Voice Reply)
+ - 阅后即焚 (Burn-after-reading Auto Recall)
 
 ## Commands
 
@@ -86,6 +88,8 @@ Enable a feature.
 ```
 !开启 weather
 !开启 translation
+!开启 语音回复
+!开启 阅后即焚
 ```
 
 ### !关闭 <feature>
@@ -98,6 +102,8 @@ Disable a feature.
 ```
 !关闭 weather
 !关闭 translation
+!关闭 语音回复
+!关闭 阅后即焚
 ```
 
 ## Configuration

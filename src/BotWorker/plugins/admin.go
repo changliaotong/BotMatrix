@@ -1,19 +1,18 @@
 package plugins
 
 import (
+	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
+	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 )
 
-// AdminPlugin  admin plugin
 type AdminPlugin struct {
-	// 管理员列表
 	admins []string
-	// 功能开关
-	featureSwitches map[string]bool
-	// 命令解析器
+	db     *sql.DB
 	cmdParser *CommandParser
 }
 
@@ -30,21 +29,10 @@ func (p *AdminPlugin) Version() string {
 }
 
 // NewAdminPlugin 创建admin plugin实例
-func NewAdminPlugin() *AdminPlugin {
+func NewAdminPlugin(database *sql.DB) *AdminPlugin {
 	return &AdminPlugin{
-		admins: []string{},
-		featureSwitches: map[string]bool{
-			"weather":    true,
-			"points":     true,
-			"signin":     true,
-			"lottery":    true,
-			"translate":  true,
-			"music":      true,
-			"games":      true,
-			"greetings":  true,
-			"utils":      true,
-			"moderation": true,
-		},
+		admins:    []string{},
+		db:        database,
 		cmdParser: NewCommandParser(),
 	}
 }
@@ -85,23 +73,59 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为开启命令
 		match, _, params := p.cmdParser.MatchCommandWithParams("开启|enable", `(.*)`, event.RawMessage)
 		if !match || len(params) < 1 {
 			return nil
 		}
 
-		// 解析功能名称
-		feature := params[0]
+		rawFeature := strings.TrimSpace(params[0])
+		feature, requireAdmin, requireSuperAdmin := normalizeFeatureName(rawFeature)
+		if feature == "" {
+			feature = rawFeature
+		}
 
-		// 检查功能是否存在
-		if _, ok := p.featureSwitches[feature]; !ok {
+		if event.MessageType == "group" && p.db != nil {
+			if requireSuperAdmin {
+				if !isSuperAdmin(p.db, event.GroupID, event.UserID) {
+					p.sendMessage(robot, event, "权限不足，只有群主或机器人主人可以操作该功能")
+					return nil
+				}
+			} else if requireAdmin {
+				if !isGroupAdmin(p.db, event.GroupID, event.UserID) {
+					p.sendMessage(robot, event, "权限不足，只有管理员可以操作该功能")
+					return nil
+				}
+			}
+		}
+		defaultEnabled, ok := FeatureDefaults[feature]
+		if !ok {
 			p.sendMessage(robot, event, fmt.Sprintf("功能%s不存在", feature))
 			return nil
 		}
 
-		// 开启功能
-		p.featureSwitches[feature] = true
+		if event.MessageType != "group" {
+			p.sendMessage(robot, event, "仅支持在群聊中设置功能开关")
+			return nil
+		}
+
+		if p.db == nil {
+			p.sendMessage(robot, event, "数据库未配置，无法保存功能开关")
+			return nil
+		}
+
+		groupID := fmt.Sprintf("%d", event.GroupID)
+		var err error
+		if defaultEnabled {
+			err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
+		} else {
+			err = db.SetGroupFeatureOverride(p.db, groupID, feature, true)
+		}
+		if err != nil {
+			log.Printf("设置功能开启失败: %v", err)
+			p.sendMessage(robot, event, fmt.Sprintf("开启功能%s失败", feature))
+			return nil
+		}
+
 		p.sendMessage(robot, event, fmt.Sprintf("功能%s已开启", feature))
 
 		return nil
@@ -113,23 +137,59 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为关闭命令
 		match, _, params := p.cmdParser.MatchCommandWithParams("关闭|disable", `(.*)`, event.RawMessage)
 		if !match || len(params) < 1 {
 			return nil
 		}
 
-		// 解析功能名称
-		feature := params[0]
+		rawFeature := strings.TrimSpace(params[0])
+		feature, requireAdmin, requireSuperAdmin := normalizeFeatureName(rawFeature)
+		if feature == "" {
+			feature = rawFeature
+		}
 
-		// 检查功能是否存在
-		if _, ok := p.featureSwitches[feature]; !ok {
+		if event.MessageType == "group" && p.db != nil {
+			if requireSuperAdmin {
+				if !isSuperAdmin(p.db, event.GroupID, event.UserID) {
+					p.sendMessage(robot, event, "权限不足，只有群主或机器人主人可以操作该功能")
+					return nil
+				}
+			} else if requireAdmin {
+				if !isGroupAdmin(p.db, event.GroupID, event.UserID) {
+					p.sendMessage(robot, event, "权限不足，只有管理员可以操作该功能")
+					return nil
+				}
+			}
+		}
+		defaultEnabled, ok := FeatureDefaults[feature]
+		if !ok {
 			p.sendMessage(robot, event, fmt.Sprintf("功能%s不存在", feature))
 			return nil
 		}
 
-		// 关闭功能
-		p.featureSwitches[feature] = false
+		if event.MessageType != "group" {
+			p.sendMessage(robot, event, "仅支持在群聊中设置功能开关")
+			return nil
+		}
+
+		if p.db == nil {
+			p.sendMessage(robot, event, "数据库未配置，无法保存功能开关")
+			return nil
+		}
+
+		groupID := fmt.Sprintf("%d", event.GroupID)
+		var err error
+		if defaultEnabled {
+			err = db.SetGroupFeatureOverride(p.db, groupID, feature, false)
+		} else {
+			err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
+		}
+		if err != nil {
+			log.Printf("设置功能关闭失败: %v", err)
+			p.sendMessage(robot, event, fmt.Sprintf("关闭功能%s失败", feature))
+			return nil
+		}
+
 		p.sendMessage(robot, event, fmt.Sprintf("功能%s已关闭", feature))
 
 		return nil
@@ -270,13 +330,146 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 
 // sendMessage 发送消息
 func (p *AdminPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
-	}
-
-	if _, err := robot.SendMessage(params); err != nil {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
+}
+
+func normalizeFeatureName(name string) (string, bool, bool) {
+	n := strings.TrimSpace(name)
+	if n == "" {
+		return "", false, false
+	}
+
+	n = strings.ReplaceAll(n, "话痨", "话唠")
+	n = strings.ReplaceAll(n, "加黑", "拉黑")
+	n = strings.ReplaceAll(n, "模式", "")
+
+	lower := strings.ToLower(n)
+	if n == "语音" || strings.EqualFold(n, "AI声聊") || n == "声聊" || n == "声音" || lower == "voice" {
+		n = "语音回复"
+	}
+
+	if n == "自动撤回" {
+		n = "阅后即焚"
+	}
+	if n == "积分系统" {
+		n = "积分"
+	}
+	if n == "积分" {
+		n = "积分系统"
+	}
+	if n == "回复图片" {
+		n = "图片回复"
+	}
+	if n == "回复撤回" {
+		n = "撤回回复"
+	}
+
+	requireAdmin := false
+	requireSuperAdmin := false
+	featureID := ""
+
+	switch n {
+	case "功能关闭提示", "关闭提示", "功能提示":
+		featureID = "feature_disabled_notice"
+	case "欢迎语":
+		featureID = "welcome"
+	case "退群提示":
+		featureID = "leave_notify"
+	case "改名提示":
+		featureID = "rename_notify"
+	case "命令前缀":
+		featureID = "command_prefix"
+	case "进群改名":
+		featureID = "join_rename"
+	case "退群拉黑":
+		featureID = "leave_to_black"
+	case "被踢拉黑", "踢出拉黑":
+		featureID = "kick_to_black"
+	case "被踢提示":
+		featureID = "kick_notify"
+	case "进群禁言":
+		featureID = "join_mute"
+	case "道具系统":
+		featureID = "props"
+	case "宠物系统":
+		featureID = "pets"
+	case "群管系统", "敏感词", "敏感词系统":
+		featureID = "moderation"
+	case "简洁":
+		featureID = "simple_mode"
+	case "进群确认":
+		featureID = "join_confirm"
+	case "群链":
+		featureID = "group_link"
+	case "邀请统计":
+		featureID = "invite_stats"
+	case "AI":
+		featureID = "ai"
+	case "群主付":
+		featureID = "owner_pay"
+		requireSuperAdmin = true
+	case "自动签到":
+		featureID = "signin"
+	case "权限提示":
+		featureID = "permission_hint"
+	case "云黑名单":
+		featureID = "cloud_blacklist"
+	case "管理加白":
+		featureID = "admin_whitelist"
+	case "多人互动":
+		featureID = "multi_interaction"
+	case "知识库":
+		featureID = "knowledge_base"
+	case "图片回复":
+		featureID = "image_reply"
+	case "撤回回复":
+		featureID = "recall_reply"
+	case "语音回复":
+		featureID = "voice_reply"
+	case "阅后即焚":
+		featureID = "burn_after_reading"
+	case "积分系统":
+		featureID = "points"
+	case "本群积分":
+		featureID = "points"
+		requireAdmin = true
+	}
+
+	return featureID, requireAdmin, requireSuperAdmin
+}
+
+func isGroupAdmin(database *sql.DB, groupID, userID int64) bool {
+	if database == nil {
+		return false
+	}
+
+	groupIDStr := fmt.Sprintf("%d", groupID)
+	userIDStr := fmt.Sprintf("%d", userID)
+
+	isAdmin, err := db.IsGroupAdmin(database, groupIDStr, userIDStr)
+	if err != nil {
+		log.Printf("检查群 %d 中用户 %d 的管理员状态失败: %v", groupID, userID, err)
+		return false
+	}
+
+	return isAdmin
+}
+
+func isSuperAdmin(database *sql.DB, groupID, userID int64) bool {
+	if database == nil {
+		return false
+	}
+
+	groupIDStr := fmt.Sprintf("%d", groupID)
+	userIDStr := fmt.Sprintf("%d", userID)
+
+	ok, err := db.IsSuperAdmin(database, groupIDStr, userIDStr)
+	if err != nil {
+		log.Printf("检查群 %d 中用户 %d 的超级管理员状态失败: %v", groupID, userID, err)
+		return false
+	}
+
+	return ok
 }

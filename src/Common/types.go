@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"github.com/shirou/gopsutil/v3/process"
+	"gorm.io/gorm"
 )
 
 // ==================== 基础结构体 ====================
@@ -222,6 +223,15 @@ type AppConfig struct {
 	JWTSecret            string `json:"jwt_secret"`
 	DefaultAdminPassword string `json:"default_admin_password"`
 	StatsFile            string `json:"stats_file"`
+
+	// Database Configuration
+	DBType     string `json:"db_type"` // "sqlite" or "postgres"
+	PGHost     string `json:"pg_host"`
+	PGPort     int    `json:"pg_port"`
+	PGUser     string `json:"pg_user"`
+	PGPassword string `json:"pg_password"`
+	PGDBName   string `json:"pg_dbname"`
+	PGSSLMode  string `json:"pg_sslmode"`
 }
 
 // Manager holds the state
@@ -295,6 +305,10 @@ type Manager struct {
 	Users      map[string]*User // 用户名 -> 用户信息
 	UsersMutex sync.RWMutex     // 用户存储的并发保护
 	DB         *sql.DB          // SQLite 数据库连接
+	
+	// GORM Support
+	GORMDB     *gorm.DB         // GORM数据库连接
+	GORMManager *GORMManager     // GORM管理器
 
 	// Message Cache (For when no workers are available)
 	MessageCache []map[string]interface{}

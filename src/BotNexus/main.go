@@ -17,6 +17,7 @@ const VERSION = "86"
 // Manager 是 BotNexus 本地的包装结构，允许在其上定义方法
 type Manager struct {
 	*common.Manager
+	Core *CorePlugin
 }
 
 // 主函数 - 整合所有功能
@@ -94,6 +95,9 @@ func NewManager() *Manager {
 	} else {
 		log.Printf("[INFO] 已连接到Redis")
 	}
+
+	// 初始化核心插件
+	m.Core = NewCorePlugin(m)
 
 	return m
 }

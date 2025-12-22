@@ -39,6 +39,15 @@ BotMatrix uses a modular architecture. You only need to configure and enable the
         *   `REDIS_ADDR`: Redis server address (e.g., `127.0.0.1:6379`).
         *   `REDIS_PWD`: Redis password.
         *   `JWT_SECRET`: Secret for JWT token generation.
+        *   **Database Configuration** (PostgreSQL recommended):
+            *   `DB_TYPE`: Database type (`postgres` or `sqlite`, default: `postgres`)
+            *   `DB_HOST`: PostgreSQL host (e.g., `localhost`)
+            *   `DB_PORT`: PostgreSQL port (e.g., `5432`)
+            *   `DB_USER`: PostgreSQL username
+            *   `DB_PASSWORD`: PostgreSQL password
+            *   `DB_NAME`: PostgreSQL database name
+            *   `DB_SSL_MODE`: PostgreSQL SSL mode (e.g., `disable`)
+            *   `DB_PATH`: SQLite database file path (used when `DB_TYPE=sqlite`)
     *   **WebUI Config**: Once logged in as an administrator, you can modify these settings directly in the **System Settings** tab. Most changes (like Redis) take effect immediately, while port changes require a service restart.
 
 ### 🟢 WxBot (WeChat)
@@ -193,7 +202,56 @@ DEFAULT_SERVER_IP = "192.168.x.x"
 DEFAULT_USERNAME = "user"
 ```
 
-## 5. Troubleshooting
+## 5. Database Setup
+
+### PostgreSQL Setup (Recommended)
+BotMatrix now supports PostgreSQL as the primary database with SQLite as a fallback option.
+
+1. **Install PostgreSQL** (if not already installed):
+```bash
+# Ubuntu/Debian
+sudo apt-get install postgresql postgresql-contrib
+
+# CentOS/RHEL
+sudo yum install postgresql-server postgresql-contrib
+sudo postgresql-setup initdb
+```
+
+2. **Create Database and User**:
+```bash
+# Connect to PostgreSQL
+sudo -u postgres psql
+
+# Create database and user
+CREATE DATABASE botmatrix_db;
+CREATE USER botmatrix WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE botmatrix_db TO botmatrix;
+\q
+```
+
+3. **Configure Environment Variables**:
+Update your `.env` file with PostgreSQL configuration:
+```bash
+DB_TYPE=postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=botmatrix
+DB_PASSWORD=your_password
+DB_NAME=botmatrix_db
+DB_SSL_MODE=disable
+```
+
+4. **Database Migration**:
+BotMatrix will automatically create the necessary tables on startup. No manual migration is required.
+
+### SQLite Setup (Fallback)
+For development or small deployments, SQLite is still supported:
+```bash
+DB_TYPE=sqlite
+DB_PATH=./botmatrix.db
+```
+
+## 6. Troubleshooting
 
 *   **Ports Occupied**: Check `docker-compose.yml` and change mapped ports (e.g., `5000:5000` -> `5050:5000`).
 *   **Connection Failed**: Ensure `NEXUS_ADDR` in bot configs points to `ws://bot-manager:3005` (internal Docker network).

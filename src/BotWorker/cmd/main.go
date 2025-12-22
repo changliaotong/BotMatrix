@@ -31,6 +31,7 @@ func main() {
 		log.Println("服务器将继续运行，但数据库功能将不可用")
 	} else {
 		log.Println("成功连接到数据库")
+		plugins.SetGlobalDB(database)
 
 		// 初始化数据库表
 		if err := db.InitDatabase(database); err != nil {
@@ -73,6 +74,7 @@ func main() {
 		log.Println("服务器将继续运行，但Redis功能将不可用")
 	} else {
 		log.Println("成功连接到Redis服务器")
+		plugins.SetGlobalRedis(redisClient)
 		// 不关闭Redis连接，由插件管理器管理连接生命周期
 	}
 
@@ -107,7 +109,7 @@ func main() {
 	}
 
 	// 加载积分系统插件
-	pointsPlugin := plugins.NewPointsPlugin()
+	pointsPlugin := plugins.NewPointsPlugin(database)
 	if err := pluginManager.LoadPlugin(pointsPlugin); err != nil {
 		log.Fatalf("加载积分系统插件失败: %v", err)
 	}
@@ -116,6 +118,11 @@ func main() {
 	signInPlugin := plugins.NewSignInPlugin(pointsPlugin)
 	if err := pluginManager.LoadPlugin(signInPlugin); err != nil {
 		log.Fatalf("加载签到系统插件失败: %v", err)
+	}
+
+	gamesPlugin := plugins.NewGamesPlugin()
+	if err := pluginManager.LoadPlugin(gamesPlugin); err != nil {
+		log.Fatalf("加载游戏插件失败: %v", err)
 	}
 
 	// 加载抽签插件
@@ -143,9 +150,14 @@ func main() {
 	}
 
 	// 加载宠物系统插件
-	petPlugin := plugins.NewPetPlugin()
+	petPlugin := plugins.NewPetPlugin(database, pointsPlugin)
 	if err := pluginManager.LoadPlugin(petPlugin); err != nil {
 		log.Fatalf("加载宠物系统插件失败: %v", err)
+	}
+
+	dialogDemoPlugin := plugins.NewDialogDemoPlugin()
+	if err := pluginManager.LoadPlugin(dialogDemoPlugin); err != nil {
+		log.Fatalf("加载对话示例插件失败: %v", err)
 	}
 
 	// 打印已加载的插件

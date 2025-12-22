@@ -318,7 +318,32 @@ func (m *Manager) sendWorkerHeartbeat(worker *common.WorkerClient, stop chan str
 
 // handleBotMessage 处理Bot消息
 func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interface{}) {
-	// 检查是否包含 self_id 并更新（如果当前是临时 ID）
+	// 1. 核心插件拦截
+	if allowed, reason, err := m.Core.ProcessMessage(msg); !allowed {
+		log.Printf("[Core] Message blocked: %s (reason: %s)", bot.SelfID, reason)
+		if err != nil {
+			log.Printf("[Core] Error processing message: %v", err)
+		}
+
+		// 如果是管理员指令被系统拦截（例如系统关闭时），尝试处理管理员指令
+		if reason == "system_closed" && m.Core.identifyMessageType(msg) == "admin_command" {
+			// 继续往下走，让 handleBotMessageEvent 处理或直接在这里拦截
+		} else {
+			return
+		}
+	}
+
+	// 核心插件处理管理员指令
+	if m.Core.identifyMessageType(msg) == "admin_command" {
+		resp, err := m.Core.HandleAdminCommand(msg)
+		if err == nil && resp != "" {
+			// 发送响应回机器人
+			m.sendBotMessage(bot, msg, resp)
+			return
+		}
+	}
+
+	// 2. 检查是否包含 self_id 并更新（如果当前是临时 ID）
 	msgSelfID := common.ToString(msg["self_id"])
 	if msgSelfID != "" {
 		if bot.SelfID != msgSelfID && strings.Contains(bot.SelfID, ":") {
@@ -603,6 +628,31 @@ func isSystemMessage(msg map[string]interface{}) bool {
 	}
 
 	return false
+}
+
+// sendBotMessage 发送文本消息回机器人 (辅助方法)
+func (m *Manager) sendBotMessage(bot *common.BotClient, originalMsg map[string]interface{}, text string) {
+	resp := map[string]interface{}{
+		"action": "send_msg",
+		"params": map[string]interface{}{
+			"message": text,
+		},
+	}
+
+	// 复制原始消息的关键字段以确定发送目标
+	if groupID, ok := originalMsg["group_id"]; ok {
+		resp["params"].(map[string]interface{})["group_id"] = groupID
+	} else if userID, ok := originalMsg["user_id"]; ok {
+		resp["params"].(map[string]interface{})["user_id"] = userID
+	}
+
+	bot.Mutex.Lock()
+	err := bot.Conn.WriteJSON(resp)
+	bot.Mutex.Unlock()
+
+	if err != nil {
+		log.Printf("[Bot] Failed to send message to Bot %s: %v", bot.SelfID, err)
+	}
 }
 
 // handleBotMessageEvent 处理Bot消息事件

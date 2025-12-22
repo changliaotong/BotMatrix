@@ -39,6 +39,11 @@ func (p *WelcomePlugin) Init(robot plugin.Robot) {
 		if event.NoticeType == "group_member_increase" {
 			log.Printf("新成员加入群 %d: 用户 %d\n", event.GroupID, event.UserID)
 
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "welcome") {
+				return nil
+			}
+
 			// 发送群欢迎消息
 			welcomeMsg := fmt.Sprintf("欢迎新成员 @%d 加入本群！\n请遵守群规，文明交流。", event.UserID)
 

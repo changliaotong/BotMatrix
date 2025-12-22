@@ -102,6 +102,8 @@ Configure group-specific moderation settings.
   - `退群加黑关闭` - Disable leave to blacklist
   - `退群提示开启` - Enable leave notification
   - `退群提示关闭` - Disable leave notification
+  - `清空黑名单` - Clear current group's blacklist (requires 3-digit confirmation code)
+  - `清空白名单` - Clear current group's whitelist (requires 3-digit confirmation code)
   - `查看` - View current group configuration
 
 **Examples:**
@@ -140,3 +142,4 @@ The Moderation plugin requires the following configuration:
 - Blacklisted users cannot send messages in the group and will be automatically kicked when added
 - Graylisted users are subject to additional moderation checks
 - When a user is blacklisted, they will be automatically kicked from the group
+- Dangerous operations such as clearing blacklist/whitelist require a 3-digit numeric confirmation code sent by the bot

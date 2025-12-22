@@ -1,8 +1,10 @@
 package plugins
 
 import (
+	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
+	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,32 +13,21 @@ import (
 
 // PointsPlugin 积分系统插件
 type PointsPlugin struct {
-	// 存储用户积分，key为用户ID，value为积分数量
-	points map[string]int
+	db *sql.DB
 	// 存储用户上次签到时间，key为用户ID，value为签到时间
 	lastSignInTime map[string]time.Time
 	// 存储用户上次领积分时间，key为用户ID，value为领积分时间
 	lastGetPointsTime map[string]time.Time
-	// 存储用户积分记录，key为用户ID，value为积分记录列表
-	pointsRecords map[string][]PointsRecord
 	// 命令解析器
 	cmdParser *CommandParser
 }
 
-// PointsRecord 积分记录
-type PointsRecord struct {
-	Points    int       // 积分数量
-	Reason    string    // 积分变动原因
-	Timestamp time.Time // 变动时间
-}
-
 // NewPointsPlugin 创建积分系统插件实例
-func NewPointsPlugin() *PointsPlugin {
+func NewPointsPlugin(database *sql.DB) *PointsPlugin {
 	return &PointsPlugin{
-		points:            make(map[string]int),
+		db:                database,
 		lastSignInTime:    make(map[string]time.Time),
 		lastGetPointsTime: make(map[string]time.Time),
-		pointsRecords:     make(map[string][]PointsRecord),
 		cmdParser:         NewCommandParser(),
 	}
 }
@@ -54,12 +45,24 @@ func (p *PointsPlugin) Version() string {
 }
 
 func (p *PointsPlugin) Init(robot plugin.Robot) {
+	if p.db == nil {
+		log.Println("积分系统插件未配置数据库，功能将不可用")
+		return
+	}
 	log.Println("加载积分系统插件")
 
 	// 处理积分查询命令
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				HandleFeatureDisabled(robot, event, "points")
+				return nil
+			}
 		}
 
 		// 检查是否为积分查询命令
@@ -74,15 +77,16 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 获取用户积分
+		// 从数据库获取用户积分
 		userIDStr := fmt.Sprintf("%d", userID)
-		userPoints := p.points[userIDStr]
-		if userPoints == 0 {
-			p.sendMessage(robot, event, fmt.Sprintf("你当前的积分为：0"))
-		} else {
-			p.sendMessage(robot, event, fmt.Sprintf("你当前的积分为：%d", userPoints))
+		userPoints, err := db.GetPoints(p.db, userIDStr)
+		if err != nil {
+			log.Printf("获取积分失败: %v", err)
+			p.sendMessage(robot, event, "查询积分失败，请稍后再试")
+			return nil
 		}
 
+		p.sendMessage(robot, event, fmt.Sprintf("你当前的积分为：%d", userPoints))
 		return nil
 	})
 
@@ -90,6 +94,14 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				HandleFeatureDisabled(robot, event, "points")
+				return nil
+			}
 		}
 
 		// 检查是否为签到命令
@@ -117,11 +129,17 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 增加积分（签到奖励10积分）
-		p.addPoints(userIDStr, 10, "签到奖励")
+		err := db.AddPoints(p.db, userIDStr, 10, "签到奖励", "sign_in")
+		if err != nil {
+			log.Printf("签到积分增加失败: %v", err)
+			p.sendMessage(robot, event, "签到失败，请稍后再试")
+			return nil
+		}
 		p.lastSignInTime[userIDStr] = now
 
-		// 发送签到成功消息
-		userPoints := p.points[userIDStr]
+		// 获取更新后的积分
+		userPoints, _ := db.GetPoints(p.db, userIDStr)
+
 		var rewardMsg string
 		switch msg {
 		case "早安":
@@ -142,6 +160,14 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				HandleFeatureDisabled(robot, event, "points")
+				return nil
+			}
+		}
+
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
@@ -149,14 +175,13 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为命令消息（不奖励积分）
-		// 检查所有插件的命令模式
-		if p.cmdParser.IsCommand("points|积分|signpoints|签到积分|签到|早安|晚安|rank|排行榜|积分榜|打赏|reward|领积分|getpoints", event.RawMessage) {
+		if p.cmdParser.IsCommand("points|积分|signpoints|签到积分|签到|早安|晚安|rank|排行榜|积分榜|打赏|reward|转账|transfer|领积分|getpoints|存积分|存款|取积分|取款|冻结积分|冻结|解冻积分|解冻", event.RawMessage) {
 			return nil
 		}
 
 		// 发言奖励1积分
 		userIDStr := fmt.Sprintf("%d", userID)
-		p.addPoints(userIDStr, 1, "发言奖励")
+		_ = db.AddPoints(p.db, userIDStr, 1, "发言奖励", "message_reward")
 
 		return nil
 	})
@@ -167,15 +192,27 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				HandleFeatureDisabled(robot, event, "points")
+				return nil
+			}
+		}
+
 		// 检查是否为排行榜命令
 		if match, _ := p.cmdParser.MatchCommand("rank|排行榜|积分榜", event.RawMessage); !match {
 			return nil
 		}
 
-		// 获取积分排行榜
-		rank := p.getPointsRank()
+		// 从数据库获取积分排行榜
+		rank, err := p.getPointsRankFromDB()
+		if err != nil {
+			log.Printf("获取积分排行榜失败: %v", err)
+			p.sendMessage(robot, event, "获取排行榜失败")
+			return nil
+		}
 
-		// 发送排行榜消息
 		if len(rank) == 0 {
 			p.sendMessage(robot, event, "暂无积分记录")
 			return nil
@@ -198,27 +235,35 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			msg += fmt.Sprintf("%s 用户%s：%d积分\n", medal, item.UserID, item.Points)
 		}
 		msg += "------------------------\n"
-		msg += fmt.Sprintf("总参与人数：%d人\n", len(p.points))
 
 		p.sendMessage(robot, event, msg)
-
 		return nil
 	})
 
-	// 处理打赏功能
+	// 处理打赏/转账功能
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
 		}
 
-		// 检查是否为打赏命令
-		match, _, params := p.cmdParser.MatchCommandWithParams("打赏|reward", "(\\S+)\\s+(\\S+)", event.RawMessage)
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				HandleFeatureDisabled(robot, event, "points")
+				return nil
+			}
+		}
+
+		// 检查是否为打赏或转账命令
+		match, cmd, params := p.cmdParser.MatchCommandWithParams("打赏|reward|转账|transfer", "(\\d+)\\s+(\\d+)", event.RawMessage)
 		if !match || len(params) != 2 {
-			p.sendMessage(robot, event, "打赏命令格式：/打赏 <用户ID> <积分数量>")
+			if match {
+				p.sendMessage(robot, event, fmt.Sprintf("%s命令格式：%s <用户ID> <积分数量>", cmd, cmd))
+			}
 			return nil
 		}
 
-		// 解析打赏信息
+		// 解析转账信息
 		toUserID := params[0]
 		pointsStr := params[1]
 		points, err := strconv.Atoi(pointsStr)
@@ -227,29 +272,29 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 获取打赏者ID
+		// 获取操作者ID
 		fromUserID := event.UserID
-		if fromUserID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，打赏失败")
-			return nil
-		}
-
-		// 检查打赏者积分是否足够
 		fromUserIDStr := fmt.Sprintf("%d", fromUserID)
-		if p.points[fromUserIDStr] < points {
-			p.sendMessage(robot, event, "积分不足，打赏失败")
+
+		if fromUserIDStr == toUserID {
+			p.sendMessage(robot, event, "不能给自己转账哦")
 			return nil
 		}
 
-		// 执行打赏
-		toUserIDStr := fmt.Sprintf("%d", toUserID)
-		p.addPoints(fromUserIDStr, -points, fmt.Sprintf("打赏用户%s", toUserID))
-		p.addPoints(toUserIDStr, points, fmt.Sprintf("收到用户%s打赏", fromUserID))
+		// 执行转账（使用数据库事务）
+		reason := "主动转账"
+		if cmd == "打赏" || cmd == "reward" {
+			reason = "打赏"
+		}
 
-		// 发送打赏成功消息
-		rewardMsg := fmt.Sprintf("打赏成功！用户%s 打赏用户%s %d积分", fromUserID, toUserID, points)
-		p.sendMessage(robot, event, rewardMsg)
+		err = db.TransferPoints(p.db, fromUserIDStr, toUserID, points, reason, "transfer")
+		if err != nil {
+			p.sendMessage(robot, event, fmt.Sprintf("操作失败: %v", err))
+			return nil
+		}
 
+		// 发送成功消息
+		p.sendMessage(robot, event, fmt.Sprintf("✅ %s成功！你给用户 %s %s了 %d 积分", reason, toUserID, reason, points))
 		return nil
 	})
 
@@ -257,6 +302,14 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				HandleFeatureDisabled(robot, event, "points")
+				return nil
+			}
 		}
 
 		// 检查是否为领积分命令
@@ -281,13 +334,200 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 领取5积分
-		p.addPoints(userIDStr, 5, "每日领积分")
+		err := db.AddPoints(p.db, userIDStr, 5, "每日领积分", "daily_bonus")
+		if err != nil {
+			p.sendMessage(robot, event, "领取失败，请稍后再试")
+			return nil
+		}
 		p.lastGetPointsTime[userIDStr] = now
 
-		// 发送领取成功消息
-		userPoints := p.points[userIDStr]
-		msg := fmt.Sprintf("领取成功！获得5积分\n当前积分：%d", userPoints)
-		p.sendMessage(robot, event, msg)
+		// 获取更新后的积分
+		userPoints, _ := db.GetPoints(p.db, userIDStr)
+		p.sendMessage(robot, event, fmt.Sprintf("领取成功！获得5积分\n当前积分：%d", userPoints))
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				return nil
+			}
+		}
+
+		userID := event.UserID
+		if userID == 0 {
+			p.sendMessage(robot, event, "无法获取用户ID，存积分失败")
+			return nil
+		}
+
+		userIDStr := fmt.Sprintf("%d", userID)
+
+		matchDep, _, depParams := p.cmdParser.MatchCommandWithParams("存积分|存款", `(\\d+)`, event.RawMessage)
+		if matchDep && len(depParams) == 1 {
+			amount, err := strconv.Atoi(depParams[0])
+			if err != nil || amount <= 0 {
+				p.sendMessage(robot, event, "存入的积分数量必须为正整数")
+				return nil
+			}
+
+			err = db.DepositPointsToSavings(p.db, userIDStr, amount)
+			if err != nil {
+				p.sendMessage(robot, event, fmt.Sprintf("存积分失败: %v", err))
+				return nil
+			}
+
+			saving, _ := db.GetSavingsPoints(p.db, userIDStr)
+			p.sendMessage(robot, event, fmt.Sprintf("已存入 %d 积分\n当前存积分余额：%d", amount, saving))
+			return nil
+		}
+
+		matchQuery, _ := p.cmdParser.MatchCommand("存积分|存款", event.RawMessage)
+		if !matchQuery {
+			return nil
+		}
+
+		saving, err := db.GetSavingsPoints(p.db, userIDStr)
+		if err != nil {
+			p.sendMessage(robot, event, fmt.Sprintf("查询存积分失败: %v", err))
+			return nil
+		}
+
+		points, err := db.GetPoints(p.db, userIDStr)
+		if err != nil {
+			p.sendMessage(robot, event, fmt.Sprintf("查询积分失败: %v", err))
+			return nil
+		}
+
+		p.sendMessage(robot, event, fmt.Sprintf("当前可用积分：%d\n当前存积分余额：%d", points, saving))
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				return nil
+			}
+		}
+
+		userID := event.UserID
+		if userID == 0 {
+			p.sendMessage(robot, event, "无法获取用户ID，取积分失败")
+			return nil
+		}
+
+		userIDStr := fmt.Sprintf("%d", userID)
+
+		match, _, params := p.cmdParser.MatchCommandWithParams("取积分|取款", `(\\d+)`, event.RawMessage)
+		if !match || len(params) != 1 {
+			return nil
+		}
+
+		amount, err := strconv.Atoi(params[0])
+		if err != nil || amount <= 0 {
+			p.sendMessage(robot, event, "取出的积分数量必须为正整数")
+			return nil
+		}
+
+		err = db.WithdrawPointsFromSavings(p.db, userIDStr, amount)
+		if err != nil {
+			p.sendMessage(robot, event, fmt.Sprintf("取积分失败: %v", err))
+			return nil
+		}
+
+		saving, _ := db.GetSavingsPoints(p.db, userIDStr)
+		points, _ := db.GetPoints(p.db, userIDStr)
+		p.sendMessage(robot, event, fmt.Sprintf("已取出 %d 积分\n当前可用积分：%d\n当前存积分余额：%d", amount, points, saving))
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "points") {
+				return nil
+			}
+		}
+
+		userID := event.UserID
+		if userID == 0 {
+			p.sendMessage(robot, event, "无法获取用户ID，冻结积分失败")
+			return nil
+		}
+
+		userIDStr := fmt.Sprintf("%d", userID)
+
+		match, _, params := p.cmdParser.MatchCommandWithParams("冻结积分|冻结", `(\\d+)`, event.RawMessage)
+		if !match || len(params) != 1 {
+			return nil
+		}
+
+		amount, err := strconv.Atoi(params[0])
+		if err != nil || amount <= 0 {
+			p.sendMessage(robot, event, "冻结的积分数量必须为正整数")
+			return nil
+		}
+
+		err = db.FreezePoints(p.db, userIDStr, amount, "手动冻结积分")
+		if err != nil {
+			p.sendMessage(robot, event, fmt.Sprintf("冻结积分失败: %v", err))
+			return nil
+		}
+
+		frozen, _ := db.GetFrozenPoints(p.db, userIDStr)
+		p.sendMessage(robot, event, fmt.Sprintf("已冻结 %d 积分\n当前冻结积分：%d", amount, frozen))
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		userID := event.UserID
+		if userID == 0 {
+			p.sendMessage(robot, event, "无法获取用户ID，解冻积分失败")
+			return nil
+		}
+
+		userIDStr := fmt.Sprintf("%d", userID)
+
+		match, _, params := p.cmdParser.MatchCommandWithParams("解冻积分|解冻", `(\\d+)`, event.RawMessage)
+		if !match || len(params) != 1 {
+			return nil
+		}
+
+		amount, err := strconv.Atoi(params[0])
+		if err != nil || amount <= 0 {
+			p.sendMessage(robot, event, "解冻的积分数量必须为正整数")
+			return nil
+		}
+
+		err = db.UnfreezePoints(p.db, userIDStr, amount, "手动解冻积分")
+		if err != nil {
+			p.sendMessage(robot, event, fmt.Sprintf("解冻积分失败: %v", err))
+			return nil
+		}
+
+		frozen, _ := db.GetFrozenPoints(p.db, userIDStr)
+		p.sendMessage(robot, event, fmt.Sprintf("已解冻 %d 积分\n当前冻结积分：%d", amount, frozen))
 
 		return nil
 	})
@@ -295,61 +535,57 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 // sendMessage 发送消息
 func (p *PointsPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
-	}
-
-	if _, err := robot.SendMessage(params); err != nil {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
 }
 
-// addPoints 增加用户积分
-func (p *PointsPlugin) addPoints(userID string, points int, reason string) {
-	// 增加积分
-	p.points[userID] += points
-
-	// 记录积分变动
-	record := PointsRecord{
-		Points:    points,
-		Reason:    reason,
-		Timestamp: time.Now(),
+func (p *PointsPlugin) AddPoints(userID string, points int, reason string, category string) {
+	if p.db == nil {
+		return
 	}
-	p.pointsRecords[userID] = append(p.pointsRecords[userID], record)
+	_ = db.AddPoints(p.db, userID, points, reason, category)
 }
 
-// getPointsRank 获取积分排行榜
-func (p *PointsPlugin) getPointsRank() []PointsRankItem {
-	// 转换为排行榜项列表
-	var rank []PointsRankItem
-	for userID, points := range p.points {
-		if points > 0 {
-			rank = append(rank, PointsRankItem{UserID: userID, Points: points})
-		}
+func (p *PointsPlugin) GetPoints(userID string) int {
+	if p.db == nil {
+		return 0
 	}
-
-	// 按积分降序排序
-	for i := 0; i < len(rank); i++ {
-		for j := i + 1; j < len(rank); j++ {
-			if rank[j].Points > rank[i].Points {
-				rank[i], rank[j] = rank[j], rank[i]
-			}
-		}
+	points, err := db.GetPoints(p.db, userID)
+	if err != nil {
+		return 0
 	}
-
-	// 返回前10名
-	if len(rank) > 10 {
-		return rank[:10]
-	}
-	return rank
+	return points
 }
 
-// PointsRankItem 排行榜项
 type PointsRankItem struct {
-	UserID string // 用户ID
-	Points int    // 积分数量
+	UserID string
+	Points int
 }
 
+func (p *PointsPlugin) getPointsRankFromDB() ([]PointsRankItem, error) {
+	if p.db == nil {
+		return nil, nil
+	}
 
+	rows, err := p.db.Query("SELECT user_id, points FROM users ORDER BY points DESC LIMIT 10")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rank []PointsRankItem
+	for rows.Next() {
+		var item PointsRankItem
+		if err := rows.Scan(&item.UserID, &item.Points); err != nil {
+			return nil, err
+		}
+		rank = append(rank, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return rank, nil
+}

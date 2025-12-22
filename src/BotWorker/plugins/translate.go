@@ -47,6 +47,14 @@ func (p *TranslatePlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "translate") {
+				HandleFeatureDisabled(robot, event, "translate")
+				return nil
+			}
+		}
+
 		// 检查是否为翻译命令
 		var content string
 		// 首先检查是否为带参数的翻译命令
@@ -85,13 +93,7 @@ func (p *TranslatePlugin) Init(robot plugin.Robot) {
 
 // sendMessage 发送消息
 func (p *TranslatePlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
-	}
-
-	if _, err := robot.SendMessage(params); err != nil {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
 }
@@ -190,4 +192,3 @@ func (p *TranslatePlugin) IsChinese(text string) bool {
 	}
 	return false
 }
-

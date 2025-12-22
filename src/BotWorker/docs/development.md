@@ -140,6 +140,61 @@ go build -o bot.exe ./cmd/main.go
 .\test_plugins.bat
 ```
 
+## 会话状态与危险操作确认（2024-12-22）
+
+### 设计目标
+
+- 支持多 worker、无状态部署场景
+- 通过 Redis 或数据库持久化会话状态
+- 为危险操作（如清空黑名单、清空白名单）提供三位数字确认码保护
+- 支持多步对话 / 多级菜单流程
+
+### 核心实现
+
+- 在 `plugins/utils.go` 中新增全局依赖：
+  - `GlobalRedis`：可选 Redis 客户端
+  - `GlobalDB`：数据库连接（作为 Redis 不可用时的回退）
+- 提供会话键生成工具：
+  - 使用 `groupID:userID` 组合构造唯一会话键，保证同一群内按用户隔离
+
+### 危险操作确认流程
+
+- 使用 `StartConfirmation` 创建待确认记录：
+  - 自动生成三位随机确认码和三位随机取消码
+  - 默认有效期为 2 分钟
+- 存储策略：
+  - 若配置了 Redis：使用 `bot:confirm:<groupID>:<userID>` Key 存储 JSON
+  - 否则使用数据库 `sessions` 表，`session_id` 为 `confirm:<groupID>:<userID>`
+- 用户回复任意消息时，`HandleConfirmationReply` 会：
+  - 从 Redis 或数据库加载待确认记录
+  - 匹配确认码 / 取消码并返回统一的 `ConfirmationResult`
+  - 自动清理已完成或过期的会话记录
+
+### 多步对话 / 多级菜单
+
+- 使用 `StartDialog` 创建对话状态：
+  - 记录 `Type`、当前 `Step` 以及 `Data`（用户已输入数据）
+  - 默认有效期为 5 分钟
+- 状态存储：
+  - Redis：Key 为 `bot:dialog:<groupID>:<userID>`
+  - 数据库：`session_id` 为 `dialog:<groupID>:<userID>`
+- 使用 `GetDialog` 读取当前对话状态，用 `UpdateDialog` 推进步骤：
+  - 在每一步中根据 `Step` 决定提示内容和下一步逻辑
+  - 完成或中断对话时调用 `EndDialog` 清理状态
+
+### 对多 worker 的支持
+
+- 所有与确认码、对话相关的状态都存储在 Redis 或数据库中
+- 任意一个 worker 收到后续消息时：
+  - 通过 `(groupID, userID)` 从共享存储恢复上下文
+  - 不依赖单个进程内存，实现真正的无状态 worker
+
+### 相关文件
+
+- `plugins/utils.go`：会话状态、确认码、多步对话工具函数
+- `plugins/moderation.go`：清空黑名单 / 白名单确认逻辑
+- `plugins/dialog_demo.go`：多级菜单与多步输入示例插件
+
 ### 开发建议
 
 1. **类型检查**：在开发过程中注意Go语言的强类型特性，确保类型匹配

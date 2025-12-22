@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 )
@@ -15,6 +16,13 @@ var GlobalConfig = &AppConfig{
 	RedisPwd:             "redis_zsYik8",
 	JWTSecret:            "botnexus_secret_key_for_jwt_token_generation",
 	DefaultAdminPassword: "admin123",
+	DBType:               "sqlite",
+	PGHost:               "localhost",
+	PGPort:               5432,
+	PGUser:               "postgres",
+	PGPassword:           "postgres",
+	PGDBName:             "botnexus",
+	PGSSLMode:            "disable",
 }
 
 // 注意：为了兼容现有代码，保留这些全局变量
@@ -26,6 +34,13 @@ var (
 	REDIS_PWD              string
 	JWT_SECRET             string
 	DEFAULT_ADMIN_PASSWORD string
+	DB_TYPE                string
+	PG_HOST                string
+	PG_PORT                int
+	PG_USER                string
+	PG_PASSWORD            string
+	PG_DBNAME              string
+	PG_SSLMODE             string
 )
 
 const CONFIG_FILE = "config.json"
@@ -39,6 +54,13 @@ func init() {
 	REDIS_PWD = GlobalConfig.RedisPwd
 	JWT_SECRET = GlobalConfig.JWTSecret
 	DEFAULT_ADMIN_PASSWORD = GlobalConfig.DefaultAdminPassword
+	DB_TYPE = GlobalConfig.DBType
+	PG_HOST = GlobalConfig.PGHost
+	PG_PORT = GlobalConfig.PGPort
+	PG_USER = GlobalConfig.PGUser
+	PG_PASSWORD = GlobalConfig.PGPassword
+	PG_DBNAME = GlobalConfig.PGDBName
+	PG_SSLMODE = GlobalConfig.PGSSLMode
 
 	// 2. 尝试从文件加载
 	loadConfigFromFile()
@@ -84,6 +106,27 @@ func loadConfigFromFile() {
 		if fileConfig.DefaultAdminPassword != "" {
 			DEFAULT_ADMIN_PASSWORD = fileConfig.DefaultAdminPassword
 		}
+		if fileConfig.DBType != "" {
+			DB_TYPE = fileConfig.DBType
+		}
+		if fileConfig.PGHost != "" {
+			PG_HOST = fileConfig.PGHost
+		}
+		if fileConfig.PGPort != 0 {
+			PG_PORT = fileConfig.PGPort
+		}
+		if fileConfig.PGUser != "" {
+			PG_USER = fileConfig.PGUser
+		}
+		if fileConfig.PGPassword != "" {
+			PG_PASSWORD = fileConfig.PGPassword
+		}
+		if fileConfig.PGDBName != "" {
+			PG_DBNAME = fileConfig.PGDBName
+		}
+		if fileConfig.PGSSLMode != "" {
+			PG_SSLMODE = fileConfig.PGSSLMode
+		}
 		log.Printf("[INFO] 已从 %s 加载配置", CONFIG_FILE)
 	}
 }
@@ -110,6 +153,27 @@ func loadConfigFromEnv() {
 	if v := os.Getenv("DEFAULT_ADMIN_PASSWORD"); v != "" {
 		DEFAULT_ADMIN_PASSWORD = v
 	}
+	if v := os.Getenv("DB_TYPE"); v != "" {
+		DB_TYPE = v
+	}
+	if v := os.Getenv("PG_HOST"); v != "" {
+		PG_HOST = v
+	}
+	if v := os.Getenv("PG_PORT"); v != "" {
+		fmt.Sscanf(v, "%d", &PG_PORT)
+	}
+	if v := os.Getenv("PG_USER"); v != "" {
+		PG_USER = v
+	}
+	if v := os.Getenv("PG_PASSWORD"); v != "" {
+		PG_PASSWORD = v
+	}
+	if v := os.Getenv("PG_DBNAME"); v != "" {
+		PG_DBNAME = v
+	}
+	if v := os.Getenv("PG_SSLMODE"); v != "" {
+		PG_SSLMODE = v
+	}
 }
 
 func syncToGlobalConfig() {
@@ -120,6 +184,13 @@ func syncToGlobalConfig() {
 	GlobalConfig.RedisPwd = REDIS_PWD
 	GlobalConfig.JWTSecret = JWT_SECRET
 	GlobalConfig.DefaultAdminPassword = DEFAULT_ADMIN_PASSWORD
+	GlobalConfig.DBType = DB_TYPE
+	GlobalConfig.PGHost = PG_HOST
+	GlobalConfig.PGPort = PG_PORT
+	GlobalConfig.PGUser = PG_USER
+	GlobalConfig.PGPassword = PG_PASSWORD
+	GlobalConfig.PGDBName = PG_DBNAME
+	GlobalConfig.PGSSLMode = PG_SSLMODE
 }
 
 // SaveConfigToFile 保存配置到文件

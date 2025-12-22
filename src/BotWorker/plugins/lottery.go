@@ -94,6 +94,14 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "lottery") {
+				HandleFeatureDisabled(robot, event, "lottery")
+				return nil
+			}
+		}
+
 		// 检查是否为抽签命令
 		if match, _ := p.cmdParser.MatchCommand("lottery|抽签", event.RawMessage); !match {
 			return nil
@@ -139,6 +147,14 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "lottery") {
+				HandleFeatureDisabled(robot, event, "lottery")
+				return nil
+			}
+		}
+
 		// 检查是否为解签命令
 		if match, _ := p.cmdParser.MatchCommand("interpret|解签", event.RawMessage); !match {
 			return nil
@@ -174,13 +190,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 
 // sendMessage 发送消息
 func (p *LotteryPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
-	}
-
-	if _, err := robot.SendMessage(params); err != nil {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
 }

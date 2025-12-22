@@ -40,6 +40,14 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "greetings") {
+				HandleFeatureDisabled(robot, event, "greetings")
+				return nil
+			}
+		}
+
 		// 检查是否为早安命令
 		if match, _ := p.cmdParser.MatchCommand("早安|goodmorning", event.RawMessage); !match {
 			return nil
@@ -56,6 +64,14 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "greetings") {
+				HandleFeatureDisabled(robot, event, "greetings")
+				return nil
+			}
 		}
 
 		// 检查是否为晚安命令
@@ -76,6 +92,14 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "greetings") {
+				HandleFeatureDisabled(robot, event, "greetings")
+				return nil
+			}
+		}
+
 		// 检查是否为欢迎语命令
 		match, _, welcomeUser := p.cmdParser.MatchCommandWithSingleParam("欢迎|welcome", event.RawMessage)
 		if !match {
@@ -92,13 +116,7 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 
 // sendMessage 发送消息
 func (p *GreetingsPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
-	}
-
-	if _, err := robot.SendMessage(params); err != nil {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
 }

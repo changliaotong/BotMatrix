@@ -8,10 +8,14 @@ import (
 	"math/rand"
 )
 
-// GamesPlugin 游戏插件
 type GamesPlugin struct {
-	// 命令解析器
-	cmdParser *CommandParser
+	cmdParser   *CommandParser
+	idiomGames  map[string]*IdiomGameState
+	idioms      []string
+}
+
+type IdiomGameState struct {
+	CurrentIdiom string
 }
 
 func (p *GamesPlugin) Name() string {
@@ -26,10 +30,32 @@ func (p *GamesPlugin) Version() string {
 	return "1.0.0"
 }
 
-// NewGamesPlugin 创建游戏插件实例
 func NewGamesPlugin() *GamesPlugin {
 	return &GamesPlugin{
-		cmdParser: NewCommandParser(),
+		cmdParser:  NewCommandParser(),
+		idiomGames: make(map[string]*IdiomGameState),
+		idioms: []string{
+			"画蛇添足",
+			"足智多谋",
+			"谋事在人",
+			"人山人海",
+			"海阔天空",
+			"空前绝后",
+			"后来居上",
+			"上行下效",
+			"效颦学步",
+			"步步高升",
+			"升堂入室",
+			"室雅人和",
+			"和气致祥",
+			"祥风时雨",
+			"雨过天晴",
+			"晴空万里",
+			"里应外合",
+			"合情合理",
+			"理直气壮",
+			"壮志凌云",
+		},
 	}
 }
 
@@ -40,6 +66,14 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "games") {
+				HandleFeatureDisabled(robot, event, "games")
+				return nil
+			}
 		}
 
 		// 检查是否为猜拳命令
@@ -73,6 +107,14 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "games") {
+				HandleFeatureDisabled(robot, event, "games")
+				return nil
+			}
 		}
 
 		// 检查是否为猜大小命令
@@ -118,6 +160,14 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "games") {
+				HandleFeatureDisabled(robot, event, "games")
+				return nil
+			}
+		}
+
 		// 检查是否为抽奖命令
 		if match, _ := p.cmdParser.MatchCommand("抽奖|lottery", event.RawMessage); !match {
 			return nil
@@ -130,6 +180,31 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		// 发送结果
 		resultMsg := fmt.Sprintf("🎁 抽奖结果：%s", prize)
 		p.sendMessage(robot, event, resultMsg)
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		if event.MessageType == "group" {
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "games") {
+				HandleFeatureDisabled(robot, event, "games")
+				return nil
+			}
+		}
+
+		matchContinue, _, idiom := p.cmdParser.MatchCommandWithSingleParam("成语接龙|idiom", event.RawMessage)
+		if matchContinue && idiom != "" {
+			return p.handleIdiomContinue(robot, event, idiom)
+		}
+
+		if matchStart, _ := p.cmdParser.MatchCommand("成语接龙|idiom", event.RawMessage); matchStart {
+			return p.handleIdiomStart(robot, event)
+		}
 
 		return nil
 	})
@@ -157,15 +232,108 @@ func (p *GamesPlugin) judgeRockPaperScissors(player, bot string) string {
 	return "你输了！"
 }
 
-// sendMessage 发送消息
-func (p *GamesPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	params := &onebot.SendMessageParams{
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
-		Message: message,
+func (p *GamesPlugin) getIdiomGameKey(event *onebot.Event) string {
+	if event.MessageType == "group" {
+		return fmt.Sprintf("group:%d", event.GroupID)
+	}
+	return fmt.Sprintf("user:%d", event.UserID)
+}
+
+func (p *GamesPlugin) handleIdiomStart(robot plugin.Robot, event *onebot.Event) error {
+	if len(p.idioms) == 0 {
+		p.sendMessage(robot, event, "成语库为空，暂时无法开始成语接龙")
+		return nil
 	}
 
-	if _, err := robot.SendMessage(params); err != nil {
+	key := p.getIdiomGameKey(event)
+	start := p.idioms[rand.Intn(len(p.idioms))]
+	p.idiomGames[key] = &IdiomGameState{CurrentIdiom: start}
+
+	runes := []rune(start)
+	last := ""
+	if len(runes) > 0 {
+		last = string(runes[len(runes)-1])
+	}
+
+	msg := fmt.Sprintf("成语接龙开始！第一个成语：%s\n请接下一个成语，要求首字为「%s」", start, last)
+	p.sendMessage(robot, event, msg)
+	return nil
+}
+
+func (p *GamesPlugin) handleIdiomContinue(robot plugin.Robot, event *onebot.Event, idiom string) error {
+	key := p.getIdiomGameKey(event)
+	state, ok := p.idiomGames[key]
+	if !ok || state.CurrentIdiom == "" {
+		p.sendMessage(robot, event, "你还没有开始成语接龙，请先发送「/ 成语接龙」")
+		return nil
+	}
+
+	idiomRunes := []rune(idiom)
+	if len(idiomRunes) < 2 {
+		p.sendMessage(robot, event, "请输入正确的成语")
+		return nil
+	}
+
+	prevRunes := []rune(state.CurrentIdiom)
+	if len(prevRunes) == 0 {
+		state.CurrentIdiom = idiom
+	} else {
+		last := prevRunes[len(prevRunes)-1]
+		first := idiomRunes[0]
+		if last != first {
+			p.sendMessage(robot, event, fmt.Sprintf("不对哦，新成语必须以「%c」开头", last))
+			return nil
+		}
+		state.CurrentIdiom = idiom
+	}
+
+	botIdiom, ok := p.findNextIdiom(idiom)
+	if !ok {
+		delete(p.idiomGames, key)
+		p.sendMessage(robot, event, fmt.Sprintf("你接得很好：%s\n我一时想不出下一个了，这局你赢了！", idiom))
+		return nil
+	}
+
+	state.CurrentIdiom = botIdiom
+	nextRunes := []rune(botIdiom)
+	nextLast := ' '
+	if len(nextRunes) > 0 {
+		nextLast = nextRunes[len(nextRunes)-1]
+	}
+
+	msg := fmt.Sprintf("你接了：%s\n我接：%s\n继续，请接首字为「%c」的成语", idiom, botIdiom, nextLast)
+	p.sendMessage(robot, event, msg)
+	return nil
+}
+
+func (p *GamesPlugin) findNextIdiom(prev string) (string, bool) {
+	runes := []rune(prev)
+	if len(runes) == 0 {
+		return "", false
+	}
+	last := runes[len(runes)-1]
+
+	candidates := make([]string, 0)
+	for _, item := range p.idioms {
+		ir := []rune(item)
+		if len(ir) == 0 {
+			continue
+		}
+		if ir[0] == last && item != prev {
+			candidates = append(candidates, item)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return "", false
+	}
+
+	return candidates[rand.Intn(len(candidates))], true
+}
+
+// sendMessage 发送消息
+func (p *GamesPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
+	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
 }
