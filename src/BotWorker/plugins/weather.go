@@ -23,7 +23,7 @@ func (p *WeatherPlugin) Name() string {
 }
 
 func (p *WeatherPlugin) Description() string {
-	return "天气查询插件，支持城市天气查询"
+	return common.T("", "weather_plugin_desc")
 }
 
 func (p *WeatherPlugin) Version() string {
@@ -39,7 +39,7 @@ func NewWeatherPlugin(cfg *config.WeatherConfig) *WeatherPlugin {
 }
 
 func (p *WeatherPlugin) Init(robot plugin.Robot) {
-	log.Println("加载天气查询插件")
+	log.Println(common.T("", "weather_plugin_loaded"))
 
 	// 处理天气查询命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -58,26 +58,26 @@ func (p *WeatherPlugin) Init(robot plugin.Robot) {
 		// 使用命令解析器检查并解析天气查询命令
 		var city string
 		// 首先检查是否为带参数的天气查询命令
-		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams("weather|天气", "(.+)", event.RawMessage)
+		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "weather_cmd_query"), "(.+)", event.RawMessage)
 		if matchWithParams && len(params) == 1 {
 			// 提取城市名称
 			city = strings.TrimSpace(params[0])
 		} else {
 			// 检查是否为帮助请求（不带参数）
-			matchHelp, _ := p.cmdParser.MatchCommand("weather|天气", event.RawMessage)
+			matchHelp, _ := p.cmdParser.MatchCommand(common.T("", "weather_cmd_query"), event.RawMessage)
 			if !matchHelp {
 				return nil
 			}
 
 			// 发送帮助信息
-			helpMsg := "天气查询命令格式：\n/weather 城市名\n/天气 城市名\n例如：/weather 北京"
+			helpMsg := common.T("", "weather_help_msg")
 			p.sendMessage(robot, event, helpMsg)
 			return nil
 		}
 
 		if city == "" {
 			// 发送帮助信息
-			helpMsg := "天气查询命令格式：\n/weather 城市名\n/天气 城市名\n例如：/weather 北京"
+			helpMsg := common.T("", "weather_help_msg")
 			p.sendMessage(robot, event, helpMsg)
 			return nil
 		}
@@ -85,8 +85,8 @@ func (p *WeatherPlugin) Init(robot plugin.Robot) {
 		// 查询天气
 		weatherInfo, err := p.getWeatherInfo(city)
 		if err != nil {
-			log.Printf("查询天气失败: %v\n", err)
-			errorMsg := fmt.Sprintf("查询天气失败：%v", err)
+			log.Printf(common.T("", "weather_query_failed_log"), err)
+			errorMsg := fmt.Sprintf(common.T("", "weather_query_failed_msg"), err)
 			p.sendMessage(robot, event, errorMsg)
 			return err
 		}
@@ -104,7 +104,7 @@ func (p *WeatherPlugin) Init(robot plugin.Robot) {
 // sendMessage 发送消息
 func (p *WeatherPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "weather_send_failed_log"), err)
 	}
 }
 
@@ -141,13 +141,13 @@ type WeatherInfo struct {
 func (p *WeatherPlugin) getWeatherInfo(city string) (*WeatherInfo, error) {
 	// 检查API密钥是否配置
 	if p.cfg.APIKey == "" {
-		return nil, fmt.Errorf("天气API密钥未配置")
+		return nil, fmt.Errorf(common.T("", "weather_api_key_not_set"))
 	}
 
 	// 构建请求URL
 	baseURL, err := url.Parse(p.cfg.Endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("构建请求URL失败: %w", err)
+		return nil, fmt.Errorf(common.T("", "weather_build_url_failed"), err)
 	}
 
 	// 添加查询参数
@@ -166,19 +166,19 @@ func (p *WeatherPlugin) getWeatherInfo(city string) (*WeatherInfo, error) {
 	// 发送请求
 	resp, err := client.Get(baseURL.String())
 	if err != nil {
-		return nil, fmt.Errorf("请求天气API失败: %w", err)
+		return nil, fmt.Errorf(common.T("", "weather_api_request_failed"), err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态码
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("天气API返回错误状态码: %d", resp.StatusCode)
+		return nil, fmt.Errorf(common.T("", "weather_api_error_status"), resp.StatusCode)
 	}
 
 	// 解析响应
 	var weatherInfo WeatherInfo
 	if err := json.NewDecoder(resp.Body).Decode(&weatherInfo); err != nil {
-		return nil, fmt.Errorf("解析天气API响应失败: %w", err)
+		return nil, fmt.Errorf(common.T("", "weather_parse_response_failed"), err)
 	}
 
 	return &weatherInfo, nil
@@ -188,12 +188,12 @@ func (p *WeatherPlugin) getWeatherInfo(city string) (*WeatherInfo, error) {
 func (p *WeatherPlugin) formatWeatherInfo(info *WeatherInfo) string {
 	// 检查天气数据是否完整
 	if len(info.Weather) == 0 {
-		return "无法获取完整的天气信息"
+		return common.T("", "weather_incomplete_info")
 	}
 
 	// 格式化输出
 	weather := info.Weather[0]
-	return fmt.Sprintf("当前天气信息\n城市: %s\n天气: %s (%s)\n温度: %.1f°C (体感温度: %.1f°C)\n最低温度: %.1f°C, 最高温度: %.1f°C\n湿度: %d%%\n气压: %d hPa\n风速: %.1f m/s\n风向: %d°\n云量: %d%%\n日出: %s\n日落: %s",
+	return fmt.Sprintf(common.T("", "weather_info_format"),
 		info.Name,
 		weather.Main,
 		weather.Description,

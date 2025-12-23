@@ -1,6 +1,7 @@
 package main
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/config"
 	"botworker/internal/db"
 	"botworker/internal/redis"
@@ -11,8 +12,11 @@ import (
 )
 
 func main() {
+	// 初始化翻译器
+	common.InitTranslator("locales", "zh-CN")
+
 	// 测试日志输出
-	log.Println("=== 机器人启动 ===")
+	log.Println(common.T("", "server_starting"), "BotWorker")
 	log.Println("当前工作目录:", func() string { dir, _ := os.Getwd(); return dir }())
 
 	// 加载配置
@@ -79,7 +83,7 @@ func main() {
 	}
 
 	// 创建组合服务器，同时支持WebSocket和HTTP
-	combinedServer := server.NewCombinedServer(cfg)
+	combinedServer := server.NewCombinedServer(cfg, redisClient)
 
 	// 获取插件管理器
 	pluginManager := combinedServer.GetPluginManager()
@@ -207,6 +211,11 @@ func main() {
 	smallGamesPlugin := plugins.NewSmallGamesPlugin()
 	if err := pluginManager.LoadPlugin(smallGamesPlugin); err != nil {
 		log.Fatalf("加载小型游戏插件失败: %v", err)
+	}
+
+	knowledgePlugin := plugins.NewKnowledgeBasePlugin(database, cfg.AI.OfficialGroupID)
+	if err := pluginManager.LoadPlugin(knowledgePlugin); err != nil {
+		log.Fatalf("加载知识库插件失败: %v", err)
 	}
 
 	dialogDemoPlugin := plugins.NewDialogDemoPlugin()

@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -15,7 +16,7 @@ func (p *DialogDemoPlugin) Name() string {
 }
 
 func (p *DialogDemoPlugin) Description() string {
-	return "对话流程示例插件，演示多级菜单与多步输入"
+	return common.T("", "dialog_demo_plugin_desc")
 }
 
 func (p *DialogDemoPlugin) Version() string {
@@ -51,9 +52,9 @@ func (p *DialogDemoPlugin) Init(robot plugin.Robot) {
 				if text == "1" || text == "2" || text == "3" {
 					dialog.Data["mode"] = text
 					UpdateDialog(dialog, 2, 5*60*1e9)
-					SendTextReply(robot, event, "请输入欢迎语内容：")
+					SendTextReply(robot, event, common.T("", "dialog_demo_input_content"))
 				} else {
-					SendTextReply(robot, event, "无效选项，请回复 1、2 或 3。")
+					SendTextReply(robot, event, common.T("", "dialog_demo_invalid_option"))
 				}
 				return nil
 			}
@@ -61,7 +62,7 @@ func (p *DialogDemoPlugin) Init(robot plugin.Robot) {
 			if dialog.Step == 2 {
 				dialog.Data["text"] = text
 				mode := dialog.Data["mode"]
-				msg := fmt.Sprintf("欢迎语已更新。\n模式: %s\n内容: %s", mode, text)
+				msg := fmt.Sprintf(common.T("", "dialog_demo_updated"), mode, text)
 				SendTextReply(robot, event, msg)
 				EndDialog(event.GroupID, event.UserID)
 				return nil
@@ -76,7 +77,7 @@ func (p *DialogDemoPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		match, _ := p.cmdParser.MatchCommand("设置欢迎语", event.RawMessage)
+		match, _ := p.cmdParser.MatchCommand(common.T("", "dialog_demo_cmd_set_welcome"), event.RawMessage)
 		if !match {
 			return nil
 		}
@@ -86,7 +87,7 @@ func (p *DialogDemoPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		menu := "请选择欢迎语模式：\n1. 简短欢迎\n2. 详细欢迎\n3. 自定义文案\n请回复数字选择。"
+		menu := common.T("", "dialog_demo_menu")
 		SendTextReply(robot, event, menu)
 
 		return nil

@@ -480,7 +480,7 @@ body { background-color: var(--bg-body); color: var(--text-main); font-family: s
     width: 100%;
     height: 100%;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display: none; /* 修改：初始隐藏，防止闪现 */
+    display: flex; /* 修改：由 Vue 控制显示，此处设为 flex 以确保显示时布局正确 */
     align-items: center;
     justify-content: center;
     z-index: 9999;

@@ -100,16 +100,17 @@ func InitDatabase(db *sql.DB) error {
 		id SERIAL PRIMARY KEY,
 		group_id VARCHAR(255) NOT NULL UNIQUE,
 		rules TEXT NOT NULL,
+		voice_id VARCHAR(255),
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	`
 
-	// 创建敏感词表
 	sensitiveWordsTableSQL := `
 	CREATE TABLE IF NOT EXISTS sensitive_words (
 		id SERIAL PRIMARY KEY,
 		word VARCHAR(255) NOT NULL UNIQUE,
+		level INTEGER NOT NULL DEFAULT 1,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	`
@@ -152,6 +153,16 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
+	groupWhitelistTableSQL := `
+	CREATE TABLE IF NOT EXISTS group_whitelist (
+		id SERIAL PRIMARY KEY,
+		group_id VARCHAR(255) NOT NULL,
+		user_id VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(group_id, user_id)
+	);
+	`
+
 	petsTableSQL := `
 	CREATE TABLE IF NOT EXISTS pets (
 		id SERIAL PRIMARY KEY,
@@ -177,6 +188,48 @@ func InitDatabase(db *sql.DB) error {
 		reason VARCHAR(255),
 		category VARCHAR(100),
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
+	questionsTableSQL := `
+	CREATE TABLE IF NOT EXISTS questions (
+		id SERIAL PRIMARY KEY,
+		group_id VARCHAR(255) NOT NULL,
+		question_raw TEXT NOT NULL,
+		question_normalized TEXT NOT NULL,
+		status VARCHAR(50) NOT NULL DEFAULT 'approved',
+		created_by VARCHAR(255),
+		source_group_id VARCHAR(255),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		usage_count INTEGER NOT NULL DEFAULT 0,
+		UNIQUE (question_normalized)
+	);
+	`
+
+	answersTableSQL := `
+	CREATE TABLE IF NOT EXISTS answers (
+		id SERIAL PRIMARY KEY,
+		question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+		answer TEXT NOT NULL,
+		status VARCHAR(50) NOT NULL DEFAULT 'approved',
+		created_by VARCHAR(255),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		usage_count INTEGER NOT NULL DEFAULT 0,
+		short_interval_usage_count INTEGER NOT NULL DEFAULT 0,
+		last_used_at TIMESTAMP
+	);
+	`
+
+	groupAISettingsTableSQL := `
+	CREATE TABLE IF NOT EXISTS group_ai_settings (
+		id SERIAL PRIMARY KEY,
+		group_id VARCHAR(255) NOT NULL UNIQUE,
+		qa_mode VARCHAR(50) NOT NULL,
+		last_answer_id INTEGER,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	`
 
@@ -213,8 +266,16 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("创建群规表失败: %w", err)
 	}
 
+	if _, err := db.Exec(`ALTER TABLE group_rules ADD COLUMN IF NOT EXISTS voice_id VARCHAR(255)`); err != nil {
+		return fmt.Errorf("为群规表添加语音配置字段失败: %w", err)
+	}
+
 	if _, err := db.Exec(sensitiveWordsTableSQL); err != nil {
 		return fmt.Errorf("创建敏感词表失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE sensitive_words ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1`); err != nil {
+		return fmt.Errorf("为敏感词表添加级别字段失败: %w", err)
 	}
 
 	if _, err := db.Exec(bannedUsersTableSQL); err != nil {
@@ -237,9 +298,45 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("创建群功能开关表失败: %w", err)
 	}
 
+	if _, err := db.Exec(groupWhitelistTableSQL); err != nil {
+		return fmt.Errorf("创建群白名单表失败: %w", err)
+	}
+
+	if _, err := db.Exec(questionsTableSQL); err != nil {
+		return fmt.Errorf("创建问题表失败: %w", err)
+	}
+
+	if _, err := db.Exec(answersTableSQL); err != nil {
+		return fmt.Errorf("创建答案表失败: %w", err)
+	}
+
+	if _, err := db.Exec(groupAISettingsTableSQL); err != nil {
+		return fmt.Errorf("创建群AI设置表失败: %w", err)
+	}
+
 	// 兼容旧表结构，补充缺失的分类字段
 	if _, err := db.Exec(`ALTER TABLE points_logs ADD COLUMN IF NOT EXISTS category VARCHAR(100)`); err != nil {
 		return fmt.Errorf("为积分记录表添加分类字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("为问题表添加使用次数字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE answers ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("为答案表添加使用次数字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE answers ADD COLUMN IF NOT EXISTS short_interval_usage_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("为答案表添加短间隔使用次数字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE answers ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP`); err != nil {
+		return fmt.Errorf("为答案表添加最后使用时间字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE group_ai_settings ADD COLUMN IF NOT EXISTS last_answer_id INTEGER`); err != nil {
+		return fmt.Errorf("为群AI设置表添加最后答案ID字段失败: %w", err)
 	}
 
 	return nil
@@ -890,6 +987,350 @@ type PetModel struct {
 	Health    int       `json:"health"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type GroupAISettings struct {
+	ID           int       `json:"id"`
+	GroupID      string    `json:"group_id"`
+	QAMode       string    `json:"qa_mode"`
+	LastAnswerID int       `json:"last_answer_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type Question struct {
+	ID                 int       `json:"id"`
+	GroupID            string    `json:"group_id"`
+	QuestionRaw        string    `json:"question_raw"`
+	QuestionNormalized string    `json:"question_normalized"`
+	Status             string    `json:"status"`
+	CreatedBy          string    `json:"created_by"`
+	SourceGroupID      string    `json:"source_group_id"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type Answer struct {
+	ID         int       `json:"id"`
+	QuestionID int       `json:"question_id"`
+	Answer     string    `json:"answer"`
+	Status     string    `json:"status"`
+	CreatedBy  string    `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func GetGroupQAMode(db *sql.DB, groupID string) (string, error) {
+	if db == nil || groupID == "" {
+		return "", nil
+	}
+
+	query := `
+	SELECT qa_mode
+	FROM group_ai_settings
+	WHERE group_id = $1
+	`
+
+	var mode string
+	err := db.QueryRow(query, groupID).Scan(&mode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("获取群问答模式失败: %w", err)
+	}
+
+	return mode, nil
+}
+
+func SetGroupQAMode(db *sql.DB, groupID string, mode string) error {
+	if db == nil || groupID == "" {
+		return fmt.Errorf("数据库或群ID为空")
+	}
+
+	query := `
+	INSERT INTO group_ai_settings (group_id, qa_mode, created_at, updated_at)
+	VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	ON CONFLICT (group_id) DO UPDATE
+	SET qa_mode = EXCLUDED.qa_mode,
+	    updated_at = CURRENT_TIMESTAMP
+	`
+
+	_, err := db.Exec(query, groupID, mode)
+	if err != nil {
+		return fmt.Errorf("设置群问答模式失败: %w", err)
+	}
+
+	return nil
+}
+
+func GetGroupLastAnswerID(db *sql.DB, groupID string) (int, error) {
+	if db == nil || groupID == "" {
+		return 0, nil
+	}
+
+	query := `
+	SELECT COALESCE(last_answer_id, 0)
+	FROM group_ai_settings
+	WHERE group_id = $1
+	`
+
+	var lastID int
+	err := db.QueryRow(query, groupID).Scan(&lastID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("获取群最后答案ID失败: %w", err)
+	}
+
+	return lastID, nil
+}
+
+func SetGroupLastAnswerID(db *sql.DB, groupID string, answerID int) error {
+	if db == nil || groupID == "" {
+		return fmt.Errorf("数据库或群ID为空")
+	}
+
+	query := `
+	INSERT INTO group_ai_settings (group_id, qa_mode, last_answer_id, created_at, updated_at)
+	VALUES ($1, 'group', $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	ON CONFLICT (group_id) DO UPDATE
+	SET last_answer_id = EXCLUDED.last_answer_id,
+	    updated_at = CURRENT_TIMESTAMP
+	`
+
+	_, err := db.Exec(query, groupID, answerID)
+	if err != nil {
+		return fmt.Errorf("设置群最后答案ID失败: %w", err)
+	}
+
+	return nil
+}
+
+func GetQuestionByGroupAndNormalized(dbConn *sql.DB, groupID string, normalized string) (*Question, error) {
+	if dbConn == nil || normalized == "" {
+		return nil, nil
+	}
+
+	query := `
+	SELECT id, group_id, question_raw, question_normalized, status, created_by, source_group_id, created_at, updated_at
+	FROM questions
+	WHERE question_normalized = $1
+	`
+
+	q := &Question{}
+	err := dbConn.QueryRow(query, normalized).Scan(
+		&q.ID,
+		&q.GroupID,
+		&q.QuestionRaw,
+		&q.QuestionNormalized,
+		&q.Status,
+		&q.CreatedBy,
+		&q.SourceGroupID,
+		&q.CreatedAt,
+		&q.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取问题失败: %w", err)
+	}
+
+	return q, nil
+}
+
+func CreateQuestion(dbConn *sql.DB, q *Question) (*Question, error) {
+	if dbConn == nil || q == nil {
+		return nil, fmt.Errorf("数据库或问题为空")
+	}
+
+	if q.Status == "" {
+		q.Status = "approved"
+	}
+
+	query := `
+	INSERT INTO questions (group_id, question_raw, question_normalized, status, created_by, source_group_id, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	ON CONFLICT (question_normalized) DO UPDATE
+	SET question_raw = EXCLUDED.question_raw,
+	    status = EXCLUDED.status,
+	    created_by = EXCLUDED.created_by,
+	    source_group_id = EXCLUDED.source_group_id,
+	    updated_at = CURRENT_TIMESTAMP
+	RETURNING id, group_id, question_raw, question_normalized, status, created_by, source_group_id, created_at, updated_at
+	`
+
+	row := dbConn.QueryRow(query, q.GroupID, q.QuestionRaw, q.QuestionNormalized, q.Status, q.CreatedBy, q.SourceGroupID)
+
+	var result Question
+	if err := row.Scan(
+		&result.ID,
+		&result.GroupID,
+		&result.QuestionRaw,
+		&result.QuestionNormalized,
+		&result.Status,
+		&result.CreatedBy,
+		&result.SourceGroupID,
+		&result.CreatedAt,
+		&result.UpdatedAt,
+	); err != nil {
+		return nil, fmt.Errorf("创建或更新问题失败: %w", err)
+	}
+
+	return &result, nil
+}
+
+func AddAnswer(dbConn *sql.DB, a *Answer) (*Answer, error) {
+	if dbConn == nil || a == nil {
+		return nil, fmt.Errorf("数据库或答案为空")
+	}
+
+	if a.Status == "" {
+		a.Status = "approved"
+	}
+
+	query := `
+	INSERT INTO answers (question_id, answer, status, created_by, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	RETURNING id, question_id, answer, status, created_by, created_at, updated_at
+	`
+
+	row := dbConn.QueryRow(query, a.QuestionID, a.Answer, a.Status, a.CreatedBy)
+
+	var result Answer
+	if err := row.Scan(
+		&result.ID,
+		&result.QuestionID,
+		&result.Answer,
+		&result.Status,
+		&result.CreatedBy,
+		&result.CreatedAt,
+		&result.UpdatedAt,
+	); err != nil {
+		return nil, fmt.Errorf("创建答案失败: %w", err)
+	}
+
+	return &result, nil
+}
+
+func GetApprovedAnswersByQuestionID(dbConn *sql.DB, questionID int) ([]*Answer, error) {
+	if dbConn == nil || questionID == 0 {
+		return nil, nil
+	}
+
+	query := `
+	SELECT id, question_id, answer, status, created_by, created_at, updated_at
+	FROM answers
+	WHERE question_id = $1 AND status = 'approved'
+	ORDER BY id ASC
+	`
+
+	rows, err := dbConn.Query(query, questionID)
+	if err != nil {
+		return nil, fmt.Errorf("获取答案列表失败: %w", err)
+	}
+	defer rows.Close()
+
+	var answers []*Answer
+	for rows.Next() {
+		var a Answer
+		if err := rows.Scan(
+			&a.ID,
+			&a.QuestionID,
+			&a.Answer,
+			&a.Status,
+			&a.CreatedBy,
+			&a.CreatedAt,
+			&a.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("扫描答案失败: %w", err)
+		}
+		answers = append(answers, &a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历答案失败: %w", err)
+	}
+
+	return answers, nil
+}
+
+func GetRandomApprovedAnswer(dbConn *sql.DB, questionID int) (*Answer, error) {
+	answers, err := GetApprovedAnswersByQuestionID(dbConn, questionID)
+	if err != nil {
+		return nil, err
+	}
+	if len(answers) == 0 {
+		return nil, nil
+	}
+	if len(answers) == 1 {
+		return answers[0], nil
+	}
+
+	index := time.Now().UnixNano() % int64(len(answers))
+	if index < 0 {
+		index = -index
+	}
+	return answers[index], nil
+}
+
+func IncrementQuestionUsage(dbConn *sql.DB, questionID int) error {
+	if dbConn == nil || questionID == 0 {
+		return nil
+	}
+
+	query := `
+	UPDATE questions
+	SET usage_count = usage_count + 1
+	WHERE id = $1
+	`
+
+	if _, err := dbConn.Exec(query, questionID); err != nil {
+		return fmt.Errorf("更新问题使用次数失败: %w", err)
+	}
+
+	return nil
+}
+
+func IncrementAnswerUsage(dbConn *sql.DB, answerID int) error {
+	if dbConn == nil || answerID == 0 {
+		return nil
+	}
+
+	query := `
+	UPDATE answers
+	SET usage_count = usage_count + 1,
+	    last_used_at = NOW()
+	WHERE id = $1
+	`
+
+	if _, err := dbConn.Exec(query, answerID); err != nil {
+		return fmt.Errorf("更新答案使用次数失败: %w", err)
+	}
+
+	return nil
+}
+
+func IncrementAnswerShortIntervalUsageIfRecent(dbConn *sql.DB, answerID int) error {
+	if dbConn == nil || answerID == 0 {
+		return nil
+	}
+
+	query := `
+	UPDATE answers
+	SET short_interval_usage_count = short_interval_usage_count + 1
+	WHERE id = $1
+	  AND last_used_at IS NOT NULL
+	  AND last_used_at >= NOW() - INTERVAL '5 minutes'
+	`
+
+	if _, err := dbConn.Exec(query, answerID); err != nil {
+		return fmt.Errorf("更新答案短间隔使用次数失败: %w", err)
+	}
+
+	return nil
 }
 
 // CreatePet 创建宠物
@@ -1626,6 +2067,44 @@ func GetGroupRules(db *sql.DB, groupID string) (string, error) {
 	return rules, nil
 }
 
+func SetGroupVoiceID(db *sql.DB, groupID, voiceID string) error {
+	query := `
+	INSERT INTO group_rules (group_id, rules, voice_id, updated_at)
+	VALUES ($1, '', $2, CURRENT_TIMESTAMP)
+	ON CONFLICT (group_id) DO UPDATE
+	SET voice_id = $2, updated_at = CURRENT_TIMESTAMP
+	`
+
+	_, err := db.Exec(query, groupID, voiceID)
+	if err != nil {
+		return fmt.Errorf("设置群语音配置失败: %w", err)
+	}
+
+	return nil
+}
+
+func GetGroupVoiceID(db *sql.DB, groupID string) (string, error) {
+	query := `
+	SELECT voice_id
+	FROM group_rules
+	WHERE group_id = $1
+	`
+
+	var voiceID sql.NullString
+	if err := db.QueryRow(query, groupID).Scan(&voiceID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("获取群语音配置失败: %w", err)
+	}
+
+	if !voiceID.Valid {
+		return "", nil
+	}
+
+	return voiceID.String, nil
+}
+
 func SetGroupFeatureOverride(db *sql.DB, groupID, featureID string, enabled bool) error {
 	query := `
 	INSERT INTO group_features (group_id, feature_id, enabled, updated_at)
@@ -1675,17 +2154,24 @@ func GetGroupFeatureOverride(db *sql.DB, groupID, featureID string) (bool, bool,
 	return enabled, true, nil
 }
 
-// ------------------- 敏感词相关操作 -------------------
+type SensitiveWord struct {
+	Word  string
+	Level int
+}
 
-// AddSensitiveWord 添加敏感词
-func AddSensitiveWord(db *sql.DB, word string) error {
+func AddSensitiveWord(db *sql.DB, word string, level int) error {
+	if level <= 0 {
+		level = 1
+	}
+
 	query := `
-	INSERT INTO sensitive_words (word)
-	VALUES ($1)
-	ON CONFLICT (word) DO NOTHING
+	INSERT INTO sensitive_words (word, level)
+	VALUES ($1, $2)
+	ON CONFLICT (word) DO UPDATE
+	SET level = EXCLUDED.level
 	`
 
-	_, err := db.Exec(query, word)
+	_, err := db.Exec(query, word, level)
 	if err != nil {
 		return fmt.Errorf("添加敏感词失败: %w", err)
 	}
@@ -1693,7 +2179,6 @@ func AddSensitiveWord(db *sql.DB, word string) error {
 	return nil
 }
 
-// RemoveSensitiveWord 移除敏感词
 func RemoveSensitiveWord(db *sql.DB, word string) error {
 	query := `
 	DELETE FROM sensitive_words
@@ -1717,10 +2202,9 @@ func RemoveSensitiveWord(db *sql.DB, word string) error {
 	return nil
 }
 
-// GetAllSensitiveWords 获取所有敏感词
-func GetAllSensitiveWords(db *sql.DB) ([]string, error) {
+func GetAllSensitiveWords(db *sql.DB) ([]SensitiveWord, error) {
 	query := `
-	SELECT word
+	SELECT word, level
 	FROM sensitive_words
 	`
 
@@ -1730,10 +2214,10 @@ func GetAllSensitiveWords(db *sql.DB) ([]string, error) {
 	}
 	defer rows.Close()
 
-	words := []string{}
+	words := []SensitiveWord{}
 	for rows.Next() {
-		var word string
-		if err := rows.Scan(&word); err != nil {
+		var word SensitiveWord
+		if err := rows.Scan(&word.Word, &word.Level); err != nil {
 			return nil, fmt.Errorf("扫描敏感词失败: %w", err)
 		}
 		words = append(words, word)
@@ -1744,6 +2228,64 @@ func GetAllSensitiveWords(db *sql.DB) ([]string, error) {
 	}
 
 	return words, nil
+}
+
+func AddGroupWhitelistUser(db *sql.DB, groupID, userID string) error {
+	query := `
+	INSERT INTO group_whitelist (group_id, user_id)
+	VALUES ($1, $2)
+	ON CONFLICT (group_id, user_id) DO NOTHING
+	`
+
+	_, err := db.Exec(query, groupID, userID)
+	if err != nil {
+		return fmt.Errorf("添加群白名单用户失败: %w", err)
+	}
+
+	return nil
+}
+
+func RemoveGroupWhitelistUser(db *sql.DB, groupID, userID string) error {
+	query := `
+	DELETE FROM group_whitelist
+	WHERE group_id = $1 AND user_id = $2
+	`
+
+	_, err := db.Exec(query, groupID, userID)
+	if err != nil {
+		return fmt.Errorf("移除群白名单用户失败: %w", err)
+	}
+
+	return nil
+}
+
+func ClearGroupWhitelist(db *sql.DB, groupID string) error {
+	query := `
+	DELETE FROM group_whitelist
+	WHERE group_id = $1
+	`
+
+	_, err := db.Exec(query, groupID)
+	if err != nil {
+		return fmt.Errorf("清空群白名单失败: %w", err)
+	}
+
+	return nil
+}
+
+func IsUserInGroupWhitelist(db *sql.DB, groupID, userID string) (bool, error) {
+	query := `
+	SELECT COUNT(*) > 0
+	FROM group_whitelist
+	WHERE group_id = $1 AND user_id = $2
+	`
+
+	var exists bool
+	if err := db.QueryRow(query, groupID, userID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("检查群白名单用户失败: %w", err)
+	}
+
+	return exists, nil
 }
 
 // ------------------- 禁言记录相关操作 -------------------

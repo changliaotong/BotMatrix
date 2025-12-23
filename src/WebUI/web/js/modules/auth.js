@@ -3,7 +3,7 @@
  */
 
 import { applyRoleUI } from './ui.js';
-import { translations, currentLang } from './i18n.js';
+import { t } from './i18n.js';
 import { fetchWithAuth } from './api.js';
 
 export { applyRoleUI };
@@ -18,6 +18,56 @@ export let authRole = localStorage.getItem('wxbot_role') || 'user';
 if (authRole === 'undefined' || authRole === 'null') {
     authRole = 'user';
     localStorage.removeItem('wxbot_role');
+}
+
+export async function checkAuth() {
+    let token = authToken || localStorage.getItem('wxbot_token');
+    if (!token || token === 'undefined' || token === 'null') {
+        const lp = document.getElementById('loginPage');
+        if (lp) {
+            lp.style.display = 'flex';
+            lp.classList.remove('hidden');
+        }
+        const mainApp = document.querySelector('.main-app');
+        if (mainApp) mainApp.style.display = 'none';
+        return false;
+    }
+
+    authToken = token;
+    window.authToken = token;
+
+    try {
+        const res = await fetchWithAuth('/api/me');
+        if (!res.ok) {
+            return false;
+        }
+
+        try {
+            const data = await res.json();
+            if (data && data.user) {
+                const isAdmin = !!data.user.is_admin;
+                const role = isAdmin ? (authRole === 'super' ? 'super' : 'admin') : 'user';
+                authRole = role;
+                localStorage.setItem('wxbot_role', role);
+                window.authRole = role;
+            }
+        } catch (e) {
+        }
+
+        const lp = document.getElementById('loginPage');
+        if (lp) {
+            lp.classList.add('hidden');
+            setTimeout(() => {
+                lp.style.display = 'none';
+            }, 500);
+        }
+        const mainApp = document.querySelector('.main-app');
+        if (mainApp) mainApp.style.display = '';
+
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 /**
@@ -52,8 +102,7 @@ export async function handleMagicToken(magicToken) {
         return { success: true, role: authRole, data: data };
     } catch (err) {
         console.error('[Auth] Magic login error:', err);
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        alert(t.magic_login_fail || '免密码登录失败，链接可能已过期。请重新获取或使用密码登录。');
+        alert(t('magic_login_fail') || '免密码登录失败，链接可能已过期。请重新获取或使用密码登录。');
         window.history.replaceState({}, document.title, window.location.pathname);
         return { success: false, error: err.message };
     }
@@ -177,11 +226,9 @@ export async function updatePassword() {
     const newPwd = document.getElementById('pwd-new').value;
     const confirmPwd = document.getElementById('pwd-confirm').value;
 
-    const t = translations[currentLang] || translations['zh-CN'] || {};
-
-    if (!newPwd) return alert(t.enter_new_pwd || '请输入新密码');
-    if (newPwd !== confirmPwd) return alert(t.pwd_mismatch || '两次输入的密码不一致');
-    if (!oldPwd) return alert(t.enter_current_pwd || '请输入当前密码');
+    if (!newPwd) return alert(t('enter_new_pwd') || '请输入新密码');
+    if (newPwd !== confirmPwd) return alert(t('pwd_mismatch') || '两次输入的密码不一致');
+    if (!oldPwd) return alert(t('enter_current_pwd') || '请输入当前密码');
 
     try {
         const res = await fetchWithAuth('/api/user/password', {
@@ -197,12 +244,12 @@ export async function updatePassword() {
             throw new Error(txt);
         }
 
-        alert(t.password_change_success || '密码修改成功');
+        alert(t('password_change_success') || '密码修改成功');
         document.getElementById('pwd-current').value = '';
         document.getElementById('pwd-new').value = '';
         document.getElementById('pwd-confirm').value = '';
     } catch (e) {
-        alert((t.password_change_fail || '修改失败: ') + e.message);
+        alert((t('password_change_fail') || '修改失败: ') + e.message);
     }
 }
 

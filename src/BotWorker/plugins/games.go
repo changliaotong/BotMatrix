@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -9,9 +10,9 @@ import (
 )
 
 type GamesPlugin struct {
-	cmdParser   *CommandParser
-	idiomGames  map[string]*IdiomGameState
-	idioms      []string
+	cmdParser  *CommandParser
+	idiomGames map[string]*IdiomGameState
+	idioms     []string
 }
 
 type IdiomGameState struct {
@@ -23,7 +24,7 @@ func (p *GamesPlugin) Name() string {
 }
 
 func (p *GamesPlugin) Description() string {
-	return "游戏插件，支持猜拳、三公、梭哈、猜大小等游戏"
+	return common.T("", "games_plugin_desc")
 }
 
 func (p *GamesPlugin) Version() string {
@@ -35,32 +36,32 @@ func NewGamesPlugin() *GamesPlugin {
 		cmdParser:  NewCommandParser(),
 		idiomGames: make(map[string]*IdiomGameState),
 		idioms: []string{
-			"画蛇添足",
-			"足智多谋",
-			"谋事在人",
-			"人山人海",
-			"海阔天空",
-			"空前绝后",
-			"后来居上",
-			"上行下效",
-			"效颦学步",
-			"步步高升",
-			"升堂入室",
-			"室雅人和",
-			"和气致祥",
-			"祥风时雨",
-			"雨过天晴",
-			"晴空万里",
-			"里应外合",
-			"合情合理",
-			"理直气壮",
-			"壮志凌云",
+			common.T("", "idiom_1"),
+			common.T("", "idiom_2"),
+			common.T("", "idiom_3"),
+			common.T("", "idiom_4"),
+			common.T("", "idiom_5"),
+			common.T("", "idiom_6"),
+			common.T("", "idiom_7"),
+			common.T("", "idiom_8"),
+			common.T("", "idiom_9"),
+			common.T("", "idiom_10"),
+			common.T("", "idiom_11"),
+			common.T("", "idiom_12"),
+			common.T("", "idiom_13"),
+			common.T("", "idiom_14"),
+			common.T("", "idiom_15"),
+			common.T("", "idiom_16"),
+			common.T("", "idiom_17"),
+			common.T("", "idiom_18"),
+			common.T("", "idiom_19"),
+			common.T("", "idiom_20"),
 		},
 	}
 }
 
 func (p *GamesPlugin) Init(robot plugin.Robot) {
-	log.Println("加载游戏插件")
+	log.Println(common.T("", "games_plugin_loaded"))
 
 	// 处理猜拳命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -77,27 +78,38 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为猜拳命令
-		match, _, playerChoice := p.cmdParser.MatchCommandWithSingleParam("猜拳|rock", event.RawMessage)
+		match, _, playerChoice := p.cmdParser.MatchCommandWithSingleParam(common.T("", "games_cmd_rock"), event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		// 验证玩家选择
-		validChoices := map[string]bool{"石头": true, "剪刀": true, "布": true, "rock": true, "paper": true, "scissors": true}
+		validChoices := map[string]bool{
+			common.T("", "games_rock"):     true,
+			common.T("", "games_paper"):    true,
+			common.T("", "games_scissors"): true,
+			"rock":                         true,
+			"paper":                        true,
+			"scissors":                     true,
+		}
 		if !validChoices[playerChoice] {
-			p.sendMessage(robot, event, "无效选择，请选择石头、剪刀、布或rock、paper、scissors")
+			p.sendMessage(robot, event, common.T("", "games_rock_invalid"))
 			return nil
 		}
 
 		// 机器人随机选择
-		choices := []string{"石头", "剪刀", "布"}
+		choices := []string{
+			common.T("", "games_rock"),
+			common.T("", "games_scissors"),
+			common.T("", "games_paper"),
+		}
 		botChoice := choices[rand.Intn(len(choices))]
 
 		// 判断胜负
 		result := p.judgeRockPaperScissors(playerChoice, botChoice)
 
 		// 发送结果
-		resultMsg := fmt.Sprintf("你出了：%s\n机器人出了：%s\n结果：%s", playerChoice, botChoice, result)
+		resultMsg := fmt.Sprintf(common.T("", "games_rock_result"), playerChoice, botChoice, result)
 		p.sendMessage(robot, event, resultMsg)
 
 		return nil
@@ -118,37 +130,42 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为猜大小命令
-		match, _, playerChoice := p.cmdParser.MatchCommandWithSingleParam("猜大小|bigsmall", event.RawMessage)
+		match, _, playerChoice := p.cmdParser.MatchCommandWithSingleParam(common.T("", "games_cmd_bigsmall"), event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		// 验证玩家选择
-		validChoices := map[string]bool{"大": true, "小": true, "big": true, "small": true}
+		validChoices := map[string]bool{
+			common.T("", "games_big"):   true,
+			common.T("", "games_small"): true,
+			"big":                       true,
+			"small":                     true,
+		}
 		if !validChoices[playerChoice] {
-			p.sendMessage(robot, event, "无效选择，请选择大、小或big、small")
+			p.sendMessage(robot, event, common.T("", "games_bigsmall_invalid"))
 			return nil
 		}
 
 		// 生成随机数（1-100）
 		num := rand.Intn(100) + 1
-		actualResult := "大"
+		actualResult := common.T("", "games_big")
 		if num <= 50 {
-			actualResult = "小"
+			actualResult = common.T("", "games_small")
 		}
 
 		// 判断胜负
-		result := "平局"
-		if (playerChoice == "大" || playerChoice == "big") && actualResult == "大" {
-			result = "你赢了！"
-		} else if (playerChoice == "小" || playerChoice == "small") && actualResult == "小" {
-			result = "你赢了！"
+		result := common.T("", "games_draw")
+		if (playerChoice == common.T("", "games_big") || playerChoice == "big") && actualResult == common.T("", "games_big") {
+			result = common.T("", "games_win")
+		} else if (playerChoice == common.T("", "games_small") || playerChoice == "small") && actualResult == common.T("", "games_small") {
+			result = common.T("", "games_win")
 		} else {
-			result = "你输了！"
+			result = common.T("", "games_lose")
 		}
 
 		// 发送结果
-		resultMsg := fmt.Sprintf("你猜了：%s\n随机数：%d\n结果：%s", playerChoice, num, result)
+		resultMsg := fmt.Sprintf(common.T("", "games_bigsmall_result"), playerChoice, num, result)
 		p.sendMessage(robot, event, resultMsg)
 
 		return nil
@@ -169,16 +186,21 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为抽奖命令
-		if match, _ := p.cmdParser.MatchCommand("抽奖|lottery", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "games_cmd_lottery"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 生成随机奖品
-		prizes := []string{"一等奖：100积分", "二等奖：50积分", "三等奖：10积分", "谢谢参与"}
+		prizes := []string{
+			common.T("", "games_lottery_prize1"),
+			common.T("", "games_lottery_prize2"),
+			common.T("", "games_lottery_prize3"),
+			common.T("", "games_lottery_thanks"),
+		}
 		prize := prizes[rand.Intn(len(prizes))]
 
 		// 发送结果
-		resultMsg := fmt.Sprintf("🎁 抽奖结果：%s", prize)
+		resultMsg := fmt.Sprintf(common.T("", "games_lottery_result"), prize)
 		p.sendMessage(robot, event, resultMsg)
 
 		return nil
@@ -197,12 +219,12 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 			}
 		}
 
-		matchContinue, _, idiom := p.cmdParser.MatchCommandWithSingleParam("成语接龙|idiom", event.RawMessage)
+		matchContinue, _, idiom := p.cmdParser.MatchCommandWithSingleParam(common.T("", "games_cmd_idiom"), event.RawMessage)
 		if matchContinue && idiom != "" {
 			return p.handleIdiomContinue(robot, event, idiom)
 		}
 
-		if matchStart, _ := p.cmdParser.MatchCommand("成语接龙|idiom", event.RawMessage); matchStart {
+		if matchStart, _ := p.cmdParser.MatchCommand(common.T("", "games_cmd_idiom"), event.RawMessage); matchStart {
 			return p.handleIdiomStart(robot, event)
 		}
 
@@ -214,22 +236,24 @@ func (p *GamesPlugin) Init(robot plugin.Robot) {
 func (p *GamesPlugin) judgeRockPaperScissors(player, bot string) string {
 	// 统一转换为中文
 	if player == "rock" {
-		player = "石头"
+		player = common.T("", "games_rock")
 	} else if player == "paper" {
-		player = "布"
+		player = common.T("", "games_paper")
 	} else if player == "scissors" {
-		player = "剪刀"
+		player = common.T("", "games_scissors")
 	}
 
 	if player == bot {
-		return "平局！"
+		return common.T("", "games_draw")
 	}
 
-	if (player == "石头" && bot == "剪刀") || (player == "剪刀" && bot == "布") || (player == "布" && bot == "石头") {
-		return "你赢了！"
+	if (player == common.T("", "games_rock") && bot == common.T("", "games_scissors")) ||
+		(player == common.T("", "games_scissors") && bot == common.T("", "games_paper")) ||
+		(player == common.T("", "games_paper") && bot == common.T("", "games_rock")) {
+		return common.T("", "games_win")
 	}
 
-	return "你输了！"
+	return common.T("", "games_lose")
 }
 
 func (p *GamesPlugin) getIdiomGameKey(event *onebot.Event) string {
@@ -241,7 +265,7 @@ func (p *GamesPlugin) getIdiomGameKey(event *onebot.Event) string {
 
 func (p *GamesPlugin) handleIdiomStart(robot plugin.Robot, event *onebot.Event) error {
 	if len(p.idioms) == 0 {
-		p.sendMessage(robot, event, "成语库为空，暂时无法开始成语接龙")
+		p.sendMessage(robot, event, common.T("", "games_idiom_empty"))
 		return nil
 	}
 
@@ -255,7 +279,7 @@ func (p *GamesPlugin) handleIdiomStart(robot plugin.Robot, event *onebot.Event) 
 		last = string(runes[len(runes)-1])
 	}
 
-	msg := fmt.Sprintf("成语接龙开始！第一个成语：%s\n请接下一个成语，要求首字为「%s」", start, last)
+	msg := fmt.Sprintf(common.T("", "games_idiom_start"), start, last)
 	p.sendMessage(robot, event, msg)
 	return nil
 }
@@ -264,13 +288,13 @@ func (p *GamesPlugin) handleIdiomContinue(robot plugin.Robot, event *onebot.Even
 	key := p.getIdiomGameKey(event)
 	state, ok := p.idiomGames[key]
 	if !ok || state.CurrentIdiom == "" {
-		p.sendMessage(robot, event, "你还没有开始成语接龙，请先发送「/ 成语接龙」")
+		p.sendMessage(robot, event, common.T("", "games_idiom_not_started"))
 		return nil
 	}
 
 	idiomRunes := []rune(idiom)
 	if len(idiomRunes) < 2 {
-		p.sendMessage(robot, event, "请输入正确的成语")
+		p.sendMessage(robot, event, common.T("", "games_idiom_invalid"))
 		return nil
 	}
 
@@ -281,7 +305,7 @@ func (p *GamesPlugin) handleIdiomContinue(robot plugin.Robot, event *onebot.Even
 		last := prevRunes[len(prevRunes)-1]
 		first := idiomRunes[0]
 		if last != first {
-			p.sendMessage(robot, event, fmt.Sprintf("不对哦，新成语必须以「%c」开头", last))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "games_idiom_wrong_char"), last))
 			return nil
 		}
 		state.CurrentIdiom = idiom
@@ -290,7 +314,7 @@ func (p *GamesPlugin) handleIdiomContinue(robot plugin.Robot, event *onebot.Even
 	botIdiom, ok := p.findNextIdiom(idiom)
 	if !ok {
 		delete(p.idiomGames, key)
-		p.sendMessage(robot, event, fmt.Sprintf("你接得很好：%s\n我一时想不出下一个了，这局你赢了！", idiom))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "games_idiom_win"), idiom))
 		return nil
 	}
 
@@ -301,7 +325,7 @@ func (p *GamesPlugin) handleIdiomContinue(robot plugin.Robot, event *onebot.Even
 		nextLast = nextRunes[len(nextRunes)-1]
 	}
 
-	msg := fmt.Sprintf("你接了：%s\n我接：%s\n继续，请接首字为「%c」的成语", idiom, botIdiom, nextLast)
+	msg := fmt.Sprintf(common.T("", "games_idiom_continue"), idiom, botIdiom, nextLast)
 	p.sendMessage(robot, event, msg)
 	return nil
 }
@@ -334,6 +358,6 @@ func (p *GamesPlugin) findNextIdiom(prev string) (string, bool) {
 // sendMessage 发送消息
 func (p *GamesPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "games_send_failed"), err)
 	}
 }

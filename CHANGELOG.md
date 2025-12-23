@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.2 (2025-12-22)
+*   **🧠 BotWorker Confirmation & Dialog Engine**: Added a shared confirmation/session utility layer in `BotWorker` using Redis (when available) or the database as fallback. Dangerous operations (such as clearing group blacklists/whitelists) are now protected by random 3-digit confirmation and cancellation codes, with full support for multi-step dialogs and multi-worker, stateless deployments.
+*   **🔊 Voice Reply & Burn-After-Reading**: Introduced per-group feature switches for AI voice replies and burn-after-reading auto-recall in `BotWorker`. These features are wired through the Admin plugin, allowing administrators to enable or disable them via simple chat commands.
+*   **🗄️ Shared Persistence Layer**: Added a GORM-based persistence layer and `dblib` helper to the `Common` and `BotWorker` modules, reducing duplicate database code and standardizing session storage across workers.
+*   **📚 Documentation Refresh**: Updated root and BotWorker documentation (including plugin docs and development notes) to describe the new confirmation flow, dialog system, Redis/DB-backed sessions, and best practices for running stateless worker clusters.
+
 ## v1.3.1 (2025-12-22)
 *   **🐾 BotWorker Feature Expansion**: Introduced a new **Pet System** plugin (`pets.go`), allowing users to adopt, feed, and interact with virtual pets.
 *   **⌨️ Command Parsing Engine**: Added a robust `CommandParser` utility to handle structured bot commands with optional prefixes and parameters.

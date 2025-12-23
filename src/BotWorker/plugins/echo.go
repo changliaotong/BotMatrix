@@ -15,7 +15,7 @@ func (p *EchoPlugin) Name() string {
 }
 
 func (p *EchoPlugin) Description() string {
-	return "简单的回声插件，回复收到的消息"
+	return common.T("", "echo_plugin_desc")
 }
 
 func (p *EchoPlugin) Version() string {
@@ -30,18 +30,18 @@ func NewEchoPlugin() *EchoPlugin {
 }
 
 func (p *EchoPlugin) Init(robot plugin.Robot) {
-	log.Println("加载回声插件")
+	log.Println(common.T("", "echo_plugin_loaded"))
 
 	// 响应消息事件
 	robot.OnMessage(func(event *onebot.Event) error {
-		log.Printf("收到消息: %s", event.RawMessage)
+		log.Printf(common.T("", "echo_msg_received"), event.RawMessage)
 
 		// 只处理私聊消息
 		if event.MessageType == "private" {
 			// 发送回声消息
 			params := &onebot.SendMessageParams{
 				UserID:  event.UserID,
-				Message: "你说: " + event.RawMessage,
+				Message: common.T("", "echo_reply_prefix") + event.RawMessage,
 			}
 			robot.SendMessage(params)
 		}
@@ -54,7 +54,7 @@ func (p *EchoPlugin) Init(robot plugin.Robot) {
 		if match, _ := p.cmdParser.MatchCommand("help", event.RawMessage); match {
 			params := &onebot.SendMessageParams{
 				UserID:  event.UserID,
-				Message: "可用命令:\n- /help: 显示帮助信息\n- /echo [内容]: 回复相同内容",
+				Message: common.T("", "echo_help_msg"),
 			}
 			robot.SendMessage(params)
 		}

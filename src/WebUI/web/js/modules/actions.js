@@ -3,7 +3,7 @@
  */
 
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { currentBotId } from './bots.js';
 
 /**
@@ -21,8 +21,7 @@ export function sendAction() {
         const paramsValue = document.getElementById('action-params').value;
         params = JSON.parse(paramsValue || '{}');
     } catch (e) {
-        const t = translations[currentLang] || translations['zh-CN'];
-        alert(t.alert_json_error || 'JSON 格式错误');
+        alert(t('alert_json_error') || 'JSON 格式错误');
         return;
     }
 

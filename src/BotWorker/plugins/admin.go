@@ -1,18 +1,20 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 )
 
 type AdminPlugin struct {
-	admins []string
-	db     *sql.DB
+	admins    []string
+	db        *sql.DB
 	cmdParser *CommandParser
 }
 
@@ -21,7 +23,7 @@ func (p *AdminPlugin) Name() string {
 }
 
 func (p *AdminPlugin) Description() string {
-	return "admin plugin，支持后台设置、功能开关、教学等功能"
+	return common.T("", "admin_plugin_desc")
 }
 
 func (p *AdminPlugin) Version() string {
@@ -38,7 +40,87 @@ func NewAdminPlugin(database *sql.DB) *AdminPlugin {
 }
 
 func (p *AdminPlugin) Init(robot plugin.Robot) {
-	log.Println("加载admin plugin")
+	log.Println(common.T("", "admin_plugin_loaded"))
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		matchNoArg, _ := p.cmdParser.MatchCommand("设置语音|setvoice", event.RawMessage)
+		matchWithArg, _, arg := p.cmdParser.MatchCommandWithSingleParam("设置语音|setvoice", event.RawMessage)
+
+		if !matchNoArg && !matchWithArg {
+			return nil
+		}
+
+		if event.MessageType != "group" {
+			p.sendMessage(robot, event, common.T("", "admin_group_only_voice"))
+			return nil
+		}
+
+		if p.db == nil {
+			p.sendMessage(robot, event, common.T("", "admin_no_db_voice"))
+			return nil
+		}
+
+		groupID := fmt.Sprintf("%d", event.GroupID)
+
+		if matchNoArg && !matchWithArg {
+			currentID, _ := db.GetGroupVoiceID(p.db, groupID)
+			list := BuildVoiceList(currentID)
+			msg := list + "\n" + common.T("", "admin_set_voice_usage")
+			p.sendMessage(robot, event, msg)
+			return nil
+		}
+
+		if !matchWithArg {
+			return nil
+		}
+
+		input := strings.TrimSpace(arg)
+		if input == "" {
+			currentID, _ := db.GetGroupVoiceID(p.db, groupID)
+			list := BuildVoiceList(currentID)
+			msg := list + "\n" + common.T("", "admin_set_voice_usage")
+			p.sendMessage(robot, event, msg)
+			return nil
+		}
+
+		if num, err := strconv.Atoi(input); err == nil {
+			item := FindVoiceByGlobalIndex(num)
+			if item == nil {
+				p.sendMessage(robot, event, "❌ "+common.T("", "admin_voice_not_found"))
+				return nil
+			}
+			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "")
+			return nil
+		}
+
+		if strings.EqualFold(input, "随机") || strings.EqualFold(input, "random") {
+			item := GetRandomVoice()
+			if item == nil {
+				p.sendMessage(robot, event, "❌ "+common.T("", "admin_voice_list_not_supported"))
+				return nil
+			}
+			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "（"+common.T("", "admin_random")+"）")
+			return nil
+		}
+
+		if item := FindVoiceByName(input); item != nil {
+			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "")
+			return nil
+		}
+
+		if item := FindVoiceFuzzy(input); item != nil {
+			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "（"+common.T("", "admin_fuzzy_match")+"）")
+			return nil
+		}
+
+		p.sendMessage(robot, event, "❌ "+common.T("", "admin_voice_not_found_hint"))
+
+		return nil
+	})
 
 	// 处理后台命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -52,16 +134,16 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 发送后台菜单
-		adminMenu := "🔧 后台管理菜单\n"
+		adminMenu := "🔧 " + common.T("", "admin_menu_title") + "\n"
 		adminMenu += "====================\n"
-		adminMenu += "/开启 <功能> - 开启指定功能\n"
-		adminMenu += "/关闭 <功能> - 关闭指定功能\n"
-		adminMenu += "/设置 <参数> <值> - 设置参数\n"
-		adminMenu += "/教学 - 查看使用教程\n"
-		adminMenu += "/本群 - 查看本群信息\n"
-		adminMenu += "/话唠 - 开启话唠模式\n"
-		adminMenu += "/终极 - 开启终极模式\n"
-		adminMenu += "/智能体 - 开启智能体模式\n"
+		adminMenu += common.T("", "admin_menu_enable") + "\n"
+		adminMenu += common.T("", "admin_menu_disable") + "\n"
+		adminMenu += common.T("", "admin_menu_set") + "\n"
+		adminMenu += common.T("", "admin_menu_teach") + "\n"
+		adminMenu += common.T("", "admin_menu_group_info") + "\n"
+		adminMenu += common.T("", "admin_menu_chatty") + "\n"
+		adminMenu += common.T("", "admin_menu_ultimate") + "\n"
+		adminMenu += common.T("", "admin_menu_agent") + "\n"
 		p.sendMessage(robot, event, adminMenu)
 
 		return nil
@@ -87,29 +169,29 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		if event.MessageType == "group" && p.db != nil {
 			if requireSuperAdmin {
 				if !isSuperAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, "权限不足，只有群主或机器人主人可以操作该功能")
+					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_super"))
 					return nil
 				}
 			} else if requireAdmin {
 				if !isGroupAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, "权限不足，只有管理员可以操作该功能")
+					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_admin"))
 					return nil
 				}
 			}
 		}
 		defaultEnabled, ok := FeatureDefaults[feature]
 		if !ok {
-			p.sendMessage(robot, event, fmt.Sprintf("功能%s不存在", feature))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_feature_not_found"), feature))
 			return nil
 		}
 
 		if event.MessageType != "group" {
-			p.sendMessage(robot, event, "仅支持在群聊中设置功能开关")
+			p.sendMessage(robot, event, common.T("", "admin_group_only_feature"))
 			return nil
 		}
 
 		if p.db == nil {
-			p.sendMessage(robot, event, "数据库未配置，无法保存功能开关")
+			p.sendMessage(robot, event, common.T("", "admin_no_db_feature"))
 			return nil
 		}
 
@@ -151,29 +233,29 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		if event.MessageType == "group" && p.db != nil {
 			if requireSuperAdmin {
 				if !isSuperAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, "权限不足，只有群主或机器人主人可以操作该功能")
+					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_super"))
 					return nil
 				}
 			} else if requireAdmin {
 				if !isGroupAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, "权限不足，只有管理员可以操作该功能")
+					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_admin"))
 					return nil
 				}
 			}
 		}
 		defaultEnabled, ok := FeatureDefaults[feature]
 		if !ok {
-			p.sendMessage(robot, event, fmt.Sprintf("功能%s不存在", feature))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_feature_not_found"), feature))
 			return nil
 		}
 
 		if event.MessageType != "group" {
-			p.sendMessage(robot, event, "仅支持在群聊中设置功能开关")
+			p.sendMessage(robot, event, common.T("", "admin_group_only_feature"))
 			return nil
 		}
 
 		if p.db == nil {
-			p.sendMessage(robot, event, "数据库未配置，无法保存功能开关")
+			p.sendMessage(robot, event, common.T("", "admin_no_db_feature"))
 			return nil
 		}
 
@@ -186,11 +268,11 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 		if err != nil {
 			log.Printf("设置功能关闭失败: %v", err)
-			p.sendMessage(robot, event, fmt.Sprintf("关闭功能%s失败", feature))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_disable_feature_failed"), feature))
 			return nil
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("功能%s已关闭", feature))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_feature_disabled"), feature))
 
 		return nil
 	})
@@ -212,7 +294,7 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		value := params[1]
 
 		// 模拟设置
-		p.sendMessage(robot, event, fmt.Sprintf("参数%s已设置为%s", param, value))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_param_set_success"), param, value))
 
 		return nil
 	})
@@ -229,25 +311,25 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 发送教学内容
-		teaching := "📚 使用教程\n"
+		teaching := "📚 " + common.T("", "admin_tutorial_title") + "\n"
 		teaching += "====================\n"
-		teaching += "/菜单 - 查看所有命令\n"
-		teaching += "/help - 查看帮助信息\n"
-		teaching += "/签到 - 每日签到\n"
-		teaching += "/积分 - 查询积分\n"
-		teaching += "/天气 <城市> - 查询天气\n"
-		teaching += "/翻译 <文本> - 翻译文本\n"
-		teaching += "/点歌 <歌曲> - 点歌\n"
-		teaching += "/猜拳 <选择> - 猜拳\n"
-		teaching += "/猜大小 <选择> - 猜大小\n"
-		teaching += "/抽奖 - 抽奖\n"
-		teaching += "/早安 - 早安问候\n"
-		teaching += "/晚安 - 晚安问候\n"
-		teaching += "/报时 - 查看当前时间\n"
-		teaching += "/计算 <表达式> - 计算\n"
-		teaching += "/笑话 - 讲笑话\n"
-		teaching += "/鬼故事 - 讲鬼故事\n"
-		teaching += "/成语接龙 <成语> - 成语接龙\n"
+		teaching += "/菜单 - " + common.T("", "admin_help_menu") + "\n"
+		teaching += "/help - " + common.T("", "admin_help_help") + "\n"
+		teaching += "/签到 - " + common.T("", "admin_help_signin") + "\n"
+		teaching += "/积分 - " + common.T("", "admin_help_points") + "\n"
+		teaching += "/天气 <城市> - " + common.T("", "admin_help_weather") + "\n"
+		teaching += "/翻译 <文本> - " + common.T("", "admin_help_translate") + "\n"
+		teaching += "/点歌 <歌曲> - " + common.T("", "admin_help_music") + "\n"
+		teaching += "/猜拳 <选择> - " + common.T("", "admin_help_rps") + "\n"
+		teaching += "/猜大小 <选择> - " + common.T("", "admin_help_guess") + "\n"
+		teaching += "/抽奖 - " + common.T("", "admin_help_lottery") + "\n"
+		teaching += "/早安 - " + common.T("", "admin_help_morning") + "\n"
+		teaching += "/晚安 - " + common.T("", "admin_help_night") + "\n"
+		teaching += "/报时 - " + common.T("", "admin_help_time") + "\n"
+		teaching += "/计算 <表达式> - " + common.T("", "admin_help_calc") + "\n"
+		teaching += "/笑话 - " + common.T("", "admin_help_joke") + "\n"
+		teaching += "/鬼故事 - " + common.T("", "admin_help_ghost") + "\n"
+		teaching += "/成语接龙 <成语> - " + common.T("", "admin_help_idiom") + "\n"
 		p.sendMessage(robot, event, teaching)
 
 		return nil
@@ -265,12 +347,12 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 发送本群信息
-		groupInfo := "🏠 本群信息\n"
+		groupInfo := "🏠 " + common.T("", "admin_group_info_title") + "\n"
 		groupInfo += "====================\n"
-		groupInfo += "群名称：未知\n"
-		groupInfo += "群人数：未知\n"
-		groupInfo += "群创建时间：未知\n"
-		groupInfo += "群公告：无\n"
+		groupInfo += common.T("", "admin_group_name") + "：" + common.T("", "admin_unknown") + "\n"
+		groupInfo += common.T("", "admin_group_member_count") + "：" + common.T("", "admin_unknown") + "\n"
+		groupInfo += common.T("", "admin_group_create_time") + "：" + common.T("", "admin_unknown") + "\n"
+		groupInfo += common.T("", "admin_group_notice") + "：" + common.T("", "admin_none") + "\n"
 		p.sendMessage(robot, event, groupInfo)
 
 		return nil
@@ -282,13 +364,18 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为话唠命令
 		if match, _ := p.cmdParser.MatchCommand("话唠|chatty", event.RawMessage); !match {
 			return nil
 		}
 
-		// 开启话唠模式
-		p.sendMessage(robot, event, "话唠模式已开启！我会更积极地回复消息哦！")
+		if event.MessageType == "group" && p.db != nil {
+			groupID := fmt.Sprintf("%d", event.GroupID)
+			if err := db.SetGroupQAMode(p.db, groupID, "chatty"); err != nil {
+				log.Printf("设置话唠模式失败: %v", err)
+			}
+		}
+
+		p.sendMessage(robot, event, common.T("", "admin_chatty_mode_enabled"))
 
 		return nil
 	})
@@ -299,13 +386,18 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为终极命令
 		if match, _ := p.cmdParser.MatchCommand("终极|ultimate", event.RawMessage); !match {
 			return nil
 		}
 
-		// 开启终极模式
-		p.sendMessage(robot, event, "终极模式已开启！我会释放全部能力！")
+		if event.MessageType == "group" && p.db != nil {
+			groupID := fmt.Sprintf("%d", event.GroupID)
+			if err := db.SetGroupQAMode(p.db, groupID, "ultimate"); err != nil {
+				log.Printf("设置终极模式失败: %v", err)
+			}
+		}
+
+		p.sendMessage(robot, event, common.T("", "admin_ultimate_mode_enabled"))
 
 		return nil
 	})
@@ -316,13 +408,52 @@ func (p *AdminPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		// 检查是否为智能体命令
 		if match, _ := p.cmdParser.MatchCommand("智能体|agent", event.RawMessage); !match {
 			return nil
 		}
 
-		// 开启智能体模式
-		p.sendMessage(robot, event, "智能体模式已开启！我会更智能地回复消息！")
+		p.sendMessage(robot, event, common.T("", "admin_agent_mode_enabled"))
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		if match, _ := p.cmdParser.MatchCommand("闭嘴|silent", event.RawMessage); match {
+			if event.MessageType == "group" && p.db != nil {
+				groupID := fmt.Sprintf("%d", event.GroupID)
+				if err := db.SetGroupQAMode(p.db, groupID, "silent"); err != nil {
+					log.Printf("设置闭嘴模式失败: %v", err)
+				}
+			}
+			p.sendMessage(robot, event, common.T("", "admin_silent_mode_enabled"))
+			return nil
+		}
+
+		if match, _ := p.cmdParser.MatchCommand("本群模式|本群问答|本群", event.RawMessage); match {
+			if event.MessageType == "group" && p.db != nil {
+				groupID := fmt.Sprintf("%d", event.GroupID)
+				if err := db.SetGroupQAMode(p.db, groupID, "group"); err != nil {
+					log.Printf("设置本群模式失败: %v", err)
+				}
+			}
+			p.sendMessage(robot, event, common.T("", "admin_group_mode_enabled"))
+			return nil
+		}
+
+		if match, _ := p.cmdParser.MatchCommand("官方模式|官方问答|官方", event.RawMessage); match {
+			if event.MessageType == "group" && p.db != nil {
+				groupID := fmt.Sprintf("%d", event.GroupID)
+				if err := db.SetGroupQAMode(p.db, groupID, "official"); err != nil {
+					log.Printf("设置官方模式失败: %v", err)
+				}
+			}
+			p.sendMessage(robot, event, common.T("", "admin_official_mode_enabled"))
+			return nil
+		}
 
 		return nil
 	})
@@ -333,6 +464,36 @@ func (p *AdminPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, messa
 	if _, err := SendTextReply(robot, event, message); err != nil {
 		log.Printf("发送消息失败: %v\n", err)
 	}
+}
+
+func (p *AdminPlugin) handleSaveGroupVoice(robot plugin.Robot, event *onebot.Event, groupID, voiceID, voiceName, suffix string) {
+	if p.db == nil {
+		p.sendMessage(robot, event, common.T("", "admin_no_db_voice"))
+		return
+	}
+
+	if err := db.SetGroupVoiceID(p.db, groupID, voiceID); err != nil {
+		log.Printf("设置群语音失败: %v", err)
+		p.sendMessage(robot, event, "❌ "+common.T("", "admin_set_voice_failed"))
+		return
+	}
+
+	categories := GetVoiceCategoriesForID(voiceID)
+	categoryName := strings.Join(categories, "、")
+	url := GetVoicePreviewURL(voiceID)
+
+	msg := "✅ " + common.T("", "admin_set_voice_success") + voiceName
+	if categoryName != "" {
+		msg += "（" + categoryName + "）"
+	}
+	if suffix != "" {
+		msg += suffix
+	}
+	if url != "" {
+		msg += "\n" + common.T("", "admin_preview") + "：" + url
+	}
+
+	p.sendMessage(robot, event, msg)
 }
 
 func normalizeFeatureName(name string) (string, bool, bool) {

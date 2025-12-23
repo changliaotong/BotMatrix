@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
@@ -33,7 +34,7 @@ func (p *PetPlugin) Name() string {
 }
 
 func (p *PetPlugin) Description() string {
-	return "宠物系统插件，支持领养宠物、喂食、玩耍、升级等功能（集成积分系统）"
+	return common.T("", "pet_plugin_desc")
 }
 
 func (p *PetPlugin) Version() string {
@@ -41,7 +42,7 @@ func (p *PetPlugin) Version() string {
 }
 
 func (p *PetPlugin) Init(robot plugin.Robot) {
-	log.Println("加载宠物系统插件")
+	log.Println(common.T("", "pet_plugin_loaded"))
 
 	// 处理领养宠物命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -58,13 +59,13 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为领养宠物命令
-		if match, _ := p.cmdParser.MatchCommand("adopt|领养宠物|领养", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "pet_cmd_adopt"), event.RawMessage); !match {
 			return nil
 		}
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，领养失败")
+			p.sendMessage(robot, event, common.T("", "pet_adopt_no_userid"))
 			return nil
 		}
 
@@ -73,25 +74,34 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 检查积分是否足够 (领养需要 50 积分)
 		adoptCost := 50
 		if p.points != nil && p.points.GetPoints(userIDStr) < adoptCost {
-			p.sendMessage(robot, event, fmt.Sprintf("领养宠物需要 %d 积分，你当前的积分不足", adoptCost))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_adopt_insufficient_points"), adoptCost))
 			return nil
 		}
 
 		// 检查用户是否已经有宠物 (从数据库查)
 		userPets, err := db.GetPetsByUserID(p.db, userIDStr)
 		if err != nil {
-			log.Printf("查询用户宠物失败: %v", err)
-			p.sendMessage(robot, event, "查询宠物信息失败，请稍后再试")
+			log.Printf(common.T("", "pet_query_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_query_failed"))
 			return nil
 		}
 
 		if len(userPets) >= 3 {
-			p.sendMessage(robot, event, "你最多只能领养3只宠物")
+			p.sendMessage(robot, event, common.T("", "pet_adopt_limit"))
 			return nil
 		}
 
 		// 随机生成宠物类型
-		petTypes := []string{"🐱 猫咪", "🐶 狗狗", "🐰 兔子", "🐹 仓鼠", "🐻 小熊", "🐼 熊猫", "🐯 老虎", "🦁 狮子"}
+		petTypes := []string{
+			common.T("", "pet_type_cat"),
+			common.T("", "pet_type_dog"),
+			common.T("", "pet_type_rabbit"),
+			common.T("", "pet_type_hamster"),
+			common.T("", "pet_type_bear"),
+			common.T("", "pet_type_panda"),
+			common.T("", "pet_type_tiger"),
+			common.T("", "pet_type_lion"),
+		}
 		petType := petTypes[rand.Intn(len(petTypes))]
 
 		// 生成宠物ID
@@ -101,7 +111,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		petModel := &db.PetModel{
 			PetID:     petID,
 			UserID:    userIDStr,
-			Name:      fmt.Sprintf("%d的%s", userID, petType),
+			Name:      fmt.Sprintf(common.T("", "pet_default_name"), userID, petType),
 			Type:      petType,
 			Level:     1,
 			Exp:       0,
@@ -112,17 +122,17 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 
 		// 存储宠物到数据库
 		if err := db.CreatePet(p.db, petModel); err != nil {
-			log.Printf("保存宠物到数据库失败: %v", err)
-			p.sendMessage(robot, event, "领养失败，请联系管理员")
+			log.Printf(common.T("", "pet_save_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_adopt_failed"))
 			return nil
 		}
 
 		// 扣除积分
 		if p.points != nil {
-			p.points.AddPoints(userIDStr, -adoptCost, "领养宠物", "pet_adopt")
+			p.points.AddPoints(userIDStr, -adoptCost, common.T("", "pet_adopt_action"), "pet_adopt")
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("🎉 恭喜你花费 %d 积分领养了一只%s！\n宠物名字：%s\n等级：%d\n经验：%d\n饥饿值：%d\n快乐值：%d\n健康值：%d",
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_adopt_success"),
 			adoptCost, petType, petModel.Name, petModel.Level, petModel.Exp, petModel.Hunger, petModel.Happiness, petModel.Health))
 
 		return nil
@@ -143,13 +153,13 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为查看宠物命令
-		if match, _ := p.cmdParser.MatchCommand("pets|我的宠物|宠物", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "pet_cmd_list"), event.RawMessage); !match {
 			return nil
 		}
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID")
+			p.sendMessage(robot, event, common.T("", "pet_no_userid"))
 			return nil
 		}
 
@@ -157,28 +167,28 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		userIDStr := fmt.Sprintf("%d", userID)
 		userPets, err := db.GetPetsByUserID(p.db, userIDStr)
 		if err != nil {
-			log.Printf("查询用户宠物失败: %v", err)
-			p.sendMessage(robot, event, "查询宠物信息失败")
+			log.Printf(common.T("", "pet_query_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_query_failed_brief"))
 			return nil
 		}
 
 		if len(userPets) == 0 {
-			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
+			p.sendMessage(robot, event, common.T("", "pet_no_pets"))
 			return nil
 		}
 
 		// 发送宠物列表
-		msg := "🐾 你的宠物 🐾\n"
-		msg += "------------------------\n"
+		msg := common.T("", "pet_list_header")
+		msg += common.T("", "pet_list_separator")
 		for i, pet := range userPets {
 			msg += fmt.Sprintf("%d. %s\n", i+1, pet.Name)
-			msg += fmt.Sprintf("   类型：%s\n", pet.Type)
-			msg += fmt.Sprintf("   等级：%d\n", pet.Level)
-			msg += fmt.Sprintf("   经验：%d/%d\n", pet.Exp, pet.Level*100)
-			msg += fmt.Sprintf("   饥饿值：%d/100\n", pet.Hunger)
-			msg += fmt.Sprintf("   快乐值：%d/100\n", pet.Happiness)
-			msg += fmt.Sprintf("   健康值：%d/100\n", pet.Health)
-			msg += "------------------------\n"
+			msg += fmt.Sprintf(common.T("", "pet_info_type"), pet.Type)
+			msg += fmt.Sprintf(common.T("", "pet_info_level"), pet.Level)
+			msg += fmt.Sprintf(common.T("", "pet_info_exp"), pet.Exp, pet.Level*100)
+			msg += fmt.Sprintf(common.T("", "pet_info_hunger"), pet.Hunger)
+			msg += fmt.Sprintf(common.T("", "pet_info_happiness"), pet.Happiness)
+			msg += fmt.Sprintf(common.T("", "pet_info_health"), pet.Health)
+			msg += common.T("", "pet_list_separator")
 		}
 
 		p.sendMessage(robot, event, msg)
@@ -201,14 +211,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为喂食命令
-		match, _, params := p.cmdParser.MatchCommandWithParams("feed|喂食", `(\d*)`, event.RawMessage)
+		match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "pet_cmd_feed"), `(\d*)`, event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID")
+			p.sendMessage(robot, event, common.T("", "pet_no_userid"))
 			return nil
 		}
 
@@ -217,14 +227,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 喂食消耗 5 积分
 		feedCost := 5
 		if p.points != nil && p.points.GetPoints(userIDStr) < feedCost {
-			p.sendMessage(robot, event, fmt.Sprintf("喂食需要 %d 积分，你当前的积分不足", feedCost))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_feed_insufficient_points"), feedCost))
 			return nil
 		}
 
 		// 获取用户的宠物
 		userPets, err := db.GetPetsByUserID(p.db, userIDStr)
 		if err != nil || len(userPets) == 0 {
-			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
+			p.sendMessage(robot, event, common.T("", "pet_no_pets"))
 			return nil
 		}
 
@@ -258,17 +268,17 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 
 		// 更新到数据库
 		if err := db.UpdatePet(p.db, pet); err != nil {
-			log.Printf("更新宠物失败: %v", err)
-			p.sendMessage(robot, event, "操作失败，请重试")
+			log.Printf(common.T("", "pet_update_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_op_failed"))
 			return nil
 		}
 
 		// 扣除积分
 		if p.points != nil {
-			p.points.AddPoints(userIDStr, -feedCost, "喂食宠物", "pet_feed")
+			p.points.AddPoints(userIDStr, -feedCost, common.T("", "pet_feed_action"), "pet_feed")
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("🍖 你花费 %d 积分给%s喂食了！\n饥饿值：%d → %d\n快乐值：%d → %d\n经验值：%d → %d",
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_feed_success"),
 			feedCost, pet.Name, oldHunger, pet.Hunger, oldHappiness, pet.Happiness, oldExp, pet.Exp))
 
 		return nil
@@ -289,14 +299,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为玩耍命令
-		match, _, params := p.cmdParser.MatchCommandWithParams("play|玩耍", `(\d*)`, event.RawMessage)
+		match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "pet_cmd_play"), `(\d*)`, event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID")
+			p.sendMessage(robot, event, common.T("", "pet_no_userid"))
 			return nil
 		}
 
@@ -305,7 +315,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 获取用户的宠物
 		userPets, err := db.GetPetsByUserID(p.db, userIDStr)
 		if err != nil || len(userPets) == 0 {
-			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
+			p.sendMessage(robot, event, common.T("", "pet_no_pets"))
 			return nil
 		}
 
@@ -339,12 +349,12 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 
 		// 更新到数据库
 		if err := db.UpdatePet(p.db, pet); err != nil {
-			log.Printf("更新宠物失败: %v", err)
-			p.sendMessage(robot, event, "操作失败，请重试")
+			log.Printf(common.T("", "pet_update_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_op_failed"))
 			return nil
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("🎮 你和%s玩耍了！\n快乐值：%d → %d\n饥饿值：%d → %d\n经验值：%d → %d",
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_play_success"),
 			pet.Name, oldHappiness, pet.Happiness, oldHunger, pet.Hunger, oldExp, pet.Exp))
 
 		return nil
@@ -365,14 +375,14 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为洗澡命令
-		match, _, params := p.cmdParser.MatchCommandWithParams("wash|洗澡", `(\d*)`, event.RawMessage)
+		match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "pet_cmd_wash"), `(\d*)`, event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID")
+			p.sendMessage(robot, event, common.T("", "pet_no_userid"))
 			return nil
 		}
 
@@ -381,7 +391,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 获取用户的宠物
 		userPets, err := db.GetPetsByUserID(p.db, userIDStr)
 		if err != nil || len(userPets) == 0 {
-			p.sendMessage(robot, event, "你还没有宠物，使用/领养命令领养一只吧")
+			p.sendMessage(robot, event, common.T("", "pet_no_pets"))
 			return nil
 		}
 
@@ -415,12 +425,12 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 
 		// 更新到数据库
 		if err := db.UpdatePet(p.db, pet); err != nil {
-			log.Printf("更新宠物失败: %v", err)
-			p.sendMessage(robot, event, "操作失败，请重试")
+			log.Printf(common.T("", "pet_update_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_op_failed"))
 			return nil
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("🛁 你给%s洗澡了！\n健康值：%d → %d\n快乐值：%d → %d\n经验值：%d → %d",
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_wash_success"),
 			pet.Name, oldHealth, pet.Health, oldHappiness, pet.Happiness, oldExp, pet.Exp))
 
 		return nil
@@ -440,7 +450,7 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为改名命令
-		match, _, params := p.cmdParser.MatchCommandWithParams("rename|改名", `(\d+)\s+(\S+)`, event.RawMessage)
+		match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "pet_cmd_rename"), `(\d+)\s+(\S+)`, event.RawMessage)
 		if !match {
 			return nil
 		}
@@ -451,13 +461,13 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		// 获取用户的宠物
 		userPets, err := db.GetPetsByUserID(p.db, userIDStr)
 		if err != nil || len(userPets) == 0 {
-			p.sendMessage(robot, event, "你还没有宠物")
+			p.sendMessage(robot, event, common.T("", "pet_no_pets_brief"))
 			return nil
 		}
 
 		index, _ := strconv.Atoi(params[0])
 		if index <= 0 || index > len(userPets) {
-			p.sendMessage(robot, event, "宠物编号不正确")
+			p.sendMessage(robot, event, common.T("", "pet_invalid_index"))
 			return nil
 		}
 
@@ -467,12 +477,12 @@ func (p *PetPlugin) Init(robot plugin.Robot) {
 		pet.Name = newName
 
 		if err := db.UpdatePet(p.db, pet); err != nil {
-			log.Printf("改名失败: %v", err)
-			p.sendMessage(robot, event, "改名失败")
+			log.Printf(common.T("", "pet_rename_failed_log"), err)
+			p.sendMessage(robot, event, common.T("", "pet_rename_failed"))
 			return nil
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("🏷️ 成功将宠物 %s 改名为 %s", oldName, newName))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "pet_rename_success"), oldName, newName))
 		return nil
 	})
 
@@ -490,7 +500,7 @@ func (p *PetPlugin) checkLevelUp(pet *db.PetModel) {
 		pet.Happiness = 100
 		pet.Hunger = 80
 
-		log.Printf("宠物%s升级到%d级", pet.Name, pet.Level)
+		log.Printf(common.T("", "pet_levelup_log"), pet.Name, pet.Level)
 	}
 }
 
@@ -503,7 +513,7 @@ func (p *PetPlugin) updatePetStatus() {
 		// 从数据库加载所有宠物
 		allPets, err := db.GetAllPets(p.db)
 		if err != nil {
-			log.Printf("定时任务：加载所有宠物失败: %v", err)
+			log.Printf(common.T("", "pet_cron_load_failed_log"), err)
 			continue
 		}
 
@@ -529,7 +539,7 @@ func (p *PetPlugin) updatePetStatus() {
 
 			// 更新到数据库
 			if err := db.UpdatePet(p.db, pet); err != nil {
-				log.Printf("定时任务：更新宠物 %s 失败: %v", pet.PetID, err)
+				log.Printf(common.T("", "pet_cron_update_failed_log"), pet.PetID, err)
 			}
 		}
 	}

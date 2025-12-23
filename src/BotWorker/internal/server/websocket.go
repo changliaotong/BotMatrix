@@ -112,23 +112,27 @@ func (s *WebSocketServer) handleConnection(conn *websocket.Conn) {
 }
 
 func (s *WebSocketServer) handleEvent(event onebot.Event) {
+	s.DispatchEvent(&event)
+}
+
+func (s *WebSocketServer) DispatchEvent(event *onebot.Event) {
 	// 分发到对应的事件处理器
 	switch event.PostType {
 	case "message":
 		for _, handler := range s.messageHandlers {
-			if err := handler(&event); err != nil {
+			if err := handler(event); err != nil {
 				log.Println("消息处理错误:", err)
 			}
 		}
 	case "notice":
 		for _, handler := range s.noticeHandlers {
-			if err := handler(&event); err != nil {
+			if err := handler(event); err != nil {
 				log.Println("通知处理错误:", err)
 			}
 		}
 	case "request":
 		for _, handler := range s.requestHandlers {
-			if err := handler(&event); err != nil {
+			if err := handler(event); err != nil {
 				log.Println("请求处理错误:", err)
 			}
 		}
@@ -137,7 +141,7 @@ func (s *WebSocketServer) handleEvent(event onebot.Event) {
 	// 分发到命名事件处理器
 	if handlers, ok := s.eventHandlers[event.EventName]; ok {
 		for _, handler := range handlers {
-			if err := handler(&event); err != nil {
+			if err := handler(event); err != nil {
 				log.Println("事件处理错误:", err)
 			}
 		}

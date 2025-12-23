@@ -1,5 +1,5 @@
 import { fetchWithAuth, callBotApi } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { currentBotId } from './bots.js';
 import { addEventLog } from './logs.js';
 import { showToast } from './ui.js';
@@ -156,7 +156,6 @@ export function selectFriend(id, name) {
 }
 
 export async function sendFriendMsg() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const input = document.getElementById('friend-msg-input');
     if (!input) return;
     
@@ -168,11 +167,11 @@ export async function sendFriendMsg() {
             user_id: currentFriendId,
             message: text
         });
-        showToast(t.alert_send_success || '发送成功', 'success');
+        showToast(t('alert_send_success') || '发送成功', 'success');
         input.value = '';
         addEventLog({type: 'message', message: `发送给好友(${currentFriendId}): ${text}`});
     } catch (e) {
-        showToast((t.alert_op_failed || '操作失败: ') + e.message, 'danger');
+        showToast((t('alert_op_failed') || '操作失败: ') + e.message, 'danger');
     }
 }
 

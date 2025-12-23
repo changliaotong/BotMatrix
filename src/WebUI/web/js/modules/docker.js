@@ -1,11 +1,10 @@
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 
 export function renderDockerContainers(containers) {
     const tbody = document.getElementById('docker-containers-tbody');
     if (!tbody) return;
 
-    const t = translations[currentLang] || translations['zh-CN'];
     const searchTerm = (document.getElementById('docker-search')?.value || '').toLowerCase();
 
     const filtered = containers.filter(c => {
@@ -32,10 +31,10 @@ export function renderDockerContainers(containers) {
             <td>${c.Status}</td>
             <td>
                 ${isRunning ? 
-                    `<button class="btn btn-sm btn-outline-danger me-1" onclick="controlContainer('${c.Id}', 'stop')"><i class="bi bi-stop-fill"></i> ${t.docker_stop}</button>
-                     <button class="btn btn-sm btn-outline-warning" onclick="controlContainer('${c.Id}', 'restart')"><i class="bi bi-arrow-repeat"></i> ${t.docker_restart}</button>` 
+                    `<button class="btn btn-sm btn-outline-danger me-1" onclick="controlContainer('${c.Id}', 'stop')"><i class="bi bi-stop-fill"></i> ${t('docker_stop')}</button>
+                     <button class="btn btn-sm btn-outline-warning" onclick="controlContainer('${c.Id}', 'restart')"><i class="bi bi-arrow-repeat"></i> ${t('docker_restart')}</button>` 
                     : 
-                    `<button class="btn btn-sm btn-outline-success" onclick="controlContainer('${c.Id}', 'start')"><i class="bi bi-play-fill"></i> ${t.docker_start}</button>`
+                    `<button class="btn btn-sm btn-outline-success" onclick="controlContainer('${c.Id}', 'start')"><i class="bi bi-play-fill"></i> ${t('docker_start')}</button>`
                 }
             </td>
         </tr>
@@ -49,9 +48,8 @@ export function filterDockerContainers() {
 }
 
 export function controlContainer(id, action) {
-    const t = translations[currentLang] || translations['zh-CN'];
-    const actionText = t[`docker_${action}`] || action;
-    const confirmMsg = t.docker_confirm_action
+    const actionText = t(`docker_${action}`) || action;
+    const confirmMsg = t('docker_confirm_action')
         .replace('{id}', id.substring(0, 12))
         .replace('{action}', actionText);
         
@@ -75,7 +73,7 @@ export function controlContainer(id, action) {
                 window.loadDockerContainers(true);
             }
         } else {
-            alert(`${t.docker_action_failed}: ${res.message || JSON.stringify(res)}`);
+            alert(`${t('docker_action_failed')}: ${res.message || JSON.stringify(res)}`);
         }
     })
     .catch(err => {
@@ -84,7 +82,7 @@ export function controlContainer(id, action) {
 }
 
 export function addBotContainer() {
-    if (!confirm("确定要部署新的机器人容器吗？")) return;
+    if (!confirm(t('docker_confirm_add_bot'))) return;
     
     fetchWithAuth('/api/docker/add-bot', {
         method: 'POST',
@@ -95,19 +93,19 @@ export function addBotContainer() {
     .then(r => r.json())
     .then(res => {
         if (res.status === 'ok') {
-            alert("机器人容器已在后台开始部署");
+            alert(t('docker_add_bot_success'));
             if (window.loadDockerContainers) {
                 window.loadDockerContainers(true);
             }
         } else {
-            alert(res.message || "部署请求失败");
+            alert(res.message || t('docker_deployment_failed'));
         }
     })
     .catch(err => alert("Error: " + err));
 }
 
 export function addWorkerContainer() {
-    if (!confirm("确定要部署新的 Worker 节点容器吗？")) return;
+    if (!confirm(t('docker_confirm_add_worker'))) return;
     
     fetchWithAuth('/api/docker/add-worker', {
         method: 'POST',
@@ -118,12 +116,12 @@ export function addWorkerContainer() {
     .then(r => r.json())
     .then(res => {
         if (res.status === 'ok') {
-            alert("Worker 节点容器已在后台开始部署");
+            alert(t('docker_add_worker_success'));
             if (window.loadDockerContainers) {
                 window.loadDockerContainers(true);
             }
         } else {
-            alert(res.message || "部署请求失败");
+            alert(res.message || t('docker_deployment_failed'));
         }
     })
     .catch(err => alert("Error: " + err));
@@ -145,7 +143,7 @@ export async function loadDockerContainers(silent = false) {
     } catch (err) {
         console.error('Failed to load docker containers:', err);
         if (!silent) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">加载失败: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${t('loading_failed')}: ${err.message}</td></tr>`;
         }
     }
 }

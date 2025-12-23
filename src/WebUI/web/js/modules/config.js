@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from './api.js';
 import { authRole } from './auth.js';
-import { translations, currentLang } from './i18n.js';
+import { t } from './i18n.js';
 import { showToast } from './ui.js?v=1.1.88';
 import { updateStats, updateChatStats } from './stats.js';
 import { updateSystemStats } from './system.js';
@@ -48,11 +48,9 @@ export async function updatePassword() {
     const newPwd = document.getElementById('pwd-new').value;
     const confirmPwd = document.getElementById('pwd-confirm').value;
 
-    const t = translations[currentLang] || translations['zh-CN'];
-
-    if (!newPwd) return alert(t.enter_new_pwd || '请输入新密码');
-    if (newPwd !== confirmPwd) return alert(t.pwd_mismatch || '两次输入的密码不一致');
-    if (!oldPwd) return alert(t.enter_current_pwd || '请输入当前密码');
+    if (!newPwd) return alert(t('enter_new_pwd') || '请输入新密码');
+    if (newPwd !== confirmPwd) return alert(t('pwd_mismatch') || '两次输入的密码不一致');
+    if (!oldPwd) return alert(t('enter_current_pwd') || '请输入当前密码');
 
     try {
         const res = await fetchWithAuth('/api/user/password', {
@@ -68,12 +66,12 @@ export async function updatePassword() {
             throw new Error(txt);
         }
 
-        alert(t.password_change_success || '密码修改成功');
+        alert(t('password_change_success') || '密码修改成功');
         document.getElementById('pwd-current').value = '';
         document.getElementById('pwd-new').value = '';
         document.getElementById('pwd-confirm').value = '';
     } catch (e) {
-        alert((t.password_change_fail || '修改失败: ') + e.message);
+        alert((t('password_change_fail') || '修改失败: ') + e.message);
     }
 }
 

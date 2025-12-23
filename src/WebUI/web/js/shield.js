@@ -53,69 +53,72 @@
 
     moNames.forEach(name => {
         const OriginalMO = window[name];
-        if (OriginalMO && OriginalMO.prototype) {
-            const nativeObserve = OriginalMO.prototype.observe;
-            const safeObserve = createSafeObserve(nativeObserve);
+        if (!OriginalMO || !OriginalMO.prototype) return;
 
-            // Hijack prototype
-            try {
-                Object.defineProperties(OriginalMO.prototype, {
-                    'observe': {
-                        get() { return safeObserve; },
-                        set(v) { /* Block overwrite */ },
-                        configurable: false
-                    }
-                });
-            } catch (e) {
+        const nativeObserve = OriginalMO.prototype.observe;
+        const safeObserve = createSafeObserve(nativeObserve);
+
+        // Proxy constructor to handle new instances and prototype access
+        const ProxyMO = new Proxy(OriginalMO, {
+            construct(target, args) {
+                const instance = Reflect.construct(target, args);
                 try {
-                    OriginalMO.prototype.observe = safeObserve;
-                } catch (e2) {}
+                    Object.defineProperty(instance, 'observe', { 
+                        value: safeObserve, 
+                        writable: true, 
+                        configurable: true 
+                    });
+                } catch (e) {}
+                return instance;
+            },
+            get(target, prop) {
+                if (prop === 'prototype') return target.prototype;
+                if (prop === 'observe') return safeObserve;
+                const val = Reflect.get(target, prop);
+                return typeof val === 'function' ? val.bind(target) : val;
             }
+        });
 
-            // Hijack global constructor using Proxy for maximum transparency
-            try {
-                const ProxyMO = new Proxy(OriginalMO, {
-                    construct(target, args) {
-                        try {
-                            const instance = Reflect.construct(target, args);
-                            // Ensure instance.observe is our safe version
-                            try {
-                                Object.defineProperty(instance, 'observe', {
-                                    value: safeObserve,
-                                    writable: false,
-                                    configurable: false
-                                });
-                            } catch (e) {
-                                instance.observe = safeObserve;
-                            }
-                            return instance;
-                        } catch (e) {
-                            // Dummy to avoid crash
-                            return { observe: () => {}, disconnect: () => {}, takeRecords: () => [] };
-                        }
-                    },
-                    get(target, prop) {
-                        if (prop === 'prototype') return target.prototype;
-                        if (prop === 'observe') return safeObserve;
-                        const val = Reflect.get(target, prop);
-                        return typeof val === 'function' ? (val.bind ? val.bind(target) : val) : val;
-                    }
-                });
-
-                Object.defineProperty(window, name, {
-                    value: ProxyMO,
-                    configurable: false,
-                    writable: false
-                });
-            } catch (e) {}
+        // Hijack prototype and global
+        try {
+            Object.defineProperties(OriginalMO.prototype, {
+                'observe': { 
+                    get() { return safeObserve; }, 
+                    set(v) {}, 
+                    configurable: true 
+                }
+            });
+            Object.defineProperty(window, name, { 
+                value: ProxyMO, 
+                configurable: true, 
+                writable: true 
+            });
+        } catch (e) {
+            window[name] = ProxyMO;
         }
     });
 
     // 2. Iframe Protection (Intercept dynamically created iframes)
     const applyProtectionToWindow = (win) => {
-        if (!win || win === window) return;
-        // Recursive protection for iframes if needed
-        // (Simplified for now, just the main protection)
+        try {
+            if (!win || win === window) return;
+            
+            // Apply MutationObserver protection to iframe window
+            moNames.forEach(name => {
+                const MO = win[name];
+                if (MO && MO.prototype) {
+                    const original = MO.prototype.observe;
+                    MO.prototype.observe = createSafeObserve(original);
+                }
+            });
+
+            // Apply error filtering to iframe window
+            win.addEventListener('error', (e) => {
+                if (isNoisyError(e.message, e.filename, e.error)) {
+                    e.preventDefault(); e.stopImmediatePropagation();
+                }
+            }, true);
+        } catch (e) {}
     };
 
     try {
@@ -143,17 +146,28 @@
         "Failed to execute 'observe'",
         "index.ts-",
         "not of type 'node'",
-        "failed to execute 'observe'"
+        "failed to execute 'observe'",
+        "cdn.tailwindcss.com should not be used in production",
+        "Failed to execute 'observe' on 'MutationObserver'",
+        "parameter 1 is not of type 'Node'",
+        "parameter 1 is not of type",
+        "ResizeObserver loop limit exceeded",
+        "three.js r128",
+        "THREE.WebGLRenderer"
     ];
 
     const isNoisyError = (msg, source, errorObj) => {
-        let combined = (String(msg) + " " + String(source)).toLowerCase();
+        if (!msg) return false;
+        let combined = (String(msg) + " " + (source || "")).toLowerCase();
         if (errorObj && errorObj.stack) {
             combined += " " + String(errorObj.stack).toLowerCase();
         }
         
         // Custom visualization error filter
         if (combined.includes('visualization.js') && combined.includes('innerhtml')) return true;
+
+        // Specific MutationObserver error filtering
+        if (combined.includes('mutationobserver') && (combined.includes('node') || combined.includes('parameter 1'))) return true;
 
         return noisyStrings.some(s => combined.includes(s.toLowerCase()));
     };
@@ -191,7 +205,12 @@
             const msg = `[${type}] ${new Date().toLocaleTimeString()} - ${Array.from(args).map(a => {
                 try {
                     if (a instanceof Error) return a.message + (a.stack ? " " + a.stack : "");
-                    return (typeof a === 'object') ? JSON.stringify(a) : String(a);
+                    if (typeof a === 'object') {
+                        // Avoid circular refs or huge objects
+                        if (a === window || a === document) return '[Global Object]';
+                        return JSON.stringify(a).substring(0, 500);
+                    }
+                    return String(a);
                 } catch(e) { return String(a); }
             }).join(' ')}`;
             window.console.history.push(msg);
@@ -204,6 +223,9 @@
         originalConsole.log.apply(console, arguments);
     };
     console.warn = function() {
+        const args = Array.from(arguments);
+        const msg = args.map(a => String(a)).join(' ');
+        if (isNoisyError(msg, "")) return;
         addToHistory('WARN', arguments);
         originalConsole.warn.apply(console, arguments);
     };
@@ -224,12 +246,10 @@
             return String(a);
         }).join(' ');
         
+        if (isNoisyError(msg, "")) return;
+        
         addToHistory('ERROR', arguments);
-
-        if (isNoisyError(msg, "")) {
-            return;
-        }
-        return originalConsole.error.apply(console, arguments);
+        originalConsole.error.apply(console, arguments);
     };
 
     console.log(TAG, 'Ultimate Early protection active.');

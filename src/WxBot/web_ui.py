@@ -2791,6 +2791,52 @@ class WebUI:
             except Exception as e:
                 return jsonify({"status": "error", "error": str(e)})
 
+        @self.app.route('/api/docker/start', methods=['POST'])
+        def start_container():
+            data = request.json
+            cid = data.get('container_id')
+            if not cid: return jsonify({"status": "error", "error": "Missing container_id"})
+            try:
+                prefix = self._get_docker_cmd()
+                subprocess.check_call(f"{prefix} start {cid}", shell=True)
+                return jsonify({"status": "ok"})
+            except Exception as e:
+                return jsonify({"status": "error", "error": str(e)})
+
+        @self.app.route('/api/docker/remove', methods=['POST'])
+        def remove_container():
+            data = request.json
+            cid = data.get('container_id')
+            if not cid: return jsonify({"status": "error", "error": "Missing container_id"})
+            try:
+                prefix = self._get_docker_cmd()
+                subprocess.check_call(f"{prefix} rm -f {cid}", shell=True)
+                return jsonify({"status": "ok"})
+            except Exception as e:
+                return jsonify({"status": "error", "error": str(e)})
+
+        @self.app.route('/api/docker/add-bot', methods=['POST'])
+        def add_docker_bot():
+            try:
+                # 这是一个示例，实际命令可能需要根据环境调整
+                prefix = self._get_docker_cmd()
+                # 假设有一个预定义的镜像
+                cmd = f"{prefix} run -d --name bot_matrix_node_{int(time.time())} bot_matrix_node:latest"
+                subprocess.check_call(cmd, shell=True)
+                return jsonify({"status": "ok", "message": "Bot deployed successfully"})
+            except Exception as e:
+                return jsonify({"status": "error", "error": str(e)})
+
+        @self.app.route('/api/docker/add-worker', methods=['POST'])
+        def add_docker_worker():
+            try:
+                prefix = self._get_docker_cmd()
+                cmd = f"{prefix} run -d --name bot_matrix_worker_{int(time.time())} bot_matrix_worker:latest"
+                subprocess.check_call(cmd, shell=True)
+                return jsonify({"status": "ok", "message": "Worker deployed successfully"})
+            except Exception as e:
+                return jsonify({"status": "error", "error": str(e)})
+
         @self.app.route('/api/docker/logs')
         def get_container_logs():
             cid = request.args.get('container_id')

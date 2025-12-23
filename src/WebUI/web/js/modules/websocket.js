@@ -8,7 +8,7 @@ import { handleRoutingEvent, handleSyncState } from './visualization.js';
 import { updateWsStatus, showToast } from './ui.js';
 import { fetchBots } from './bots.js';
 import { addEventLog, renderLogMessage } from './logs.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 
 let wsSubscriber = null;
 let wsReconnectAttempts = 0;
@@ -22,21 +22,29 @@ export function initWebSocket() {
     
     if (wsReconnectAttempts >= MAX_WS_RECONNECT_ATTEMPTS) {
         console.error('WebSocket reconnection limit reached');
-        const t = translations[currentLang] || translations['zh-CN'];
-        updateWsStatus('danger', t.status_error || '连接失败');
+        updateWsStatus('danger', t('status_error') || '连接失败');
         addEventLog({ type: 'system', message: 'WebSocket 连接失败次数过多，请检查网络或服务器状态' });
         return;
     }
     
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsPort = window.location.port ? `:${window.location.port}` : '';
+    
+    // Ensure we have the latest token from localStorage if the imported one is missing
+    const token = authToken || localStorage.getItem('wxbot_token');
+    
     let wsUrl = `${protocol}//${window.location.hostname}${wsPort}/ws/subscriber?role=subscriber`;
-    if (authToken) {
-        wsUrl += `&token=${encodeURIComponent(authToken)}`;
+    if (token && token !== 'null' && token !== 'undefined') {
+        wsUrl += `&token=${encodeURIComponent(token)}`;
+    } else {
+        console.warn('[WS] No auth token found, connection might be rejected');
     }
+    
+    console.log('[WS] Connecting to:', wsUrl.split('&token=')[0] + (token ? '&token=***' : ''));
     
     try {
         wsSubscriber = new WebSocket(wsUrl);
+        window.wsSubscriber = wsSubscriber; // Attach to window for cleanup visibility
         
         // Connection timeout
         const connectTimeout = setTimeout(() => {
@@ -49,25 +57,26 @@ export function initWebSocket() {
         wsSubscriber.onopen = () => {
             clearTimeout(connectTimeout);
             wsReconnectAttempts = 0;
-            const t = translations[currentLang] || translations['zh-CN'];
-            updateWsStatus('success', t.status_connected || '已连接');
-            addEventLog({ type: 'system', message: t.ws_connected || 'WebSocket 连接成功' });
+            updateWsStatus('success', t('status_connected') || '已连接');
+            addEventLog({ type: 'system', message: t('ws_connected') || 'WebSocket 连接成功' });
             fetchBots();
         };
         
         wsSubscriber.onerror = (error) => {
             clearTimeout(connectTimeout);
-            const t = translations[currentLang] || translations['zh-CN'];
-            console.error('WebSocket error:', error);
-            updateWsStatus('warning', t.status_error || '连接错误');
-            addEventLog({ type: 'system', message: t.ws_error || 'WebSocket 连接错误' });
+            console.error('WebSocket connection error details:', {
+                url: wsUrl.split('&token=')[0] + '...',
+                readyState: wsSubscriber.readyState,
+                error: error
+            });
+            updateWsStatus('warning', t('status_error') || '连接错误');
+            addEventLog({ type: 'system', message: (t('ws_error') || 'WebSocket 连接错误') + ': ' + (error.message || 'Check console') });
         };
         
         wsSubscriber.onclose = () => {
             clearTimeout(connectTimeout);
-            const t = translations[currentLang] || translations['zh-CN'];
-            updateWsStatus('danger', t.status_disconnected || '已断开');
-            addEventLog({ type: 'system', message: t.ws_disconnected_retry || 'WebSocket 连接断开，正在尝试重连...' });
+            updateWsStatus('danger', t('status_disconnected') || '已断开');
+            addEventLog({ type: 'system', message: t('ws_disconnected_retry') || 'WebSocket 连接断开，正在尝试重连...' });
             
             wsSubscriber = null;
             wsReconnectAttempts++;

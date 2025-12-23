@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -35,7 +36,7 @@ func (p *SignInPlugin) Name() string {
 }
 
 func (p *SignInPlugin) Description() string {
-	return "签到系统插件，支持每日签到和连续签到"
+	return common.T("", "signin_plugin_desc")
 }
 
 func (p *SignInPlugin) Version() string {
@@ -43,7 +44,7 @@ func (p *SignInPlugin) Version() string {
 }
 
 func (p *SignInPlugin) Init(robot plugin.Robot) {
-	log.Println("加载签到系统插件")
+	log.Println(common.T("", "signin_plugin_loaded"))
 
 	// 处理签到命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -60,14 +61,14 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为签到命令
-		if match, _ := p.cmdParser.MatchCommand("sign|签到", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "signin_cmd_sign"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，签到失败")
+			p.sendMessage(robot, event, common.T("", "signin_no_userid"))
 			return nil
 		}
 
@@ -128,12 +129,12 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 			}
 		}
 
-		if match, _ := p.cmdParser.MatchCommand("signstats|签到统计", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "signin_cmd_stats"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 发送签到统计信息
-		statsMsg := fmt.Sprintf("签到系统统计信息：\n总签到人数：%d\n今日签到人数：%d",
+		statsMsg := fmt.Sprintf(common.T("", "signin_stats_msg"),
 			len(p.signInRecords), p.getTodaySignInCount())
 		p.sendMessage(robot, event, statsMsg)
 
@@ -143,19 +144,30 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 
 // processSignIn 处理签到逻辑
 func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, userID string) {
-	// 检查是否已经签到
 	now := time.Now()
+	continuousDay := 1
 	if lastSignIn, ok := p.signInRecords[userID]; ok {
-		// 检查是否在同一天
 		if isSameDay(lastSignIn, now) {
-			return // 已经签到过了
+			continuousDay := p.continuousDays[userID]
+			totalDays := continuousDay
+			superPoints := 0
+			if p.pointsPlugin != nil {
+				superPoints = p.pointsPlugin.GetPoints(userID)
+			}
+			todaySignCount := p.getTodaySignInCount()
+			msg := fmt.Sprintf(common.T("", "signin_already_signed"),
+				superPoints,
+				0, 0,
+				continuousDay, totalDays,
+				0, 0,
+				todaySignCount, 0,
+			)
+			p.sendMessage(robot, event, msg)
+			return
 		}
 	}
 
-	// 计算连续签到天数
-	continuousDay := 1
 	if lastSignIn, ok := p.signInRecords[userID]; ok {
-		// 检查是否连续
 		if isYesterday(lastSignIn, now) {
 			continuousDay = p.continuousDays[userID] + 1
 		} else {
@@ -167,29 +179,42 @@ func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, us
 	p.signInRecords[userID] = now
 	p.continuousDays[userID] = continuousDay
 
-	// 奖励积分（基础10积分，连续签到额外奖励）
 	basePoints := 10
 	extraPoints := 0
 	if continuousDay > 1 {
-		extraPoints = continuousDay - 1 // 连续签到每天额外奖励1积分
+		extraPoints = continuousDay - 1
 	}
 	totalPoints := basePoints + extraPoints
 
-	// 添加积分
 	if p.pointsPlugin != nil {
-		p.pointsPlugin.AddPoints(userID, totalPoints, fmt.Sprintf("签到奖励（连续%d天）", continuousDay), "sign_in")
+		p.pointsPlugin.AddPoints(userID, totalPoints, fmt.Sprintf(common.T("", "signin_reward_desc"), continuousDay), "sign_in")
 	}
 
-	// 发送签到成功消息
-	msg := fmt.Sprintf("签到成功！\n今日签到时间：%s\n连续签到天数：%d天\n获得积分：%d（基础%d + 连续%d）",
-		now.Format("15:04:05"), continuousDay, totalPoints, basePoints, extraPoints)
+	currentPoints := 0
+	if p.pointsPlugin != nil {
+		currentPoints = p.pointsPlugin.GetPoints(userID)
+	}
+	todaySignCount := p.getTodaySignInCount()
+	totalDays := 0
+	for _, t := range p.signInRecords {
+		if !t.IsZero() {
+			totalDays++
+		}
+	}
+	msg := fmt.Sprintf(common.T("", "signin_success_msg"),
+		totalPoints, currentPoints,
+		0, 0,
+		continuousDay, totalDays,
+		0, 0,
+		todaySignCount, 0,
+	)
 	p.sendMessage(robot, event, msg)
 }
 
 // sendMessage 发送消息
 func (p *SignInPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "signin_send_failed_log"), err)
 	}
 }
 

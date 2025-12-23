@@ -30,6 +30,14 @@ type BotClient struct {
 	LastHeartbeat time.Time       `json:"last_heartbeat"` // Track last heartbeat for timeout detection
 }
 
+// WorkerCapability 定义 Worker 具备的能力（如：签到、天气）
+type WorkerCapability struct {
+	Name        string            `json:"name"`        // 能力名称 (例如: "checkin")
+	Description string            `json:"description"` // 描述 (例如: "每日签到获取积分")
+	Usage       string            `json:"usage"`       // 使用示例
+	Params      map[string]string `json:"params"`      // 参数说明
+}
+
 // WorkerClient represents a business logic worker
 type WorkerClient struct {
 	ID            string // Worker标识
@@ -38,6 +46,7 @@ type WorkerClient struct {
 	Connected     time.Time
 	HandledCount  int64
 	LastHeartbeat time.Time
+	Capabilities  []WorkerCapability `json:"capabilities"` // Worker 报备的能力列表
 
 	// RTT Tracking
 	AvgRTT     time.Duration `json:"avg_rtt"`
@@ -305,10 +314,10 @@ type Manager struct {
 	Users      map[string]*User // 用户名 -> 用户信息
 	UsersMutex sync.RWMutex     // 用户存储的并发保护
 	DB         *sql.DB          // SQLite 数据库连接
-	
+
 	// GORM Support
-	GORMDB     *gorm.DB         // GORM数据库连接
-	GORMManager *GORMManager     // GORM管理器
+	GORMDB      *gorm.DB     // GORM数据库连接
+	GORMManager *GORMManager // GORM管理器
 
 	// Message Cache (For when no workers are available)
 	MessageCache []map[string]interface{}
@@ -316,4 +325,7 @@ type Manager struct {
 	GroupCache   map[string]map[string]interface{}
 	MemberCache  map[string]map[string]interface{}
 	FriendCache  map[string]map[string]interface{}
+
+	// Local Idempotency Cache (reduce Redis pressure)
+	LocalIdempotency sync.Map // msgID -> time.Time
 }

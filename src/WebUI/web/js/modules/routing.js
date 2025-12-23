@@ -1,5 +1,5 @@
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 
 export let routingRules = [];
 
@@ -38,13 +38,12 @@ export async function fetchRoutingRules() {
         
     } catch (error) {
         console.error('Failed to fetch routing rules:', error);
-        const t = translations[currentLang] || translations['zh-CN'];
         container.innerHTML = `
             <div class="col-12 text-center text-danger">
                 <i class="bi bi-exclamation-triangle fs-4"></i>
-                <p class="mt-2">${t.loading_failed || '加载失败'}: ${error.message}</p>
+                <p class="mt-2">${t('loading_failed') || '加载失败'}: ${error.message}</p>
                 <button class="btn btn-sm btn-outline-primary" onclick="fetchRoutingRules()">
-                    <i class="bi bi-arrow-clockwise"></i> ${t.retry || '重试'}
+                    <i class="bi bi-arrow-clockwise"></i> ${t('retry') || '重试'}
                 </button>
             </div>
         `;
@@ -65,8 +64,6 @@ export function toggleRoutingHelp() {
 export function renderRoutingRules() {
     const container = document.getElementById('routing-list-container');
     if (!container) return;
-    
-    const t = translations[currentLang] || translations['zh-CN'];
     
     if (!routingRules || routingRules.length === 0) {
         container.innerHTML = `
@@ -210,8 +207,7 @@ export async function saveRoutingRule() {
 }
 
 export async function deleteRoutingRule(ruleId) {
-    const t = translations[currentLang] || translations['zh-CN'];
-    if (!confirm(t.confirm_delete || '确定要删除这条路由规则吗？')) {
+    if (!confirm(t('confirm_delete') || '确定要删除这条路由规则吗？')) {
         return;
     }
     

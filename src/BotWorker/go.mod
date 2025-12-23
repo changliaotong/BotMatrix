@@ -3,10 +3,13 @@ module botworker
 go 1.25.0
 
 require (
+	BotMatrix/common v0.0.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gorilla/websocket v1.5.0
 	github.com/lib/pq v1.10.9
 )
+
+replace BotMatrix/common => ../Common
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect

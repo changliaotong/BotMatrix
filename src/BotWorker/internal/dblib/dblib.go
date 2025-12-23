@@ -148,6 +148,8 @@ type DB interface {
 	Insert(ctx context.Context, table string, values map[string]interface{}) (int64, error)
 	Update(ctx context.Context, table, pkColumn string, pkValue interface{}, values map[string]interface{}) (int64, error)
 	UpdateByKeys(ctx context.Context, table string, keys map[string]interface{}, values map[string]interface{}) (int64, error)
+	SetValue(ctx context.Context, table string, keys map[string]interface{}, column string, value interface{}) (int64, error)
+	UpdatePlus(ctx context.Context, table string, keys map[string]interface{}, column string, delta interface{}) (int64, error)
 	Delete(ctx context.Context, table, pkColumn string, pkValue interface{}) (int64, error)
 	DeleteByKeys(ctx context.Context, table string, keys map[string]interface{}) (int64, error)
 	Exec(ctx context.Context, query string, args ...interface{}) (int64, error)
@@ -418,6 +420,43 @@ func (c *Client) UpdateByKeys(ctx context.Context, table string, keys map[string
 	return c.Exec(ctx, query, args...)
 }
 
+func (c *Client) SetValue(ctx context.Context, table string, keys map[string]interface{}, column string, value interface{}) (int64, error) {
+	if column == "" {
+		return 0, fmt.Errorf("column 不能为空")
+	}
+	values := map[string]interface{}{column: value}
+	return c.UpdateByKeys(ctx, table, keys, values)
+}
+
+func (c *Client) UpdatePlus(ctx context.Context, table string, keys map[string]interface{}, column string, delta interface{}) (int64, error) {
+	if column == "" {
+		return 0, fmt.Errorf("column 不能为空")
+	}
+	if len(keys) == 0 {
+		return 0, fmt.Errorf("keys 不能为空")
+	}
+
+	args := make([]interface{}, 0, len(keys)+1)
+	args = append(args, delta)
+
+	whereClause, whereArgs, err := buildWhereByKeys(c.dialect, keys, 2)
+	if err != nil {
+		return 0, err
+	}
+	args = append(args, whereArgs...)
+
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s = %s + %s WHERE %s",
+		c.dialect.QuoteIdent(table),
+		c.dialect.QuoteIdent(column),
+		c.dialect.QuoteIdent(column),
+		c.dialect.Placeholder(1),
+		whereClause,
+	)
+
+	return c.Exec(ctx, query, args...)
+}
+
 func (c *Client) Delete(ctx context.Context, table, pkColumn string, pkValue interface{}) (int64, error) {
 	query := buildDeleteQuery(c.dialect, table, pkColumn)
 	return c.Exec(ctx, query, pkValue)
@@ -545,6 +584,43 @@ func (t *Tx) UpdateByKeys(ctx context.Context, table string, keys map[string]int
 		"UPDATE %s SET %s WHERE %s",
 		t.dialect.QuoteIdent(table),
 		strings.Join(sets, ", "),
+		whereClause,
+	)
+
+	return t.Exec(ctx, query, args...)
+}
+
+func (t *Tx) SetValue(ctx context.Context, table string, keys map[string]interface{}, column string, value interface{}) (int64, error) {
+	if column == "" {
+		return 0, fmt.Errorf("column 不能为空")
+	}
+	values := map[string]interface{}{column: value}
+	return t.UpdateByKeys(ctx, table, keys, values)
+}
+
+func (t *Tx) UpdatePlus(ctx context.Context, table string, keys map[string]interface{}, column string, delta interface{}) (int64, error) {
+	if column == "" {
+		return 0, fmt.Errorf("column 不能为空")
+	}
+	if len(keys) == 0 {
+		return 0, fmt.Errorf("keys 不能为空")
+	}
+
+	args := make([]interface{}, 0, len(keys)+1)
+	args = append(args, delta)
+
+	whereClause, whereArgs, err := buildWhereByKeys(t.dialect, keys, 2)
+	if err != nil {
+		return 0, err
+	}
+	args = append(args, whereArgs...)
+
+	query := fmt.Sprintf(
+		"UPDATE %s SET %s = %s + %s WHERE %s",
+		t.dialect.QuoteIdent(table),
+		t.dialect.QuoteIdent(column),
+		t.dialect.QuoteIdent(column),
+		t.dialect.Placeholder(1),
 		whereClause,
 	)
 

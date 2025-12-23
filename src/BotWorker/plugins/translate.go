@@ -1,15 +1,16 @@
 package plugins
 
 import (
+	"BotMatrix/common"
+	"botworker/internal/config"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
-	"botworker/internal/config"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
-	"encoding/json"
 )
 
 // TranslatePlugin 翻译插件
@@ -23,7 +24,7 @@ func (p *TranslatePlugin) Name() string {
 }
 
 func (p *TranslatePlugin) Description() string {
-	return "翻译插件，支持中英文互译"
+	return common.T("", "translate_plugin_desc")
 }
 
 func (p *TranslatePlugin) Version() string {
@@ -39,7 +40,7 @@ func NewTranslatePlugin(cfg *config.TranslateConfig) *TranslatePlugin {
 }
 
 func (p *TranslatePlugin) Init(robot plugin.Robot) {
-	log.Println("加载翻译插件")
+	log.Println(common.T("", "translate_loaded"))
 
 	// 处理翻译命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -58,18 +59,18 @@ func (p *TranslatePlugin) Init(robot plugin.Robot) {
 		// 检查是否为翻译命令
 		var content string
 		// 首先检查是否为带参数的翻译命令
-		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams("翻译|translate", "(.+)", event.RawMessage)
+		matchWithParams, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "translate_cmd_translate"), "(.+)", event.RawMessage)
 		if matchWithParams && len(params) == 1 {
 			// 解析翻译内容
 			content = strings.TrimSpace(params[0])
 		} else {
 			// 检查是否为不带参数的翻译命令（显示帮助信息）
-			matchHelp, _ := p.cmdParser.MatchCommand("翻译|translate", event.RawMessage)
+			matchHelp, _ := p.cmdParser.MatchCommand(common.T("", "translate_cmd_translate"), event.RawMessage)
 			if !matchHelp {
 				return nil
 			}
 			// 发送帮助信息
-			helpMsg := "翻译命令格式：\n/翻译 <文本> - 翻译指定文本\n/translate <文本> - 翻译指定文本\n例如：/translate Hello world"
+			helpMsg := common.T("", "translate_help_msg")
 			p.sendMessage(robot, event, helpMsg)
 			return nil
 		}
@@ -77,14 +78,14 @@ func (p *TranslatePlugin) Init(robot plugin.Robot) {
 		// 进行翻译
 		translation, err := p.translate(content)
 		if err != nil {
-			log.Printf("翻译失败: %v\n", err)
-			errorMsg := fmt.Sprintf("翻译失败：%v", err)
+			log.Printf(common.T("", "translate_api_error_log"), err)
+			errorMsg := fmt.Sprintf(common.T("", "translate_api_error_msg"), err)
 			p.sendMessage(robot, event, errorMsg)
 			return err
 		}
 
 		// 发送翻译结果
-		translateMsg := fmt.Sprintf("翻译结果：\n原文：%s\n译文：%s", content, translation)
+		translateMsg := fmt.Sprintf(common.T("", "translate_result"), content, translation)
 		p.sendMessage(robot, event, translateMsg)
 
 		return nil
@@ -94,7 +95,7 @@ func (p *TranslatePlugin) Init(robot plugin.Robot) {
 // sendMessage 发送消息
 func (p *TranslatePlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "translate_send_failed"), err)
 	}
 }
 
@@ -111,7 +112,7 @@ type TranslateResponse struct {
 func (p *TranslatePlugin) translate(text string) (string, error) {
 	// 检查API密钥是否配置
 	if p.cfg.APIKey == "" {
-		return "", fmt.Errorf("翻译API密钥未配置")
+		return "", fmt.Errorf(common.T("", "translate_api_key_not_set"))
 	}
 
 	// 检查文本语言
@@ -139,13 +140,13 @@ func (p *TranslatePlugin) translate(text string) (string, error) {
 	}
 	requestBodyBytes, err := json.Marshal(requestBody)
 	if err != nil {
-		return "", fmt.Errorf("构建请求体失败: %w", err)
+		return "", fmt.Errorf(common.T("", "translate_build_body_failed"), err)
 	}
 
 	// 创建请求
 	req, err := http.NewRequest("POST", baseURL+"?"+params.Encode(), strings.NewReader(string(requestBodyBytes)))
 	if err != nil {
-		return "", fmt.Errorf("创建请求失败: %w", err)
+		return "", fmt.Errorf(common.T("", "translate_create_request_failed"), err)
 	}
 
 	// 设置请求头
@@ -156,13 +157,13 @@ func (p *TranslatePlugin) translate(text string) (string, error) {
 	// 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("请求翻译API失败: %w", err)
+		return "", fmt.Errorf(common.T("", "translate_api_request_failed"), err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态码
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("翻译API返回错误状态码: %d", resp.StatusCode)
+		return "", fmt.Errorf(common.T("", "translate_api_error_status"), resp.StatusCode)
 	}
 
 	// 解析响应
@@ -172,7 +173,7 @@ func (p *TranslatePlugin) translate(text string) (string, error) {
 		} `json:"translations"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("解析翻译API响应失败: %w", err)
+		return "", fmt.Errorf(common.T("", "translate_parse_response_failed"), err)
 	}
 
 	// 提取翻译结果
@@ -180,7 +181,7 @@ func (p *TranslatePlugin) translate(text string) (string, error) {
 		return result[0].Translations[0].Text, nil
 	}
 
-	return "", fmt.Errorf("无法获取翻译结果")
+	return "", fmt.Errorf(common.T("", "translate_no_result"))
 }
 
 // IsChinese 检查文本是否为中文

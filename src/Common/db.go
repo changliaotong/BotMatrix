@@ -6,10 +6,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
-	_ "modernc.org/sqlite"
+	_ "github.com/glebarez/sqlite"
 )
 
 const DB_FILE = "data/botnexus.db"
@@ -82,6 +83,7 @@ func (m *Manager) InitDB() error {
 		username TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
 		is_admin BOOLEAN DEFAULT FALSE,
+		active BOOLEAN DEFAULT TRUE,
 		session_version INTEGER DEFAULT 1,
 		created_at TIMESTAMP,
 		updated_at TIMESTAMP
@@ -91,6 +93,16 @@ func (m *Manager) InitDB() error {
 	if err != nil {
 		log.Printf("创建用户表失败: %v", err)
 		return err
+	}
+
+	// 兼容已有数据库：确保 active 字段存在
+	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE users ADD COLUMN active BOOLEAN DEFAULT TRUE`))
+	if err != nil {
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "duplicate column name") && !strings.Contains(errMsg, "already exists") {
+			log.Printf("为 users 表添加 active 字段失败: %v", err)
+			return err
+		}
 	}
 
 	// 创建路由规则表

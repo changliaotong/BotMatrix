@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### [v1.3.2] - 2025-12-22
+- **BotWorker Stateless Sessions**: Added Redis/DB-backed confirmation and dialog state so multiple workers can safely handle the same group without losing context.
+- **Dangerous Action Protection**: Introduced 3-digit numeric confirmation codes for operations like clearing blacklists/whitelists, reducing mis-operations by admins.
+- **Voice Reply & Burn-After-Reading**: Exposed per-group switches for AI voice replies and auto-recall (阅后即焚) via the Admin plugin.
+- **Documentation Refresh**: Updated BotWorker docs and development notes to reflect the new confirmation, dialog, and session designs.
+
 ### [v1.3.1] - 2025-12-22
 - **New BotWorker Features**: Added Pet System and advanced Command Parser plugins.
 - **Enhanced Testing**: Introduced comprehensive test plans and CLI tools for developers.

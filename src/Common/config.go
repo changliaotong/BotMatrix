@@ -45,6 +45,32 @@ var (
 
 const CONFIG_FILE = "config.json"
 
+// Redis Key 设计
+const (
+	// 消息队列 (支持多 Worker 横向扩展)
+	REDIS_KEY_QUEUE_DEFAULT = "botmatrix:queue:default"
+	REDIS_KEY_QUEUE_WORKER  = "botmatrix:queue:worker:%s"
+
+	// 限流 (防刷、防滥用)
+	REDIS_KEY_RATELIMIT_USER  = "botmatrix:ratelimit:user:%s"
+	REDIS_KEY_RATELIMIT_GROUP = "botmatrix:ratelimit:group:%s"
+
+	// 幂等与去重 (防重复回复)
+	REDIS_KEY_IDEMPOTENCY = "botmatrix:msg:idempotency:%s"
+
+	// 会话上下文与状态缓存 (支持 TTL)
+	REDIS_KEY_SESSION_CONTEXT = "botmatrix:session:%s:%s" // platform:user_id
+
+	// 动态路由规则
+	REDIS_KEY_DYNAMIC_RULES = "botmatrix:rules:routing"
+
+	// 动态限流配置
+	REDIS_KEY_CONFIG_RATELIMIT = "botmatrix:config:ratelimit"
+
+	// 动态 TTL 配置
+	REDIS_KEY_CONFIG_TTL = "botmatrix:config:ttl"
+)
+
 func init() {
 	// 1. 设置默认值
 	WS_PORT = GlobalConfig.WSPort

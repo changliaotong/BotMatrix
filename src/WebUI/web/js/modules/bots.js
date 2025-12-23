@@ -1,5 +1,5 @@
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { showToast } from './ui.js';
 import { timeAgo } from './utils.js';
 import { authToken } from './auth.js';
@@ -13,7 +13,6 @@ export let botViewMode = localStorage.getItem('bot_view_mode') || 'detail';
 
 export async function fetchBots(showLoading = false) {
     if (!window.authToken && !localStorage.getItem('wxbot_token')) return;
-    const t = translations[currentLang] || translations['zh-CN'];
     
     if (showLoading) {
         const container = document.getElementById('bot-list-container');
@@ -23,7 +22,7 @@ export async function fetchBots(showLoading = false) {
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <div class="mt-2 text-muted">${t.loading || '加载中...'}</div>
+                    <div class="mt-2 text-muted">${t('loading')}</div>
                 </div>
             `;
         }
@@ -86,8 +85,6 @@ export function sortBots(field) {
         if (field === 'count' || field === 'time' || field === 'msg') botSortAsc = false;
     }
 
-    const t = translations[currentLang] || translations['zh-CN'];
-
     // Update UI buttons
     ['name', 'id', 'platform', 'count', 'time', 'msg'].forEach(f => {
         const btn = document.getElementById(`btn-sort-bot-${f}`);
@@ -97,24 +94,24 @@ export function sortBots(field) {
             btn.classList.add('active');
             let label = '';
             switch(f) {
-                case 'name': label = t.sort_name; break;
-                case 'id': label = t.sort_id; break;
-                case 'platform': label = t.sort_platform; break;
-                case 'count': label = t.sort_group_count; break;
-                case 'time': label = t.sort_time; break;
-                case 'msg': label = t.sort_msg_count; break;
+                case 'name': label = t('sort_name'); break;
+                case 'id': label = t('sort_id'); break;
+                case 'platform': label = t('sort_platform'); break;
+                case 'count': label = t('sort_group_count'); break;
+                case 'time': label = t('sort_time'); break;
+                case 'msg': label = t('sort_msg_count'); break;
             }
             btn.innerHTML = label + (botSortAsc ? ' ↑' : ' ↓');
         } else {
             btn.classList.remove('active');
             let label = '';
             switch(f) {
-                case 'name': label = t.sort_name; break;
-                case 'id': label = t.sort_id; break;
-                case 'platform': label = t.sort_platform; break;
-                case 'count': label = t.sort_group_count; break;
-                case 'time': label = t.sort_time; break;
-                case 'msg': label = t.sort_msg_count; break;
+                case 'name': label = t('sort_name'); break;
+                case 'id': label = t('sort_id'); break;
+                case 'platform': label = t('sort_platform'); break;
+                case 'count': label = t('sort_group_count'); break;
+                case 'time': label = t('sort_time'); break;
+                case 'msg': label = t('sort_msg_count'); break;
             }
             btn.innerHTML = label;
         }
@@ -196,9 +193,8 @@ export function renderBots() {
         return (a.self_id || a.id || '').localeCompare(b.self_id || b.id || '');
     });
 
-    const t = translations[currentLang] || translations['zh-CN'];
     if (bots.length === 0) {
-        container.innerHTML = `<div class="col-12 text-center text-muted">${t.no_bot_data}</div>`;
+        container.innerHTML = `<div class="col-12 text-center text-muted">${t('no_bot_data')}</div>`;
         return;
     }
 
@@ -209,8 +205,8 @@ export function renderBots() {
         const isAlive = bot.is_alive !== undefined ? bot.is_alive : bot.online;
         const isOffline = !isAlive;
         const cardStyle = isOffline ? 'filter: grayscale(100%); opacity: 0.8;' : '';
-        const statusBadge = isOffline ? `<span class="badge bg-secondary ms-2">${t.bot_status_offline}</span>` : `<span class="badge bg-success ms-2">${t.bot_status_online}</span>`;
-        const timeLabel = isOffline ? t.card_status_offline_since : t.card_status_connected_at;
+        const statusBadge = isOffline ? `<span class="badge bg-secondary ms-2">${t('bot_status_offline')}</span>` : `<span class="badge bg-success ms-2">${t('bot_status_online')}</span>`;
+        const timeLabel = isOffline ? t('card_status_offline_since') : t('card_status_connected_at');
         const platform = bot.platform || 'QQ';
         let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
         let avatarBg = 'var(--bg-list-item)';
@@ -257,11 +253,11 @@ export function renderBots() {
                     </div>
                     <div class="rounded p-1 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                          <div class="d-flex justify-content-between">
-                            <span class="text-muted">${t.card_label_groups}: ${bot.group_count || 0}</span>
-                            <span class="text-muted">${t.card_label_friends}: ${bot.friend_count || 0}</span>
+                            <span class="text-muted">${t('card_label_groups')}: ${bot.group_count || 0}</span>
+                            <span class="text-muted">${t('card_label_friends')}: ${bot.friend_count || 0}</span>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <span class="text-muted">${t.card_label_msgs}:</span>
+                            <span class="text-muted">${t('card_label_msgs')}:</span>
                             <span class="text-primary fw-bold">${bot.msg_count || 0} <small class="text-muted">(${bot.msg_count_today || 0})</small></span>
                         </div>
                     </div>
@@ -290,19 +286,19 @@ export function renderBots() {
                     </div>
                     <div class="rounded p-2 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_groups}:</span>
+                            <span class="text-muted">${t('card_label_groups')}:</span>
                             <span class="fw-bold text-primary">${bot.group_count || 0}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_friends}:</span>
+                            <span class="text-muted">${t('card_label_friends')}:</span>
                             <span class="fw-bold text-success">${bot.friend_count || 0}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_msgs}:</span>
-                            <span><span class="fw-bold text-primary">${bot.msg_count || 0}</span> <span class="text-muted" style="font-size: 0.7em;">(${t.sort_today}:${bot.msg_count_today || 0})</span></span>
+                            <span class="text-muted">${t('card_label_msgs')}:</span>
+                            <span><span class="fw-bold text-primary">${bot.msg_count || 0}</span> <span class="text-muted" style="font-size: 0.7em;">(${t('sort_today')}:${bot.msg_count_today || 0})</span></span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_ip}:</span>
+                            <span class="text-muted">${t('card_label_ip')}:</span>
                             <span class="text-truncate" style="max-width: 80px;" title="${bot.remote_addr}">${bot.remote_addr ? bot.remote_addr.split(':')[0] : 'N/A'}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
@@ -310,7 +306,7 @@ export function renderBots() {
                             <span title="${connDate.toLocaleString()}">${timeStr}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_protocol}:</span>
+                            <span class="text-muted">${t('card_label_protocol')}:</span>
                             <span class="fw-bold text-info">${platform}</span>
                         </div>
                     </div>
@@ -323,7 +319,6 @@ export function updateGlobalBotSelectors(bots = null) {
     if (!bots) bots = currentBots;
     if (!bots || !Array.isArray(bots)) return;
     
-    const t = translations[currentLang] || translations['zh-CN'];
     const selectorConfigs = [
         { inputId: 'global-bot-selector', listId: 'global-bot-list', contentId: 'global-bot-selected-content' },
         { inputId: 'global-bot-selector-groups', listId: 'global-bot-list-groups', contentId: 'global-bot-selected-content-groups' },
@@ -340,13 +335,13 @@ export function updateGlobalBotSelectors(bots = null) {
         const currentVal = selectorInput.value;
         
         if (bots.length === 0) {
-            dropdownList.innerHTML = `<li><span class="dropdown-item disabled">${t.no_bot_data_simple || '无机器人数据'}</span></li>`;
-            contentEl.innerHTML = t.no_bot_data_simple || '无机器人数据';
+            dropdownList.innerHTML = `<li><span class="dropdown-item disabled">${t('no_bot_data_simple') || '无机器人数据'}</span></li>`;
+            contentEl.innerHTML = t('no_bot_data_simple') || '无机器人数据';
         } else {
             dropdownList.innerHTML = bots.map(bot => {
                 const isOffline = !bot.is_alive;
                 const statusClass = isOffline ? 'text-muted' : 'text-success fw-bold';
-                const badge = isOffline ? `<span class="badge bg-secondary ms-auto">${t.bot_status_offline || '离线'}</span>` : `<span class="badge bg-success ms-auto">${t.bot_status_online || '在线'}</span>`;
+                const badge = isOffline ? `<span class="badge bg-secondary ms-auto">${t('bot_status_offline') || '离线'}</span>` : `<span class="badge bg-success ms-auto">${t('bot_status_online') || '在线'}</span>`;
                 const platform = bot.platform || 'QQ';
                 let avatarUrl = `https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg`;
                 
@@ -413,8 +408,7 @@ export function selectBotFromDropdown(botId, selectorInputId = 'global-bot-selec
             }
         });
         
-        const t = translations[currentLang] || translations['zh-CN'];
-        const loadingText = `<div class="text-center p-4 text-muted">${t.switching_bot || '切换机器人中...'}</div>`;
+        const loadingText = `<div class="text-center p-4 text-muted">${t('switching_bot') || '切换机器人中...'}</div>`;
 
         // Clear views that depend on global bot
         const groupList = document.getElementById('group-list');
@@ -510,15 +504,14 @@ export function refreshCurrentTabList() {
  * @param {string} action 操作类型 ('start' | 'stop')
  */
 export async function toggleBot(id, action) {
-    const t = translations[currentLang] || translations['zh-CN'];
     try {
         const response = await fetchWithAuth(`/api/bot/${action}?id=${id}`, { method: 'POST' });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        showToast(t.alert_op_success || '操作成功', 'success');
+        showToast(t('alert_op_success') || '操作成功', 'success');
         fetchBots(true);
     } catch (e) {
         console.error(`Failed to ${action} bot:`, e);
-        showToast((t.alert_op_failed || '操作失败: ') + e.message, 'danger');
+        showToast((t('alert_op_failed') || '操作失败: ') + e.message, 'danger');
     }
 }
 
@@ -533,17 +526,16 @@ export async function toggleBotState(id, action) {
  * 删除机器人
  */
 export async function deleteBot(id) {
-    const t = translations[currentLang] || translations['zh-CN'];
-    if (!confirm(t.confirm_delete_bot || '确定要删除该机器人吗？')) return;
+    if (!confirm(t('confirm_delete_bot') || '确定要删除该机器人吗？')) return;
     
     try {
         const response = await fetchWithAuth(`/api/bot/delete?id=${id}`, { method: 'POST' });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        showToast(t.alert_op_success || '操作成功', 'success');
+        showToast(t('alert_op_success') || '操作成功', 'success');
         fetchBots(true);
     } catch (e) {
         console.error(`Failed to delete bot:`, e);
-        showToast((t.alert_op_failed || '操作失败: ') + e.message, 'danger');
+        showToast((t('alert_op_failed') || '操作失败: ') + e.message, 'danger');
     }
 }
 

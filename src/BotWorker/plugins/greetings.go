@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -17,7 +18,7 @@ func (p *GreetingsPlugin) Name() string {
 }
 
 func (p *GreetingsPlugin) Description() string {
-	return "问候插件，支持早安、晚安、欢迎语等功能"
+	return common.T("", "greetings_plugin_desc")
 }
 
 func (p *GreetingsPlugin) Version() string {
@@ -32,7 +33,7 @@ func NewGreetingsPlugin() *GreetingsPlugin {
 }
 
 func (p *GreetingsPlugin) Init(robot plugin.Robot) {
-	log.Println("加载问候插件")
+	log.Println(common.T("", "greetings_plugin_loaded"))
 
 	// 处理早安命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -49,12 +50,12 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为早安命令
-		if match, _ := p.cmdParser.MatchCommand("早安|goodmorning", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "greetings_cmd_morning"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 发送早安问候
-		morningMsg := "☀️ 早安！美好的一天开始了！"
+		morningMsg := common.T("", "greetings_morning_msg")
 		p.sendMessage(robot, event, morningMsg)
 
 		return nil
@@ -75,12 +76,12 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为晚安命令
-		if match, _ := p.cmdParser.MatchCommand("晚安|goodnight", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "greetings_cmd_night"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 发送晚安问候
-		nightMsg := "🌙 晚安！祝你做个好梦！"
+		nightMsg := common.T("", "greetings_night_msg")
 		p.sendMessage(robot, event, nightMsg)
 
 		return nil
@@ -101,13 +102,13 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为欢迎语命令
-		match, _, welcomeUser := p.cmdParser.MatchCommandWithSingleParam("欢迎|welcome", event.RawMessage)
+		match, _, welcomeUser := p.cmdParser.MatchCommandWithSingleParam(common.T("", "greetings_cmd_welcome"), event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		// 发送欢迎语
-		welcomeMsg := fmt.Sprintf("🎉 欢迎%s加入本群！", welcomeUser)
+		welcomeMsg := fmt.Sprintf(common.T("", "greetings_welcome_msg"), welcomeUser)
 		p.sendMessage(robot, event, welcomeMsg)
 
 		return nil
@@ -117,6 +118,6 @@ func (p *GreetingsPlugin) Init(robot plugin.Robot) {
 // sendMessage 发送消息
 func (p *GreetingsPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "greetings_send_failed"), err)
 	}
 }

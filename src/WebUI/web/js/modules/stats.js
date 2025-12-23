@@ -3,7 +3,7 @@
  */
 
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { currentGroups, renderGroups } from './groups.js';
 import { renderMembers, currentMembers } from './members.js';
 import { formatBytes } from './utils.js';
@@ -63,7 +63,7 @@ export function loadStatsFromCache() {
                  if (card) card.title = stats.cpu_model;
             }
             if (document.getElementById('metric-cpu-cores') && stats.cpu_cores_physical) {
-                 document.getElementById('metric-cpu-cores').innerText = (stats.cpu_cores_physical || 0) + 'P/' + (stats.cpu_cores_logical || 0) + 'L 核';
+                 document.getElementById('metric-cpu-cores').innerText = (stats.cpu_cores_physical || 0) + 'P/' + (stats.cpu_cores_logical || 0) + 'L ' + t('cores_label');
             }
             if (document.getElementById('metric-cpu-freq') && stats.cpu_freq) {
                  document.getElementById('metric-cpu-freq').innerText = (stats.cpu_freq || 0).toFixed(0) + ' MHz';
@@ -104,11 +104,10 @@ export function initCharts() {
     };
 
     safeInit('memChart', (el) => {
-        const t = translations[currentLang] || translations['zh-CN'];
         memChart = new Chart(el.getContext('2d'), {
             type: 'line',
             data: { labels: [], datasets: [{
-                label: t.mem_alloc || 'Memory Alloc (MB)',
+                label: t('memory_used'),
                 data: [],
                 borderColor: '#0d6efd',
                 tension: 0.4,
@@ -129,11 +128,10 @@ export function initCharts() {
     });
 
     safeInit('cpuChart', (el) => {
-        const t = translations[currentLang] || translations['zh-CN'];
         cpuChart = new Chart(el.getContext('2d'), {
             type: 'line',
             data: { labels: [], datasets: [{
-                label: t.cpu_usage || 'CPU Usage (%)',
+                label: t('stat_cpu'),
                 data: [],
                 borderColor: '#ffc107',
                 tension: 0.4,
@@ -154,13 +152,12 @@ export function initCharts() {
     });
 
     safeInit('msgChart', (el) => {
-        const t = translations[currentLang] || translations['zh-CN'];
         msgChart = new Chart(el.getContext('2d'), {
             type: 'line',
             data: { labels: [], datasets: [
-                { label: t.received || '接收', data: [], borderColor: '#198754', tension: 0.4, fill: false, borderWidth: 2 },
-                { label: t.sent || '发送', data: [], borderColor: '#0d6efd', tension: 0.4, fill: false, borderWidth: 2 },
-                { label: t.total || '总量', data: [], borderColor: '#6c757d', tension: 0.4, fill: false, borderDash: [5, 5], borderWidth: 1 }
+                { label: t('label_recv'), data: [], borderColor: '#198754', tension: 0.4, fill: false, borderWidth: 2 },
+                { label: t('label_sent'), data: [], borderColor: '#0d6efd', tension: 0.4, fill: false, borderWidth: 2 },
+                { label: t('total_messages'), data: [], borderColor: '#6c757d', tension: 0.4, fill: false, borderDash: [5, 5], borderWidth: 1 }
             ]},
             options: {
                 responsive: true,
@@ -228,8 +225,7 @@ export async function updateStats() {
 
         const osVerEl = document.getElementById('metric-os-ver');
         if (osVerEl) {
-            const t = translations[currentLang] || translations['zh-CN'] || {};
-            osVerEl.innerText = (t.version_label || '版本: ') + (data.os_version || 'Unknown');
+            osVerEl.innerText = t('version_label') + (data.os_version || 'Unknown');
         }
 
         if (data.os_arch || (data.host_info && data.host_info.kernelArch)) {
@@ -473,7 +469,7 @@ export function renderTopList(elementId, stats, names, type) {
     if (!list) return;
     
     if (!stats || Object.keys(stats).length === 0) {
-        list.innerHTML = '<li class="list-group-item text-muted text-center">暂无数据</li>';
+        list.innerHTML = `<li class="flex items-center justify-center py-4 text-gray-500 text-xs italic">${t('no_data')}</li>`;
         return;
     }
 
@@ -485,22 +481,24 @@ export function renderTopList(elementId, stats, names, type) {
         const name = getDisplayName(id, names, type);
         let avatar = '';
         if (type === 'User') {
-             avatar = `<img src="https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100" class="rounded-circle me-2" width="20" height="20" onerror="this.style.display='none'">`;
+             avatar = `<img src="https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100" class="w-8 h-8 rounded-full border border-black/5 dark:border-white/10" onerror="this.src='https://ui-avatars.com/api/?name=U&background=random'">`;
         } else if (type === 'Group') {
-             avatar = `<img src="https://p.qlogo.cn/gh/${id}/${id}/100/" class="rounded-circle me-2" width="20" height="20" onerror="this.style.display='none'">`;
+             avatar = `<img src="https://p.qlogo.cn/gh/${id}/${id}/100/" class="w-8 h-8 rounded-full border border-black/5 dark:border-white/10" onerror="this.src='https://ui-avatars.com/api/?name=G&background=random'">`;
         }
 
         return `
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div class="text-truncate" style="max-width: 70%;">
-                    <span class="badge bg-secondary bg-opacity-10 text-secondary me-2">#${index + 1}</span>
+            <li class="flex items-center justify-between p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 hover:border-matrix/30 transition-all group">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex-shrink-0 w-6 text-[10px] font-bold text-gray-400">#${index + 1}</div>
                     ${avatar}
-                    <span title="${id}">
-                        ${name}
-                        ${names && names[id] ? `<small class="text-muted ms-1" style="font-size:0.8em">(${id})</small>` : ''}
-                    </span>
+                    <div class="min-w-0">
+                        <div class="text-xs font-bold dark:text-white truncate" title="${id}">${name}</div>
+                        <div class="text-[8px] text-gray-500 mono truncate">${id}</div>
+                    </div>
                 </div>
-                <span class="badge bg-primary rounded-pill">${count}</span>
+                <div class="flex-shrink-0 px-2 py-1 rounded-lg bg-matrix/10 text-matrix text-[10px] font-bold mono">
+                    ${count}
+                </div>
             </li>
         `;
     }).join('');
@@ -513,7 +511,6 @@ export function showAllStats(type) {
     const stats = type === 'Group' ? latestChatStats.group_stats_today : latestChatStats.user_stats_today;
     const names = type === 'Group' ? latestChatStats.group_names : latestChatStats.user_names;
     
-    const t = translations[currentLang] || translations['zh-CN'];
     const titleEl = document.getElementById('statsModalTitle');
     const headerEl = document.getElementById('statsModalNameHeader');
     const tbody = document.getElementById('statsModalBody');
@@ -521,25 +518,18 @@ export function showAllStats(type) {
     if (titleEl) {
         const titleKey = type === 'Group' ? 'top_active_groups' : 'top_active_users';
         titleEl.setAttribute('data-i18n', titleKey);
-        titleEl.innerText = t[titleKey] || (type === 'Group' ? '今日活跃群组' : '今日龙王');
+        titleEl.innerText = t(titleKey) || (type === 'Group' ? '今日活跃群组' : '今日龙王');
     }
     if (headerEl) {
         const headerKey = type === 'Group' ? 'group_name_default' : 'user_nickname';
         headerEl.setAttribute('data-i18n', headerKey);
-        headerEl.innerText = t[headerKey] || (type === 'Group' ? '群组名称' : '用户昵称');
-    }
-    
-    // Add translation for the "Action" column if needed
-    const actionHeader = document.querySelector('#statsModal thead th:last-child');
-    if (actionHeader) {
-        actionHeader.setAttribute('data-i18n', 'count');
-        actionHeader.innerText = t['count'] || '消息数';
+        headerEl.innerText = t(headerKey) || (type === 'Group' ? '群组名称' : '用户昵称');
     }
     
     if (!tbody) return;
     
     if (!stats || Object.keys(stats).length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="text-center p-4">${t.no_data || '暂无数据'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="3" class="px-6 py-12 text-center text-gray-500 italic">${t('no_data')}</td></tr>`;
     } else {
         const sorted = Object.entries(stats).sort(([, a], [, b]) => b - a);
         tbody.innerHTML = sorted.map(([id, count], index) => {
@@ -548,26 +538,30 @@ export function showAllStats(type) {
             if (type === 'User') {
                  let userAvatar = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
                  userAvatar = `/api/proxy/avatar?url=${encodeURIComponent(userAvatar)}`;
-                 avatar = `<img src="${userAvatar}" class="rounded-circle me-2 border border-secondary border-opacity-25" width="32" height="32" onerror="this.src='https://ui-avatars.com/api/?name=U&background=random'">`;
+                 avatar = `<img src="${userAvatar}" class="w-10 h-10 rounded-full border border-black/5 dark:border-white/10" onerror="this.src='https://ui-avatars.com/api/?name=U&background=random'">`;
             } else {
                  let groupAvatar = `https://p.qlogo.cn/gh/${id}/${id}/100/`;
                  groupAvatar = `/api/proxy/avatar?url=${encodeURIComponent(groupAvatar)}`;
-                 avatar = `<img src="${groupAvatar}" class="rounded-circle me-2 border border-secondary border-opacity-25" width="32" height="32" onerror="this.src='https://ui-avatars.com/api/?name=G&background=random'">`;
+                 avatar = `<img src="${groupAvatar}" class="w-10 h-10 rounded-full border border-black/5 dark:border-white/10" onerror="this.src='https://ui-avatars.com/api/?name=G&background=random'">`;
             }
             
             return `
-                <tr>
-                    <td class="align-middle">${index + 1}</td>
-                    <td class="text-truncate align-middle" style="max-width: 300px;" title="${id}">
-                        <div class="d-flex align-items-center">
+                <tr class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                    <td class="px-6 py-4">
+                        <span class="text-xs font-bold text-gray-400">#${index + 1}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
                             ${avatar}
-                            <div class="overflow-hidden">
-                                <div class="text-truncate">${name}</div>
-                                <div class="text-muted small" style="font-size: 0.75rem;">${id}</div>
+                            <div class="min-w-0">
+                                <div class="text-sm font-bold dark:text-white truncate max-w-[200px]" title="${name}">${name}</div>
+                                <div class="text-[10px] text-gray-500 mono">${id}</div>
                             </div>
                         </div>
                     </td>
-                    <td class="text-end align-middle fw-bold text-primary">${count}</td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="px-3 py-1 rounded-lg bg-matrix/10 text-matrix font-bold mono text-sm">${count}</span>
+                    </td>
                 </tr>
             `;
         }).join('');
@@ -575,7 +569,8 @@ export function showAllStats(type) {
     
     const modalEl = document.getElementById('statsModal');
     if (modalEl) {
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+        modalEl.classList.remove('hidden');
+        modalEl.style.display = 'flex';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }

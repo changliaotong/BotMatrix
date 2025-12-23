@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
@@ -11,7 +12,9 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,10 +29,6 @@ var GlobalRedis *redis.Client
 
 func SetGlobalRedis(client *redis.Client) {
 	GlobalRedis = client
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 type PendingConfirmation struct {
@@ -58,6 +57,10 @@ var (
 	pendingDialogsMu sync.Mutex
 	pendingDialogs   = make(map[string]*PendingDialog)
 )
+
+func GetFeatureDisplayName(featureID string) string {
+	return common.T("", "feature_"+featureID)
+}
 
 var FeatureDefaults = map[string]bool{
 	"weather":                 true,
@@ -92,28 +95,30 @@ var FeatureDefaults = map[string]bool{
 	"auction":                 true,
 	"badge":                   true,
 	"medal":                   true,
+	"ai":                      true,
+	"knowledge_base":          true,
 }
 
 var FeatureDisplayNames = map[string]string{
-	"weather":            "天气",
-	"points":             "积分",
-	"signin":             "签到",
-	"lottery":            "抽签",
-	"translate":          "翻译",
-	"music":              "点歌",
-	"games":              "游戏",
-	"greetings":          "问候",
-	"utils":              "工具",
-	"moderation":         "群管",
-	"pets":               "宠物",
-	"welcome":            "欢迎语",
-	"kick_to_black":      "踢出拉黑",
-	"kick_notify":        "被踢提示",
-	"leave_to_black":     "退群拉黑",
-	"leave_notify":       "退群提示",
-	"join_mute":          "进群禁言",
-	"voice_reply":        "语音回复",
-	"burn_after_reading": "阅后即焚",
+	"weather":            common.T("", "feature_weather"),
+	"points":             common.T("", "feature_points"),
+	"signin":             common.T("", "feature_signin"),
+	"lottery":            common.T("", "feature_lottery"),
+	"translate":          common.T("", "feature_translate"),
+	"music":              common.T("", "feature_music"),
+	"games":              common.T("", "feature_games"),
+	"greetings":          common.T("", "feature_greetings"),
+	"utils":              common.T("", "feature_utils"),
+	"moderation":         common.T("", "feature_moderation"),
+	"pets":               common.T("", "feature_pets"),
+	"welcome":            common.T("", "feature_welcome"),
+	"kick_to_black":      common.T("", "feature_kick_to_black"),
+	"kick_notify":        common.T("", "feature_kick_notify"),
+	"leave_to_black":     common.T("", "feature_leave_to_black"),
+	"leave_notify":       common.T("", "feature_leave_notify"),
+	"join_mute":          common.T("", "feature_join_mute"),
+	"voice_reply":        common.T("", "feature_voice_reply"),
+	"burn_after_reading": common.T("", "feature_burn_after_reading"),
 	"tarot":              "塔罗牌",
 	"plugin_manager":     "插件管理",
 	"gift":               "礼物",
@@ -126,6 +131,225 @@ var FeatureDisplayNames = map[string]string{
 	"auction":            "竞拍系统",
 	"badge":              "徽章系统",
 	"medal":              "勋章系统",
+	"ai":                 common.T("", "feature_ai"),
+	"knowledge_base":     common.T("", "feature_knowledge_base"),
+}
+
+type VoiceItem struct {
+	ID         string
+	Name       string
+	PreviewURL string
+}
+
+type VoiceCategory struct {
+	Name  string
+	Items []VoiceItem
+}
+
+var VoiceCategories = []VoiceCategory{
+	{
+		Name: "推荐",
+		Items: []VoiceItem{
+			{ID: "lucy-voice-laibixiaoxin", Name: "小新", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-laibixiaoxin.wav"},
+			{ID: "lucy-voice-houge", Name: "猴哥", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-houge.wav"},
+			{ID: "lucy-voice-silang", Name: "四郎", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-silang.wav"},
+			{ID: "lucy-voice-guangdong-f1", Name: "东北老妹儿", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-guangdong-f1.wav"},
+			{ID: "lucy-voice-guangxi-m1", Name: "广西大表哥", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-guangxi-m1.wav"},
+			{ID: "lucy-voice-daji", Name: "妲己", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-daji.wav"},
+			{ID: "lucy-voice-lizeyan", Name: "霸道总裁", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-lizeyan-2.wav"},
+			{ID: "lucy-voice-suxinjiejie", Name: "酥心御姐", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-suxinjiejie.wav"},
+		},
+	},
+	{
+		Name: "搞怪",
+		Items: []VoiceItem{
+			{ID: "lucy-voice-laibixiaoxin", Name: "小新", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-laibixiaoxin.wav"},
+			{ID: "lucy-voice-houge", Name: "猴哥", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-houge.wav"},
+			{ID: "lucy-voice-guangdong-f1", Name: "东北老妹儿", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-guangdong-f1.wav"},
+			{ID: "lucy-voice-guangxi-m1", Name: "广西大表哥", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-guangxi-m1.wav"},
+			{ID: "lucy-voice-m8", Name: "说书先生", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-m8.wav"},
+			{ID: "lucy-voice-male1", Name: "憨憨小弟", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-male1.wav"},
+			{ID: "lucy-voice-male3", Name: "憨厚老哥", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-male3.wav"},
+		},
+	},
+	{
+		Name: "古风",
+		Items: []VoiceItem{
+			{ID: "lucy-voice-daji", Name: "妲己", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-daji.wav"},
+			{ID: "lucy-voice-silang", Name: "四郎", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-silang.wav"},
+			{ID: "lucy-voice-lvbu", Name: "吕布", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-lvbu.wav"},
+		},
+	},
+	{
+		Name: "现代",
+		Items: []VoiceItem{
+			{ID: "lucy-voice-lizeyan", Name: "霸道总裁", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-lizeyan-2.wav"},
+			{ID: "lucy-voice-suxinjiejie", Name: "酥心御姐", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-suxinjiejie.wav"},
+			{ID: "lucy-voice-xueling", Name: "元气少女", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-xueling.wav"},
+			{ID: "lucy-voice-f37", Name: "文艺少女", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-f37.wav"},
+			{ID: "lucy-voice-male2", Name: "磁性大叔", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-male2.wav"},
+			{ID: "lucy-voice-female1", Name: "邻家小妹", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-female1.wav"},
+			{ID: "lucy-voice-m14", Name: "低沉男声", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-m14.wav"},
+			{ID: "lucy-voice-f38", Name: "傲娇少女", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-f38.wav"},
+			{ID: "lucy-voice-m101", Name: "爹系男友", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-m101.wav"},
+			{ID: "lucy-voice-female2", Name: "暖心姐姐", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-female2.wav"},
+			{ID: "lucy-voice-f36", Name: "温柔妹妹", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-f36.wav"},
+			{ID: "lucy-voice-f34", Name: "书香少女", PreviewURL: "https://res.qpt.qq.com/qpilot/tts_sample/group/lucy-voice-f34.wav"},
+		},
+	},
+}
+
+var (
+	voiceNameToID = map[string]string{}
+	allVoices     []VoiceItem
+)
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+	initVoiceData()
+}
+
+func initVoiceData() {
+	voiceNameToID = make(map[string]string)
+	allVoices = allVoices[:0]
+
+	for _, cat := range VoiceCategories {
+		for _, item := range cat.Items {
+			allVoices = append(allVoices, item)
+			if item.Name != "" {
+				if _, ok := voiceNameToID[item.Name]; !ok {
+					voiceNameToID[item.Name] = item.ID
+				}
+			}
+		}
+	}
+}
+
+func BuildVoiceList(currentID string) string {
+	var b strings.Builder
+
+	if currentID != "" {
+		current := findVoiceByID(currentID)
+		if current != nil {
+			b.WriteString(common.T("", "voice_current_prefix"))
+			b.WriteString(current.Name)
+		} else {
+			b.WriteString(common.T("", "voice_current_prefix"))
+			b.WriteString(currentID)
+		}
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString(common.T("", "voice_list_title"))
+	b.WriteString("\n")
+
+	index := 1
+	for _, cat := range VoiceCategories {
+		b.WriteString("[")
+		b.WriteString(cat.Name)
+		b.WriteString("]\n")
+		for _, item := range cat.Items {
+			b.WriteString(fmt.Sprintf("%d. %s\n", index, item.Name))
+			index++
+		}
+		b.WriteString("\n")
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+func FindVoiceByGlobalIndex(index int) *VoiceItem {
+	if index <= 0 {
+		return nil
+	}
+
+	cur := 1
+	for _, cat := range VoiceCategories {
+		for i := range cat.Items {
+			if cur == index {
+				return &cat.Items[i]
+			}
+			cur++
+		}
+	}
+
+	return nil
+}
+
+func findVoiceByID(id string) *VoiceItem {
+	if id == "" {
+		return nil
+	}
+
+	for _, cat := range VoiceCategories {
+		for i := range cat.Items {
+			if cat.Items[i].ID == id {
+				return &cat.Items[i]
+			}
+		}
+	}
+
+	return nil
+}
+
+func FindVoiceByName(name string) *VoiceItem {
+	if name == "" {
+		return nil
+	}
+
+	id, ok := voiceNameToID[name]
+	if !ok {
+		return nil
+	}
+
+	return findVoiceByID(id)
+}
+
+func FindVoiceFuzzy(keyword string) *VoiceItem {
+	if keyword == "" {
+		return nil
+	}
+
+	kw := strings.ToLower(keyword)
+	for _, v := range allVoices {
+		if strings.Contains(strings.ToLower(v.Name), kw) {
+			return &v
+		}
+	}
+
+	return nil
+}
+
+func GetRandomVoice() *VoiceItem {
+	if len(allVoices) == 0 {
+		return nil
+	}
+	return &allVoices[rand.Intn(len(allVoices))]
+}
+
+func GetVoiceCategoriesForID(voiceID string) []string {
+	if voiceID == "" {
+		return nil
+	}
+
+	var names []string
+	for _, cat := range VoiceCategories {
+		for _, item := range cat.Items {
+			if item.ID == voiceID {
+				names = append(names, cat.Name)
+				break
+			}
+		}
+	}
+	return names
+}
+
+func GetVoicePreviewURL(voiceID string) string {
+	item := findVoiceByID(voiceID)
+	if item == nil {
+		return ""
+	}
+	return item.PreviewURL
 }
 
 func isSameDay(t1, t2 time.Time) bool {
@@ -165,11 +389,8 @@ func HandleFeatureDisabled(robot plugin.Robot, event *onebot.Event, featureID st
 	userID := fmt.Sprintf("%d", event.UserID)
 
 	if IsFeatureEnabledForGroup(GlobalDB, groupID, "feature_disabled_notice") {
-		displayName, ok := FeatureDisplayNames[featureID]
-		if !ok || displayName == "" {
-			displayName = featureID
-		}
-		message := fmt.Sprintf("%s功能已关闭", displayName)
+		displayName := GetFeatureDisplayName(featureID)
+		message := fmt.Sprintf(common.T("", "feature_disabled_msg"), displayName)
 		params := &onebot.SendMessageParams{
 			GroupID: event.GroupID,
 			UserID:  event.UserID,
@@ -177,7 +398,7 @@ func HandleFeatureDisabled(robot plugin.Robot, event *onebot.Event, featureID st
 		}
 
 		if _, err := robot.SendMessage(params); err != nil {
-			log.Printf("发送功能关闭提示失败: %v\n", err)
+			log.Printf(common.T("", "feature_disabled_notice_failed"), err)
 		}
 		return
 	}
@@ -194,7 +415,7 @@ func HandleFeatureDisabled(robot plugin.Robot, event *onebot.Event, featureID st
 	}
 
 	if err := db.CreateMessage(GlobalDB, record); err != nil {
-		log.Printf("记录无回复原因失败: %v\n", err)
+		log.Printf(common.T("", "feature_disabled_record_failed"), err)
 	}
 }
 
@@ -294,7 +515,7 @@ func scheduleAutoDelete(robot plugin.Robot, resp *onebot.Response) {
 			MessageID: msgID,
 		})
 		if err != nil {
-			log.Printf("自动撤回消息失败: %v\n", err)
+			log.Printf(common.T("", "utils_auto_delete_failed"), err)
 		}
 	}()
 }
@@ -754,4 +975,169 @@ func EndDialog(groupID, userID int64) {
 	pendingDialogsMu.Lock()
 	delete(pendingDialogs, key)
 	pendingDialogsMu.Unlock()
+}
+
+func NormalizeQuestion(text string) string {
+	if text == "" {
+		return ""
+	}
+	s := strings.TrimSpace(text)
+	replacer := strings.NewReplacer(" ", "", "\t", "", "\n", "", "\r", "")
+	s = replacer.Replace(s)
+	return s
+}
+
+func SubstituteSystemVariables(text string, event *onebot.Event) string {
+	if text == "" || event == nil {
+		return text
+	}
+
+	now := time.Now()
+
+	userName := fmt.Sprintf("%d", event.UserID)
+	if event.Sender.Card != "" {
+		userName = event.Sender.Card
+	} else if event.Sender.Nickname != "" {
+		userName = event.Sender.Nickname
+	}
+
+	selfName := "机器人"
+	groupName := ""
+
+	groupIDStr := ""
+	if event.GroupID != 0 {
+		groupIDStr = fmt.Sprintf("%d", event.GroupID)
+	}
+
+	userIDStr := fmt.Sprintf("%d", event.UserID)
+
+	pointsStr := ""
+	if GlobalDB != nil && userIDStr != "0" {
+		if pts, err := db.GetPoints(GlobalDB, userIDStr); err == nil {
+			pointsStr = strconv.Itoa(pts)
+		}
+	}
+
+	yearStr := fmt.Sprintf("%d", now.Year())
+	monthStr := fmt.Sprintf("%d", int(now.Month()))
+	dayStr := fmt.Sprintf("%d", now.Day())
+	hourStr := fmt.Sprintf("%d", now.Hour())
+	minuteStr := fmt.Sprintf("%d", now.Minute())
+	secondStr := fmt.Sprintf("%d", now.Second())
+
+	weekdayNames := []string{"日", "一", "二", "三", "四", "五", "六"}
+	weekday := weekdayNames[int(now.Weekday())]
+
+	replacements := map[string]string{
+		"#你#":   userName,
+		"{你}":   userName,
+		"#我#":   selfName,
+		"{我}":   selfName,
+		"#群#":   groupName,
+		"{群}":   groupName,
+		"#群主#": "",
+		"{群主}": "",
+		"#主人#": "",
+		"{主人}": "",
+		"#积分#": pointsStr,
+		"{积分}": pointsStr,
+		"#年#":  yearStr,
+		"{年}":  yearStr,
+		"#月#":  monthStr,
+		"{月}":  monthStr,
+		"#日#":  dayStr,
+		"{日}":  dayStr,
+		"#时#":  hourStr,
+		"{时}":  hourStr,
+		"#分#":  minuteStr,
+		"{分}":  minuteStr,
+		"#秒#":  secondStr,
+		"{秒}":  secondStr,
+		"#群号#": groupIDStr,
+		"{群号}": groupIDStr,
+		"#星期#": "星期" + weekday,
+		"{星期}": "星期" + weekday,
+	}
+
+	result := text
+	for k, v := range replacements {
+		if v == "" {
+			continue
+		}
+		result = strings.ReplaceAll(result, k, v)
+	}
+
+	return result
+}
+
+func SubstituteCustomVariables(text string, event *onebot.Event) string {
+	if text == "" || event == nil || GlobalDB == nil {
+		return text
+	}
+
+	if event.GroupID == 0 {
+		return text
+	}
+
+	groupIDStr := fmt.Sprintf("%d", event.GroupID)
+
+	re := regexp.MustCompile(`\{\{([^{}]+)\}\}`)
+
+	result := re.ReplaceAllStringFunc(text, func(match string) string {
+		matches := re.FindStringSubmatch(match)
+		if len(matches) < 2 {
+			return ""
+		}
+		name := strings.TrimSpace(matches[1])
+		if name == "" {
+			return ""
+		}
+		normalized := NormalizeQuestion(name)
+		if normalized == "" {
+			return ""
+		}
+
+		q, err := db.GetQuestionByGroupAndNormalized(GlobalDB, groupIDStr, normalized)
+		if err != nil || q == nil {
+			return ""
+		}
+
+		answer, err := db.GetRandomApprovedAnswer(GlobalDB, q.ID)
+		if err != nil || answer == nil {
+			return ""
+		}
+
+		return answer.Answer
+	})
+
+	return result
+}
+
+func SubstituteAllVariables(text string, event *onebot.Event) string {
+	if text == "" || event == nil {
+		return text
+	}
+	t := SubstituteSystemVariables(text, event)
+	t = SubstituteCustomVariables(t, event)
+	return t
+}
+
+func IsAtMe(event *onebot.Event) bool {
+	if event == nil {
+		return false
+	}
+	raw := event.RawMessage
+	if raw == "" {
+		if msg, ok := event.Message.(string); ok {
+			raw = msg
+		}
+	}
+	if raw == "" {
+		return false
+	}
+	if event.SelfID == 0 {
+		return false
+	}
+	target := fmt.Sprintf("[CQ:at,qq=%d]", event.SelfID)
+	return strings.Contains(raw, target)
 }

@@ -2,7 +2,7 @@
  * Utilities and global handlers
  */
 
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 
 // Console history for diagnostic purposes
 console.history = [];
@@ -92,24 +92,20 @@ export function formatBytes(bytes) {
  */
 export function timeAgo(date) {
     if (!date) return 'N/A';
-    // Use translations if available, else fallback to default
-    const t = (translations && currentLang) ? 
-              (translations[currentLang] || translations['zh-CN']) : 
-              {};
               
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     let interval = seconds / 31536000;
 
-    if (interval > 1) return Math.floor(interval) + (t.years_ago || " 年前");
+    if (interval > 1) return Math.floor(interval) + (t('time_ago_year') || " 年前");
     interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + (t.months_ago || " 个月前");
+    if (interval > 1) return Math.floor(interval) + (t('time_ago_month') || " 个月前");
     interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + (t.days_ago || " 天前");
+    if (interval > 1) return Math.floor(interval) + (t('time_ago_day') || " 天前");
     interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + (t.hours_ago || " 小时前");
+    if (interval > 1) return Math.floor(interval) + (t('time_ago_hour') || " 小时前");
     interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + (t.minutes_ago || " 分钟前");
-    return Math.floor(seconds) + (t.seconds_ago || " 秒前");
+    if (interval > 1) return Math.floor(interval) + (t('time_ago_minute') || " 分钟前");
+    return Math.floor(seconds) + (t('time_ago_second') || " 秒前");
 }
 
 /**

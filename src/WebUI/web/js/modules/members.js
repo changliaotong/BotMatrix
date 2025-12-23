@@ -1,5 +1,5 @@
 import { callBotApi, fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { latestChatStats } from './stats.js';
 import { currentContactType } from './groups.js';
 
@@ -135,14 +135,13 @@ export function renderMembers() {
 
     const searchInput = document.getElementById('member-search');
     const keyword = searchInput ? searchInput.value.toLowerCase() : '';
-    const t = translations[currentLang] || translations['zh-CN'];
 
     if (!currentMembers || currentMembers.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center">
             <div class="p-3">
-                <div class="text-muted mb-2">${t.no_members || '暂无成员'}</div>
+                <div class="text-muted mb-2">${t('no_members')}</div>
                 <button class="btn btn-sm btn-outline-primary" onclick="loadGroupMembers('${currentGroupId}')">
-                    <i class="bi bi-arrow-clockwise me-1"></i>${t.retry || '重试'}
+                    <i class="bi bi-arrow-clockwise me-1"></i>${t('retry')}
                 </button>
             </div>
         </td></tr>`;
@@ -159,7 +158,7 @@ export function renderMembers() {
     });
     
     if (filteredMembers.length === 0) {
-         tbody.innerHTML = `<tr><td colspan="6" class="text-center">${t.no_match_members || '未找到匹配成员'}</td></tr>`;
+         tbody.innerHTML = `<tr><td colspan="6" class="text-center">${t('no_match_members')}</td></tr>`;
          return;
     }
 
@@ -190,8 +189,8 @@ export function renderMembers() {
         const totalMsg = latestChatStats.user_stats ? (latestChatStats.user_stats[m.user_id] || 0) : 0;
         
         const roleKey = 'role_' + m.role;
-        const roleText = t[roleKey] || m.role;
-        const statsTooltip = (t.stats_title_tooltip || '今日: {today}, 总计: {total}').replace('{today}', todayMsg).replace('{total}', totalMsg);
+        const roleText = t(roleKey) || m.role;
+        const statsTooltip = (t('stats_title_tooltip') || '今日: {today}, 总计: {total}').replace('{today}', todayMsg).replace('{total}', totalMsg);
         const safeName = (m.card || m.nickname || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const mID = String(m.user_id);
         const gID = String(currentGroupId);
@@ -220,7 +219,7 @@ export function renderMembers() {
             <td>
                 <div class="d-flex flex-column" title="${statsTooltip}">
                     <span class="badge bg-primary rounded-pill mb-1" style="width: fit-content;">${todayMsg}</span>
-                    <small class="text-muted">${t.stats_total || '总计: '}${totalMsg}</small>
+                    <small class="text-muted">${t('stats_total') || '总计: '}${totalMsg}</small>
                 </div>
             </td>
             <td>
@@ -229,14 +228,14 @@ export function renderMembers() {
             <td>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        ${t.action_ops || '操作'}
+                        ${t('action_ops') || '操作'}
                     </button>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" onclick="setCard('${gID}', '${mID}', '${safeName}')">${t.action_set_card || '设置名片'}</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="banMember('${gID}', '${mID}')">${t.action_ban || '禁言'}</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="unbanMember('${gID}', '${mID}')">${t.action_unban || '解除禁言'}</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setCard('${gID}', '${mID}', '${safeName}')">${t('action_set_card')}</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="banMember('${gID}', '${mID}')">${t('action_ban')}</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="unbanMember('${gID}', '${mID}')">${t('action_unban')}</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger" href="#" onclick="kickMember('${gID}', '${mID}')">${t.action_kick || '移出群聊'}</a></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="kickMember('${gID}', '${mID}')">${t('action_kick')}</a></li>
                     </ul>
                 </div>
             </td>
@@ -245,8 +244,7 @@ export function renderMembers() {
 }
 
 export function banMember(groupId, userId) {
-    const t = translations[currentLang] || translations['zh-CN'];
-    const duration = prompt(t.prompt_ban_duration || '请输入禁言时长（分钟），0 为解除禁言', "30");
+    const duration = prompt(t('prompt_ban_duration') || '请输入禁言时长（分钟），0 为解除禁言', "30");
     if (duration === null) return;
     const minutes = parseInt(duration);
     if (isNaN(minutes)) {
@@ -264,19 +262,17 @@ export function banMember(groupId, userId) {
 }
 
 export function unbanMember(groupId, userId) {
-    const t = translations[currentLang] || translations['zh-CN'];
     callBotApi('set_group_ban', {
         group_id: groupId,
         user_id: userId,
         duration: 0
     }).then(() => {
-        alert(t.alert_unbanned || '已解除禁言');
-    }).catch(e => alert((t.alert_op_failed || '操作失败: ') + e.message));
+        alert(t('alert_unbanned') || '已解除禁言');
+    }).catch(e => alert((t('alert_op_failed') || '操作失败: ') + e.message));
 }
 
 export function setCard(groupId, userId, currentCard) {
-    const t = translations[currentLang] || translations['zh-CN'];
-    const newCard = prompt(t.prompt_new_card || '请输入新的名片内容', currentCard);
+    const newCard = prompt(t('prompt_new_card') || '请输入新的名片内容', currentCard);
     if (newCard === null) return;
 
     callBotApi('set_group_card', {
@@ -284,47 +280,44 @@ export function setCard(groupId, userId, currentCard) {
         user_id: userId,
         card: newCard
     }).then(() => {
-        alert(t.alert_card_set || '名片设置成功');
+        alert(t('alert_card_set') || '名片设置成功');
         loadGroupMembers(groupId); // Reload to show change
-    }).catch(e => alert((t.alert_op_failed || '操作失败: ') + e.message));
+    }).catch(e => alert((t('alert_op_failed') || '操作失败: ') + e.message));
 }
 
 export function kickMember(groupId, userId) {
-    const t = translations[currentLang] || translations['zh-CN'];
-    if (!confirm((t.confirm_kick_member || '确定要将用户 {id} 移出群聊吗？').replace('{id}', userId))) return;
+    if (!confirm((t('confirm_kick_member') || '确定要将用户 {id} 移出群聊吗？').replace('{id}', userId))) return;
     callBotApi('set_group_kick', {
         group_id: groupId,
         user_id: userId
     }).then(() => {
-        alert(t.alert_kicked || '已移出群聊');
+        alert(t('alert_kicked') || '已移出群聊');
         loadGroupMembers(groupId);
-    }).catch(e => alert((t.alert_op_failed || '操作失败: ') + e.message));
+    }).catch(e => alert((t('alert_op_failed') || '操作失败: ') + e.message));
 }
 
 export function leaveGroup() {
-    const t = translations[currentLang] || translations['zh-CN'];
-    if (!confirm((t.confirm_leave_group || '确定要退出群聊 {id} 吗？').replace('{id}', currentGroupId))) return;
+    if (!confirm((t('confirm_leave_group') || '确定要退出群聊 {id} 吗？').replace('{id}', currentGroupId))) return;
      callBotApi('set_group_leave', {
         group_id: currentGroupId
     }).then(() => {
-        alert(t.alert_left_group || '已退出群聊');
+        alert(t('alert_left_group') || '已退出群聊');
         if (window.refreshGroupList) window.refreshGroupList();
         document.getElementById('group-detail-empty').style.display = 'block';
         document.getElementById('group-detail-content').style.setProperty('display', 'none', 'important');
-    }).catch(e => alert((t.alert_op_failed || '操作失败: ') + e.message));
+    }).catch(e => alert((t('alert_op_failed') || '操作失败: ') + e.message));
 }
 
 export function checkGroupMember() {
     const userId = document.getElementById('check-member-input').value.trim();
     const resultEl = document.getElementById('check-member-result');
-    const t = translations[currentLang] || translations['zh-CN'];
     
     if (!userId) {
-        resultEl.innerHTML = `<span class="text-danger">${t.alert_invalid_number || '无效的 ID'}</span>`;
+        resultEl.innerHTML = `<span class="text-danger">${t('alert_invalid_number') || '无效的 ID'}</span>`;
         return;
     }
 
-    resultEl.innerHTML = `<span class="text-muted">${t.loading || '正在查询...'}</span>`;
+    resultEl.innerHTML = `<span class="text-muted">${t('loading') || '正在查询...'}</span>`;
     
     callBotApi('get_group_member_info', {
         group_id: Number(currentGroupId),
@@ -335,17 +328,17 @@ export function checkGroupMember() {
             // Found
             let name = data.nickname || userId;
             let card = data.card || '';
-            let text = (t.member_found || '找到成员: {name} ({card})').replace('{name}', name).replace('{card}', card);
+            let text = (t('member_found') || '找到成员: {name} ({card})').replace('{name}', name).replace('{card}', card);
             resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${text}</span>`;
         } else {
             // Not found
-            resultEl.innerHTML = `<span class="text-warning">${t.member_not_found || '未找到该成员'}</span>`;
+            resultEl.innerHTML = `<span class="text-warning">${t('member_not_found') || '未找到该成员'}</span>`;
         }
     }).catch(e => {
         console.error(e);
-        let msg = (t.check_error || '查询出错: ') + e.message;
+        let msg = (t('check_error') || '查询出错: ') + e.message;
         if (e.message.includes('not found') || e.message.includes('不存在')) {
-            msg = t.member_not_found || '未找到该成员';
+            msg = t('member_not_found') || '未找到该成员';
         }
         resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${msg}</span>`;
     });

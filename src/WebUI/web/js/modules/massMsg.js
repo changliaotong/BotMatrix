@@ -1,5 +1,5 @@
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { showToast } from './ui.js';
 
 export let massSendType = 'group';
@@ -8,8 +8,7 @@ export function showMassSendModal(type) {
     massSendType = type;
     const checkboxes = document.querySelectorAll(`.mass-send-checkbox-${type}:checked`);
     if (checkboxes.length === 0) {
-        const t = translations[currentLang] || translations['zh-CN'];
-        showToast(t.mass_send_select_first || '请先选择要群发的目标', 'warning');
+        showToast(t('mass_send_select_first') || '请先选择要群发的目标', 'warning');
         return;
     }
     
@@ -19,7 +18,7 @@ export function showMassSendModal(type) {
     const modal = new bootstrap.Modal(modalEl);
     document.getElementById('mass-send-content').value = '';
     document.getElementById('mass-send-progress').classList.add('d-none');
-    document.getElementById('mass-send-status').innerText = `已选择 ${checkboxes.length} 个目标`;
+    document.getElementById('mass-send-status').innerText = t('mass_send_selected', { count: checkboxes.length });
     modal.show();
 }
 
@@ -33,8 +32,7 @@ export function toggleSelectAll(type) {
 export async function executeMassSend() {
     const content = document.getElementById('mass-send-content').value.trim();
     if (!content) {
-        const t = translations[currentLang] || translations['zh-CN'];
-        showToast(t.mass_send_input_content || '请输入消息内容', 'warning');
+        showToast(t('mass_send_input_content') || '请输入消息内容', 'warning');
         return;
     }
 
@@ -55,7 +53,7 @@ export async function executeMassSend() {
 
     if (progressContainer) progressContainer.classList.remove('d-none');
     if (startBtn) startBtn.disabled = true;
-    if (statusText) statusText.innerText = `正在准备发送 ${targets.length} 个目标...`;
+    if (statusText) statusText.innerText = t('mass_send_preparing', { count: targets.length });
 
     try {
         const response = await fetchWithAuth('/api/action', {
@@ -72,30 +70,30 @@ export async function executeMassSend() {
 
         const result = await response.json();
         if (result.success || result.status === 'ok') {
-            showToast(`群发任务已启动，请在日志中查看进度`, 'success');
+            showToast(t('mass_send_started'), 'success');
             
-            if (statusText) statusText.innerText = `已启动批量发送任务，共 ${targets.length} 个目标。请在日志中查看进度。`;
+            if (statusText) statusText.innerText = t('mass_send_started_detail', { count: targets.length });
             if (startBtn) {
                 startBtn.disabled = false;
-                startBtn.innerText = '完成';
+                startBtn.innerText = t('mass_send_complete');
                 startBtn.onclick = () => {
                     const modalEl = document.getElementById('massSendModal');
                     const modal = bootstrap.Modal.getInstance(modalEl);
                     if (modal) modal.hide();
                     
                     setTimeout(() => {
-                        startBtn.innerText = '开始群发';
+                        startBtn.innerText = t('mass_send_start');
                         startBtn.onclick = executeMassSend;
                     }, 500);
                 };
             }
         } else {
-            showToast('群发失败: ' + (result.message || '未知错误'), 'danger');
+            showToast(t('mass_send_failed') + (result.message || t('unknown')), 'danger');
             if (startBtn) startBtn.disabled = false;
         }
     } catch (e) {
         console.error('Mass send error:', e);
-        showToast('群发请求异常: ' + e.message, 'danger');
+        showToast(t('mass_send_exception') + e.message, 'danger');
         if (startBtn) startBtn.disabled = false;
     }
 }

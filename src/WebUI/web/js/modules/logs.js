@@ -1,5 +1,5 @@
 import { fetchWithAuth } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 
 /**
  * 渲染日志消息，支持长文本折叠
@@ -11,10 +11,9 @@ export function renderLogMessage(message) {
     if (!message || message.length <= MAX_LEN) return message;
     
     const shortMsg = message.substring(0, MAX_LEN) + '...';
-    const t = translations[currentLang] || translations['zh-CN'];
     
-    return `<span class="log-short" style="cursor:pointer; text-decoration:underline dotted; color: inherit;" onclick="toggleLogExpand(this)" title="${t.log_expand || '点击展开'}">${shortMsg}</span>` + 
-           `<span class="log-full" style="display:none; cursor:pointer; color: inherit;" onclick="toggleLogExpand(this)" title="${t.log_collapse || '点击折叠'}">${message}</span>`;
+    return `<span class="log-short" style="cursor:pointer; text-decoration:underline dotted; color: inherit;" onclick="toggleLogExpand(this)" title="${t('log_expand') || '点击展开'}">${shortMsg}</span>` + 
+           `<span class="log-full" style="display:none; cursor:pointer; color: inherit;" onclick="toggleLogExpand(this)" title="${t('log_collapse') || '点击折叠'}">${message}</span>`;
 }
 
 /**
@@ -47,13 +46,12 @@ export function toggleLogExpand(el) {
  */
 export async function fetchLogsFull() {
     if (!window.authToken) return;
-    const t = translations[currentLang] || translations['zh-CN'];
     const container = document.getElementById('log-container-full');
     if (!container) return;
 
     // 如果容器为空，显示加载中
     if (!container.innerHTML || container.innerHTML.trim() === '') {
-        container.innerHTML = `<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>${t.loading || '加载中...'}</div>`;
+        container.innerHTML = `<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>${t('loading') || '加载中...'}</div>`;
     }
 
     const selector = document.getElementById('log-bot-selector-full');
@@ -88,14 +86,13 @@ export function updateLogBotSelectorFull(bots) {
     if (!selector) return;
     
     const current = selector.value;
-    const t = translations[currentLang] || translations['zh-CN'];
     
-    let html = `<option value="">${t.log_all || '全部日志'}</option>`;
-    html += `<option value="system">${t.log_system || '系统日志'}</option>`;
+    let html = `<option value="">${t('log_all') || '全部日志'}</option>`;
+    html += `<option value="system">${t('log_system') || '系统日志'}</option>`;
     
     bots.forEach(b => {
         const name = b.nickname || b.self_id;
-        const status = b.is_alive ? '' : ' (Offline)';
+        const status = b.is_alive ? '' : ` (${t('status_offline')})`;
         html += `<option value="${b.self_id}">${name} (${b.platform})${status}</option>`;
     });
     
@@ -108,12 +105,11 @@ export function updateLogBotSelectorFull(bots) {
  */
 export async function fetchLogs() {
     if (!window.authToken) return;
-    const t = translations[currentLang] || translations['zh-CN'];
     const container = document.getElementById('log-container');
     if (!container) return;
 
     if (!container.innerHTML || container.innerHTML.trim() === '') {
-        container.innerHTML = `<div class="text-center py-4 text-muted small"><div class="spinner-border spinner-border-sm me-2" style="width: 1rem; height: 1rem;"></div>${t.loading || '加载中...'}</div>`;
+        container.innerHTML = `<div class="text-center py-4 text-muted small"><div class="spinner-border spinner-border-sm me-2" style="width: 1rem; height: 1rem;"></div>${t('loading') || '加载中...'}</div>`;
     }
 
     const selector = document.getElementById('log-bot-selector');
@@ -211,8 +207,7 @@ export function addEventLog(data) {
 export function clearEvents() {
     const container = document.getElementById('event-container');
     if (container) {
-        const t = translations[currentLang] || translations['zh-CN'];
-        container.innerHTML = `<div class="text-muted text-center mt-5">${t.waiting_for_events || '等待事件连接...'}</div>`;
+        container.innerHTML = `<div class="text-muted text-center mt-5">${t('waiting_for_events') || '等待事件连接...'}</div>`;
     }
 }
 

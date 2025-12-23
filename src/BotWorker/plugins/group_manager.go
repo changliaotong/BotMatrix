@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"BotMatrix/common"
 )
 
 type GroupManagerPlugin struct {
@@ -37,7 +39,7 @@ func (p *GroupManagerPlugin) Name() string {
 }
 
 func (p *GroupManagerPlugin) Description() string {
-	return "群管插件，提供踢人、禁言、关键词过滤等功能"
+	return common.T("", "group_manager_plugin_desc")
 }
 
 func (p *GroupManagerPlugin) Version() string {
@@ -45,7 +47,7 @@ func (p *GroupManagerPlugin) Version() string {
 }
 
 func (p *GroupManagerPlugin) Init(robot plugin.Robot) {
-	log.Println("加载群管插件")
+	log.Println(common.T("", "group_manager_plugin_loaded"))
 
 	// 处理爱群主命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -107,29 +109,29 @@ func (p *GroupManagerPlugin) Init(robot plugin.Robot) {
 
 	// 如果数据库连接可用，添加默认敏感词
 	if p.db != nil {
-		// 添加默认敏感词（如果不存在）
 		defaultSensitiveWords := []string{"敏感词1", "敏感词2", "敏感词3"}
 		for _, word := range defaultSensitiveWords {
-			if err := db.AddSensitiveWord(p.db, word); err != nil {
-				log.Printf("添加默认敏感词失败: %v", err)
+			if err := db.AddSensitiveWord(p.db, word, 3); err != nil {
+				log.Printf(common.T("", "group_manager_add_default_sensitive_failed"), err)
 			}
 		}
 
 		// 设置默认群规（如果不存在）
-		defaultRules := `1. 遵守国家法律法规
-2. 禁止发布违法信息
-3. 禁止发布广告
-4. 禁止人身攻击
-5. 禁止刷屏
-6. 保持文明交流`
+		defaultRules := common.T("", "group_manager_default_rules")
 		if err := db.SetGroupRules(p.db, "0", defaultRules); err != nil {
-			log.Printf("设置默认群规失败: %v", err)
+			log.Printf(common.T("", "group_manager_set_default_rules_failed"), err)
 		}
 	}
 
 	// 处理群消息事件
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" {
+			return nil
+		}
+
+		groupIDStr := fmt.Sprintf("%d", event.GroupID)
+		if !IsFeatureEnabledForGroup(p.db, groupIDStr, "moderation") {
+			HandleFeatureDisabled(robot, event, "moderation")
 			return nil
 		}
 
@@ -152,7 +154,7 @@ func (p *GroupManagerPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否是命令
-		if match, _ := p.cmdParser.MatchCommand("群规", event.RawMessage); match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "group_manager_cmd_rules"), event.RawMessage); match {
 			p.sendGroupRules(robot, event)
 		} else if match, _ := p.cmdParser.MatchCommand("help", event.RawMessage); match {
 			p.sendHelp(robot, event)
@@ -190,7 +192,7 @@ func (p *GroupManagerPlugin) handleAdminCommand(robot plugin.Robot, event *onebo
 	if !p.isAdmin(event.GroupID, event.UserID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "权限不足，只有管理员可以执行此命令！",
+			Message: common.T("", "group_manager_insufficient_perms_admin"),
 		})
 		return nil
 	}
@@ -497,7 +499,7 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /kick <用户ID> [是否拒绝入群]",
+			Message: common.T("", "group_manager_kick_usage"),
 		})
 		return
 	}
@@ -507,9 +509,9 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
@@ -517,9 +519,9 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 	if p.isAdmin(event.GroupID, userID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "不能踢管理员！",
+			Message: common.T("", "group_manager_kick_admin_denied"),
 		})
-		log.Printf("[GroupManager] 尝试踢群 %d 中的管理员 %d，操作被拒绝", event.GroupID, userID)
+		log.Printf("[GroupManager] %s %d %s %d, %s", common.T("", "group_manager_try_kick_admin"), event.GroupID, common.T("", "in_group"), userID, common.T("", "group_manager_op_denied"))
 		return
 	}
 
@@ -530,7 +532,7 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 	}
 
 	// 记录踢人操作
-	log.Printf("[GroupManager] 尝试踢群 %d 中的用户 %d，拒绝再次加入: %v", event.GroupID, userID, refuse)
+	log.Printf("[GroupManager] %s %d %s %d, %s: %v", common.T("", "group_manager_try_kick_user"), event.GroupID, common.T("", "in_group"), userID, common.T("", "group_manager_refuse_rejoin"), refuse)
 
 	_, err = robot.SetGroupKick(&onebot.SetGroupKickParams{
 		GroupID:   event.GroupID,
@@ -539,19 +541,19 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 	})
 
 	if err != nil {
-		log.Printf("[GroupManager] 踢群 %d 中的用户 %d 失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_kick_user"), event.GroupID, common.T("", "in_group"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("踢人失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_kick_failed"), err),
 		})
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 已成功将用户 %d 踢出群 %d", userID, event.GroupID)
+	log.Printf("[GroupManager] %s %d %s %d", common.T("", "group_manager_kick_success"), userID, common.T("", "from_group"), event.GroupID)
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已将用户 %d 踢出群聊", userID),
+		Message: fmt.Sprintf(common.T("", "group_manager_kick_success_msg"), userID),
 	})
 
 	// 记录审核日志
@@ -561,10 +563,10 @@ func (p *GroupManagerPlugin) handleKickCommand(robot plugin.Robot, event *onebot
 			AdminID:      fmt.Sprintf("%d", event.UserID),
 			Action:       "kick",
 			TargetUserID: fmt.Sprintf("%d", userID),
-			Description:  fmt.Sprintf("将用户 %d 踢出群聊，拒绝再次加入: %v", userID, refuse),
+			Description:  fmt.Sprintf(common.T("", "group_manager_audit_kick"), userID, refuse),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -574,7 +576,7 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /ban <用户ID> [时长(分钟)]",
+			Message: common.T("", "group_manager_ban_usage"),
 		})
 		return
 	}
@@ -584,9 +586,9 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
@@ -594,9 +596,9 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 	if p.isAdmin(event.GroupID, userID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "不能禁言管理员！",
+			Message: common.T("", "group_manager_ban_admin_denied"),
 		})
-		log.Printf("[GroupManager] 尝试禁言群 %d 中的管理员 %d，操作被拒绝", event.GroupID, userID)
+		log.Printf("[GroupManager] %s %d %s %d, %s", common.T("", "group_manager_try_ban_admin"), event.GroupID, common.T("", "in_group"), userID, common.T("", "group_manager_op_denied"))
 		return
 	}
 
@@ -607,12 +609,12 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 		if err == nil && minutes > 0 {
 			duration = time.Duration(minutes) * time.Minute
 		} else {
-			log.Printf("[GroupManager] 解析禁言时长 '%s' 失败，使用默认时长30分钟", args[1])
+			log.Printf("[GroupManager] %s '%s' %s, %s", common.T("", "group_manager_parse_duration_failed"), args[1], common.T("", "failed"), common.T("", "group_manager_use_default_duration"))
 		}
 	}
 
 	// 执行禁言操作
-	log.Printf("[GroupManager] 尝试禁言群 %d 中的用户 %d，时长 %d 分钟", event.GroupID, userID, int(duration.Minutes()))
+	log.Printf("[GroupManager] %s %d %s %d, %s %d %s", common.T("", "group_manager_try_ban_user"), event.GroupID, common.T("", "in_group"), userID, common.T("", "duration"), int(duration.Minutes()), common.T("", "minutes"))
 
 	_, err = robot.SetGroupBan(&onebot.SetGroupBanParams{
 		GroupID:  event.GroupID,
@@ -621,10 +623,10 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 	})
 
 	if err != nil {
-		log.Printf("[GroupManager] 禁言群 %d 中的用户 %d 失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_ban_user"), event.GroupID, common.T("", "in_group"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("禁言失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_ban_failed"), err),
 		})
 		return
 	}
@@ -638,36 +640,36 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 
 		// 设置禁言记录，带过期时间
 		if err := p.redisClient.Set(ctx, banKey, time.Now().Add(duration).Unix(), duration).Err(); err != nil {
-			log.Printf("[GroupManager] 存储禁言信息到Redis失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_redis_save_ban_failed"), err)
 			// 回退到数据库存储
 			if p.db != nil {
 				banEndTime := time.Now().Add(duration)
 				if err := db.BanUser(p.db, groupIDStr, userIDStr, banEndTime); err != nil {
-					log.Printf("[GroupManager] 存储禁言信息到数据库也失败: %v", err)
+					log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_db_save_ban_failed"), err)
 				} else {
-					log.Printf("[GroupManager] 已将禁言信息回退到数据库存储")
+					log.Printf("[GroupManager] %s", common.T("", "group_manager_fallback_db_save"))
 				}
 			}
 		} else {
-			log.Printf("[GroupManager] 已将禁言信息存储到Redis")
+			log.Printf("[GroupManager] %s", common.T("", "group_manager_redis_save_ban_success"))
 		}
 	} else if p.db != nil {
 		// Redis不可用时，使用数据库存储
 		banEndTime := time.Now().Add(duration)
 		if err := db.BanUser(p.db, fmt.Sprintf("%d", event.GroupID), fmt.Sprintf("%d", userID), banEndTime); err != nil {
-			log.Printf("[GroupManager] 存储禁言信息到数据库失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_db_save_ban_failed"), err)
 		} else {
-			log.Printf("[GroupManager] 已将禁言信息存储到数据库")
+			log.Printf("[GroupManager] %s", common.T("", "group_manager_db_save_ban_success"))
 		}
 	} else {
-		log.Printf("[GroupManager] Redis和数据库都不可用，无法持久化禁言信息")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_persistence_unavailable"))
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 已成功将用户 %d 禁言 %d 分钟", userID, int(duration.Minutes()))
+	log.Printf("[GroupManager] %s %d %d %s", common.T("", "group_manager_ban_success"), userID, int(duration.Minutes()), common.T("", "minutes"))
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已将用户 %d 禁言 %d 分钟", userID, int(duration.Minutes())),
+		Message: fmt.Sprintf(common.T("", "group_manager_ban_success_msg"), userID, int(duration.Minutes())),
 	})
 
 	// 记录审核日志
@@ -677,10 +679,10 @@ func (p *GroupManagerPlugin) handleBanCommand(robot plugin.Robot, event *onebot.
 			AdminID:      fmt.Sprintf("%d", event.UserID),
 			Action:       "ban",
 			TargetUserID: fmt.Sprintf("%d", userID),
-			Description:  fmt.Sprintf("将用户 %d 禁言 %d 分钟", userID, int(duration.Minutes())),
+			Description:  fmt.Sprintf(common.T("", "group_manager_audit_ban"), userID, int(duration.Minutes())),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -690,7 +692,7 @@ func (p *GroupManagerPlugin) handleUnbanCommand(robot plugin.Robot, event *onebo
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /unban <用户ID>",
+			Message: common.T("", "group_manager_unban_usage"),
 		})
 		return
 	}
@@ -700,14 +702,14 @@ func (p *GroupManagerPlugin) handleUnbanCommand(robot plugin.Robot, event *onebo
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
 	// 执行解除禁言操作
-	log.Printf("[GroupManager] 尝试解除群 %d 中用户 %d 的禁言", event.GroupID, userID)
+	log.Printf("[GroupManager] %s %d %s %d", common.T("", "group_manager_try_unban_user"), event.GroupID, common.T("", "in_group"), userID)
 
 	_, err = robot.SetGroupBan(&onebot.SetGroupBanParams{
 		GroupID:  event.GroupID,
@@ -716,10 +718,10 @@ func (p *GroupManagerPlugin) handleUnbanCommand(robot plugin.Robot, event *onebo
 	})
 
 	if err != nil {
-		log.Printf("[GroupManager] 解除群 %d 中用户 %d 的禁言失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_unban_user"), event.GroupID, common.T("", "in_group"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("解除禁言失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_unban_failed"), err),
 		})
 		return
 	}
@@ -733,26 +735,26 @@ func (p *GroupManagerPlugin) handleUnbanCommand(robot plugin.Robot, event *onebo
 		banKey := fmt.Sprintf("group:%s:ban:%s", groupIDStr, userIDStr)
 
 		if err := p.redisClient.Del(ctx, banKey).Err(); err != nil {
-			log.Printf("[GroupManager] 从Redis移除禁言记录失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_redis_del_ban_failed"), err)
 		} else {
-			log.Printf("[GroupManager] 已从Redis移除禁言记录")
+			log.Printf("[GroupManager] %s", common.T("", "group_manager_redis_del_ban_success"))
 		}
 	}
 
 	// 同时从数据库移除禁言记录，确保数据一致性
 	if p.db != nil {
 		if err := db.UnbanUser(p.db, groupIDStr, userIDStr); err != nil {
-			log.Printf("[GroupManager] 从数据库移除禁言记录失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_db_del_ban_failed"), err)
 		} else {
-			log.Printf("[GroupManager] 已从数据库移除禁言记录")
+			log.Printf("[GroupManager] %s", common.T("", "group_manager_db_del_ban_success"))
 		}
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 已成功解除用户 %d 的禁言", userID)
+	log.Printf("[GroupManager] %s %d", common.T("", "group_manager_unban_success"), userID)
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已解除用户 %d 的禁言", userID),
+		Message: fmt.Sprintf(common.T("", "group_manager_unban_success_msg"), userID),
 	})
 
 	// 记录审核日志
@@ -762,10 +764,10 @@ func (p *GroupManagerPlugin) handleUnbanCommand(robot plugin.Robot, event *onebo
 			AdminID:      fmt.Sprintf("%d", event.UserID),
 			Action:       "unban",
 			TargetUserID: fmt.Sprintf("%d", userID),
-			Description:  fmt.Sprintf("解除用户 %d 的禁言", userID),
+			Description:  fmt.Sprintf(common.T("", "group_manager_audit_unban"), userID),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -776,16 +778,16 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 	if !p.isSuperAdmin(event.GroupID, event.UserID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "权限不足，只有超级管理员可以添加管理员！",
+			Message: common.T("", "group_manager_insufficient_perms_superadmin"),
 		})
-		log.Printf("[GroupManager] 用户 %d 尝试在群 %d 中添加管理员，但不是超级管理员，操作被拒绝", event.UserID, event.GroupID)
+		log.Printf("[GroupManager] %s %d %s %d %s, %s", common.T("", "user"), event.UserID, common.T("", "try_add_admin_in_group"), event.GroupID, common.T("", "but_not_superadmin"), common.T("", "group_manager_op_denied"))
 		return
 	}
 
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /addadmin <用户ID>",
+			Message: common.T("", "group_manager_addadmin_usage"),
 		})
 		return
 	}
@@ -795,9 +797,9 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
@@ -805,9 +807,9 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 	if p.db == nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "数据库连接不可用，操作失败！",
+			Message: common.T("", "group_manager_db_unavailable"),
 		})
-		log.Printf("[GroupManager] 数据库连接不可用，无法添加管理员")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_db_unavailable_log"))
 		return
 	}
 
@@ -818,10 +820,10 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 	// 检查是否已经是管理员
 	isAdmin, err := db.IsGroupAdmin(p.db, groupIDStr, userIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] 检查群 %d 中用户 %d 的管理员状态失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_check_admin_status"), event.GroupID, common.T("", "in_group"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "操作失败，请稍后重试！",
+			Message: common.T("", "group_manager_op_failed_retry"),
 		})
 		return
 	}
@@ -829,26 +831,26 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 	if isAdmin {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "该用户已经是管理员！",
+			Message: common.T("", "group_manager_already_admin"),
 		})
 		return
 	}
 
 	// 添加管理员，默认权限级别为1（普通管理员）
 	if err := db.AddGroupAdmin(p.db, groupIDStr, userIDStr, 1); err != nil {
-		log.Printf("[GroupManager] 向群 %d 添加管理员 %d 失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_add_admin"), event.GroupID, common.T("", "to_group"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "操作失败，请稍后重试！",
+			Message: common.T("", "group_manager_op_failed_retry"),
 		})
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 群 %d 中用户 %d 已成功添加为管理员", event.GroupID, userID)
+	log.Printf("[GroupManager] %s %d %s %d %s", common.T("", "group"), event.GroupID, common.T("", "in_group"), userID, common.T("", "group_manager_add_admin_success"))
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已将用户 %d 添加为管理员", userID),
+		Message: fmt.Sprintf(common.T("", "group_manager_add_admin_success_msg"), userID),
 	})
 
 	// 记录审核日志
@@ -858,10 +860,10 @@ func (p *GroupManagerPlugin) handleAddAdminCommand(robot plugin.Robot, event *on
 			AdminID:      fmt.Sprintf("%d", event.UserID),
 			Action:       "add_admin",
 			TargetUserID: fmt.Sprintf("%d", userID),
-			Description:  fmt.Sprintf("将用户 %d 添加为群管理员", userID),
+			Description:  fmt.Sprintf(common.T("", "group_manager_audit_add_admin"), userID),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -872,16 +874,16 @@ func (p *GroupManagerPlugin) handleDelAdminCommand(robot plugin.Robot, event *on
 	if !p.isSuperAdmin(event.GroupID, event.UserID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "权限不足，只有超级管理员可以删除管理员！",
+			Message: common.T("", "group_manager_insufficient_perms_superadmin"),
 		})
-		log.Printf("[GroupManager] 用户 %d 尝试在群 %d 中删除管理员，但不是超级管理员，操作被拒绝", event.UserID, event.GroupID)
+		log.Printf("[GroupManager] %s %d %s %d %s", common.T("", "user"), event.UserID, common.T("", "group_manager_try_del_admin"), event.GroupID, common.T("", "group_manager_op_denied"))
 		return
 	}
 
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /deladmin <用户ID>",
+			Message: common.T("", "group_manager_deladmin_usage"),
 		})
 		return
 	}
@@ -891,9 +893,9 @@ func (p *GroupManagerPlugin) handleDelAdminCommand(robot plugin.Robot, event *on
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
@@ -901,9 +903,9 @@ func (p *GroupManagerPlugin) handleDelAdminCommand(robot plugin.Robot, event *on
 	if p.db == nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "数据库连接不可用，操作失败！",
+			Message: common.T("", "group_manager_db_unavailable"),
 		})
-		log.Printf("[GroupManager] 数据库连接不可用，无法删除管理员")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_db_unavailable_log"))
 		return
 	}
 
@@ -914,19 +916,19 @@ func (p *GroupManagerPlugin) handleDelAdminCommand(robot plugin.Robot, event *on
 	// 移除管理员
 	err = db.RemoveGroupAdmin(p.db, groupIDStr, userIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] 从群 %d 中删除管理员 %d 失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_del_admin"), event.GroupID, common.T("", "from_group"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "该用户不是管理员！",
+			Message: common.T("", "group_manager_not_admin"),
 		})
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 群 %d 中用户 %d 已成功移除管理员身份", event.GroupID, userID)
+	log.Printf("[GroupManager] %s %d %s %d %s", common.T("", "group"), event.GroupID, common.T("", "in_group"), userID, common.T("", "group_manager_del_admin_success"))
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已将用户 %d 移除管理员身份", userID),
+		Message: fmt.Sprintf(common.T("", "group_manager_del_admin_success_msg"), userID),
 	})
 
 	// 记录审核日志
@@ -936,10 +938,10 @@ func (p *GroupManagerPlugin) handleDelAdminCommand(robot plugin.Robot, event *on
 			AdminID:      fmt.Sprintf("%d", event.UserID),
 			Action:       "del_admin",
 			TargetUserID: fmt.Sprintf("%d", userID),
-			Description:  fmt.Sprintf("将用户 %d 移除管理员身份", userID),
+			Description:  fmt.Sprintf(common.T("", "group_manager_audit_del_admin"), userID),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -949,7 +951,7 @@ func (p *GroupManagerPlugin) handleSetRulesCommand(robot plugin.Robot, event *on
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /setrules <群规内容>",
+			Message: common.T("", "group_manager_setrules_usage"),
 		})
 		return
 	}
@@ -958,9 +960,9 @@ func (p *GroupManagerPlugin) handleSetRulesCommand(robot plugin.Robot, event *on
 	if p.db == nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "数据库连接不可用，操作失败！",
+			Message: common.T("", "group_manager_db_unavailable"),
 		})
-		log.Printf("[GroupManager] 数据库连接不可用，无法设置群规")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_db_unavailable_log"))
 		return
 	}
 
@@ -969,19 +971,19 @@ func (p *GroupManagerPlugin) handleSetRulesCommand(robot plugin.Robot, event *on
 	groupIDStr := fmt.Sprintf("%d", event.GroupID)
 
 	if err := db.SetGroupRules(p.db, groupIDStr, rules); err != nil {
-		log.Printf("[GroupManager] 设置群 %d 的群规失败: %v", event.GroupID, err)
+		log.Printf("[GroupManager] %s %d %s %s: %v", common.T("", "group_manager_set_rules"), event.GroupID, common.T("", "failed"), common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "设置群规失败，请稍后重试！",
+			Message: common.T("", "group_manager_set_rules_failed"),
 		})
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 群 %d 的群规已成功更新", event.GroupID)
+	log.Printf("[GroupManager] %s %d %s", common.T("", "group"), event.GroupID, common.T("", "group_manager_rules_updated"))
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: "群规已更新！",
+		Message: common.T("", "group_manager_rules_updated_msg"),
 	})
 
 	// 记录审核日志
@@ -990,10 +992,14 @@ func (p *GroupManagerPlugin) handleSetRulesCommand(robot plugin.Robot, event *on
 			GroupID:     fmt.Sprintf("%d", event.GroupID),
 			AdminID:     fmt.Sprintf("%d", event.UserID),
 			Action:      "set_rules",
+<<<<<<< Updated upstream
 			Description: fmt.Sprintf("更新群规为: %s", rules),
+=======
+			Description: fmt.Sprintf(common.T("", "group_manager_audit_set_rules"), rules),
+>>>>>>> Stashed changes
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -1003,7 +1009,7 @@ func (p *GroupManagerPlugin) handleAddWordCommand(robot plugin.Robot, event *one
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /addword <敏感词>",
+			Message: common.T("", "group_manager_addword_usage"),
 		})
 		return
 	}
@@ -1012,38 +1018,55 @@ func (p *GroupManagerPlugin) handleAddWordCommand(robot plugin.Robot, event *one
 	if p.db == nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "数据库连接不可用，操作失败！",
+			Message: common.T("", "group_manager_db_unavailable"),
 		})
-		log.Printf("[GroupManager] 数据库连接不可用，无法添加敏感词")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_db_unavailable_log"))
 		return
 	}
 
-	// 添加敏感词
-	word := strings.Join(args, " ")
+	level := 3
+	startIndex := 0
+
+	if len(args) >= 2 {
+		if v, err := strconv.Atoi(args[0]); err == nil && v >= 1 && v <= 6 {
+			level = v
+			startIndex = 1
+		}
+	}
+
+	if startIndex >= len(args) {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: common.T("", "group_manager_provide_sensitive_word"),
+		})
+		return
+	}
+
+	word := strings.Join(args[startIndex:], " ")
 
 	// 添加到数据库
-	if err := db.AddSensitiveWord(p.db, word); err != nil {
-		log.Printf("[GroupManager] 添加敏感词 '%s' 失败: %v", word, err)
+	if err := db.AddSensitiveWord(p.db, word, level); err != nil {
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_add_sensitive"), word, common.T("", "failed"), err)
 		// 检查是否为重复添加
 		if strings.Contains(err.Error(), "duplicate key") {
 			robot.SendMessage(&onebot.SendMessageParams{
 				GroupID: event.GroupID,
-				Message: "该敏感词已经存在！",
+				Message: common.T("", "group_manager_sensitive_exists"),
 			})
 		} else {
 			robot.SendMessage(&onebot.SendMessageParams{
 				GroupID: event.GroupID,
-				Message: "添加敏感词失败，请稍后重试！",
+				Message: common.T("", "group_manager_add_sensitive_failed_msg"),
 			})
 		}
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 敏感词 '%s' 已成功添加", word)
+	log.Printf("[GroupManager] %s '%s' %s", common.T("", "group_manager_sensitive"), word, common.T("", "group_manager_sensitive_added"))
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已添加敏感词: %s", word),
+		Message: fmt.Sprintf(common.T("", "group_manager_sensitive_added_msg"), word),
 	})
 
 	// 记录审核日志
@@ -1052,10 +1075,10 @@ func (p *GroupManagerPlugin) handleAddWordCommand(robot plugin.Robot, event *one
 			GroupID:     fmt.Sprintf("%d", event.GroupID),
 			AdminID:     fmt.Sprintf("%d", event.UserID),
 			Action:      "add_sensitive_word",
-			Description: fmt.Sprintf("添加敏感词: %s", word),
+			Description: fmt.Sprintf(common.T("", "group_manager_audit_add_sensitive"), word),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -1065,7 +1088,7 @@ func (p *GroupManagerPlugin) handleDelWordCommand(robot plugin.Robot, event *one
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /delword <敏感词>",
+			Message: common.T("", "group_manager_delword_usage"),
 		})
 		return
 	}
@@ -1074,9 +1097,9 @@ func (p *GroupManagerPlugin) handleDelWordCommand(robot plugin.Robot, event *one
 	if p.db == nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "数据库连接不可用，操作失败！",
+			Message: common.T("", "group_manager_db_unavailable"),
 		})
-		log.Printf("[GroupManager] 数据库连接不可用，无法删除敏感词")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_db_unavailable_log"))
 		return
 	}
 
@@ -1085,27 +1108,27 @@ func (p *GroupManagerPlugin) handleDelWordCommand(robot plugin.Robot, event *one
 
 	// 从数据库删除
 	if err := db.RemoveSensitiveWord(p.db, word); err != nil {
-		log.Printf("[GroupManager] 删除敏感词 '%s' 失败: %v", word, err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_del_sensitive"), word, common.T("", "failed"), err)
 		// 检查是否为不存在的敏感词
 		if strings.Contains(err.Error(), "no rows in result set") || strings.Contains(err.Error(), "not found") {
 			robot.SendMessage(&onebot.SendMessageParams{
 				GroupID: event.GroupID,
-				Message: "该敏感词不存在！",
+				Message: common.T("", "group_manager_sensitive_not_exists"),
 			})
 		} else {
 			robot.SendMessage(&onebot.SendMessageParams{
 				GroupID: event.GroupID,
-				Message: "删除敏感词失败，请稍后重试！",
+				Message: common.T("", "group_manager_op_failed_retry"),
 			})
 		}
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 敏感词 '%s' 已成功删除", word)
+	log.Printf("[GroupManager] %s '%s' %s", common.T("", "group_manager_sensitive"), word, common.T("", "group_manager_del_success"))
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已删除敏感词: %s", word),
+		Message: fmt.Sprintf(common.T("", "group_manager_del_sensitive_success_msg"), word),
 	})
 
 	// 记录审核日志
@@ -1114,10 +1137,10 @@ func (p *GroupManagerPlugin) handleDelWordCommand(robot plugin.Robot, event *one
 			GroupID:     fmt.Sprintf("%d", event.GroupID),
 			AdminID:     fmt.Sprintf("%d", event.UserID),
 			Action:      "del_sensitive_word",
-			Description: fmt.Sprintf("删除敏感词: %s", word),
+			Description: fmt.Sprintf(common.T("", "group_manager_audit_del_sensitive"), word),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -1130,12 +1153,11 @@ func (p *GroupManagerPlugin) isAdmin(groupID, userID int64) bool {
 
 	isAdmin, err := db.IsGroupAdmin(p.db, groupIDStr, userIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] 检查群 %d 中用户 %d 的管理员状态失败: %v", groupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_check_admin_status"), groupID, common.T("", "of_user"), userID, common.T("", "failed"), err)
 		return false
 	}
 
 	return isAdmin
-	// 可以添加更多管理员检查逻辑，如群主检查
 }
 
 // 检查是否为超级管理员
@@ -1146,7 +1168,7 @@ func (p *GroupManagerPlugin) isSuperAdmin(groupID, userID int64) bool {
 
 	isSuperAdmin, err := db.IsSuperAdmin(p.db, groupIDStr, userIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] 检查群 %d 中用户 %d 的超级管理员状态失败: %v", groupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_check_superadmin_status"), groupID, common.T("", "of_user"), userID, common.T("", "failed"), err)
 		return false
 	}
 
@@ -1159,16 +1181,16 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 	if !p.isOwner(robot, event.GroupID, event.UserID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "权限不足，只有群主可以设置头衔！",
+			Message: common.T("", "group_manager_insufficient_perms_owner"),
 		})
-		log.Printf("[GroupManager] 用户 %d 尝试在群 %d 中设置头衔，但不是群主，操作被拒绝", event.UserID, event.GroupID)
+		log.Printf("[GroupManager] %s %d %s %d %s", common.T("", "user"), event.UserID, common.T("", "group_manager_try_set_title_not_owner"), event.GroupID, common.T("", "group_manager_op_denied"))
 		return
 	}
 
 	if len(args) < 2 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: /settitle <用户ID> <头衔>",
+			Message: common.T("", "group_manager_settitle_usage"),
 		})
 		return
 	}
@@ -1178,9 +1200,9 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
@@ -1192,9 +1214,9 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("获取用户信息失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_get_member_info_failed"), err),
 		})
-		log.Printf("[GroupManager] 获取群 %d 中用户 %d 的信息失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_get_member_info_failed_log"), event.GroupID, userID, common.T("", "failed"), err)
 		return
 	}
 
@@ -1203,7 +1225,7 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 	if len(title) > 12 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "头衔长度不能超过12个字符！",
+			Message: common.T("", "group_manager_title_too_long"),
 		})
 		return
 	}
@@ -1216,19 +1238,19 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 	})
 
 	if err != nil {
-		log.Printf("[GroupManager] 为群 %d 中用户 %d 设置头衔 '%s' 失败: %v", event.GroupID, userID, title, err)
+		log.Printf("[GroupManager] %s %d %s %d %s '%s' %s: %v", common.T("", "group_manager_set_title"), event.GroupID, common.T("", "of_user"), userID, common.T("", "to"), title, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("设置头衔失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_set_title_failed"), err),
 		})
 		return
 	}
 
 	// 记录成功操作
-	log.Printf("[GroupManager] 已成功为用户 %d 设置头衔 '%s'", userID, title)
+	log.Printf("[GroupManager] %s %d %s '%s'", common.T("", "group_manager_set_title_success_log"), userID, common.T("", "to"), title)
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("已为用户 %d 设置头衔 '%s'", userID, title),
+		Message: fmt.Sprintf(common.T("", "group_manager_set_title_success_msg"), userID, title),
 	})
 
 	// 记录审核日志
@@ -1238,10 +1260,10 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 			AdminID:      fmt.Sprintf("%d", event.UserID),
 			Action:       "set_title",
 			TargetUserID: fmt.Sprintf("%d", userID),
-			Description:  fmt.Sprintf("为用户 %d 设置头衔 '%s'", userID, title),
+			Description:  fmt.Sprintf(common.T("", "group_manager_audit_set_title"), userID, title),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
-			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
+			log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_add_audit_failed"), err)
 		}
 	}
 }
@@ -1254,7 +1276,7 @@ func (p *GroupManagerPlugin) isOwner(robot plugin.Robot, groupID, userID int64) 
 		UserID:  userID,
 	})
 	if err != nil {
-		log.Printf("[GroupManager] 获取用户 %d 在群 %d 中的成员信息失败: %v", userID, groupID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_get_member_info_failed_user_log"), userID, common.T("", "in_group"), groupID, common.T("", "failed"), err)
 		return false
 	}
 
@@ -1269,45 +1291,21 @@ func (p *GroupManagerPlugin) isOwner(robot plugin.Robot, groupID, userID int64) 
 	return false
 }
 
-// 检查消息是否包含敏感词
-func (p *GroupManagerPlugin) containsSensitiveWords(message string) bool {
-	// 检查数据库连接是否可用
-	if p.db == nil {
-		log.Printf("[GroupManager] 数据库连接不可用，无法检查敏感词")
-		return false
-	}
-
-	// 从数据库获取所有敏感词
-	words, err := db.GetAllSensitiveWords(p.db)
-	if err != nil {
-		log.Printf("[GroupManager] 从数据库获取敏感词失败: %v", err)
-		return false
-	}
-
-	for _, word := range words {
-		if strings.Contains(message, word) {
-			log.Printf("[GroupManager] 检测到敏感词 '%s'", word)
-			return true
-		}
-	}
-	return false
-}
-
 // 发送欢迎消息和群规
 func (p *GroupManagerPlugin) sendWelcomeAndRules(robot plugin.Robot, event *onebot.Event) {
 	// 发送欢迎消息
-	welcomeMsg := fmt.Sprintf("欢迎新成员 @%d 加入本群！\n\n请遵守群规：", event.UserID)
+	welcomeMsg := fmt.Sprintf(common.T("", "group_manager_welcome_member"), event.UserID)
 
 	// 从数据库获取群规
 	groupIDStr := fmt.Sprintf("%d", event.GroupID)
 	rules, err := db.GetGroupRules(p.db, groupIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] 获取群 %d 的群规失败: %v", event.GroupID, err)
+		log.Printf("[GroupManager] %s %d %s %s: %v", common.T("", "group_manager_get_rules"), event.GroupID, common.T("", "failed"), common.T("", "failed"), err)
 		// 使用默认群规
 		if err == sql.ErrNoRows {
 			defaultRules, err := db.GetGroupRules(p.db, "0")
 			if err != nil {
-				log.Printf("[GroupManager] 获取默认群规失败: %v", err)
+				log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_get_default_rules_failed"), err)
 				rules = ""
 			} else {
 				rules = defaultRules
@@ -1317,13 +1315,8 @@ func (p *GroupManagerPlugin) sendWelcomeAndRules(robot plugin.Robot, event *oneb
 
 	if rules == "" {
 		// 如果数据库中没有群规，使用默认群规
-		rules = `1. 遵守国家法律法规
-2. 禁止发布违法信息
-3. 禁止发布广告
-4. 禁止人身攻击
-5. 禁止刷屏
-6. 保持文明交流`
-		log.Printf("[GroupManager] 使用内置默认群规")
+		rules = common.T("", "group_manager_default_rules")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_use_builtin_rules"))
 	}
 
 	// 合并消息
@@ -1335,7 +1328,7 @@ func (p *GroupManagerPlugin) sendWelcomeAndRules(robot plugin.Robot, event *oneb
 		Message: fullMsg,
 	})
 	if err != nil {
-		log.Printf("[GroupManager] 向群 %d 发送欢迎消息失败: %v", event.GroupID, err)
+		log.Printf("[GroupManager] %s %d %s %s: %v", common.T("", "group_manager_send_welcome"), event.GroupID, common.T("", "failed"), common.T("", "failed"), err)
 	}
 
 	// 记录邀请统计
@@ -1397,12 +1390,12 @@ func (p *GroupManagerPlugin) sendGroupRules(robot plugin.Robot, event *onebot.Ev
 	groupIDStr := fmt.Sprintf("%d", event.GroupID)
 	rules, err := db.GetGroupRules(p.db, groupIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] 获取群 %d 的群规失败: %v", event.GroupID, err)
+		log.Printf("[GroupManager] %s %d %s %s: %v", common.T("", "group_manager_get_rules"), event.GroupID, common.T("", "failed"), common.T("", "failed"), err)
 		// 使用默认群规
 		if err == sql.ErrNoRows {
 			defaultRules, err := db.GetGroupRules(p.db, "0")
 			if err != nil {
-				log.Printf("[GroupManager] 获取默认群规失败: %v", err)
+				log.Printf("[GroupManager] %s: %v", common.T("", "group_manager_get_default_rules_failed"), err)
 				rules = ""
 			} else {
 				rules = defaultRules
@@ -1412,45 +1405,23 @@ func (p *GroupManagerPlugin) sendGroupRules(robot plugin.Robot, event *onebot.Ev
 
 	if rules == "" {
 		// 如果数据库中没有群规，使用默认群规
-		rules = `1. 遵守国家法律法规
-2. 禁止发布违法信息
-3. 禁止发布广告
-4. 禁止人身攻击
-5. 禁止刷屏
-6. 保持文明交流`
-		log.Printf("[GroupManager] 使用内置默认群规")
+		rules = common.T("", "group_manager_default_rules")
+		log.Printf("[GroupManager] %s", common.T("", "group_manager_use_builtin_rules"))
 	}
 
 	// 发送群规
 	_, err = robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: "群规：\n" + rules,
+		Message: common.T("", "group_manager_rules_prefix") + "\n" + rules,
 	})
 	if err != nil {
-		log.Printf("[GroupManager] 向群 %d 发送群规失败: %v", event.GroupID, err)
+		log.Printf("[GroupManager] %s %d %s %s: %v", common.T("", "group_manager_send_rules"), event.GroupID, common.T("", "failed"), common.T("", "failed"), err)
 	}
 }
 
 // 发送帮助信息
 func (p *GroupManagerPlugin) sendHelp(robot plugin.Robot, event *onebot.Event) {
-	helpMsg := `群管机器人帮助信息：
-
-普通成员命令：
-- 群规：查看群规
-- help：查看帮助信息
-
-管理员命令：
-- !kick <用户ID> [是否拒绝入群]：踢人
-- !ban <用户ID> [时长(分钟)]：禁言
-- !unban <用户ID>：解除禁言
-- !addadmin <用户ID>：添加管理员
-- !deladmin <用户ID>：删除管理员
-- !setrules <群规内容>：设置群规
-- !addword <敏感词>：添加敏感词
-- !delword <敏感词>：删除敏感词
-- !members：查看群成员列表
-- !memberinfo <用户ID>：查看特定成员信息
-- !settitle <用户ID> <头衔>：设置群成员头衔（仅群主可用）`
+	helpMsg := common.T("", "group_manager_help_msg")
 
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
@@ -1473,7 +1444,7 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 				// 使用SCAN命令遍历所有禁言记录
 				keys, nextCursor, err := p.redisClient.Scan(ctx, cursor, "group:*:ban:*", 10).Result()
 				if err != nil {
-					log.Printf("从Redis获取禁言记录失败: %v", err)
+					log.Printf("%s: %v", common.T("", "group_manager_redis_get_ban_failed"), err)
 					break
 				}
 
@@ -1482,13 +1453,13 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 					// 获取禁言过期时间
 					banEndTimeStr, err := p.redisClient.Get(ctx, key).Result()
 					if err != nil {
-						log.Printf("获取禁言记录失败: %v", err)
+						log.Printf("%s: %v", common.T("", "group_manager_redis_get_ban_key_failed"), err)
 						continue
 					}
 
 					banEndTime, err := strconv.ParseInt(banEndTimeStr, 10, 64)
 					if err != nil {
-						log.Printf("解析禁言时间失败: %v", err)
+						log.Printf("%s: %v", common.T("", "group_manager_redis_parse_ban_time_failed"), err)
 						continue
 					}
 
@@ -1497,7 +1468,7 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 						// 解析groupID和userID
 						parts := strings.Split(key, ":")
 						if len(parts) != 4 {
-							log.Printf("无效的禁言记录键: %s", key)
+							log.Printf("%s: %s", common.T("", "group_manager_invalid_ban_key"), key)
 							continue
 						}
 
@@ -1505,12 +1476,12 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 						userIDStr := parts[3]
 						groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
 						if err != nil {
-							log.Printf("转换群ID失败: %v", err)
+							log.Printf("%s: %v", common.T("", "group_manager_convert_groupid_failed"), err)
 							continue
 						}
 						userID, err := strconv.ParseInt(userIDStr, 10, 64)
 						if err != nil {
-							log.Printf("转换用户ID失败: %v", err)
+							log.Printf("%s: %v", common.T("", "group_manager_convert_userid_failed"), err)
 							continue
 						}
 
@@ -1521,26 +1492,26 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 							Duration: 0,
 						})
 						if err != nil {
-							log.Printf("解除禁言失败: %v", err)
+							log.Printf("%s: %v", common.T("", "group_manager_unban_failed_log"), err)
 							continue
 						}
 
 						// 从Redis移除禁言记录
 						if err := p.redisClient.Del(ctx, key).Err(); err != nil {
-							log.Printf("从Redis移除禁言记录失败: %v", err)
+							log.Printf("%s: %v", common.T("", "group_manager_redis_del_ban_failed"), err)
 						}
 
 						// 同时从数据库移除禁言记录（如果存在）
 						if p.db != nil {
 							if err := db.UnbanUser(p.db, groupIDStr, userIDStr); err != nil {
-								log.Printf("从数据库移除禁言记录失败: %v", err)
+								log.Printf("%s: %v", common.T("", "group_manager_db_del_ban_failed"), err)
 							}
 						}
 
 						// 发送通知
 						robot.SendMessage(&onebot.SendMessageParams{
 							GroupID: groupID,
-							Message: fmt.Sprintf("用户 %d 的禁言时间已到", userID),
+							Message: fmt.Sprintf(common.T("", "group_manager_ban_expired_msg"), userID),
 						})
 					}
 				}
@@ -1558,7 +1529,7 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 			// 从数据库获取所有过期的禁言记录
 			expiredBans, err := db.GetExpiredBans(p.db)
 			if err != nil {
-				log.Printf("获取过期禁言记录失败: %v", err)
+				log.Printf("%s: %v", common.T("", "group_manager_get_expired_bans_failed"), err)
 				continue
 			}
 
@@ -1569,12 +1540,12 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 				userIDStr := ban["user_id"].(string)
 				groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
 				if err != nil {
-					log.Printf("转换群ID失败: %v", err)
+					log.Printf("%s: %v", common.T("", "group_manager_convert_groupid_failed"), err)
 					continue
 				}
 				userID, err := strconv.ParseInt(userIDStr, 10, 64)
 				if err != nil {
-					log.Printf("转换用户ID失败: %v", err)
+					log.Printf("%s: %v", common.T("", "group_manager_convert_userid_failed"), err)
 					continue
 				}
 
@@ -1585,20 +1556,20 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 					Duration: 0,
 				})
 				if err != nil {
-					log.Printf("解除禁言失败: %v", err)
+					log.Printf("%s: %v", common.T("", "group_manager_unban_failed_log"), err)
 					continue
 				}
 
 				// 从数据库移除禁言记录
 				if err := db.UnbanUser(p.db, groupIDStr, userIDStr); err != nil {
-					log.Printf("移除禁言记录失败: %v", err)
+					log.Printf("%s: %v", common.T("", "group_manager_db_del_ban_failed"), err)
 					continue
 				}
 
 				// 发送通知
 				robot.SendMessage(&onebot.SendMessageParams{
 					GroupID: groupID,
-					Message: fmt.Sprintf("用户 %d 的禁言时间已到", userID),
+					Message: fmt.Sprintf(common.T("", "group_manager_ban_expired_msg"), userID),
 				})
 			}
 		}
@@ -1616,7 +1587,7 @@ func parseUserID(str string) (int64, error) {
 	re := regexp.MustCompile(`\d+`)
 	numStr := re.FindString(str)
 	if numStr == "" {
-		return 0, fmt.Errorf("无效的用户ID")
+		return 0, fmt.Errorf(common.T("", "group_manager_invalid_userid_err"))
 	}
 
 	// 转换为int64
@@ -1634,7 +1605,7 @@ func parseDuration(str string) (int, error) {
 	re := regexp.MustCompile(`\d+`)
 	numStr := re.FindString(str)
 	if numStr == "" {
-		return 0, fmt.Errorf("无效的时长")
+		return 0, fmt.Errorf(common.T("", "group_manager_invalid_duration_err"))
 	}
 
 	// 转换为int
@@ -1652,7 +1623,7 @@ func (p *GroupManagerPlugin) handleGetMembersCommand(robot plugin.Robot, event *
 	if !p.isAdmin(event.GroupID, event.UserID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "权限不足，只有管理员可以查看群成员列表！",
+			Message: common.T("", "group_manager_insufficient_perms_admin_view_members"),
 		})
 		return
 	}
@@ -1664,10 +1635,10 @@ func (p *GroupManagerPlugin) handleGetMembersCommand(robot plugin.Robot, event *
 	})
 
 	if err != nil {
-		log.Printf("[GroupManager] 获取群 %d 成员列表失败: %v", event.GroupID, err)
+		log.Printf("[GroupManager] %s %d %s: %v", common.T("", "group_manager_get_member_list_failed_log"), event.GroupID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("获取群成员列表失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_get_member_list_failed"), err),
 		})
 		return
 	}
@@ -1675,17 +1646,17 @@ func (p *GroupManagerPlugin) handleGetMembersCommand(robot plugin.Robot, event *
 	// 解析返回数据
 	memberList, ok := resp.Data.([]interface{})
 	if !ok {
-		log.Printf("[GroupManager] 解析群成员列表数据失败: %T", resp.Data)
+		log.Printf("[GroupManager] %s: %T", common.T("", "group_manager_parse_member_list_failed_log"), resp.Data)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "解析群成员列表数据失败",
+			Message: common.T("", "group_manager_parse_member_list_failed"),
 		})
 		return
 	}
 
 	// 格式化群成员信息
 	var membersInfo strings.Builder
-	membersInfo.WriteString(fmt.Sprintf("群 %d 成员列表 (共%d人):\n\n", event.GroupID, len(memberList)))
+	membersInfo.WriteString(fmt.Sprintf(common.T("", "group_manager_member_list_title"), event.GroupID, len(memberList)))
 
 	for i, member := range memberList {
 		memberMap, ok := member.(map[string]interface{})
@@ -1709,7 +1680,11 @@ func (p *GroupManagerPlugin) handleGetMembersCommand(robot plugin.Robot, event *
 		joinDate := time.Unix(int64(joinTime), 0).Format("2006-01-02")
 
 		// 添加到信息字符串
+<<<<<<< Updated upstream
 		membersInfo.WriteString(fmt.Sprintf("%d. ID: %d | 昵称: %s | 性别: %s | 入群时间: %s\n",
+=======
+		membersInfo.WriteString(fmt.Sprintf(common.T("", "group_manager_member_list_item"),
+>>>>>>> Stashed changes
 			i+1, int64(userID), name, sex, joinDate))
 
 		// 每50个成员发送一次消息，避免消息过长
@@ -1719,7 +1694,7 @@ func (p *GroupManagerPlugin) handleGetMembersCommand(robot plugin.Robot, event *
 				Message: membersInfo.String(),
 			})
 			membersInfo.Reset()
-			membersInfo.WriteString(fmt.Sprintf("群 %d 成员列表 (续):\n\n", event.GroupID))
+			membersInfo.WriteString(fmt.Sprintf(common.T("", "group_manager_member_list_cont"), event.GroupID))
 		}
 	}
 }
@@ -1730,7 +1705,7 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 	if !p.isAdmin(event.GroupID, event.UserID) {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "权限不足，只有管理员可以查看群成员信息！",
+			Message: common.T("", "group_manager_insufficient_perms_admin_view_info"),
 		})
 		return
 	}
@@ -1738,7 +1713,7 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 	if len(args) < 1 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法: !memberinfo <用户ID>",
+			Message: common.T("", "group_manager_memberinfo_usage"),
 		})
 		return
 	}
@@ -1748,9 +1723,9 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 	if err != nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "无效的用户ID！",
+			Message: common.T("", "group_manager_invalid_userid"),
 		})
-		log.Printf("[GroupManager] 解析用户ID '%s' 失败: %v", args[0], err)
+		log.Printf("[GroupManager] %s '%s' %s: %v", common.T("", "group_manager_parse_userid_failed"), args[0], common.T("", "failed"), err)
 		return
 	}
 
@@ -1762,10 +1737,10 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 	})
 
 	if err != nil {
-		log.Printf("[GroupManager] 获取群 %d 成员 %d 信息失败: %v", event.GroupID, userID, err)
+		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_get_member_info_failed_member_log"), event.GroupID, common.T("", "of_user"), userID, common.T("", "failed"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: fmt.Sprintf("获取群成员信息失败: %v", err),
+			Message: fmt.Sprintf("%s: %v", common.T("", "group_manager_get_member_info_failed"), err),
 		})
 		return
 	}
@@ -1773,10 +1748,10 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 	// 解析返回数据
 	memberInfo, ok := resp.Data.(map[string]interface{})
 	if !ok {
-		log.Printf("[GroupManager] 解析群成员信息数据失败: %T", resp.Data)
+		log.Printf("[GroupManager] %s: %T", common.T("", "group_manager_parse_member_info_failed_log"), resp.Data)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "解析群成员信息数据失败",
+			Message: common.T("", "group_manager_parse_member_info_failed"),
 		})
 		return
 	}
@@ -1804,6 +1779,7 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 
 	// 格式化成员信息
 	memberDetail := fmt.Sprintf(
+<<<<<<< Updated upstream
 		"成员信息:\n"+
 			"ID: %d\n"+
 			"昵称: %s\n"+
@@ -1814,6 +1790,9 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 			"最后发言: %s\n"+
 			"群等级: %d\n"+
 			"角色: %s",
+=======
+		common.T("", "group_manager_member_detail"),
+>>>>>>> Stashed changes
 		int64(userIDFloat), name, card, sex, int(age), joinDate, lastSentDate, int(level), role)
 
 	// 发送成员信息

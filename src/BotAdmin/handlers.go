@@ -28,6 +28,7 @@ import (
 func HandleLogin(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		lang := common.GetLangFromRequest(r)
 
 		var loginData struct {
 			Username string `json:"username"`
@@ -35,16 +36,16 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
-			log.Printf("[WARN] 登录请求解析失败: %v", err)
+			log.Printf(common.T(lang, "login_request_failed"), err)
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"message": "请求格式错误",
+				"message": common.T(lang, "invalid_request_format"),
 			})
 			return
 		}
 
-		log.Printf("[INFO] 登录尝试 - 用户名: %s, 客户端IP: %s", loginData.Username, r.RemoteAddr)
+		log.Printf(common.T(lang, "login_attempt"), loginData.Username, r.RemoteAddr)
 
 		m.UsersMutex.RLock()
 		user, exists := m.Users[loginData.Username]
@@ -77,7 +78,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"message": "用户名或密码错误",
+				"message": common.T(lang, "invalid_username_password"),
 			})
 			return
 		}
@@ -88,7 +89,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"message": "Token生成失败",
+				"message": common.T(lang, "token_generation_failed"),
 			})
 			return
 		}
@@ -98,7 +99,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 			role = "admin"
 		}
 
-		log.Printf("[INFO] 登录成功 - 用户: %s, 角色: %s", user.Username, role)
+		log.Printf(common.T(lang, "login_success"), user.Username, role)
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
@@ -118,13 +119,14 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		lang := common.GetLangFromRequest(r)
 
 		claims, ok := r.Context().Value(common.UserClaimsKey).(*common.UserClaims)
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"message": "未登录",
+				"message": common.T(lang, "not_logged_in"),
 			})
 			return
 		}
@@ -137,7 +139,7 @@ func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"message": "用户不存在",
+				"message": common.T(lang, "user_not_found"),
 			})
 			return
 		}
@@ -450,19 +452,20 @@ func HandleGetWorkers(m *common.Manager) http.HandlerFunc {
 func HandleDockerList(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		lang := common.GetLangFromRequest(r)
 
 		if m.DockerClient == nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
-				"message": "Docker 客户端未初始化",
+				"message": common.T(lang, "docker_not_init"),
 			})
 			return
 		}
 
 		containers, err := m.DockerClient.ContainerList(r.Context(), types.ContainerListOptions{All: true})
 		if err != nil {
-			log.Printf("[ERROR] 获取 Docker 容器列表失败: %v", err)
+			log.Printf(common.T(lang, "docker_list_failed"), err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
@@ -479,6 +482,7 @@ func HandleDockerList(m *common.Manager) http.HandlerFunc {
 func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		lang := common.GetLangFromRequest(r)
 
 		var req struct {
 			ContainerID string `json:"container_id"`
@@ -489,7 +493,7 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
-				"message": "请求格式错误",
+				"message": common.T(lang, "invalid_request_format"),
 			})
 			return
 		}
@@ -498,7 +502,7 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
-				"message": "Docker 客户端未初始化",
+				"message": common.T(lang, "docker_not_init"),
 			})
 			return
 		}
@@ -518,11 +522,11 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 			m.DockerClient.ContainerStop(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
 			err = m.DockerClient.ContainerRemove(r.Context(), req.ContainerID, types.ContainerRemoveOptions{Force: true})
 		default:
-			err = fmt.Errorf("不支持的操作: %s", req.Action)
+			err = fmt.Errorf(common.T(lang, "unsupported_action"), req.Action)
 		}
 
 		if err != nil {
-			log.Printf("[ERROR] Docker 操作 %s 失败: %v", req.Action, err)
+			log.Printf(common.T(lang, "docker_action_failed"), req.Action, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
@@ -551,11 +555,12 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		lang := common.GetLangFromRequest(r)
 
 		if m.DockerClient == nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
-				"message": "Docker 客户端未初始化",
+				"message": common.T(lang, "docker_not_init"),
 			})
 			return
 		}
@@ -565,13 +570,13 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 
 		_, _, err := m.DockerClient.ImageInspectWithRaw(ctx, imageName)
 		if err != nil {
-			log.Printf("[Docker] 镜像 %s 在本地未找到，正在尝试从仓库拉取...", imageName)
+			log.Printf(common.T(lang, "docker_pulling_image"), imageName)
 			reader, err := m.DockerClient.ImagePull(ctx, imageName, types.ImagePullOptions{})
 			if err != nil {
-				log.Printf("[Docker] 无法拉取镜像 %s: %v", imageName, err)
+				log.Printf(common.T(lang, "docker_pull_failed"), imageName, err)
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"status":  "error",
-					"message": fmt.Sprintf("镜像 %s 不存在且无法拉取。错误: %v", imageName, err),
+					"message": fmt.Sprintf(common.T(lang, "docker_image_not_exists"), imageName, err),
 				})
 				return
 			}
@@ -599,7 +604,7 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
-				"message": fmt.Sprintf("创建容器失败: %v", err),
+				"message": fmt.Sprintf(common.T(lang, "docker_create_container_failed"), err),
 			})
 			return
 		}
@@ -607,7 +612,7 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 		if err := m.DockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
-				"message": fmt.Sprintf("启动容器失败: %v", err),
+				"message": fmt.Sprintf(common.T(lang, "docker_start_container_failed"), err),
 			})
 			return
 		}
@@ -616,7 +621,7 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "ok",
-			"message": "机器人容器部署成功",
+			"message": common.T(lang, "bot_deploy_success"),
 			"id":      resp.ID,
 		})
 	}
@@ -1145,11 +1150,13 @@ func HandleAdminManageUsers(m *common.Manager) http.HandlerFunc {
 		switch req.Action {
 		case "create":
 			handleAdminCreateUser(m, w, req.Username, req.Password, req.IsAdmin)
+		case "edit":
+			handleAdminUpdateUser(m, w, req.Username, req.IsAdmin)
 		case "delete":
 			handleAdminDeleteUser(m, w, req.Username)
 		case "reset_password":
 			handleAdminResetPassword(m, w, req.Username, req.Password)
-		case "toggle_status":
+		case "toggle_status", "toggle_active":
 			handleAdminToggleUser(m, w, req.Username)
 		default:
 			w.WriteHeader(http.StatusBadRequest)
@@ -1206,6 +1213,47 @@ func handleAdminCreateUser(m *common.Manager, w http.ResponseWriter, username, p
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "用户创建成功",
+	})
+}
+
+func handleAdminUpdateUser(m *common.Manager, w http.ResponseWriter, username string, isAdmin bool) {
+	if username == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "用户名不能为空",
+		})
+		return
+	}
+
+	if username == "admin" && !isAdmin {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "不能取消默认管理员的权限",
+		})
+		return
+	}
+
+	if _, err := m.DB.Exec("UPDATE users SET is_admin = ?, updated_at = ? WHERE username = ?", isAdmin, time.Now().Format(time.RFC3339), username); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "更新失败: " + err.Error(),
+		})
+		return
+	}
+
+	m.UsersMutex.Lock()
+	if u, exists := m.Users[username]; exists {
+		u.IsAdmin = isAdmin
+		u.UpdatedAt = time.Now()
+	}
+	m.UsersMutex.Unlock()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "用户信息已更新",
 	})
 }
 

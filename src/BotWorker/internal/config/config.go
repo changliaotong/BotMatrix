@@ -11,6 +11,9 @@ import (
 
 // Config 定义应用程序配置结构
 type Config struct {
+	// Worker唯一标识
+	WorkerID string `json:"worker_id"`
+
 	// HTTP服务器配置
 	HTTP HTTPConfig `json:"http"`
 
@@ -34,6 +37,9 @@ type Config struct {
 
 	// 翻译API配置
 	Translate TranslateConfig `json:"translate"`
+
+	// AI配置
+	AI AIConfig `json:"ai"`
 }
 
 // HTTPConfig 定义HTTP服务器配置
@@ -68,6 +74,8 @@ type WebSocketConfig struct {
 
 // jsonConfig 用于解析JSON的中间结构
 type jsonConfig struct {
+	WorkerID string `json:"worker_id"`
+
 	HTTP struct {
 		Addr         string `json:"addr"`
 		ReadTimeout  string `json:"read_timeout"`
@@ -120,6 +128,14 @@ type jsonConfig struct {
 		Timeout  string `json:"timeout"`
 		Region   string `json:"region"`
 	} `json:"translate"`
+
+	AI struct {
+		APIKey          string `json:"api_key"`
+		Endpoint        string `json:"endpoint"`
+		Model           string `json:"model"`
+		Timeout         string `json:"timeout"`
+		OfficialGroupID string `json:"official_group_id"`
+	} `json:"ai"`
 }
 
 // LogConfig 定义日志配置
@@ -203,6 +219,15 @@ type TranslateConfig struct {
 	Region string `json:"region"`
 }
 
+// AIConfig 定义AI问答配置
+type AIConfig struct {
+	APIKey          string        `json:"api_key"`
+	Endpoint        string        `json:"endpoint"`
+	Model           string        `json:"model"`
+	Timeout         time.Duration `json:"timeout"`
+	OfficialGroupID string        `json:"official_group_id"`
+}
+
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
@@ -251,6 +276,13 @@ func DefaultConfig() *Config {
 			Timeout:  10 * time.Second,
 			Region:   "eastus",
 		},
+		AI: AIConfig{
+			APIKey:          "",
+			Endpoint:        "",
+			Model:           "",
+			Timeout:         15 * time.Second,
+			OfficialGroupID: "",
+		},
 	}
 }
 
@@ -281,6 +313,11 @@ func LoadConfig(configPath string) (*Config, error) {
 	var jsonCfg jsonConfig
 	if err := json.Unmarshal(content, &jsonCfg); err != nil {
 		return nil, fmt.Errorf("无法解析配置文件: %w", err)
+	}
+
+	// 更新 WorkerID
+	if jsonCfg.WorkerID != "" {
+		config.WorkerID = jsonCfg.WorkerID
 	}
 
 	// 更新HTTP配置
@@ -398,6 +435,25 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	if jsonCfg.Translate.Region != "" {
 		config.Translate.Region = jsonCfg.Translate.Region
+	}
+
+	// 更新AI配置
+	if jsonCfg.AI.APIKey != "" {
+		config.AI.APIKey = jsonCfg.AI.APIKey
+	}
+	if jsonCfg.AI.Endpoint != "" {
+		config.AI.Endpoint = jsonCfg.AI.Endpoint
+	}
+	if jsonCfg.AI.Model != "" {
+		config.AI.Model = jsonCfg.AI.Model
+	}
+	if jsonCfg.AI.Timeout != "" {
+		if timeout, err := time.ParseDuration(jsonCfg.AI.Timeout); err == nil {
+			config.AI.Timeout = timeout
+		}
+	}
+	if jsonCfg.AI.OfficialGroupID != "" {
+		config.AI.OfficialGroupID = jsonCfg.AI.OfficialGroupID
 	}
 
 	return config, nil

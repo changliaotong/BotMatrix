@@ -1,5 +1,5 @@
 import { fetchWithAuth, callBotApi } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { serverStartTime, memChart, cpuChart, msgChart } from './stats.js';
 import { addEventLog, clearEvents } from './logs.js';
 import { showTab } from './ui.js';
@@ -22,9 +22,8 @@ export async function fetchSystemStats(updateDetails = false) {
 
         const procBody = document.getElementById('process-list');
         if (procBody && data.processes) {
-            const t = translations[currentLang] || translations['zh-CN'];
             procBody.innerHTML = data.processes.length === 0 ? 
-                `<tr><td colspan="4" class="text-center">${t.no_data || '暂无数据'}</td></tr>` : 
+                `<tr><td colspan="4" class="text-center">${t('no_data')}</td></tr>` : 
                 data.processes.map(p => `<tr><td>${p.pid}</td><td class="text-truncate" style="max-width: 150px;" title="${p.name}">${p.name || 'unknown'}</td><td>${(p.cpu || 0).toFixed(1)}%</td><td>${((p.memory || 0) / 1024 / 1024).toFixed(1)}</td></tr>`).join('');
         }
         
@@ -105,8 +104,7 @@ export function updateTimeDisplay() {
         const m = Math.floor((uptimeSeconds % 3600) / 60);
         const s = uptimeSeconds % 60;
         
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        const dStr = d > 0 ? `${d}${t.time_days || 'd'} ` : '';
+        const dStr = d > 0 ? `${d}${t('time_days') || 'd'} ` : '';
         const hStr = h.toString().padStart(2, '0');
         const mStr = m.toString().padStart(2, '0');
         const sStr = s.toString().padStart(2, '0');
@@ -191,7 +189,7 @@ export function updateDetailChart() {
     if (currentDetailType === 'cpu') {
         labels = Array.from({length: cpuDataBuffer.length}, (_, i) => i);
         datasets = [{
-            label: 'CPU Usage (%)',
+            label: t('cpu_usage_label') || 'CPU Usage (%)',
             data: cpuDataBuffer,
             borderColor: '#0d6efd',
             backgroundColor: 'rgba(13, 110, 253, 0.1)',
@@ -203,7 +201,7 @@ export function updateDetailChart() {
         labels = Array.from({length: memDataBuffer.length}, (_, i) => i);
         const dataGB = memDataBuffer.map(v => sourceIsRaw ? (v / 1024 / 1024 / 1024) : (v / 1024));
         datasets = [{
-            label: 'Memory Usage (GB)',
+            label: t('mem_usage_label') || 'Memory Usage (GB)',
             data: dataGB,
             borderColor: '#dc3545',
             backgroundColor: 'rgba(220, 53, 69, 0.1)',
@@ -214,21 +212,21 @@ export function updateDetailChart() {
         labels = Array.from({length: msgDataBuffer.length}, (_, i) => i);
         datasets = [
             {
-                label: 'Total Messages',
+                label: t('total_messages_label') || 'Total Messages',
                 data: msgDataBuffer,
                 borderColor: '#198754',
                 backgroundColor: 'rgba(25, 135, 84, 0.1)',
                 fill: true
             },
             {
-                label: 'Sent Messages',
+                label: t('sent_messages_label') || 'Sent Messages',
                 data: sentDataBuffer,
                 borderColor: '#0dcaf0',
                 borderDash: [5, 5],
                 fill: false
             },
             {
-                label: 'Recv Messages',
+                label: t('recv_messages_label') || 'Recv Messages',
                 data: recvDataBuffer,
                 borderColor: '#ffc107',
                 borderDash: [2, 2],
@@ -244,12 +242,12 @@ export function updateDetailChart() {
             
             datasets = [
                 {
-                    label: 'Used (GB)',
+                    label: t('used_label') || 'Used (GB)',
                     data: dataUsed,
                     backgroundColor: '#dc3545'
                 },
                 {
-                    label: 'Free (GB)',
+                    label: t('free_label') || 'Free (GB)',
                     data: dataFree,
                     backgroundColor: '#198754'
                 }
@@ -257,8 +255,8 @@ export function updateDetailChart() {
             options.scales.x = { stacked: true };
             options.scales.y = { stacked: true, beginAtZero: true };
         } else {
-            labels = ['Loading...'];
-            datasets = [{label: 'No Data', data: []}];
+            labels = [t('loading_dots') || 'Loading...'];
+            datasets = [{label: t('no_data') || 'No Data', data: []}];
         }
     } else if (currentDetailType === 'net') {
          if (netSentTrend.length > 1) {
@@ -275,7 +273,7 @@ export function updateDetailChart() {
 
              datasets = [
                  {
-                     label: 'Sent (KB/s)',
+                     label: t('sent_kb_s') || 'Sent (KB/s)',
                      data: sentThroughput,
                      borderColor: '#0dcaf0',
                      backgroundColor: 'rgba(13, 202, 240, 0.1)',
@@ -283,7 +281,7 @@ export function updateDetailChart() {
                      tension: 0.4
                  },
                  {
-                     label: 'Recv (KB/s)',
+                     label: t('recv_kb_s') || 'Recv (KB/s)',
                      data: recvThroughput,
                      borderColor: '#ffc107',
                      backgroundColor: 'rgba(255, 193, 7, 0.1)',
@@ -294,9 +292,9 @@ export function updateDetailChart() {
          } else if (window.lastSystemStats && window.lastSystemStats.net_io && window.lastSystemStats.net_io.length > 0) {
              type = 'bar';
              const io = window.lastSystemStats.net_io[0];
-             labels = ['Total Sent', 'Total Recv'];
+             labels = [t('total_sent_label') || 'Total Sent', t('total_recv_label') || 'Total Recv'];
              datasets = [{
-                 label: 'Bytes (MB)',
+                 label: t('bytes_mb_label') || 'Bytes (MB)',
                  data: [
                      (io.bytesSent / 1024 / 1024).toFixed(2), 
                      (io.bytesRecv / 1024 / 1024).toFixed(2)
@@ -304,8 +302,8 @@ export function updateDetailChart() {
                  backgroundColor: ['#0dcaf0', '#ffc107']
              }];
          } else {
-            labels = ['Loading...'];
-            datasets = [{label: 'No Data', data: []}];
+            labels = [t('loading_dots') || 'Loading...'];
+            datasets = [{label: t('no_data') || 'No Data', data: []}];
          }
     }
 
@@ -321,22 +319,21 @@ export function updateDetailChart() {
  * @param {string} action 操作名称
  */
 export async function callSystemAction(action) {
-    const t = translations[currentLang] || translations['zh-CN'];
     if (action === 'clean_logs') {
         const dashLog = document.getElementById('recent-logs');
         if (dashLog) dashLog.innerHTML = '';
         
         clearEvents();
         
-        addEventLog({type: 'system', message: t.log_cleaned});
+        addEventLog({type: 'system', message: t('log_cleaned')});
         return;
     }
     
     try {
         const res = await callBotApi(action);
-        alert(t.alert_op_success + JSON.stringify(res.data));
+        alert(t('alert_op_success') + JSON.stringify(res.data));
     } catch (e) {
-        alert(t.alert_op_failed + e.message);
+        alert(t('alert_op_failed') + e.message);
     }
 }
 
@@ -354,18 +351,18 @@ export function renderHardwareGrid() {
          html += `
             <div class="col-12 mb-3">
                 <div class="card h-100">
-                    <div class="card-header fw-bold">主机信息</div>
+                    <div class="card-header fw-bold">${t('host_info_title') || '主机信息'}</div>
                     <div class="card-body small">
                         <div class="row">
                             <div class="col-md-6">
-                                <div><span class="text-muted">Hostname:</span> ${s.host_info.hostname}</div>
-                                <div><span class="text-muted">OS:</span> ${s.host_info.platform} ${s.host_info.platformVersion}</div>
-                                <div><span class="text-muted">Kernel:</span> ${s.host_info.kernelVersion}</div>
+                                <div><span class="text-muted">${t('hostname_label') || 'Hostname'}:</span> ${s.host_info.hostname}</div>
+                                <div><span class="text-muted">${t('os_label') || 'OS'}:</span> ${s.host_info.platform} ${s.host_info.platformVersion}</div>
+                                <div><span class="text-muted">${t('kernel_label') || 'Kernel'}:</span> ${s.host_info.kernelVersion}</div>
                             </div>
                             <div class="col-md-6">
-                                <div><span class="text-muted">Arch:</span> ${s.host_info.kernelArch}</div>
-                                <div><span class="text-muted">Uptime:</span> ${(s.host_info.uptime / 3600).toFixed(1)} Hours</div>
-                                <div><span class="text-muted">Boot Time:</span> ${new Date(s.host_info.bootTime * 1000).toLocaleString()}</div>
+                                <div><span class="text-muted">${t('arch_label') || 'Arch'}:</span> ${s.host_info.kernelArch}</div>
+                                <div><span class="text-muted">${t('uptime_label') || 'Uptime'}:</span> ${(s.host_info.uptime / 3600).toFixed(1)} Hours</div>
+                                <div><span class="text-muted">${t('boot_time_label') || 'Boot Time'}:</span> ${new Date(s.host_info.bootTime * 1000).toLocaleString()}</div>
                             </div>
                         </div>
                     </div>
@@ -377,7 +374,7 @@ export function renderHardwareGrid() {
         html += `
             <div class="col-md-6 mb-3">
                 <div class="card h-100">
-                    <div class="card-header fw-bold">磁盘使用</div>
+                    <div class="card-header fw-bold">${t('disk_usage_title') || '磁盘使用'}</div>
                     <div class="card-body small" style="overflow-y: auto; max-height: 200px;">
                         ${s.disk_usage.map(d => `
                             <div class="mb-2">
@@ -403,7 +400,7 @@ export function renderHardwareGrid() {
          html += `
             <div class="col-md-6 mb-3">
                 <div class="card h-100">
-                    <div class="card-header fw-bold">网络接口</div>
+                    <div class="card-header fw-bold">${t('net_interfaces_title') || '网络接口'}</div>
                     <div class="card-body small" style="overflow-y: auto; max-height: 200px;">
                         ${s.net_interfaces.map(i => `
                             <div class="mb-2 border-bottom pb-1">

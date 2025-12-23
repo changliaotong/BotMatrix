@@ -3,7 +3,7 @@
  */
 
 import { callBotApi } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 
 export async function loadTestGroups() {
     const select = document.getElementById('mt-group-select');
@@ -45,7 +45,6 @@ export function pasteTargetUid() {
 }
 
 export function updateMsgForm() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const typeEl = document.getElementById('mt-type');
     if (!typeEl) return;
     
@@ -89,13 +88,12 @@ export function updateMsgForm() {
 }
 
 export async function submitTestMsg() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const resultEl = document.getElementById('mt-result');
     if (!resultEl) return;
     
     resultEl.style.display = 'none';
     resultEl.className = 'alert alert-secondary';
-    resultEl.textContent = t.msg_sending;
+    resultEl.textContent = t('msg_sending');
     resultEl.style.display = 'block';
     
     const targetInput = document.getElementById('mt-target');
@@ -107,7 +105,7 @@ export async function submitTestMsg() {
     
     if (!target) {
         resultEl.className = 'alert alert-danger';
-        resultEl.textContent = t.alert_enter_target_uid;
+        resultEl.textContent = t('alert_enter_target_uid');
         return;
     }
 
@@ -122,7 +120,7 @@ export async function submitTestMsg() {
         const content = document.getElementById('mt-content').value;
         if (!content) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.alert_enter_content;
+            resultEl.textContent = t('alert_enter_content');
             return;
         }
         params.message = content;
@@ -133,7 +131,7 @@ export async function submitTestMsg() {
         const file = document.getElementById('mt-file-path').value;
         if (!file) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.alert_enter_file_url;
+            resultEl.textContent = t('alert_enter_file_url');
             return;
         }
         params.message = [
@@ -147,7 +145,7 @@ export async function submitTestMsg() {
         const mId = document.getElementById('mt-music-id').value;
         if (!mId) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.msg_input_song_id;
+            resultEl.textContent = t('msg_input_song_id');
             return;
         }
         params.message = [{
@@ -171,7 +169,7 @@ export async function submitTestMsg() {
         const raw = document.getElementById('mt-raw-content').value;
         if (!raw) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.msg_input_content;
+            resultEl.textContent = t('msg_input_content');
             return;
         }
         params.message = [{
@@ -250,7 +248,6 @@ export function updateCodePreview() {
 }
 
 export function copyCodePreview() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const previewEl = document.getElementById('code-preview');
     if (!previewEl) return;
     
@@ -259,7 +256,7 @@ export function copyCodePreview() {
         const btn = document.querySelector('button[onclick="copyCodePreview()"]');
         if(btn) {
             const original = btn.textContent;
-            btn.textContent = t.btn_copied;
+            btn.textContent = t('btn_copied') || '已复制';
             setTimeout(() => {
                 btn.textContent = original;
             }, 2000);

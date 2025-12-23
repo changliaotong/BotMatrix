@@ -9,31 +9,15 @@ services:
     restart: always
     ports:
       - "3001:3001"  # WebSocket Gateway
-    volumes:
-      - ./src/BotNexus/data:/app/data
-      - ./stats.json:/app/stats.json
-    environment:
-      - TZ=Asia/Shanghai
-      - REDIS_ADDR=${REDIS_ADDR:-192.168.0.126:6379}
-      - REDIS_PWD=${REDIS_PWD:-redis_zsYik8}
-
-  # 1.1 BotAdmin: Management API & Dashboard Server
-  bot-admin:
-    build:
-      context: ./src/BotAdmin
-    container_name: btadmin
-    restart: always
-    ports:
       - "5000:5000"  # Web Dashboard / API
     volumes:
-      - ./src/BotAdmin/data:/app/data
+      - ./src/BotNexus/data:/app/data
       - ./stats.json:/app/stats.json
       - /var/run/docker.sock:/var/run/docker.sock # Enable Docker Management
     environment:
       - TZ=Asia/Shanghai
       - REDIS_ADDR=${REDIS_ADDR:-192.168.0.126:6379}
       - REDIS_PWD=${REDIS_PWD:-redis_zsYik8}
-      - MANAGER_TOKEN=${MANAGER_TOKEN:-}
 
   # 1.1 System Worker: Global Logic & Commands
   system-worker:
@@ -235,4 +219,3 @@ services:
   #     resources:
   #       limits:
   #         memory: 1G
-

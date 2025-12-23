@@ -2,7 +2,7 @@
  * Debug and Test Actions Module
  */
 import { fetchWithAuth, callBotApi } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { showToast } from './ui.js';
 
 // --- Console History & Error Handling ---
@@ -45,8 +45,7 @@ export function sendAction() {
     try {
         params = JSON.parse(document.getElementById('action-params').value);
     } catch (e) {
-        const t = translations[currentLang] || translations['zh-CN'];
-        showToast(t.alert_json_error || 'JSON 格式错误', 'danger');
+        showToast(t('alert_json_error') || 'JSON 格式错误', 'danger');
         return;
     }
 
@@ -75,7 +74,7 @@ export function sendAction() {
 export async function loadTestGroups() {
     const select = document.getElementById('mt-group-select');
     if (!select) return;
-    select.innerHTML = '<option value="">加载中...</option>';
+    select.innerHTML = `<option value="">${t('loading') || '加载中...'}</option>`;
     
     try {
         const response = await callBotApi('get_group_list');
@@ -84,13 +83,13 @@ export async function loadTestGroups() {
         // Sort by name
         groups.sort((a, b) => (a.group_name || '').localeCompare(b.group_name || '', 'zh-CN'));
         
-        let html = '<option value="">-- 选择群组 (或手动输入 UID) --</option>';
+        let html = `<option value="">-- ${t('select_group_placeholder') || '选择群组 (或手动输入 UID)'} --</option>`;
         groups.forEach(g => {
             html += `<option value="${g.group_id}">[${g.group_id}] ${g.group_name}</option>`;
         });
         select.innerHTML = html;
     } catch (e) {
-        select.innerHTML = '<option value="">加载失败: ' + e.message + '</option>';
+        select.innerHTML = `<option value="">${t('load_failed') || '加载失败'}: ` + e.message + '</option>';
     }
 }
 
@@ -111,7 +110,6 @@ export function pasteTargetUid() {
 }
 
 export function updateMsgForm() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const typeEl = document.getElementById('mt-type');
     if (!typeEl) return;
     const type = typeEl.value;
@@ -127,16 +125,16 @@ export function updateMsgForm() {
         const groupText = document.getElementById('mt-group-text');
         const contentEl = document.getElementById('mt-content');
         if (groupText) groupText.style.display = 'block';
-        if (contentEl) contentEl.placeholder = type === 'poke' ? (t.placeholder_poke || '请输入QQ号') : (t.placeholder_text_cq || '请输入文字或CQ码');
+        if (contentEl) contentEl.placeholder = type === 'poke' ? (t('placeholder_poke') || '请输入QQ号') : (t('placeholder_text_cq') || '请输入文字或CQ码');
     } else if (type === 'image' || type === 'record' || type === 'video') {
         const groupFile = document.getElementById('mt-group-file');
         const fileLabel = document.getElementById('mt-file-label');
         if (groupFile) groupFile.style.display = 'block';
         if (fileLabel) {
-            let label = t.label_file_url || '文件 URL';
-            if (type === 'image') label = t.label_image_url || '图片 URL';
-            else if (type === 'record') label = t.label_record_url || '语音 URL';
-            else if (type === 'video') label = t.label_video_url || '视频 URL';
+            let label = t('label_file_url') || '文件 URL';
+            if (type === 'image') label = t('label_image_url') || '图片 URL';
+            else if (type === 'record') label = t('label_record_url') || '语音 URL';
+            else if (type === 'video') label = t('label_video_url') || '视频 URL';
             fileLabel.textContent = label;
         }
     } else if (type === 'music') {
@@ -149,18 +147,17 @@ export function updateMsgForm() {
         const groupRaw = document.getElementById('mt-group-raw');
         const rawLabel = document.getElementById('mt-raw-label');
         if (groupRaw) groupRaw.style.display = 'block';
-        if (rawLabel) rawLabel.textContent = type.toUpperCase() + (t.label_raw_content_suffix || ' 内容');
+        if (rawLabel) rawLabel.textContent = type.toUpperCase() + (t('label_raw_content_suffix') || ' 内容');
     }
 }
 
 export async function submitTestMsg() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const resultEl = document.getElementById('mt-result');
     if (!resultEl) return;
     
     resultEl.style.display = 'none';
     resultEl.className = 'alert alert-secondary';
-    resultEl.textContent = t.msg_sending || '正在发送...';
+    resultEl.textContent = t('msg_sending') || '正在发送...';
     resultEl.style.display = 'block';
     
     const targetEl = document.getElementById('mt-target');
@@ -172,7 +169,7 @@ export async function submitTestMsg() {
     
     if (!target) {
         resultEl.className = 'alert alert-danger';
-        resultEl.textContent = t.alert_enter_target_uid || '请输入目标 UID';
+        resultEl.textContent = t('alert_enter_target_uid') || '请输入目标 UID';
         return;
     }
 
@@ -185,7 +182,7 @@ export async function submitTestMsg() {
         const content = document.getElementById('mt-content').value;
         if (!content) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.alert_enter_content || '请输入内容';
+            resultEl.textContent = t('alert_enter_content') || '请输入内容';
             return;
         }
         params.message = content;
@@ -196,7 +193,7 @@ export async function submitTestMsg() {
         const file = document.getElementById('mt-file-path').value;
         if (!file) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.alert_enter_file_url || '请输入文件 URL';
+            resultEl.textContent = t('alert_enter_file_url') || '请输入文件 URL';
             return;
         }
         params.message = [{ type: type, data: { file: file } }];
@@ -205,7 +202,7 @@ export async function submitTestMsg() {
         const mId = document.getElementById('mt-music-id').value;
         if (!mId) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.msg_input_song_id || '请输入歌曲 ID';
+            resultEl.textContent = t('msg_input_song_id') || '请输入歌曲 ID';
             return;
         }
         params.message = [{ type: 'music', data: { type: mType, id: mId } }];
@@ -223,7 +220,7 @@ export async function submitTestMsg() {
         const raw = document.getElementById('mt-raw-content').value;
         if (!raw) {
             resultEl.className = 'alert alert-danger';
-            resultEl.textContent = t.msg_input_content || '请输入内容';
+            resultEl.textContent = t('msg_input_content') || '请输入内容';
             return;
         }
         params.message = [{ type: type, data: { data: raw } }];
@@ -297,7 +294,6 @@ export function updateCodePreview() {
 }
 
 export function copyCodePreview() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const previewEl = document.getElementById('code-preview');
     if (!previewEl) return;
     
@@ -306,7 +302,7 @@ export function copyCodePreview() {
         const btn = document.querySelector('button[onclick="copyCodePreview()"]');
         if(btn) {
             const original = btn.textContent;
-            btn.textContent = t.btn_copied || '已复制';
+            btn.textContent = t('btn_copied') || '已复制';
             setTimeout(() => btn.textContent = original, 2000);
         }
     });

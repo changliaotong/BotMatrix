@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
@@ -37,7 +38,7 @@ func (p *PointsPlugin) Name() string {
 }
 
 func (p *PointsPlugin) Description() string {
-	return "积分系统插件，支持签到积分、发言积分、查询积分等功能"
+	return common.T("", "points_plugin_desc")
 }
 
 func (p *PointsPlugin) Version() string {
@@ -46,10 +47,10 @@ func (p *PointsPlugin) Version() string {
 
 func (p *PointsPlugin) Init(robot plugin.Robot) {
 	if p.db == nil {
-		log.Println("积分系统插件未配置数据库，功能将不可用")
+		log.Println(common.T("", "points_db_not_configured"))
 		return
 	}
-	log.Println("加载积分系统插件")
+	log.Println(common.T("", "points_plugin_loaded"))
 
 	// 处理积分查询命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -73,7 +74,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，查询失败")
+			p.sendMessage(robot, event, common.T("", "points_query_no_userid"))
 			return nil
 		}
 
@@ -81,12 +82,12 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		userIDStr := fmt.Sprintf("%d", userID)
 		userPoints, err := db.GetPoints(p.db, userIDStr)
 		if err != nil {
-			log.Printf("获取积分失败: %v", err)
-			p.sendMessage(robot, event, "查询积分失败，请稍后再试")
+			log.Printf(common.T("", "points_query_log_failed")+": %v", err)
+			p.sendMessage(robot, event, common.T("", "points_query_failed"))
 			return nil
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("你当前的积分为：%d", userPoints))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_current_balance"), userPoints))
 		return nil
 	})
 
@@ -113,7 +114,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，签到失败")
+			p.sendMessage(robot, event, common.T("", "points_sign_no_userid"))
 			return nil
 		}
 
@@ -123,16 +124,16 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		if lastSignIn, ok := p.lastSignInTime[userIDStr]; ok {
 			// 检查是否在同一天
 			if isSameDay(lastSignIn, now) {
-				p.sendMessage(robot, event, fmt.Sprintf("你今天已经签到过了！上次签到时间：%s", lastSignIn.Format("15:04:05")))
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_sign_already"), lastSignIn.Format("15:04:05")))
 				return nil
 			}
 		}
 
 		// 增加积分（签到奖励10积分）
-		err := db.AddPoints(p.db, userIDStr, 10, "签到奖励", "sign_in")
+		err := db.AddPoints(p.db, userIDStr, 10, common.T("", "points_reason_signin"), "sign_in")
 		if err != nil {
-			log.Printf("签到积分增加失败: %v", err)
-			p.sendMessage(robot, event, "签到失败，请稍后再试")
+			log.Printf(common.T("", "points_sign_log_failed")+": %v", err)
+			p.sendMessage(robot, event, common.T("", "points_sign_failed"))
 			return nil
 		}
 		p.lastSignInTime[userIDStr] = now
@@ -143,11 +144,11 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		var rewardMsg string
 		switch msg {
 		case "早安":
-			rewardMsg = fmt.Sprintf("☀️ 早安！签到成功！获得10积分\n当前积分：%d", userPoints)
+			rewardMsg = fmt.Sprintf(common.T("", "points_sign_morning"), userPoints)
 		case "晚安":
-			rewardMsg = fmt.Sprintf("🌙 晚安！签到成功！获得10积分\n当前积分：%d", userPoints)
+			rewardMsg = fmt.Sprintf(common.T("", "points_sign_night"), userPoints)
 		default:
-			rewardMsg = fmt.Sprintf("签到成功！获得10积分\n当前积分：%d", userPoints)
+			rewardMsg = fmt.Sprintf(common.T("", "points_sign_success"), userPoints)
 		}
 		p.sendMessage(robot, event, rewardMsg)
 
@@ -181,7 +182,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		// 发言奖励1积分
 		userIDStr := fmt.Sprintf("%d", userID)
-		_ = db.AddPoints(p.db, userIDStr, 1, "发言奖励", "message_reward")
+		_ = db.AddPoints(p.db, userIDStr, 1, common.T("", "points_reason_message"), "message_reward")
 
 		return nil
 	})
@@ -208,17 +209,17 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		// 从数据库获取积分排行榜
 		rank, err := p.getPointsRankFromDB()
 		if err != nil {
-			log.Printf("获取积分排行榜失败: %v", err)
-			p.sendMessage(robot, event, "获取排行榜失败")
+			log.Printf(common.T("", "points_rank_log_failed")+": %v", err)
+			p.sendMessage(robot, event, common.T("", "points_rank_failed"))
 			return nil
 		}
 
 		if len(rank) == 0 {
-			p.sendMessage(robot, event, "暂无积分记录")
+			p.sendMessage(robot, event, common.T("", "points_rank_empty"))
 			return nil
 		}
 
-		msg := "🏆 积分排行榜 🏆\n"
+		msg := common.T("", "points_rank_title") + "\n"
 		msg += "------------------------\n"
 		for i, item := range rank {
 			var medal string
@@ -232,7 +233,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 			default:
 				medal = fmt.Sprintf("%d.", i+1)
 			}
-			msg += fmt.Sprintf("%s 用户%s：%d积分\n", medal, item.UserID, item.Points)
+			msg += fmt.Sprintf(common.T("", "points_rank_item"), medal, item.UserID, item.Points) + "\n"
 		}
 		msg += "------------------------\n"
 
@@ -258,7 +259,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		match, cmd, params := p.cmdParser.MatchCommandWithParams("打赏|reward|转账|transfer", "(\\d+)\\s+(\\d+)", event.RawMessage)
 		if !match || len(params) != 2 {
 			if match {
-				p.sendMessage(robot, event, fmt.Sprintf("%s命令格式：%s <用户ID> <积分数量>", cmd, cmd))
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_transfer_usage"), cmd, cmd))
 			}
 			return nil
 		}
@@ -268,7 +269,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		pointsStr := params[1]
 		points, err := strconv.Atoi(pointsStr)
 		if err != nil || points <= 0 {
-			p.sendMessage(robot, event, "积分数量必须为正整数")
+			p.sendMessage(robot, event, common.T("", "points_amount_invalid"))
 			return nil
 		}
 
@@ -277,24 +278,24 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		fromUserIDStr := fmt.Sprintf("%d", fromUserID)
 
 		if fromUserIDStr == toUserID {
-			p.sendMessage(robot, event, "不能给自己转账哦")
+			p.sendMessage(robot, event, common.T("", "points_transfer_self"))
 			return nil
 		}
 
 		// 执行转账（使用数据库事务）
-		reason := "主动转账"
+		reason := common.T("", "points_reason_transfer")
 		if cmd == "打赏" || cmd == "reward" {
-			reason = "打赏"
+			reason = common.T("", "points_reason_reward")
 		}
 
 		err = db.TransferPoints(p.db, fromUserIDStr, toUserID, points, reason, "transfer")
 		if err != nil {
-			p.sendMessage(robot, event, fmt.Sprintf("操作失败: %v", err))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_op_failed"), err))
 			return nil
 		}
 
 		// 发送成功消息
-		p.sendMessage(robot, event, fmt.Sprintf("✅ %s成功！你给用户 %s %s了 %d 积分", reason, toUserID, reason, points))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_transfer_success"), reason, toUserID, reason, points))
 		return nil
 	})
 
@@ -320,7 +321,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，领积分失败")
+			p.sendMessage(robot, event, common.T("", "points_get_no_userid"))
 			return nil
 		}
 
@@ -329,21 +330,21 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		lastGetTime, ok := p.lastGetPointsTime[userIDStr]
 		now := time.Now()
 		if ok && isSameDay(lastGetTime, now) {
-			p.sendMessage(robot, event, "你今天已经领取过积分了！")
+			p.sendMessage(robot, event, common.T("", "points_get_already"))
 			return nil
 		}
 
 		// 领取5积分
-		err := db.AddPoints(p.db, userIDStr, 5, "每日领积分", "daily_bonus")
+		err := db.AddPoints(p.db, userIDStr, 5, common.T("", "points_reason_daily_bonus"), "daily_bonus")
 		if err != nil {
-			p.sendMessage(robot, event, "领取失败，请稍后再试")
+			p.sendMessage(robot, event, common.T("", "points_get_failed"))
 			return nil
 		}
 		p.lastGetPointsTime[userIDStr] = now
 
 		// 获取更新后的积分
 		userPoints, _ := db.GetPoints(p.db, userIDStr)
-		p.sendMessage(robot, event, fmt.Sprintf("领取成功！获得5积分\n当前积分：%d", userPoints))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_get_success"), userPoints))
 
 		return nil
 	})
@@ -362,7 +363,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，存积分失败")
+			p.sendMessage(robot, event, common.T("", "points_deposit_no_userid"))
 			return nil
 		}
 
@@ -372,18 +373,18 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 		if matchDep && len(depParams) == 1 {
 			amount, err := strconv.Atoi(depParams[0])
 			if err != nil || amount <= 0 {
-				p.sendMessage(robot, event, "存入的积分数量必须为正整数")
+				p.sendMessage(robot, event, common.T("", "points_deposit_amount_invalid"))
 				return nil
 			}
 
 			err = db.DepositPointsToSavings(p.db, userIDStr, amount)
 			if err != nil {
-				p.sendMessage(robot, event, fmt.Sprintf("存积分失败: %v", err))
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_deposit_failed"), err))
 				return nil
 			}
 
 			saving, _ := db.GetSavingsPoints(p.db, userIDStr)
-			p.sendMessage(robot, event, fmt.Sprintf("已存入 %d 积分\n当前存积分余额：%d", amount, saving))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_deposit_success"), amount, saving))
 			return nil
 		}
 
@@ -394,17 +395,17 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		saving, err := db.GetSavingsPoints(p.db, userIDStr)
 		if err != nil {
-			p.sendMessage(robot, event, fmt.Sprintf("查询存积分失败: %v", err))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_deposit_query_failed"), err))
 			return nil
 		}
 
 		points, err := db.GetPoints(p.db, userIDStr)
 		if err != nil {
-			p.sendMessage(robot, event, fmt.Sprintf("查询积分失败: %v", err))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_query_failed_with_err"), err))
 			return nil
 		}
 
-		p.sendMessage(robot, event, fmt.Sprintf("当前可用积分：%d\n当前存积分余额：%d", points, saving))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_balance_summary"), points, saving))
 
 		return nil
 	})
@@ -423,7 +424,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，取积分失败")
+			p.sendMessage(robot, event, common.T("", "points_withdraw_no_userid"))
 			return nil
 		}
 
@@ -436,19 +437,19 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		amount, err := strconv.Atoi(params[0])
 		if err != nil || amount <= 0 {
-			p.sendMessage(robot, event, "取出的积分数量必须为正整数")
+			p.sendMessage(robot, event, common.T("", "points_withdraw_amount_invalid"))
 			return nil
 		}
 
 		err = db.WithdrawPointsFromSavings(p.db, userIDStr, amount)
 		if err != nil {
-			p.sendMessage(robot, event, fmt.Sprintf("取积分失败: %v", err))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_withdraw_failed"), err))
 			return nil
 		}
 
 		saving, _ := db.GetSavingsPoints(p.db, userIDStr)
 		points, _ := db.GetPoints(p.db, userIDStr)
-		p.sendMessage(robot, event, fmt.Sprintf("已取出 %d 积分\n当前可用积分：%d\n当前存积分余额：%d", amount, points, saving))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_withdraw_success"), amount, points, saving))
 
 		return nil
 	})
@@ -467,7 +468,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，冻结积分失败")
+			p.sendMessage(robot, event, common.T("", "points_freeze_no_userid"))
 			return nil
 		}
 
@@ -480,18 +481,18 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		amount, err := strconv.Atoi(params[0])
 		if err != nil || amount <= 0 {
-			p.sendMessage(robot, event, "冻结的积分数量必须为正整数")
+			p.sendMessage(robot, event, common.T("", "points_freeze_amount_invalid"))
 			return nil
 		}
 
-		err = db.FreezePoints(p.db, userIDStr, amount, "手动冻结积分")
+		err = db.FreezePoints(p.db, userIDStr, amount, common.T("", "points_reason_manual_freeze"))
 		if err != nil {
-			p.sendMessage(robot, event, fmt.Sprintf("冻结积分失败: %v", err))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_freeze_failed"), err))
 			return nil
 		}
 
 		frozen, _ := db.GetFrozenPoints(p.db, userIDStr)
-		p.sendMessage(robot, event, fmt.Sprintf("已冻结 %d 积分\n当前冻结积分：%d", amount, frozen))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_freeze_success"), amount, frozen))
 
 		return nil
 	})
@@ -503,7 +504,7 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，解冻积分失败")
+			p.sendMessage(robot, event, common.T("", "points_unfreeze_no_userid"))
 			return nil
 		}
 
@@ -516,18 +517,18 @@ func (p *PointsPlugin) Init(robot plugin.Robot) {
 
 		amount, err := strconv.Atoi(params[0])
 		if err != nil || amount <= 0 {
-			p.sendMessage(robot, event, "解冻的积分数量必须为正整数")
+			p.sendMessage(robot, event, common.T("", "points_unfreeze_amount_invalid"))
 			return nil
 		}
 
-		err = db.UnfreezePoints(p.db, userIDStr, amount, "手动解冻积分")
+		err = db.UnfreezePoints(p.db, userIDStr, amount, common.T("", "points_reason_manual_unfreeze"))
 		if err != nil {
-			p.sendMessage(robot, event, fmt.Sprintf("解冻积分失败: %v", err))
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_unfreeze_failed"), err))
 			return nil
 		}
 
 		frozen, _ := db.GetFrozenPoints(p.db, userIDStr)
-		p.sendMessage(robot, event, fmt.Sprintf("已解冻 %d 积分\n当前冻结积分：%d", amount, frozen))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "points_unfreeze_success"), amount, frozen))
 
 		return nil
 	})

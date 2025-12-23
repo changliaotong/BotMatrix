@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"botworker/internal/onebot"
+	"time"
 )
 
 type Plugin interface {
@@ -26,6 +27,11 @@ type Robot interface {
 	GetGroupMemberInfo(params *onebot.GetGroupMemberInfoParams) (*onebot.Response, error)
 	SetGroupSpecialTitle(params *onebot.SetGroupSpecialTitleParams) (*onebot.Response, error)
 	GetSelfID() int64
+
+	// Session & State Management
+	GetSessionContext(platform, userID string) (map[string]interface{}, error)
+	SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error
+	GetSessionState(platform, userID string) (map[string]interface{}, error)
 }
 
 type Manager struct {
@@ -44,6 +50,23 @@ func (m *Manager) LoadPlugin(plugin Plugin) error {
 	plugin.Init(m.robot)
 	m.plugins = append(m.plugins, plugin)
 	return nil
+}
+
+func (m *Manager) HandleEvent(msg map[string]interface{}) {
+	// 将 map 转换为 onebot.Event
+	// 这里可以根据 msg 的内容构建 onebot.Event 对象
+	// 然后分发给 robot (CombinedServer) 的 handleEvent 方法
+	// 注意：CombinedServer 内部的 wsServer 也有 handleEvent，
+	// 我们需要确保 Redis 队列的消息也能通过同样的逻辑分发。
+
+	// 由于 CombinedServer 实现了 Robot 接口，但 HandleEvent 不是 Robot 接口的一部分
+	// 我们直接在 CombinedServer 中实现 handleEvent 逻辑，或者让 Manager 负责分发。
+
+	// 这里的 msg 是从 Redis 队列出来的原始 json map
+	// 我们需要将其传递给 CombinedServer 来处理
+	if s, ok := m.robot.(interface{ HandleQueueEvent(map[string]interface{}) }); ok {
+		s.HandleQueueEvent(msg)
+	}
 }
 
 func (m *Manager) GetPlugins() []Plugin {

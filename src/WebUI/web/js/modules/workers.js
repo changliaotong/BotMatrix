@@ -1,6 +1,6 @@
 import { fetchWithAuth } from './api.js';
 import { timeAgo } from './utils.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { authToken } from './auth.js';
 
 export let currentWorkers = [];
@@ -11,7 +11,6 @@ export let workerViewMode = localStorage.getItem('worker_view_mode') || 'detail'
 
 export async function fetchWorkers(showLoading = false) {
     if (!window.authToken) return;
-    const t = translations[currentLang] || translations['zh-CN'];
 
     if (showLoading) {
         const container = document.getElementById('worker-list-container');
@@ -21,7 +20,7 @@ export async function fetchWorkers(showLoading = false) {
                     <div class="spinner-border text-success" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <div class="mt-2 text-muted">${t.loading || '加载中...'}</div>
+                    <div class="mt-2 text-muted">${t('loading')}</div>
                 </div>
             `;
         }
@@ -76,8 +75,6 @@ export function sortWorkers(field) {
         if (field === 'time' || field === 'msg') workerSortAsc = false;
     }
 
-    const t = translations[currentLang] || translations['zh-CN'];
-
     // Update UI
     ['addr', 'time', 'status', 'msg'].forEach(f => {
         const btn = document.getElementById(`btn-sort-worker-${f}`);
@@ -87,20 +84,20 @@ export function sortWorkers(field) {
             btn.classList.add('active');
             let label = '';
             switch(f) {
-                case 'addr': label = t.sort_address; break;
-                case 'time': label = t.sort_time; break;
-                case 'status': label = t.sort_status; break;
-                case 'msg': label = t.sort_processed; break;
+                case 'addr': label = t('sort_address'); break;
+                case 'time': label = t('sort_time'); break;
+                case 'status': label = t('sort_status'); break;
+                case 'msg': label = t('sort_processed'); break;
             }
             btn.innerHTML = label + (workerSortAsc ? ' ↑' : ' ↓');
         } else {
             btn.classList.remove('active');
             let label = '';
             switch(f) {
-                case 'addr': label = t.sort_address; break;
-                case 'time': label = t.sort_time; break;
-                case 'status': label = t.sort_status; break;
-                case 'msg': label = t.sort_processed; break;
+                case 'addr': label = t('sort_address'); break;
+                case 'time': label = t('sort_time'); break;
+                case 'status': label = t('sort_status'); break;
+                case 'msg': label = t('sort_processed'); break;
             }
             btn.innerHTML = label;
         }
@@ -188,9 +185,8 @@ export function renderWorkers() {
         return workerSortAsc ? res : -res;
     });
 
-    const t = translations[currentLang] || translations['zh-CN'];
     if (workers.length === 0) {
-        container.innerHTML = `<div class="col-12 text-center text-muted">${t.no_workers || '暂无处理端'}</div>`;
+        container.innerHTML = `<div class="col-12 text-center text-muted">${t('no_workers')}</div>`;
         return;
     }
     
@@ -210,21 +206,21 @@ export function renderWorkers() {
                             <i class="bi bi-gear-wide-connected fs-6"></i>
                         </div>
                         <div class="overflow-hidden w-100">
-                            <div class="fw-bold text-truncate" style="font-size: 0.85rem;">${t.worker_node_title}</div>
+                            <div class="fw-bold text-truncate" style="font-size: 0.85rem;">${t('worker_node_title')}</div>
                             <div class="text-muted text-truncate" style="font-size: 0.7rem;">${addrDisplay}</div>
                         </div>
                     </div>
                     <div class="rounded p-1 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_status}:</span>
+                            <span class="text-muted">${t('card_label_status')}:</span>
                             <span class="text-success">${status}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_latency}:</span>
+                            <span class="text-muted">${t('card_label_latency')}:</span>
                             <span class="text-info fw-bold">${w.avg_rtt || '0s'}</span>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <span class="text-muted">${t.card_label_processed}:</span>
+                            <span class="text-muted">${t('card_label_processed')}:</span>
                             <span class="text-primary fw-bold">${w.handled_count || 0}</span>
                         </div>
                     </div>
@@ -240,29 +236,29 @@ export function renderWorkers() {
                             <i class="bi bi-gear-wide-connected fs-5"></i>
                         </div>
                         <div class="overflow-hidden w-100">
-                            <div class="fw-bold text-truncate" style="font-size: 0.9rem;">${t.worker_node}</div>
-                            <div class="text-muted text-truncate" style="font-size: 0.7rem;">${t.worker_node_title}</div>
+                            <div class="fw-bold text-truncate" style="font-size: 0.9rem;">${t('worker_node')}</div>
+                            <div class="text-muted text-truncate" style="font-size: 0.7rem;">${t('worker_node_title')}</div>
                         </div>
                     </div>
                     <div class="rounded p-2 mb-2 flex-grow-1" style="background-color: var(--bg-list-item); font-size: 0.75rem;">
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_ip}:</span>
+                            <span class="text-muted">${t('card_label_ip')}:</span>
                             <span class="text-truncate" style="max-width: 80px;" title="${addr}">${addrDisplay}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_connected}:</span>
+                            <span class="text-muted">${t('card_label_connected')}:</span>
                             <span title="${connDate.toLocaleString()}">${timeStr}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_status}:</span>
+                            <span class="text-muted">${t('card_label_status')}:</span>
                             <span class="text-success">${status}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">${t.card_label_latency}:</span>
+                            <span class="text-muted">${t('card_label_latency')}:</span>
                             <span class="text-info fw-bold">${w.avg_rtt || '0s'}</span>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <span class="text-muted">${t.card_label_processed_msgs}:</span>
+                            <span class="text-muted">${t('card_label_processed_msgs')}:</span>
                             <span class="text-primary fw-bold">${w.handled_count || 0}</span>
                         </div>
                     </div>

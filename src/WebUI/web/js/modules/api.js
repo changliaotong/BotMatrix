@@ -120,9 +120,7 @@ export function sendAction() {
     try {
         params = JSON.parse(document.getElementById('action-params').value);
     } catch (e) {
-        const { currentLang, translations } = window;
-        const t = translations && translations[currentLang] ? translations[currentLang] : {};
-        alert(t.alert_json_error || 'JSON format error');
+        alert(t('alert_json_error') || 'JSON format error');
         return;
     }
 

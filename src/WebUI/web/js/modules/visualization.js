@@ -1,7 +1,7 @@
 /**
  * 可视化引擎模块
  */
-import { currentLang, translations, setLanguage } from './i18n.js';
+import { setLanguage, t, currentLang } from './i18n.js';
 import { authToken, authRole } from './auth.js';
 import { addEventLog } from './logs.js';
 import { renderBots, updateGlobalBotSelectors, currentBots } from './bots.js';
@@ -79,8 +79,7 @@ export class RoutingVisualizer {
         this.container.appendChild(this.statsEl);
 
         // Add Nexus (Central Node)
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        this.getOrCreateNode('nexus', 'nexus', t.viz_nexus || 'Nexus', null, null, null, t.viz_nexus || 'Nexus');
+        this.getOrCreateNode('nexus', 'nexus', t('viz_nexus') || 'Nexus', null, null, null, t('viz_nexus') || 'Nexus');
 
         this.updateStatsUI();
 
@@ -119,17 +118,16 @@ export class RoutingVisualizer {
 
     updateStatsUI() {
         if (!this.statsEl) return;
-        const t = translations[currentLang] || translations['zh-CN'] || {};
         const activeNodes = this.nodes.size;
         const activeParticles = this.particles.length;
         
         this.statsEl.innerHTML = `
             <div style="font-size: 1.1rem; border-bottom: 1px solid rgba(0,255,65,0.3); margin-bottom: 5px; padding-bottom: 2px;">
-                ${t.viz_stats_title || 'SYSTEM STATUS'}
+                ${t('viz_stats_title') || 'SYSTEM STATUS'}
             </div>
-            <div>${t.total_messages || '消息总量'}: <span style="color: #fff; text-shadow: 0 0 5px #00ff41;">${this.totalMessages}</span></div>
-            <div>${t.viz_active_nodes || '活动节点'}: ${activeNodes}</div>
-            <div>${t.viz_active_tasks || '处理中任务'}: ${activeParticles}</div>
+            <div>${t('total_messages') || '消息总量'}: <span style="color: #fff; text-shadow: 0 0 5px #00ff41;">${this.totalMessages}</span></div>
+            <div>${t('viz_active_nodes') || '活动节点'}: ${activeNodes}</div>
+            <div>${t('viz_active_tasks') || '处理中任务'}: ${activeParticles}</div>
         `;
     }
 
@@ -247,8 +245,6 @@ export class RoutingVisualizer {
         const panel = document.getElementById('viz-settings-panel');
         if (!panel) return;
         
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        
         const createSlider = (label, key, min, max, step = 1) => `
             <div style="margin-bottom: 12px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -263,21 +259,21 @@ export class RoutingVisualizer {
 
         panel.innerHTML = `
             <div style="font-weight: bold; border-bottom: 1px solid rgba(0,255,65,0.3); margin-bottom: 15px; padding-bottom: 5px; display: flex; justify-content: space-between;">
-                <span>${t.viz_settings_title || 'VISUALIZATION CONFIG'}</span>
+                <span>${t('viz_settings_title') || 'VISUALIZATION CONFIG'}</span>
                 <i class="bi bi-x-lg" onclick="window.visualizer.toggleSettings()" style="cursor: pointer;"></i>
             </div>
-            ${createSlider(t.viz_bot_dist || '机器人距离', 'botRadius', 500, 10000, 50)}
-            ${createSlider(t.viz_bot_mult || '机器人间距系数', 'botGroupMultiplier', 0, 1000, 10)}
-            ${createSlider(t.viz_group_dist || '群组距离', 'groupRadius', 1000, 40000, 100)}
-            ${createSlider(t.viz_group_mult || '群组间距系数', 'groupCountMultiplier', 0, 5000, 100)}
-            ${createSlider(t.viz_group_spread || '群组离散度', 'groupSpread', 0, 20000, 100)}
-            ${createSlider(t.viz_user_dist || '用户距离', 'userRadius', 1000, 30000, 100)}
-            ${createSlider(t.viz_user_spread || '用户离散度', 'userSpread', 0, 10000, 100)}
-            ${createSlider(t.viz_wander || '浮动幅度', 'wanderScale', 0, 5, 0.1)}
-            ${createSlider(t.viz_vertical || '垂直分布', 'verticalSpread', 0, 3, 0.1)}
+            ${createSlider(t('viz_bot_dist') || '机器人距离', 'botRadius', 500, 10000, 50)}
+            ${createSlider(t('viz_bot_mult') || '机器人间距系数', 'botGroupMultiplier', 0, 1000, 10)}
+            ${createSlider(t('viz_group_dist') || '群组距离', 'groupRadius', 1000, 40000, 100)}
+            ${createSlider(t('viz_group_mult') || '群组间距系数', 'groupCountMultiplier', 0, 5000, 100)}
+            ${createSlider(t('viz_group_spread') || '群组离散度', 'groupSpread', 0, 20000, 100)}
+            ${createSlider(t('viz_user_dist') || '用户距离', 'userRadius', 1000, 30000, 100)}
+            ${createSlider(t('viz_user_spread') || '用户离散度', 'userSpread', 0, 10000, 100)}
+            ${createSlider(t('viz_wander') || '浮动幅度', 'wanderScale', 0, 5, 0.1)}
+            ${createSlider(t('viz_vertical') || '垂直分布', 'verticalSpread', 0, 3, 0.1)}
             <div style="margin-top: 15px; display: flex; gap: 10px;">
-                <button onclick="window.visualizer.resetConfig()" style="flex: 1; background: rgba(255,0,0,0.2); border: 1px solid #ff4444; color: #ff4444; padding: 5px; cursor: pointer; border-radius: 4px;">${t.reset || '重置'}</button>
-                <button onclick="window.visualizer.saveConfigToDisk()" style="flex: 1; background: rgba(0,255,65,0.2); border: 1px solid #00ff41; color: #00ff41; padding: 5px; cursor: pointer; border-radius: 4px;">${t.save || '保存'}</button>
+                <button onclick="window.visualizer.resetConfig()" style="flex: 1; background: rgba(255,0,0,0.2); border: 1px solid #ff4444; color: #ff4444; padding: 5px; cursor: pointer; border-radius: 4px;">${t('reset') || '重置'}</button>
+                <button onclick="window.visualizer.saveConfigToDisk()" style="flex: 1; background: rgba(0,255,65,0.2); border: 1px solid #00ff41; color: #00ff41; padding: 5px; cursor: pointer; border-radius: 4px;">${t('save') || '保存'}</button>
             </div>
         `;
     }
@@ -286,13 +282,11 @@ export class RoutingVisualizer {
         this.updateStatsUI();
         this.updateSettingsUIContent();
 
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-
         // Update Nexus Label
         const nexus = this.nodes.get('nexus');
         if (nexus) {
-            nexus.label = t.viz_nexus || 'Nexus';
-            nexus.typeLabel = t.viz_nexus || 'Nexus';
+            nexus.label = t('viz_nexus') || 'Nexus';
+            nexus.typeLabel = t('viz_nexus') || 'Nexus';
         }
 
         // Update all node textures and type labels to reflect language change
@@ -300,11 +294,11 @@ export class RoutingVisualizer {
             if (node.id === 'nexus') return;
             
             // Update type label based on type
-            if (node.type === 'bot') node.typeLabel = t.viz_bot || 'Bot';
-            else if (node.type === 'group') node.typeLabel = t.viz_group || 'Group';
-            else if (node.type === 'user') node.typeLabel = t.viz_user || 'User';
-            else if (node.type === 'worker') node.typeLabel = t.viz_worker || 'Worker';
-            else if (node.type === 'member') node.typeLabel = t.viz_member || 'Member';
+            if (node.type === 'bot') node.typeLabel = t('viz_bot') || 'Bot';
+            else if (node.type === 'group') node.typeLabel = t('viz_group') || 'Group';
+            else if (node.type === 'user') node.typeLabel = t('viz_user') || 'User';
+            else if (node.type === 'worker') node.typeLabel = t('viz_worker') || 'Worker';
+            else if (node.type === 'member') node.typeLabel = t('viz_member') || 'Member';
 
             this.updateNodeTexture(node);
         });
@@ -343,8 +337,7 @@ export class RoutingVisualizer {
 
     saveConfigToDisk() {
         this.saveConfig();
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        alert(t.viz_save_success || 'Settings saved to local storage');
+        alert(t('viz_save_success') || 'Settings saved to local storage');
         this.toggleSettings();
     }
 
@@ -571,7 +564,6 @@ export class RoutingVisualizer {
 
     finalizeNodeTexture(node, canvas) {
         const ctx = canvas.getContext('2d');
-        const t = translations[currentLang] || translations['zh-CN'] || {};
         
         // Draw Label
         ctx.fillStyle = '#ffffff';
@@ -602,8 +594,7 @@ export class RoutingVisualizer {
             this.totalMessages = event.total_messages;
             this.updateStatsUI();
         }
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        const nexusLabel = t.viz_nexus || 'Nexus';
+        const nexusLabel = t('viz_nexus') || 'Nexus';
         const nexus = this.getOrCreateNode('nexus', 'nexus', nexusLabel);
         let startNode, endNode;
 
@@ -1356,8 +1347,6 @@ export function handleSyncState(data) {
 
     // 3. Update Visualizer if active
     if (window.visualizer) {
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        
         // Sync bots
         if (data.bots) {
             data.bots.forEach(b => {
@@ -1366,28 +1355,28 @@ export function handleSyncState(data) {
                     avatarUrl = `https://q1.qlogo.cn/g?b=qq&nk=${b.self_id}&s=640`;
                     avatarUrl = `/api/proxy/avatar?url=${encodeURIComponent(avatarUrl)}`;
                 }
-                window.visualizer.getOrCreateNode(b.self_id, 'bot', b.nickname || b.self_id, avatarUrl, null, null, t.viz_bot || 'Bot');
+                window.visualizer.getOrCreateNode(b.self_id, 'bot', b.nickname || b.self_id, avatarUrl, null, null, t('viz_bot') || 'Bot');
             });
         }
 
         // Sync groups
         if (data.groups) {
             Object.values(data.groups).forEach(g => {
-                window.visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`, null, null, g.bot_id, t.viz_group || 'Group');
+                window.visualizer.getOrCreateNode(g.group_id, 'group', g.group_name || `Group ${g.group_id}`, null, null, g.bot_id, t('viz_group') || 'Group');
             });
         }
         
         // Sync friends
         if (data.friends) {
             Object.values(data.friends).forEach(f => {
-                window.visualizer.getOrCreateNode(f.user_id, 'user', f.nickname || f.user_id, null, null, null, t.viz_user || 'User');
+                window.visualizer.getOrCreateNode(f.user_id, 'user', f.nickname || f.user_id, null, null, null, t('viz_user') || 'User');
             });
         }
         
         // Sync members
         if (data.members) {
             Object.values(data.members).forEach(m => {
-                window.visualizer.getOrCreateNode(m.user_id, 'user', m.nickname || m.user_id, null, m.group_id, null, t.viz_member || 'Member');
+                window.visualizer.getOrCreateNode(m.user_id, 'user', m.nickname || m.user_id, null, m.group_id, null, t('viz_member') || 'Member');
             });
         }
     }

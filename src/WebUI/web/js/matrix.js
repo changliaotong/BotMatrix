@@ -1,357 +1,141 @@
+console.log('matrix.js loading...');
+if (typeof Vue === 'undefined') {
+    const errorTitle = (window.t && window.t('vue_not_loaded_error')) || 'Vue is NOT defined! Check index.html script tags.';
+    const errorMsg = (window.t && window.t('vue_not_loaded_msg')) || 'Error: Vue.js not loaded. Please check your internet connection or script paths.';
+    console.error(errorTitle);
+    document.body.innerHTML = `<div style="color:red;padding:20px;">${errorMsg}</div>`;
+}
 const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 
-const translations = {
-    'en-US': {
-        dashboard: 'Dashboard',
-        bot_matrix: 'Bot Matrix',
-        groups: 'Groups',
-        friends: 'Friends',
-        system_logs: 'System Logs',
-        settings: 'Settings',
-        overview: 'Overview',
-        total_bots: 'Total Bots',
-        active_workers: 'Active Workers',
-        messages_today: 'Messages Today',
-        system_uptime: 'System Uptime',
-        target_node: 'Target Node',
-        refresh_sector: 'Refresh Sector',
-        members: 'MEMBERS',
-        manage_node: 'Manage Node',
-        no_nodes: 'No neural nodes found in this sector',
-        no_clusters: 'No active clusters found in this node',
-        deployment_in_progress: 'MODULE DEPLOYMENT IN PROGRESS...',
-        back: 'Back',
-        logout: 'Logout',
-        search_placeholder: 'Search nodes...',
-        status_active: 'Active',
-        status_offline: 'Offline',
-        all_sectors: 'All Sectors',
-        active_sectors: 'Active Sectors',
-        offline_sectors: 'Offline Sectors',
-        msgs: 'MSGS',
-        id: 'ID',
-        security_logs: 'View Security Logs',
-        protocol_time: 'Node Protocol Time',
-        pulse_map: 'Neural Pulse Map',
-        realtime_stream: 'Real-time Stream',
-        node_events: 'Node Events',
-        secure_link: 'established secure link.',
-        visualization: 'Visualization',
-        neural_nodes: 'NEURAL NODES',
-        active_routing: 'ACTIVE ROUTING',
-        sync_status: 'SYNC STATUS',
-        reset_camera: 'Reset View',
-        mass_send: 'Mass Send',
-        select_bot: 'Select Bot',
-        select_bot_hint: 'Please select a bot to view data',
-        mass_send_groups: 'Mass Send Groups',
-        mass_send_friends: 'Mass Send Friends',
-        message_content: 'Message Content',
-        select_targets: 'Select Targets',
-        select_all: 'Select All',
-        deselect_all: 'Deselect All',
-        cancel: 'Cancel',
-        execute: 'Execute',
-        sending: 'Sending...',
-        send_message: 'Send Message',
-        enter_message: 'Enter message content...',
-        send: 'Send',
-        // New Translations
-        routing_rules: 'Routing Rules',
-        docker_mgmt: 'Docker Management',
-        user_mgmt: 'User Management',
-        backend_config: 'Backend Config',
-        change_password: 'Change Password',
-        add_rule: 'Add Rule',
-        rule_name: 'Rule Name',
-        pattern: 'Pattern',
-        target_worker: 'Target Worker',
-        actions: 'Actions',
-        status: 'Status',
-        container_id: 'Container ID',
-        image: 'Image',
-        cpu_usage: 'CPU Usage',
-        mem_usage: 'Memory Usage',
-        save_changes: 'Save Changes',
-        reset: 'Reset',
-        admin_privileges: 'Admin Privileges Required',
-        confirm_leave_group: 'Are you sure you want to leave this group?',
-        prompt_check_member: 'Enter user ID to check:',
-        member_found: 'Member found',
-        member_not_found: 'Member not found',
-        prompt_username: 'Enter username:',
-        prompt_password: 'Enter password:',
-        confirm_admin: 'Is administrator?',
-        confirm_delete_user: 'Are you sure you want to delete this user?',
-        confirm_delete_container: 'Are you sure you want to delete this container?',
-        prompt_new_password: 'Enter new password:',
-        docker_containers: 'Docker Containers',
-        username: 'Username',
-        role: 'Role',
-        add_user: 'Add User',
-        reset_pwd: 'Reset PWD',
-        confirm_kick: 'Are you sure you want to kick this member?',
-        prompt_ban_duration: 'Enter duration in minutes (0 to unban):',
-        prompt_new_card: 'Enter new card name:',
-        search_members: 'Search members...',
-        sort_role: 'By Role',
-        sort_nickname: 'By Nickname',
-        sort_user_id: 'By ID'
-    },
-    'zh-CN': {
-        dashboard: '仪表盘',
-        bot_matrix: '云端矩阵',
-        groups: '群组管理',
-        friends: '好友管理',
-        system_logs: '系统日志',
-        settings: '系统设置',
-        overview: '运行概览',
-        total_bots: '在线机器人',
-        active_workers: '处理节点',
-        messages_today: '今日消息',
-        system_uptime: '运行时间',
-        target_node: '目标节点',
-        refresh_sector: '刷新扇区',
-        members: '成员',
-        manage_node: '管理节点',
-        no_nodes: '未发现神经节点',
-        no_clusters: '未发现活跃簇',
-        deployment_in_progress: '模块部署中...',
-        back: '返回',
-        logout: '退出',
-        search_placeholder: '搜索节点...',
-        status_active: '活跃',
-        status_offline: '离线',
-        all_sectors: '全部扇区',
-        active_sectors: '活跃扇区',
-        offline_sectors: '离线扇区',
-        msgs: '消息',
-        id: '标识',
-        security_logs: '查看安全日志',
-        protocol_time: '节点协议时间',
-        pulse_map: '神经脉冲图谱',
-        realtime_stream: '实时数据流',
-        node_events: '节点事件',
-        secure_link: '建立安全连接',
-        visualization: '神经可视化',
-        neural_nodes: '神经节点',
-        active_routing: '活跃路由',
-        sync_status: '同步状态',
-        reset_camera: '重置视角',
-        mass_send: '批量发送',
-        select_bot: '选择机器人',
-        select_bot_hint: '请选择机器人以查看数据',
-        mass_send_groups: '批量发送群组',
-        mass_send_friends: '批量发送好友',
-        message_content: '消息内容',
-        select_targets: '选择目标',
-        select_all: '全选',
-        deselect_all: '取消全选',
-        cancel: '取消',
-        execute: '执行发送',
-        sending: '发送中...',
-        send_message: '发送消息',
-        enter_message: '输入消息内容...',
-        send: '发送',
-        // 新增翻译
-        routing_rules: '路由规则',
-        docker_mgmt: 'Docker 管理',
-        user_mgmt: '用户管理',
-        backend_config: '后端配置',
-        change_password: '修改密码',
-        add_rule: '添加规则',
-        rule_name: '规则名称',
-        pattern: '匹配模式',
-        target_worker: '目标节点',
-        actions: '操作',
-        status: '状态',
-        container_id: '容器 ID',
-        image: '镜像',
-        cpu_usage: 'CPU 使用率',
-        mem_usage: '内存使用率',
-        save_changes: '保存更改',
-        reset: '重置',
-        admin_privileges: '需要管理员权限',
-        confirm_leave_group: '确定要退出该群聊吗？',
-        prompt_check_member: '请输入要查询的用户ID:',
-        member_found: '已找到成员',
-        member_not_found: '未找到该成员',
-        prompt_username: '请输入用户名:',
-        prompt_password: '请输入密码:',
-        confirm_admin: '是否设为管理员？',
-        confirm_delete_user: '确定要删除该用户吗？',
-        prompt_new_password: '请输入新密码:',
-        docker_containers: 'Docker 容器',
-        username: '用户名',
-        role: '角色',
-        add_user: '添加用户',
-        reset_pwd: '重置密码',
-        confirm_kick: '确定要移出群聊吗？',
-        prompt_ban_duration: '请输入禁言时长（分钟，0为解除）:',
-        prompt_new_card: '请输入新的名片内容:',
-        search_members: '搜索成员...',
-        sort_role: '按角色',
-        sort_nickname: '按昵称',
-        sort_user_id: '按账号',
-        docker_logs: '容器日志',
-        confirm_add_bot: '部署新的机器人容器？',
-        confirm_add_worker: '部署新的 Worker 容器？',
-        add_bot: '部署机器人',
-        add_worker: '部署 Worker',
-        filter_logs: '过滤日志...',
-        download: '下载',
-        node_details: '节点详情',
-        last_seen: '最后在线',
-        action_success: '操作成功',
-        action_failed: '操作失败',
-        container_deleted: '容器已删除',
-        error_username_required: '请输入用户名',
-        error_password_required: '请输入密码',
-        error_password_too_short: '密码长度至少为 6 位',
-        confirm_clear_logs: '确定要清除所有日志吗？'
-    },
-    'en': {
-        dashboard: 'Dashboard',
-        bot_matrix: 'Cloud Matrix',
-        groups: 'Groups',
-        friends: 'Friends',
-        system_logs: 'Logs',
-        settings: 'Settings',
-        overview: 'Overview',
-        total_bots: 'Online Bots',
-        active_workers: 'Active Workers',
-        messages_today: 'Messages Today',
-        system_uptime: 'Uptime',
-        target_node: 'Target Node',
-        refresh_sector: 'Refresh Sector',
-        members: 'Members',
-        manage_node: 'Manage Node',
-        no_nodes: 'No neural nodes discovered',
-        no_clusters: 'No active clusters',
-        deployment_in_progress: 'Module deploying...',
-        back: 'Back',
-        logout: 'Logout',
-        search_placeholder: 'Search nodes...',
-        status_active: 'Active',
-        status_offline: 'Offline',
-        all_sectors: 'All Sectors',
-        active_sectors: 'Active Sectors',
-        offline_sectors: 'Offline Sectors',
-        msgs: 'Msgs',
-        id: 'ID',
-        security_logs: 'Security Logs',
-        protocol_time: 'Protocol Time',
-        pulse_map: 'Pulse Map',
-        realtime_stream: 'Realtime Stream',
-        node_events: 'Node Events',
-        secure_link: 'Secure Link',
-        visualization: 'Visualization',
-        neural_nodes: 'Neural Nodes',
-        confirm_add_bot: 'Deploy new Bot container?',
-        confirm_add_worker: 'Deploy new Worker container?',
-        add_bot: 'Add Bot',
-        add_worker: 'Add Worker',
-        active_routing: 'Active Routing',
-        sync_status: 'Sync Status',
-        reset_camera: 'Reset Camera',
-        mass_send: 'Mass Send',
-        select_bot: 'Select Bot',
-        select_bot_hint: 'Please select a bot to view data',
-        mass_send_groups: 'Mass Send Groups',
-        mass_send_friends: 'Mass Send Friends',
-        message_content: 'Message',
-        select_targets: 'Select Targets',
-        select_all: 'Select All',
-        deselect_all: 'Deselect All',
-        cancel: 'Cancel',
-        execute: 'Execute',
-        sending: 'Sending...',
-        send_message: 'Send Message',
-        enter_message: 'Enter message...',
-        send: 'Send',
-        routing_rules: 'Routing Rules',
-        docker_mgmt: 'Docker Mgmt',
-        user_mgmt: 'User Mgmt',
-        backend_config: 'Backend Config',
-        change_password: 'Change Password',
-        add_rule: 'Add Rule',
-        rule_name: 'Rule Name',
-        pattern: 'Pattern',
-        target_worker: 'Target Worker',
-        actions: 'Actions',
-        status: 'Status',
-        container_id: 'Container ID',
-        image: 'Image',
-        cpu_usage: 'CPU',
-        mem_usage: 'Memory',
-        save_changes: 'Save',
-        reset: 'Reset',
-        admin_privileges: 'Admin Privileges',
-        confirm_leave_group: 'Are you sure you want to leave this group?',
-        prompt_check_member: 'Enter user ID:',
-        member_found: 'Member found',
-        member_not_found: 'Member not found',
-        prompt_username: 'Enter username:',
-        prompt_password: 'Enter password:',
-        confirm_admin: 'Set as administrator?',
-        confirm_delete_user: 'Are you sure you want to delete this user?',
-        prompt_new_password: 'Enter new password:',
-        docker_containers: 'Docker Containers',
-        username: 'Username',
-        role: 'Role',
-        add_user: 'Add User',
-        reset_pwd: 'Reset Password',
-        confirm_kick: 'Are you sure you want to kick this member?',
-        prompt_ban_duration: 'Enter ban duration (minutes, 0 to unban):',
-        prompt_new_card: 'Enter new nickname:',
-        search_members: 'Search members...',
-        sort_role: 'By Role',
-        sort_nickname: 'By Nickname',
-        sort_user_id: 'By ID',
-        docker_logs: 'Container Logs',
-        filter_logs: 'Filter logs...',
-        download: 'Download',
-        node_details: 'Node Details',
-        last_seen: 'Last Seen',
-        action_success: 'Success',
-        action_failed: 'Operation failed',
-        container_deleted: 'Container was deleted',
-        error_username_required: 'Username is required',
-        error_password_required: 'Password is required',
-        error_password_too_short: 'Password must be at least 6 characters',
-        confirm_clear_logs: 'Clear all logs?'
-    }
-};
-
-createApp({
+const app = createApp({
     setup() {
-        const lang = ref(localStorage.getItem('language') || 'zh-CN');
-        const isDark = ref(localStorage.getItem('theme') !== 'light'); // Default to dark
+        console.log('Vue setup() starting...');
+        
+        // Helper for safe localStorage access
+        const safeStorage = {
+            getItem: (key) => {
+                try {
+                    return localStorage.getItem(key);
+                } catch (e) {
+                    console.warn('localStorage access failed:', e);
+                    return null;
+                }
+            },
+            setItem: (key, value) => {
+                try {
+                    localStorage.setItem(key, value);
+                } catch (e) {
+                    console.warn('localStorage write failed:', e);
+                }
+            }
+        };
+
+        const lang = ref(safeStorage.getItem('language') || 'zh-CN');
+        const isDark = ref(safeStorage.getItem('theme') !== 'light'); // Default to dark
         const shieldActive = ref(window.__shield_active || false);
+        
+        // Auth state
+        const token = safeStorage.getItem('wxbot_token');
+        
+        // Basic token validation: must exist and look like a JWT (3 parts)
+        const isValidToken = (t) => {
+            console.log('Checking token validity:', t ? (t.substring(0, 10) + '...') : 'null');
+            if (!t || t === 'undefined' || t === 'null') {
+                console.log('Token is null or undefined string');
+                return false;
+            }
+            // Simple JWT check
+            const parts = t.split('.');
+            console.log('Token parts count:', parts.length);
+            return parts.length === 3;
+        };
+
+        const isLoggedIn = ref(isValidToken(token));
+        console.log('Auth state:', { 
+            isLoggedIn: isLoggedIn.value, 
+            hasToken: !!token,
+            tokenType: typeof token,
+            tokenValue: token ? (token.substring(0, 10) + '...') : 'none'
+        });
+        const loginLoading = ref(false);
+        const loginError = ref('');
+        const loginData = ref({
+            username: '',
+            password: ''
+        });
+
+        const safeCreateIcons = () => {
+            if (typeof lucide !== 'undefined') {
+                nextTick(() => {
+                    try {
+                        lucide.createIcons();
+                    } catch (e) {
+                        console.warn('Lucide icons error:', e);
+                    }
+                });
+            }
+        };
+
+        const handleLogin = async () => {
+            if (!loginData.value.username || !loginData.value.password) {
+                loginError.value = t('alert_enter_user_pass') || 'Please enter username and password';
+                return;
+            }
+
+            loginLoading.value = true;
+            loginError.value = '';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(loginData.value)
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.token) {
+                    safeStorage.setItem('wxbot_token', data.token);
+                    if (data.role) safeStorage.setItem('wxbot_role', data.role);
+                    isLoggedIn.value = true;
+                    // Reset login data
+                    loginData.value.username = '';
+                    loginData.value.password = '';
+                    // Fetch data for the main app
+                    nextTick(() => {
+                        fetchAllData();
+                        fetchUserInfo();
+                        initWebSocket();
+                        safeCreateIcons();
+                    });
+                } else {
+                    loginError.value = data.message || t('login_failed') || 'Login failed';
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                loginError.value = t('network_error') || 'Network error or server unavailable';
+            } finally {
+                loginLoading.value = false;
+            }
+        };
 
         const t = (key) => {
-            if (!translations[lang.value]) {
-                return translations['zh-CN'][key] || key;
-            }
-            return translations[lang.value][key] || key;
+            if (window.t) return window.t(key);
+            return key;
         };
 
         const toggleLang = () => {
             lang.value = lang.value === 'zh-CN' ? 'en' : 'zh-CN';
-            localStorage.setItem('language', lang.value);
+            safeStorage.setItem('language', lang.value);
             document.documentElement.lang = lang.value;
-            nextTick(() => {
-                lucide.createIcons();
-            });
+            safeCreateIcons();
         };
 
         const toggleTheme = () => {
             isDark.value = !isDark.value;
-            localStorage.setItem('theme', isDark.value ? 'dark' : 'light');
+            safeStorage.setItem('theme', isDark.value ? 'dark' : 'light');
             updateThemeClass();
-            nextTick(() => {
-                lucide.createIcons();
-            });
+            safeCreateIcons();
             // Update visualizer theme if active
             if (window.visualizer) {
                 window.visualizer.setTheme(isDark.value);
@@ -361,8 +145,10 @@ createApp({
         const updateThemeClass = () => {
             if (isDark.value) {
                 document.documentElement.classList.add('dark');
+                document.documentElement.setAttribute('data-theme', 'dark');
             } else {
                 document.documentElement.classList.remove('dark');
+                document.documentElement.setAttribute('data-theme', 'light');
             }
         };
 
@@ -496,9 +282,7 @@ createApp({
                     selectedNodeDetails.value = details;
                     showingNodeDetails.value = true;
                     
-                    nextTick(() => {
-                        lucide.createIcons();
-                    });
+                    safeCreateIcons();
 
                     // Center camera on node
                     const targetPos = nodeMesh.position.clone();
@@ -834,28 +618,30 @@ createApp({
         const currentTime = ref('');
         const searchQuery = ref('');
         const filterTab = ref('all');
-        const activeTab = ref('overview');
+        const activeTab = ref('dashboard');
         const showMobileMenu = ref(false);
+        const isSidebarCollapsed = ref(false);
         const bots = ref([]);
         const workers = ref([]);
         const groups = ref([]);
         const friends = ref([]);
         const groupMembers = ref([]);
         const currentGroup = ref(null);
-        const logs = ref([]);
+        const systemLogs = ref([]);
         const logFilter = ref('');
         const filteredLogs = computed(() => {
-            if (!logFilter.value) return logs.value;
+            if (!logFilter.value || logFilter.value === 'all') return systemLogs.value;
             const filter = logFilter.value.toLowerCase();
-            return logs.value.filter(log => {
+            return systemLogs.value.filter(log => {
                 const text = (log.msg || log.message || JSON.stringify(log)).toLowerCase();
-                return text.includes(filter) || (log.level && log.level.toLowerCase().includes(filter));
+                const level = (log.level || log.type || 'info').toLowerCase();
+                return text.includes(filter) || level.includes(filter);
             });
         });
 
         const downloadLogs = () => {
-            if (logs.value.length === 0) return;
-            const logText = logs.value.map(log => `[${log.time || 'SYSTEM'}] ${log.level || 'INFO'}: ${log.msg || log.message || JSON.stringify(log)}`).join('\n');
+            if (systemLogs.value.length === 0) return;
+            const logText = systemLogs.value.map(log => `[${log.time || 'SYSTEM'}] ${log.level || log.type || 'INFO'}: ${log.msg || log.message || JSON.stringify(log)}`).join('\n');
             const blob = new Blob([logText], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -906,6 +692,13 @@ createApp({
             password: '',
             is_admin: false
         });
+        const showAddBotModal = ref(false);
+        const newBotData = ref({
+            self_id: '',
+            nickname: '',
+            platform: 'QQ'
+        });
+        const debugResponse = ref('');
         const showingMassSend = ref(false);
         const massSendType = ref('group'); // 'group' or 'friend'
         const massSendTargets = ref([]);
@@ -919,7 +712,66 @@ createApp({
             total_msgs: 0,
             total_bots: 0,
             active_workers: 0,
-            uptime: '0d 0h 0m'
+            uptime: '0d 0h 0m',
+            cpu_usage: '0%',
+            memory_usage: '0%',
+            memory_used_mb: 0,
+            msg_per_sec: 0,
+            sent_per_sec: 0,
+            goroutines: 0,
+            disk_usage: '0%',
+            os_platform: '',
+            os_arch: '',
+            cpu_model: ''
+        });
+
+        const menuGroups = computed(() => [
+            {
+                title: 'overview',
+                items: [
+                    { id: 'dashboard', icon: 'layout-dashboard' },
+                    { id: 'bots', icon: 'bot' },
+                    { id: 'visualization', icon: 'zap' }
+                ]
+            },
+            {
+                title: 'management',
+                items: [
+                    { id: 'groups', icon: 'users' },
+                    { id: 'friends', icon: 'user-plus' },
+                    { id: 'logs', icon: 'file-text' }
+                ]
+            },
+            {
+                title: 'system',
+                items: [
+                    { id: 'docker', icon: 'container' },
+                    { id: 'users', icon: 'shield-check' },
+                    { id: 'settings', icon: 'settings' }
+                ]
+            }
+        ]);
+
+        const statsCards = computed(() => [
+            { label: 'total_bots', value: stats.value.total_bots, icon: 'bot', colorClass: 'bg-blue-500', textColor: 'text-blue-500' },
+            { label: 'active_workers', value: stats.value.active_workers, icon: 'cpu', colorClass: 'bg-purple-500', textColor: 'text-purple-500' },
+            { label: 'messages_today', value: stats.value.total_msgs, icon: 'message-square', colorClass: 'bg-green-500', textColor: 'text-green-500' },
+            { label: 'system_uptime', value: stats.value.uptime, icon: 'clock', colorClass: 'bg-orange-500', textColor: 'text-orange-500' }
+        ]);
+
+        const uptimeDisplay = computed(() => {
+            const parts = stats.value.uptime.split(' ');
+            if (parts.length >= 2) {
+                return { value: parts[0] + parts[1], unit: parts.slice(2).join(' ') || 'UPTIME' };
+            }
+            return { value: stats.value.uptime, unit: 'UPTIME' };
+        });
+
+        const recentLogs = computed(() => {
+            return systemLogs.value.slice(0, 10).map(log => ({
+                time: log.time || new Date().toISOString(),
+                message: log.msg || log.message || JSON.stringify(log)
+            }));
         });
 
         const singleMsgModal = ref({
@@ -1032,8 +884,8 @@ createApp({
                         const data = JSON.parse(evt.data);
                         // Real-time log updates
                         if (data.post_type === 'log') {
-                            logs.value.unshift(data.data);
-                            if (logs.value.length > 100) logs.value.pop();
+                            systemLogs.value.unshift(data.data);
+                            if (systemLogs.value.length > 100) systemLogs.value.pop();
                         }
                         // Handle visualization events
                         if (data.type === 'routing_event' || data.type === 'sync_state') {
@@ -1078,7 +930,7 @@ createApp({
         const apiFetch = async (url, options = {}) => {
             const token = localStorage.getItem('wxbot_token');
             if (!token) {
-                window.location.href = 'index.html';
+                isLoggedIn.value = false;
                 return null;
             }
 
@@ -1093,7 +945,7 @@ createApp({
                 const res = await fetch(url, { ...defaultOptions, ...options });
                 if (res.status === 401) {
                     localStorage.removeItem('wxbot_token');
-                    window.location.href = 'index.html';
+                    isLoggedIn.value = false;
                     return null;
                 }
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -1160,9 +1012,17 @@ createApp({
         };
 
         const fetchLogs = async () => {
-            const data = await apiFetch('/api/logs');
+            const data = await apiFetch(`/api/admin/logs?filter=${logFilter.value}`);
             if (data) {
-                logs.value = data.logs || [];
+                systemLogs.value = data.logs || [];
+            }
+        };
+
+        const clearLogs = async () => {
+            if (!confirm('Clear all system logs?')) return;
+            const data = await apiFetch('/api/admin/logs/clear', { method: 'POST' });
+            if (data && data.success) {
+                systemLogs.value = [];
             }
         };
 
@@ -1658,6 +1518,11 @@ createApp({
             e.target.src = 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';
         };
 
+        const submitAddBot = async () => {
+            alert('Manual bot addition is not implemented. Bots should connect automatically or via Docker.');
+            showAddBotModal.value = false;
+        };
+
         const fetchAllData = async () => {
             try {
                 const botsData = await apiFetch('/api/bots');
@@ -1674,12 +1539,42 @@ createApp({
                     stats.value.total_bots = statsData.bot_count_total || bots.value.length;
                     stats.value.active_workers = statsData.worker_count || 0;
                     
+                    // Update more system stats
+                    if (statsData.cpu_usage !== undefined) {
+                        stats.value.cpu_usage = `${parseFloat(statsData.cpu_usage).toFixed(1)}%`;
+                    }
+                    if (statsData.memory_used_percent !== undefined) {
+                        stats.value.memory_usage = `${parseFloat(statsData.memory_used_percent).toFixed(1)}%`;
+                    }
+                    if (statsData.memory_used !== undefined) {
+                        stats.value.memory_used_mb = Math.round(statsData.memory_used / 1024 / 1024);
+                    }
+                    if (statsData.goroutines !== undefined) {
+                        stats.value.goroutines = statsData.goroutines;
+                    }
+                    if (statsData.os_platform) stats.value.os_platform = statsData.os_platform;
+                    if (statsData.os_arch) stats.value.os_arch = statsData.os_arch;
+                    if (statsData.cpu_model) stats.value.cpu_model = statsData.cpu_model;
+                    
+                    // Calculate Uptime from start_time if uptime string is missing
                     if (statsData.uptime) {
                         const match = statsData.uptime.match(/(\d+h)?(\d+m)?/);
                         if (match && (match[1] || match[2])) {
                             stats.value.uptime = `${match[1] || ''} ${match[2] || ''}`.trim() || '0h 0m';
                         } else {
                             stats.value.uptime = '< 1m';
+                        }
+                    } else if (statsData.start_time) {
+                        const uptimeSeconds = Math.floor(Date.now() / 1000 - statsData.start_time);
+                        const d = Math.floor(uptimeSeconds / 86400);
+                        const h = Math.floor((uptimeSeconds % 86400) / 3600);
+                        const m = Math.floor((uptimeSeconds % 3600) / 60);
+                        if (d > 0) {
+                            stats.value.uptime = `${d}d ${h}h ${m}m`;
+                        } else if (h > 0) {
+                            stats.value.uptime = `${h}h ${m}m`;
+                        } else {
+                            stats.value.uptime = `${m}m`;
                         }
                     }
                 }
@@ -1710,6 +1605,15 @@ createApp({
 
         const logout = () => {
             localStorage.removeItem('wxbot_token');
+            localStorage.removeItem('wxbot_role');
+            if (wsSubscriber) {
+                try {
+                    wsSubscriber.onclose = null; // Prevent reconnect
+                    wsSubscriber.close();
+                } catch (e) {}
+                wsSubscriber = null;
+            }
+            isLoggedIn.value = false;
             window.location.href = 'index.html';
         };
 
@@ -1751,25 +1655,54 @@ createApp({
         };
 
         onMounted(() => {
+            console.log('Vue instance mounted!');
             updateThemeClass();
             updateTime();
             setInterval(updateTime, 1000);
             
-            fetchAllData();
-            fetchUserInfo();
-            const dataInterval = setInterval(fetchAllData, 5000);
+            if (isLoggedIn.value) {
+                fetchAllData();
+                fetchUserInfo();
+                initWebSocket();
+                
+                // Initialize legacy stats if available
+                if (window.initCharts) {
+                    setTimeout(() => {
+                        window.initCharts();
+                        if (window.updateStats) window.updateStats();
+                        if (window.updateChatStats) window.updateChatStats();
+                    }, 500);
+                }
+            }
+
+            const dataInterval = setInterval(() => {
+                if (isLoggedIn.value) {
+                    fetchAllData();
+                    // Update legacy stats/charts
+                    if (window.updateStats) window.updateStats();
+                    if (window.updateChatStats) window.updateChatStats();
+                }
+            }, 5000);
 
             initMatrix();
             
             watch(showMobileMenu, (newVal) => {
                 if (newVal) {
-                    nextTick(() => {
-                        lucide.createIcons();
-                    });
+                    safeCreateIcons();
                 }
             });
-
+            
             watch(activeTab, (newTab) => {
+                if (!isLoggedIn.value) return;
+                
+                // Re-initialize charts when switching back to dashboard
+                if (newTab === 'dashboard') {
+                    setTimeout(() => {
+                        if (window.initCharts) window.initCharts();
+                        if (window.updateStats) window.updateStats();
+                    }, 100);
+                }
+
                 if (newTab === 'groups') {
                     if (!selectedBotId.value && bots.value.length > 0) {
                         selectedBotId.value = bots.value[0].self_id;
@@ -1813,12 +1746,11 @@ createApp({
                     });
                 }
 
-                nextTick(() => {
-                    lucide.createIcons();
-                });
+                safeCreateIcons();
             });
 
             watch(selectedBotId, (newId) => {
+                if (!isLoggedIn.value) return;
                 if (activeTab.value === 'groups') {
                     fetchGroups(newId);
                 }
@@ -1827,11 +1759,16 @@ createApp({
                 }
             });
 
-            lucide.createIcons();
+            safeCreateIcons();
 
             onUnmounted(() => {
                 clearInterval(dataInterval);
                 clearInterval(matrixInterval);
+                if (wsSubscriber) {
+                    wsSubscriber.onclose = null;
+                    wsSubscriber.close();
+                    wsSubscriber = null;
+                }
             });
         });
 
@@ -1839,6 +1776,11 @@ createApp({
             lang,
             isDark,
             shieldActive,
+            isLoggedIn,
+            loginLoading,
+            loginError,
+            loginData,
+            handleLogin,
             t,
             toggleLang,
             toggleTheme,
@@ -1855,7 +1797,18 @@ createApp({
             workers,
             groups,
             friends,
-            logs,
+            systemLogs,
+            isSidebarCollapsed,
+            showAddBotModal,
+            newBotData,
+            submitAddBot,
+            debugResponse,
+            menuGroups,
+            statsCards,
+            uptimeDisplay,
+            recentLogs,
+            stats,
+            clearLogs,
             routingRules,
             dockerContainers,
                 dockerLogs,
@@ -1908,7 +1861,6 @@ createApp({
             handleAvatarError,
             goBack,
             logout,
-            stats,
             wsStatus,
             wsConnected,
             singleMsgModal,
@@ -1928,8 +1880,16 @@ createApp({
             kickMember,
             setMemberCard,
             leaveGroup,
-            checkGroupMember,
-            manageSystemUser
+            checkGroupMember
         };
     }
-}).mount('#app');
+});
+
+app.config.errorHandler = (err, vm, info) => {
+    console.error('Vue Error:', err, info);
+};
+
+app.mount('#app');
+
+console.log('matrix.js execution finished, Vue mounted to #app');
+window.__matrix_loaded = true;

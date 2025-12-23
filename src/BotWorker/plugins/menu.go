@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"log"
@@ -17,7 +18,7 @@ func (p *MenuPlugin) Name() string {
 }
 
 func (p *MenuPlugin) Description() string {
-	return "菜单插件，显示所有可用命令"
+	return common.T("", "menu_plugin_desc")
 }
 
 func (p *MenuPlugin) Version() string {
@@ -32,7 +33,7 @@ func NewMenuPlugin() *MenuPlugin {
 }
 
 func (p *MenuPlugin) Init(robot plugin.Robot) {
-	log.Println("加载菜单插件")
+	log.Println(common.T("", "menu_plugin_loaded"))
 
 	// 处理菜单命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -60,11 +61,38 @@ func (p *MenuPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, messag
 
 // GetMenu 获取菜单内容
 func (p *MenuPlugin) GetMenu() string {
-	menu := "🤖 机器人命令菜单\n"
+	menu := common.T("", "menu_title") + "\n"
 	menu += "====================\n\n"
+	menu += common.T("", "menu_section_points") + ":\n"
+	menu += common.T("", "menu_cmd_points_query") + "\n"
+	menu += common.T("", "menu_cmd_points_rank") + "\n\n"
+	menu += common.T("", "menu_section_signin") + ":\n"
+	menu += common.T("", "menu_cmd_signin") + "\n\n"
+	menu += common.T("", "menu_section_weather") + ":\n"
+	menu += common.T("", "menu_cmd_weather") + "\n"
+	menu += "/weather <city> - " + common.T("", "menu_help_weather") + "\n\n"
+	menu += common.T("", "menu_section_lottery") + ":\n"
+	menu += common.T("", "menu_cmd_lottery") + "\n"
+	menu += common.T("", "menu_cmd_lottery_explain") + "\n\n"
+	menu += common.T("", "menu_section_translate") + ":\n"
+	menu += common.T("", "menu_cmd_translate") + "\n"
+	menu += "/translate <text> - " + common.T("", "menu_help_translate") + "\n\n"
+	menu += common.T("", "menu_section_music") + ":\n"
+	menu += common.T("", "menu_cmd_music") + "\n"
+	menu += "/music <name> - " + common.T("", "menu_help_music") + "\n\n"
+	menu += common.T("", "menu_section_pets") + ":\n"
+	menu += common.T("", "menu_cmd_pets_adopt") + "\n"
+	menu += common.T("", "menu_cmd_pets_my") + "\n"
+	menu += common.T("", "menu_cmd_pets_feed") + "\n"
+	menu += common.T("", "menu_cmd_pets_play") + "\n"
+	menu += common.T("", "menu_cmd_pets_bath") + "\n\n"
 	menu += "🎮 小型游戏:\n"
 	menu += "小游戏\n\n"
+	menu += common.T("", "menu_section_other") + ":\n"
+	menu += common.T("", "menu_cmd_menu") + "\n"
+	menu += common.T("", "menu_cmd_help") + "\n"
 	menu += "====================\n"
+	menu += common.T("", "menu_tip") + "\n"
 	menu += "💡 提示: 发送 '小游戏' 查看所有游戏列表"
 
 	return menu

@@ -6,7 +6,7 @@ import { initVisualizer } from './visualization.js?v=1.1.87';
 import { loadDockerContainers } from './docker.js?v=1.1.87';
 import { fetchUsers } from './admin.js?v=1.1.87';
 import { fetchLogs, fetchLogsFull } from './logs.js?v=1.1.87';
-import { translations, currentLang, initLanguage } from './i18n.js?v=1.1.87';
+import { initLanguage, t } from './i18n.js?v=1.1.87';
 import { initWebSocket, closeWebSocket } from './websocket.js?v=1.1.87';
 import { updateSystemStats, updateTimeDisplay } from './system.js?v=1.1.87';
 import { refreshGroupList } from './groups.js?v=1.1.87';
@@ -71,6 +71,12 @@ export function startApp() {
         if (lp) {
             lp.classList.add('hidden');
             lp.style.display = 'none';
+        }
+
+        // Show main app container if it exists (for legacy.html)
+        const mainApp = document.querySelector('.main-app');
+        if (mainApp) {
+            mainApp.style.display = 'block';
         }
         
         // Ensure overlay is hidden
@@ -193,8 +199,7 @@ export function startApp() {
             lp.style.display = 'flex';
             lp.classList.remove('hidden');
         }
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        alert(t.startup_error || '应用初始化失败，请刷新页面重试: ' + error.message);
+        alert((t('startup_error') || '启动失败') + ': ' + error.message);
     }
 }
 
@@ -259,6 +264,101 @@ export function setGlobalBot(id) {
  */
 document.addEventListener('DOMContentLoaded', () => {
     console.log('--- DOMContentLoaded Triggered ---');
+    
+    // Helper function for initialization that requires loginPage
+    const initializeWithLp = (lp) => {
+        console.log('--- DOMContentLoaded Initializing with loginPage ---');
+        try {
+            console.log('1. Initializing theme and language...');
+            try {
+                initTheme();
+            } catch (themeErr) {
+                console.error('Theme init error:', themeErr);
+            }
+            
+            try {
+                initLanguage();
+            } catch (langErr) {
+                console.error('Language init error:', langErr);
+            }
+
+            // Resource checks
+            if (typeof bootstrap === 'undefined') console.warn('Bootstrap JS failed to load');
+            if (typeof Chart === 'undefined') console.warn('Chart.js failed to load');
+            if (typeof THREE === 'undefined') console.warn('Three.js failed to load');
+
+            // Initialize UI
+            try {
+                initUI();
+            } catch (uiErr) {
+                console.error('UI init error:', uiErr);
+            }
+
+            // Force logout if requested via URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('logout') === '1') {
+                console.log('Logout parameter detected, performing logout...');
+                localStorage.removeItem('wxbot_token');
+                localStorage.removeItem('wxbot_role');
+                window.authToken = null;
+                window.authRole = 'user';
+                
+                if (lp) {
+                    lp.style.display = 'flex';
+                    lp.classList.remove('hidden');
+                }
+                
+                // Remove the logout parameter from URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                clearTimeout(emergencyTimeout);
+                return;
+            }
+
+            // Magic Token Login (Support 'magic', 'token', and 'magic_token' params)
+            const magicToken = urlParams.get('magic') || urlParams.get('token') || urlParams.get('magic_token');
+            if (magicToken) {
+                console.log('Magic token detected, attempting login...');
+                handleMagicToken(magicToken).then(res => {
+                    if (res.success) {
+                        startApp();
+                    } else {
+                        lp.style.display = 'flex';
+                        lp.classList.remove('hidden');
+                    }
+                });
+                clearTimeout(emergencyTimeout);
+                return;
+            }
+
+            // Check for existing token
+            const token = window.authToken || localStorage.getItem('wxbot_token');
+            if (token && token !== 'undefined' && token !== 'null') {
+                console.log('Existing token found, starting app...');
+                startApp();
+            } else {
+                console.log('No valid token found, showing login page');
+                lp.style.display = 'flex';
+                lp.classList.remove('hidden');
+            }
+            
+            // Initialize Auth listeners
+            initAuth();
+            
+            // If app started, clear timeout immediately
+            if (isAppStarted) {
+                clearTimeout(emergencyTimeout);
+            }
+        } catch (err) {
+            console.error('DOMContentLoaded initialization error:', err);
+            if (lp) {
+                lp.style.display = 'flex';
+                lp.classList.remove('hidden');
+            }
+            clearTimeout(emergencyTimeout);
+        }
+    };
+
     const lp = document.getElementById('loginPage');
     
     // Set an emergency timeout: if after 5 seconds the page is still blank (neither main UI nor login page shown), show the login page
@@ -266,18 +366,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // If app already started, do nothing
         if (isAppStarted) return;
 
-        const lp = document.getElementById('loginPage');
+        const currentLp = document.getElementById('loginPage');
         const dashboard = document.getElementById('tab-dashboard');
         
         // Use getComputedStyle to check actual visibility as style.display might be empty if set via CSS
-        const isLpVisible = lp && window.getComputedStyle(lp).display !== 'none' && window.getComputedStyle(lp).visibility !== 'hidden' && window.getComputedStyle(lp).opacity !== '0';
+        const isLpVisible = currentLp && window.getComputedStyle(currentLp).display !== 'none' && window.getComputedStyle(currentLp).visibility !== 'hidden' && window.getComputedStyle(currentLp).opacity !== '0';
         const isDashboardVisible = dashboard && window.getComputedStyle(dashboard).display !== 'none' && window.getComputedStyle(dashboard).visibility !== 'hidden' && window.getComputedStyle(dashboard).opacity !== '0';
         
         if (!isLpVisible && !isDashboardVisible) {
             console.error('Emergency Timeout: Page remains blank after 5s. Force showing login page.');
-            if (lp) {
-                lp.style.display = 'flex';
-                lp.classList.remove('hidden');
+            if (currentLp) {
+                currentLp.style.display = 'flex';
+                currentLp.classList.remove('hidden');
                 
                 // Check if an emergency alert already exists
                 if (!document.getElementById('emergency-alert')) {
@@ -322,85 +422,46 @@ document.addEventListener('DOMContentLoaded', () => {
                     btnContainer.appendChild(diagBtn);
                     
                     alertDiv.appendChild(btnContainer);
-                    lp.appendChild(alertDiv);
+                    currentLp.appendChild(alertDiv);
                 }
             }
         }
     }, 5000);
 
-    console.log('--- DOMContentLoaded Initializing ---');
-    try {
-        console.log('1. Initializing theme and language...');
-        try {
-            initTheme();
-        } catch (themeErr) {
-            console.error('Theme init error:', themeErr);
-        }
+    if (!lp) {
+        console.log('loginPage not found in DOM initially. Waiting for potential async rendering...');
         
-        try {
-            initLanguage();
-        } catch (langErr) {
-            console.error('Language init error:', langErr);
-        }
-        
-        if (!lp) {
-            console.error('Critical Error: loginPage element not found in DOM!');
-            alert('Critical Error: loginPage element not found!');
-            clearTimeout(emergencyTimeout);
-            return;
-        }
-
-        // Force logout if requested via URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('logout') === '1') {
-            console.log('Logout parameter detected, showing login page');
-            lp.style.display = 'flex';
-            lp.classList.remove('hidden');
-            clearTimeout(emergencyTimeout);
-            return;
-        }
-
-        // Magic Token Login (Support both 'magic' and 'token' params)
-        const magicToken = urlParams.get('magic') || urlParams.get('token');
-        if (magicToken) {
-            console.log('Magic token detected, attempting login...');
-            handleMagicToken(magicToken).then(res => {
-                if (res.success) {
-                    startApp();
-                } else {
-                    lp.style.display = 'flex';
-                    lp.classList.remove('hidden');
-                }
-            });
-            clearTimeout(emergencyTimeout);
-            return;
-        }
-
-        // Check for existing token
+        // If we have a token, we might still be able to start the app immediately
         const token = window.authToken || localStorage.getItem('wxbot_token');
         if (token && token !== 'undefined' && token !== 'null') {
-            console.log('Existing token found, starting app...');
+            console.log('Existing token found, starting app without waiting for loginPage...');
             startApp();
-        } else {
-            console.log('No valid token found, showing login page');
-            lp.style.display = 'flex';
-            lp.classList.remove('hidden');
-        }
-        
-        // Initialize Auth listeners
-        initAuth();
-        
-        // If app started, clear timeout immediately
-        if (isAppStarted) {
             clearTimeout(emergencyTimeout);
+            return;
         }
-    } catch (err) {
-        console.error('DOMContentLoaded initialization error:', err);
-        if (lp) {
-            lp.style.display = 'flex';
-            lp.classList.remove('hidden');
-        }
-        clearTimeout(emergencyTimeout);
+
+        // Use MutationObserver to wait for loginPage (handles Vue race condition in index.html)
+        const observer = new MutationObserver((mutations, obs) => {
+            const foundLp = document.getElementById('loginPage');
+            if (foundLp) {
+                obs.disconnect();
+                console.log('loginPage detected via MutationObserver.');
+                initializeWithLp(foundLp);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        
+        // Also check if we are in a legacy page that doesn't use Vue
+        // If it's not index.html and no loginPage after 1s, it's likely missing entirely
+        setTimeout(() => {
+            if (!document.getElementById('loginPage') && !isAppStarted) {
+                console.warn('loginPage still not found after 1s. This page might be missing required UI elements.');
+                // For legacy.html, we should still try to init theme/lang
+                try { initTheme(); initLanguage(); } catch(e) {}
+            }
+        }, 1000);
+    } else {
+        initializeWithLp(lp);
     }
 });
 

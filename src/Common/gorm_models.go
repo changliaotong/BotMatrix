@@ -13,6 +13,7 @@ type UserGORM struct {
 	Username       string    `gorm:"uniqueIndex;not null;size:255"`
 	PasswordHash   string    `gorm:"not null;size:255"`
 	IsAdmin        bool      `gorm:"default:false"`
+	Active         bool      `gorm:"default:true"`
 	SessionVersion int       `gorm:"default:1"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -30,6 +31,7 @@ func (u *UserGORM) ToUser() *User {
 		Username:       u.Username,
 		PasswordHash:   u.PasswordHash,
 		IsAdmin:        u.IsAdmin,
+		Active:         u.Active,
 		SessionVersion: u.SessionVersion,
 		CreatedAt:      u.CreatedAt,
 		UpdatedAt:      u.UpdatedAt,
@@ -44,6 +46,7 @@ func (u *UserGORM) FromUser(user *User) {
 	u.Username = user.Username
 	u.PasswordHash = user.PasswordHash
 	u.IsAdmin = user.IsAdmin
+	u.Active = user.Active
 	u.SessionVersion = user.SessionVersion
 	u.CreatedAt = user.CreatedAt
 	u.UpdatedAt = user.UpdatedAt

@@ -1,5 +1,5 @@
 import { fetchWithAuth, callBotApi } from './api.js';
-import { currentLang, translations } from './i18n.js';
+import { t } from './i18n.js';
 import { latestChatStats } from './stats.js';
 import { loadGroupMembers } from './members.js';
 
@@ -64,8 +64,6 @@ export function sortGroups(field) {
         if (field === 'count' || field === 'msg_today') groupSortAsc = false;
     }
     
-    const t = translations[currentLang] || translations['zh-CN'];
-
     ['name', 'count', 'id', 'msg_today'].forEach(f => {
         const btn = document.getElementById(`btn-sort-group-${f}`);
         if (btn) {
@@ -73,20 +71,20 @@ export function sortGroups(field) {
                 btn.classList.add('active');
                 let label = '';
                 switch(f) {
-                    case 'name': label = t.sort_name || '名称'; break;
-                    case 'count': label = t.sort_count || '数量'; break;
-                    case 'id': label = t.sort_id || 'ID'; break;
-                    case 'msg_today': label = t.sort_today || '今日'; break;
+                    case 'name': label = t('sort_name') || '名称'; break;
+                    case 'count': label = t('sort_count') || '数量'; break;
+                    case 'id': label = t('sort_id') || 'ID'; break;
+                    case 'msg_today': label = t('sort_today') || '今日'; break;
                 }
                 btn.innerHTML = label + (groupSortAsc ? ' ↑' : ' ↓');
             } else {
                 btn.classList.remove('active');
                 let label = '';
                 switch(f) {
-                    case 'name': label = t.sort_name || '名称'; break;
-                    case 'count': label = t.sort_count || '数量'; break;
-                    case 'id': label = t.sort_id || 'ID'; break;
-                    case 'msg_today': label = t.sort_today || '今日'; break;
+                    case 'name': label = t('sort_name') || '名称'; break;
+                    case 'count': label = t('sort_count') || '数量'; break;
+                    case 'id': label = t('sort_id') || 'ID'; break;
+                    case 'msg_today': label = t('sort_today') || '今日'; break;
                 }
                 btn.innerHTML = label;
             }
@@ -99,9 +97,8 @@ export function sortGroups(field) {
 export function renderGroups(groups) {
     const listEl = document.getElementById('group-list');
     if (!listEl) return;
-    const t = translations[currentLang] || translations['zh-CN'];
     if (!groups || groups.length === 0) {
-        listEl.innerHTML = `<div class="text-center p-4 text-muted">${t.no_groups || '未找到会话'}</div>`;
+        listEl.innerHTML = `<div class="text-center p-4 text-muted">${t('no_groups') || '未找到会话'}</div>`;
         return;
     }
 
@@ -278,7 +275,6 @@ export function toggleAutoRecallInput() {
 }
 
 export async function sendGroupMsg() {
-    const t = translations[currentLang] || translations['zh-CN'];
     const input = document.getElementById('group-msg-input');
     const msg = input.value.trim();
     if (!msg) return;
@@ -323,13 +319,13 @@ export async function sendGroupMsg() {
         const result = await res.json();
         if (result.error) throw new Error(result.error);
 
-        alert(t.alert_send_success || '发送成功');
+        alert(t('alert_send_success') || '发送成功');
         input.value = '';
         if (window.addEventLog) {
             window.addEventLog({type: 'system', message: `发送消息到 [${currentGroupId}]: ${msg}`});
         }
     } catch (e) {
-        alert((t.alert_op_failed || '操作失败: ') + e.message);
+        alert((t('alert_op_failed') || '操作失败: ') + e.message);
     }
 }
 

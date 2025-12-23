@@ -12,7 +12,7 @@ import { showTab, applyRoleUI, toggleSidebar, showToast } from './modules/ui.js'
 import { loadDockerContainers } from './modules/docker.js';
 import { fetchRoutingRules } from './modules/routing.js';
 import { fetchUsers } from './modules/admin.js';
-import { initLanguage, currentLang, translations } from './modules/i18n.js';
+import { initLanguage, currentLang, t } from './modules/i18n.js';
 import { initVisualizer, handleRoutingEvent, handleSyncState, clearVisualization, toggleFullScreen, openOvermind } from './modules/visualization.js';
 
 let isAppStarted = false;
@@ -32,6 +32,12 @@ async function startApp() {
         if (lp) {
             lp.classList.add('hidden');
             lp.style.display = 'none';
+        }
+
+        // Show main app container if it exists (for legacy.html)
+        const mainApp = document.querySelector('.main-app');
+        if (mainApp) {
+            mainApp.style.display = 'block';
         }
         
         // Ensure overlay is hidden
@@ -160,8 +166,7 @@ async function startApp() {
             lp.style.display = 'flex';
             lp.classList.remove('hidden');
         }
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        alert(t.startup_error || '应用初始化失败，请刷新页面重试: ' + error.message);
+        alert(t('startup_error') || '应用初始化失败，请刷新页面重试: ' + error.message);
     }
 }
 
@@ -180,8 +185,7 @@ function updateTimeDisplay() {
         const m = Math.floor((uptimeSeconds % 3600) / 60);
         const s = uptimeSeconds % 60;
         
-        const t = translations[currentLang] || translations['zh-CN'] || {};
-        const dStr = d > 0 ? `${d}${t.time_days || 'd'} ` : '';
+        const dStr = d > 0 ? `${d}${t('time_days') || 'd'} ` : '';
         const hStr = h.toString().padStart(2, '0');
         const mStr = m.toString().padStart(2, '0');
         const sStr = s.toString().padStart(2, '0');

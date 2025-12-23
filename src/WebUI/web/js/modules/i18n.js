@@ -74,5 +74,24 @@ export function setLanguage(lang) {
     if (window.renderFriends) window.renderFriends();
 }
 
+/**
+ * Get translation for a key
+ */
+export function t(key, replacements = {}) {
+    const lang = localStorage.getItem('language') || 'zh-CN';
+    const dict = translations[lang] || translations['zh-CN'] || {};
+    let text = dict[key] || key;
+
+    // Support basic placeholder replacement: {key}
+    Object.keys(replacements).forEach(k => {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), replacements[k]);
+    });
+
+    return text;
+}
+
+// Expose to window for global access
+window.t = t;
+
 export { translations };
 

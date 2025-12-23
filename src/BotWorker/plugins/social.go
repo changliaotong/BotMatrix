@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"fmt"
 	"log"
 	"math/rand"
@@ -21,7 +22,7 @@ func (p *SocialPlugin) Name() string {
 }
 
 func (p *SocialPlugin) Description() string {
-	return "social plugin，支持爱群主、变身、头衔等功能"
+	return common.T("", "social_plugin_desc")
 }
 
 func (p *SocialPlugin) Version() string {
@@ -32,22 +33,32 @@ func (p *SocialPlugin) Version() string {
 func NewSocialPlugin() *SocialPlugin {
 	return &SocialPlugin{
 		titles: []string{
-			"群主大大", "管理员", "超级会员", "VIP", "普通用户", "萌新", "大佬", "学霸", "学渣",
-			"游戏高手", "音乐达人", "美食家", "旅行家", "摄影师", "作家", "画家", "设计师",
-			"程序员", "工程师", "医生", "老师", "学生", "上班族", "自由职业者", "创业者",
-			"投资者", "收藏家", "健身达人", "运动健将", "吃货", "睡神", "拖延症患者",
-			"强迫症患者", "选择困难症患者", "路痴", "脸盲", "音痴", "手残党", "强迫症",
-			"洁癖", "夜猫子", "早起鸟", "社交达人", "社恐", "社牛", "吐槽帝", "段子手",
-			"表情包达人", "追剧狂魔", "追星族", "二次元", "三次元", "四次元", "coser",
-			"后期", "剪辑师", "编剧", "导演", "演员", "歌手", "舞者", "音乐人", "制作人",
-			"主播", "UP主", "博主", "网红", "明星", "偶像", "男神", "女神", "帅哥", "美女",
-			"萌妹", "御姐", "萝莉", "正太", "大叔", "阿姨", "小姐姐", "小哥哥",
+			common.T("", "social_title_owner"), common.T("", "social_title_admin"), common.T("", "social_title_svip"), common.T("", "social_title_vip"),
+			common.T("", "social_title_user"), common.T("", "social_title_newbie"), common.T("", "social_title_master"), common.T("", "social_title_scholar"),
+			common.T("", "social_title_loser"), common.T("", "social_title_gamer"), common.T("", "social_title_music_fan"), common.T("", "social_title_foodie"),
+			common.T("", "social_title_traveler"), common.T("", "social_title_photographer"), common.T("", "social_title_writer"), common.T("", "social_title_painter"),
+			common.T("", "social_title_designer"), common.T("", "social_title_coder"), common.T("", "social_title_engineer"), common.T("", "social_title_doctor"),
+			common.T("", "social_title_teacher"), common.T("", "social_title_student"), common.T("", "social_title_worker"), common.T("", "social_title_freelancer"),
+			common.T("", "social_title_entrepreneur"), common.T("", "social_title_investor"), common.T("", "social_title_collector"), common.T("", "social_title_fitness"),
+			common.T("", "social_title_athlete"), common.T("", "social_title_eater"), common.T("", "social_title_sleeper"), common.T("", "social_title_procrastinator"),
+			common.T("", "social_title_ocd"), common.T("", "social_title_indecisive"), common.T("", "social_title_lost"), common.T("", "social_title_blind"),
+			common.T("", "social_title_tone_deaf"), common.T("", "social_title_clumsy"), common.T("", "social_title_clean_freak"), common.T("", "social_title_night_owl"),
+			common.T("", "social_title_early_bird"), common.T("", "social_title_social_butterfly"), common.T("", "social_title_social_phobia"), common.T("", "social_title_social_cow"),
+			common.T("", "social_title_troll"), common.T("", "social_title_joker"), common.T("", "social_title_meme_master"), common.T("", "social_title_binge_watcher"),
+			common.T("", "social_title_idol_fan"), common.T("", "social_title_2d"), common.T("", "social_title_3d"), common.T("", "social_title_4d"),
+			common.T("", "social_title_coser"), common.T("", "social_title_editor"), common.T("", "social_title_video_editor"), common.T("", "social_title_screenwriter"),
+			common.T("", "social_title_director"), common.T("", "social_title_actor"), common.T("", "social_title_singer"), common.T("", "social_title_dancer"),
+			common.T("", "social_title_musician"), common.T("", "social_title_producer"), common.T("", "social_title_streamer"), common.T("", "social_title_up"),
+			common.T("", "social_title_blogger"), common.T("", "social_title_influencer"), common.T("", "social_title_star"), common.T("", "social_title_idol"),
+			common.T("", "social_title_god"), common.T("", "social_title_goddess"), common.T("", "social_title_handsome"), common.T("", "social_title_beauty"),
+			common.T("", "social_title_cute_girl"), common.T("", "social_title_big_sister"), common.T("", "social_title_loli"), common.T("", "social_title_shota"),
+			common.T("", "social_title_uncle"), common.T("", "social_title_aunt"), common.T("", "social_title_little_sister"), common.T("", "social_title_little_brother"),
 		},
 	}
 }
 
 func (p *SocialPlugin) Init(robot plugin.Robot) {
-	log.Println("加载social插件")
+	log.Println(common.T("", "social_plugin_loaded"))
 
 	// 处理群消息事件
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -56,17 +67,17 @@ func (p *SocialPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 处理爱群主命令
-		if msgStr, ok := event.Message.(string); ok && strings.Contains(msgStr, "爱群主") {
+		if msgStr, ok := event.Message.(string); ok && strings.Contains(msgStr, common.T("", "social_cmd_love_owner")) {
 			return p.handleLoveOwnerCommand(robot, event)
 		}
 
 		// 处理变身命令
-		if msgStr, ok := event.Message.(string); ok && strings.Contains(msgStr, "变身") {
+		if msgStr, ok := event.Message.(string); ok && strings.Contains(msgStr, common.T("", "social_cmd_transform")) {
 			return p.handleTransformCommand(robot, event)
 		}
 
 		// 处理头衔命令
-		if msgStr, ok := event.Message.(string); ok && strings.Contains(msgStr, "头衔") {
+		if msgStr, ok := event.Message.(string); ok && strings.Contains(msgStr, common.T("", "social_cmd_title")) {
 			return p.handleTitleCommand(robot, event)
 		}
 
@@ -83,10 +94,10 @@ func (p *SocialPlugin) handleLoveOwnerCommand(robot plugin.Robot, event *onebot.
 	})
 
 	if err != nil {
-		log.Printf("[Social] 获取群成员信息失败: %v", err)
+		log.Printf(common.T("", "social_get_member_failed_log"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "❤️ 爱群主失败，请稍后重试！",
+			Message: common.T("", "social_love_failed"),
 		})
 		return nil
 	}
@@ -94,18 +105,18 @@ func (p *SocialPlugin) handleLoveOwnerCommand(robot plugin.Robot, event *onebot.
 	if memberInfo == nil {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "❤️ 爱群主失败，无法获取群成员信息！",
+			Message: common.T("", "social_love_failed_no_info"),
 		})
 		return nil
 	}
 
 	// 发送爱群主消息
 	loveMessages := []string{
-		"❤️ 群主大大最棒了！",
-		"❤️ 爱群主，群主最帅！",
-		"❤️ 群主是大家的榜样！",
-		"❤️ 感谢群主的辛勤付出！",
-		"❤️ 群主威武霸气！",
+		common.T("", "social_love_msg1"),
+		common.T("", "social_love_msg2"),
+		common.T("", "social_love_msg3"),
+		common.T("", "social_love_msg4"),
+		common.T("", "social_love_msg5"),
 	}
 
 	message := loveMessages[rand.Intn(len(loveMessages))]
@@ -124,7 +135,7 @@ func (p *SocialPlugin) handleTransformCommand(robot plugin.Robot, event *onebot.
 	// 发送变身消息
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("✨ %s 变身为：%s", event.Sender.Nickname, title),
+		Message: fmt.Sprintf(common.T("", "social_transform_msg"), event.Sender.Nickname, title),
 	})
 
 	return nil
@@ -140,7 +151,7 @@ func (p *SocialPlugin) handleTitleCommand(robot plugin.Robot, event *onebot.Even
 	if len(parts) < 2 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "用法：头衔 [自定义头衔]\n例如：头衔 游戏大神",
+			Message: common.T("", "social_title_usage"),
 		})
 		return nil
 	}
@@ -150,7 +161,7 @@ func (p *SocialPlugin) handleTitleCommand(robot plugin.Robot, event *onebot.Even
 	if len(customTitle) > 10 {
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "头衔长度不能超过10个字符！",
+			Message: common.T("", "social_title_too_long"),
 		})
 		return nil
 	}
@@ -164,17 +175,17 @@ func (p *SocialPlugin) handleTitleCommand(robot plugin.Robot, event *onebot.Even
 	})
 
 	if err != nil {
-		log.Printf("[Social] 设置群成员头衔失败: %v", err)
+		log.Printf(common.T("", "social_set_title_failed_log"), err)
 		robot.SendMessage(&onebot.SendMessageParams{
 			GroupID: event.GroupID,
-			Message: "❌ 设置头衔失败，请稍后重试！",
+			Message: common.T("", "social_set_title_failed"),
 		})
 		return nil
 	}
 
 	robot.SendMessage(&onebot.SendMessageParams{
 		GroupID: event.GroupID,
-		Message: fmt.Sprintf("✅ 已成功设置头衔：%s", customTitle),
+		Message: fmt.Sprintf(common.T("", "social_set_title_success"), customTitle),
 	})
 
 	return nil

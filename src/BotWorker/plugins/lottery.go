@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -35,33 +36,33 @@ func NewLotteryPlugin() *LotteryPlugin {
 	// 初始化签文列表
 	lotteries := []Lottery{
 		{
-			Name:           "上上签",
-			Content:        "久旱逢甘雨，他乡遇故知。洞房花烛夜，金榜题名时。",
-			Interpretation: "此签为上上大吉，诸事顺遂，心想事成。",
+			Name:           common.T("", "lottery_level1_name"),
+			Content:        common.T("", "lottery_level1_content"),
+			Interpretation: common.T("", "lottery_level1_interpretation"),
 			Level:          1,
 		},
 		{
-			Name:           "上签",
-			Content:        "春风得意马蹄疾，一日看尽长安花。",
-			Interpretation: "此签为上吉，事业有成，前程似锦。",
+			Name:           common.T("", "lottery_level2_name"),
+			Content:        common.T("", "lottery_level2_content"),
+			Interpretation: common.T("", "lottery_level2_interpretation"),
 			Level:          2,
 		},
 		{
-			Name:           "中签",
-			Content:        "行到水穷处，坐看云起时。",
-			Interpretation: "此签为中平，遇事需耐心等待，转机将至。",
+			Name:           common.T("", "lottery_level3_name"),
+			Content:        common.T("", "lottery_level3_content"),
+			Interpretation: common.T("", "lottery_level3_interpretation"),
 			Level:          3,
 		},
 		{
-			Name:           "下签",
-			Content:        "屋漏偏逢连夜雨，船迟又遇打头风。",
-			Interpretation: "此签为下凶，诸事不顺，需谨慎行事。",
+			Name:           common.T("", "lottery_level4_name"),
+			Content:        common.T("", "lottery_level4_content"),
+			Interpretation: common.T("", "lottery_level4_interpretation"),
 			Level:          4,
 		},
 		{
-			Name:           "下下签",
-			Content:        "福无双至，祸不单行。",
-			Interpretation: "此签为下下大凶，遇事需格外小心，避免冲动。",
+			Name:           common.T("", "lottery_level5_name"),
+			Content:        common.T("", "lottery_level5_content"),
+			Interpretation: common.T("", "lottery_level5_interpretation"),
 			Level:          5,
 		},
 	}
@@ -78,7 +79,7 @@ func (p *LotteryPlugin) Name() string {
 }
 
 func (p *LotteryPlugin) Description() string {
-	return "抽签插件，支持抽签和解签功能"
+	return common.T("", "lottery_plugin_desc")
 }
 
 func (p *LotteryPlugin) Version() string {
@@ -86,7 +87,7 @@ func (p *LotteryPlugin) Version() string {
 }
 
 func (p *LotteryPlugin) Init(robot plugin.Robot) {
-	log.Println("加载抽签插件")
+	log.Println(common.T("", "lottery_plugin_loaded"))
 
 	// 处理抽签命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -103,14 +104,14 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为抽签命令
-		if match, _ := p.cmdParser.MatchCommand("lottery|抽签", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "lottery_cmd_draw"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，抽签失败")
+			p.sendMessage(robot, event, common.T("", "lottery_invalid_userid"))
 			return nil
 		}
 
@@ -119,7 +120,7 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		if lastLottery, ok := p.lastLotteryTime[fmt.Sprintf("%d", userID)]; ok {
 			// 检查是否在同一天
 			if isSameDay(lastLottery, now) {
-				p.sendMessage(robot, event, fmt.Sprintf("你今天已经抽过签了！上次抽签时间：%s", lastLottery.Format("15:04:05")))
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "lottery_already_drawn"), lastLottery.Format("15:04:05")))
 				return nil
 			}
 		}
@@ -131,10 +132,10 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		p.lastLotteryTime[fmt.Sprintf("%d", userID)] = now
 
 		// 发送抽签结果
-		msg := fmt.Sprintf("🎐 抽签结果 🎐\n")
-		msg += fmt.Sprintf("签名：%s\n", lottery.Name)
-		msg += fmt.Sprintf("签文：%s\n", lottery.Content)
-		msg += fmt.Sprintf("解签：%s\n", lottery.Interpretation)
+		msg := common.T("", "lottery_result_header")
+		msg += fmt.Sprintf(common.T("", "lottery_result_name"), lottery.Name)
+		msg += fmt.Sprintf(common.T("", "lottery_result_content"), lottery.Content)
+		msg += fmt.Sprintf(common.T("", "lottery_result_interpretation"), lottery.Interpretation)
 
 		p.sendMessage(robot, event, msg)
 
@@ -156,20 +157,20 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为解签命令
-		if match, _ := p.cmdParser.MatchCommand("interpret|解签", event.RawMessage); !match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "lottery_cmd_interpret"), event.RawMessage); !match {
 			return nil
 		}
 
 		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, "无法获取用户ID，解签失败")
+			p.sendMessage(robot, event, common.T("", "lottery_invalid_userid"))
 			return nil
 		}
 
 		// 检查是否有抽签记录
 		if _, ok := p.lastLotteryTime[fmt.Sprintf("%d", userID)]; !ok {
-			p.sendMessage(robot, event, "你还没有抽过签，请先抽签！")
+			p.sendMessage(robot, event, common.T("", "lottery_not_drawn"))
 			return nil
 		}
 
@@ -177,10 +178,10 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 		lottery := p.lotteries[rand.Intn(len(p.lotteries))]
 
 		// 发送解签结果
-		msg := fmt.Sprintf("📜 解签结果 📜\n")
-		msg += fmt.Sprintf("签名：%s\n", lottery.Name)
-		msg += fmt.Sprintf("签文：%s\n", lottery.Content)
-		msg += fmt.Sprintf("解签：%s\n", lottery.Interpretation)
+		msg := common.T("", "lottery_interpret_header")
+		msg += fmt.Sprintf(common.T("", "lottery_result_name"), lottery.Name)
+		msg += fmt.Sprintf(common.T("", "lottery_result_content"), lottery.Content)
+		msg += fmt.Sprintf(common.T("", "lottery_result_interpretation"), lottery.Interpretation)
 
 		p.sendMessage(robot, event, msg)
 
@@ -191,6 +192,6 @@ func (p *LotteryPlugin) Init(robot plugin.Robot) {
 // sendMessage 发送消息
 func (p *LotteryPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "lottery_send_failed"), err)
 	}
 }

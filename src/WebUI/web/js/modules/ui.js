@@ -3,7 +3,7 @@
  */
 
 import { authRole, authToken } from './auth.js';
-import { currentLang, translations, setLanguage } from './i18n.js';
+import { currentLang, setLanguage } from './i18n.js';
 import { fetchUsers } from './admin.js';
 import { loadBackendConfig } from './config.js';
 import { serverStartTime } from './stats.js';

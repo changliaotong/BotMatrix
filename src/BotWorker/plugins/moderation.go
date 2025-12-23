@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"BotMatrix/common"
+	"botworker/internal/db"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -40,7 +42,7 @@ func (p *ModerationPlugin) Name() string {
 }
 
 func (p *ModerationPlugin) Description() string {
-	return "moderation plugin，支持敏感词过滤、广告检测、图片网址过滤等功能"
+	return common.T("", "moderation_plugin_desc")
 }
 
 func (p *ModerationPlugin) Version() string {
@@ -50,16 +52,21 @@ func (p *ModerationPlugin) Version() string {
 // NewModerationPlugin 创建moderation plugin实例
 func NewModerationPlugin() *ModerationPlugin {
 	return &ModerationPlugin{
-		sensitiveWords: []string{"脏话", "广告", "图片", "网址"},
-		whitelist:      []string{},
-		blacklist:      []string{},
-		groupConfigs:   make(map[string]*GroupConfig),
-		cmdParser:      NewCommandParser(),
+		sensitiveWords: []string{
+			common.T("", "moderation_word_profanity"),
+			common.T("", "moderation_word_ad"),
+			common.T("", "moderation_word_image"),
+			common.T("", "moderation_word_url"),
+		},
+		whitelist:    []string{},
+		blacklist:    []string{},
+		groupConfigs: make(map[string]*GroupConfig),
+		cmdParser:    NewCommandParser(),
 	}
 }
 
 func (p *ModerationPlugin) Init(robot plugin.Robot) {
-	log.Println("加载moderation plugin")
+	log.Println(common.T("", "moderation_plugin_loaded"))
 
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
@@ -74,16 +81,22 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		if result.Confirmed {
 			if result.Action == "clear_blacklist" {
 				p.blacklist = []string{}
-				p.sendMessage(robot, event, "黑名单已清空")
+				p.sendMessage(robot, event, common.T("", "moderation_blacklist_cleared"))
 			}
 			if result.Action == "clear_whitelist" {
 				p.whitelist = []string{}
-				p.sendMessage(robot, event, "白名单已清空")
+				if GlobalDB != nil && event != nil && event.GroupID != 0 {
+					groupIDStr := fmt.Sprintf("%d", event.GroupID)
+					if err := db.ClearGroupWhitelist(GlobalDB, groupIDStr); err != nil {
+						log.Printf(common.T("", "moderation_clear_whitelist_failed"), err)
+					}
+				}
+				p.sendMessage(robot, event, common.T("", "moderation_whitelist_cleared"))
 			}
 		}
 
 		if result.Canceled {
-			p.sendMessage(robot, event, "操作已取消")
+			p.sendMessage(robot, event, common.T("", "moderation_op_canceled"))
 		}
 
 		return nil
@@ -103,46 +116,83 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 			}
 		}
 
-		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
 			return nil
 		}
 
-		// 检查是否在白名单
-		if p.isWhitelisted(fmt.Sprintf("%d", userID)) {
-			// 白名单用户可以发送任何消息，包括敏感词、广告、图片、网址
+		groupIDStr := ""
+		if event.MessageType == "group" {
+			groupIDStr = fmt.Sprintf("%d", event.GroupID)
+		}
+
+		userIDStr := fmt.Sprintf("%d", userID)
+
+		if p.isWhitelisted(groupIDStr, userIDStr) {
 			return nil
 		}
 
-		// 检查是否在黑名单
-		if p.isBlacklisted(fmt.Sprintf("%d", userID)) {
-			p.sendMessage(robot, event, "你已被拉黑，无法发送消息")
+		if p.isBlacklisted(userIDStr) {
+			p.sendMessage(robot, event, common.T("", "moderation_user_blacklisted"))
 			return nil
 		}
 
-		// 检查敏感词
 		msg := strings.TrimSpace(event.RawMessage)
+		if msg == "" {
+			return nil
+		}
+
+		level := 0
+		reason := ""
+
+		if GlobalDB != nil {
+			words, err := db.GetAllSensitiveWords(GlobalDB)
+			if err == nil {
+				for _, w := range words {
+					if strings.Contains(msg, w.Word) {
+						if w.Level > level {
+							level = w.Level
+							reason = w.Word
+						}
+					}
+				}
+			} else {
+				log.Printf(common.T("", "moderation_get_sensitive_words_failed"), err)
+			}
+		}
+
 		if p.containsSensitiveWords(msg) {
-			p.sendMessage(robot, event, "消息包含敏感词，已被拦截")
-			return nil
+			if level < 3 {
+				level = 3
+			}
+			if reason == "" {
+				reason = common.T("", "moderation_reason_sensitive")
+			}
 		}
 
-		// 检查广告
 		if p.containsAdvertisement(msg) {
-			p.sendMessage(robot, event, "消息包含广告，已被拦截")
-			return nil
+			if level < 4 {
+				level = 4
+				reason = common.T("", "moderation_reason_ad")
+			}
 		}
 
-		// 检查图片
 		if p.containsImage(msg) {
-			p.sendMessage(robot, event, "消息包含图片，已被拦截")
-			return nil
+			if level < 1 {
+				level = 1
+				reason = common.T("", "moderation_reason_image")
+			}
 		}
 
-		// 检查网址
 		if p.containsURL(msg) {
-			p.sendMessage(robot, event, "消息包含网址，已被拦截")
+			if level < 2 {
+				level = 2
+				reason = common.T("", "moderation_reason_url")
+			}
+		}
+
+		if level > 0 {
+			p.handleSensitiveHit(robot, event, level, reason)
 			return nil
 		}
 
@@ -164,7 +214,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为拉黑命令
-		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("拉黑|ban", `(.+)`, event.RawMessage)
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams(common.T("", "moderation_cmd_ban"), `(.+)`, event.RawMessage)
 		if !match || len(paramMatches) < 1 {
 			return nil
 		}
@@ -176,7 +226,156 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		p.blacklist = append(p.blacklist, userID)
 
 		// 自动踢出群聊
-		p.sendMessage(robot, event, fmt.Sprintf("用户%s已被拉黑并踢出群聊", userID))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_user_banned_msg"), userID))
+
+		return nil
+	})
+
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" {
+			return nil
+		}
+
+		groupIDStr := fmt.Sprintf("%d", event.GroupID)
+		if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "moderation") {
+			HandleFeatureDisabled(robot, event, "moderation")
+			return nil
+		}
+
+		match, cmd, paramMatches := p.cmdParser.MatchCommandWithParams(common.T("", "moderation_cmd_word_manage"), `(.+)`, event.RawMessage)
+		if !match || len(paramMatches) < 1 {
+			return nil
+		}
+
+		if GlobalDB == nil {
+			p.sendMessage(robot, event, common.T("", "moderation_db_unavailable"))
+			return nil
+		}
+
+		adminIDStr := fmt.Sprintf("%d", event.UserID)
+		isAdmin, err := db.IsGroupAdmin(GlobalDB, groupIDStr, adminIDStr)
+		if err != nil || !isAdmin {
+			p.sendMessage(robot, event, common.T("", "moderation_admin_only"))
+			return nil
+		}
+
+		raw := strings.TrimSpace(paramMatches[0])
+		if raw == "" {
+			p.sendMessage(robot, event, common.T("", "moderation_provide_content"))
+			return nil
+		}
+
+		op := "add"
+		if strings.HasPrefix(raw, "+") {
+			raw = strings.TrimSpace(raw[1:])
+			op = "add"
+		} else if strings.HasPrefix(raw, "-") {
+			raw = strings.TrimSpace(raw[1:])
+			op = "del"
+		}
+
+		parts := strings.Fields(raw)
+		if len(parts) == 0 {
+			p.sendMessage(robot, event, common.T("", "moderation_provide_content"))
+			return nil
+		}
+
+		level := 1
+		switch cmd {
+		case common.T("", "moderation_cmd_recall_word"):
+			level = 1
+		case common.T("", "moderation_cmd_points_word"):
+			level = 2
+		case common.T("", "moderation_cmd_warn_word"):
+			level = 3
+		case common.T("", "moderation_cmd_mute_word"):
+			level = 4
+		case common.T("", "moderation_cmd_kick_word"):
+			level = 5
+		case common.T("", "moderation_cmd_ban_word"):
+			level = 6
+		}
+
+		if op == "del" {
+			for _, w := range parts {
+				if err := db.RemoveSensitiveWord(GlobalDB, w); err != nil {
+					p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_del_word_failed"), w))
+					return nil
+				}
+			}
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_del_word_success"), cmd, strings.Join(parts, " ")))
+			return nil
+		}
+
+		for _, w := range parts {
+			if err := db.AddSensitiveWord(GlobalDB, w, level); err != nil {
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_add_word_failed"), w))
+				return nil
+			}
+		}
+
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_add_word_success"), cmd, strings.Join(parts, " ")))
+
+		return nil
+	})
+
+	// 处理白名单命令
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" {
+			return nil
+		}
+
+		groupIDStr := fmt.Sprintf("%d", event.GroupID)
+		if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "moderation") {
+			HandleFeatureDisabled(robot, event, "moderation")
+			return nil
+		}
+
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams(common.T("", "moderation_cmd_whitelist"), `(.+)`, event.RawMessage)
+		if !match || len(paramMatches) < 1 {
+			return nil
+		}
+
+		if GlobalDB == nil {
+			p.sendMessage(robot, event, common.T("", "moderation_db_unavailable_whitelist"))
+			return nil
+		}
+
+		adminIDStr := fmt.Sprintf("%d", event.UserID)
+		isAdmin, err := db.IsGroupAdmin(GlobalDB, groupIDStr, adminIDStr)
+		if err != nil || !isAdmin {
+			p.sendMessage(robot, event, common.T("", "moderation_admin_only_whitelist"))
+			return nil
+		}
+
+		userIDStr := strings.TrimSpace(paramMatches[0])
+		if userIDStr == "" {
+			p.sendMessage(robot, event, common.T("", "moderation_provide_userid"))
+			return nil
+		}
+
+		exists, err := db.IsUserInGroupWhitelist(GlobalDB, groupIDStr, userIDStr)
+		if err != nil {
+			log.Printf(common.T("", "moderation_check_whitelist_failed"), err)
+			p.sendMessage(robot, event, common.T("", "moderation_check_failed_retry"))
+			return nil
+		}
+
+		if exists {
+			if err := db.RemoveGroupWhitelistUser(GlobalDB, groupIDStr, userIDStr); err != nil {
+				log.Printf(common.T("", "moderation_remove_whitelist_user_failed"), err)
+				p.sendMessage(robot, event, common.T("", "moderation_remove_failed_retry"))
+				return nil
+			}
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_user_removed_whitelist"), userIDStr))
+		} else {
+			if err := db.AddGroupWhitelistUser(GlobalDB, groupIDStr, userIDStr); err != nil {
+				log.Printf(common.T("", "moderation_add_whitelist_user_failed"), err)
+				p.sendMessage(robot, event, common.T("", "moderation_add_failed_retry"))
+				return nil
+			}
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_user_added_whitelist"), userIDStr))
+		}
 
 		return nil
 	})
@@ -196,7 +395,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为踢出命令
-		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("踢出|kick", `(.+)`, event.RawMessage)
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams(common.T("", "moderation_cmd_kick"), `(.+)`, event.RawMessage)
 		if !match || len(paramMatches) < 1 {
 			return nil
 		}
@@ -205,7 +404,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		userID := strings.TrimSpace(paramMatches[0])
 
 		// 模拟踢出
-		p.sendMessage(robot, event, fmt.Sprintf("用户%s已被踢出群聊", userID))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_user_kicked_msg"), userID))
 
 		return nil
 	})
@@ -225,7 +424,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为禁言命令
-		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("禁言|mute", `(.+)`, event.RawMessage)
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams(common.T("", "moderation_cmd_mute"), `(.+)`, event.RawMessage)
 		if !match || len(paramMatches) < 1 {
 			return nil
 		}
@@ -234,7 +433,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		userID := strings.TrimSpace(paramMatches[0])
 
 		// 模拟禁言
-		p.sendMessage(robot, event, fmt.Sprintf("用户%s已被禁言", userID))
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_user_muted_msg"), userID))
 
 		return nil
 	})
@@ -253,13 +452,13 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为撤回命令
-		match, _ := p.cmdParser.MatchCommand("撤回|recall", event.RawMessage)
+		match, _ := p.cmdParser.MatchCommand(common.T("", "moderation_cmd_recall"), event.RawMessage)
 		if !match {
 			return nil
 		}
 
 		// 模拟撤回
-		p.sendMessage(robot, event, "消息已被撤回")
+		p.sendMessage(robot, event, common.T("", "moderation_msg_recalled"))
 
 		return nil
 	})
@@ -276,7 +475,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
-		match, _, paramMatches := p.cmdParser.MatchCommandWithParams("群配置", `(.+)`, event.RawMessage)
+		match, _, paramMatches := p.cmdParser.MatchCommandWithParams(common.T("", "moderation_cmd_group_config"), `(.+)`, event.RawMessage)
 		if !match || len(paramMatches) < 1 {
 			return nil
 		}
@@ -297,46 +496,46 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 
 		// 处理配置
 		switch configStr {
-		case "被踢加黑开启":
+		case common.T("", "moderation_config_kick_black_on"):
 			config.kickToBlack = true
-			p.sendMessage(robot, event, "被踢加黑功能已开启")
-		case "被踢加黑关闭":
+			p.sendMessage(robot, event, common.T("", "moderation_kick_to_black_on"))
+		case common.T("", "moderation_config_kick_black_off"):
 			config.kickToBlack = false
-			p.sendMessage(robot, event, "被踢加黑功能已关闭")
-		case "被踢提示开启":
+			p.sendMessage(robot, event, common.T("", "moderation_kick_to_black_off"))
+		case common.T("", "moderation_config_kick_notify_on"):
 			config.kickNotify = true
-			p.sendMessage(robot, event, "被踢提示功能已开启")
-		case "被踢提示关闭":
+			p.sendMessage(robot, event, common.T("", "moderation_kick_notify_on"))
+		case common.T("", "moderation_config_kick_notify_off"):
 			config.kickNotify = false
-			p.sendMessage(robot, event, "被踢提示功能已关闭")
-		case "退群加黑开启":
+			p.sendMessage(robot, event, common.T("", "moderation_kick_notify_off"))
+		case common.T("", "moderation_config_leave_black_on"):
 			config.leaveToBlack = true
-			p.sendMessage(robot, event, "退群加黑功能已开启")
-		case "退群加黑关闭":
+			p.sendMessage(robot, event, common.T("", "moderation_leave_to_black_on"))
+		case common.T("", "moderation_config_leave_black_off"):
 			config.leaveToBlack = false
-			p.sendMessage(robot, event, "退群加黑功能已关闭")
-		case "退群提示开启":
+			p.sendMessage(robot, event, common.T("", "moderation_leave_to_black_off"))
+		case common.T("", "moderation_config_leave_notify_on"):
 			config.leaveNotify = true
-			p.sendMessage(robot, event, "退群提示功能已开启")
-		case "退群提示关闭":
+			p.sendMessage(robot, event, common.T("", "moderation_leave_notify_on"))
+		case common.T("", "moderation_config_leave_notify_off"):
 			config.leaveNotify = false
-			p.sendMessage(robot, event, "退群提示功能已关闭")
-		case "查看":
-			msg := fmt.Sprintf("当前群配置：\n被踢加黑：%t\n被踢提示：%t\n退群加黑：%t\n退群提示：%t",
+			p.sendMessage(robot, event, common.T("", "moderation_leave_notify_off"))
+		case common.T("", "moderation_config_view"):
+			msg := fmt.Sprintf(common.T("", "moderation_view_config"),
 				config.kickToBlack, config.kickNotify, config.leaveToBlack, config.leaveNotify)
 			p.sendMessage(robot, event, msg)
-		case "清空黑名单":
+		case common.T("", "moderation_config_clear_blacklist"):
 			pc := StartConfirmation("clear_blacklist", event, "", "", nil, 2*time.Minute)
 			if pc != nil {
-				p.sendMessage(robot, event, fmt.Sprintf("即将清空本群黑名单。\n发送【%s】确认，发送【%s】取消。", pc.ConfirmCode, pc.CancelCode))
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_clear_blacklist_confirm"), pc.ConfirmCode, pc.CancelCode))
 			}
-		case "清空白名单":
+		case common.T("", "moderation_config_clear_whitelist"):
 			pc := StartConfirmation("clear_whitelist", event, "", "", nil, 2*time.Minute)
 			if pc != nil {
-				p.sendMessage(robot, event, fmt.Sprintf("即将清空本群白名单。\n发送【%s】确认，发送【%s】取消。", pc.ConfirmCode, pc.CancelCode))
+				p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_clear_whitelist_confirm"), pc.ConfirmCode, pc.CancelCode))
 			}
 		default:
-			p.sendMessage(robot, event, "未知配置项，可用配置：被踢加黑开启/关闭、被踢提示开启/关闭、退群加黑开启/关闭、退群提示开启/关闭、查看")
+			p.sendMessage(robot, event, common.T("", "moderation_unknown_config"))
 		}
 
 		return nil
@@ -366,11 +565,11 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 			Duration: 300,
 		})
 		if err != nil {
-			log.Printf("进群禁言失败: %v", err)
+			log.Printf(common.T("", "moderation_join_mute_failed"), err)
 			return nil
 		}
 
-		p.sendMessage(robot, &onebot.Event{GroupID: groupID}, fmt.Sprintf("新成员%d已被进群禁言5分钟", userID))
+		p.sendMessage(robot, &onebot.Event{GroupID: groupID}, fmt.Sprintf(common.T("", "moderation_join_mute_msg"), userID))
 
 		return nil
 	})
@@ -402,7 +601,7 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 
 		// 被踢提示
 		if config.kickNotify && IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "kick_notify") {
-			p.sendMessage(robot, &onebot.Event{GroupID: groupID}, fmt.Sprintf("用户%d已被踢出群聊", userID))
+			p.sendMessage(robot, &onebot.Event{GroupID: groupID}, fmt.Sprintf(common.T("", "moderation_user_kicked_msg"), userID))
 		}
 
 		return nil
@@ -435,20 +634,34 @@ func (p *ModerationPlugin) Init(robot plugin.Robot) {
 
 		// 退群提示
 		if config.leaveNotify && IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "leave_notify") {
-			p.sendMessage(robot, &onebot.Event{GroupID: groupID}, fmt.Sprintf("用户%d已退出群聊", userID))
+			p.sendMessage(robot, &onebot.Event{GroupID: groupID}, fmt.Sprintf(common.T("", "moderation_user_left_msg"), userID))
 		}
 
 		return nil
 	})
 }
 
-// isWhitelisted 检查用户是否在白名单
-func (p *ModerationPlugin) isWhitelisted(userID string) bool {
+func (p *ModerationPlugin) isWhitelisted(groupID, userID string) bool {
 	for _, id := range p.whitelist {
 		if id == userID {
 			return true
 		}
 	}
+
+	if GlobalDB != nil && groupID != "" && userID != "" {
+		if IsFeatureEnabledForGroup(GlobalDB, groupID, "admin_whitelist") {
+			isAdmin, err := db.IsGroupAdmin(GlobalDB, groupID, userID)
+			if err == nil && isAdmin {
+				return true
+			}
+		}
+
+		ok, err := db.IsUserInGroupWhitelist(GlobalDB, groupID, userID)
+		if err == nil && ok {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -474,7 +687,13 @@ func (p *ModerationPlugin) containsSensitiveWords(msg string) bool {
 
 // containsAdvertisement 检查消息是否包含广告
 func (p *ModerationPlugin) containsAdvertisement(msg string) bool {
-	adWords := []string{"广告", "推广", "促销", "优惠", "打折"}
+	adWords := []string{
+		common.T("", "moderation_ad_word_1"),
+		common.T("", "moderation_ad_word_2"),
+		common.T("", "moderation_ad_word_3"),
+		common.T("", "moderation_ad_word_4"),
+		common.T("", "moderation_ad_word_5"),
+	}
 	for _, word := range adWords {
 		if strings.Contains(msg, word) {
 			return true
@@ -485,7 +704,14 @@ func (p *ModerationPlugin) containsAdvertisement(msg string) bool {
 
 // containsImage 检查消息是否包含图片
 func (p *ModerationPlugin) containsImage(msg string) bool {
-	imageWords := []string{"图片", "照片", "截图", "img", "image", "pic"}
+	imageWords := []string{
+		common.T("", "moderation_image_word_1"),
+		common.T("", "moderation_image_word_2"),
+		common.T("", "moderation_image_word_3"),
+		"img",
+		"image",
+		"pic",
+	}
 	for _, word := range imageWords {
 		if strings.Contains(msg, word) {
 			return true
@@ -508,6 +734,77 @@ func (p *ModerationPlugin) containsURL(msg string) bool {
 // sendMessage 发送消息
 func (p *ModerationPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "moderation_send_failed_log"), err)
+	}
+}
+
+func (p *ModerationPlugin) handleSensitiveHit(robot plugin.Robot, event *onebot.Event, level int, reason string) {
+	if event == nil {
+		return
+	}
+
+	if event.MessageID != 0 {
+		_, err := robot.DeleteMessage(&onebot.DeleteMessageParams{
+			MessageID: event.MessageID,
+		})
+		if err != nil {
+			log.Printf(common.T("", "moderation_recall_failed_log"), err)
+		}
+	}
+
+	groupIDStr := ""
+	if event.MessageType == "group" && event.GroupID != 0 {
+		groupIDStr = fmt.Sprintf("%d", event.GroupID)
+	}
+
+	userIDStr := fmt.Sprintf("%d", event.UserID)
+
+	switch {
+	case level <= 1:
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_sensitive_recalled"), reason))
+	case level == 2:
+		if GlobalDB != nil && userIDStr != "" {
+			if err := db.AddPoints(GlobalDB, userIDStr, -10, common.T("", "moderation_points_deduct_reason")+reason, "sensitive_word"); err != nil {
+				log.Printf(common.T("", "moderation_points_deduct_failed_log"), err)
+			}
+		}
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_sensitive_points_deduct"), reason))
+	case level == 3:
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_sensitive_warn"), reason))
+	case level == 4:
+		if event.MessageType == "group" && groupIDStr != "" {
+			_, err := robot.SetGroupBan(&onebot.SetGroupBanParams{
+				GroupID:  event.GroupID,
+				UserID:   event.UserID,
+				Duration: 600,
+			})
+			if err != nil {
+				log.Printf(common.T("", "moderation_mute_failed_log"), err)
+			}
+		}
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_sensitive_muted"), reason))
+	case level == 5:
+		if event.MessageType == "group" && groupIDStr != "" {
+			_, err := robot.SetGroupKick(&onebot.SetGroupKickParams{
+				GroupID: event.GroupID,
+				UserID:  event.UserID,
+			})
+			if err != nil {
+				log.Printf(common.T("", "moderation_kick_failed_log"), err)
+			}
+		}
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_sensitive_kicked"), reason))
+	default:
+		p.blacklist = append(p.blacklist, userIDStr)
+		if event.MessageType == "group" && groupIDStr != "" {
+			_, err := robot.SetGroupKick(&onebot.SetGroupKickParams{
+				GroupID: event.GroupID,
+				UserID:  event.UserID,
+			})
+			if err != nil {
+				log.Printf(common.T("", "moderation_ban_kick_failed_log"), err)
+			}
+		}
+		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "moderation_sensitive_banned"), reason))
 	}
 }

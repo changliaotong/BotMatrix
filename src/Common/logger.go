@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// AddLog 添加日志条目
+// AddLog adds a log entry
 func (m *Manager) AddLog(level string, message string) {
 	m.LogMutex.Lock()
 	defer m.LogMutex.Unlock()
@@ -24,7 +24,7 @@ func (m *Manager) AddLog(level string, message string) {
 		m.LogBuffer = m.LogBuffer[len(m.LogBuffer)-1000:]
 	}
 
-	// 广播给所有订阅者
+	// Broadcast to all subscribers
 	go func() {
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
@@ -32,7 +32,7 @@ func (m *Manager) AddLog(level string, message string) {
 		msg := map[string]interface{}{
 			"post_type": "log",
 			"data":      entry,
-			"self_id":   "", // 系统日志没有 self_id
+			"self_id":   "", // System logs have no self_id
 		}
 		
 		for _, sub := range m.Subscribers {
@@ -42,11 +42,11 @@ func (m *Manager) AddLog(level string, message string) {
 		}
 	}()
 
-	// 同时打印到控制台
+	// Also print to console
 	log.Printf("[%s] %s", level, message)
 }
 
-// GetLogs 获取最近的日志
+// GetLogs gets recent logs
 func (m *Manager) GetLogs(limit int) []LogEntry {
 	m.LogMutex.RLock()
 	defer m.LogMutex.RUnlock()
@@ -60,7 +60,7 @@ func (m *Manager) GetLogs(limit int) []LogEntry {
 	return result
 }
 
-// 快捷日志函数
+// Helper log functions
 func (m *Manager) LogDebug(format string, args ...interface{}) {
 	m.AddLog("DEBUG", fmt.Sprintf(format, args...))
 }
@@ -75,4 +75,11 @@ func (m *Manager) LogWarn(format string, args ...interface{}) {
 
 func (m *Manager) LogError(format string, args ...interface{}) {
 	m.AddLog("ERROR", fmt.Sprintf(format, args...))
+}
+
+// ClearLogs clears log buffer
+func (m *Manager) ClearLogs() {
+	m.LogMutex.Lock()
+	defer m.LogMutex.Unlock()
+	m.LogBuffer = make([]LogEntry, 0)
 }
