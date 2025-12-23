@@ -155,9 +155,45 @@ func main() {
 		log.Fatalf("加载宠物系统插件失败: %v", err)
 	}
 
+	// 加载报时插件
+	timePlugin := plugins.NewTimePlugin()
+	if err := pluginManager.LoadPlugin(timePlugin); err != nil {
+		log.Fatalf("加载报时插件失败: %v", err)
+	}
+
+	// 加载问答系统插件
+	qaPlugin := plugins.NewQAPlugin()
+	if err := pluginManager.LoadPlugin(qaPlugin); err != nil {
+		log.Fatalf("加载问答系统插件失败: %v", err)
+	}
+
+	// 加载送礼物插件
+	giftPlugin := plugins.NewGiftPlugin(database)
+	if err := pluginManager.LoadPlugin(giftPlugin); err != nil {
+		log.Fatalf("加载送礼物插件失败: %v", err)
+	}
+
+	// 加载结婚系统插件
+	marriagePlugin := plugins.NewMarriagePlugin()
+	if err := pluginManager.LoadPlugin(marriagePlugin); err != nil {
+		log.Fatalf("加载结婚系统插件失败: %v", err)
+	}
+
+	// 加载小型游戏插件
+	smallGamesPlugin := plugins.NewSmallGamesPlugin()
+	if err := pluginManager.LoadPlugin(smallGamesPlugin); err != nil {
+		log.Fatalf("加载小型游戏插件失败: %v", err)
+	}
+
 	dialogDemoPlugin := plugins.NewDialogDemoPlugin()
 	if err := pluginManager.LoadPlugin(dialogDemoPlugin); err != nil {
 		log.Fatalf("加载对话示例插件失败: %v", err)
+	}
+
+	// 加载测试服插件
+	testServerPlugin := plugins.NewTestServerPlugin()
+	if err := pluginManager.LoadPlugin(testServerPlugin); err != nil {
+		log.Fatalf("加载测试服插件失败: %v", err)
 	}
 
 	// 打印已加载的插件
