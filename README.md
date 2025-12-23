@@ -191,6 +191,39 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 *   **Failure Recovery**: Automatic fallback to round-robin if designated worker is unavailable
 *   **Real-time Validation**: Built-in test tools for routing rule functionality verification
 
+### 🎟️ Auction System (竞拍系统)
+> *Bid for physical/virtual items and group sponsorship rights.*
+*   **Multi-type Auctions**: Support for physical items, virtual items, and group sponsorship auctions
+*   **Group Sponsorship**: Auction for group name rights with 1-7 days advance booking
+*   **Auto-bidding**: Set maximum bid and increment for automatic bidding when outbid
+*   **Time-based Rules**: 
+    *   Group sponsorship auctions end at 21:00 on the effective date
+    *   Automatic顺延 if current time passes 21:00
+    *   Support for bidding 1-7 days in advance
+*   **Commands**:
+    *   `/创建竞拍 <名称> <起拍价> <时长> <描述>` - Create a new auction
+    *   `/竞拍群冠名 <起拍价> <天数> <描述>` - Create group sponsorship auction
+    *   `/出价 <竞拍ID> <价格>` - Place a bid on an auction
+    *   `/setautobid <竞拍ID> <最高出价> <加价幅度>` - Set up auto-bidding
+    *   `/cancelautobid <竞拍ID>` - Cancel auto-bidding
+    *   `/showmyautobids` - Show all auto-bid settings
+*   **Integration**: Built-in integration with Points Plugin for payment processing
+
+### 🏅 Medal System (勋章系统)
+> *Award and manage achievement badges for users.*
+*   **Multi-type Medals**: Support for honor, achievement, and rank medals
+*   **Medal Levels**: Progressive medal levels with upgrade progress tracking
+*   **Automatic Granting**: System-triggered medal awarding based on user activities
+*   **Manual Management**: Admin tools for manual medal granting and revocation
+*   **Medal Showcase**: Users can view their earned medals and progress
+*   **Commands**:
+    *   `/我的勋章` - Show all medals owned by the user
+    *   `/查看勋章 <勋章名称>` - Get detailed information about a specific medal
+    *   `/勋章列表` - Display all available medals in the system
+    *   `/发放勋章 <用户ID> <勋章名称>` - Admin command to grant medals
+    *   `/回收勋章 <用户ID> <勋章名称>` - Admin command to revoke medals
+*   **Data Persistence**: Complete medal ownership and grant history tracking
+
 ---
 
 ## 🛠 Architecture | 架构

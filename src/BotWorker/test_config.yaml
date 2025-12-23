@@ -1,0 +1,41 @@
+# 测试配置文件
+
+# WebSocket服务器配置
+websocket:
+  enabled: false
+  address: ":8080"
+  path: "/ws"
+
+# HTTP服务器配置
+http:
+  enabled: false
+  address: ":8081"
+  event_path: "/event"
+  api_path: "/api"
+
+# 机器人配置
+bot:
+  name: "BotWorker"
+  version: "1.0.0"
+  description: "OneBot协议兼容机器人"
+
+# 插件配置
+plugins:
+  enabled: true
+  path: "./plugins"
+
+# 数据库配置
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: ""
+  dbname: "bot"
+  sslmode: "disable"
+
+# Redis配置
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
