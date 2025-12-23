@@ -120,6 +120,18 @@ func main() {
 		log.Fatalf("加载签到系统插件失败: %v", err)
 	}
 
+	// 加载竞拍系统插件（传递数据库和积分插件引用）
+	auctionPlugin := plugins.NewAuctionPlugin(database, pointsPlugin)
+	if err := pluginManager.LoadPlugin(auctionPlugin); err != nil {
+		log.Fatalf("加载竞拍系统插件失败: %v", err)
+	}
+
+	// 加载勋章系统插件
+	medalPlugin := plugins.NewMedalPlugin(database)
+	if err := pluginManager.LoadPlugin(medalPlugin); err != nil {
+		log.Fatalf("加载勋章系统插件失败: %v", err)
+	}
+
 	gamesPlugin := plugins.NewGamesPlugin()
 	if err := pluginManager.LoadPlugin(gamesPlugin); err != nil {
 		log.Fatalf("加载游戏插件失败: %v", err)
@@ -179,6 +191,18 @@ func main() {
 		log.Fatalf("加载结婚系统插件失败: %v", err)
 	}
 
+	// 加载宝宝系统插件
+	babyPlugin := plugins.NewBabyPlugin()
+	if err := pluginManager.LoadPlugin(babyPlugin); err != nil {
+		log.Fatalf("加载宝宝系统插件失败: %v", err)
+	}
+
+	// 加载徽章系统插件
+	badgePlugin := plugins.NewBadgePlugin()
+	if err := pluginManager.LoadPlugin(badgePlugin); err != nil {
+		log.Fatalf("加载徽章系统插件失败: %v", err)
+	}
+
 	// 加载小型游戏插件
 	smallGamesPlugin := plugins.NewSmallGamesPlugin()
 	if err := pluginManager.LoadPlugin(smallGamesPlugin); err != nil {
@@ -194,6 +218,54 @@ func main() {
 	testServerPlugin := plugins.NewTestServerPlugin()
 	if err := pluginManager.LoadPlugin(testServerPlugin); err != nil {
 		log.Fatalf("加载测试服插件失败: %v", err)
+	}
+
+	// 加载打劫系统插件
+	robberyPlugin := plugins.NewRobberyPlugin(database)
+	if err := pluginManager.LoadPlugin(robberyPlugin); err != nil {
+		log.Fatalf("加载打劫系统插件失败: %v", err)
+	}
+
+	// 加载钓鱼系统插件
+	fishingPlugin := plugins.NewFishingPlugin(database)
+	if err := pluginManager.LoadPlugin(fishingPlugin); err != nil {
+		log.Fatalf("加载钓鱼系统插件失败: %v", err)
+	}
+
+	// 加载修炼系统插件
+	cultivationPlugin := plugins.NewCultivationPlugin(database)
+	if err := pluginManager.LoadPlugin(cultivationPlugin); err != nil {
+		log.Fatalf("加载修炼系统插件失败: %v", err)
+	}
+
+	// 加载开心农场插件
+	farmPlugin := plugins.NewFarmPlugin(database)
+	if err := pluginManager.LoadPlugin(farmPlugin); err != nil {
+		log.Fatalf("加载开心农场插件失败: %v", err)
+	}
+
+	// 加载塔罗牌插件
+	tarotPlugin := plugins.NewTarotPlugin()
+	if err := pluginManager.LoadPlugin(tarotPlugin); err != nil {
+		log.Fatalf("加载塔罗牌插件失败: %v", err)
+	}
+
+	// 加载猜单词插件
+	wordGuessPlugin := plugins.NewWordGuessPlugin()
+	if err := pluginManager.LoadPlugin(wordGuessPlugin); err != nil {
+		log.Fatalf("加载猜单词插件失败: %v", err)
+	}
+
+	// 加载猜成语插件
+	idiomGuessPlugin := plugins.NewIdiomGuessPlugin()
+	if err := pluginManager.LoadPlugin(idiomGuessPlugin); err != nil {
+		log.Fatalf("加载猜成语插件失败: %v", err)
+	}
+
+	// 加载插件管理插件
+	pluginManagerPlugin := plugins.NewPluginManagerPlugin(database)
+	if err := pluginManager.LoadPlugin(pluginManagerPlugin); err != nil {
+		log.Fatalf("加载插件管理插件失败: %v", err)
 	}
 
 	// 打印已加载的插件

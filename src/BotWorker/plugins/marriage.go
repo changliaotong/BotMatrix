@@ -272,9 +272,160 @@ func (p *MarriagePlugin) initDatabase() {
 		return
 	}
 	
-	// 这里可以添加数据库初始化代码
-	// 如果使用GORM，可以使用AutoMigrate创建表
-	// 但当前项目使用的是原生sql.DB，所以需要手动创建表
+	// 创建用户婚姻表
+	createUserMarriageTable := `
+	CREATE TABLE IF NOT EXISTS user_marriage (
+		id SERIAL PRIMARY KEY,
+		user_id VARCHAR(20) NOT NULL,
+		spouse_id VARCHAR(20) NOT NULL,
+		marriage_date TIMESTAMP,
+		divorce_date TIMESTAMP,
+		status VARCHAR(20) NOT NULL DEFAULT 'single',
+		sweets_count INT NOT NULL DEFAULT 0,
+		red_packets_count INT NOT NULL DEFAULT 0,
+		sweet_hearts INT NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err := GlobalDB.Exec(createUserMarriageTable)
+	if err != nil {
+		log.Printf("创建用户婚姻表失败: %v\n", err)
+		return
+	}
+	
+	// 创建求婚记录表
+	createMarriageProposalTable := `
+	CREATE TABLE IF NOT EXISTS marriage_proposal (
+		id SERIAL PRIMARY KEY,
+		proposer_id VARCHAR(20) NOT NULL,
+		recipient_id VARCHAR(20) NOT NULL,
+		status VARCHAR(20) NOT NULL DEFAULT 'pending',
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createMarriageProposalTable)
+	if err != nil {
+		log.Printf("创建求婚记录表失败: %v\n", err)
+		return
+	}
+	
+	// 创建婚礼物品表
+	createWeddingItemTable := `
+	CREATE TABLE IF NOT EXISTS wedding_item (
+		id SERIAL PRIMARY KEY,
+		item_type VARCHAR(20) NOT NULL,
+		name VARCHAR(50) NOT NULL,
+		price INT NOT NULL DEFAULT 0,
+		description VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createWeddingItemTable)
+	if err != nil {
+		log.Printf("创建婚礼物品表失败: %v\n", err)
+		return
+	}
+	
+	// 创建用户婚礼物品表
+	createUserWeddingItemsTable := `
+	CREATE TABLE IF NOT EXISTS user_wedding_items (
+		id SERIAL PRIMARY KEY,
+		user_id VARCHAR(20) NOT NULL,
+		item_id INT NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createUserWeddingItemsTable)
+	if err != nil {
+		log.Printf("创建用户婚礼物品表失败: %v\n", err)
+		return
+	}
+	
+	// 创建喜糖记录表
+	createSweetsTable := `
+	CREATE TABLE IF NOT EXISTS sweets (
+		id SERIAL PRIMARY KEY,
+		user_id VARCHAR(20) NOT NULL,
+		amount INT NOT NULL,
+		type VARCHAR(20) NOT NULL,
+		description VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createSweetsTable)
+	if err != nil {
+		log.Printf("创建喜糖记录表失败: %v\n", err)
+		return
+	}
+	
+	// 创建红包记录表
+	createRedPacketTable := `
+	CREATE TABLE IF NOT EXISTS red_packet (
+		id SERIAL PRIMARY KEY,
+		user_id VARCHAR(20) NOT NULL,
+		amount INT NOT NULL,
+		type VARCHAR(20) NOT NULL,
+		description VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createRedPacketTable)
+	if err != nil {
+		log.Printf("创建红包记录表失败: %v\n", err)
+		return
+	}
+	
+	// 创建甜蜜爱心表
+	createSweetHeartTable := `
+	CREATE TABLE IF NOT EXISTS sweet_heart (
+		id SERIAL PRIMARY KEY,
+		sender_id VARCHAR(20) NOT NULL,
+		recipient_id VARCHAR(20) NOT NULL,
+		amount INT NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createSweetHeartTable)
+	if err != nil {
+		log.Printf("创建甜蜜爱心表失败: %v\n", err)
+		return
+	}
+	
+	// 创建结婚系统配置表
+	createMarriageConfigTable := `
+	CREATE TABLE IF NOT EXISTS marriage_config (
+		id SERIAL PRIMARY KEY,
+		is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		sweets_cost INT NOT NULL DEFAULT 100,
+		red_packet_cost INT NOT NULL DEFAULT 200,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createMarriageConfigTable)
+	if err != nil {
+		log.Printf("创建结婚系统配置表失败: %v\n", err)
+		return
+	}
+	
+	// 初始化配置
+	var count int
+	err = GlobalDB.QueryRow("SELECT COUNT(*) FROM marriage_config").Scan(&count)
+	if err != nil {
+		log.Printf("查询结婚系统配置失败: %v\n", err)
+		return
+	}
+	
+	if count == 0 {
+		_, err = GlobalDB.Exec("INSERT INTO marriage_config (is_enabled, sweets_cost, red_packet_cost) VALUES (TRUE, 100, 200)")
+		if err != nil {
+			log.Printf("初始化结婚系统配置失败: %v\n", err)
+			return
+		}
+	}
+	
 	log.Println("结婚系统数据库初始化完成")
 }
 
@@ -320,40 +471,348 @@ func (p *MarriagePlugin) buyWeddingRing(robot plugin.Robot, event *onebot.Event)
 
 // proposeMarriage 求婚
 func (p *MarriagePlugin) proposeMarriage(robot plugin.Robot, event *onebot.Event, spouseID string) {
-	// 检查用户是否单身
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 数据库连接失败，请稍后重试",
+		})
+		return
+	}
+	
+	// 检查自己是否单身
+	var myStatus string
+	row := GlobalDB.QueryRow("SELECT status FROM user_marriage WHERE user_id = $1", event.UserID)
+	err := row.Scan(&myStatus)
+	if err != nil {
+		// 如果没有记录，默认是单身
+		myStatus = "single"
+	}
+	
+	if myStatus != "single" {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 您当前不是单身状态，无法求婚",
+		})
+		return
+	}
+	
 	// 检查对方是否单身
+	var targetStatus string
+	row = GlobalDB.QueryRow("SELECT status FROM user_marriage WHERE user_id = $1", spouseID)
+	err = row.Scan(&targetStatus)
+	if err != nil {
+		// 如果没有记录，默认是单身
+		targetStatus = "single"
+	}
+	
+	if targetStatus != "single" {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 对方当前不是单身状态，无法求婚",
+		})
+		return
+	}
+	
+	// 检查是否已经有未处理的求婚记录
+	var proposalCount int
+	err = GlobalDB.QueryRow("SELECT COUNT(*) FROM marriage_proposal WHERE proposer_id = $1 AND recipient_id = $2 AND status = 'pending'", event.UserID, spouseID).Scan(&proposalCount)
+	if err != nil {
+		log.Printf("查询求婚记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 查询求婚记录失败，请稍后重试",
+		})
+		return
+	}
+	
+	if proposalCount > 0 {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 您已经向对方发送过求婚请求，请等待对方回应",
+		})
+		return
+	}
+	
 	// 创建求婚记录
+	_, err = GlobalDB.Exec("INSERT INTO marriage_proposal (proposer_id, recipient_id, status) VALUES ($1, $2, 'pending')", event.UserID, spouseID)
+	if err != nil {
+		log.Printf("创建求婚记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 发送求婚请求失败，请稍后重试",
+		})
+		return
+	}
+	
 	robot.SendMessage(&onebot.SendMessageParams{
 		MessageType: event.MessageType,
 		UserID:      event.UserID,
 		GroupID:     event.GroupID,
-		Message:     "求婚已发送，请等待对方回应！",
+		Message:     "💍 求婚请求已发送，请等待对方回应！",
 	})
 }
 
 // marry 结婚
 func (p *MarriagePlugin) marry(robot plugin.Robot, event *onebot.Event, spouseID string) {
-	// 检查是否有求婚记录
-	// 更新婚姻状态
-	// 创建婚姻记录
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 数据库连接失败，请稍后重试",
+		})
+		return
+	}
+	
+	// 检查是否有对方的求婚记录
+	var proposalID int
+	row := GlobalDB.QueryRow("SELECT id FROM marriage_proposal WHERE proposer_id = $1 AND recipient_id = $2 AND status = 'pending'", spouseID, event.UserID)
+	err := row.Scan(&proposalID)
+	if err != nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 未找到对方的求婚记录，请确认对方已向您求婚",
+		})
+		return
+	}
+	
+	// 开始事务
+	tx, err := GlobalDB.Begin()
+	if err != nil {
+		log.Printf("开启事务失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 更新求婚记录状态为已接受
+	_, err = tx.Exec("UPDATE marriage_proposal SET status = 'accepted' WHERE id = $1", proposalID)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("更新求婚记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 处理自己的婚姻记录
+	var count int
+	err = tx.QueryRow("SELECT COUNT(*) FROM user_marriage WHERE user_id = $1", event.UserID).Scan(&count)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("查询婚姻记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	if count > 0 {
+		// 更新现有记录
+		_, err = tx.Exec("UPDATE user_marriage SET spouse_id = $1, status = 'married', marriage_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", spouseID, event.UserID)
+	} else {
+		// 创建新记录
+		_, err = tx.Exec("INSERT INTO user_marriage (user_id, spouse_id, status, marriage_date) VALUES ($1, $2, 'married', CURRENT_TIMESTAMP)", event.UserID, spouseID)
+	}
+	
+	if err != nil {
+		tx.Rollback()
+		log.Printf("更新自己婚姻记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 处理对方的婚姻记录
+	err = tx.QueryRow("SELECT COUNT(*) FROM user_marriage WHERE user_id = $1", spouseID).Scan(&count)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("查询对方婚姻记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	if count > 0 {
+		// 更新现有记录
+		_, err = tx.Exec("UPDATE user_marriage SET spouse_id = $1, status = 'married', marriage_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", event.UserID, spouseID)
+	} else {
+		// 创建新记录
+		_, err = tx.Exec("INSERT INTO user_marriage (user_id, spouse_id, status, marriage_date) VALUES ($1, $2, 'married', CURRENT_TIMESTAMP)", spouseID, event.UserID)
+	}
+	
+	if err != nil {
+		tx.Rollback()
+		log.Printf("更新对方婚姻记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 提交事务
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("提交事务失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 发放婚姻伴侣徽章给双方用户
+	badgePlugin := GetBadgePluginInstance()
+	// 给当前用户发放徽章
+	err = badgePlugin.GrantBadgeToUser(event.UserID, "婚姻伴侣", "system", "成功结婚")
+	if err != nil {
+		log.Printf("给用户 %s 发放婚姻伴侣徽章失败: %v\n", event.UserID, err)
+	} else {
+		log.Printf("给用户 %s 成功发放婚姻伴侣徽章\n", event.UserID)
+	}
+	// 给配偶用户发放徽章
+	err = badgePlugin.GrantBadgeToUser(spouseID, "婚姻伴侣", "system", "成功结婚")
+	if err != nil {
+		log.Printf("给用户 %s 发放婚姻伴侣徽章失败: %v\n", spouseID, err)
+	} else {
+		log.Printf("给用户 %s 成功发放婚姻伴侣徽章\n", spouseID)
+	}
+	
 	robot.SendMessage(&onebot.SendMessageParams{
 		MessageType: event.MessageType,
 		UserID:      event.UserID,
 		GroupID:     event.GroupID,
-		Message:     "恭喜你们喜结良缘！",
+		Message:     "🎎 恭喜你们喜结良缘！祝你们百年好合，永结同心！\n💍 你们已获得【婚姻伴侣】徽章！",
 	})
 }
 
 // divorce 离婚
 func (p *MarriagePlugin) divorce(robot plugin.Robot, event *onebot.Event) {
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 数据库连接失败，请稍后重试",
+		})
+		return
+	}
+	
 	// 检查用户是否已婚
-	// 更新婚姻状态
-	// 记录离婚日期
+	var spouseID string
+	var status string
+	row := GlobalDB.QueryRow("SELECT spouse_id, status FROM user_marriage WHERE user_id = $1", event.UserID)
+	err := row.Scan(&spouseID, &status)
+	if err != nil || status != "married" {
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 您当前不是已婚状态，无法办理离婚",
+		})
+		return
+	}
+	
+	// 开始事务
+	tx, err := GlobalDB.Begin()
+	if err != nil {
+		log.Printf("开启事务失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 更新自己的婚姻状态
+	_, err = tx.Exec("UPDATE user_marriage SET status = 'divorced', divorce_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", event.UserID)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("更新自己离婚记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 更新对方的婚姻状态
+	_, err = tx.Exec("UPDATE user_marriage SET status = 'divorced', divorce_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", spouseID)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("更新对方离婚记录失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
+	// 提交事务
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("提交事务失败: %v\n", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			MessageType: event.MessageType,
+			UserID:      event.UserID,
+			GroupID:     event.GroupID,
+			Message:     "❌ 系统错误，请稍后重试",
+		})
+		return
+	}
+	
 	robot.SendMessage(&onebot.SendMessageParams{
 		MessageType: event.MessageType,
 		UserID:      event.UserID,
 		GroupID:     event.GroupID,
-		Message:     "离婚手续已办理完成！",
+		Message:     "📝 离婚手续已办理完成，祝您未来生活幸福！",
 	})
 }
 

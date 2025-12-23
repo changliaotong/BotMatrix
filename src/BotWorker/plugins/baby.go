@@ -159,31 +159,121 @@ func (p *BabyPlugin) Init(robot plugin.Robot) {
 }
 
 // initDatabase 初始化数据库
-type Database interface {
-	AutoMigrate(dst ...interface{}) error
-}
-
 func (p *BabyPlugin) initDatabase() {
-	// 这里需要获取数据库连接，实际实现时需要与项目的数据库系统集成
-	// db := GetDatabaseInstance()
-	// err := db.AutoMigrate(&Baby{}, &BabyEvent{}, &BabyConfig{})
-	// if err != nil {
-	//  log.Printf("宝宝系统数据库初始化失败: %v\n", err)
-	// }
+	if GlobalDB == nil {
+		log.Println("警告: 数据库未初始化，宝宝系统将使用模拟数据")
+		return
+	}
+	
+	// 创建宝宝表
+	createBabyTable := `
+	CREATE TABLE IF NOT EXISTS baby (
+		id SERIAL PRIMARY KEY,
+		user_id VARCHAR(20) NOT NULL,
+		name VARCHAR(50) NOT NULL,
+		birthday TIMESTAMP NOT NULL,
+		growth_value INT NOT NULL DEFAULT 0,
+		days_old INT NOT NULL DEFAULT 0,
+		level INT NOT NULL DEFAULT 1,
+		status VARCHAR(20) NOT NULL DEFAULT 'active',
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err := GlobalDB.Exec(createBabyTable)
+	if err != nil {
+		log.Printf("创建宝宝表失败: %v\n", err)
+		return
+	}
+	
+	// 创建宝宝事件表
+	createBabyEventTable := `
+	CREATE TABLE IF NOT EXISTS baby_event (
+		id SERIAL PRIMARY KEY,
+		baby_id INT NOT NULL REFERENCES baby(id) ON DELETE CASCADE,
+		event_type VARCHAR(50) NOT NULL,
+		content VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createBabyEventTable)
+	if err != nil {
+		log.Printf("创建宝宝事件表失败: %v\n", err)
+		return
+	}
+	
+	// 创建宝宝系统配置表
+	createBabyConfigTable := `
+	CREATE TABLE IF NOT EXISTS baby_config (
+		id SERIAL PRIMARY KEY,
+		is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		growth_rate INT NOT NULL DEFAULT 1000,
+		update_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)
+	`
+	_, err = GlobalDB.Exec(createBabyConfigTable)
+	if err != nil {
+		log.Printf("创建宝宝系统配置表失败: %v\n", err)
+		return
+	}
+	
+	// 初始化配置
+	var count int
+	err = GlobalDB.QueryRow("SELECT COUNT(*) FROM baby_config").Scan(&count)
+	if err != nil {
+		log.Printf("查询宝宝系统配置失败: %v\n", err)
+		return
+	}
+	
+	if count == 0 {
+		_, err = GlobalDB.Exec("INSERT INTO baby_config (is_enabled, growth_rate) VALUES (TRUE, 1000)")
+		if err != nil {
+			log.Printf("初始化宝宝系统配置失败: %v\n", err)
+			return
+		}
+	}
+	
 	log.Println("宝宝系统数据库初始化完成")
 }
 
 // isSystemEnabled 检查宝宝系统是否开启
 func (p *BabyPlugin) isSystemEnabled() bool {
-	// 这里需要查询数据库获取系统配置
-	// 默认返回开启状态
-	return true
+	if GlobalDB == nil {
+		// 如果没有数据库连接，默认返回开启状态
+		return true
+	}
+	
+	// 查询系统配置
+	var isEnabled bool
+	err := GlobalDB.QueryRow("SELECT is_enabled FROM baby_config LIMIT 1").Scan(&isEnabled)
+	if err != nil {
+		// 如果查询失败，默认返回开启状态
+		log.Printf("查询宝宝系统配置失败: %v\n", err)
+		return true
+	}
+	
+	return isEnabled
 }
 
 // babyBirth 宝宝降临功能
 func (p *BabyPlugin) babyBirth(robot plugin.Robot, event *onebot.Event) {
 	// 检查用户是否已有宝宝
-	// 如果没有，创建新宝宝
+	if GlobalDB != nil {
+		var count int
+		err := GlobalDB.QueryRow("SELECT COUNT(*) FROM baby WHERE user_id = ? AND status = 'active'", event.UserID).Scan(&count)
+		if err != nil {
+			log.Printf("查询用户宝宝失败: %v\n", err)
+			SendTextReply(robot, event, "❌ 查询失败，请稍后重试")
+			return
+		}
+		
+		if count > 0 {
+			SendTextReply(robot, event, "❌ 您已经有宝宝了哦~\n💡 发送【我的宝宝】查看宝宝详情")
+			return
+		}
+	}
+	
+	// 创建新宝宝
 	baby := Baby{
 		UserID:      event.UserID,
 		Name:        "小宝宝",
@@ -197,13 +287,20 @@ func (p *BabyPlugin) babyBirth(robot plugin.Robot, event *onebot.Event) {
 	}
 
 	// 保存宝宝数据到数据库
-	// db := GetDatabaseInstance()
-	// result := db.Create(&baby)
-	// if result.Error != nil {
-	//  log.Printf("创建宝宝失败: %v\n", result.Error)
-	//  SendTextReply(robot, event, "❌ 宝宝降临失败，请稍后重试")
-	//  return
-	// }
+	if GlobalDB != nil {
+		insertQuery := `
+		INSERT INTO baby (user_id, name, birthday, growth_value, days_old, level, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`
+		_, err := GlobalDB.Exec(insertQuery, 
+			baby.UserID, baby.Name, baby.Birthday, baby.GrowthValue, baby.DaysOld, 
+			baby.Level, baby.Status, baby.CreatedAt, baby.UpdatedAt)
+		if err != nil {
+			log.Printf("创建宝宝失败: %v\n", err)
+			SendTextReply(robot, event, "❌ 宝宝降临失败，请稍后重试")
+			return
+		}
+	}
 
 	msg := "🎉 恭喜！您的宝宝降临了！\n"
 	msg += "👶 宝宝名字：" + baby.Name + "\n"
@@ -217,21 +314,23 @@ func (p *BabyPlugin) babyBirth(robot plugin.Robot, event *onebot.Event) {
 // myBaby 我的宝宝功能
 func (p *BabyPlugin) myBaby(robot plugin.Robot, event *onebot.Event) {
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", event.UserID, "active").First(&baby)
-	// if result.Error != nil {
-	//  SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
-	//  return
-	// }
-
-	// 模拟数据用于测试
-	baby := Baby{
-		Name:        "小宝宝",
-		Birthday:    time.Now().AddDate(0, 0, -10),
-		GrowthValue: 5000,
-		DaysOld:     5,
-		Level:       1,
+	var baby Baby
+	if GlobalDB != nil {
+		row := GlobalDB.QueryRow("SELECT id, user_id, name, birthday, growth_value, days_old, level FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+		err := row.Scan(&baby.ID, &baby.UserID, &baby.Name, &baby.Birthday, &baby.GrowthValue, &baby.DaysOld, &baby.Level)
+		if err != nil {
+			SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
+			return
+		}
+	} else {
+		// 如果没有数据库连接，使用模拟数据
+		baby = Baby{
+			Name:        "小宝宝",
+			Birthday:    time.Now().AddDate(0, 0, -10),
+			GrowthValue: 5000,
+			DaysOld:     5,
+			Level:       1,
+		}
 	}
 
 	msg := "👶 我的宝宝\n"
@@ -255,48 +354,62 @@ func (p *BabyPlugin) myBaby(robot plugin.Robot, event *onebot.Event) {
 // babyLearn 宝宝学习功能
 func (p *BabyPlugin) babyLearn(robot plugin.Robot, event *onebot.Event) {
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", event.UserID, "active").First(&baby)
-	// if result.Error != nil {
-	//  SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
-	//  return
-	// }
+	var baby Baby
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+	
+	row := GlobalDB.QueryRow("SELECT id, user_id, name, birthday, growth_value, days_old, level FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+	err := row.Scan(&baby.ID, &baby.UserID, &baby.Name, &baby.Birthday, &baby.GrowthValue, &baby.DaysOld, &baby.Level)
+	if err != nil {
+		SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
+		return
+	}
 
 	// 增加成长值
 	growthAdd := 100
-	// baby.GrowthValue += growthAdd
-	// 
-	// // 计算应该增加的天数（每1000成长值=1天）
-	// newDays := baby.GrowthValue / 1000
-	// if newDays > baby.DaysOld {
-	//  baby.DaysOld = newDays
-	//  baby.Level = baby.DaysOld/30 + 1 // 每30天升1级
-	// }
-	// 
-	// // 记录学习事件
-	// babyEvent := BabyEvent{
-	//  BabyID:    baby.ID,
-	//  EventType: "learn",
-	//  Content:   "宝宝学习获得" + IntToString(growthAdd) + "点成长值",
-	//  CreatedAt: time.Now(),
-	// }
-	// 
-	// // 保存数据到数据库
-	// db.Save(&baby)
-	// db.Create(&babyEvent)
-
-	// 模拟宝宝数据用于测试
-	baby := Baby{
-		Name:        "小宝宝",
-		GrowthValue: 1000,
-		DaysOld:     1,
-		Level:       1,
+	newGrowthValue := baby.GrowthValue + growthAdd
+	
+	// 计算应该增加的天数（每1000成长值=1天）
+	newDays := newGrowthValue / 1000
+	if newDays > baby.DaysOld {
+		// 更新天数和等级
+		_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ?, days_old = ?, level = ? WHERE id = ?", 
+			newGrowthValue, newDays, newDays/30+1, baby.ID)
+		if err != nil {
+			log.Printf("更新宝宝学习数据失败: %v\n", err)
+			SendTextReply(robot, event, "❌ 学习过程中出现错误，请稍后重试")
+			return
+		}
+		
+		// 更新本地变量用于消息显示
+		baby.GrowthValue = newGrowthValue
+		baby.DaysOld = newDays
+		baby.Level = newDays/30 + 1
+	} else {
+		// 只更新成长值
+		_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ? WHERE id = ?", newGrowthValue, baby.ID)
+		if err != nil {
+			log.Printf("更新宝宝学习数据失败: %v\n", err)
+			SendTextReply(robot, event, "❌ 学习过程中出现错误，请稍后重试")
+			return
+		}
+		
+		// 更新本地变量用于消息显示
+		baby.GrowthValue = newGrowthValue
+	}
+	
+	// 记录学习事件
+	_, err = GlobalDB.Exec("INSERT INTO baby_event (baby_id, event_type, content) VALUES (?, ?, ?)", 
+		baby.ID, "learn", "宝宝学习获得"+IntToString(growthAdd)+"点成长值")
+	if err != nil {
+		log.Printf("记录宝宝学习事件失败: %v\n", err)
 	}
 
 	msg := "📚 宝宝正在学习...\n"
 	msg += "✅ 学习完成！获得" + IntToString(growthAdd) + "点成长值\n"
-	msg += "📈 当前成长值：" + IntToString(baby.GrowthValue+growthAdd) + "\n"
+	msg += "📈 当前成长值：" + IntToString(baby.GrowthValue) + "\n"
 	msg += "👶 宝宝名字：" + baby.Name + "\n"
 	msg += "📅 年龄：" + p.getBabyAge(baby) + "\n"
 	msg += "⭐ 等级：" + IntToString(baby.Level) + "\n"
@@ -343,16 +456,23 @@ func (p *BabyPlugin) buyProduct(robot plugin.Robot, event *onebot.Event, product
 		return
 	}
 
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", event.UserID, "active").First(&baby)
-	// if result.Error != nil {
-	//  SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
-	//  return
-	// }
+	var baby Baby
+	row := GlobalDB.QueryRow("SELECT id, user_id, name, growth_value, days_old, level FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+	err := row.Scan(&baby.ID, &baby.UserID, &baby.Name, &baby.GrowthValue, &baby.DaysOld, &baby.Level)
+	if err != nil {
+		SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
+		return
+	}
 
 	// 检查用户积分是否足够
+	// 注意：这里需要积分系统的支持，暂时注释掉
 	// pointsPlugin := GetPointsPluginInstance()
 	// userPoints := pointsPlugin.GetPoints(event.UserID)
 	// if userPoints < product.Price {
@@ -365,35 +485,32 @@ func (p *BabyPlugin) buyProduct(robot plugin.Robot, event *onebot.Event, product
 
 	// 增加宝宝成长值
 	growthAdd := product.GrowthValue
-	// baby.GrowthValue += growthAdd
-	// 
-	// // 计算应该增加的天数（每1000成长值=1天）
-	// newDays := baby.GrowthValue / 1000
-	// if newDays > baby.DaysOld {
-	//  baby.DaysOld = newDays
-	//  baby.Level = baby.DaysOld/30 + 1 // 每30天升1级
-	// }
-	// 
-	// // 记录购买事件
-	// babyEvent := BabyEvent{
-	//  BabyID:    baby.ID,
-	//  EventType: "buy",
-	//  Content:   "购买了" + product.Name + "，获得" + IntToString(growthAdd) + "点成长值",
-	//  CreatedAt: time.Now(),
-	// }
-	// 
-	// // 保存数据到数据库
-	// db.Save(&baby)
-	// db.Create(&babyEvent)
-
-	// 模拟数据用于测试
-	baby := Baby{
-		Name:        "小宝宝",
-		GrowthValue: 1000,
-		DaysOld:     1,
-		Level:       1,
+	newGrowthValue := baby.GrowthValue + growthAdd
+	
+	// 计算应该增加的天数（每1000成长值=1天）
+	newDays := newGrowthValue / 1000
+	newLevel := baby.Level
+	if newDays > baby.DaysOld {
+		newLevel = newDays/30 + 1 // 每30天升1级
 	}
 	
+	// 更新宝宝信息
+	_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ?, days_old = ?, level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+		newGrowthValue, newDays, newLevel, baby.ID)
+	if err != nil {
+		log.Printf("更新宝宝购买数据失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 购买过程中出现错误，请稍后重试")
+		return
+	}
+
+	// 记录购买事件
+	_, err = GlobalDB.Exec("INSERT INTO baby_event (baby_id, event_type, content) VALUES (?, ?, ?)", 
+		baby.ID, "buy", "购买了"+product.Name+"，获得"+IntToString(growthAdd)+"点成长值")
+	if err != nil {
+		log.Printf("记录宝宝购买事件失败: %v\n", err)
+	}
+
+	// 模拟积分数据用于测试
 	userPoints := 500
 
 	msg := "🎉 购买成功！\n"
@@ -401,7 +518,8 @@ func (p *BabyPlugin) buyProduct(robot plugin.Robot, event *onebot.Event, product
 	msg += "💰 花费积分：" + IntToString(product.Price) + "\n"
 	msg += "剩余积分：" + IntToString(userPoints-product.Price) + "\n"
 	msg += "📈 宝宝获得" + IntToString(growthAdd) + "点成长值\n"
-	msg += "👶 宝宝当前成长值：" + IntToString(baby.GrowthValue+growthAdd) + "\n"
+	msg += "👶 宝宝当前成长值：" + IntToString(newGrowthValue) + "\n"
+	msg += "⭐ 等级：" + IntToString(newLevel) + "\n"
 	msg += "💡 宝宝变得更加强壮了！"
 
 	SendTextReply(robot, event, msg)
@@ -410,48 +528,62 @@ func (p *BabyPlugin) buyProduct(robot plugin.Robot, event *onebot.Event, product
 // babyInteract 宝宝互动功能
 func (p *BabyPlugin) babyInteract(robot plugin.Robot, event *onebot.Event) {
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", event.UserID, "active").First(&baby)
-	// if result.Error != nil {
-	//  SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
-	//  return
-	// }
+	var baby Baby
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+	
+	row := GlobalDB.QueryRow("SELECT id, user_id, name, birthday, growth_value, days_old, level FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+	err := row.Scan(&baby.ID, &baby.UserID, &baby.Name, &baby.Birthday, &baby.GrowthValue, &baby.DaysOld, &baby.Level)
+	if err != nil {
+		SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
+		return
+	}
 
 	// 增加成长值
 	growthAdd := 50
-	// baby.GrowthValue += growthAdd
-	// 
-	// // 计算应该增加的天数（每1000成长值=1天）
-	// newDays := baby.GrowthValue / 1000
-	// if newDays > baby.DaysOld {
-	//  baby.DaysOld = newDays
-	//  baby.Level = baby.DaysOld/30 + 1 // 每30天升1级
-	// }
-	// 
-	// // 记录互动事件
-	// babyEvent := BabyEvent{
-	//  BabyID:    baby.ID,
-	//  EventType: "interact",
-	//  Content:   "与宝宝互动获得" + IntToString(growthAdd) + "点成长值",
-	//  CreatedAt: time.Now(),
-	// }
-	// 
-	// // 保存数据到数据库
-	// db.Save(&baby)
-	// db.Create(&babyEvent)
-
-	// 模拟宝宝数据用于测试
-	baby := Baby{
-		Name:        "小宝宝",
-		GrowthValue: 800,
-		DaysOld:     0,
-		Level:       1,
+	newGrowthValue := baby.GrowthValue + growthAdd
+	
+	// 计算应该增加的天数（每1000成长值=1天）
+	newDays := newGrowthValue / 1000
+	if newDays > baby.DaysOld {
+		// 更新天数和等级
+		_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ?, days_old = ?, level = ? WHERE id = ?", 
+			newGrowthValue, newDays, newDays/30+1, baby.ID)
+		if err != nil {
+			log.Printf("更新宝宝互动数据失败: %v\n", err)
+			SendTextReply(robot, event, "❌ 互动过程中出现错误，请稍后重试")
+			return
+		}
+		
+		// 更新本地变量用于消息显示
+		baby.GrowthValue = newGrowthValue
+		baby.DaysOld = newDays
+		baby.Level = newDays/30 + 1
+	} else {
+		// 只更新成长值
+		_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ? WHERE id = ?", newGrowthValue, baby.ID)
+		if err != nil {
+			log.Printf("更新宝宝互动数据失败: %v\n", err)
+			SendTextReply(robot, event, "❌ 互动过程中出现错误，请稍后重试")
+			return
+		}
+		
+		// 更新本地变量用于消息显示
+		baby.GrowthValue = newGrowthValue
+	}
+	
+	// 记录互动事件
+	_, err = GlobalDB.Exec("INSERT INTO baby_event (baby_id, event_type, content) VALUES (?, ?, ?)", 
+		baby.ID, "interact", "与宝宝互动获得"+IntToString(growthAdd)+"点成长值")
+	if err != nil {
+		log.Printf("记录宝宝互动事件失败: %v\n", err)
 	}
 
 	msg := "🎮 您正在和宝宝互动...\n"
 	msg += "😊 宝宝很开心！获得" + IntToString(growthAdd) + "点成长值\n"
-	msg += "📈 当前成长值：" + IntToString(baby.GrowthValue+growthAdd) + "\n"
+	msg += "📈 当前成长值：" + IntToString(baby.GrowthValue) + "\n"
 	msg += "👶 宝宝名字：" + baby.Name + "\n"
 	msg += "📅 年龄：" + p.getBabyAge(baby) + "\n"
 	msg += "⭐ 等级：" + IntToString(baby.Level) + "\n"
@@ -462,45 +594,61 @@ func (p *BabyPlugin) babyInteract(robot plugin.Robot, event *onebot.Event) {
 
 // babyWork 宝宝打工功能
 func (p *BabyPlugin) babyWork(robot plugin.Robot, event *onebot.Event) {
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+	
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", event.UserID, "active").First(&baby)
-	// if result.Error != nil {
-	// 	SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
-	// 	return
-	// }
+	var baby Baby
+	row := GlobalDB.QueryRow("SELECT id, user_id, name, birthday, growth_value, days_old, level FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+	err := row.Scan(&baby.ID, &baby.UserID, &baby.Name, &baby.Birthday, &baby.GrowthValue, &baby.DaysOld, &baby.Level)
+	if err != nil {
+		SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
+		return
+	}
 
-	// 检查宝宝年龄是否足够打工
-	// if baby.DaysOld < 30 {
-	// 	SendTextReply(robot, event, "❌ 宝宝太小了，至少需要1个月才能打工哦~\n当前宝宝年龄：" + p.getBabyAge(baby))
-	// 	return
-	// }
+	// 检查宝宝年龄是否足够打工（至少30天）
+	if baby.DaysOld < 30 {
+		SendTextReply(robot, event, "❌ 宝宝太小了，至少需要1个月才能打工哦~\n当前宝宝年龄：" + p.getBabyAge(baby))
+		return
+	}
 
 	// 增加成长值和积分
 	growthAdd := 150
 	pointsAdd := 50
-	// baby.GrowthValue += growthAdd
-	// db.Save(&baby)
+	newGrowthValue := baby.GrowthValue + growthAdd
+	
+	// 计算应该增加的天数（每1000成长值=1天）
+	newDays := newGrowthValue / 1000
+	newLevel := baby.Level
+	if newDays > baby.DaysOld {
+		newLevel = newDays/30 + 1 // 每30天升1级
+	}
+	
+	// 更新宝宝信息
+	_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ?, days_old = ?, level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+		newGrowthValue, newDays, newLevel, baby.ID)
+	if err != nil {
+		log.Printf("更新宝宝打工数据失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 打工过程中出现错误，请稍后重试")
+		return
+	}
 
-	// 增加用户积分
-	// pointsPlugin := GetPointsPluginInstance()
-	// pointsPlugin.AddPoints(event.UserID, pointsAdd)
-
-	// 模拟宝宝数据用于测试
-	baby := Baby{
-		Name:        "小宝宝",
-		GrowthValue: 1200,
-		DaysOld:     30,
-		Level:       2,
+	// 记录宝宝打工事件
+	_, err = GlobalDB.Exec("INSERT INTO baby_event (baby_id, event_type, content) VALUES (?, ?, ?)", 
+		baby.ID, "work", "宝宝打工获得"+IntToString(growthAdd)+"点成长值和"+IntToString(pointsAdd)+"积分")
+	if err != nil {
+		log.Printf("记录宝宝打工事件失败: %v\n", err)
 	}
 
 	msg := "💼 宝宝开始打工了...\n"
 	msg += "✅ 打工完成！获得" + IntToString(growthAdd) + "点成长值和" + IntToString(pointsAdd) + "积分\n"
-	msg += "📈 当前成长值：" + IntToString(baby.GrowthValue+growthAdd) + "\n"
+	msg += "📈 当前成长值：" + IntToString(newGrowthValue) + "\n"
 	msg += "👶 宝宝名字：" + baby.Name + "\n"
 	msg += "📅 年龄：" + p.getBabyAge(baby) + "\n"
-	msg += "⭐ 等级：" + IntToString(baby.Level) + "\n"
+	msg += "⭐ 等级：" + IntToString(newLevel) + "\n"
 	msg += "💡 打工可以培养宝宝的独立性和责任感哦~"
 
 	SendTextReply(robot, event, msg)
@@ -513,20 +661,39 @@ func (p *BabyPlugin) babyRename(robot plugin.Robot, event *onebot.Event, newName
 		return
 	}
 
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+	
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", event.UserID, "active").First(&baby)
-	// if result.Error != nil {
-	// 	SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
-	// 	return
-	// }
+	var oldName string
+	row := GlobalDB.QueryRow("SELECT name FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+	err := row.Scan(&oldName)
+	if err != nil {
+		SendTextReply(robot, event, "❌ 您还没有宝宝哦~ 发送【宝宝降临】迎接新生命吧")
+		return
+	}
 
 	// 更新宝宝名字
-	oldName := "小宝宝"
-	// baby.Name = newName
-	// baby.UpdatedAt = time.Now()
-	// db.Save(&baby)
+	_, err = GlobalDB.Exec("UPDATE baby SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND status = 'active'", newName, event.UserID)
+	if err != nil {
+		log.Printf("更新宝宝名字失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 改名失败，请稍后重试")
+		return
+	}
+	
+	// 记录改名事件
+	var babyID int
+	row = GlobalDB.QueryRow("SELECT id FROM baby WHERE user_id = ? AND status = 'active'", event.UserID)
+	row.Scan(&babyID)
+	
+	_, err = GlobalDB.Exec("INSERT INTO baby_event (baby_id, event_type, content) VALUES (?, ?, ?)", 
+		babyID, "rename", "宝宝改名：从\""+oldName+"\"改为\""+newName+"\"")
+	if err != nil {
+		log.Printf("记录宝宝改名事件失败: %v\n", err)
+	}
 
 	msg := "✏️ 宝宝改名成功！\n"
 	msg += "👶 旧名字：" + oldName + "\n"
@@ -545,13 +712,19 @@ func (p *BabyPlugin) enableSystem(robot plugin.Robot, event *onebot.Event) {
 		return
 	}
 
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+
 	// 更新系统配置为开启
-	// db := GetDatabaseInstance()
-	// var config BabyConfig
-	// db.FirstOrCreate(&config)
-	// config.IsEnabled = true
-	// config.UpdateAt = time.Now()
-	// db.Save(&config)
+	_, err := GlobalDB.Exec("UPDATE baby_config SET is_enabled = TRUE, update_at = CURRENT_TIMESTAMP")
+	if err != nil {
+		log.Printf("开启宝宝系统失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 操作失败，请稍后重试")
+		return
+	}
 
 	msg := "✅ 宝宝系统已成功开启！\n"
 	msg += "👶 用户现在可以使用以下宝宝系统功能：\n"
@@ -574,13 +747,19 @@ func (p *BabyPlugin) disableSystem(robot plugin.Robot, event *onebot.Event) {
 		return
 	}
 
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+
 	// 更新系统配置为关闭
-	// db := GetDatabaseInstance()
-	// var config BabyConfig
-	// db.FirstOrCreate(&config)
-	// config.IsEnabled = false
-	// config.UpdateAt = time.Now()
-	// db.Save(&config)
+	_, err := GlobalDB.Exec("UPDATE baby_config SET is_enabled = FALSE, update_at = CURRENT_TIMESTAMP")
+	if err != nil {
+		log.Printf("关闭宝宝系统失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 操作失败，请稍后重试")
+		return
+	}
 
 	msg := "⚠️ 宝宝系统已成功关闭！\n"
 	msg += "👶 用户将暂时无法使用宝宝系统的所有功能\n"
@@ -597,19 +776,33 @@ func (p *BabyPlugin) abandonBaby(robot plugin.Robot, event *onebot.Event, userID
 		return
 	}
 
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		SendTextReply(robot, event, "❌ 数据库连接失败，请稍后重试")
+		return
+	}
+
 	// 查询用户的宝宝
-	// var baby Baby
-	// db := GetDatabaseInstance()
-	// result := db.Where("user_id = ? AND status = ?", userID, "active").First(&baby)
-	// if result.Error != nil {
-	//  SendTextReply(robot, event, "❌ 该用户没有宝宝")
-	//  return
-	// }
+	var count int
+	err := GlobalDB.QueryRow("SELECT COUNT(*) FROM baby WHERE user_id = ? AND status = 'active'", userID).Scan(&count)
+	if err != nil {
+		log.Printf("查询用户宝宝失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 查询失败，请稍后重试")
+		return
+	}
+	
+	if count == 0 {
+		SendTextReply(robot, event, "❌ 该用户没有宝宝")
+		return
+	}
 
 	// 标记宝宝为已抛弃
-	// baby.Status = "abandoned"
-	// baby.UpdatedAt = time.Now()
-	// db.Save(&baby)
+	_, err = GlobalDB.Exec("UPDATE baby SET status = 'abandoned', updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND status = 'active'", userID)
+	if err != nil {
+		log.Printf("抛弃宝宝失败: %v\n", err)
+		SendTextReply(robot, event, "❌ 操作失败，请稍后重试")
+		return
+	}
 
 	msg := "⚠️ 操作完成！已成功处理用户 " + userID + " 的宝宝\n"
 	msg += "💡 注意：此操作不可逆，请谨慎使用"
@@ -670,42 +863,82 @@ func (p *BabyPlugin) isSuperAdmin(userID string) bool {
 func (p *BabyPlugin) updateGrowthValue() {
 	log.Println("开始更新宝宝成长值...")
 	
-	// 查询所有活跃状态的宝宝
-	// var babies []Baby
-	// db := GetDatabaseInstance()
-	// db.Where("status = ?", "active").Find(&babies)
-	
-	// 模拟数据用于测试
-	babies := []Baby{
-		{
-			ID:          1,
-			UserID:      "123456",
-			Name:        "小宝宝",
-			Birthday:    time.Now().AddDate(0, 0, -10),
-			GrowthValue: 5000,
-			DaysOld:     5,
-			Level:       1,
-			Status:      "active",
-		},
+	// 检查全局数据库连接
+	if GlobalDB == nil {
+		log.Println("警告: 数据库未初始化，无法更新宝宝成长值")
+		return
 	}
+	
+	// 查询所有活跃状态的宝宝
+	rows, err := GlobalDB.Query("SELECT id, user_id, name, birthday, growth_value, days_old, level FROM baby WHERE status = 'active'")
+	if err != nil {
+		log.Printf("查询活跃宝宝失败: %v\n", err)
+		return
+	}
+	defer rows.Close()
 	
 	// 遍历所有宝宝，更新成长值
-	for _, baby := range babies {
+	for rows.Next() {
+		var baby Baby
+		err := rows.Scan(&baby.ID, &baby.UserID, &baby.Name, &baby.Birthday, &baby.GrowthValue, &baby.DaysOld, &baby.Level)
+		if err != nil {
+			log.Printf("扫描宝宝数据失败: %v\n", err)
+			continue
+		}
+		
 		growthAdd := 50 // 每日自动增加50成长值
-		baby.GrowthValue += growthAdd
+		newGrowthValue := baby.GrowthValue + growthAdd
 		
 		// 计算应该增加的天数（每1000成长值=1天）
-		newDays := baby.GrowthValue / 1000
+		newDays := newGrowthValue / 1000
 		if newDays > baby.DaysOld {
-			baby.DaysOld = newDays
-			baby.Level = baby.DaysOld/30 + 1 // 每30天升1级
-			p.checkBirthday(baby) // 检查是否过生日
-			log.Printf("宝宝 %s 更新完成：成长值=%d, 天数=%d, 等级=%d\n", baby.Name, baby.GrowthValue, baby.DaysOld, baby.Level)
+			newLevel := newDays/30 + 1 // 每30天升1级
 			
-			// 保存宝宝数据到数据库
-			// db.Save(&baby)
-		}
+			// 更新宝宝数据到数据库
+			_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ?, days_old = ?, level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+				newGrowthValue, newDays, newLevel, baby.ID)
+			if err != nil {
+				log.Printf("更新宝宝 %s 数据失败: %v\n", baby.Name, err)
+				continue
+			}
+			
+			// 更新本地变量用于后续处理
+				baby.GrowthValue = newGrowthValue
+				baby.DaysOld = newDays
+				baby.Level = newLevel
+				
+				// 检查是否过生日
+				p.checkBirthday(baby)
+				log.Printf("宝宝 %s 更新完成：成长值=%d, 天数=%d, 等级=%d\n", baby.Name, baby.GrowthValue, baby.DaysOld, baby.Level)
+			} else {
+				// 只更新成长值
+				_, err = GlobalDB.Exec("UPDATE baby SET growth_value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+					newGrowthValue, baby.ID)
+				if err != nil {
+					log.Printf("更新宝宝 %s 成长值失败: %v\n", baby.Name, err)
+					continue
+				}
+				log.Printf("宝宝 %s 更新完成：成长值=%d\n", baby.Name, newGrowthValue)
+			}
+			
+			// 检查是否达到宝宝达人徽章条件（成长值达到10000）
+			if newGrowthValue >= 10000 && baby.GrowthValue < 10000 {
+				// 获取徽章插件实例
+				badgePlugin := GetBadgePluginInstance()
+				// 发放宝宝达人徽章
+				err := badgePlugin.GrantBadgeToUser(baby.UserID, "宝宝达人", "system", "宝宝成长值达到10000")
+				if err != nil {
+					log.Printf("给宝宝 %s 的用户 %s 发放宝宝达人徽章失败: %v\n", baby.Name, baby.UserID, err)
+				} else {
+					log.Printf("给宝宝 %s 的用户 %s 成功发放宝宝达人徽章\n", baby.Name, baby.UserID)
+				}
+			}
 	}
+	
+	if err = rows.Err(); err != nil {
+		log.Printf("遍历宝宝数据失败: %v\n", err)
+	}
+	
 	log.Println("更新宝宝成长值任务执行完成")
 }
 
@@ -718,14 +951,12 @@ func (p *BabyPlugin) checkBirthday(baby Baby) {
 	// 检查是否是生日
 	if now.Month() == birthMonth && now.Day() == birthDay {
 		// 如果是生日，记录生日事件
-		// babyEvent := BabyEvent{
-		//  BabyID:    baby.ID,
-		//  EventType: "birthday",
-		//  Content:   "宝宝今天过生日了！",
-		//  CreatedAt: now,
-		// }
-		// db := GetDatabaseInstance()
-		// db.Create(&babyEvent)
+		_, err := GlobalDB.Exec("INSERT INTO baby_event (baby_id, event_type, content) VALUES (?, ?, ?)", 
+			baby.ID, "birthday", "宝宝今天过生日了！现在"+IntToString(baby.DaysOld)+"天了")
+		if err != nil {
+			log.Printf("记录宝宝 %s 生日事件失败: %v\n", baby.Name, err)
+			return
+		}
 		
 		log.Printf("🎉 宝宝 %s 今天过生日了！现在 %d 天了\n", baby.Name, baby.DaysOld)
 	}

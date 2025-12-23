@@ -80,6 +80,18 @@ var FeatureDefaults = map[string]bool{
 	"voice_reply":             false,
 	"burn_after_reading":      false,
 	"feature_disabled_notice": false,
+	"tarot":                   true,
+	"plugin_manager":          true,
+	"gift":                    true,
+	"fishing":                 true,
+	"cultivation":             true,
+	"farm":                    true,
+	"robbery":                 true,
+	"word_guess":              true,
+	"idiom_guess":             true,
+	"auction":                 true,
+	"badge":                   true,
+	"medal":                   true,
 }
 
 var FeatureDisplayNames = map[string]string{
@@ -102,6 +114,18 @@ var FeatureDisplayNames = map[string]string{
 	"join_mute":          "进群禁言",
 	"voice_reply":        "语音回复",
 	"burn_after_reading": "阅后即焚",
+	"tarot":              "塔罗牌",
+	"plugin_manager":     "插件管理",
+	"gift":               "礼物",
+	"fishing":            "钓鱼",
+	"cultivation":        "修炼",
+	"farm":               "农场",
+	"robbery":            "打劫",
+	"word_guess":         "猜单词",
+	"idiom_guess":        "猜成语",
+	"auction":            "竞拍系统",
+	"badge":              "徽章系统",
+	"medal":              "勋章系统",
 }
 
 func isSameDay(t1, t2 time.Time) bool {
