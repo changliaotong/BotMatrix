@@ -47,6 +47,64 @@ func (p *GroupManagerPlugin) Version() string {
 func (p *GroupManagerPlugin) Init(robot plugin.Robot) {
 	log.Println("加载群管插件")
 
+	// 处理爱群主命令
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" {
+			return nil
+		}
+
+		// 检查是否为爱群主命令
+		if match, _ := p.cmdParser.MatchCommand("爱群主|loveowner|loveadmin", event.RawMessage); match {
+			// 检查是否在冷却时间内
+			userIDStr := fmt.Sprintf("%d", event.UserID)
+			groupIDStr := fmt.Sprintf("%d", event.GroupID)
+
+			// 检查冷却时间
+			coolKey := fmt.Sprintf("love_owner_cool:%s:%s", groupIDStr, userIDStr)
+			coolExpire, err := p.redisClient.TTL(context.Background(), coolKey).Result()
+			if err != nil && err != redis.Nil {
+				log.Printf("[GroupManager] 检查冷却时间失败: %v", err)
+				return nil
+			}
+
+			if coolExpire > 0 {
+				remaining := time.Duration(coolExpire) * time.Second
+				message := fmt.Sprintf("💖 爱群主功能冷却中，剩余时间：%.0f分钟", remaining.Minutes())
+				robot.SendMessage(&onebot.SendMessageParams{
+					GroupID: event.GroupID,
+					Message: message,
+				})
+				return nil
+			}
+
+			// 执行爱群主操作
+			err = p.handleLoveOwner(robot, event)
+			if err != nil {
+				log.Printf("[GroupManager] 处理爱群主失败: %v", err)
+			}
+		}
+
+		return nil
+	})
+
+	// 处理粉丝团排行榜命令
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" {
+			return nil
+		}
+
+		// 检查是否为粉丝团排行榜命令
+		if match, _ := p.cmdParser.MatchCommand("粉丝团排行|fanrank|intimacyrank", event.RawMessage); match {
+			// 执行粉丝团排行榜
+			err := p.handleFanRank(robot, event)
+			if err != nil {
+				log.Printf("[GroupManager] 处理粉丝团排行失败: %v", err)
+			}
+		}
+
+		return nil
+	})
+
 	// 如果数据库连接可用，添加默认敏感词
 	if p.db != nil {
 		// 添加默认敏感词（如果不存在）
@@ -90,8 +148,8 @@ func (p *GroupManagerPlugin) Init(robot plugin.Robot) {
 			})
 
 			// 记录日志
-		log.Printf("用户 %d 在群 %d 发送了敏感消息: %s", event.UserID, event.GroupID, event.RawMessage)
-	}
+			log.Printf("用户 %d 在群 %d 发送了敏感消息: %s", event.UserID, event.GroupID, event.RawMessage)
+		}
 
 		// 检查是否是命令
 		if match, _ := p.cmdParser.MatchCommand("群规", event.RawMessage); match {
@@ -138,7 +196,7 @@ func (p *GroupManagerPlugin) handleAdminCommand(robot plugin.Robot, event *onebo
 	}
 
 	// 提取命令和参数 - 使用CommandParser的通用模式匹配
-	pattern := `(\w+)` // 匹配命令名
+	pattern := `(\w+)`     // 匹配命令名
 	paramPattern := `(.*)` // 匹配所有参数
 	match, command, paramMatches := p.cmdParser.MatchCommandWithParams(pattern, paramPattern, event.RawMessage)
 	if !match || len(command) == 0 {
@@ -172,7 +230,264 @@ func (p *GroupManagerPlugin) handleAdminCommand(robot plugin.Robot, event *onebo
 		p.handleGetMemberInfoCommand(robot, event, args)
 	case "settitle":
 		p.handleSetTitleCommand(robot, event, args)
+	case "invitationstats":
+		p.handleInvitationStatsCommand(robot, event, args)
+	case "inviterank":
+		p.handleInviteRankCommand(robot, event, args)
 	}
+
+	return nil
+}
+
+// 处理邀请统计命令
+func (p *GroupManagerPlugin) handleInvitationStatsCommand(robot plugin.Robot, event *onebot.Event, args []string) {
+	if p.db == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "数据库未配置，无法查看邀请统计！",
+		})
+		return
+	}
+
+	var targetUserID string
+	if len(args) > 0 {
+		targetUserID = args[0]
+	} else {
+		targetUserID = fmt.Sprintf("%d", event.UserID)
+	}
+
+	groupIDStr := fmt.Sprintf("%d", event.GroupID)
+
+	// 查询邀请次数
+	var count int
+	query := "SELECT COALESCE(invitation_count, 0) FROM group_invitation_stats WHERE group_id = ? AND user_id = ?"
+	err := p.db.QueryRow(query, groupIDStr, targetUserID).Scan(&count)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 没有邀请记录
+			robot.SendMessage(&onebot.SendMessageParams{
+				GroupID: event.GroupID,
+				Message: fmt.Sprintf("用户 %s 暂无邀请记录！", targetUserID),
+			})
+		} else {
+			log.Printf("[GroupManager] 查询邀请统计失败: %v", err)
+			robot.SendMessage(&onebot.SendMessageParams{
+				GroupID: event.GroupID,
+				Message: "查询邀请统计失败，请稍后重试！",
+			})
+		}
+		return
+	}
+
+	// 查询邀请的具体用户
+	inviteesQuery := "SELECT invitee_id FROM group_invitations WHERE group_id = ? AND inviter_id = ? ORDER BY invite_time DESC"
+	rows, err := p.db.Query(inviteesQuery, groupIDStr, targetUserID)
+	if err != nil {
+		log.Printf("[GroupManager] 查询邀请用户列表失败: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var invitees []string
+	for rows.Next() {
+		var inviteeID string
+		if err := rows.Scan(&inviteeID); err != nil {
+			log.Printf("[GroupManager] 扫描邀请用户失败: %v", err)
+			continue
+		}
+		invitees = append(invitees, inviteeID)
+	}
+
+	// 发送统计信息
+	message := fmt.Sprintf("用户 %s 的邀请统计：\n", targetUserID)
+	message += fmt.Sprintf("邀请人数：%d\n", count)
+	if len(invitees) > 0 {
+		message += fmt.Sprintf("邀请的用户：%s\n", strings.Join(invitees, ", "))
+	}
+
+	robot.SendMessage(&onebot.SendMessageParams{
+		GroupID: event.GroupID,
+		Message: message,
+	})
+}
+
+// 处理邀请排行榜命令
+func (p *GroupManagerPlugin) handleInviteRankCommand(robot plugin.Robot, event *onebot.Event, args []string) {
+	if p.db == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "数据库未配置，无法查看邀请排行榜！",
+		})
+		return
+	}
+
+	groupIDStr := fmt.Sprintf("%d", event.GroupID)
+
+	// 查询邀请排行榜
+	query := "SELECT user_id, invitation_count FROM group_invitation_stats WHERE group_id = ? ORDER BY invitation_count DESC LIMIT 10"
+	rows, err := p.db.Query(query, groupIDStr)
+	if err != nil {
+		log.Printf("[GroupManager] 查询邀请排行榜失败: %v", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "查询邀请排行榜失败，请稍后重试！",
+		})
+		return
+	}
+	defer rows.Close()
+
+	// 构建排行榜信息
+	var rankMsg strings.Builder
+	rankMsg.WriteString("邀请排行榜（前10名）：\n\n")
+
+	rank := 1
+	for rows.Next() {
+		var userID string
+		var count int
+		if err := rows.Scan(&userID, &count); err != nil {
+			log.Printf("[GroupManager] 扫描排行榜数据失败: %v", err)
+			continue
+		}
+		rankMsg.WriteString(fmt.Sprintf("%d. 用户 %s：%d 人\n", rank, userID, count))
+		rank++
+	}
+
+	if rank == 1 {
+		rankMsg.WriteString("暂无邀请记录！")
+	}
+
+	// 发送排行榜信息
+	robot.SendMessage(&onebot.SendMessageParams{
+		GroupID: event.GroupID,
+		Message: rankMsg.String(),
+	})
+}
+
+// 处理爱群主操作
+func (p *GroupManagerPlugin) handleLoveOwner(robot plugin.Robot, event *onebot.Event) error {
+	if p.db == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "数据库未配置，无法使用爱群主功能！",
+		})
+		return fmt.Errorf("数据库未配置")
+	}
+
+	userIDStr := fmt.Sprintf("%d", event.UserID)
+	groupIDStr := fmt.Sprintf("%d", event.GroupID)
+
+	// 检查是否已经加入粉丝团
+	var isMember bool
+	query := "SELECT EXISTS(SELECT 1 FROM fan_group_members WHERE group_id = ? AND user_id = ?)"
+	err := p.db.QueryRow(query, groupIDStr, userIDStr).Scan(&isMember)
+	if err != nil {
+		log.Printf("[GroupManager] 检查粉丝团成员失败: %v", err)
+		return err
+	}
+
+	if !isMember {
+		// 自动加入粉丝团
+		insertQuery := "INSERT INTO fan_group_members (group_id, user_id, join_time) VALUES (?, ?, ?)"
+		_, err = p.db.Exec(insertQuery, groupIDStr, userIDStr, time.Now())
+		if err != nil {
+			log.Printf("[GroupManager] 加入粉丝团失败: %v", err)
+			return err
+		}
+	}
+
+	// 增加亲密度和积分
+	intimacyPoints := 10
+	pointReward := 50
+
+	// 更新亲密度
+	updateIntimacyQuery := "INSERT INTO fan_group_intimacy (group_id, user_id, intimacy_points, last_love_time) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE intimacy_points = intimacy_points + ?, last_love_time = ?"
+	_, err = p.db.Exec(updateIntimacyQuery, groupIDStr, userIDStr, intimacyPoints, time.Now(), intimacyPoints, time.Now())
+	if err != nil {
+		log.Printf("[GroupManager] 更新亲密度失败: %v", err)
+		return err
+	}
+
+	// 发放积分奖励
+	// 这里假设存在points表，需要根据实际情况调整
+	updatePointsQuery := "INSERT INTO user_points (user_id, points) VALUES (?, ?) ON DUPLICATE KEY UPDATE points = points + ?"
+	_, err = p.db.Exec(updatePointsQuery, userIDStr, pointReward, pointReward)
+	if err != nil {
+		log.Printf("[GroupManager] 发放积分奖励失败: %v", err)
+		return err
+	}
+
+	// 设置冷却时间（10分钟）
+	coolKey := fmt.Sprintf("love_owner_cool:%s:%s", groupIDStr, userIDStr)
+	_, err = p.redisClient.SetEx(context.Background(), coolKey, "1", 10*time.Minute).Result()
+	if err != nil {
+		log.Printf("[GroupManager] 设置冷却时间失败: %v", err)
+		return err
+	}
+
+	// 发送成功消息
+	message := fmt.Sprintf("💖 爱群主成功！\n")
+	message += fmt.Sprintf("获得亲密度：+%d\n", intimacyPoints)
+	message += fmt.Sprintf("获得积分奖励：+%d\n", pointReward)
+	message += "每10分钟可以爱一次群主哦～"
+
+	robot.SendMessage(&onebot.SendMessageParams{
+		GroupID: event.GroupID,
+		Message: message,
+	})
+
+	return nil
+}
+
+// 处理粉丝团排行榜
+func (p *GroupManagerPlugin) handleFanRank(robot plugin.Robot, event *onebot.Event) error {
+	if p.db == nil {
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "数据库未配置，无法查看粉丝团排行！",
+		})
+		return fmt.Errorf("数据库未配置")
+	}
+
+	groupIDStr := fmt.Sprintf("%d", event.GroupID)
+
+	// 查询粉丝团排行榜
+	query := "SELECT user_id, intimacy_points FROM fan_group_intimacy WHERE group_id = ? ORDER BY intimacy_points DESC LIMIT 10"
+	rows, err := p.db.Query(query, groupIDStr)
+	if err != nil {
+		log.Printf("[GroupManager] 查询粉丝团排行失败: %v", err)
+		robot.SendMessage(&onebot.SendMessageParams{
+			GroupID: event.GroupID,
+			Message: "查询粉丝团排行失败，请稍后重试！",
+		})
+		return err
+	}
+	defer rows.Close()
+
+	// 构建排行榜信息
+	var rankMsg strings.Builder
+	rankMsg.WriteString("粉丝团亲密度排行榜（前10名）：\n\n")
+
+	rank := 1
+	for rows.Next() {
+		var userID string
+		var intimacyPoints int
+		if err := rows.Scan(&userID, &intimacyPoints); err != nil {
+			log.Printf("[GroupManager] 扫描粉丝团排行数据失败: %v", err)
+			continue
+		}
+		rankMsg.WriteString(fmt.Sprintf("%d. 用户 %s：%d 亲密度\n", rank, userID, intimacyPoints))
+		rank++
+	}
+
+	if rank == 1 {
+		rankMsg.WriteString("暂无粉丝团成员！")
+	}
+
+	// 发送排行榜信息
+	robot.SendMessage(&onebot.SendMessageParams{
+		GroupID: event.GroupID,
+		Message: rankMsg.String(),
+	})
 
 	return nil
 }
@@ -672,10 +987,10 @@ func (p *GroupManagerPlugin) handleSetRulesCommand(robot plugin.Robot, event *on
 	// 记录审核日志
 	if p.db != nil {
 		auditLog := &db.AuditLog{
-			GroupID:      fmt.Sprintf("%d", event.GroupID),
-			AdminID:      fmt.Sprintf("%d", event.UserID),
-			Action:       "set_rules",
-			Description:  fmt.Sprintf("更新群规为: %s", rules),
+			GroupID:     fmt.Sprintf("%d", event.GroupID),
+			AdminID:     fmt.Sprintf("%d", event.UserID),
+			Action:      "set_rules",
+			Description: fmt.Sprintf("更新群规为: %s", rules),
 		}
 		if err := db.AddAuditLog(p.db, auditLog); err != nil {
 			log.Printf("[GroupManager] 添加审核日志失败: %v", err)
@@ -895,8 +1210,8 @@ func (p *GroupManagerPlugin) handleSetTitleCommand(robot plugin.Robot, event *on
 
 	// 执行设置头衔操作
 	_, err = robot.SetGroupSpecialTitle(&onebot.SetGroupSpecialTitleParams{
-		GroupID:     event.GroupID,
-		UserID:      userID,
+		GroupID:      event.GroupID,
+		UserID:       userID,
 		SpecialTitle: title,
 	})
 
@@ -1022,6 +1337,58 @@ func (p *GroupManagerPlugin) sendWelcomeAndRules(robot plugin.Robot, event *oneb
 	if err != nil {
 		log.Printf("[GroupManager] 向群 %d 发送欢迎消息失败: %v", event.GroupID, err)
 	}
+
+	// 记录邀请统计
+	if event.OperatorID != 0 && event.OperatorID != event.UserID {
+		// 邀请者ID和被邀请者ID不同，说明是邀请加入
+		inviterIDStr := fmt.Sprintf("%d", event.OperatorID)
+		inviteeIDStr := fmt.Sprintf("%d", event.UserID)
+
+		// 更新邀请统计
+		err = p.updateInvitationCount(groupIDStr, inviterIDStr, inviteeIDStr)
+		if err != nil {
+			log.Printf("[GroupManager] 更新邀请统计失败: %v", err)
+		}
+	}
+}
+
+// 更新邀请统计
+func (p *GroupManagerPlugin) updateInvitationCount(groupID, inviterID, inviteeID string) error {
+	if p.db == nil {
+		return fmt.Errorf("数据库未配置")
+	}
+
+	// 检查是否已经记录过该邀请
+	var count int
+	query := "SELECT COUNT(*) FROM group_invitations WHERE group_id = ? AND inviter_id = ? AND invitee_id = ?"
+	err := p.db.QueryRow(query, groupID, inviterID, inviteeID).Scan(&count)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return fmt.Errorf("检查邀请记录失败: %v", err)
+		}
+	}
+
+	if count > 0 {
+		// 已经记录过，不重复记录
+		return nil
+	}
+
+	// 插入新的邀请记录
+	insertQuery := "INSERT INTO group_invitations (group_id, inviter_id, invitee_id, invite_time) VALUES (?, ?, ?, ?)"
+	_, err = p.db.Exec(insertQuery, groupID, inviterID, inviteeID, time.Now())
+	if err != nil {
+		return fmt.Errorf("插入邀请记录失败: %v", err)
+	}
+
+	// 更新邀请者的邀请次数
+	updateQuery := "INSERT INTO group_invitation_stats (group_id, user_id, invitation_count) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE invitation_count = invitation_count + 1"
+	_, err = p.db.Exec(updateQuery, groupID, inviterID)
+	if err != nil {
+		return fmt.Errorf("更新邀请统计失败: %v", err)
+	}
+
+	log.Printf("[GroupManager] 邀请统计更新成功: 群 %s, 邀请者 %s, 被邀请者 %s", groupID, inviterID, inviteeID)
+	return nil
 }
 
 // 发送群规
@@ -1342,7 +1709,7 @@ func (p *GroupManagerPlugin) handleGetMembersCommand(robot plugin.Robot, event *
 		joinDate := time.Unix(int64(joinTime), 0).Format("2006-01-02")
 
 		// 添加到信息字符串
-		membersInfo.WriteString(fmt.Sprintf("%d. ID: %d | 昵称: %s | 性别: %s | 入群时间: %s\n", 
+		membersInfo.WriteString(fmt.Sprintf("%d. ID: %d | 昵称: %s | 性别: %s | 入群时间: %s\n",
 			i+1, int64(userID), name, sex, joinDate))
 
 		// 每50个成员发送一次消息，避免消息过长
@@ -1438,15 +1805,15 @@ func (p *GroupManagerPlugin) handleGetMemberInfoCommand(robot plugin.Robot, even
 	// 格式化成员信息
 	memberDetail := fmt.Sprintf(
 		"成员信息:\n"+
-		"ID: %d\n"+
-		"昵称: %s\n"+
-		"群名片: %s\n"+
-		"性别: %s\n"+
-		"年龄: %d\n"+
-		"入群时间: %s\n"+
-		"最后发言: %s\n"+
-		"群等级: %d\n"+
-		"角色: %s",
+			"ID: %d\n"+
+			"昵称: %s\n"+
+			"群名片: %s\n"+
+			"性别: %s\n"+
+			"年龄: %d\n"+
+			"入群时间: %s\n"+
+			"最后发言: %s\n"+
+			"群等级: %d\n"+
+			"角色: %s",
 		int64(userIDFloat), name, card, sex, int(age), joinDate, lastSentDate, int(level), role)
 
 	// 发送成员信息
