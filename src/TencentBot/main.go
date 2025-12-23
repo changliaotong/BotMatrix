@@ -29,22 +29,31 @@ import (
 	"github.com/tencent-connect/botgo/token"
 )
 
+// WebSocketConfig holds WebSocket connection configuration
+type WebSocketConfig struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Enabled  bool   `json:"enabled"`
+	Priority int    `json:"priority"`
+}
+
 // Config holds the configuration
 type Config struct {
-	AppID      uint64 `json:"app_id"` // AppID is uint64 in SDK
-	Token      string `json:"token"`
-	Secret     string `json:"secret"`
-	Sandbox    bool   `json:"sandbox"`
-	SelfID     string `json:"self_id"` // Optional: manually set SelfID
-	NexusAddr  string `json:"nexus_addr"`
-	LogPort    int    `json:"log_port"`    // Port for HTTP Log Viewer
-	FileHost   string `json:"file_host"`   // Public base URL for serving files (e.g. http://1.2.3.4:8080)
-	MediaRoute string `json:"media_route"` // Internal route path for media (default: /media/)
+	AppID          uint64            `json:"app_id"` // AppID is uint64 in SDK
+	Token          string            `json:"token"`
+	Secret         string            `json:"secret"`
+	Sandbox        bool              `json:"sandbox"`
+	SelfID         string            `json:"self_id"`         // Optional: manually set SelfID
+	LogPort        int               `json:"log_port"`        // Port for HTTP Log Viewer
+	FileHost       string            `json:"file_host"`       // Public base URL for serving files (e.g. http://1.2.3.4:8080)
+	MediaRoute     string            `json:"media_route"`     // Internal route path for media (default: /media/)
+	WebSocketAddrs []WebSocketConfig `json:"websocket_addrs"` // Multiple WebSocket connections
+	NexusAddr      string            `json:"nexus_addr"`      // Backward compatibility
 }
 
 var (
 	config         Config
-	nexusConn      *websocket.Conn
+	nexusConns     []*websocket.Conn
 	nexusMu        sync.Mutex
 	api            openapi.OpenAPI
 	ctx            context.Context
@@ -98,6 +107,11 @@ func getAppAccessToken() (string, error) {
 
 	log.Printf("Refreshed Access Token, expires in %d seconds", exp)
 	return accessToken, nil
+}
+
+// flusher interface for log flushing
+type flusher interface {
+	Flush() error
 }
 
 // LogManager handles in-memory log buffering
@@ -315,8 +329,25 @@ func loadConfig() {
 	if envSelfID := os.Getenv("TENCENT_SELF_ID"); envSelfID != "" {
 		config.SelfID = envSelfID
 	}
+	// Backward compatibility: if NexusAddr is set, add it to WebSocketAddrs
 	if envNexusAddr := os.Getenv("NEXUS_ADDR"); envNexusAddr != "" {
-		config.NexusAddr = envNexusAddr
+		config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
+			Name:     "Default",
+			URL:      envNexusAddr,
+			Enabled:  true,
+			Priority: 1,
+		})
+	}
+
+	// Backward compatibility: if old NexusAddr is set in config.json
+	if config.NexusAddr != "" && len(config.WebSocketAddrs) == 0 {
+		config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
+			Name:     "Default",
+			URL:      config.NexusAddr,
+			Enabled:  true,
+			Priority: 1,
+		})
+		config.NexusAddr = "" // Clear old field
 	}
 
 	if envLogPort := os.Getenv("LOG_PORT"); envLogPort != "" {
@@ -360,39 +391,65 @@ func NexusConnect() {
 	headers.Add("X-Self-ID", selfID)
 	headers.Add("X-Platform", "Guild")
 
+	// If no WebSocket configs, wait for configuration
+	for len(config.WebSocketAddrs) == 0 {
+		log.Println("No WebSocket connections configured. Waiting for configuration...")
+		time.Sleep(5 * time.Second)
+	}
+
+	// Connect to all enabled WebSocket servers
+	for _, wsConfig := range config.WebSocketAddrs {
+		if !wsConfig.Enabled {
+			continue
+		}
+
+		go connectToWebSocket(wsConfig, headers)
+	}
+}
+
+func connectToWebSocket(wsConfig WebSocketConfig, headers http.Header) {
 	for {
-		log.Printf("Connecting to BotNexus at %s...", config.NexusAddr)
-		conn, _, err := websocket.DefaultDialer.Dial(config.NexusAddr, headers)
+		log.Printf("Connecting to WebSocket '%s' at %s...", wsConfig.Name, wsConfig.URL)
+		conn, _, err := websocket.DefaultDialer.Dial(wsConfig.URL, headers)
 		if err != nil {
-			log.Printf("Connection failed: %v. Retrying in 5s...", err)
+			log.Printf("WebSocket '%s' connection failed: %v. Retrying in 5s...", wsConfig.Name, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		nexusConn = conn
-		log.Println("Connected to BotNexus!")
+		nexusMu.Lock()
+		nexusConns = append(nexusConns, conn)
+		nexusMu.Unlock()
+		log.Printf("Connected to WebSocket '%s'!", wsConfig.Name)
 
-		// Handle incoming messages from BotNexus (Actions)
-		go handleNexusMessages()
+		// Handle incoming messages from this WebSocket
+		go handleNexusMessages(conn, wsConfig.Name)
 
 		return
 	}
 }
 
-func handleNexusMessages() {
-	defer nexusConn.Close()
+func handleNexusMessages(conn *websocket.Conn, name string) {
+	defer conn.Close()
 	for {
-		_, message, err := nexusConn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("BotNexus connection lost:", err)
-			// Reconnect logic could be here, but for now we just exit/restart
-			os.Exit(1)
+			log.Printf("WebSocket '%s' connection lost: %v", name, err)
+			// Remove closed connection from list
+			nexusMu.Lock()
+			for i, c := range nexusConns {
+				if c == conn {
+					nexusConns = append(nexusConns[:i], nexusConns[i+1:]...)
+					break
+				}
+			}
+			nexusMu.Unlock()
 			return
 		}
 
 		var actionMap map[string]interface{}
 		if err := json.Unmarshal(message, &actionMap); err != nil {
-			log.Println("Error parsing action:", err)
+			log.Printf("Error parsing action from WebSocket '%s': %v", name, err)
 			continue
 		}
 
@@ -1177,7 +1234,12 @@ func handleAction(action map[string]interface{}) {
 		// However, if we only have GuildID, we can't send.
 		if channelID == "" {
 			log.Println("send_guild_channel_msg requires channel_id")
-			sendToNexus(map[string]interface{}{"status": "failed", "message": "missing channel_id", "echo": action["echo"]})
+			sendToNexus(map[string]interface{}{
+				"status":  "failed",
+				"retcode": 100,
+				"message": "missing channel_id",
+				"echo":    action["echo"],
+			})
 			return
 		}
 
@@ -1336,13 +1398,23 @@ func handleAction(action map[string]interface{}) {
 		params, _ := action["params"].(map[string]interface{})
 		guildID := getString(params, "guild_id")
 		if guildID == "" {
-			sendToNexus(map[string]interface{}{"status": "failed", "echo": action["echo"]})
+			sendToNexus(map[string]interface{}{
+				"status":  "failed",
+				"retcode": 100,
+				"message": "missing guild_id",
+				"echo":    action["echo"],
+			})
 			return
 		}
 
 		channels, err := api.Channels(ctx, guildID)
 		if err != nil {
-			sendToNexus(map[string]interface{}{"status": "failed", "echo": action["echo"]})
+			sendToNexus(map[string]interface{}{
+				"status":  "failed",
+				"retcode": 100,
+				"message": err.Error(),
+				"echo":    action["echo"],
+			})
 			return
 		}
 
@@ -1359,36 +1431,6 @@ func handleAction(action map[string]interface{}) {
 		sendToNexus(map[string]interface{}{
 			"status": "ok",
 			"data":   channelList,
-			"echo":   action["echo"],
-		})
-
-	case "get_guild_member_list":
-		params, _ := action["params"].(map[string]interface{})
-		guildID := getString(params, "guild_id")
-		if guildID == "" {
-			sendToNexus(map[string]interface{}{"status": "failed", "message": "missing guild_id", "echo": action["echo"]})
-			return
-		}
-
-		members, err := api.GuildMembers(ctx, guildID, &dto.GuildMemberPager{Limit: "100"})
-		if err != nil {
-			log.Printf("Error getting guild members: %v", err)
-			sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": action["echo"]})
-			return
-		}
-
-		var memberList []map[string]interface{}
-		for _, member := range members {
-			memberList = append(memberList, map[string]interface{}{
-				"user_id":  member.User.ID,
-				"nickname": member.User.Username,
-				"role":     "member", // Roles can be refined if needed
-			})
-		}
-
-		sendToNexus(map[string]interface{}{
-			"status": "ok",
-			"data":   memberList,
 			"echo":   action["echo"],
 		})
 
@@ -1412,8 +1454,6 @@ func handleAction(action map[string]interface{}) {
 			"message": "get_group_info not fully supported for QQ Groups yet",
 			"echo":    action["echo"],
 		})
-
-	default:
 
 	case "get_friend_list":
 		// Official bots don't have friends in the traditional sense
@@ -1537,7 +1577,12 @@ func handleAction(action map[string]interface{}) {
 				log.Println("Error kicking guild member:", err)
 			}
 		}
-		sendToNexus(map[string]interface{}{"status": "failed", "echo": action["echo"]})
+		sendToNexus(map[string]interface{}{
+			"status":  "failed",
+			"retcode": 100,
+			"message": fmt.Sprintf("Action '%s' failed", act),
+			"echo":    action["echo"],
+		})
 
 	case "get_guild_meta":
 		params, _ := action["params"].(map[string]interface{})
@@ -1743,6 +1788,152 @@ func handleAction(action map[string]interface{}) {
 			"data":   logs,
 			"echo":   action["echo"],
 		})
+
+	// ------------------------------
+	// 未实现的OneBot接口，返回不支持提示
+	// ------------------------------
+	case "set_group_admin":
+	case "set_group_card":
+	case "set_group_name":
+	case "set_group_leave":
+	case "set_group_special_title":
+	case "set_group_whole_ban":
+	case "set_friend_add_request":
+	case "set_group_add_request":
+	case "get_group_file_system_info":
+	case "get_group_root_files":
+	case "get_group_files":
+	case "get_group_file_url":
+	case "upload_group_file":
+	case "delete_group_file":
+	case "create_group_folder":
+	case "delete_group_folder":
+	case "get_record":
+	case "get_image":
+	case "can_send_image":
+	case "can_send_record":
+	case "get_status":
+	case "get_version":
+	case "set_restart":
+	case "set_stop":
+	case "clean_cache":
+	case "send_group_forward_msg":
+	case "send_private_forward_msg":
+	case "get_forward_msg":
+	case "send_group_sign":
+	case "get_group_sign_info":
+	case "get_group_system_msg":
+	case "get_group_at_all_remain":
+	case "get_group_at_all_status":
+	case "set_group_portrait":
+	case "set_group_upload":
+	case "set_group_topic":
+	case "set_group_join_request":
+	case "set_group_invite_request":
+	case "get_stranger_info":
+	case "get_friend_info":
+	case "delete_friend":
+	case "get_unidirectional_friend_list":
+	case "delete_unidirectional_friend":
+	case "get_group_honor_info":
+	case "get_group_member_nick":
+	case "get_group_member_card":
+	case "set_group_member_card":
+	case "set_group_member_special_title":
+	case "set_group_member_ban":
+	case "set_group_member_kick":
+	case "set_group_member_leave":
+		// 返回不支持提示
+		sendToNexus(map[string]interface{}{
+			"status":  "failed",
+			"retcode": 100,
+			"message": fmt.Sprintf("Action '%s' not supported by TencentBot", act),
+			"echo":    action["echo"],
+		})
+	}
+}
+
+func getRoleName(roles []string) string {
+	if len(roles) > 0 {
+		return "member" // Simplify for now, roles are IDs usually
+	}
+	return "member"
+}
+
+func parseTimestamp(t dto.Timestamp) int64 {
+	ts, err := time.Parse(time.RFC3339, string(t))
+	if err != nil {
+		return 0
+	}
+	return ts.Unix()
+}
+
+func handleSendResponse(err error, msg *dto.Message, action map[string]interface{}) {
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
+		errMsg := err.Error()
+		retcode := 100
+
+		// 根据错误类型设置不同的错误码
+		switch {
+		case strings.Contains(errMsg, "400"):
+			retcode = 400 // 参数错误
+		case strings.Contains(errMsg, "401"):
+			retcode = 401 // 认证失败
+		case strings.Contains(errMsg, "403"):
+			retcode = 403 // 权限不足
+		case strings.Contains(errMsg, "404"):
+			retcode = 404 // 资源不存在
+		case strings.Contains(errMsg, "405"):
+			retcode = 405 // 方法不允许
+		case strings.Contains(errMsg, "429"):
+			retcode = 429 // 请求频率过高
+		case strings.Contains(errMsg, "500") || strings.Contains(errMsg, "Internal Server Error"):
+			retcode = 500 // 服务器内部错误
+		case strings.Contains(errMsg, "502"):
+			retcode = 502 // 网关错误
+		case strings.Contains(errMsg, "503"):
+			retcode = 503 // 服务不可用
+		case strings.Contains(errMsg, "504"):
+			retcode = 504 // 网关超时
+		default:
+			retcode = 100 // 其他错误
+		}
+
+		sendToNexus(map[string]interface{}{
+			"status":  "failed",
+			"retcode": retcode,
+			"data":    nil,
+			"message": errMsg,
+			"echo":    action["echo"],
+		})
+	} else {
+		respData := map[string]interface{}{}
+		if msg != nil {
+			respData["message_id"] = msg.ID
+		}
+		sendToNexus(map[string]interface{}{
+			"status": "ok",
+			"data":   respData,
+			"echo":   action["echo"],
+		})
+	}
+}
+
+func sendToNexus(data interface{}) {
+	nexusMu.Lock()
+	defer nexusMu.Unlock()
+	if len(nexusConns) == 0 {
+		return
+	}
+
+	for i, conn := range nexusConns {
+		if err := conn.WriteJSON(data); err != nil {
+			log.Printf("Error sending to WebSocket #%d: %v", i, err)
+			// Remove broken connection
+			conn.Close()
+			nexusConns = append(nexusConns[:i], nexusConns[i+1:]...)
+		}
 	}
 }
 
@@ -1765,55 +1956,6 @@ func getString(m map[string]interface{}, key string) string {
 	return ""
 }
 
-func getRoleName(roles []string) string {
-	if len(roles) > 0 {
-		return "member" // Simplify for now, roles are IDs usually
-	}
-	return "member"
-}
-
-func parseTimestamp(t dto.Timestamp) int64 {
-	ts, err := time.Parse(time.RFC3339, string(t))
-	if err != nil {
-		return 0
-	}
-	return ts.Unix()
-}
-
-func handleSendResponse(err error, msg *dto.Message, action map[string]interface{}) {
-	if err != nil {
-		log.Println("Error sending message:", err)
-		sendToNexus(map[string]interface{}{
-			"status":  "failed",
-			"retcode": 100,
-			"data":    nil,
-			"message": err.Error(),
-			"echo":    action["echo"],
-		})
-	} else {
-		respData := map[string]interface{}{}
-		if msg != nil {
-			respData["message_id"] = msg.ID
-		}
-		sendToNexus(map[string]interface{}{
-			"status": "ok",
-			"data":   respData,
-			"echo":   action["echo"],
-		})
-	}
-}
-
-func sendToNexus(data interface{}) {
-	nexusMu.Lock()
-	defer nexusMu.Unlock()
-	if nexusConn == nil {
-		return
-	}
-	if err := nexusConn.WriteJSON(data); err != nil {
-		log.Println("Error sending to Nexus:", err)
-	}
-}
-
 // Event Handlers
 
 func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) error {
@@ -1834,20 +1976,17 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 		go handleAction(action)
 	}
 
-	// Test: Reply with Avatar
-	if strings.Contains(data.Content, "头像") || strings.EqualFold(strings.TrimSpace(data.Content), "avatar") {
-		avatar := data.Author.Avatar
-		if avatar == "" {
-			avatar = "Avatar URL not found"
-		}
-		log.Printf("Replying with Avatar: %s", avatar)
-		_, err := api.PostMessage(context.Background(), data.ChannelID, &dto.MessageToCreate{
-			Content: fmt.Sprintf("Your Avatar: %s", avatar),
-			MsgID:   data.ID,
-			MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
-		})
-		if err != nil {
-			log.Printf("Failed to reply avatar: %v", err)
+	// Handle Attachments (Images, Video, Audio, Files)
+	for _, attachment := range data.Attachments {
+		if strings.HasPrefix(attachment.ContentType, "image") {
+			data.Content += fmt.Sprintf("[CQ:image,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "video") {
+			data.Content += fmt.Sprintf("[CQ:video,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "audio") {
+			data.Content += fmt.Sprintf("[CQ:record,file=%s]", attachment.URL)
+		} else {
+			// Generic File
+			data.Content += fmt.Sprintf("[CQ:file,file=%s,name=%s]", attachment.URL, filepath.Base(attachment.URL))
 		}
 	}
 
@@ -1893,6 +2032,20 @@ func directMessageEventHandler(event *dto.WSPayload, data *dto.WSDirectMessageDa
 	pending := sessionCache.Save("channel", data.ChannelID, data.ID)
 	for _, action := range pending {
 		go handleAction(action)
+	}
+
+	// Handle Attachments (Images, Video, Audio, Files)
+	for _, attachment := range data.Attachments {
+		if strings.HasPrefix(attachment.ContentType, "image") {
+			data.Content += fmt.Sprintf("[CQ:image,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "video") {
+			data.Content += fmt.Sprintf("[CQ:video,file=%s]", attachment.URL)
+		} else if strings.HasPrefix(attachment.ContentType, "audio") {
+			data.Content += fmt.Sprintf("[CQ:record,file=%s]", attachment.URL)
+		} else {
+			// Generic File
+			data.Content += fmt.Sprintf("[CQ:file,file=%s,name=%s]", attachment.URL, filepath.Base(attachment.URL))
+		}
 	}
 
 	// Translate to OneBot v11 Message Event
@@ -2009,55 +2162,6 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 		go handleAction(action)
 	}
 
-	// Test: Reply with Avatar
-	if strings.Contains(data.Content, "头像") || strings.EqualFold(strings.TrimSpace(data.Content), "avatar") {
-		avatar := data.Author.Avatar
-		if avatar == "" {
-			avatar = "https://q1.qlogo.cn/g?b=qq&nk=1653346663&s=100"
-		}
-		log.Printf("Replying with Avatar (Uploading...): %s", avatar)
-
-		// Upload file to get FileInfo
-		fileInfo, err := uploadGroupFile(data.GroupID, avatar, 1) // 1 = Image
-		if err != nil {
-			log.Printf("Failed to upload avatar via URL: %v. Trying proxy...", err)
-			// Fallback: Download and Proxy
-			resp, errDl := http.Get(avatar)
-			if errDl == nil {
-				defer resp.Body.Close()
-				tmpFile, errTmp := ioutil.TempFile("", "avatar_*.jpg")
-				if errTmp == nil {
-					defer tmpFile.Close()
-					_, _ = io.Copy(tmpFile, resp.Body)
-					tmpPath := tmpFile.Name()
-					// Upload local file
-					fileInfo, err = uploadGroupFile(data.GroupID, tmpPath, 1)
-					os.Remove(tmpPath)
-				}
-			}
-		}
-
-		if err != nil {
-			log.Printf("Failed to upload avatar: %v", err)
-			api.PostGroupMessage(context.Background(), data.GroupID, &dto.MessageToCreate{
-				Content: fmt.Sprintf("Avatar Upload Failed: %v", err),
-				MsgID:   data.ID,
-				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
-			})
-		} else {
-			_, err := api.PostGroupMessage(context.Background(), data.GroupID, &dto.MessageToCreate{
-				Content: " ",
-				MsgType: 7,
-				Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
-				MsgID:   data.ID,
-				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
-			})
-			if err != nil {
-				log.Printf("Failed to reply avatar media: %v", err)
-			}
-		}
-	}
-
 	// 处理附件
 	for _, attachment := range data.Attachments {
 		if strings.HasPrefix(attachment.ContentType, "image") {
@@ -2114,56 +2218,6 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 		go handleAction(action)
 	}
 
-	// Test: Reply with Avatar
-	if strings.Contains(data.Content, "头像") || strings.EqualFold(strings.TrimSpace(data.Content), "avatar") {
-		avatar := data.Author.Avatar
-		if avatar == "" {
-			// Fallback to a default avatar
-			avatar = "https://q1.qlogo.cn/g?b=qq&nk=1653346663&s=100"
-		}
-		log.Printf("Replying with Avatar (Uploading...): %s", avatar)
-
-		// Upload file to get FileInfo
-		fileInfo, err := uploadC2CFile(data.Author.ID, avatar, 1) // 1 = Image
-		if err != nil {
-			log.Printf("Failed to upload avatar via URL: %v. Trying proxy...", err)
-			// Fallback: Download and Proxy
-			resp, errDl := http.Get(avatar)
-			if errDl == nil {
-				defer resp.Body.Close()
-				tmpFile, errTmp := ioutil.TempFile("", "avatar_*.jpg")
-				if errTmp == nil {
-					defer tmpFile.Close()
-					_, _ = io.Copy(tmpFile, resp.Body)
-					tmpPath := tmpFile.Name()
-					// Upload local file
-					fileInfo, err = uploadC2CFile(data.Author.ID, tmpPath, 1)
-					os.Remove(tmpPath)
-				}
-			}
-		}
-
-		if err != nil {
-			log.Printf("Failed to upload avatar: %v", err)
-			api.PostC2CMessage(context.Background(), data.Author.ID, &dto.MessageToCreate{
-				Content: fmt.Sprintf("Avatar Upload Failed: %v", err),
-				MsgID:   data.ID,
-				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
-			})
-		} else {
-			_, err := api.PostC2CMessage(context.Background(), data.Author.ID, &dto.MessageToCreate{
-				Content: " ",
-				MsgType: 7,
-				Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
-				MsgID:   data.ID,
-				MsgSeq:  uint32(atomic.AddInt64(&msgSeq, 1)),
-			})
-			if err != nil {
-				log.Printf("Failed to reply avatar media: %v", err)
-			}
-		}
-	}
-
 	// Handle Attachments (Images, Video, Audio, Files)
 	for _, attachment := range data.Attachments {
 		if strings.HasPrefix(attachment.ContentType, "image") {
@@ -2216,11 +2270,25 @@ var _ event.MessageReactionEventHandler = messageReactionEventHandler
 func main() {
 	// Initialize Logger
 	logManager = NewLogManager(2000) // Keep last 2000 lines
-	log.SetOutput(logManager)
+	// Create a multi-writer that logs to both our manager and stdout
+	multiWriter := io.MultiWriter(logManager, os.Stdout)
+	log.SetOutput(multiWriter)
 
+	log.Println("=== Starting Tencent Bot Application ===")
+
+	log.Println("Step 1: Loading configuration...")
 	loadConfig()
 	ctx = context.Background()
 
+	// Skip configuration check for testing - allow running to access config UI
+	if config.AppID == 0 || config.Token == "" || config.Secret == "" {
+		log.Println("WARNING: Missing required configuration! AppID, Token, and Secret must be set.")
+		log.Println("However, the application will continue running so you can access the web configuration interface.")
+	}
+
+	log.Printf("Configuration loaded successfully. AppID: %d, Sandbox: %t, LogPort: %d", config.AppID, config.Sandbox, config.LogPort)
+
+	log.Println("Step 2: Loading session cache...")
 	// Load Session Cache
 	sessionCache.LoadDisk()
 
@@ -2279,14 +2347,261 @@ func main() {
 				http.ServeFile(w, r, tmpPath)
 			})
 
+			// Configuration endpoints
+			http.HandleFunc("/config", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+				if r.Method == "OPTIONS" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+
+				if r.Method == "GET" {
+					// Return current config
+					json.NewEncoder(w).Encode(config)
+					return
+				}
+
+				if r.Method == "POST" {
+					// Update config
+					var newConfig Config
+					if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+
+					// Validate
+					if newConfig.AppID == 0 || newConfig.Token == "" || newConfig.Secret == "" {
+						http.Error(w, "Missing required configuration", http.StatusBadRequest)
+						return
+					}
+
+					// Update config
+					config = newConfig
+
+					// Save to file
+					file, err := os.Create("config.json")
+					if err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
+					defer file.Close()
+					encoder := json.NewEncoder(file)
+					encoder.SetIndent("", "  ")
+					if err := encoder.Encode(config); err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
+
+					// Reconnect to WebSocket servers
+					go NexusConnect()
+
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "message": "Configuration updated successfully"})
+					return
+				}
+
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			})
+
+			// Configuration web interface
+			http.HandleFunc("/config-ui", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				fmt.Fprint(w, `
+				<!DOCTYPE html>
+				<html lang="zh-CN">
+				<head>
+					<meta charset="UTF-8">
+					<meta name="viewport" content="width=device-width, initial-scale=1.0">
+					<title>机器人配置</title>
+					<style>
+						body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+						.container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+						h1 { text-align: center; color: #333; }
+						.form-group { margin-bottom: 15px; }
+						label { display: block; margin-bottom: 5px; font-weight: bold; }
+						input, textarea, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+						button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+						button:hover { background-color: #0056b3; }
+						.websocket-config { margin: 10px 0; padding: 10px; border: 1px solid #eee; border-radius: 4px; }
+						.add-ws-btn { background-color: #28a745; margin: 10px 0; }
+						.add-ws-btn:hover { background-color: #218838; }
+						.remove-ws-btn { background-color: #dc3545; margin-left: 10px; }
+						.remove-ws-btn:hover { background-color: #c82333; }
+						.status { margin-top: 20px; padding: 10px; border-radius: 4px; }
+						.status.success { background-color: #d4edda; color: #155724; }
+						.status.error { background-color: #f8d7da; color: #721c24; }
+					</style>
+				</head>
+				<body>
+					<div class="container">
+						<h1>机器人配置</h1>
+						<form id="config-form">
+							<div class="form-group">
+								<label for="app_id">App ID:</label>
+								<input type="number" id="app_id" name="app_id" required>
+							</div>
+							<div class="form-group">
+								<label for="token">Token:</label>
+								<input type="text" id="token" name="token" required>
+							</div>
+							<div class="form-group">
+								<label for="secret">Secret:</label>
+								<input type="text" id="secret" name="secret" required>
+							</div>
+							<div class="form-group">
+								<label for="sandbox">Sandbox:</label>
+								<input type="checkbox" id="sandbox" name="sandbox">
+							</div>
+							<div class="form-group">
+								<label for="self_id">Self ID:</label>
+								<input type="text" id="self_id" name="self_id">
+							</div>
+							<div class="form-group">
+								<label for="log_port">Log Port:</label>
+								<input type="number" id="log_port" name="log_port" value="8080">
+							</div>
+							<div class="form-group">
+								<label for="file_host">File Host:</label>
+								<input type="text" id="file_host" name="file_host" placeholder="http://1.2.3.4:8080">
+							</div>
+							<div class="form-group">
+								<label for="media_route">Media Route:</label>
+								<input type="text" id="media_route" name="media_route" value="/media/">
+							</div>
+							<div class="form-group">
+								<label>WebSocket Connections:</label>
+								<div id="websocket-list"></div>
+								<button type="button" class="add-ws-btn" onclick="addWebSocketConfig()">Add WebSocket</button>
+							</div>
+							<button type="submit">Save Configuration</button>
+						</form>
+						<div id="status"></div>
+					</div>
+					<script>
+						// Load current config
+						fetch('/config')
+							.then(response => response.json())
+							.then(config => {
+								document.getElementById('app_id').value = config.app_id;
+								document.getElementById('token').value = config.token;
+								document.getElementById('secret').value = config.secret;
+								document.getElementById('sandbox').checked = config.sandbox;
+								document.getElementById('self_id').value = config.self_id || '';
+								document.getElementById('log_port').value = config.log_port || 8080;
+								document.getElementById('file_host').value = config.file_host || '';
+								document.getElementById('media_route').value = config.media_route || '/media/';
+
+								// Load WebSocket configs
+								const wsList = document.getElementById('websocket-list');
+								config.websocket_addrs.forEach((ws, index) => {
+									addWebSocketConfig(ws, index);
+								});
+								if (config.websocket_addrs.length === 0) {
+									addWebSocketConfig();
+								}
+							})
+							.catch(error => console.error('Error loading config:', error));
+
+						function addWebSocketConfig(ws = {}, index = Date.now()) {
+							const wsList = document.getElementById('websocket-list');
+							const wsDiv = document.createElement('div');
+							wsDiv.className = 'websocket-config';
+							wsDiv.innerHTML = 
+								'<div class="form-group">' +
+									'<label>Name:</label>' +
+									'<input type="text" name="websocket_addrs[' + index + '].name" value="' + (ws.name || 'Default') + '" required>' +
+								'</div>' +
+								'<div class="form-group">' +
+									'<label>URL:</label>' +
+									'<input type="text" name="websocket_addrs[' + index + '].url" value="' + (ws.url || 'ws://192.168.0.167:3005/ws/bots') + '" required>' +
+								'</div>' +
+								'<div class="form-group">' +
+									'<label>Enabled:</label>' +
+									'<input type="checkbox" name="websocket_addrs[' + index + '].enabled" ' + (ws.enabled !== false ? 'checked' : '') + '>' +
+								'</div>' +
+								'<div class="form-group">' +
+									'<label>Priority:</label>' +
+									'<input type="number" name="websocket_addrs[' + index + '].priority" value="' + (ws.priority || 1) + '" min="1" max="10">' +
+								'</div>' +
+								'<button type="button" class="remove-ws-btn" onclick="removeWebSocketConfig(this)">Remove</button>';
+							wsList.appendChild(wsDiv);
+						}
+
+						function removeWebSocketConfig(btn) {
+							btn.parentElement.remove();
+						}
+
+						// Handle form submission
+						document.getElementById('config-form').addEventListener('submit', function(e) {
+							e.preventDefault();
+							const formData = new FormData(this);
+							const config = {
+								app_id: parseInt(formData.get('app_id')),
+								token: formData.get('token'),
+								secret: formData.get('secret'),
+								sandbox: formData.get('sandbox') === 'on',
+								self_id: formData.get('self_id'),
+								log_port: parseInt(formData.get('log_port')),
+								file_host: formData.get('file_host'),
+								media_route: formData.get('media_route'),
+								websocket_addrs: []
+							};
+
+							// Collect WebSocket configs
+							const wsConfigs = [];
+							const wsDivs = document.querySelectorAll('.websocket-config');
+							wsDivs.forEach((div, index) => {
+								const wsConfig = {
+								name: div.querySelector('input[name="websocket_addrs[' + index + '].name"]').value,
+								url: div.querySelector('input[name="websocket_addrs[' + index + '].url"]').value,
+								enabled: div.querySelector('input[name="websocket_addrs[' + index + '].enabled"]').checked,
+								priority: parseInt(div.querySelector('input[name="websocket_addrs[' + index + '].priority"]').value)
+							};
+								wsConfigs.push(wsConfig);
+							});
+							config.websocket_addrs = wsConfigs;
+
+							// Send to server
+							fetch('/config', {
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json'
+								},
+								body: JSON.stringify(config)
+							})
+							.then(response => response.json())
+							.then(data => {
+								const statusDiv = document.getElementById('status');
+								statusDiv.className = 'status success';
+								statusDiv.textContent = data.message || 'Configuration saved successfully';
+								setTimeout(() => statusDiv.textContent = '', 3000);
+							})
+							.catch(error => {
+								const statusDiv = document.getElementById('status');
+								statusDiv.className = 'status error';
+								statusDiv.textContent = 'Error saving configuration: ' + error.message;
+								setTimeout(() => statusDiv.textContent = '', 3000);
+							});
+						});
+					</script>
+				</body>
+				</html>
+				`)
+			})
+
 			addr := fmt.Sprintf(":%d", config.LogPort)
-			log.Printf("Starting HTTP Server at http://localhost%s (Logs: /logs, Media: %s)", addr, config.MediaRoute)
+			log.Printf("Starting HTTP Server at http://localhost%s (Logs: /logs, Media: %s, Config: /config, UI: /config-ui)", addr, config.MediaRoute)
 			if err := http.ListenAndServe(addr, nil); err != nil {
 				log.Printf("Failed to start HTTP Server: %v", err)
 			}
 		}()
 	}
 
+	log.Println("Step 4: Initializing Bot Token...")
 	// Initialize Bot Token
 	botToken := token.NewQQBotTokenSource(
 		&token.QQBotCredentials{
@@ -2295,6 +2610,7 @@ func main() {
 		},
 	)
 
+	log.Println("Step 5: Initializing Bot API...")
 	// Initialize API
 	if config.Sandbox {
 		log.Println("Initializing Tencent Bot API in SANDBOX mode...")
@@ -2304,6 +2620,7 @@ func main() {
 		api = botgo.NewOpenAPI(fmt.Sprintf("%d", config.AppID), botToken).WithTimeout(3 * time.Second)
 	}
 
+	log.Println("Step 6: Retrieving bot info from API...")
 	// Get Bot Info (SelfID)
 	// Always try to get nickname from API for better UX
 	me, err := api.Me(ctx)
@@ -2328,9 +2645,11 @@ func main() {
 		}
 	}
 
+	log.Println("Step 7: Starting BotNexus connection...")
 	// Connect to BotNexus
 	go NexusConnect()
 
+	log.Println("Step 8: Starting Tencent WebSocket connection...")
 	// Connect to Tencent WebSocket
 	go func() {
 		wsInfo, err := api.WS(ctx, nil, "")
@@ -2367,6 +2686,7 @@ func main() {
 		}
 	}()
 
+	log.Println("Step 9: Application initialization complete. Entering keep-alive loop...")
 	// Keep alive
 	select {}
 }
