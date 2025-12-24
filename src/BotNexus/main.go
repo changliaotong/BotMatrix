@@ -213,6 +213,38 @@ func main() {
 	// 管理员接口 - 帮助手册
 	mux.HandleFunc("/api/admin/manual", manager.AdminMiddleware(HandleGetManual(manager.Manager)))
 
+	// 裂变系统接口
+	mux.HandleFunc("/api/admin/fission/config", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleGetFissionConfig(manager.Manager)(w, r)
+		case http.MethodPost:
+			HandleUpdateFissionConfig(manager.Manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/fission/tasks", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleGetFissionTasks(manager.Manager)(w, r)
+		case http.MethodPost:
+			HandleSaveFissionTask(manager.Manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/fission/tasks/", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			HandleDeleteFissionTask(manager.Manager)(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/fission/stats", manager.AdminMiddleware(HandleGetFissionStats(manager.Manager)))
+	mux.HandleFunc("/api/admin/fission/invitations", manager.AdminMiddleware(HandleGetInvitations(manager.Manager)))
+	mux.HandleFunc("/api/admin/fission/leaderboard", manager.AdminMiddleware(HandleGetFissionLeaderboard(manager.Manager)))
+
 	// --- WebSocket 接口 (仅供管理后台 UI 使用) ---
 	mux.HandleFunc("/ws/subscriber", manager.JWTMiddleware(HandleSubscriberWebSocket(manager.Manager)))
 
@@ -294,6 +326,11 @@ func NewManager() *Manager {
 		m.Rdb = nil
 	} else {
 		log.Printf(common.T("", "redis_connected"))
+	}
+
+	// 初始化 Docker 客户端
+	if err := m.InitDockerClient(); err != nil {
+		log.Printf("Docker 初始化失败: %v", err)
 	}
 
 	// 初始化核心插件

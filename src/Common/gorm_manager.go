@@ -75,6 +75,11 @@ func (gm *GORMManager) autoMigrate() error {
 		&UserStatsGORM{},
 		&GroupStatsTodayGORM{},
 		&UserStatsTodayGORM{},
+		&FissionConfigGORM{},
+		&InvitationGORM{},
+		&FissionTaskGORM{},
+		&UserFissionRecordGORM{},
+		&FissionRewardLogGORM{},
 	)
 	
 	if err != nil {

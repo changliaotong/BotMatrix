@@ -246,8 +246,102 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
+	// 裂变系统表
+	fissionConfigsTableSQL := `
+	CREATE TABLE IF NOT EXISTS fission_configs (
+		id SERIAL PRIMARY KEY,
+		enabled BOOLEAN NOT NULL DEFAULT FALSE,
+		invite_reward_points INTEGER NOT NULL DEFAULT 0,
+		invite_reward_duration INTEGER NOT NULL DEFAULT 24,
+		anti_fraud_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		welcome_message TEXT,
+		invite_code_template VARCHAR(255) DEFAULT 'INV-{RAND}',
+		rules TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
+	fissionTasksTableSQL := `
+	CREATE TABLE IF NOT EXISTS fission_tasks (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		description TEXT,
+		task_type VARCHAR(50) NOT NULL, -- registration, usage, group_join
+		target_count INTEGER NOT NULL DEFAULT 1,
+		reward_points INTEGER NOT NULL DEFAULT 0,
+		reward_duration INTEGER NOT NULL DEFAULT 0,
+		status VARCHAR(20) DEFAULT 'active',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
+	invitationsTableSQL := `
+	CREATE TABLE IF NOT EXISTS invitations (
+		id SERIAL PRIMARY KEY,
+		inviter_id BIGINT NOT NULL,
+		invitee_id BIGINT NOT NULL,
+		platform VARCHAR(50),
+		invite_code VARCHAR(50),
+		status VARCHAR(50) DEFAULT 'pending', -- pending, completed, invalid
+		ip_address VARCHAR(50),
+		device_id VARCHAR(100),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		completed_at TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(invitee_id)
+	);
+	`
+
+	userFissionRecordsTableSQL := `
+	CREATE TABLE IF NOT EXISTS user_fission_records (
+		id SERIAL PRIMARY KEY,
+		user_id BIGINT NOT NULL UNIQUE,
+		platform VARCHAR(50),
+		invite_count INTEGER NOT NULL DEFAULT 0,
+		points INTEGER NOT NULL DEFAULT 0,
+		level INTEGER NOT NULL DEFAULT 1,
+		total_rewards DOUBLE PRECISION NOT NULL DEFAULT 0,
+		invite_code VARCHAR(50) UNIQUE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
+	fissionRewardLogsTableSQL := `
+	CREATE TABLE IF NOT EXISTS fission_reward_logs (
+		id SERIAL PRIMARY KEY,
+		user_id BIGINT NOT NULL,
+		type VARCHAR(50) NOT NULL, -- points, duration, item
+		amount INTEGER NOT NULL DEFAULT 0,
+		reason VARCHAR(255),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
 	if _, err := db.Exec(userTableSQL); err != nil {
 		return fmt.Errorf("创建用户表失败: %w", err)
+	}
+
+	if _, err := db.Exec(fissionConfigsTableSQL); err != nil {
+		return fmt.Errorf("创建裂变配置表失败: %w", err)
+	}
+
+	if _, err := db.Exec(fissionTasksTableSQL); err != nil {
+		return fmt.Errorf("创建裂变任务表失败: %w", err)
+	}
+
+	if _, err := db.Exec(invitationsTableSQL); err != nil {
+		return fmt.Errorf("创建邀请记录表失败: %w", err)
+	}
+
+	if _, err := db.Exec(userFissionRecordsTableSQL); err != nil {
+		return fmt.Errorf("创建用户裂变记录表失败: %w", err)
+	}
+
+	if _, err := db.Exec(fissionRewardLogsTableSQL); err != nil {
+		return fmt.Errorf("创建裂变奖励日志表失败: %w", err)
 	}
 
 	// 尝试更改列类型（如果已存在）
@@ -2654,6 +2748,291 @@ func GetAuditLogsByGroup(db *sql.DB, groupID int64, limit, offset int) ([]AuditL
 	}
 
 	return logs, nil
+}
+
+// ------------------- 裂变系统相关操作 -------------------
+
+// FissionConfig 定义裂变配置模型
+type FissionConfig struct {
+	ID                  int       `json:"id"`
+	Enabled             bool      `json:"enabled"`
+	InviteRewardPoints  int       `json:"invite_reward_points"`
+	NewUserRewardPoints int       `json:"new_user_reward_points"`
+	MinLevelRequired    int       `json:"min_level_required"`
+	MaxDailyInvites     int       `json:"max_daily_invites"`
+	AntiFraudEnabled    bool      `json:"anti_fraud_enabled"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+// GetFissionConfig 获取裂变配置
+func GetFissionConfig(db *sql.DB) (*FissionConfig, error) {
+	query := `
+	SELECT id, enabled, invite_reward_points, new_user_reward_points, min_level_required, max_daily_invites, anti_fraud_enabled, created_at, updated_at
+	FROM fission_configs
+	LIMIT 1
+	`
+	config := &FissionConfig{}
+	err := db.QueryRow(query).Scan(
+		&config.ID, &config.Enabled, &config.InviteRewardPoints, &config.NewUserRewardPoints, &config.MinLevelRequired, &config.MaxDailyInvites, &config.AntiFraudEnabled, &config.CreatedAt, &config.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取裂变配置失败: %w", err)
+	}
+	return config, nil
+}
+
+// CreateInvitation 创建邀请记录
+func CreateInvitation(db *sql.DB, inviterID, inviteeID int64, inviteCode string, ipAddress, deviceID string) error {
+	query := `
+	INSERT INTO invitations (inviter_id, invitee_id, invite_code, status, ip_address, device_id, updated_at)
+	VALUES ($1, $2, $3, 'pending', $4, $5, CURRENT_TIMESTAMP)
+	ON CONFLICT (invitee_id) DO NOTHING
+	`
+	_, err := db.Exec(query, inviterID, inviteeID, inviteCode, ipAddress, deviceID)
+	if err != nil {
+		return fmt.Errorf("创建邀请记录失败: %w", err)
+	}
+	return nil
+}
+
+// CheckInvitationFraud 检查是否存在作弊风险
+func CheckInvitationFraud(db *sql.DB, ipAddress, deviceID string) (bool, string, error) {
+	if ipAddress != "" {
+		var ipCount int
+		ipQuery := `SELECT COUNT(*) FROM invitations WHERE ip_address = $1 AND status = 'completed'`
+		err := db.QueryRow(ipQuery, ipAddress).Scan(&ipCount)
+		if err == nil && ipCount >= 3 {
+			return true, "IP 绑定次数过多", nil
+		}
+	}
+
+	if deviceID != "" {
+		var deviceCount int
+		deviceQuery := `SELECT COUNT(*) FROM invitations WHERE device_id = $1 AND status = 'completed'`
+		err := db.QueryRow(deviceQuery, deviceID).Scan(&deviceCount)
+		if err == nil && deviceCount >= 2 {
+			return true, "设备绑定次数过多", nil
+		}
+	}
+
+	return false, "", nil
+}
+
+// GetDailyInviteCount 获取用户当日邀请数量
+func GetDailyInviteCount(db *sql.DB, inviterID int64) (int, error) {
+	query := `
+	SELECT COUNT(*) 
+	FROM invitations 
+	WHERE inviter_id = $1 AND created_at >= CURRENT_DATE
+	`
+	var count int
+	err := db.QueryRow(query, inviterID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("获取当日邀请数量失败: %w", err)
+	}
+	return count, nil
+}
+
+// FissionTask 定义裂变任务模型
+type FissionTask struct {
+	ID             int       `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	TaskType       string    `json:"task_type"`
+	TargetCount    int       `json:"target_count"`
+	RewardPoints   int       `json:"reward_points"`
+	RewardDuration int       `json:"reward_duration"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// GetActiveFissionTasks 获取进行中的裂变任务
+func GetActiveFissionTasks(db *sql.DB) ([]FissionTask, error) {
+	query := `
+	SELECT id, name, description, task_type, target_count, reward_points, reward_duration, status, created_at
+	FROM fission_tasks
+	WHERE status = 'active'
+	`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("获取裂变任务失败: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := []FissionTask{}
+	for rows.Next() {
+		var t FissionTask
+		err := rows.Scan(&t.ID, &t.Name, &t.Description, &t.TaskType, &t.TargetCount, &t.RewardPoints, &t.RewardDuration, &t.Status, &t.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("扫描裂变任务失败: %w", err)
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, nil
+}
+
+// CreateFissionRewardLog 记录裂变奖励日志
+func CreateFissionRewardLog(db *sql.DB, userID int64, rewardType string, amount int, reason string) error {
+	query := `
+	INSERT INTO fission_reward_logs (user_id, type, amount, reason, created_at)
+	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+	`
+	_, err := db.Exec(query, userID, rewardType, amount, reason)
+	if err != nil {
+		return fmt.Errorf("记录裂变奖励日志失败: %w", err)
+	}
+	return nil
+}
+
+// CompleteFissionTask 完成裂变任务并分发奖励
+func CompleteFissionTask(db *sql.DB, userID int64, taskType string) error {
+	// 1. 获取所有进行中的该类型的任务
+	query := `
+	SELECT id, name, reward_points, reward_duration 
+	FROM fission_tasks 
+	WHERE task_type = $1 AND status = 'active'
+	`
+	rows, err := db.Query(query, taskType)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var taskID int
+		var taskName string
+		var points, duration int
+		if err := rows.Scan(&taskID, &taskName, &points, &duration); err != nil {
+			continue
+		}
+
+		// 2. 检查用户是否已经完成过此任务
+		var exists bool
+		checkQuery := `SELECT EXISTS(SELECT 1 FROM fission_reward_logs WHERE user_id = $1 AND reason LIKE $2)`
+		_ = db.QueryRow(checkQuery, userID, "%"+taskName+"%").Scan(&exists)
+		if exists {
+			continue
+		}
+
+		// 3. 发放奖励
+		reason := fmt.Sprintf("完成裂变任务: %s", taskName)
+		if points > 0 {
+			_ = AddPoints(db, userID, points, reason, "fission_task")
+			_ = CreateFissionRewardLog(db, userID, "points", points, reason)
+		}
+
+		// 4. 如果是 register 任务，且该用户是被邀请者，也要给邀请者额外奖励（如果配置了）
+		if taskType == "register" {
+			inviterID, _, status, err := GetInvitationByInviteeID(db, userID)
+			if err == nil && inviterID != 0 && status == "completed" {
+				// 可以根据需要增加邀请者的额外奖励逻辑
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetInvitationByInviteeID 根据被邀请者ID获取邀请记录
+func GetInvitationByInviteeID(db *sql.DB, inviteeID int64) (int64, string, string, error) {
+	query := `SELECT inviter_id, invite_code, status FROM invitations WHERE invitee_id = $1`
+	var inviterID int64
+	var inviteCode string
+	var status string
+	err := db.QueryRow(query, inviteeID).Scan(&inviterID, &inviteCode, &status)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, "", "", nil
+		}
+		return 0, "", "", fmt.Errorf("获取邀请记录失败: %w", err)
+	}
+	return inviterID, inviteCode, status, nil
+}
+
+// UpdateInvitationStatus 更新邀请状态
+func UpdateInvitationStatus(db *sql.DB, inviteeID int64, status string) error {
+	query := `UPDATE invitations SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE invitee_id = $2`
+	_, err := db.Exec(query, status, inviteeID)
+	if err != nil {
+		return fmt.Errorf("更新邀请状态失败: %w", err)
+	}
+	return nil
+}
+
+// UserFissionRecord 定义用户裂变记录模型
+type UserFissionRecord struct {
+	UserID      int64  `json:"user_id"`
+	InviteCount int    `json:"invite_count"`
+	Points      int    `json:"points"`
+	Level       int    `json:"level"`
+	InviteCode  string `json:"invite_code"`
+}
+
+// GetUserFissionRecord 获取用户裂变记录
+func GetUserFissionRecord(db *sql.DB, userID int64) (*UserFissionRecord, error) {
+	query := `SELECT invite_count, points, level, invite_code FROM user_fission_records WHERE user_id = $1`
+	record := &UserFissionRecord{UserID: userID}
+	err := db.QueryRow(query, userID).Scan(&record.InviteCount, &record.Points, &record.Level, &record.InviteCode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 如果不存在，返回默认记录（邀请码逻辑会在插件层处理）
+			return record, nil
+		}
+		return nil, fmt.Errorf("获取用户裂变记录失败: %w", err)
+	}
+	return record, nil
+}
+
+// UpdateUserFissionRecord 更新用户裂变记录
+func UpdateUserFissionRecord(db *sql.DB, userID int64, inviteIncr, rewardIncr, pointsIncr int) error {
+	query := `
+	INSERT INTO user_fission_records (user_id, invite_count, total_rewards, points, updated_at)
+	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+	ON CONFLICT (user_id) DO UPDATE
+	SET invite_count = user_fission_records.invite_count + $2,
+	    total_rewards = user_fission_records.total_rewards + $3,
+	    points = user_fission_records.points + $4,
+	    updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.Exec(query, userID, inviteIncr, rewardIncr, pointsIncr)
+	if err != nil {
+		return fmt.Errorf("更新用户裂变记录失败: %w", err)
+	}
+	return nil
+}
+
+// GetFissionRank 获取裂变排行榜
+func GetFissionRank(db *sql.DB, limit int) ([]map[string]interface{}, error) {
+	query := `
+	SELECT user_id, invite_count, points
+	FROM user_fission_records
+	ORDER BY invite_count DESC, points DESC
+	LIMIT $1
+	`
+	rows, err := db.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("获取裂变排行榜失败: %w", err)
+	}
+	defer rows.Close()
+
+	rank := []map[string]interface{}{}
+	for rows.Next() {
+		var userID int64
+		var inviteCount, points int
+		if err := rows.Scan(&userID, &inviteCount, &points); err != nil {
+			return nil, fmt.Errorf("扫描裂变排行失败: %w", err)
+		}
+		rank = append(rank, map[string]interface{}{
+			"user_id":      userID,
+			"invite_count": inviteCount,
+			"points":       points,
+		})
+	}
+	return rank, nil
 }
 
 // GetAuditLogsByAdmin 获取管理员的审核日志
