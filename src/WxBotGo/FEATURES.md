@@ -26,6 +26,11 @@ send_group_msg(group_id, message)
 send_msg(message_type, user_id/group_id, message)
 ```
 
+#### 自身消息支持
+- 支持接收自身发送的消息
+- 以 OneBot 标准格式上报自身消息
+- 支持通过命令控制机器人及设置功能
+
 ### 2. 信息查询
 
 #### 机器人信息
@@ -68,6 +73,7 @@ set_group_name(group_id, new_name)
 - `message`: 收到消息事件
 - `message.private`: 私聊消息事件
 - `message.group`: 群聊消息事件
+- `message.private.self`: 自身发送的私聊消息
 
 #### 请求事件
 - `request.friend`: 好友请求事件

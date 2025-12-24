@@ -22,6 +22,7 @@ type BotCallback interface {
 type WxBot struct {
 	ManagerURL string
 	SelfID     string
+	ReportSelfMsg bool // 是否上报自身消息
 
 	wsConn  *websocket.Conn
 	wsMutex sync.Mutex
@@ -41,6 +42,7 @@ func NewWxBot(managerUrl, selfId string, cb BotCallback) *WxBot {
 	return &WxBot{
 		ManagerURL: managerUrl,
 		SelfID:     selfId,
+		ReportSelfMsg: true, // 默认上报自身消息
 		callback:   cb,
 	}
 }
@@ -222,7 +224,8 @@ func (b *WxBot) sendEvent(event OneBotEvent) {
 
 // Handle WeChat Message -> OneBot Event
 func (b *WxBot) HandleWeChatMsg(msg *openwechat.Message) {
-	if msg.IsSendBySelf() {
+	// 如果是自身消息且未开启上报，则忽略
+	if msg.IsSendBySelf() && !b.ReportSelfMsg {
 		return
 	}
 
@@ -230,38 +233,50 @@ func (b *WxBot) HandleWeChatMsg(msg *openwechat.Message) {
 		PostType: "message",
 	}
 
-	sender, err := msg.Sender()
-	if err != nil {
-		b.Log("Error getting sender: %v", err)
-		sender = &openwechat.User{NickName: "Unknown"}
-	}
-
-	if msg.IsSendByGroup() {
-		event.MessageType = "group"
-		event.SubType = "normal"
-
-		groupSender, err := msg.SenderInGroup()
-		if err == nil {
-			event.UserID = groupSender.UserName
-			event.Sender = &Sender{
-				UserID:   groupSender.UserName,
-				Nickname: groupSender.NickName,
-			}
-		} else {
-			event.UserID = sender.UserName
-			event.Sender = &Sender{UserID: sender.UserName, Nickname: sender.NickName}
+	if msg.IsSendBySelf() {
+		// 自身消息处理
+		event.MessageType = "private"
+		event.SubType = "self"
+		event.UserID = b.SelfID
+		event.Sender = &Sender{
+			UserID:   b.SelfID,
+			Nickname: "Self",
+		}
+	} else {
+		// 他人消息处理
+		sender, err := msg.Sender()
+		if err != nil {
+			b.Log("Error getting sender: %v", err)
+			sender = &openwechat.User{NickName: "Unknown"}
 		}
 
-		group := sender
-		event.GroupID = group.UserName
+		if msg.IsSendByGroup() {
+			event.MessageType = "group"
+			event.SubType = "normal"
 
-	} else {
-		event.MessageType = "private"
-		event.SubType = "friend"
-		event.UserID = sender.UserName
-		event.Sender = &Sender{
-			UserID:   sender.UserName,
-			Nickname: sender.NickName,
+			groupSender, err := msg.SenderInGroup()
+			if err == nil {
+				event.UserID = groupSender.UserName
+				event.Sender = &Sender{
+					UserID:   groupSender.UserName,
+					Nickname: groupSender.NickName,
+				}
+			} else {
+				event.UserID = sender.UserName
+				event.Sender = &Sender{UserID: sender.UserName, Nickname: sender.NickName}
+			}
+
+			group := sender
+			event.GroupID = group.UserName
+
+		} else {
+			event.MessageType = "private"
+			event.SubType = "friend"
+			event.UserID = sender.UserName
+			event.Sender = &Sender{
+				UserID:   sender.UserName,
+				Nickname: sender.NickName,
+			}
 		}
 	}
 

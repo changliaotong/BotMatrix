@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WxBotGo 配置管理</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .section h2 {
+            color: #666;
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            color: #28a745;
+            margin-top: 10px;
+        }
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WxBotGo 配置管理</h1>
+        
+        <form action="/save" method="post">
+            <div class="section">
+                <h2>网络配置</h2>
+                {{range $index, $network := .Networks}}
+                <div class="form-group">
+                    <label for="manager_url_{{$index}}">Manager URL {{$index}}:</label>
+                    <input type="text" id="manager_url_{{$index}}" name="manager_url_{{$index}}" value="{{$network.ManagerUrl}}" required>
+                </div>
+                <div class="form-group">
+                    <label for="self_id_{{$index}}">Self ID {{$index}}:</label>
+                    <input type="text" id="self_id_{{$index}}" name="self_id_{{$index}}" value="{{$network.SelfId}}" placeholder="Will be set by server">
+                </div>
+                {{end}}
+            </div>
+
+            <div class="section">
+                <h2>HTTP 配置</h2>
+                {{range $index, $http := .HTTPs}}
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="http_enabled_{{$index}}" {{if $http.Enabled}}checked{{end}}>
+                        启用 HTTP 服务 {{$index}}
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="http_host_{{$index}}">HTTP 主机 {{$index}}:</label>
+                    <input type="text" id="http_host_{{$index}}" name="http_host_{{$index}}" value="{{$http.Host}}">
+                </div>
+                <div class="form-group">
+                    <label for="http_port_{{$index}}">HTTP 端口 {{$index}}:</label>
+                    <input type="text" id="http_port_{{$index}}" name="http_port_{{$index}}" value="{{$http.Port}}">
+                </div>
+                {{end}}
+            </div>
+
+            <div class="section">
+                <h2>WebSocket 配置</h2>
+                {{range $index, $ws := .WebSockets}}
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="ws_enabled_{{$index}}" {{if $ws.Enabled}}checked{{end}}>
+                        启用 WebSocket 服务 {{$index}}
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="ws_host_{{$index}}">WebSocket 主机 {{$index}}:</label>
+                    <input type="text" id="ws_host_{{$index}}" name="ws_host_{{$index}}" value="{{$ws.Host}}">
+                </div>
+                <div class="form-group">
+                    <label for="ws_port_{{$index}}">WebSocket 端口 {{$index}}:</label>
+                    <input type="text" id="ws_port_{{$index}}" name="ws_port_{{$index}}" value="{{$ws.Port}}">
+                </div>
+                <div class="form-group">
+                    <label for="ws_path_{{$index}}">WebSocket 路径 {{$index}}:</label>
+                    <input type="text" id="ws_path_{{$index}}" name="ws_path_{{$index}}" value="{{$ws.Path}}">
+                </div>
+                {{end}}
+            </div>
+
+            <div class="section">
+                <h2>日志配置</h2>
+                <div class="form-group">
+                    <label for="log_level">日志级别:</label>
+                    <select id="log_level" name="log_level">
+                        <option value="debug" {{if eq .Logging.Level "debug"}}selected{{end}}>Debug</option>
+                        <option value="info" {{if eq .Logging.Level "info"}}selected{{end}}>Info</option>
+                        <option value="warn" {{if eq .Logging.Level "warn"}}selected{{end}}>Warn</option>
+                        <option value="error" {{if eq .Logging.Level "error"}}selected{{end}}>Error</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="log_file">日志文件:</label>
+                    <input type="text" id="log_file" name="log_file" value="{{.Logging.File}}">
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>功能配置</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="auto_login" {{if .Features.AutoLogin}}checked{{end}}>
+                        自动登录
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="qr_code_save" {{if .Features.QRCodeSave}}checked{{end}}>
+                        保存二维码
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="auto_reconnect" {{if .Features.AutoReconnect}}checked{{end}}>
+                        自动重连
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <button type="submit" class="btn">保存配置</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
