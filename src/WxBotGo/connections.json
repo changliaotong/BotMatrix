@@ -1,0 +1,23 @@
+{
+  "connections": [
+    {
+      "client_type": "wx",
+      "name": "微信机器人",
+      "enabled": true,
+      "http_config": {
+        "enabled": true,
+        "port": "8080",
+        "host": "0.0.0.0"
+      },
+      "websocket_config": {
+        "enabled": true,
+        "port": "3001",
+        "host": "0.0.0.0",
+        "path": "/ws"
+      },
+      "client_specific": {
+        "self_id": ""
+      }
+    }
+  ]
+}
