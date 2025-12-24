@@ -154,6 +154,7 @@ func NewManager() *Manager {
 		UsersMutex:         sync.RWMutex{},
 		ProcMap:            make(map[int32]*process.Process),
 		WorkerRequestTimes: make(map[string]time.Time),
+		LogBuffer:          make([]LogEntry, 0),
 	}
 	return m
 }

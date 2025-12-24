@@ -493,14 +493,20 @@ body { background-color: var(--bg-body); color: var(--text-main); font-family: s
 }
 .login-card {
     background: white;
-    padding: 2.5rem;
+    padding: 2rem;
     border-radius: 1.5rem;
     box-shadow: 0 1rem 3rem rgba(0,0,0,0.175);
-    width: 100%;
+    width: 90%;
     max-width: 450px;
     animation: slideUp 0.5s ease-out;
     position: relative;
     z-index: 10000;
+}
+@media (max-width: 480px) {
+    .login-card {
+        padding: 1.5rem;
+        border-radius: 1rem;
+    }
 }
 [data-theme="dark"] .login-card {
     background: var(--bg-card);

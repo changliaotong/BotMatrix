@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,18 +23,48 @@ const VERSION = "86"
 
 // LogManager 用于捕获日志并显示在 Web UI
 type LogManager struct {
-	logs []string
-	max  int
-	mu   sync.Mutex
+	logs    []string
+	max     int
+	mu      sync.Mutex
+	manager *common.Manager
+}
+
+func (lm *LogManager) SetManager(m *common.Manager) {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+	lm.manager = m
 }
 
 func (lm *LogManager) Write(p []byte) (n int, err error) {
 	lm.mu.Lock()
-	defer lm.mu.Unlock()
-	lm.logs = append(lm.logs, string(p))
+	msg := string(p)
+	lm.logs = append(lm.logs, msg)
 	if len(lm.logs) > lm.max {
 		lm.logs = lm.logs[len(lm.logs)-lm.max:]
 	}
+	m := lm.manager
+	lm.mu.Unlock()
+
+	if m != nil {
+		// 避免 AddLog 产生的 fmt.Printf 再次进入这里 (虽然 AddLog 现在用 fmt 了，但还是加个保险)
+		// 提取日志级别，默认为 INFO
+		level := "INFO"
+		if strings.Contains(msg, "[DEBUG]") {
+			level = "DEBUG"
+		} else if strings.Contains(msg, "[WARN]") {
+			level = "WARN"
+		} else if strings.Contains(msg, "[ERROR]") {
+			level = "ERROR"
+		}
+		
+		// 移除可能的换行符，因为 AddLog 会处理显示
+		cleanMsg := strings.TrimSpace(msg)
+		if cleanMsg != "" {
+			// 使用 go func 异步调用，防止死锁或阻塞主线程日志输出
+			go m.AddLog(level, cleanMsg)
+		}
+	}
+
 	return os.Stdout.Write(p)
 }
 
@@ -77,6 +108,7 @@ func main() {
 
 	// 创建管理器 (内部会初始化数据库和管理员)
 	manager := NewManager()
+	logMgr.SetManager(manager.Manager)
 
 	// 启动超时检测
 	go manager.StartWorkerTimeoutDetection()
@@ -367,8 +399,8 @@ func NewManager() *Manager {
 func (m *Manager) SendToWorker(workerID string, msg map[string]interface{}) error {
 	payload, _ := json.Marshal(msg)
 
-	// 1. 尝试通过 Redis 发送
-	if m.Rdb != nil {
+	// 1. 尝试通过 Redis 发送 (仅在启用技能系统时)
+	if common.ENABLE_SKILL && m.Rdb != nil {
 		queue := "botmatrix:queue:default"
 		if workerID != "" {
 			queue = fmt.Sprintf("botmatrix:queue:worker:%s", workerID)

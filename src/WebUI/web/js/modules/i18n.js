@@ -1,7 +1,8 @@
 /**
  * Internationalization (i18n) management
  */
-import { translations } from '../../locales.js?v=1.1.87';
+// translations is loaded globally via locales.js in index.html
+const translations = window.translations || {};
 
 export let currentLang = 'zh-CN';
 

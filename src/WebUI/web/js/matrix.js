@@ -1,11 +1,28 @@
 console.log('matrix.js loading...');
+
+// Global error handler for easier debugging
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    const errorMsg = `[Global Error] ${msg} at ${url}:${lineNo}:${columnNo}`;
+    console.error(errorMsg, error);
+    // Only alert for non-extension errors if possible, but for now alert all to help user
+    if (url && !url.startsWith('chrome-extension')) {
+        // alert(errorMsg);
+    }
+    return false;
+};
+
+window.onunhandledrejection = function(event) {
+    console.error('[Unhandled Rejection]', event.reason);
+    // alert(`[Promise Error] ${event.reason}`);
+};
+
 if (typeof Vue === 'undefined') {
     const errorTitle = (window.t && window.t('vue_not_loaded_error')) || 'Vue is NOT defined! Check index.html script tags.';
     const errorMsg = (window.t && window.t('vue_not_loaded_msg')) || 'Error: Vue.js not loaded. Please check your internet connection or script paths.';
     console.error(errorTitle);
     document.body.innerHTML = `<div style="color:red;padding:20px;">${errorMsg}</div>`;
 }
-const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
+const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick, toRaw } = Vue;
 
 const app = createApp({
     setup() {
@@ -51,6 +68,9 @@ const app = createApp({
         };
 
         const isLoggedIn = ref(isValidToken(token));
+        if (isLoggedIn.value) {
+            window.authToken = token;
+        }
         console.log('Auth state:', { 
             isLoggedIn: isLoggedIn.value, 
             hasToken: !!token,
@@ -96,6 +116,7 @@ const app = createApp({
 
                 if (data.success && data.token) {
                     safeStorage.setItem('wxbot_token', data.token);
+                    window.authToken = data.token; // Ensure global token is set for other modules
                     if (data.role) safeStorage.setItem('wxbot_role', data.role);
                     isLoggedIn.value = true;
                     // Reset login data
@@ -120,9 +141,11 @@ const app = createApp({
         };
 
         const t = (key) => {
-            if (window.t) return window.t(key);
-            return key;
+            if (!key) return '';
+            const dict = translations[lang.value] || translations['zh-CN'] || {};
+            return dict[key] || key;
         };
+        window.t = t;
 
         const toggleLang = () => {
             lang.value = lang.value === 'zh-CN' ? 'en' : 'zh-CN';
@@ -171,9 +194,10 @@ const app = createApp({
                 this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
                 this.controls.enableDamping = true;
                 this.controls.dampingFactor = 0.05;
-                this.camera.position.z = 8000;
+                this.camera.position.z = 15000;
 
                 this.nodes = new Map();
+                this.links = new Map();
                 this.particles = [];
                 this.labels = [];
                 this.running = true;
@@ -268,6 +292,28 @@ const app = createApp({
                                 ip: worker.remote_addr
                             };
                         }
+                    } else if (nodeType === 'group') {
+                        const group = groups.value.find(g => (g.group_id || g.id) == nodeId);
+                        if (group) {
+                            details = {
+                                ...details,
+                                name: group.group_name || group.id,
+                                status: 'Active Group',
+                                member_count: group.member_count || 0,
+                                bot_id: group.bot_id
+                            };
+                        }
+                    } else if (nodeType === 'user') {
+                        const friend = friends.value.find(f => (f.user_id || f.id) == nodeId);
+                        if (friend) {
+                            details = {
+                                ...details,
+                                name: friend.nickname || friend.id,
+                                status: 'Active User',
+                                platform: friend.platform || 'QQ',
+                                bot_id: friend.bot_id
+                            };
+                        }
                     } else if (nodeType === 'nexus') {
                         details = {
                             ...details,
@@ -294,8 +340,8 @@ const app = createApp({
             }
 
             pulseNode(node) {
-                const originalScale = 1000;
-                const targetScale = 1500;
+                const originalScale = node.userData.id === 'nexus' ? 2200 : 1800;
+                const targetScale = originalScale * 1.5;
                 let start = null;
                 const duration = 600;
                 
@@ -332,7 +378,7 @@ const app = createApp({
                 }
                 starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
                 this.stars = new THREE.Points(starsGeometry, new THREE.PointsMaterial({ 
-                    color: this.theme === 'dark' ? 0x00ff41 : 0x33ccff, 
+                    color: this.theme === 'dark' ? 0x3b82f6 : 0x33ccff, 
                     size: 4,
                     transparent: true,
                     opacity: 0.6
@@ -340,24 +386,134 @@ const app = createApp({
                 this.scene.add(this.stars);
 
                 this.getOrCreateNode('nexus', 'nexus', 'NEXUS');
+
+                // Load existing bots and workers
+                if (bots.value) {
+                    bots.value.forEach(bot => {
+                        this.getOrCreateNode(bot.self_id, 'bot', bot.nickname || bot.self_id);
+                    });
+                }
+                if (workers.value) {
+                    workers.value.forEach(worker => {
+                        this.getOrCreateNode(worker.id, 'worker', worker.id);
+                    });
+                }
+                if (groups.value) {
+                    groups.value.forEach(group => {
+                        this.getOrCreateNode(group.group_id || group.id, 'group', group.group_name || group.id);
+                    });
+                }
+                if (friends.value) {
+                    friends.value.forEach(friend => {
+                        this.getOrCreateNode(friend.user_id || friend.id, 'user', friend.nickname || friend.id);
+                    });
+                }
+
+                // Load cached links
+                this.loadLinksFromCache();
+            }
+
+            saveLinksToCache() {
+                const linksToSave = [];
+                this.links.forEach((link, id) => {
+                    linksToSave.push({
+                        id,
+                        source: { id: link.source.id, type: link.source.type, label: link.source.label },
+                        target: { id: link.target.id, type: link.target.type, label: link.target.label }
+                    });
+                });
+                localStorage.setItem('viz_links_cache', JSON.stringify(linksToSave.slice(-500))); // Limit to last 500 links
+            }
+
+            loadLinksFromCache() {
+                try {
+                    const cached = localStorage.getItem('viz_links_cache');
+                    if (cached) {
+                        const linksToLoad = JSON.parse(cached);
+                        linksToLoad.forEach(linkData => {
+                            const source = this.getOrCreateNode(linkData.source.id, linkData.source.type, linkData.source.label);
+                            const target = this.getOrCreateNode(linkData.target.id, linkData.target.type, linkData.target.label);
+                            if (source && target) {
+                                this.createLink(source, target, false); // false = don't save during batch load
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to load links from cache:', e);
+                }
+            }
+
+            createLink(source, target, save = true, color = 0x3b82f6, opacity = 0.1) {
+                const linkId = [source.id, target.id].sort().join('-');
+                if (this.links.has(linkId)) return this.links.get(linkId);
+
+                const material = new THREE.LineBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: opacity,
+                    depthWrite: false
+                });
+
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    source.mesh.position,
+                    target.mesh.position
+                ]);
+
+                const line = new THREE.Line(geometry, material);
+                this.scene.add(line);
+                const link = { line, source, target, baseOpacity: opacity };
+                this.links.set(linkId, link);
+                
+                if (save) {
+                    this.saveLinksToCache();
+                }
+                return link;
+            }
+
+            getAvatarUrl(id, type) {
+                if (!id || id === 'nexus') return null;
+                
+                const numericId = parseInt(id);
+                const isLargeId = !isNaN(numericId) && numericId > 980000000000;
+
+                let url = '';
+                if (type === 'group') {
+                    url = `https://p.qlogo.cn/gh/${id}/${id}/100`;
+                } else if (type === 'user') {
+                    url = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
+                } else if (type === 'bot') {
+                    if (isLargeId) {
+                        return 'https://cdn.staticfile.org/bootstrap-icons/1.8.1/icons/robot.svg';
+                    }
+                    url = `https://q1.qlogo.cn/g?b=qq&nk=${id}&s=100`;
+                } else {
+                    return null;
+                }
+                
+                return `/api/proxy/avatar?url=${encodeURIComponent(url)}`;
             }
 
             getOrCreateNode(id, type, label) {
+                if (!id) return null;
                 if (this.nodes.has(id)) return this.nodes.get(id);
                 
-                const cacheKey = `${type}_${label}`;
+                const cacheKey = `${type}_${id}_${label}`;
                 let texture = this.textureCache.get(cacheKey);
 
-                if (!texture) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 512; canvas.height = 512;
-                    const ctx = canvas.getContext('2d');
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                const drawNode = (img = null) => {
+                    ctx.clearRect(0, 0, 512, 512);
                     
                     // Draw glow
                     const gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 240);
-                    let color = '#00ff41';
+                    let color = '#3b82f6';
                     if (type === 'worker') color = '#33ccff';
                     if (type === 'bot') color = '#ff3366';
+                    if (type === 'group') color = '#a855f7';
+                    if (type === 'user') color = '#10b981';
                     if (type === 'nexus') color = '#facc15';
                     
                     gradient.addColorStop(0, color);
@@ -368,20 +524,60 @@ const app = createApp({
                     ctx.fillStyle = gradient;
                     ctx.beginPath(); ctx.arc(256, 256, 240, 0, Math.PI * 2); ctx.fill();
                     
-                    // Draw circle
+                    if (img) {
+                        // Draw avatar circle
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(256, 256, 180, 0, Math.PI * 2);
+                        ctx.clip();
+                        ctx.drawImage(img, 256 - 180, 256 - 180, 360, 360);
+                        ctx.restore();
+                    }
+                    
+                    // Draw outer ring
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 15;
                     ctx.setLineDash([20, 10]);
                     ctx.beginPath(); ctx.arc(256, 256, 200, 0, Math.PI * 2); ctx.stroke();
                     
-                    // Text
-                    ctx.shadowColor = color;
-                    ctx.shadowBlur = 20;
-                    ctx.fillStyle = '#fff'; ctx.font = 'bold 60px JetBrains Mono'; ctx.textAlign = 'center';
-                    ctx.fillText(label, 256, 275);
+                    // Text (only if no image or for nexus)
+                    if (!img || type === 'nexus') {
+                        ctx.shadowColor = color;
+                        ctx.shadowBlur = 30;
+                        ctx.fillStyle = '#fff'; 
+                        ctx.font = 'bold 90px JetBrains Mono'; // Much larger for distant visibility
+                        ctx.textAlign = 'center';
+                        ctx.fillText(label, 256, 285);
+                    } else {
+                        // Label below avatar
+                        ctx.shadowColor = 'black';
+                        ctx.shadowBlur = 15;
+                        ctx.fillStyle = '#fff'; 
+                        ctx.font = 'bold 70px JetBrains Mono'; // Significantly increased from 40px
+                        ctx.textAlign = 'center';
+                        
+                        // Slightly move up to avoid being too close to the edge
+                        const displayLabel = label.length > 15 ? label.substring(0, 13) + '..' : label;
+                        ctx.fillText(displayLabel, 256, 470);
+                    }
+                    
+                    if (texture) texture.needsUpdate = true;
+                };
 
+                drawNode(); // Draw placeholder/base first
+
+                if (!texture) {
                     texture = new THREE.CanvasTexture(canvas);
                     this.textureCache.set(cacheKey, texture);
+                    
+                    // Load avatar if applicable
+                    const avatarUrl = this.getAvatarUrl(id, type);
+                    if (avatarUrl) {
+                        const img = new Image();
+                        img.crossOrigin = "Anonymous";
+                        img.onload = () => drawNode(img);
+                        img.src = avatarUrl;
+                    }
                 }
 
                 const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
@@ -394,14 +590,23 @@ const app = createApp({
                     const angle = Math.random() * Math.PI * 2;
                     const dist = 3000 + Math.random() * 1500;
                     pos = new THREE.Vector3(Math.cos(angle) * dist, Math.sin(angle) * dist, (Math.random() - 0.5) * 1000);
-                } else {
+                } else if (type === 'bot') {
                     const angle = Math.random() * Math.PI * 2;
                     const dist = 6000 + Math.random() * 2500;
                     pos = new THREE.Vector3(Math.cos(angle) * dist, Math.sin(angle) * dist, (Math.random() - 0.5) * 2000);
+                } else if (type === 'group') {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 10000 + Math.random() * 3000;
+                    pos = new THREE.Vector3(Math.cos(angle) * dist, Math.sin(angle) * dist, (Math.random() - 0.5) * 3000);
+                } else { // user
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 14000 + Math.random() * 4000;
+                    pos = new THREE.Vector3(Math.cos(angle) * dist, Math.sin(angle) * dist, (Math.random() - 0.5) * 4000);
                 }
                 
                 sprite.position.copy(pos);
-                sprite.scale.set(1000, 1000, 1);
+                sprite.scale.set(1800, 1800, 1); // Increased from 1000 for better distant visibility
+                sprite.userData = { id, type, label };
                 
                 this.scene.add(sprite);
                 const node = { id, type, label, mesh: sprite, targetPos: pos, pulse: 0 };
@@ -414,6 +619,21 @@ const app = createApp({
                 const target = this.getOrCreateNode(event.target || 'nexus', event.target_type || 'worker', event.target_label || event.target || 'WORKER');
                 
                 if (source && target) {
+                    // Determine link color and opacity based on types
+                    let linkColor = 0x3b82f6; // Default blue
+                    let linkOpacity = 0.1;
+
+                    if (event.source_type === 'group' || event.target_type === 'group') {
+                        linkColor = 0x60a5fa; // Lighter blue for group links
+                        linkOpacity = 0.15;
+                    }
+
+                    // Create persistent link if it doesn't exist
+                    const mainLink = this.createLink(source, target, true, linkColor, linkOpacity);
+                    if (mainLink) {
+                        mainLink.line.material.opacity = 0.8; // Flash on transmission
+                    }
+
                     this.createParticle(source, target, event.color || (event.msg_type === 'request' ? '#ff3366' : '#33ccff'));
                     source.pulse = 1.0;
                     target.pulse = 0.5;
@@ -436,7 +656,19 @@ const app = createApp({
                 }
                 if (state.workers) {
                     state.workers.forEach(worker => {
-                        this.getOrCreateNode(worker.id, 'worker', worker.id);
+                        if (worker.status === 'Online' || worker.status === 'Active') {
+                            this.getOrCreateNode(worker.id, 'worker', worker.id);
+                        }
+                    });
+                }
+                if (state.groups) {
+                    state.groups.forEach(group => {
+                        this.getOrCreateNode(group.group_id || group.id, 'group', group.group_name || group.id);
+                    });
+                }
+                if (state.friends) {
+                    state.friends.forEach(friend => {
+                        this.getOrCreateNode(friend.user_id || friend.id, 'user', friend.nickname || friend.id);
                     });
                 }
                 if (state.nodes) {
@@ -446,20 +678,36 @@ const app = createApp({
                 // Cleanup removed nodes
                 const activeIds = new Set(['nexus', 
                     ...(state.bots?.map(b => b.self_id) || []), 
-                    ...(state.workers?.map(w => w.id) || []),
-                    ...(state.nodes?.map(n => n.id) || [])
+                    ...(state.workers?.filter(w => w.status === 'Online' || w.status === 'Active').map(w => w.id) || []),
+                    ...(state.groups?.map(g => g.group_id || g.id) || []),
+                    ...(state.friends?.map(f => f.user_id || f.id) || []),
+                    ...(state.nodes?.map(n => n.id) || []),
+                    ...(groups.value?.map(g => g.group_id || g.id) || []),
+                    ...(friends.value?.map(f => f.user_id || f.id) || [])
                 ]);
+
                 this.nodes.forEach((node, id) => {
                     if (!activeIds.has(id)) {
                         this.scene.remove(node.mesh);
                         this.nodes.delete(id);
                         
+                        // Cleanup associated links
+                        this.links.forEach((link, linkId) => {
+                            if (link.source.id === id || link.target.id === id) {
+                                this.scene.remove(link.line);
+                                this.links.delete(linkId);
+                            }
+                        });
+
                         if (selectedNodeDetails.value && selectedNodeDetails.value.id === id) {
                             showingNodeDetails.value = false;
                             selectedNodeDetails.value = null;
                         }
                     }
                 });
+
+                // Update cache after cleanup
+                this.saveLinksToCache();
             }
 
             createFloatingLabel(text, position) {
@@ -471,7 +719,7 @@ const app = createApp({
                 ctx.roundRect(0, 0, 512, 80, 20);
                 ctx.fill();
                 
-                ctx.strokeStyle = '#00ff41';
+                ctx.strokeStyle = '#3b82f6';
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
@@ -496,7 +744,7 @@ const app = createApp({
                 });
             }
 
-            createParticle(start, end, color = 0x00ff41) {
+            createParticle(start, end, color = 0x3b82f6) {
                 let mat = this.materialCache.get(color);
                 if (!mat) {
                     mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
@@ -573,7 +821,7 @@ const app = createApp({
 
                 // Update Nodes
                 this.nodes.forEach(node => {
-                    const baseScale = node.id === 'nexus' ? 1200 : 1000;
+                    const baseScale = node.id === 'nexus' ? 2200 : 1800; // Match new larger scales
                     const isHovered = this.hoveredNode === node.mesh;
                     const hoverScale = isHovered ? 1.2 : 1.0;
                     const pulseScale = (1 + Math.sin(time * 2) * 0.05 + (node.pulse || 0) * 0.3) * hoverScale;
@@ -583,11 +831,32 @@ const app = createApp({
                     
                     if (node.id !== 'nexus') {
                         node.mesh.position.y += Math.sin(time + node.mesh.position.x) * 1.5;
-                        node.mesh.material.rotation += 0.002;
+                        // node.mesh.material.rotation += 0.002; // Removed to keep avatar orientation fixed
                     }
 
                     if (isHovered) {
                         node.mesh.userData = { id: node.id, type: node.type, label: node.label };
+                    }
+                });
+
+                // Update Links (follow floating nodes and handle dynamic opacity)
+                this.links.forEach(link => {
+                    const positions = link.line.geometry.attributes.position.array;
+                    positions[0] = link.source.mesh.position.x;
+                    positions[1] = link.source.mesh.position.y;
+                    positions[2] = link.source.mesh.position.z;
+                    positions[3] = link.target.mesh.position.x;
+                    positions[4] = link.target.mesh.position.y;
+                    positions[5] = link.target.mesh.position.z;
+                    link.line.geometry.attributes.position.needsUpdate = true;
+
+                    // Opacity decay
+                    const baseOpacity = link.baseOpacity || 0.1;
+                    if (link.line.material.opacity > baseOpacity) {
+                        link.line.material.opacity -= 0.005; // Fade out slowly
+                        if (link.line.material.opacity < baseOpacity) {
+                            link.line.material.opacity = baseOpacity;
+                        }
                     }
                 });
 
@@ -603,7 +872,7 @@ const app = createApp({
             setTheme(isDark) {
                 this.theme = isDark ? 'dark' : 'light';
                 if (this.stars) {
-                    this.stars.material.color.set(isDark ? 0x00ff41 : 0x33ccff);
+                    this.stars.material.color.set(isDark ? 0x3b82f6 : 0x33ccff);
                 }
             }
 
@@ -616,11 +885,12 @@ const app = createApp({
         }
 
         const currentTime = ref('');
+        const loading = ref(false);
         const searchQuery = ref('');
         const filterTab = ref('all');
-        const activeTab = ref('dashboard');
-        const showMobileMenu = ref(false);
-        const isSidebarCollapsed = ref(false);
+        const activeTab = ref(localStorage.getItem('activeTab') || 'dashboard');
+        const showMobileMenu = ref(window.innerWidth >= 1024);
+        const isSidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
         const bots = ref([]);
         const workers = ref([]);
         const groups = ref([]);
@@ -705,7 +975,24 @@ const app = createApp({
         const massSendMessage = ref('');
         const massSendSelectedTargets = ref([]);
         const massSendStatus = ref({ current: 0, total: 0, running: false });
-        const backendConfig = ref({});
+        const backendConfig = ref({
+            ws_port: ':3001',
+            webui_port: ':5000',
+            redis_addr: 'localhost:6379',
+            redis_pwd: '',
+            jwt_secret: '',
+            default_admin_password: '',
+            stats_file: 'stats.json',
+            pg_host: 'localhost',
+            pg_port: 5432,
+            pg_user: 'postgres',
+            pg_password: '',
+            pg_dbname: 'botmatrix',
+            pg_sslmode: 'disable',
+            enable_skill: true,
+            log_level: 'INFO',
+            auto_reply: false
+        });
         const userInfo = ref({});
         const selectedBotId = ref('');
         const stats = ref({
@@ -731,6 +1018,7 @@ const app = createApp({
                 items: [
                     { id: 'dashboard', icon: 'layout-dashboard' },
                     { id: 'bots', icon: 'bot' },
+                    { id: 'monitor', icon: 'activity' },
                     { id: 'visualization', icon: 'zap' }
                 ]
             },
@@ -739,7 +1027,7 @@ const app = createApp({
                 items: [
                     { id: 'groups', icon: 'users' },
                     { id: 'friends', icon: 'user-plus' },
-                    { id: 'logs', icon: 'file-text' }
+                    { id: 'system_logs', icon: 'file-text' }
                 ]
             },
             {
@@ -756,7 +1044,7 @@ const app = createApp({
             { label: 'total_bots', value: stats.value.total_bots, icon: 'bot', colorClass: 'bg-blue-500', textColor: 'text-blue-500' },
             { label: 'active_workers', value: stats.value.active_workers, icon: 'cpu', colorClass: 'bg-purple-500', textColor: 'text-purple-500' },
             { label: 'messages_today', value: stats.value.total_msgs, icon: 'message-square', colorClass: 'bg-green-500', textColor: 'text-green-500' },
-            { label: 'system_uptime', value: stats.value.uptime, icon: 'clock', colorClass: 'bg-orange-500', textColor: 'text-orange-500' }
+            { label: 'current_time', value: currentTime.value, icon: 'clock', colorClass: 'bg-matrix', textColor: 'text-matrix' }
         ]);
 
         const uptimeDisplay = computed(() => {
@@ -768,7 +1056,7 @@ const app = createApp({
         });
 
         const recentLogs = computed(() => {
-            return systemLogs.value.slice(0, 10).map(log => ({
+            return systemLogs.value.filter(log => log).slice(0, 10).map(log => ({
                 time: log.time || new Date().toISOString(),
                 message: log.msg || log.message || JSON.stringify(log)
             }));
@@ -793,10 +1081,11 @@ const app = createApp({
         const navItems = computed(() => [
             { id: 'overview', label: t('overview'), icon: 'layout-dashboard' },
             { id: 'bots', label: t('bot_matrix'), icon: 'bot' },
+            { id: 'monitor', label: t('monitor_events'), icon: 'activity' },
             { id: 'visualization', label: t('visualization'), icon: 'zap' },
             { id: 'groups', label: t('groups'), icon: 'users' },
             { id: 'friends', label: t('friends'), icon: 'user-plus' },
-            { id: 'logs', label: t('system_logs'), icon: 'file-text' },
+            { id: 'system_logs', label: t('system_logs'), icon: 'file-text' },
             { id: 'docker', label: t('docker_mgmt'), icon: 'container' },
             { id: 'users', label: t('user_mgmt'), icon: 'shield-check' },
             { id: 'settings', label: t('settings'), icon: 'settings' }
@@ -833,11 +1122,6 @@ const app = createApp({
 
             return result;
         });
-
-        const updateTime = () => {
-            const now = new Date();
-            currentTime.value = now.toLocaleTimeString('en-US', { hour12: false });
-        };
 
         // WebSocket Integration
         const initWebSocket = () => {
@@ -882,9 +1166,19 @@ const app = createApp({
                 wsSubscriber.onmessage = (evt) => {
                     try {
                         const data = JSON.parse(evt.data);
+                        
+                        // Pass to global event logger if available
+                        if (window.addEventLog) {
+                            window.addEventLog(data);
+                        }
+
                         // Real-time log updates
-                        if (data.post_type === 'log') {
-                            systemLogs.value.unshift(data.data);
+                        if (data.post_type === 'log' && data.data) {
+                            const logEntry = {
+                                ...data.data,
+                                type: (data.data.level || data.data.type || 'info').toLowerCase()
+                            };
+                            systemLogs.value.unshift(logEntry);
                             if (systemLogs.value.length > 100) systemLogs.value.pop();
                         }
                         // Handle visualization events
@@ -912,6 +1206,24 @@ const app = createApp({
                                 }
                             }
                         }
+
+                        // Handle worker updates
+                        if (data.type === 'worker_update' && data.data) {
+                            const updatedWorker = data.data;
+                            const index = workers.value.findIndex(w => w.id === updatedWorker.id);
+                            if (index !== -1) {
+                                // Update existing worker
+                                workers.value[index] = { ...workers.value[index], ...updatedWorker };
+                            } else {
+                                // Add new worker if not exists
+                                workers.value.push(updatedWorker);
+                            }
+                            // Also update visualization if it exists
+                            if (window.visualizer) {
+                                window.visualizer.getOrCreateNode(updatedWorker.id, 'worker', updatedWorker.id);
+                            }
+                        }
+
                         // Refresh bots on lifecycle events
                         if (data.post_type === 'meta_event' && data.meta_event_type === 'lifecycle') {
                             fetchAllData();
@@ -957,11 +1269,17 @@ const app = createApp({
         };
 
         const fetchFriends = async (botId, refresh = false) => {
-            if (!botId) return;
-            const data = await apiFetch(`/api/contacts?bot_id=${botId}${refresh ? '&refresh=true' : ''}`);
-            if (data) {
-                friends.value = Array.isArray(data) ? data.filter(item => item.type === 'friend' || item.type === 'contact' || item.type === 'private') : [];
-                console.log(`Fetched ${friends.value.length} friends for bot ${botId}`);
+            loading.value = true;
+            try {
+                const url = botId ? `/api/contacts?bot_id=${botId}${refresh ? '&refresh=true' : ''}` : '/api/contacts';
+                const data = await apiFetch(url);
+                if (data) {
+                    const friendList = Array.isArray(data) ? data : (data.friends || []);
+                    friends.value = friendList.filter(item => item.type === 'friend' || item.type === 'contact' || item.type === 'private' || item.user_id);
+                    console.log(`Fetched ${friends.value.length} friends`);
+                }
+            } finally {
+                loading.value = false;
             }
         };
 
@@ -1012,17 +1330,31 @@ const app = createApp({
         };
 
         const fetchLogs = async () => {
-            const data = await apiFetch(`/api/admin/logs?filter=${logFilter.value}`);
-            if (data) {
-                systemLogs.value = data.logs || [];
+            loading.value = true;
+            try {
+                const data = await apiFetch(`/api/admin/logs?level=${logFilter.value}`);
+                if (data) {
+                    const logList = data.logs || (data.data && data.data.logs) || [];
+                    systemLogs.value = logList.filter(log => log).map(log => ({
+                        ...log,
+                        type: (log.level || log.type || 'info').toLowerCase()
+                    }));
+                }
+            } finally {
+                loading.value = false;
             }
         };
 
         const clearLogs = async () => {
             if (!confirm('Clear all system logs?')) return;
-            const data = await apiFetch('/api/admin/logs/clear', { method: 'POST' });
-            if (data && data.success) {
-                systemLogs.value = [];
+            loading.value = true;
+            try {
+                const data = await apiFetch('/api/admin/logs/clear', { method: 'POST' });
+                if (data && data.success) {
+                    systemLogs.value = [];
+                }
+            } finally {
+                loading.value = false;
             }
         };
 
@@ -1098,9 +1430,14 @@ const app = createApp({
         };
 
         const fetchSystemUsers = async () => {
-            const data = await apiFetch('/api/admin/users');
-            if (data) {
-                systemUsers.value = data.users || [];
+            loading.value = true;
+            try {
+                const data = await apiFetch('/api/admin/users');
+                if (data) {
+                    systemUsers.value = data.users || [];
+                }
+            } finally {
+                loading.value = false;
             }
         };
 
@@ -1249,18 +1586,42 @@ const app = createApp({
 
         const fetchBackendConfig = async () => {
             const data = await apiFetch('/api/admin/config');
-            if (data) {
-                backendConfig.value = data.config || {};
+            if (data && data.config) {
+                backendConfig.value = { ...backendConfig.value, ...data.config };
             }
         };
 
         const saveBackendConfig = async () => {
-            const data = await apiFetch('/api/admin/config', {
-                method: 'POST',
-                body: JSON.stringify(backendConfig.value)
-            });
-            if (data && data.success) {
-                alert(t('action_success') || 'Configuration saved successfully');
+            console.log('SAVE BUTTON CLICKED - Starting save process'); 
+            try {
+                console.log('Current backendConfig state:', JSON.stringify(backendConfig.value));
+                
+                // Ensure numeric types for fields that require them in backend
+                if (backendConfig.value.pg_port !== undefined && backendConfig.value.pg_port !== '') {
+                    const oldPort = backendConfig.value.pg_port;
+                    backendConfig.value.pg_port = parseInt(backendConfig.value.pg_port) || 0;
+                    console.log(`Converted pg_port from ${oldPort} to ${backendConfig.value.pg_port}`);
+                }
+                
+                const payload = JSON.stringify(backendConfig.value);
+                console.log('Sending payload to /api/admin/config:', payload);
+                
+                const data = await apiFetch('/api/admin/config', {
+                    method: 'POST',
+                    body: payload
+                });
+                
+                console.log('API Response received:', data);
+                
+                if (data && (data.success || data.status === 'ok')) {
+                    alert(t('action_success') || 'Configuration saved successfully');
+                } else {
+                    const errorMsg = data && data.message ? data.message : (data ? 'Action failed' : 'Network or server error');
+                    alert((t('action_failed') || 'Failed to save configuration') + ': ' + errorMsg);
+                }
+            } catch (err) {
+                console.error('Save config fatal error:', err);
+                alert((t('error') || 'Error') + ': ' + err.message);
             }
         };
 
@@ -1279,11 +1640,17 @@ const app = createApp({
         };
 
         const fetchGroups = async (botId, refresh = false) => {
-            if (!botId) return;
-            const data = await apiFetch(`/api/contacts?bot_id=${botId}${refresh ? '&refresh=true' : ''}`);
-            if (data) {
-                groups.value = Array.isArray(data) ? data.filter(item => item.type === 'group' || item.type === 'guild') : [];
-                console.log(`Fetched ${groups.value.length} groups for bot ${botId}`);
+            loading.value = true;
+            try {
+                const url = botId ? `/api/contacts?bot_id=${botId}${refresh ? '&refresh=true' : ''}` : '/api/contacts';
+                const data = await apiFetch(url);
+                if (data) {
+                    const groupList = Array.isArray(data) ? data : (data.groups || []);
+                    groups.value = groupList.filter(item => item.type === 'group' || item.type === 'guild' || item.group_id);
+                    console.log(`Fetched ${groups.value.length} groups`);
+                }
+            } finally {
+                loading.value = false;
             }
         };
 
@@ -1524,6 +1891,8 @@ const app = createApp({
         };
 
         const fetchAllData = async () => {
+            if (!isLoggedIn.value) return;
+            loading.value = true;
             try {
                 const botsData = await apiFetch('/api/bots');
                 if (botsData) {
@@ -1535,35 +1904,65 @@ const app = createApp({
 
                 const statsData = await apiFetch('/api/stats');
                 if (statsData) {
+                    // 更新 Vue 响应式数据
                     stats.value.total_msgs = statsData.message_count || 0;
-                    stats.value.total_bots = statsData.bot_count_total || bots.value.length;
+                    stats.value.total_bots = statsData.bot_count_total || (bots.value ? bots.value.length : 0);
                     stats.value.active_workers = statsData.worker_count || 0;
                     
-                    // Update more system stats
                     if (statsData.cpu_usage !== undefined) {
+                        stats.value.cpu_usage_raw = statsData.cpu_usage;
                         stats.value.cpu_usage = `${parseFloat(statsData.cpu_usage).toFixed(1)}%`;
                     }
                     if (statsData.memory_used_percent !== undefined) {
                         stats.value.memory_usage = `${parseFloat(statsData.memory_used_percent).toFixed(1)}%`;
                     }
                     if (statsData.memory_used !== undefined) {
+                        stats.value.memory_used = statsData.memory_used;
                         stats.value.memory_used_mb = Math.round(statsData.memory_used / 1024 / 1024);
                     }
                     if (statsData.goroutines !== undefined) {
                         stats.value.goroutines = statsData.goroutines;
                     }
+
+                    // 保存趋势数据到 stats.value，以便图表重新初始化时使用
+                    stats.value.cpu_trend = statsData.cpu_trend || [];
+                    stats.value.mem_trend = statsData.mem_trend || [];
+                    stats.value.msg_trend = statsData.msg_trend || [];
+                    stats.value.sent_trend = statsData.sent_trend || [];
+                    stats.value.recv_trend = statsData.recv_trend || [];
+                    
+                    // 保存其他指标到 stats.value
+                    stats.value.memory_total = statsData.memory_total;
+                    stats.value.memory_alloc = statsData.memory_alloc;
+                    stats.value.bot_count = statsData.bot_count;
+                    stats.value.bot_count_offline = statsData.bot_count_offline;
+                    stats.value.bot_count_total = statsData.bot_count_total;
+                    stats.value.worker_count = statsData.worker_count;
+                    stats.value.active_groups = statsData.active_groups;
+                    stats.value.active_groups_today = statsData.active_groups_today;
+                    stats.value.active_users = statsData.active_users;
+                    stats.value.active_users_today = statsData.active_users_today;
+                    stats.value.sent_message_count = statsData.sent_message_count;
+                    stats.value.message_count = statsData.message_count;
+
+                    // 更新趋势相关
+                    if (statsData.msg_trend && statsData.msg_trend.length > 0) {
+                        const lastMsg = statsData.msg_trend[statsData.msg_trend.length - 1];
+                        stats.value.msg_per_sec = lastMsg / 5.0;
+                    }
+                    if (statsData.sent_trend && statsData.sent_trend.length > 0) {
+                        const lastSent = statsData.sent_trend[statsData.sent_trend.length - 1];
+                        stats.value.sent_per_sec = lastSent / 5.0;
+                    }
+
+                    // 更新系统信息
                     if (statsData.os_platform) stats.value.os_platform = statsData.os_platform;
                     if (statsData.os_arch) stats.value.os_arch = statsData.os_arch;
                     if (statsData.cpu_model) stats.value.cpu_model = statsData.cpu_model;
+                    if (statsData.disk_usage) stats.value.disk_usage = statsData.disk_usage;
                     
-                    // Calculate Uptime from start_time if uptime string is missing
                     if (statsData.uptime) {
-                        const match = statsData.uptime.match(/(\d+h)?(\d+m)?/);
-                        if (match && (match[1] || match[2])) {
-                            stats.value.uptime = `${match[1] || ''} ${match[2] || ''}`.trim() || '0h 0m';
-                        } else {
-                            stats.value.uptime = '< 1m';
-                        }
+                        stats.value.uptime = statsData.uptime;
                     } else if (statsData.start_time) {
                         const uptimeSeconds = Math.floor(Date.now() / 1000 - statsData.start_time);
                         const d = Math.floor(uptimeSeconds / 86400);
@@ -1577,6 +1976,14 @@ const app = createApp({
                             stats.value.uptime = `${m}m`;
                         }
                     }
+
+                    // 重要：更新首页图表 (stats.js 中的函数)
+                    if (window.updateStats) {
+                        window.updateStats(statsData);
+                    }
+                    if (window.updateChatStats && activeTab.value === 'dashboard') {
+                        window.updateChatStats();
+                    }
                 }
 
                 const workersData = await apiFetch('/api/workers');
@@ -1584,10 +1991,21 @@ const app = createApp({
                     workers.value = workersData.workers || [];
                 }
 
-                fetchLogs();
+                // Load contacts for visualization and tabs
+                if (selectedBotId.value) {
+                    if (groups.value.length === 0) fetchGroups(selectedBotId.value);
+                    if (friends.value.length === 0) fetchFriends(selectedBotId.value);
+                }
+
+                if (activeTab.value === 'system_logs' && systemLogs.value.length === 0) fetchLogs();
+                if (activeTab.value === 'docker' && dockerContainers.value.length === 0) fetchDockerContainers();
+                if (activeTab.value === 'users' && systemUsers.value.length === 0) fetchSystemUsers();
+
                 pulseBars.value = pulseBars.value.map(() => Math.floor(Math.random() * 80) + 20);
             } catch (err) {
                 console.error('Failed to fetch data:', err);
+            } finally {
+                loading.value = false;
             }
         };
 
@@ -1654,33 +2072,78 @@ const app = createApp({
             matrixInterval = setInterval(draw, 33);
         };
 
+        const updateTime = () => {
+            const now = new Date();
+            currentTime.value = now.toLocaleTimeString(lang.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        };
+        updateTime();
+
+        watch(groups, (newGroups) => {
+            if (window.visualizer && newGroups) {
+                newGroups.forEach(group => {
+                    window.visualizer.getOrCreateNode(group.group_id || group.id, 'group', group.group_name || group.id);
+                });
+            }
+        });
+
+        watch(friends, (newFriends) => {
+            if (window.visualizer && newFriends) {
+                newFriends.forEach(friend => {
+                    window.visualizer.getOrCreateNode(friend.user_id || friend.id, 'user', friend.nickname || friend.id);
+                });
+            }
+        });
+
         onMounted(() => {
             console.log('Vue instance mounted!');
             updateThemeClass();
             updateTime();
-            setInterval(updateTime, 1000);
             
             if (isLoggedIn.value) {
                 fetchAllData();
                 fetchUserInfo();
                 initWebSocket();
                 
-                // Initialize legacy stats if available
-                if (window.initCharts) {
-                    setTimeout(() => {
-                        window.initCharts();
-                        if (window.updateStats) window.updateStats();
-                        if (window.updateChatStats) window.updateChatStats();
-                    }, 500);
+                // Initialize legacy stats with a more robust retry mechanism
+                const initLegacyStats = () => {
+            if (window.initCharts) {
+                console.log('Initializing legacy charts: window.initCharts is available');
+                window.initCharts();
+                if (window.updateStats) {
+                    console.log('Updating stats: window.updateStats is available');
+                    window.updateStats(toRaw(stats.value));
                 }
+                if (window.updateChatStats) window.updateChatStats();
+                return true;
             }
+            console.log('window.initCharts not yet available, will retry...');
+            return false;
+        };
+
+                if (!initLegacyStats()) {
+                    const retryInterval = setInterval(() => {
+                        if (initLegacyStats()) {
+                            clearInterval(retryInterval);
+                        }
+                    }, 500);
+                    // Stop retrying after 5 seconds
+                    setTimeout(() => clearInterval(retryInterval), 5000);
+                }
+            } else {
+                // If not logged in, we still might want to fetch some public info or just wait for login
+                fetchAllData(); 
+            }
+            
+            const timeInterval = setInterval(updateTime, 1000);
 
             const dataInterval = setInterval(() => {
                 if (isLoggedIn.value) {
                     fetchAllData();
-                    // Update legacy stats/charts
-                    if (window.updateStats) window.updateStats();
-                    if (window.updateChatStats) window.updateChatStats();
                 }
             }, 5000);
 
@@ -1693,13 +2156,15 @@ const app = createApp({
             });
             
             watch(activeTab, (newTab) => {
+                localStorage.setItem('activeTab', newTab);
+                safeCreateIcons();
                 if (!isLoggedIn.value) return;
                 
                 // Re-initialize charts when switching back to dashboard
                 if (newTab === 'dashboard') {
                     setTimeout(() => {
                         if (window.initCharts) window.initCharts();
-                        if (window.updateStats) window.updateStats();
+                        if (window.updateStats) window.updateStats(toRaw(stats.value));
                     }, 100);
                 }
 
@@ -1719,7 +2184,7 @@ const app = createApp({
                     }
                 }
 
-                if (newTab === 'logs') {
+                if (newTab === 'system_logs') {
                     fetchLogs();
                 }
 
@@ -1739,6 +2204,10 @@ const app = createApp({
                 }
 
                 if (newTab === 'visualization') {
+                    // Fetch all contacts from all bots for visualization
+                    fetchGroups();
+                    fetchFriends();
+                    
                     nextTick(() => {
                         if (!window.visualizer) {
                             window.visualizer = new RoutingVisualizer('visualizerContainer');
@@ -1762,6 +2231,7 @@ const app = createApp({
             safeCreateIcons();
 
             onUnmounted(() => {
+                clearInterval(timeInterval);
                 clearInterval(dataInterval);
                 clearInterval(matrixInterval);
                 if (wsSubscriber) {
@@ -1772,7 +2242,13 @@ const app = createApp({
             });
         });
 
+        const toggleSidebar = () => {
+            isSidebarCollapsed.value = !isSidebarCollapsed.value;
+            localStorage.setItem('sidebarCollapsed', isSidebarCollapsed.value);
+        };
+
         return {
+            toggleSidebar,
             lang,
             isDark,
             shieldActive,
@@ -1785,6 +2261,7 @@ const app = createApp({
             toggleLang,
             toggleTheme,
             currentTime,
+            loading,
             searchQuery,
             filterTab,
             activeTab,

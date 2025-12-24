@@ -103,7 +103,7 @@ export function startApp() {
         if (hash) {
             const tabId = hash.substring(1);
             console.log('Found hash tabId:', tabId);
-            const validTabs = ['dashboard', 'bots', 'groups', 'friends', 'monitor', 'docker', 'routing', 'logs', 'debug', 'users', 'settings', 'visualization', 'overmind'];
+            const validTabs = ['dashboard', 'bots', 'groups', 'friends', 'monitor', 'docker', 'routing', 'system_logs', 'debug', 'users', 'settings', 'visualization', 'overmind'];
             const isValidTab = validTabs.includes(tabId) && document.getElementById('tab-' + tabId);
             
             if (isValidTab) {

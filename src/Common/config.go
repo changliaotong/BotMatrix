@@ -23,6 +23,8 @@ var GlobalConfig = &AppConfig{
 	PGDBName:             "botnexus",
 	PGSSLMode:            "disable",
 	EnableSkill:          false, // 默认关闭技能系统，仅供测试使用
+	LogLevel:             "INFO",
+	AutoReply:            true,
 }
 
 // 注意：为了兼容现有代码，保留这些全局变量
@@ -41,6 +43,8 @@ var (
 	PG_DBNAME              string
 	PG_SSLMODE             string
 	ENABLE_SKILL           bool
+	LOG_LEVEL              string
+	AUTO_REPLY             bool
 )
 
 const CONFIG_FILE = "config.json"
@@ -87,6 +91,8 @@ func init() {
 	PG_DBNAME = GlobalConfig.PGDBName
 	PG_SSLMODE = GlobalConfig.PGSSLMode
 	ENABLE_SKILL = GlobalConfig.EnableSkill
+	LOG_LEVEL = GlobalConfig.LogLevel
+	AUTO_REPLY = GlobalConfig.AutoReply
 
 	// 2. 尝试从文件加载
 	loadConfigFromFile()
@@ -150,8 +156,12 @@ func loadConfigFromFile() {
 		if fileConfig.PGSSLMode != "" {
 			PG_SSLMODE = fileConfig.PGSSLMode
 		}
-		// EnableSkill 只要在配置文件中存在就覆盖默认值
+		if fileConfig.LogLevel != "" {
+			LOG_LEVEL = fileConfig.LogLevel
+		}
+		// EnableSkill 和 AutoReply 只要在配置文件中存在就覆盖默认值
 		ENABLE_SKILL = fileConfig.EnableSkill
+		AUTO_REPLY = fileConfig.AutoReply
 		log.Printf("[INFO] 已从 %s 加载配置", CONFIG_FILE)
 	}
 }
@@ -199,6 +209,12 @@ func loadConfigFromEnv() {
 	if v := os.Getenv("ENABLE_SKILL"); v != "" {
 		ENABLE_SKILL = (v == "true" || v == "1")
 	}
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		LOG_LEVEL = v
+	}
+	if v := os.Getenv("AUTO_REPLY"); v != "" {
+		AUTO_REPLY = (v == "true" || v == "1")
+	}
 }
 
 func syncToGlobalConfig() {
@@ -216,6 +232,8 @@ func syncToGlobalConfig() {
 	GlobalConfig.PGDBName = PG_DBNAME
 	GlobalConfig.PGSSLMode = PG_SSLMODE
 	GlobalConfig.EnableSkill = ENABLE_SKILL
+	GlobalConfig.LogLevel = LOG_LEVEL
+	GlobalConfig.AutoReply = AUTO_REPLY
 }
 
 // SaveConfigToFile 保存配置到文件
@@ -238,6 +256,15 @@ func (m *Manager) SaveConfig() error {
 		REDIS_PWD = m.Config.RedisPwd
 		JWT_SECRET = m.Config.JWTSecret
 		DEFAULT_ADMIN_PASSWORD = m.Config.DefaultAdminPassword
+		PG_HOST = m.Config.PGHost
+		PG_PORT = m.Config.PGPort
+		PG_USER = m.Config.PGUser
+		PG_PASSWORD = m.Config.PGPassword
+		PG_DBNAME = m.Config.PGDBName
+		PG_SSLMODE = m.Config.PGSSLMode
+		ENABLE_SKILL = m.Config.EnableSkill
+		LOG_LEVEL = m.Config.LogLevel
+		AUTO_REPLY = m.Config.AutoReply
 	}
 	return SaveConfigToFile()
 }

@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -210,7 +212,19 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 			}
 		}
 
+		vm, _ := mem.VirtualMemory()
 		hi, _ := host.Info()
+
+		// 获取磁盘使用率 (主分区)
+		var diskUsageStr string = "0%"
+		usage, err := disk.Usage("/")
+		if err != nil {
+			// Windows 下尝试使用 C:
+			usage, err = disk.Usage("C:")
+		}
+		if err == nil {
+			diskUsageStr = fmt.Sprintf("%.1f%%", usage.UsedPercent)
+		}
 
 		m.HistoryMutex.RLock()
 		cpuTrend := append([]float64{}, m.CPUTrend...)
@@ -222,7 +236,10 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 		netRecvTrend := append([]uint64{}, m.NetRecvTrend...)
 		m.HistoryMutex.RUnlock()
 
-		vm, _ := mem.VirtualMemory()
+		// 如果当前 CPU 使用率为 0，尝试从趋势中获取最新值
+		if cpuUsage <= 0 && len(cpuTrend) > 0 {
+			cpuUsage = cpuTrend[len(cpuTrend)-1]
+		}
 
 		stats := map[string]interface{}{
 			"goroutines":          runtime.NumGoroutine(),
@@ -231,6 +248,7 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 			"memory_used":         vm.Used,
 			"memory_free":         vm.Free,
 			"memory_used_percent": vm.UsedPercent,
+			"disk_usage":          diskUsageStr,
 			"bot_count":           onlineBots,
 			"worker_count":        onlineWorkers,
 			"bot_count_offline":   offlineBots,
@@ -365,25 +383,95 @@ func HandleGetLogs(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		filter := r.URL.Query().Get("filter")
-		logs := m.GetLogs(200)
+		// 获取查询参数
+		query := r.URL.Query()
+		page, _ := strconv.Atoi(query.Get("page"))
+		if page < 1 {
+			page = 1
+		}
+		pageSize, _ := strconv.Atoi(query.Get("pageSize"))
+		if pageSize < 1 {
+			pageSize = 20
+		}
+		level := query.Get("level")
+		botId := query.Get("botId")
+		search := query.Get("search")
+		sortBy := query.Get("sortBy")
+		sortOrder := query.Get("sortOrder")
 
+		// 获取所有日志
+		allLogs := m.GetLogs(0) // 0 表示获取全部缓冲区日志
+
+		// 1. 过滤
 		var filteredLogs []common.LogEntry
-		if filter != "" {
-			filter = strings.ToLower(filter)
-			for _, log := range logs {
-				if strings.Contains(strings.ToLower(log.Message), filter) ||
-					strings.Contains(strings.ToLower(log.Level), filter) {
-					filteredLogs = append(filteredLogs, log)
+		for _, entry := range allLogs {
+			// 级别过滤
+			if level != "" && level != "all" && !strings.EqualFold(entry.Level, level) {
+				continue
+			}
+			// BotId 过滤 (目前 LogEntry 结构中没有 BotId，如果未来添加了可以过滤)
+			// if botId != "" && botId != "all" && entry.BotId != botId { continue }
+			_ = botId // 暂时忽略
+
+			// 搜索过滤
+			if search != "" {
+				searchLower := strings.ToLower(search)
+				if !strings.Contains(strings.ToLower(entry.Message), searchLower) &&
+					!strings.Contains(strings.ToLower(entry.Level), searchLower) {
+					continue
 				}
 			}
+			filteredLogs = append(filteredLogs, entry)
+		}
+
+		// 2. 排序
+		if sortBy != "" {
+			sort.Slice(filteredLogs, func(i, j int) bool {
+				var less bool
+				switch sortBy {
+				case "time", "timestamp":
+					less = filteredLogs[i].Timestamp.Before(filteredLogs[j].Timestamp)
+				case "level":
+					less = filteredLogs[i].Level < filteredLogs[j].Level
+				case "message":
+					less = filteredLogs[i].Message < filteredLogs[j].Message
+				default:
+					less = filteredLogs[i].Timestamp.Before(filteredLogs[j].Timestamp)
+				}
+				if sortOrder == "desc" {
+					return !less
+				}
+				return less
+			})
 		} else {
-			filteredLogs = logs
+			// 默认按时间倒序
+			sort.Slice(filteredLogs, func(i, j int) bool {
+				return filteredLogs[i].Timestamp.After(filteredLogs[j].Timestamp)
+			})
+		}
+
+		// 3. 分页
+		total := len(filteredLogs)
+		start := (page - 1) * pageSize
+		end := start + pageSize
+
+		var pagedLogs []common.LogEntry
+		if start < total {
+			if end > total {
+				end = total
+			}
+			pagedLogs = filteredLogs[start:end]
+		} else {
+			pagedLogs = []common.LogEntry{}
 		}
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"logs":    filteredLogs,
+			"data": map[string]interface{}{
+				"logs":    pagedLogs,
+				"total":   total,
+				"hasMore": end < total,
+			},
 		})
 	}
 }
@@ -483,26 +571,35 @@ func HandleDockerList(m *common.Manager) http.HandlerFunc {
 		lang := common.GetLangFromRequest(r)
 
 		if m.DockerClient == nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "docker_not_init"),
-			})
-			return
+			// 尝试延迟初始化
+			if err := m.InitDockerClient(); err != nil {
+				log.Printf("Docker client initialization failed: %v", err)
+				// 不要返回 500，而是返回空列表，让前端知道 Docker 未就绪
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"status":     "warning",
+					"message":    common.T(lang, "docker_not_init"),
+					"containers": []interface{}{},
+				})
+				return
+			}
 		}
 
 		containers, err := m.DockerClient.ContainerList(r.Context(), types.ContainerListOptions{All: true})
 		if err != nil {
 			log.Printf(common.T("", "docker_list_failed"), err)
-			w.WriteHeader(http.StatusInternalServerError)
+			// 同理，返回空列表而不是 500
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": err.Error(),
+				"status":     "error",
+				"message":    err.Error(),
+				"containers": []interface{}{},
 			})
 			return
 		}
 
-		json.NewEncoder(w).Encode(containers)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "ok",
+			"containers": containers,
+		})
 	}
 }
 
@@ -527,12 +624,15 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 		}
 
 		if m.DockerClient == nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "docker_not_init"),
-			})
-			return
+			// 尝试延迟初始化
+			if err := m.InitDockerClient(); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"status":  "error",
+					"message": common.T(lang, "docker_not_init") + ": " + err.Error(),
+				})
+				return
+			}
 		}
 
 		var err error
@@ -951,13 +1051,17 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 
 		groups := make([]interface{}, 0, len(m.GroupCache))
 		for _, g := range m.GroupCache {
-			groups = append(groups, g)
+			if botID == "" || g["bot_id"] == botID {
+				groups = append(groups, g)
+			}
 		}
 
 		friends := make([]interface{}, 0, len(m.FriendCache))
 		for _, f := range m.FriendCache {
 			friends = append(friends, f)
 		}
+
+		log.Printf("[DEBUG] HandleGetContacts botID=%s totalGroups=%d totalFriends=%d filteredGroups=%d", botID, len(m.GroupCache), len(m.FriendCache), len(groups))
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "ok",
@@ -1534,8 +1638,11 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
+		log.Printf("[DEBUG] HandleAdminListUsers called")
+
 		rows, err := m.DB.Query("SELECT id, username, is_admin, active, created_at, updated_at FROM users")
 		if err != nil {
+			log.Printf("[ERROR] HandleAdminListUsers DB query failed: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
@@ -1551,6 +1658,7 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 			var username, createdAt, updatedAt string
 			var isAdmin, active bool
 			if err := rows.Scan(&id, &username, &isAdmin, &active, &createdAt, &updatedAt); err != nil {
+				log.Printf("[ERROR] HandleAdminListUsers scan failed: %v", err)
 				continue
 			}
 			users = append(users, map[string]interface{}{
@@ -1562,6 +1670,8 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 				"updated_at": updatedAt,
 			})
 		}
+
+		log.Printf("[DEBUG] HandleAdminListUsers found %d users", len(users))
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,

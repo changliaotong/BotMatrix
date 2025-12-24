@@ -430,12 +430,18 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 		return
 	}
 
-	log.Printf("Received %s message from Bot %s", msgType, bot.SelfID)
-
 	// Update statistics
 	m.Mutex.Lock()
 	bot.RecvCount++
 	m.Mutex.Unlock()
+
+	// Only log non-spammy message types to console
+	msgTypeLower := strings.ToLower(msgType)
+	// Filter out common high-frequency events and anything containing "log"
+	isLogType := strings.Contains(msgTypeLower, "log")
+	if !isLogType && msgTypeLower != "meta_event" && msgTypeLower != "message" && msgTypeLower != "heartbeat" && !strings.Contains(msgTypeLower, "terminal") {
+		log.Printf("Received %s event from Bot %s", msgType, bot.SelfID)
+	}
 
 	// Handle according to message type
 	switch msgType {
@@ -445,7 +451,10 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 			// Heartbeat event, update status
 			if status, ok := msg["status"].(map[string]interface{}); ok {
 				if online, ok := status["online"].(bool); ok {
-					log.Printf("Bot %s heartbeat: online=%v", bot.SelfID, online)
+					// Only log heartbeat if debug is enabled or status changed
+					if common.GlobalConfig.LogLevel == "DEBUG" {
+						log.Printf("Bot %s heartbeat: online=%v", bot.SelfID, online)
+					}
 				}
 			}
 		}
@@ -492,6 +501,12 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 		}
 	}
 
+	// Cache group/member/friend info (based on message)
+	m.cacheBotDataFromMessage(bot, msg)
+
+	// Enrich message with cached data (names, cards) before forwarding to workers
+	m.enrichMessageWithCache(msg)
+
 	if msgType == "message" {
 		m.handleBotMessageEvent(bot, msg)
 	}
@@ -528,8 +543,12 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 		msg["platform"] = bot.Platform
 	}
 
+	// 5.5 Broadcast to subscribers (Web UI Monitor)
+	m.BroadcastEvent(msg)
+
 	// 6. Use Redis queue for asynchronous decoupling
-	if m.Rdb != nil {
+	// 如果启用了技能系统，则优先进入 Redis 队列进行异步分发
+	if common.ENABLE_SKILL && m.Rdb != nil {
 		targetWorkerID := m.getTargetWorkerID(msg)
 		err := m.PushToRedisQueue(targetWorkerID, msg)
 		if err == nil {
@@ -563,9 +582,82 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 		shadowMsg["is_shadow"] = true
 		m.forwardMessageToWorkerWithTarget(shadowMsg, shadowID)
 	}
+}
 
-	// Cache group/member/friend info (based on message)
-	m.cacheBotDataFromMessage(bot, msg)
+// enrichMessageWithCache supplements the message with cached group and user information
+func (m *Manager) enrichMessageWithCache(msg map[string]interface{}) {
+	postType := common.ToString(msg["post_type"])
+	if postType != "message" && postType != "notice" && postType != "request" {
+		return
+	}
+
+	m.CacheMutex.RLock()
+	defer m.CacheMutex.RUnlock()
+
+	groupID := common.ToString(msg["group_id"])
+	userID := common.ToString(msg["user_id"])
+
+	// Ensure sender object exists for message type
+	var sender map[string]interface{}
+	if postType == "message" {
+		if s, ok := msg["sender"].(map[string]interface{}); ok {
+			sender = s
+		} else {
+			sender = make(map[string]interface{})
+			msg["sender"] = sender
+		}
+	}
+
+	// 1. Enrich Group Name
+	if groupID != "" {
+		if group, ok := m.GroupCache[groupID]; ok {
+			if gName, ok := group["group_name"].(string); ok && gName != "" {
+				// Only set if not already present or more descriptive than "Group ID"
+				existingName := common.ToString(msg["group_name"])
+				if existingName == "" || strings.Contains(existingName, groupID) {
+					msg["group_name"] = gName
+				}
+			}
+		}
+	}
+
+	// 2. Enrich User Nickname and Group Card
+	if userID != "" {
+		// Try member cache first (for group messages)
+		if groupID != "" {
+			memberKey := fmt.Sprintf("%s:%s", groupID, userID)
+			if member, ok := m.MemberCache[memberKey]; ok {
+				nickname := common.ToString(member["nickname"])
+				card := common.ToString(member["card"])
+
+				if sender != nil {
+					if common.ToString(sender["nickname"]) == "" && nickname != "" {
+						sender["nickname"] = nickname
+					}
+					if common.ToString(sender["card"]) == "" && card != "" {
+						sender["card"] = card
+					}
+				}
+				// Also add to top level if missing
+				if common.ToString(msg["nickname"]) == "" && nickname != "" {
+					msg["nickname"] = nickname
+				}
+			}
+		}
+
+		// Try friend cache (or fallback for nickname)
+		if friend, ok := m.FriendCache[userID]; ok {
+			nickname := common.ToString(friend["nickname"])
+			if nickname != "" {
+				if sender != nil && common.ToString(sender["nickname"]) == "" {
+					sender["nickname"] = nickname
+				}
+				if common.ToString(msg["nickname"]) == "" {
+					msg["nickname"] = nickname
+				}
+			}
+		}
+	}
 }
 
 // getTargetWorkerID helper method: Get target Worker ID based on routing rules
@@ -882,13 +974,38 @@ func (m *Manager) handleBotMessageEvent(bot *common.BotClient, msg map[string]in
 		m.CacheMutex.RUnlock()
 	}
 
-	// 1. Broadcast routing event: User -> Bot (if user ID exists)
-	if userID != "" {
-		m.BroadcastRoutingEvent(userID, bot.SelfID, "user_to_bot", "message", extras)
-	}
+	// 1. Broadcast routing event: Path based on group or private
+	if groupID != "" {
+		// Group path: User -> Group -> Nexus
+		if userID != "" {
+			extras["source_type"] = "user"
+			extras["target_type"] = "group"
+			extras["source_label"] = extras["user_name"]
+			extras["target_label"] = extras["group_name"]
+			m.BroadcastRoutingEvent(userID, groupID, "user_to_group", "message", extras)
+		}
 
-	// 2. Broadcast routing event: Bot -> Nexus
-	m.BroadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "message", extras)
+		// Group -> Nexus
+		extras["source_id"] = groupID
+		extras["source_type"] = "group"
+		extras["target_type"] = "nexus"
+		extras["source_label"] = extras["group_name"]
+		m.BroadcastRoutingEvent(groupID, "Nexus", "group_to_nexus", "message", extras)
+	} else {
+		// Private path: User -> Bot -> Nexus
+		if userID != "" {
+			extras["source_type"] = "user"
+			extras["target_type"] = "bot"
+			extras["source_label"] = extras["user_name"]
+			m.BroadcastRoutingEvent(userID, bot.SelfID, "user_to_bot", "message", extras)
+		}
+
+		// Bot -> Nexus
+		extras["source_type"] = "bot"
+		extras["target_type"] = "nexus"
+		extras["source_label"] = bot.Nickname
+		m.BroadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "message", extras)
+	}
 
 	// Update detailed stats (exclude system messages)
 	if !isSystemMessage(msg) {
@@ -1237,6 +1354,21 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	m.Workers = append(m.Workers, worker)
 	m.Mutex.Unlock()
 
+	// 广播 Worker 状态更新事件
+	go m.BroadcastEvent(map[string]interface{}{
+		"type": "worker_update",
+		"data": map[string]interface{}{
+			"id":            worker.ID,
+			"remote_addr":   worker.ID,
+			"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
+			"handled_count": worker.HandledCount,
+			"avg_rtt":       worker.AvgRTT.String(),
+			"last_rtt":      worker.LastRTT.String(),
+			"is_alive":      true,
+			"status":        "Online",
+		},
+	})
+
 	// Update connection statistics
 	m.ConnectionStats.Mutex.Lock()
 	m.ConnectionStats.TotalWorkerConnections++
@@ -1266,7 +1398,7 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 func (m *Manager) FindWorkerBySkill(skillName string) string {
 	m.Mutex.RLock()
 	defer m.Mutex.RUnlock()
-	
+
 	// 收集所有具备该能力的候选者
 	var candidates []string
 	for _, w := range m.Workers {
@@ -1274,7 +1406,7 @@ func (m *Manager) FindWorkerBySkill(skillName string) string {
 		if time.Since(w.LastHeartbeat) > 1*time.Minute {
 			continue
 		}
-		
+
 		for _, cap := range w.Capabilities {
 			if cap.Name == skillName {
 				candidates = append(candidates, w.ID)
@@ -1282,11 +1414,11 @@ func (m *Manager) FindWorkerBySkill(skillName string) string {
 			}
 		}
 	}
-	
+
 	if len(candidates) == 0 {
 		return ""
 	}
-	
+
 	// 简单的负载均衡：随机选择一个
 	return candidates[rand.Intn(len(candidates))]
 }
@@ -1327,6 +1459,16 @@ func (m *Manager) handleWorkerConnection(worker *common.WorkerClient) {
 		// Cleanup work when connection is closed
 		m.removeWorker(worker.ID)
 		worker.Conn.Close()
+
+		// 广播 Worker 离线事件
+		go m.BroadcastEvent(map[string]interface{}{
+			"type": "worker_update",
+			"data": map[string]interface{}{
+				"id":       worker.ID,
+				"is_alive": false,
+				"status":   "Offline",
+			},
+		})
 
 		// Record disconnection
 		duration := time.Since(worker.Connected)
@@ -1406,8 +1548,6 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 		if common.ENABLE_SKILL {
 			// 处理通过 WebSocket 上报的技能执行结果
 			m.HandleSkillResult(msg)
-		} else {
-			log.Printf("[SKILL] Ignored skill_result because skill system is disabled")
 		}
 	} else {
 		log.Printf("Worker %s event/response: type=%s", worker.ID, msgType)
@@ -1438,6 +1578,18 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 				worker.AvgProcessTime = total / time.Duration(len(worker.ProcessTimeSamples))
 				worker.Mutex.Unlock()
 				log.Printf("[METRIC] Worker %s processed message in %v (Avg: %v)", worker.ID, duration, worker.AvgProcessTime)
+
+				// 广播 Worker 状态更新（包含处理时间）
+				go m.BroadcastEvent(map[string]interface{}{
+					"type": "worker_update",
+					"data": map[string]interface{}{
+						"id":                worker.ID,
+						"handled_count":     worker.HandledCount,
+						"last_process_time": worker.LastProcessTime.String(),
+						"avg_process_time":  worker.AvgProcessTime.String(),
+						"status":            "Online",
+					},
+				})
 			} else {
 				m.WorkerRequestMutex.Unlock()
 			}
@@ -1605,6 +1757,64 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 	targetBot.Mutex.Lock()
 	err := targetBot.Conn.WriteJSON(msg)
 	targetBot.Mutex.Unlock()
+
+	// Broadcast outgoing routing events: Nexus -> Group -> User
+	if err == nil {
+		go func() {
+			action := common.ToString(msg["action"])
+			if action == "send_msg" || action == "send_group_msg" || action == "send_private_msg" {
+				params, _ := msg["params"].(map[string]interface{})
+				if params == nil {
+					params = msg
+				}
+
+				groupID := common.ToString(params["group_id"])
+				userID := common.ToString(params["user_id"])
+				content := common.ToString(params["message"])
+
+				extras := map[string]interface{}{
+					"content":  content,
+					"platform": targetBot.Platform,
+				}
+
+				if groupID != "" {
+					// Nexus -> Group
+					m.CacheMutex.RLock()
+					if group, ok := m.GroupCache[groupID]; ok {
+						if name, ok := group["group_name"].(string); ok {
+							extras["group_name"] = name
+						}
+					}
+					m.CacheMutex.RUnlock()
+
+					extras["source_type"] = "nexus"
+					extras["target_type"] = "group"
+					extras["target_label"] = extras["group_name"]
+					m.BroadcastRoutingEvent("Nexus", groupID, "nexus_to_group", "response", extras)
+
+					// Group -> User
+					if userID != "" {
+						extras["source_id"] = groupID
+						extras["source_type"] = "group"
+						extras["target_type"] = "user"
+						extras["source_label"] = extras["group_name"]
+						m.BroadcastRoutingEvent(groupID, userID, "group_to_user", "response", extras)
+					}
+				} else if userID != "" {
+					// Nexus -> Bot -> User (Private)
+					extras["source_type"] = "nexus"
+					extras["target_type"] = "bot"
+					extras["target_label"] = targetBot.Nickname
+					m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "response", extras)
+
+					extras["source_type"] = "bot"
+					extras["target_type"] = "user"
+					extras["source_label"] = targetBot.Nickname
+					m.BroadcastRoutingEvent(targetBot.SelfID, userID, "bot_to_user", "response", extras)
+				}
+			}
+		}()
+	}
 
 	if err != nil {
 		log.Printf("[ROUTING] [ERROR] Failed to forward Worker %s request to Bot %s: %v. Attempting fallback...", worker.ID, targetBot.SelfID, err)
@@ -1778,6 +1988,7 @@ func (m *Manager) cleanupPendingRequests() {
 	}
 }
 
+// BroadcastEvent broadcasts any event to all subscribers
 // BroadcastRoutingEvent broadcasts routing events to all subscribers
 func (m *Manager) BroadcastRoutingEvent(source, target, direction, msgType string, extras map[string]interface{}) {
 	event := map[string]interface{}{
@@ -1794,15 +2005,7 @@ func (m *Manager) BroadcastRoutingEvent(source, target, direction, msgType strin
 		}
 	}
 
-	m.Mutex.RLock()
-	defer m.Mutex.RUnlock()
-
-	for conn := range m.Subscribers {
-		err := conn.WriteJSON(event)
-		if err != nil {
-			log.Printf("Failed to send routing event to subscriber: %v", err)
-		}
-	}
+	m.BroadcastEvent(event)
 }
 
 // StartIdempotencyCleanup regularly cleans up local idempotency cache

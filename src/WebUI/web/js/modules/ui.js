@@ -97,7 +97,7 @@ export function showTab(tabId) {
             case 'routing':
                 fetchRoutingRules();
                 break;
-            case 'logs':
+            case 'system_logs':
                 fetchLogsFull();
                 break;
             case 'debug':

@@ -1,9 +1,24 @@
 package common
 
 import (
-	"log"
+	"fmt"
 	"time"
 )
+
+// BroadcastEvent broadcasts an event to all subscribers
+func (m *Manager) BroadcastEvent(event interface{}) {
+	m.Mutex.RLock()
+	defer m.Mutex.RUnlock()
+
+	for _, sub := range m.Subscribers {
+		sub.Mutex.Lock()
+		err := sub.Conn.WriteJSON(event)
+		sub.Mutex.Unlock()
+		if err != nil {
+			fmt.Printf("Failed to send event to subscriber: %v\n", err)
+		}
+	}
+}
 
 // BroadcastDockerEvent 向所有订阅者广播 Docker 事件
 func (m *Manager) BroadcastDockerEvent(action, containerID, status string) {
@@ -15,17 +30,5 @@ func (m *Manager) BroadcastDockerEvent(action, containerID, status string) {
 		Timestamp:   time.Now(),
 	}
 
-	m.Mutex.RLock()
-	defer m.Mutex.RUnlock()
-
-	for _, sub := range m.Subscribers {
-		go func(s *Subscriber, e DockerEvent) {
-			s.Mutex.Lock()
-			defer s.Mutex.Unlock()
-			err := s.Conn.WriteJSON(e)
-			if err != nil {
-				log.Printf("[SUBSCRIBER] Failed to send docker event to subscriber: %v", err)
-			}
-		}(sub, event)
-	}
+	m.BroadcastEvent(event)
 }

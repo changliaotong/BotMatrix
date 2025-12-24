@@ -12,6 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### [v1.6.0] - 2025-12-25
+- **3D Visualization Overhaul**: Implemented enhanced node labels, fixed sprite orientations, and introduced a dynamic blue-themed link system with transmission-based brightness pulses.
+- **Full-Path Routing**: Visualized end-to-end message routing (User -> Group -> Nexus -> Worker) in real-time within the 3D space.
+- **Smart Cache Enrichment**: Automated metadata caching for group/user names in BotNexus, enriching messages before they reach workers to minimize external API calls.
+- **Intelligent Auto-Reply**: Added a global auto-reply engine that provides automated maintenance notifications when the system gateway is closed.
+- **Settings Persistence**: Resolved critical bugs in system settings synchronization, ensuring LogLevel and AutoReply preferences are correctly saved.
+
 ### [v1.5.0] - 2025-12-24
 - **PostgreSQL-First Architecture**: Completely removed legacy SQLite support to focus on enterprise-grade performance and scalability with PostgreSQL.
 - **Dependency Optimization**: Stripped out unused database drivers and legacy dependencies, resulting in a cleaner and more maintainable core codebase.
