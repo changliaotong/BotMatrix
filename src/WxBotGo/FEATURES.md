@@ -31,6 +31,14 @@ send_msg(message_type, user_id/group_id, message)
 - 以 OneBot 标准格式上报自身消息
 - 支持通过命令控制机器人及设置功能
 
+#### 消息管理操作
+```go
+// 删除消息
+delete_msg(message_id)
+```
+- 支持删除机器人自身发送的消息
+- 支持删除收到的消息（需对应权限）
+
 ### 2. 信息查询
 
 #### 机器人信息

@@ -149,6 +149,30 @@ func (b *WxBot) connectToNexus() {
 			"self_id":         b.SelfID,
 			"platform":        "wechat-go",
 		}
+		
+		// Send Identify and wait for configuration
+		b.wsMutex.Lock()
+		b.wsConn.WriteJSON(identify)
+		b.wsMutex.Unlock()
+		
+		// Receive initial configuration from BotNexus
+		_, configMsg, err := b.wsConn.ReadMessage()
+		if err != nil {
+			b.Log("[WebSocket] Failed to receive configuration: %v", err)
+			break
+		}
+		
+		// Parse configuration
+		var config map[string]interface{}
+		if err := json.Unmarshal(configMsg, &config); err == nil {
+			b.Log("[WebSocket] Received configuration from BotNexus")
+			// Apply configuration
+			if features, ok := config["features"].(map[string]interface{}); ok {
+				if reportSelfMsg, ok := features["report_self_msg"].(bool); ok {
+					b.ReportSelfMsg = reportSelfMsg
+				}
+			}
+		}
 		b.wsMutex.Lock()
 		b.wsConn.WriteJSON(identify)
 		b.wsMutex.Unlock()
@@ -183,7 +207,7 @@ func (b *WxBot) connectToNexus() {
 			}
 		}()
 
-		// Listen for commands
+		// Listen for commands and configuration updates
 		for {
 			_, message, err := b.wsConn.ReadMessage()
 			if err != nil {
@@ -191,6 +215,21 @@ func (b *WxBot) connectToNexus() {
 				break
 			}
 
+			// Check if it's a configuration update
+			var configUpdate map[string]interface{}
+			if err := json.Unmarshal(message, &configUpdate); err == nil {
+				if _, ok := configUpdate["features"]; ok {
+					// Apply configuration update
+					if features, ok := configUpdate["features"].(map[string]interface{}); ok {
+						if reportSelfMsg, ok := features["report_self_msg"].(bool); ok {
+							b.ReportSelfMsg = reportSelfMsg
+							b.Log("[Configuration] Updated report_self_msg to %v", reportSelfMsg)
+						}
+					}
+					continue
+				}
+			}
+			
 			// Handle Action
 			var action OneBotAction
 			if err := json.Unmarshal(message, &action); err == nil && action.Action != "" {
@@ -451,11 +490,111 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 		resp.Data = map[string]interface{}{
 			"result": true,
 		}
-	default:
+	case "get_version_info":
+		resp.Data = map[string]interface{}{
+			"app_name":    "WxBotGo",
+			"app_version": "1.0.2",
+			"protocol_version": "11",
+			"onebot_version": "11",
+		}
+	case "get_status":
+		resp.Data = map[string]interface{}{
+			"online": true,
+			"good": true,
+		}
+	case "set_friend_add_request":
+		// 处理好友请求
 		resp.Status = "failed"
 		resp.RetCode = 100
-		resp.Message = "Unsupported action: " + action.Action
+		resp.Message = "Unsupported action: set_friend_add_request (openwechat library does not support this operation)"
+	case "set_group_add_request":
+		// 处理群请求
+		resp.Status = "failed"
+		resp.RetCode = 100
+		resp.Message = "Unsupported action: set_group_add_request (openwechat library does not support this operation)"
+	case "get_group_info":
+		groups, err := b.mySelf.Groups()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var group *openwechat.Group
+		for _, g := range groups {
+			if g.UserName == params.GroupID {
+				group = g
+				break
+			}
+		}
+		if group == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Group not found: " + params.GroupID
+			break
+		}
+		members, _ := group.Members()
+		resp.Data = map[string]interface{}{
+			"group_id": group.UserName,
+			"group_name": group.NickName,
+			"member_count": len(members),
+		}
+	case "get_group_member_info":
+		groups, err := b.mySelf.Groups()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var group *openwechat.Group
+		for _, g := range groups {
+			if g.UserName == params.GroupID {
+				group = g
+				break
+			}
+		}
+		if group == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Group not found: " + params.GroupID
+			break
+		}
+		members, err := group.Members()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var member *openwechat.User
+	for _, m := range members {
+		if m.UserName == params.UserID {
+			member = m
+			break
+		}
 	}
+	if member == nil {
+		resp.Status = "failed"
+		resp.RetCode = -1
+		resp.Message = "Member not found: " + params.UserID
+		break
+	}
+	resp.Data = map[string]interface{}{
+	"user_id": member.UserName,
+	"nickname": member.NickName,
+	"card": member.DisplayName,
+	}
+case "delete_msg":
+	// 删除消息（撤回）
+	resp.Status = "failed"
+	resp.RetCode = 100
+	resp.Message = "Unsupported action: delete_msg (openwechat library does not support deleting messages by ID)"
+default:
+	resp.Status = "failed"
+	resp.RetCode = 100
+	resp.Message = "Unsupported action: " + action.Action
+}
 
 	if err != nil {
 		resp.Status = "failed"
@@ -488,6 +627,30 @@ func (b *WxBot) sendText(targetID string, text string) error {
 			if g.UserName == targetID {
 				_, err = g.SendText(text)
 				return err
+			}
+		}
+	}
+
+	// 尝试发送到公众号或其他类型
+	contacts, err := b.mySelf.Members()
+	if err == nil {
+		for _, c := range contacts {
+			if c.UserName == targetID {
+				// 检查是否为公众号
+			if mp, ok := c.AsMP(); ok {
+				_, err = mp.SendText(text)
+				return err
+			}
+				// 检查是否为好友
+				if friend, ok := c.AsFriend(); ok {
+					_, err = friend.SendText(text)
+					return err
+				}
+				// 检查是否为群
+				if group, ok := c.AsGroup(); ok {
+					_, err = group.SendText(text)
+					return err
+				}
 			}
 		}
 	}
