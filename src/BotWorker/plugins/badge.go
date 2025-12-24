@@ -190,11 +190,13 @@ func (p *BadgePlugin) Init(robot plugin.Robot) {
 			badgeID := params[2]
 
 			// 权限检查
-			if event.MessageType == "group" {
-				if !isGroupAdmin(GlobalDB, event.GroupID, event.UserID) && !isSuperAdmin(GlobalDB, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "badge_admin_only_grant|抱歉，只有群管理员或超级管理员可以发放徽章。"))
-					return nil
-				}
+			isAdmin := isSuperAdmin(GlobalDB, event.GroupID, event.UserID)
+			if !isAdmin && event.MessageType == "group" {
+				isAdmin = isGroupAdmin(GlobalDB, event.GroupID, event.UserID)
+			}
+			if !isAdmin {
+				p.sendMessage(robot, event, common.T("", "badge_admin_only_grant|抱歉，您没有权限执行此操作。"))
+				return nil
 			}
 
 			msg, _ := p.doGrantBadge(userID, badgeID, "admin", common.T("", "badge_grant_reason_admin|管理员手动发放"))
@@ -208,11 +210,13 @@ func (p *BadgePlugin) Init(robot plugin.Robot) {
 			badgeID := params[2]
 
 			// 权限检查
-			if event.MessageType == "group" {
-				if !isGroupAdmin(GlobalDB, event.GroupID, event.UserID) && !isSuperAdmin(GlobalDB, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "badge_admin_only_remove|抱歉，只有群管理员或超级管理员可以移除徽章。"))
-					return nil
-				}
+			isAdmin := isSuperAdmin(GlobalDB, event.GroupID, event.UserID)
+			if !isAdmin && event.MessageType == "group" {
+				isAdmin = isGroupAdmin(GlobalDB, event.GroupID, event.UserID)
+			}
+			if !isAdmin {
+				p.sendMessage(robot, event, common.T("", "badge_admin_only_remove|抱歉，您没有权限执行此操作。"))
+				return nil
 			}
 
 			msg, _ := p.doRemoveBadge(userID, badgeID)
@@ -223,11 +227,13 @@ func (p *BadgePlugin) Init(robot plugin.Robot) {
 		// 管理员命令：开启徽章系统
 		if match, _ := p.cmdParser.MatchCommand(common.T("", "badge_cmd_enable_system|开启徽章系统"), event.RawMessage); match {
 			// 权限检查
-			if event.MessageType == "group" {
-				if !isGroupAdmin(GlobalDB, event.GroupID, event.UserID) && !isSuperAdmin(GlobalDB, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "badge_admin_only_enable|抱歉，只有群管理员或超级管理员可以开启徽章系统。"))
-					return nil
-				}
+			isAdmin := isSuperAdmin(GlobalDB, event.GroupID, event.UserID)
+			if !isAdmin && event.MessageType == "group" {
+				isAdmin = isGroupAdmin(GlobalDB, event.GroupID, event.UserID)
+			}
+			if !isAdmin {
+				p.sendMessage(robot, event, common.T("", "badge_admin_only_enable|抱歉，您没有权限执行此操作。"))
+				return nil
 			}
 
 			msg, _ := p.doEnableSystem()
@@ -238,11 +244,13 @@ func (p *BadgePlugin) Init(robot plugin.Robot) {
 		// 管理员命令：关闭徽章系统
 		if match, _ := p.cmdParser.MatchCommand(common.T("", "badge_cmd_disable_system|关闭徽章系统"), event.RawMessage); match {
 			// 权限检查
-			if event.MessageType == "group" {
-				if !isGroupAdmin(GlobalDB, event.GroupID, event.UserID) && !isSuperAdmin(GlobalDB, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "badge_admin_only_disable|抱歉，只有群管理员或超级管理员可以关闭徽章系统。"))
-					return nil
-				}
+			isAdmin := isSuperAdmin(GlobalDB, event.GroupID, event.UserID)
+			if !isAdmin && event.MessageType == "group" {
+				isAdmin = isGroupAdmin(GlobalDB, event.GroupID, event.UserID)
+			}
+			if !isAdmin {
+				p.sendMessage(robot, event, common.T("", "badge_admin_only_disable|抱歉，您没有权限执行此操作。"))
+				return nil
 			}
 
 			msg, _ := p.doDisableSystem()

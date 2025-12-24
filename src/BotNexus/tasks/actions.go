@@ -10,6 +10,8 @@ import (
 // BotManager 定义调度中心需要的机器人管理能力
 type BotManager interface {
 	SendBotAction(botID string, action string, params map[string]interface{}) error
+	SendToWorker(workerID string, msg map[string]interface{}) error
+	FindWorkerBySkill(skillName string) string // 返回 WorkerID
 	GetTags(targetType string, targetID string) []string
 	GetTargetsByTags(targetType string, tags []string, logic string) []string
 }
@@ -32,36 +34,29 @@ func (d *Dispatcher) handleSkillCall(task Task, execution *Execution) error {
 		return fmt.Errorf("missing skill name")
 	}
 
+	bm := d.manager.(BotManager)
+
 	// 查找目标 Worker ID
 	workerID, _ := params["worker_id"].(string)
-	
-	// 如果没有指定 worker_id，可以广播或根据能力选择 (这里简化为广播到默认队列)
-	queue := "botmatrix:queue:default"
-	if workerID != "" {
-		queue = fmt.Sprintf("botmatrix:queue:worker:%s", workerID)
+	if workerID == "" {
+		// 自动发现具备该技能的 Worker
+		workerID = bm.FindWorkerBySkill(skillName)
 	}
 
+	if workerID == "" {
+		return fmt.Errorf("no worker available for skill: %s", skillName)
+	}
+	
 	msg := map[string]interface{}{
-		"type":      "skill_call",
-		"skill":     skillName,
-		"params":    params,
-		"task_id":   task.ID,
-		"timestamp": time.Now().Unix(),
+		"type":         "skill_call",
+		"skill":        skillName,
+		"params":       params,
+		"task_id":      task.ID,
+		"execution_id": execution.ExecutionID,
+		"timestamp":    time.Now().Unix(),
 	}
 
-	payload, _ := json.Marshal(msg)
-	
-	// 我们需要访问 Redis 客户端。Dispatcher 结构体中目前没有 Redis。
-	// 但 Dispatcher 的 manager (即 main.Manager) 中有 Rdb。
-	
-	type RedisManager interface {
-		GetRedis() interface{} // 返回 *redis.Client
-	}
-	
-	// 我们在 manager.go 中手动定义一个接口或者直接反射
-	// 为了简单，我们先假设 manager 提供了发送消息的方法
-	
-	return d.sendToQueue(queue, payload)
+	return bm.SendToWorker(workerID, msg)
 }
 
 func (d *Dispatcher) sendToQueue(queue string, payload []byte) error {
@@ -70,7 +65,8 @@ func (d *Dispatcher) sendToQueue(queue string, payload []byte) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return d.rdb.LPush(ctx, queue, payload).Err()
+	// 使用 RPush 配合 Worker 端的 BLPop 实现 FIFO 队列
+	return d.rdb.RPush(ctx, queue, payload).Err()
 }
 
 func (d *Dispatcher) handleSendMessage(task Task, execution *Execution) error {

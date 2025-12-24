@@ -21,11 +21,11 @@ type GiftPlugin struct {
 
 // GiftItem 礼物物品
 type GiftItem struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Price    int    `json:"price"`
-	Emoji    string `json:"emoji"`
-	Rarity   string `json:"rarity"`
+	ID       int     `json:"id"`
+	Name     string  `json:"name"`
+	Price    int     `json:"price"`
+	Emoji    string  `json:"emoji"`
+	Rarity   string  `json:"rarity"`
 	DropRate float64 `json:"drop_rate"`
 }
 
@@ -141,7 +141,7 @@ func (p *GiftPlugin) Init(robot plugin.Robot) {
 
 // GetSkills 实现 SkillCapable 接口
 func (p *GiftPlugin) GetSkills() []plugin.SkillCapability {
-	return []plugin.SkillCapability {
+	return []plugin.SkillCapability{
 		{
 			Name:        "send_gift",
 			Description: common.T("", "gift_skill_send_desc|给指定用户赠送礼物"),
@@ -175,11 +175,10 @@ func (p *GiftPlugin) sendGift(robot plugin.Robot, event *onebot.Event, toUserID 
 	}
 
 	// 获取操作者ID
-	var fromUserID int64
+	var fromUserIDStr string
 	if event != nil {
-		fromUserID = event.UserID
+		fromUserIDStr = event.UserID.String()
 	}
-	fromUserIDStr := fmt.Sprintf("%d", fromUserID)
 
 	if fromUserIDStr == toUserID {
 		if event != nil {
@@ -247,14 +246,14 @@ func (p *GiftPlugin) drawGiftLogic(robot plugin.Robot, event *onebot.Event) erro
 func (p *GiftPlugin) getGiftPrice(giftName string) int {
 	giftName = strings.ToLower(giftName)
 	giftPrices := map[string]int{
-		common.T("", "gift_flower|鲜花"):    5,
-		"flower":                       5,
-		common.T("", "gift_cake|蛋糕"):      10,
-		"cake":                         10,
+		common.T("", "gift_flower|鲜花"):     5,
+		"flower":                           5,
+		common.T("", "gift_cake|蛋糕"):       10,
+		"cake":                             10,
 		common.T("", "gift_chocolate|巧克力"): 15,
-		"chocolate":                    15,
-		common.T("", "gift_diamond|钻石"):   50,
-		"diamond":                      50,
+		"chocolate":                        15,
+		common.T("", "gift_diamond|钻石"):    50,
+		"diamond":                          50,
 	}
 	return giftPrices[giftName]
 }
@@ -263,14 +262,14 @@ func (p *GiftPlugin) getGiftPrice(giftName string) int {
 func (p *GiftPlugin) getGiftEmoji(giftName string) string {
 	giftName = strings.ToLower(giftName)
 	giftEmojis := map[string]string{
-		common.T("", "gift_flower|鲜花"):    "🌸",
-		"flower":                       "🌸",
-		common.T("", "gift_cake|蛋糕"):      "🍰",
-		"cake":                         "🍰",
+		common.T("", "gift_flower|鲜花"):     "🌸",
+		"flower":                           "🌸",
+		common.T("", "gift_cake|蛋糕"):       "🍰",
+		"cake":                             "🍰",
 		common.T("", "gift_chocolate|巧克力"): "🍫",
-		"chocolate":                    "🍫",
-		common.T("", "gift_diamond|钻石"):   "💎",
-		"diamond":                      "💎",
+		"chocolate":                        "🍫",
+		common.T("", "gift_diamond|钻石"):    "💎",
+		"diamond":                          "💎",
 	}
 	return giftEmojis[giftName]
 }

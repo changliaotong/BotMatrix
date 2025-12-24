@@ -96,12 +96,12 @@ func getWeatherInfo(cfg *WeatherConfig, city string) (*WeatherInfo, error) {
 func formatWeatherInfo(info *WeatherInfo) string {
 	// 检查天气数据是否完整
 	if len(info.Weather) == 0 {
-		return "无法获取完整的天气信息"
+		return "❌ 无法获取完整的天气信息"
 	}
 
 	// 格式化输出
 	weather := info.Weather[0]
-	return fmt.Sprintf("当前天气信息\n城市: %s\n天气: %s (%s)\n温度: %.1f°C (体感温度: %.1f°C)\n最低温度: %.1f°C, 最高温度: %.1f°C\n湿度: %d%%\n气压: %d hPa\n风速: %.1f m/s\n风向: %d°\n云量: %d%%\n日出: %s\n日落: %s",
+	return fmt.Sprintf("🌤️ 城市：%s\n☁️ 天气：%s (%s)\n🌡️ 温度：%.1f°C (体感 %.1f°C)\n❄️ 最低：%.1f°C / 🔥 最高：%.1f°C\n💧 湿度：%d%%\n🌬️ 风速：%.1f m/s (风向 %d°)\n☁️ 云量：%d%%\n🌅 日出：%s / 🌇 日落：%s",
 		info.Name,
 		weather.Main,
 		weather.Description,
@@ -110,7 +110,6 @@ func formatWeatherInfo(info *WeatherInfo) string {
 		info.Main.TempMin,
 		info.Main.TempMax,
 		info.Main.Humidity,
-		info.Main.Pressure,
 		info.Wind.Speed,
 		info.Wind.Deg,
 		info.Clouds.All,

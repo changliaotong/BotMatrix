@@ -1262,18 +1262,33 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	}()
 }
 
-// FindWorkerBySkill 寻找具备指定能力的 Worker
-func (m *Manager) FindWorkerBySkill(skillName string) *common.WorkerClient {
+// FindWorkerBySkill 寻找具备指定能力的 Worker，返回其 ID
+func (m *Manager) FindWorkerBySkill(skillName string) string {
 	m.Mutex.RLock()
 	defer m.Mutex.RUnlock()
+	
+	// 收集所有具备该能力的候选者
+	var candidates []string
 	for _, w := range m.Workers {
+		// 检查心跳，确保 Worker 在线 (1分钟内有活动)
+		if time.Since(w.LastHeartbeat) > 1*time.Minute {
+			continue
+		}
+		
 		for _, cap := range w.Capabilities {
 			if cap.Name == skillName {
-				return w
+				candidates = append(candidates, w.ID)
+				break
 			}
 		}
 	}
-	return nil
+	
+	if len(candidates) == 0 {
+		return ""
+	}
+	
+	// 简单的负载均衡：随机选择一个
+	return candidates[rand.Intn(len(candidates))]
 }
 
 // SyncWorkerSkills 汇总所有 Worker 的能力并同步给 AI 解析器
@@ -1387,6 +1402,13 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 		m.BroadcastRoutingEvent(worker.ID, "Nexus", "worker_to_nexus", "request", nil)
 
 		m.forwardWorkerRequestToBot(worker, msg, echo)
+	} else if msgType == "skill_result" {
+		if common.ENABLE_SKILL {
+			// 处理通过 WebSocket 上报的技能执行结果
+			m.HandleSkillResult(msg)
+		} else {
+			log.Printf("[SKILL] Ignored skill_result because skill system is disabled")
+		}
 	} else {
 		log.Printf("Worker %s event/response: type=%s", worker.ID, msgType)
 

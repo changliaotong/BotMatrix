@@ -42,7 +42,8 @@ func InitDatabase(db *sql.DB) error {
 	userTableSQL := `
 	CREATE TABLE IF NOT EXISTS users (
 		id SERIAL PRIMARY KEY,
-		user_id VARCHAR(255) NOT NULL UNIQUE,
+		user_id BIGINT NOT NULL UNIQUE,
+		target_user_id BIGINT,
 		nickname VARCHAR(255),
 		avatar VARCHAR(255),
 		gender VARCHAR(10),
@@ -55,13 +56,25 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
+	// 创建群组表
+	groupTableSQL := `
+	CREATE TABLE IF NOT EXISTS groups (
+		id SERIAL PRIMARY KEY,
+		group_id BIGINT NOT NULL UNIQUE,
+		target_group_id BIGINT,
+		name VARCHAR(255),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
 	// 创建消息记录表
 	messageTableSQL := `
 	CREATE TABLE IF NOT EXISTS messages (
 		id SERIAL PRIMARY KEY,
 		message_id VARCHAR(255) NOT NULL UNIQUE,
-		user_id VARCHAR(255),
-		group_id VARCHAR(255),
+		user_id BIGINT,
+		group_id BIGINT,
 		type VARCHAR(50) NOT NULL,
 		content TEXT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -73,8 +86,8 @@ func InitDatabase(db *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS sessions (
 		id SERIAL PRIMARY KEY,
 		session_id VARCHAR(255) NOT NULL UNIQUE,
-		user_id VARCHAR(255),
-		group_id VARCHAR(255),
+		user_id BIGINT,
+		group_id BIGINT,
 		state VARCHAR(255),
 		data JSONB,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -86,8 +99,8 @@ func InitDatabase(db *sql.DB) error {
 	groupAdminsTableSQL := `
 	CREATE TABLE IF NOT EXISTS group_admins (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL,
-		user_id VARCHAR(255) NOT NULL,
+		group_id BIGINT NOT NULL,
+		user_id BIGINT NOT NULL,
 		level INTEGER NOT NULL DEFAULT 1, -- 权限级别: 1=普通管理员, 2=超级管理员
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(group_id, user_id)
@@ -98,7 +111,7 @@ func InitDatabase(db *sql.DB) error {
 	groupRulesTableSQL := `
 	CREATE TABLE IF NOT EXISTS group_rules (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL UNIQUE,
+		group_id BIGINT NOT NULL UNIQUE,
 		rules TEXT NOT NULL,
 		voice_id VARCHAR(255),
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -119,8 +132,8 @@ func InitDatabase(db *sql.DB) error {
 	bannedUsersTableSQL := `
 	CREATE TABLE IF NOT EXISTS banned_users (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL,
-		user_id VARCHAR(255) NOT NULL,
+		group_id BIGINT NOT NULL,
+		user_id BIGINT NOT NULL,
 		ban_end_time TIMESTAMP NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(group_id, user_id)
@@ -131,11 +144,11 @@ func InitDatabase(db *sql.DB) error {
 	auditLogsTableSQL := `
 	CREATE TABLE IF NOT EXISTS audit_logs (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL,
-		admin_id VARCHAR(255) NOT NULL,
+		group_id BIGINT NOT NULL,
+		admin_id BIGINT NOT NULL,
 		action VARCHAR(50) NOT NULL,
-		target_user_id VARCHAR(255),
-		target_group_id VARCHAR(255),
+		target_user_id BIGINT,
+		target_group_id BIGINT,
 		description TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
@@ -144,7 +157,7 @@ func InitDatabase(db *sql.DB) error {
 	groupFeaturesTableSQL := `
 	CREATE TABLE IF NOT EXISTS group_features (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL,
+		group_id BIGINT NOT NULL,
 		feature_id VARCHAR(100) NOT NULL,
 		enabled BOOLEAN NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -156,8 +169,8 @@ func InitDatabase(db *sql.DB) error {
 	groupWhitelistTableSQL := `
 	CREATE TABLE IF NOT EXISTS group_whitelist (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL,
-		user_id VARCHAR(255) NOT NULL,
+		group_id BIGINT NOT NULL,
+		user_id BIGINT NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(group_id, user_id)
 	);
@@ -167,7 +180,7 @@ func InitDatabase(db *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS pets (
 		id SERIAL PRIMARY KEY,
 		pet_id VARCHAR(255) NOT NULL UNIQUE,
-		user_id VARCHAR(255) NOT NULL,
+		user_id BIGINT NOT NULL,
 		name VARCHAR(255) NOT NULL,
 		type VARCHAR(100) NOT NULL,
 		level INTEGER NOT NULL DEFAULT 1,
@@ -183,7 +196,7 @@ func InitDatabase(db *sql.DB) error {
 	pointsLogsTableSQL := `
 	CREATE TABLE IF NOT EXISTS points_logs (
 		id SERIAL PRIMARY KEY,
-		user_id VARCHAR(255) NOT NULL,
+		user_id BIGINT NOT NULL,
 		amount INTEGER NOT NULL,
 		reason VARCHAR(255),
 		category VARCHAR(100),
@@ -194,12 +207,12 @@ func InitDatabase(db *sql.DB) error {
 	questionsTableSQL := `
 	CREATE TABLE IF NOT EXISTS questions (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL,
+		group_id BIGINT NOT NULL,
 		question_raw TEXT NOT NULL,
 		question_normalized TEXT NOT NULL,
 		status VARCHAR(50) NOT NULL DEFAULT 'approved',
-		created_by VARCHAR(255),
-		source_group_id VARCHAR(255),
+		created_by BIGINT,
+		source_group_id BIGINT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		usage_count INTEGER NOT NULL DEFAULT 0,
@@ -213,7 +226,7 @@ func InitDatabase(db *sql.DB) error {
 		question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
 		answer TEXT NOT NULL,
 		status VARCHAR(50) NOT NULL DEFAULT 'approved',
-		created_by VARCHAR(255),
+		created_by BIGINT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		usage_count INTEGER NOT NULL DEFAULT 0,
@@ -225,7 +238,7 @@ func InitDatabase(db *sql.DB) error {
 	groupAISettingsTableSQL := `
 	CREATE TABLE IF NOT EXISTS group_ai_settings (
 		id SERIAL PRIMARY KEY,
-		group_id VARCHAR(255) NOT NULL UNIQUE,
+		group_id BIGINT NOT NULL UNIQUE,
 		qa_mode VARCHAR(50) NOT NULL,
 		last_answer_id INTEGER,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -233,9 +246,36 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
-	// 执行建表语句
 	if _, err := db.Exec(userTableSQL); err != nil {
 		return fmt.Errorf("创建用户表失败: %w", err)
+	}
+
+	// 尝试更改列类型（如果已存在）
+	_, _ = db.Exec(`ALTER TABLE users ALTER COLUMN user_id TYPE BIGINT USING user_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE users ALTER COLUMN target_user_id TYPE BIGINT USING target_user_id::BIGINT`)
+
+	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS target_user_id BIGINT`); err != nil {
+		return fmt.Errorf("为用户表添加 TargetUserID 字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS user_openid VARCHAR(255)`); err != nil {
+		return fmt.Errorf("为用户表添加 UserOpenID 字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(groupTableSQL); err != nil {
+		return fmt.Errorf("创建群组表失败: %w", err)
+	}
+
+	// 尝试更改列类型（如果已存在）
+	_, _ = db.Exec(`ALTER TABLE groups ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE groups ALTER COLUMN target_group_id TYPE BIGINT USING target_group_id::BIGINT`)
+
+	if _, err := db.Exec(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS target_group_id BIGINT`); err != nil {
+		return fmt.Errorf("为群组表添加 TargetGroupID 字段失败: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS group_openid VARCHAR(255)`); err != nil {
+		return fmt.Errorf("为群组表添加 GroupOpenID 字段失败: %w", err)
 	}
 
 	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS savings_points INTEGER NOT NULL DEFAULT 0`); err != nil {
@@ -261,6 +301,10 @@ func InitDatabase(db *sql.DB) error {
 	if _, err := db.Exec(groupAdminsTableSQL); err != nil {
 		return fmt.Errorf("创建群管理员表失败: %w", err)
 	}
+
+	// 尝试更改列类型
+	_, _ = db.Exec(`ALTER TABLE group_admins ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE group_admins ALTER COLUMN user_id TYPE BIGINT USING user_id::BIGINT`)
 
 	if _, err := db.Exec(groupRulesTableSQL); err != nil {
 		return fmt.Errorf("创建群规表失败: %w", err)
@@ -314,6 +358,20 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("创建群AI设置表失败: %w", err)
 	}
 
+	// 统一更改所有表中的 user_id 和 group_id 为 BIGINT
+	tables := []string{"messages", "sessions", "group_rules", "banned_users", "audit_logs", "group_features", "group_whitelist", "pets", "points_logs", "questions"}
+	for _, table := range tables {
+		_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN user_id TYPE BIGINT USING user_id::BIGINT`, table))
+		_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`, table))
+	}
+	_, _ = db.Exec(`ALTER TABLE audit_logs ALTER COLUMN admin_id TYPE BIGINT USING admin_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE audit_logs ALTER COLUMN target_user_id TYPE BIGINT USING target_user_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE audit_logs ALTER COLUMN target_group_id TYPE BIGINT USING target_group_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE questions ALTER COLUMN created_by TYPE BIGINT USING created_by::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE questions ALTER COLUMN source_group_id TYPE BIGINT USING source_group_id::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE answers ALTER COLUMN created_by TYPE BIGINT USING created_by::BIGINT`)
+	_, _ = db.Exec(`ALTER TABLE group_ai_settings ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`)
+
 	// 兼容旧表结构，补充缺失的分类字段
 	if _, err := db.Exec(`ALTER TABLE points_logs ADD COLUMN IF NOT EXISTS category VARCHAR(100)`); err != nil {
 		return fmt.Errorf("为积分记录表添加分类字段失败: %w", err)
@@ -342,10 +400,114 @@ func InitDatabase(db *sql.DB) error {
 	return nil
 }
 
+// GetMaxUserIDPlusOne 获取用户表中最大的 UserID + 1，如果为空则返回 980000000000
+func GetMaxUserIDPlusOne(db *sql.DB) (int64, error) {
+	var maxID sql.NullInt64
+	query := `SELECT MAX(user_id) FROM users`
+	err := db.QueryRow(query).Scan(&maxID)
+	if err != nil {
+		return 980000000000, nil
+	}
+	if !maxID.Valid {
+		return 980000000000, nil
+	}
+	if maxID.Int64 < 980000000000 {
+		return 980000000000, nil
+	}
+	return maxID.Int64 + 1, nil
+}
+
+// GetMaxGroupIDPlusOne 获取群组表中最大的 GroupID + 1，如果为空则返回 990000000000
+func GetMaxGroupIDPlusOne(db *sql.DB) (int64, error) {
+	var maxID sql.NullInt64
+	query := `SELECT MAX(group_id) FROM groups`
+	err := db.QueryRow(query).Scan(&maxID)
+	if err != nil {
+		return 990000000000, nil
+	}
+	if !maxID.Valid {
+		return 990000000000, nil
+	}
+	if maxID.Int64 < 990000000000 {
+		return 990000000000, nil
+	}
+	return maxID.Int64 + 1, nil
+}
+
+// GetUserIDByTargetID 根据 TargetUserID 获取 UserID (int64)
+func GetUserIDByTargetID(db *sql.DB, targetID int64) (int64, error) {
+	var userID int64
+	query := `SELECT user_id FROM users WHERE target_user_id = $1`
+	err := db.QueryRow(query, targetID).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return userID, err
+}
+
+// GetGroupIDByTargetID 根据 TargetGroupID 获取 GroupID (int64)
+func GetGroupIDByTargetID(db *sql.DB, targetID int64) (int64, error) {
+	var groupID int64
+	query := `SELECT group_id FROM groups WHERE target_group_id = $1`
+	err := db.QueryRow(query, targetID).Scan(&groupID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return groupID, err
+}
+
+// GetUserIDByOpenID 根据 UserOpenID 获取 UserID (int64)
+func GetUserIDByOpenID(db *sql.DB, openID string) (int64, error) {
+	var userID int64
+	query := `SELECT user_id FROM users WHERE user_openid = $1`
+	err := db.QueryRow(query, openID).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return userID, err
+}
+
+// GetGroupIDByOpenID 根据 GroupOpenID 获取 GroupID (int64)
+func GetGroupIDByOpenID(db *sql.DB, openID string) (int64, error) {
+	var groupID int64
+	query := `SELECT group_id FROM groups WHERE group_openid = $1`
+	err := db.QueryRow(query, openID).Scan(&groupID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return groupID, err
+}
+
+// CreateUserWithTargetID 创建带有 TargetUserID 和 UserOpenID 的用户
+func CreateUserWithTargetID(db *sql.DB, userID int64, targetID int64, openID string, nickname, avatar string) error {
+	query := `
+	INSERT INTO users (user_id, target_user_id, user_openid, nickname, avatar, updated_at)
+	VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+	ON CONFLICT (user_id) DO UPDATE
+	SET target_user_id = $2, user_openid = $3, nickname = $4, avatar = $5, updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.Exec(query, userID, targetID, openID, nickname, avatar)
+	return err
+}
+
+// CreateGroupWithTargetID 创建带有 TargetGroupID 和 GroupOpenID 的群组
+func CreateGroupWithTargetID(db *sql.DB, groupID int64, targetID int64, openID string, name string) error {
+	query := `
+	INSERT INTO groups (group_id, target_group_id, group_openid, name, updated_at)
+	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+	ON CONFLICT (group_id) DO UPDATE
+	SET target_group_id = $2, group_openid = $3, name = $4, updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.Exec(query, groupID, targetID, openID, name)
+	return err
+}
+
 // User 定义用户模型
 type User struct {
 	ID            int       `json:"id"`
-	UserID        string    `json:"user_id"`
+	UserID        int64     `json:"user_id"`
+	TargetUserID  int64     `json:"target_user_id"`
+	UserOpenID    string    `json:"user_openid"`
 	Nickname      string    `json:"nickname"`
 	Avatar        string    `json:"avatar"`
 	Gender        string    `json:"gender"`
@@ -356,16 +518,27 @@ type User struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// Group 定义群组模型
+type Group struct {
+	ID            int       `json:"id"`
+	GroupID       int64     `json:"group_id"`
+	TargetGroupID int64     `json:"target_group_id"`
+	GroupOpenID   string    `json:"group_openid"`
+	Name          string    `json:"name"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 // CreateUser 创建新用户
 func CreateUser(db *sql.DB, user *User) error {
 	query := `
-	INSERT INTO users (user_id, nickname, avatar, gender, points, savings_points, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	INSERT INTO users (user_id, user_openid, nickname, avatar, gender, points, savings_points, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
 	ON CONFLICT (user_id) DO UPDATE
-	SET nickname = $2, avatar = $3, gender = $4, points = $5, savings_points = $6, updated_at = CURRENT_TIMESTAMP
+	SET user_openid = $2, nickname = $3, avatar = $4, gender = $5, points = $6, savings_points = $7, updated_at = CURRENT_TIMESTAMP
 	`
 
-	_, err := db.Exec(query, user.UserID, user.Nickname, user.Avatar, user.Gender, user.Points, user.SavingsPoints)
+	_, err := db.Exec(query, user.UserID, user.UserOpenID, user.Nickname, user.Avatar, user.Gender, user.Points, user.SavingsPoints)
 	if err != nil {
 		return fmt.Errorf("创建用户失败: %w", err)
 	}
@@ -374,16 +547,16 @@ func CreateUser(db *sql.DB, user *User) error {
 }
 
 // GetUserByUserID 根据用户ID获取用户信息
-func GetUserByUserID(db *sql.DB, userID string) (*User, error) {
+func GetUserByUserID(db *sql.DB, userID int64) (*User, error) {
 	query := `
-	SELECT id, user_id, nickname, avatar, gender, points, savings_points, frozen_points, created_at, updated_at
+	SELECT id, user_id, user_openid, nickname, avatar, gender, points, savings_points, frozen_points, created_at, updated_at
 	FROM users
 	WHERE user_id = $1
 	`
 
 	user := &User{}
 	err := db.QueryRow(query, userID).Scan(
-		&user.ID, &user.UserID, &user.Nickname, &user.Avatar, &user.Gender, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.UserID, &user.UserOpenID, &user.Nickname, &user.Avatar, &user.Gender, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -415,7 +588,7 @@ func UpdateUser(db *sql.DB, user *User) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("用户不存在: %s", user.UserID)
+		return fmt.Errorf("用户不存在: %d", user.UserID)
 	}
 
 	return nil
@@ -425,8 +598,8 @@ func UpdateUser(db *sql.DB, user *User) error {
 type Message struct {
 	ID        int       `json:"id"`
 	MessageID string    `json:"message_id"`
-	UserID    string    `json:"user_id"`
-	GroupID   string    `json:"group_id"`
+	UserID    int64     `json:"user_id"`
+	GroupID   int64     `json:"group_id"`
 	Type      string    `json:"type"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
@@ -449,7 +622,7 @@ func CreateMessage(db *sql.DB, message *Message) error {
 }
 
 // GetMessagesByUserID 根据用户ID获取消息记录
-func GetMessagesByUserID(db *sql.DB, userID string, limit int) ([]*Message, error) {
+func GetMessagesByUserID(db *sql.DB, userID int64, limit int) ([]*Message, error) {
 	query := `
 	SELECT id, message_id, user_id, group_id, type, content, created_at
 	FROM messages
@@ -487,8 +660,8 @@ func GetMessagesByUserID(db *sql.DB, userID string, limit int) ([]*Message, erro
 type Session struct {
 	ID        int                    `json:"id"`
 	SessionID string                 `json:"session_id"`
-	UserID    string                 `json:"user_id"`
-	GroupID   string                 `json:"group_id"`
+	UserID    int64                  `json:"user_id"`
+	GroupID   int64                  `json:"group_id"`
 	State     string                 `json:"state"`
 	Data      map[string]interface{} `json:"data"`
 	CreatedAt time.Time              `json:"created_at"`
@@ -693,24 +866,15 @@ func GetUsersWithPagination(db *sql.DB, page, pageSize int) ([]*User, int, error
 }
 
 // DeleteUser 删除用户
-func DeleteUser(db *sql.DB, userID string) error {
+func DeleteUser(db *sql.DB, userID int64) error {
 	query := `
 	DELETE FROM users
 	WHERE user_id = $1
 	`
 
-	result, err := db.Exec(query, userID)
+	_, err := db.Exec(query, userID)
 	if err != nil {
 		return fmt.Errorf("删除用户失败: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取影响行数失败: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("用户不存在: %s", userID)
 	}
 
 	return nil
@@ -742,7 +906,7 @@ func GetMessageByID(db *sql.DB, messageID string) (*Message, error) {
 }
 
 // GetMessagesByGroupID 根据群组ID获取消息
-func GetMessagesByGroupID(db *sql.DB, groupID string, limit int) ([]*Message, error) {
+func GetMessagesByGroupID(db *sql.DB, groupID int64, limit int) ([]*Message, error) {
 	query := `
 	SELECT id, message_id, user_id, group_id, type, content, created_at
 	FROM messages
@@ -837,7 +1001,7 @@ func DeleteMessage(db *sql.DB, messageID string) error {
 // ------------------- 会话相关扩展操作 -------------------
 
 // GetSessionsByUserID 根据用户ID获取会话
-func GetSessionsByUserID(db *sql.DB, userID string) ([]*Session, error) {
+func GetSessionsByUserID(db *sql.DB, userID int64) ([]*Session, error) {
 	query := `
 	SELECT id, session_id, user_id, group_id, state, data, created_at, updated_at
 	FROM sessions
@@ -878,7 +1042,7 @@ func GetSessionsByUserID(db *sql.DB, userID string) ([]*Session, error) {
 }
 
 // GetSessionsByGroupID 根据群组ID获取会话
-func GetSessionsByGroupID(db *sql.DB, groupID string) ([]*Session, error) {
+func GetSessionsByGroupID(db *sql.DB, groupID int64) ([]*Session, error) {
 	query := `
 	SELECT id, session_id, user_id, group_id, state, data, created_at, updated_at
 	FROM sessions
@@ -977,7 +1141,7 @@ func GetUserCount(db *sql.DB) (int, error) {
 type PetModel struct {
 	ID        int       `json:"id"`
 	PetID     string    `json:"pet_id"`
-	UserID    string    `json:"user_id"`
+	UserID    int64     `json:"user_id"`
 	Name      string    `json:"name"`
 	Type      string    `json:"type"`
 	Level     int       `json:"level"`
@@ -991,7 +1155,7 @@ type PetModel struct {
 
 type GroupAISettings struct {
 	ID           int       `json:"id"`
-	GroupID      string    `json:"group_id"`
+	GroupID      int64     `json:"group_id"`
 	QAMode       string    `json:"qa_mode"`
 	LastAnswerID int       `json:"last_answer_id"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -1000,12 +1164,12 @@ type GroupAISettings struct {
 
 type Question struct {
 	ID                 int       `json:"id"`
-	GroupID            string    `json:"group_id"`
+	GroupID            int64     `json:"group_id"`
 	QuestionRaw        string    `json:"question_raw"`
 	QuestionNormalized string    `json:"question_normalized"`
 	Status             string    `json:"status"`
-	CreatedBy          string    `json:"created_by"`
-	SourceGroupID      string    `json:"source_group_id"`
+	CreatedBy          int64     `json:"created_by"`
+	SourceGroupID      int64     `json:"source_group_id"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -1015,13 +1179,13 @@ type Answer struct {
 	QuestionID int       `json:"question_id"`
 	Answer     string    `json:"answer"`
 	Status     string    `json:"status"`
-	CreatedBy  string    `json:"created_by"`
+	CreatedBy  int64     `json:"created_by"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-func GetGroupQAMode(db *sql.DB, groupID string) (string, error) {
-	if db == nil || groupID == "" {
+func GetGroupQAMode(db *sql.DB, groupID int64) (string, error) {
+	if db == nil || groupID == 0 {
 		return "", nil
 	}
 
@@ -1043,8 +1207,8 @@ func GetGroupQAMode(db *sql.DB, groupID string) (string, error) {
 	return mode, nil
 }
 
-func SetGroupQAMode(db *sql.DB, groupID string, mode string) error {
-	if db == nil || groupID == "" {
+func SetGroupQAMode(db *sql.DB, groupID int64, mode string) error {
+	if db == nil || groupID == 0 {
 		return fmt.Errorf("数据库或群ID为空")
 	}
 
@@ -1064,8 +1228,8 @@ func SetGroupQAMode(db *sql.DB, groupID string, mode string) error {
 	return nil
 }
 
-func GetGroupLastAnswerID(db *sql.DB, groupID string) (int, error) {
-	if db == nil || groupID == "" {
+func GetGroupLastAnswerID(db *sql.DB, groupID int64) (int, error) {
+	if db == nil || groupID == 0 {
 		return 0, nil
 	}
 
@@ -1087,8 +1251,8 @@ func GetGroupLastAnswerID(db *sql.DB, groupID string) (int, error) {
 	return lastID, nil
 }
 
-func SetGroupLastAnswerID(db *sql.DB, groupID string, answerID int) error {
-	if db == nil || groupID == "" {
+func SetGroupLastAnswerID(db *sql.DB, groupID int64, answerID int) error {
+	if db == nil || groupID == 0 {
 		return fmt.Errorf("数据库或群ID为空")
 	}
 
@@ -1108,7 +1272,7 @@ func SetGroupLastAnswerID(db *sql.DB, groupID string, answerID int) error {
 	return nil
 }
 
-func GetQuestionByGroupAndNormalized(dbConn *sql.DB, groupID string, normalized string) (*Question, error) {
+func GetQuestionByGroupAndNormalized(dbConn *sql.DB, groupID int64, normalized string) (*Question, error) {
 	if dbConn == nil || normalized == "" {
 		return nil, nil
 	}
@@ -1374,7 +1538,7 @@ func GetPetByPetID(db *sql.DB, petID string) (*PetModel, error) {
 }
 
 // GetPetsByUserID 获取用户的所有宠物
-func GetPetsByUserID(db *sql.DB, userID string) ([]*PetModel, error) {
+func GetPetsByUserID(db *sql.DB, userID int64) ([]*PetModel, error) {
 	query := `
 	SELECT id, pet_id, user_id, name, type, level, exp, hunger, happiness, health, created_at, updated_at
 	FROM pets
@@ -1515,7 +1679,7 @@ func RegisterUserWithSession(db *sql.DB, user *User, session *Session) error {
 // ------------------- 积分系统相关操作 -------------------
 
 // GetPoints 获取用户积分
-func GetPoints(db *sql.DB, userID string) (int, error) {
+func GetPoints(db *sql.DB, userID int64) (int, error) {
 	query := `SELECT points FROM users WHERE user_id = $1`
 	var points int
 	err := db.QueryRow(query, userID).Scan(&points)
@@ -1528,7 +1692,7 @@ func GetPoints(db *sql.DB, userID string) (int, error) {
 	return points, nil
 }
 
-func GetFrozenPoints(db *sql.DB, userID string) (int, error) {
+func GetFrozenPoints(db *sql.DB, userID int64) (int, error) {
 	query := `SELECT frozen_points FROM users WHERE user_id = $1`
 	var points int
 	err := db.QueryRow(query, userID).Scan(&points)
@@ -1542,7 +1706,7 @@ func GetFrozenPoints(db *sql.DB, userID string) (int, error) {
 }
 
 // AddPoints 增加或扣除用户积分
-func AddPoints(db *sql.DB, userID string, amount int, reason string, category string) error {
+func AddPoints(db *sql.DB, userID int64, amount int, reason string, category string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("开始事务失败: %w", err)
@@ -1585,7 +1749,7 @@ func AddPoints(db *sql.DB, userID string, amount int, reason string, category st
 	return tx.Commit()
 }
 
-func applySavingsInterestTx(tx *sql.Tx, userID string) (int, error) {
+func applySavingsInterestTx(tx *sql.Tx, userID int64) (int, error) {
 	var savings int
 	var lastInterest sql.NullTime
 
@@ -1647,7 +1811,7 @@ func applySavingsInterestTx(tx *sql.Tx, userID string) (int, error) {
 	return interest, nil
 }
 
-func DepositPointsToSavings(db *sql.DB, userID string, amount int) error {
+func DepositPointsToSavings(db *sql.DB, userID int64, amount int) error {
 	if amount <= 0 {
 		return fmt.Errorf("存入积分必须大于0")
 	}
@@ -1694,7 +1858,7 @@ func DepositPointsToSavings(db *sql.DB, userID string, amount int) error {
 	return tx.Commit()
 }
 
-func WithdrawPointsFromSavings(db *sql.DB, userID string, amount int) error {
+func WithdrawPointsFromSavings(db *sql.DB, userID int64, amount int) error {
 	if amount <= 0 {
 		return fmt.Errorf("取出积分必须大于0")
 	}
@@ -1741,7 +1905,7 @@ func WithdrawPointsFromSavings(db *sql.DB, userID string, amount int) error {
 	return tx.Commit()
 }
 
-func GetSavingsPoints(db *sql.DB, userID string) (int, error) {
+func GetSavingsPoints(db *sql.DB, userID int64) (int, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, fmt.Errorf("开始事务失败: %w", err)
@@ -1770,7 +1934,7 @@ func GetSavingsPoints(db *sql.DB, userID string) (int, error) {
 	return balance, nil
 }
 
-func FreezePoints(db *sql.DB, userID string, amount int, reason string) error {
+func FreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
 	if amount <= 0 {
 		return fmt.Errorf("冻结积分数量必须大于0")
 	}
@@ -1807,7 +1971,7 @@ func FreezePoints(db *sql.DB, userID string, amount int, reason string) error {
 	return tx.Commit()
 }
 
-func UnfreezePoints(db *sql.DB, userID string, amount int, reason string) error {
+func UnfreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
 	if amount <= 0 {
 		return fmt.Errorf("解冻积分数量必须大于0")
 	}
@@ -1845,7 +2009,7 @@ func UnfreezePoints(db *sql.DB, userID string, amount int, reason string) error 
 }
 
 // TransferPoints 积分转账
-func TransferPoints(db *sql.DB, fromUserID, toUserID string, amount int, reason string, category string) error {
+func TransferPoints(db *sql.DB, fromUserID, toUserID int64, amount int, reason string, category string) error {
 	if amount <= 0 {
 		return fmt.Errorf("转账金额必须大于0")
 	}
@@ -1911,7 +2075,7 @@ func TransferPoints(db *sql.DB, fromUserID, toUserID string, amount int, reason 
 // ------------------- 群管理员相关操作 -------------------
 
 // AddGroupAdmin 添加群管理员
-func AddGroupAdmin(db *sql.DB, groupID, userID string, level int) error {
+func AddGroupAdmin(db *sql.DB, groupID, userID int64, level int) error {
 	query := `
 	INSERT INTO group_admins (group_id, user_id, level)
 	VALUES ($1, $2, $3)
@@ -1928,7 +2092,7 @@ func AddGroupAdmin(db *sql.DB, groupID, userID string, level int) error {
 }
 
 // RemoveGroupAdmin 移除群管理员
-func RemoveGroupAdmin(db *sql.DB, groupID, userID string) error {
+func RemoveGroupAdmin(db *sql.DB, groupID, userID int64) error {
 	query := `
 	DELETE FROM group_admins
 	WHERE group_id = $1 AND user_id = $2
@@ -1952,7 +2116,7 @@ func RemoveGroupAdmin(db *sql.DB, groupID, userID string) error {
 }
 
 // GetGroupAdmins 获取群管理员列表
-func GetGroupAdmins(db *sql.DB, groupID string) ([]map[string]interface{}, error) {
+func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]interface{}, error) {
 	query := `
 	SELECT user_id, level
 	FROM group_admins
@@ -1967,7 +2131,7 @@ func GetGroupAdmins(db *sql.DB, groupID string) ([]map[string]interface{}, error
 
 	admins := []map[string]interface{}{}
 	for rows.Next() {
-		var userID string
+		var userID int64
 		var level int
 		if err := rows.Scan(&userID, &level); err != nil {
 			return nil, fmt.Errorf("扫描群管理员失败: %w", err)
@@ -1986,7 +2150,7 @@ func GetGroupAdmins(db *sql.DB, groupID string) ([]map[string]interface{}, error
 }
 
 // IsGroupAdmin 检查用户是否为群管理员
-func IsGroupAdmin(db *sql.DB, groupID, userID string) (bool, error) {
+func IsGroupAdmin(db *sql.DB, groupID, userID int64) (bool, error) {
 	query := `
 	SELECT COUNT(*) > 0
 	FROM group_admins
@@ -2002,7 +2166,7 @@ func IsGroupAdmin(db *sql.DB, groupID, userID string) (bool, error) {
 }
 
 // GetAdminLevel 获取管理员权限级别
-func GetAdminLevel(db *sql.DB, groupID, userID string) (int, error) {
+func GetAdminLevel(db *sql.DB, groupID, userID int64) (int, error) {
 	query := `
 	SELECT level
 	FROM group_admins
@@ -2021,7 +2185,7 @@ func GetAdminLevel(db *sql.DB, groupID, userID string) (int, error) {
 }
 
 // IsSuperAdmin 检查用户是否为超级管理员
-func IsSuperAdmin(db *sql.DB, groupID, userID string) (bool, error) {
+func IsSuperAdmin(db *sql.DB, groupID, userID int64) (bool, error) {
 	level, err := GetAdminLevel(db, groupID, userID)
 	if err != nil {
 		return false, err
@@ -2032,7 +2196,7 @@ func IsSuperAdmin(db *sql.DB, groupID, userID string) (bool, error) {
 // ------------------- 群规相关操作 -------------------
 
 // SetGroupRules 设置群规
-func SetGroupRules(db *sql.DB, groupID, rules string) error {
+func SetGroupRules(db *sql.DB, groupID int64, rules string) error {
 	query := `
 	INSERT INTO group_rules (group_id, rules, updated_at)
 	VALUES ($1, $2, CURRENT_TIMESTAMP)
@@ -2049,7 +2213,7 @@ func SetGroupRules(db *sql.DB, groupID, rules string) error {
 }
 
 // GetGroupRules 获取群规
-func GetGroupRules(db *sql.DB, groupID string) (string, error) {
+func GetGroupRules(db *sql.DB, groupID int64) (string, error) {
 	query := `
 	SELECT rules
 	FROM group_rules
@@ -2067,7 +2231,7 @@ func GetGroupRules(db *sql.DB, groupID string) (string, error) {
 	return rules, nil
 }
 
-func SetGroupVoiceID(db *sql.DB, groupID, voiceID string) error {
+func SetGroupVoiceID(db *sql.DB, groupID int64, voiceID string) error {
 	query := `
 	INSERT INTO group_rules (group_id, rules, voice_id, updated_at)
 	VALUES ($1, '', $2, CURRENT_TIMESTAMP)
@@ -2083,7 +2247,7 @@ func SetGroupVoiceID(db *sql.DB, groupID, voiceID string) error {
 	return nil
 }
 
-func GetGroupVoiceID(db *sql.DB, groupID string) (string, error) {
+func GetGroupVoiceID(db *sql.DB, groupID int64) (string, error) {
 	query := `
 	SELECT voice_id
 	FROM group_rules
@@ -2105,7 +2269,7 @@ func GetGroupVoiceID(db *sql.DB, groupID string) (string, error) {
 	return voiceID.String, nil
 }
 
-func SetGroupFeatureOverride(db *sql.DB, groupID, featureID string, enabled bool) error {
+func SetGroupFeatureOverride(db *sql.DB, groupID int64, featureID string, enabled bool) error {
 	query := `
 	INSERT INTO group_features (group_id, feature_id, enabled, updated_at)
 	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
@@ -2121,7 +2285,7 @@ func SetGroupFeatureOverride(db *sql.DB, groupID, featureID string, enabled bool
 	return nil
 }
 
-func DeleteGroupFeatureOverride(db *sql.DB, groupID, featureID string) error {
+func DeleteGroupFeatureOverride(db *sql.DB, groupID int64, featureID string) error {
 	query := `
 	DELETE FROM group_features
 	WHERE group_id = $1 AND feature_id = $2
@@ -2135,7 +2299,7 @@ func DeleteGroupFeatureOverride(db *sql.DB, groupID, featureID string) error {
 	return nil
 }
 
-func GetGroupFeatureOverride(db *sql.DB, groupID, featureID string) (bool, bool, error) {
+func GetGroupFeatureOverride(db *sql.DB, groupID int64, featureID string) (bool, bool, error) {
 	query := `
 	SELECT enabled
 	FROM group_features
@@ -2230,7 +2394,7 @@ func GetAllSensitiveWords(db *sql.DB) ([]SensitiveWord, error) {
 	return words, nil
 }
 
-func AddGroupWhitelistUser(db *sql.DB, groupID, userID string) error {
+func AddGroupWhitelistUser(db *sql.DB, groupID, userID int64) error {
 	query := `
 	INSERT INTO group_whitelist (group_id, user_id)
 	VALUES ($1, $2)
@@ -2245,7 +2409,7 @@ func AddGroupWhitelistUser(db *sql.DB, groupID, userID string) error {
 	return nil
 }
 
-func RemoveGroupWhitelistUser(db *sql.DB, groupID, userID string) error {
+func RemoveGroupWhitelistUser(db *sql.DB, groupID, userID int64) error {
 	query := `
 	DELETE FROM group_whitelist
 	WHERE group_id = $1 AND user_id = $2
@@ -2259,7 +2423,7 @@ func RemoveGroupWhitelistUser(db *sql.DB, groupID, userID string) error {
 	return nil
 }
 
-func ClearGroupWhitelist(db *sql.DB, groupID string) error {
+func ClearGroupWhitelist(db *sql.DB, groupID int64) error {
 	query := `
 	DELETE FROM group_whitelist
 	WHERE group_id = $1
@@ -2273,7 +2437,7 @@ func ClearGroupWhitelist(db *sql.DB, groupID string) error {
 	return nil
 }
 
-func IsUserInGroupWhitelist(db *sql.DB, groupID, userID string) (bool, error) {
+func IsUserInGroupWhitelist(db *sql.DB, groupID, userID int64) (bool, error) {
 	query := `
 	SELECT COUNT(*) > 0
 	FROM group_whitelist
@@ -2291,7 +2455,7 @@ func IsUserInGroupWhitelist(db *sql.DB, groupID, userID string) (bool, error) {
 // ------------------- 禁言记录相关操作 -------------------
 
 // BanUser 禁言用户
-func BanUser(db *sql.DB, groupID, userID string, banEndTime time.Time) error {
+func BanUser(db *sql.DB, groupID, userID int64, banEndTime time.Time) error {
 	query := `
 	INSERT INTO banned_users (group_id, user_id, ban_end_time)
 	VALUES ($1, $2, $3)
@@ -2308,7 +2472,7 @@ func BanUser(db *sql.DB, groupID, userID string, banEndTime time.Time) error {
 }
 
 // UnbanUser 解除禁言
-func UnbanUser(db *sql.DB, groupID, userID string) error {
+func UnbanUser(db *sql.DB, groupID, userID int64) error {
 	query := `
 	DELETE FROM banned_users
 	WHERE group_id = $1 AND user_id = $2
@@ -2332,7 +2496,7 @@ func UnbanUser(db *sql.DB, groupID, userID string) error {
 }
 
 // GetBannedUsersByGroup 获取群内禁言用户列表
-func GetBannedUsersByGroup(db *sql.DB, groupID string) ([]map[string]interface{}, error) {
+func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]interface{}, error) {
 	query := `
 	SELECT user_id, ban_end_time
 	FROM banned_users
@@ -2347,7 +2511,7 @@ func GetBannedUsersByGroup(db *sql.DB, groupID string) ([]map[string]interface{}
 
 	bannedUsers := []map[string]interface{}{}
 	for rows.Next() {
-		var userID string
+		var userID int64
 		var banEndTime time.Time
 		if err := rows.Scan(&userID, &banEndTime); err != nil {
 			return nil, fmt.Errorf("扫描禁言用户失败: %w", err)
@@ -2382,7 +2546,7 @@ func GetExpiredBans(db *sql.DB) ([]map[string]interface{}, error) {
 
 	expiredBans := []map[string]interface{}{}
 	for rows.Next() {
-		var groupID, userID string
+		var groupID, userID int64
 		var banEndTime time.Time
 		if err := rows.Scan(&groupID, &userID, &banEndTime); err != nil {
 			return nil, fmt.Errorf("扫描过期禁言记录失败: %w", err)
@@ -2403,7 +2567,7 @@ func GetExpiredBans(db *sql.DB) ([]map[string]interface{}, error) {
 }
 
 // IsUserBanned 检查用户是否被禁言
-func IsUserBanned(db *sql.DB, groupID, userID string) (bool, time.Time, error) {
+func IsUserBanned(db *sql.DB, groupID, userID int64) (bool, time.Time, error) {
 	query := `
 	SELECT ban_end_time
 	FROM banned_users
@@ -2436,11 +2600,11 @@ func IsUserBanned(db *sql.DB, groupID, userID string) (bool, time.Time, error) {
 // AuditLog 定义审核日志模型
 type AuditLog struct {
 	ID            int       `json:"id"`
-	GroupID       string    `json:"group_id"`
-	AdminID       string    `json:"admin_id"`
+	GroupID       int64     `json:"group_id"`
+	AdminID       int64     `json:"admin_id"`
 	Action        string    `json:"action"`
-	TargetUserID  string    `json:"target_user_id"`
-	TargetGroupID string    `json:"target_group_id"`
+	TargetUserID  int64     `json:"target_user_id"`
+	TargetGroupID int64     `json:"target_group_id"`
 	Description   string    `json:"description"`
 	CreatedAt     time.Time `json:"created_at"`
 }
@@ -2461,7 +2625,7 @@ func AddAuditLog(db *sql.DB, log *AuditLog) error {
 }
 
 // GetAuditLogsByGroup 获取群的审核日志
-func GetAuditLogsByGroup(db *sql.DB, groupID string, limit, offset int) ([]AuditLog, error) {
+func GetAuditLogsByGroup(db *sql.DB, groupID int64, limit, offset int) ([]AuditLog, error) {
 	query := `
 	SELECT id, group_id, admin_id, action, target_user_id, target_group_id, description, created_at
 	FROM audit_logs
@@ -2493,7 +2657,7 @@ func GetAuditLogsByGroup(db *sql.DB, groupID string, limit, offset int) ([]Audit
 }
 
 // GetAuditLogsByAdmin 获取管理员的审核日志
-func GetAuditLogsByAdmin(db *sql.DB, adminID string, limit, offset int) ([]AuditLog, error) {
+func GetAuditLogsByAdmin(db *sql.DB, adminID int64, limit, offset int) ([]AuditLog, error) {
 	query := `
 	SELECT id, group_id, admin_id, action, target_user_id, target_group_id, description, created_at
 	FROM audit_logs

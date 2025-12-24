@@ -75,6 +75,20 @@ func (s *WebSocketServer) HandleAPI(action string, fn onebot.RequestHandler) {
 	s.apiHandlers[action] = fn
 }
 
+func (s *WebSocketServer) BroadcastJSON(v interface{}) error {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	var lastErr error
+	for client := range s.clients {
+		if err := client.WriteJSON(v); err != nil {
+			log.Printf("[WS] Failed to send JSON to client: %v", err)
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
 func (s *WebSocketServer) handleConnection(conn *websocket.Conn) {
 	s.clientsMutex.Lock()
 	s.clients[conn] = true
@@ -107,6 +121,7 @@ func (s *WebSocketServer) handleConnection(conn *websocket.Conn) {
 		}
 
 		// 处理事件
+		processEventIDs(&event)
 		s.handleEvent(event)
 	}
 }

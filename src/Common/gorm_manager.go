@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -40,24 +39,15 @@ func (gm *GORMManager) InitGORM() error {
 		},
 	}
 
-	if DB_TYPE == "postgres" {
-		// PostgreSQL连接字符串
-		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
-			PG_HOST, PG_USER, PG_PASSWORD, PG_DBNAME, PG_PORT, PG_SSLMODE)
-		
-		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
-		if err != nil {
-			return fmt.Errorf("failed to connect to PostgreSQL: %v", err)
-		}
-		log.Println("✅ GORM: Connected to PostgreSQL database")
-	} else {
-		// SQLite连接
-		db, err = gorm.Open(sqlite.Open(DB_FILE), gormConfig)
-		if err != nil {
-			return fmt.Errorf("failed to connect to SQLite: %v", err)
-		}
-		log.Println("✅ GORM: Connected to SQLite database")
+	// PostgreSQL连接字符串
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
+		PG_HOST, PG_USER, PG_PASSWORD, PG_DBNAME, PG_PORT, PG_SSLMODE)
+
+	db, err = gorm.Open(postgres.Open(dsn), gormConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to PostgreSQL: %v", err)
 	}
+	log.Println("✅ GORM: Connected to PostgreSQL database")
 
 	gm.DB = db
 

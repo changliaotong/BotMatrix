@@ -508,10 +508,12 @@ func (p *AuctionPlugin) doCreateAuction(name string, basePrice int, durationMinu
 			"creator_id":     action.CreatorID,
 			"group_id":       action.GroupID,
 		}
+		cid, _ := strconv.ParseInt(creatorID, 10, 64)
+		gid, _ := strconv.ParseInt(groupID, 10, 64)
 		session := &db.Session{
 			SessionID: auctionID,
-			UserID:    creatorID,
-			GroupID:   groupID,
+			UserID:    cid,
+			GroupID:   gid,
 			State:     "auction:active",
 			Data:      data,
 		}
@@ -599,11 +601,13 @@ func (p *AuctionPlugin) doPlaceBid(auctionID string, price int, userID string) (
 
 	// 冻结上一位竞拍者的积分
 	if action.CurrentWinner != "" {
-		_ = db.UnfreezePoints(p.db, action.CurrentWinner, action.CurrentPrice, fmt.Sprintf(common.T("", "auction_reason_unfreeze_outbid|竞拍 %s 出价被超过，解冻积分"), action.Name))
+		cwid, _ := strconv.ParseInt(action.CurrentWinner, 10, 64)
+		_ = db.UnfreezePoints(p.db, cwid, action.CurrentPrice, fmt.Sprintf(common.T("", "auction_reason_unfreeze_outbid|竞拍 %s 出价被超过，解冻积分"), action.Name))
 	}
 
 	// 冻结当前出价者的积分
-	err := db.FreezePoints(p.db, userID, price, fmt.Sprintf(common.T("", "auction_reason_freeze_bid|参与竞拍 %s 的出价"), action.Name))
+	uid, _ := strconv.ParseInt(userID, 10, 64)
+	err := db.FreezePoints(p.db, uid, price, fmt.Sprintf(common.T("", "auction_reason_freeze_bid|参与竞拍 %s 的出价"), action.Name))
 	if err != nil {
 		return fmt.Sprintf(common.T("", "auction_bid_failed|❌ 出价失败: %v"), err), err
 	}
@@ -619,10 +623,12 @@ func (p *AuctionPlugin) doPlaceBid(auctionID string, price int, userID string) (
 			"current_price":  action.CurrentPrice,
 			"current_winner": action.CurrentWinner,
 		}
+		acid, _ := strconv.ParseInt(action.CreatorID, 10, 64)
+		agid, _ := strconv.ParseInt(action.GroupID, 10, 64)
 		session := &db.Session{
 			SessionID: auctionID,
-			UserID:    action.CreatorID,
-			GroupID:   action.GroupID,
+			UserID:    acid,
+			GroupID:   agid,
 			State:     "auction:active",
 			Data:      data,
 		}
@@ -814,10 +820,12 @@ func (p *AuctionPlugin) doEndAuction(auctionID string, operator string) (string,
 		data := map[string]interface{}{
 			"status": "ended",
 		}
+		acid, _ := strconv.ParseInt(action.CreatorID, 10, 64)
+		agid, _ := strconv.ParseInt(action.GroupID, 10, 64)
 		session := &db.Session{
 			SessionID: auctionID,
-			UserID:    action.CreatorID,
-			GroupID:   action.GroupID,
+			UserID:    acid,
+			GroupID:   agid,
 			State:     "auction:ended",
 			Data:      data,
 		}
@@ -827,8 +835,10 @@ func (p *AuctionPlugin) doEndAuction(auctionID string, operator string) (string,
 	// 处理竞拍结果
 	if action.CurrentWinner != "" {
 		// 扣除中标者的积分
-		_ = db.UnfreezePoints(p.db, action.CurrentWinner, action.CurrentPrice, fmt.Sprintf(common.T("", "auction_reason_unfreeze_win|竞拍 %s 中标，解冻积分进行扣除"), action.Name))
-		_ = db.AddPoints(p.db, action.CreatorID, action.CurrentPrice, fmt.Sprintf(common.T("", "auction_reason_income|竞拍 %s 成交，获得积分收益"), action.Name), "auction_income")
+		cwid, _ := strconv.ParseInt(action.CurrentWinner, 10, 64)
+		_ = db.UnfreezePoints(p.db, cwid, action.CurrentPrice, fmt.Sprintf(common.T("", "auction_reason_unfreeze_win|竞拍 %s 中标，解冻积分进行扣除"), action.Name))
+		acid, _ := strconv.ParseInt(action.CreatorID, 10, 64)
+		_ = db.AddPoints(p.db, acid, action.CurrentPrice, fmt.Sprintf(common.T("", "auction_reason_income|竞拍 %s 成交，获得积分收益"), action.Name), "auction_income")
 
 		// 如果是群冠名竞拍，需要设置群名称
 		if action.Type == "group_name" {
@@ -937,10 +947,12 @@ func (p *AuctionPlugin) doSetAutoBid(auctionID string, maxPrice int, increment i
 			"bid_increment": increment,
 			"status":        "active",
 		}
+		uid, _ := strconv.ParseInt(userID, 10, 64)
+		gid, _ := strconv.ParseInt(action.GroupID, 10, 64)
 		session := &db.Session{
 			SessionID: fmt.Sprintf("auto_bid:%s", key),
-			UserID:    userID,
-			GroupID:   action.GroupID,
+			UserID:    uid,
+			GroupID:   gid,
 			State:     "auto_bid:active",
 			Data:      data,
 		}
@@ -973,9 +985,10 @@ func (p *AuctionPlugin) doCancelAutoBid(auctionID string, userID string) (string
 		data := map[string]interface{}{
 			"status": "disabled",
 		}
+		uid, _ := strconv.ParseInt(userID, 10, 64)
 		session := &db.Session{
 			SessionID: fmt.Sprintf("auto_bid:%s", key),
-			UserID:    userID,
+			UserID:    uid,
 			Data:      data,
 		}
 		_ = db.CreateOrUpdateSession(p.db, session)

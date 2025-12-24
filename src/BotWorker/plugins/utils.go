@@ -32,8 +32,8 @@ func SetGlobalRedis(client *redis.Client) {
 }
 
 type PendingConfirmation struct {
-	GroupID     int64
-	UserID      int64
+	GroupID     onebot.FlexibleInt64
+	UserID      onebot.FlexibleInt64
 	Action      string
 	Params      map[string]string
 	ConfirmCode string
@@ -42,8 +42,8 @@ type PendingConfirmation struct {
 }
 
 type PendingDialog struct {
-	GroupID   int64
-	UserID    int64
+	GroupID   onebot.FlexibleInt64
+	UserID    onebot.FlexibleInt64
 	Type      string
 	Step      int
 	Data      map[string]string

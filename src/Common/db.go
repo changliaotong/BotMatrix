@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
-	_ "github.com/glebarez/sqlite"
 )
-
-const DB_FILE = "data/botnexus.db"
 
 // initDB 初始化数据库
 func (m *Manager) InitDB() error {
@@ -42,39 +38,18 @@ func (m *Manager) InitDB() error {
 	var db *sql.DB
 	var err error
 
-	if DB_TYPE == "postgres" {
-		connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-			PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME, PG_SSLMODE)
-		log.Printf("[DB] 正在连接 PostgreSQL: %s:%d/%s", PG_HOST, PG_PORT, PG_DBNAME)
-		db, err = sql.Open("postgres", connStr)
-		if err != nil {
-			return fmt.Errorf("无法连接 PostgreSQL: %v", err)
-		}
-	} else {
-		// 确保目录存在
-		dbDir := filepath.Dir(DB_FILE)
-		if err := os.MkdirAll(dbDir, 0755); err != nil {
-			return fmt.Errorf("无法创建数据库目录: %v", err)
-		}
-		log.Printf("[DB] 正在使用 SQLite: %s", DB_FILE)
-		db, err = sql.Open("sqlite", DB_FILE)
-		if err != nil {
-			return err
-		}
-		// 设置繁忙超时，解决数据库锁定问题
-		_, err = db.Exec("PRAGMA busy_timeout = 5000")
-		if err != nil {
-			log.Printf("设置数据库繁忙超时失败: %v", err)
-		}
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME, PG_SSLMODE)
+	log.Printf("[DB] 正在连接 PostgreSQL: %s:%d/%s", PG_HOST, PG_PORT, PG_DBNAME)
+	db, err = sql.Open("postgres", connStr)
+	if err != nil {
+		return fmt.Errorf("无法连接 PostgreSQL: %v", err)
 	}
 
 	m.DB = db
 
-	// 通用建表逻辑，针对不同数据库类型调整语法
-	idType := "INTEGER PRIMARY KEY AUTOINCREMENT"
-	if DB_TYPE == "postgres" {
-		idType = "SERIAL PRIMARY KEY"
-	}
+	// PostgreSQL 建表逻辑
+	idType := "SERIAL PRIMARY KEY"
 
 	// 创建用户表
 	query := fmt.Sprintf(`
@@ -199,11 +174,7 @@ func (m *Manager) InitDB() error {
 		return err
 	}
 
-	if DB_TYPE == "postgres" {
-		log.Printf("PostgreSQL 数据库初始化成功")
-	} else {
-		log.Printf("SQLite 数据库初始化成功: %s", DB_FILE)
-	}
+	log.Printf("PostgreSQL 数据库初始化成功")
 
 	// 初始化GORM（可选，如果USE_GORM环境变量设置为true）
 	if os.Getenv("USE_GORM") == "true" {
@@ -221,12 +192,8 @@ func (m *Manager) InitDB() error {
 	return nil
 }
 
-// prepareQuery 根据数据库类型转换 SQL 语句
+// prepareQuery 根据数据库类型转换 SQL 语句 (目前固定为 PostgreSQL)
 func (m *Manager) prepareQuery(query string) string {
-	if DB_TYPE != "postgres" {
-		return query
-	}
-
 	// 1. 替换 ? 为 $1, $2, $3...
 	// 注意：简单的字符串替换可能会有问题，如果 SQL 中包含问号（如 JSON 操作），
 	// 但在这个项目中目前没有这种情况。

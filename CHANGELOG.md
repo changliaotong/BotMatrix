@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.5.0 (2025-12-24)
+*   **🐘 PostgreSQL-First Architecture**: Completely removed legacy SQLite support to streamline database operations and focus on enterprise-grade performance with PostgreSQL.
+*   **🧹 Dependency Modernization**: Eliminated `modernc.org/sqlite` and related CGO-free SQLite drivers, reducing binary size and complexity.
+*   **⚙️ Unified Configuration WebUI**: Redesigned the backend configuration interface in the WebUI to align with the new PostgreSQL-only architecture. Added real-time configuration for:
+    *   **PostgreSQL**: Full connection string management (Host, Port, User, DB, SSL).
+    *   **Redis Cluster**: Simplified cluster address and password settings.
+    *   **System Features**: Integrated toggles for Log Level, Auto Reply, and Skill System.
+*   **🛡️ Type-Safe API Communication**: Enforced strict numeric validation for port fields in the WebUI and Go backend, resolving data type mismatches.
+*   **🌐 Enhanced Localization**: Added comprehensive translations for all new PostgreSQL and system configuration fields in `locales.js`.
+
 ## v1.3.2 (2025-12-22)
 *   **🧠 BotWorker Confirmation & Dialog Engine**: Added a shared confirmation/session utility layer in `BotWorker` using Redis (when available) or the database as fallback. Dangerous operations (such as clearing group blacklists/whitelists) are now protected by random 3-digit confirmation and cancellation codes, with full support for multi-step dialogs and multi-worker, stateless deployments.
 *   **🔊 Voice Reply & Burn-After-Reading**: Introduced per-group feature switches for AI voice replies and burn-after-reading auto-recall in `BotWorker`. These features are wired through the Admin plugin, allowing administrators to enable or disable them via simple chat commands.

@@ -234,13 +234,17 @@ type AppConfig struct {
 	StatsFile            string `json:"stats_file"`
 
 	// Database Configuration
-	DBType     string `json:"db_type"` // "sqlite" or "postgres"
 	PGHost     string `json:"pg_host"`
 	PGPort     int    `json:"pg_port"`
 	PGUser     string `json:"pg_user"`
 	PGPassword string `json:"pg_password"`
 	PGDBName   string `json:"pg_dbname"`
 	PGSSLMode  string `json:"pg_sslmode"`
+
+	// Feature Flags
+	EnableSkill bool   `json:"enable_skill"`
+	LogLevel    string `json:"log_level"`
+	AutoReply   bool   `json:"auto_reply"`
 }
 
 // Manager holds the state
@@ -313,7 +317,7 @@ type Manager struct {
 	// User Management
 	Users      map[string]*User // 用户名 -> 用户信息
 	UsersMutex sync.RWMutex     // 用户存储的并发保护
-	DB         *sql.DB          // SQLite 数据库连接
+	DB         *sql.DB          // 数据库连接 (PostgreSQL)
 
 	// GORM Support
 	GORMDB      *gorm.DB     // GORM数据库连接

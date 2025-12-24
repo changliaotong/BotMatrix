@@ -166,6 +166,12 @@ func (s *CombinedServer) reportCapabilities() {
 		return
 	}
 
+	// 如果禁用了技能系统，则不报备能力
+	if !s.config.EnableSkill {
+		log.Printf("[SKILL] Skill system is disabled, skipping capability reporting")
+		return
+	}
+
 	// 等待插件加载完成
 	time.Sleep(2 * time.Second)
 
@@ -251,53 +257,127 @@ func (s *CombinedServer) startRedisQueueListener() {
 		}
 
 // 异步处理消息，避免阻塞监听器
-		go s.processQueueMessage(msg)
-	}
+	go func(queue string, m map[string]interface{}) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[RedisQueue] Panic in message processor: %v", r)
+			}
+		}()
+		s.processQueueMessage(m)
+	}(queueName, msg)
+}
 }
 
 func (s *CombinedServer) processQueueMessage(msg map[string]interface{}) {
-	// 检查是否为指令 (skill_call)
+	// 1. 检查是否为指令 (skill_call)
 	if msgType, ok := msg["type"].(string); ok && msgType == "skill_call" {
-		s.handleSkillCall(msg)
+		if s.config.EnableSkill {
+			s.handleSkillCall(msg)
+		} else {
+			log.Printf("[SKILL] Skill system is disabled, ignoring skill_call message")
+		}
 		return
 	}
 
-	// 提取消息类型并分发给插件管理器
-	if s.pluginManager != nil {
-		s.pluginManager.HandleEvent(msg)
+	// 2. 检查是否为工作节点注册响应或其他控制消息 (可选)
+	if msgType, ok := msg["type"].(string); ok && msgType == "control" {
+		log.Printf("[RedisQueue] Received control message: %v", msg)
+		return
 	}
+
+	// 3. 直接分发给 OneBot 事件处理流程
+	// 不再通过 pluginManager.HandleEvent 中转，以减少调用栈深度和潜在的循环依赖
+	s.HandleQueueEvent(msg)
 }
 
 func (s *CombinedServer) handleSkillCall(msg map[string]interface{}) {
 	skillName, _ := msg["skill"].(string)
 	paramsMap, _ := msg["params"].(map[string]interface{})
-	
+	taskID := fmt.Sprint(msg["task_id"])
+	executionID := fmt.Sprint(msg["execution_id"])
+
 	// 转换参数为 map[string]string
 	params := make(map[string]string)
 	for k, v := range paramsMap {
 		params[k] = fmt.Sprint(v)
 	}
 
-	log.Printf("[SkillCall] Handling skill: %s with params: %v", skillName, params)
+	log.Printf("[SkillCall] Handling skill: %s (TaskID: %s, ExecID: %s) with params: %v", skillName, taskID, executionID, params)
 
 	handler, ok := s.skillHandlers[skillName]
 	if !ok {
 		log.Printf("[SkillCall] No handler for skill: %s", skillName)
+		s.reportSkillResult(taskID, executionID, skillName, "", fmt.Errorf("no handler for skill: %s", skillName))
 		return
 	}
 
 	result, err := handler(params)
 	if err != nil {
 		log.Printf("[SkillCall] Error executing skill %s: %v", skillName, err)
+		s.reportSkillResult(taskID, executionID, skillName, "", err)
 		return
 	}
 
 	log.Printf("[SkillCall] Skill %s executed successfully: %s", skillName, result)
-	
-	// 如果需要，这里可以将结果发回 BotNexus
+
+	// 将结果报备回 BotNexus (如果配置了 Redis)
+	s.reportSkillResult(taskID, executionID, skillName, result, nil)
+}
+
+func (s *CombinedServer) reportSkillResult(taskID, executionID, skillName, result string, err error) {
+	if taskID == "" || taskID == "<nil>" {
+		return
+	}
+
+	status := "success"
+	errorMessage := ""
+	if err != nil {
+		status = "failed"
+		errorMessage = err.Error()
+	}
+
+	report := map[string]interface{}{
+		"type":         "skill_result",
+		"worker_id":    s.config.WorkerID,
+		"task_id":      taskID,
+		"execution_id": executionID,
+		"skill":        skillName,
+		"status":       status,
+		"result":       result,
+		"error":        errorMessage,
+		"timestamp":    time.Now().Unix(),
+	}
+
+	payload, _ := json.Marshal(report)
+
+	// 1. 尝试通过 Redis 报备 (Publish)
+	if s.redisClient != nil {
+		ctx := context.Background()
+		pubErr := s.redisClient.Publish(ctx, "botmatrix:worker:skill_result", payload).Err()
+		if pubErr == nil {
+			log.Printf("[SkillCall] Reported result for task %s via Redis", taskID)
+			return
+		}
+		log.Printf("[SkillCall] Failed to report result via Redis: %v. Trying WebSocket.", pubErr)
+	}
+
+	// 2. 尝试通过 WebSocket 报备 (如果连接可用)
+	if s.wsServer != nil {
+		err := s.wsServer.BroadcastJSON(report)
+		if err == nil {
+			log.Printf("[SkillCall] Reported result for task %s via WebSocket", taskID)
+			return
+		}
+		log.Printf("[SkillCall] Failed to report result via WebSocket: %v", err)
+	}
 }
 
 func (s *CombinedServer) HandleQueueEvent(msg map[string]interface{}) {
+	// 记录原始消息的一些关键信息，方便调试
+	postType, _ := msg["post_type"].(string)
+	messageType, _ := msg["message_type"].(string)
+	log.Printf("[Combined] Processing queue event: post_type=%s, message_type=%s", postType, messageType)
+
 	// 将 map 转换为 onebot.Event
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -311,8 +391,10 @@ func (s *CombinedServer) HandleQueueEvent(msg map[string]interface{}) {
 		return
 	}
 
-	// 复用 WebSocketServer 的 handleEvent 逻辑
-	// 但 WebSocketServer.handleEvent 是私有的，我们需要在 CombinedServer 中统一处理
+	// 处理 QQGuild ID 生成（确保 ID 映射正确）
+	processEventIDs(&event)
+
+	// 分发到内部处理器
 	s.dispatchInternalEvent(&event)
 }
 

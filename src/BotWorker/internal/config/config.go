@@ -43,6 +43,9 @@ type Config struct {
 
 	// Web UI 端口
 	LogPort int `json:"log_port"`
+
+	// 技能系统开关
+	EnableSkill bool `json:"enable_skill"`
 }
 
 // HTTPConfig 定义HTTP服务器配置
@@ -75,22 +78,22 @@ type WebSocketConfig struct {
 	CheckOrigin bool `json:"check_origin"`
 }
 
-// jsonConfig 用于解析JSON的中间结构
-type jsonConfig struct {
+// JSONConfig 用于解析JSON的中间结构
+type JSONConfig struct {
 	WorkerID string `json:"worker_id"`
 
 	HTTP struct {
-		Addr         string `json:"addr"`
-		ReadTimeout  string `json:"read_timeout"`
-		WriteTimeout string `json:"write_timeout"`
+		Addr         string      `json:"addr"`
+		ReadTimeout  interface{} `json:"read_timeout"`
+		WriteTimeout interface{} `json:"write_timeout"`
 	} `json:"http"`
 
 	WebSocket struct {
-		Addr         string `json:"addr"`
-		ReadTimeout  string `json:"read_timeout"`
-		WriteTimeout string `json:"write_timeout"`
-		PongTimeout  string `json:"pong_timeout"`
-		CheckOrigin  bool   `json:"check_origin"`
+		Addr         string      `json:"addr"`
+		ReadTimeout  interface{} `json:"read_timeout"`
+		WriteTimeout interface{} `json:"write_timeout"`
+		PongTimeout  interface{} `json:"pong_timeout"`
+		CheckOrigin  bool        `json:"check_origin"`
 	} `json:"websocket"`
 
 	Log struct {
@@ -120,27 +123,30 @@ type jsonConfig struct {
 	} `json:"redis"`
 
 	Weather struct {
-		APIKey   string `json:"api_key"`
-		Endpoint string `json:"endpoint"`
-		Timeout  string `json:"timeout"`
+		APIKey   string      `json:"api_key"`
+		Endpoint string      `json:"endpoint"`
+		Timeout  interface{} `json:"timeout"`
+		Mock     bool        `json:"mock"`
 	} `json:"weather"`
 
 	Translate struct {
-		APIKey   string `json:"api_key"`
-		Endpoint string `json:"endpoint"`
-		Timeout  string `json:"timeout"`
-		Region   string `json:"region"`
+		APIKey   string      `json:"api_key"`
+		Endpoint string      `json:"endpoint"`
+		Timeout  interface{} `json:"timeout"`
+		Region   string      `json:"region"`
 	} `json:"translate"`
 
 	AI struct {
-		APIKey          string `json:"api_key"`
-		Endpoint        string `json:"endpoint"`
-		Model           string `json:"model"`
-		Timeout         string `json:"timeout"`
-		OfficialGroupID string `json:"official_group_id"`
+		APIKey          string      `json:"api_key"`
+		Endpoint        string      `json:"endpoint"`
+		Model           string      `json:"model"`
+		Timeout         interface{} `json:"timeout"`
+		OfficialGroupID string      `json:"official_group_id"`
 	} `json:"ai"`
 
 	LogPort int `json:"log_port"`
+
+	EnableSkill bool `json:"enable_skill"`
 }
 
 // LogConfig 定义日志配置
@@ -207,6 +213,9 @@ type WeatherConfig struct {
 
 	// 天气API超时时间
 	Timeout time.Duration `json:"timeout"`
+
+	// 是否启用模拟数据
+	Mock bool `json:"mock"`
 }
 
 // TranslateConfig 定义翻译API配置
@@ -274,6 +283,7 @@ func DefaultConfig() *Config {
 			APIKey:   "",
 			Endpoint: "https://api.openweathermap.org/data/2.5/weather",
 			Timeout:  10 * time.Second,
+			Mock:     false,
 		},
 		Translate: TranslateConfig{
 			APIKey:   "",
@@ -289,6 +299,7 @@ func DefaultConfig() *Config {
 			OfficialGroupID: "",
 		},
 		LogPort: 8082,
+		EnableSkill: false, // 默认关闭技能系统
 	}
 }
 
@@ -315,10 +326,21 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("无法读取配置文件: %w", err)
 	}
 
-	// 先解析到jsonConfig中间结构
-	var jsonCfg jsonConfig
+	// 先解析到 JSONConfig 中间结构
+	var jsonCfg JSONConfig
 	if err := json.Unmarshal(content, &jsonCfg); err != nil {
 		return nil, fmt.Errorf("无法解析配置文件: %w", err)
+	}
+
+	// 使用通用的更新逻辑
+	return UpdateConfigFromJSON(config, content)
+}
+
+func UpdateConfigFromJSON(config *Config, content []byte) (*Config, error) {
+	// 先解析到 JSONConfig 中间结构
+	var jsonCfg JSONConfig
+	if err := json.Unmarshal(content, &jsonCfg); err != nil {
+		return nil, err
 	}
 
 	// 更新 WorkerID
@@ -326,39 +348,30 @@ func LoadConfig(configPath string) (*Config, error) {
 		config.WorkerID = jsonCfg.WorkerID
 	}
 
+
 	// 更新HTTP配置
 	if jsonCfg.HTTP.Addr != "" {
 		config.HTTP.Addr = jsonCfg.HTTP.Addr
 	}
-	if jsonCfg.HTTP.ReadTimeout != "" {
-		if readTimeout, err := time.ParseDuration(jsonCfg.HTTP.ReadTimeout); err == nil {
-			config.HTTP.ReadTimeout = readTimeout
-		}
+	if d, ok := parseDuration(jsonCfg.HTTP.ReadTimeout); ok {
+		config.HTTP.ReadTimeout = d
 	}
-	if jsonCfg.HTTP.WriteTimeout != "" {
-		if writeTimeout, err := time.ParseDuration(jsonCfg.HTTP.WriteTimeout); err == nil {
-			config.HTTP.WriteTimeout = writeTimeout
-		}
+	if d, ok := parseDuration(jsonCfg.HTTP.WriteTimeout); ok {
+		config.HTTP.WriteTimeout = d
 	}
 
 	// 更新WebSocket配置
 	if jsonCfg.WebSocket.Addr != "" {
 		config.WebSocket.Addr = jsonCfg.WebSocket.Addr
 	}
-	if jsonCfg.WebSocket.ReadTimeout != "" {
-		if readTimeout, err := time.ParseDuration(jsonCfg.WebSocket.ReadTimeout); err == nil {
-			config.WebSocket.ReadTimeout = readTimeout
-		}
+	if d, ok := parseDuration(jsonCfg.WebSocket.ReadTimeout); ok {
+		config.WebSocket.ReadTimeout = d
 	}
-	if jsonCfg.WebSocket.WriteTimeout != "" {
-		if writeTimeout, err := time.ParseDuration(jsonCfg.WebSocket.WriteTimeout); err == nil {
-			config.WebSocket.WriteTimeout = writeTimeout
-		}
+	if d, ok := parseDuration(jsonCfg.WebSocket.WriteTimeout); ok {
+		config.WebSocket.WriteTimeout = d
 	}
-	if jsonCfg.WebSocket.PongTimeout != "" {
-		if pongTimeout, err := time.ParseDuration(jsonCfg.WebSocket.PongTimeout); err == nil {
-			config.WebSocket.PongTimeout = pongTimeout
-		}
+	if d, ok := parseDuration(jsonCfg.WebSocket.PongTimeout); ok {
+		config.WebSocket.PongTimeout = d
 	}
 
 	// 更新CheckOrigin配置
@@ -410,9 +423,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if jsonCfg.Redis.Password != "" {
 		config.Redis.Password = jsonCfg.Redis.Password
 	}
-	if jsonCfg.Redis.DB != 0 {
-		config.Redis.DB = jsonCfg.Redis.DB
-	}
+	config.Redis.DB = jsonCfg.Redis.DB
 
 	// 更新天气API配置
 	if jsonCfg.Weather.APIKey != "" {
@@ -421,11 +432,10 @@ func LoadConfig(configPath string) (*Config, error) {
 	if jsonCfg.Weather.Endpoint != "" {
 		config.Weather.Endpoint = jsonCfg.Weather.Endpoint
 	}
-	if jsonCfg.Weather.Timeout != "" {
-		if timeout, err := time.ParseDuration(jsonCfg.Weather.Timeout); err == nil {
-			config.Weather.Timeout = timeout
-		}
+	if d, ok := parseDuration(jsonCfg.Weather.Timeout); ok {
+		config.Weather.Timeout = d
 	}
+	config.Weather.Mock = jsonCfg.Weather.Mock
 
 	// 更新翻译API配置
 	if jsonCfg.Translate.APIKey != "" {
@@ -434,10 +444,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	if jsonCfg.Translate.Endpoint != "" {
 		config.Translate.Endpoint = jsonCfg.Translate.Endpoint
 	}
-	if jsonCfg.Translate.Timeout != "" {
-		if timeout, err := time.ParseDuration(jsonCfg.Translate.Timeout); err == nil {
-			config.Translate.Timeout = timeout
-		}
+	if d, ok := parseDuration(jsonCfg.Translate.Timeout); ok {
+		config.Translate.Timeout = d
 	}
 	if jsonCfg.Translate.Region != "" {
 		config.Translate.Region = jsonCfg.Translate.Region
@@ -453,10 +461,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	if jsonCfg.AI.Model != "" {
 		config.AI.Model = jsonCfg.AI.Model
 	}
-	if jsonCfg.AI.Timeout != "" {
-		if timeout, err := time.ParseDuration(jsonCfg.AI.Timeout); err == nil {
-			config.AI.Timeout = timeout
-		}
+	if d, ok := parseDuration(jsonCfg.AI.Timeout); ok {
+		config.AI.Timeout = d
 	}
 	if jsonCfg.AI.OfficialGroupID != "" {
 		config.AI.OfficialGroupID = jsonCfg.AI.OfficialGroupID
@@ -466,7 +472,26 @@ func LoadConfig(configPath string) (*Config, error) {
 		config.LogPort = jsonCfg.LogPort
 	}
 
+	// 更新技能开关
+	config.EnableSkill = jsonCfg.EnableSkill
+
 	return config, nil
+}
+
+// parseDuration 解析 interface{} 类型的持续时间（支持 string 和 float64）
+func parseDuration(v interface{}) (time.Duration, bool) {
+	if v == nil {
+		return 0, false
+	}
+	switch val := v.(type) {
+	case string:
+		if d, err := time.ParseDuration(val); err == nil {
+			return d, true
+		}
+	case float64:
+		return time.Duration(val), true
+	}
+	return 0, false
 }
 
 // LoadFromCLI 从命令行参数加载配置

@@ -71,6 +71,9 @@ func (s *HTTPServer) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 处理 QQGuild ID 生成
+	processEventIDs(&event)
+
 	// 分发事件到对应的处理器
 	s.dispatchEvent(event)
 

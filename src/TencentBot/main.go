@@ -54,6 +54,7 @@ type Config struct {
 type NexusConn struct {
 	Conn *websocket.Conn
 	Name string
+	mu   sync.Mutex
 }
 
 var (
@@ -2197,6 +2198,8 @@ func sendToNexus(data interface{}) {
 
 	for _, nc := range conns {
 		go func(nc *NexusConn) {
+			nc.mu.Lock()
+			defer nc.mu.Unlock()
 			// Set a write deadline to prevent hanging
 			nc.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if err := nc.Conn.WriteJSON(data); err != nil {

@@ -169,8 +169,8 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 				Params map[string]string `json:"params"`
 			}
 			json.Unmarshal([]byte(draft.Data), &skillReq)
-			worker := m.FindWorkerBySkill(skillReq.Skill)
-			if worker == nil {
+			workerID := m.FindWorkerBySkill(skillReq.Skill)
+			if workerID == "" {
 				err = fmt.Errorf("未找到具备该能力的 Worker: %s", skillReq.Skill)
 			} else {
 				// 构造指令发送给 Worker
@@ -180,9 +180,7 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 					"params": skillReq.Params,
 					"user_id": draft.UserID,
 				}
-				worker.Mutex.Lock()
-				err = worker.Conn.WriteJSON(cmd)
-				worker.Mutex.Unlock()
+				err = m.SendToWorker(workerID, cmd)
 			}
 		}
 

@@ -1271,7 +1271,11 @@ func HandleGetConfig(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		json.NewEncoder(w).Encode(m.Config)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"status":  "ok",
+			"config":  m.Config,
+		})
 	}
 }
 
@@ -1299,8 +1303,23 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 		m.Config.DefaultAdminPassword = newConfig.DefaultAdminPassword
 		m.Config.StatsFile = newConfig.StatsFile
 
+		// 数据库配置 (PostgreSQL)
+		m.Config.PGHost = newConfig.PGHost
+		m.Config.PGPort = newConfig.PGPort
+		m.Config.PGUser = newConfig.PGUser
+		m.Config.PGPassword = newConfig.PGPassword
+		m.Config.PGDBName = newConfig.PGDBName
+		m.Config.PGSSLMode = newConfig.PGSSLMode
+
+		// 功能开关
+		m.Config.EnableSkill = newConfig.EnableSkill
+		m.Config.LogLevel = newConfig.LogLevel
+		m.Config.AutoReply = newConfig.AutoReply
+
 		if err := m.SaveConfig(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
 				"status":  "error",
 				"message": fmt.Sprintf(common.T(lang, "config_save_failed"), err),
 			})
@@ -1308,6 +1327,7 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 		}
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
 			"status":  "ok",
 			"message": common.T(lang, "config_updated"),
 		})

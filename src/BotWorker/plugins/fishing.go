@@ -196,7 +196,8 @@ func (p *FishingPlugin) doFish(userIDStr string) (string, error) {
 	totalPoints := basePoints + bonusPoints
 
 	// 增加积分
-	err := db.AddPoints(p.db, userIDStr, totalPoints, common.T("", "fishing_points_reason|钓鱼获得奖励"), "fishing")
+	uid, _ := strconv.ParseInt(userIDStr, 10, 64)
+	err := db.AddPoints(p.db, uid, totalPoints, common.T("", "fishing_points_reason|钓鱼获得奖励"), "fishing")
 	if err != nil {
 		return common.T("", "fishing_points_add_fail|糟糕，系统在为你发放积分时出错了。"), nil
 	}

@@ -1260,7 +1260,7 @@ const app = createApp({
                 body: JSON.stringify(backendConfig.value)
             });
             if (data && data.success) {
-                // Config saved
+                alert(t('action_success') || 'Configuration saved successfully');
             }
         };
 

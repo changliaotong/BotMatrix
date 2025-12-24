@@ -77,7 +77,7 @@ func (p *DialogDemoPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 1. 处理已存在的对话
-		dialog := GetDialog(event.GroupID, event.UserID)
+		dialog := GetDialog(event.GroupID.Int64(), event.UserID.Int64())
 		if dialog != nil && dialog.Type == "set_welcome" {
 			text := event.RawMessage
 			if text == "" {
@@ -106,7 +106,7 @@ func (p *DialogDemoPlugin) Init(robot plugin.Robot) {
 				mode := dialog.Data["mode"]
 				msg := fmt.Sprintf(common.T("", "dialog_demo_updated|欢迎语设置成功！\n模式：%s\n内容：%s"), mode, text)
 				p.sendMessage(robot, event, msg)
-				EndDialog(event.GroupID, event.UserID)
+				EndDialog(event.GroupID.Int64(), event.UserID.Int64())
 				return nil
 			}
 			return nil

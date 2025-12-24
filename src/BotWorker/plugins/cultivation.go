@@ -198,7 +198,8 @@ func (p *CultivationPlugin) doCultivate(userIDStr string) (string, error) {
 
 		// 突破奖励积分
 		rewardPoints := level * 50
-		err := db.AddPoints(p.db, userIDStr, rewardPoints, common.T("", "cultivation_breakthrough_reason|突破境界奖励"), "cultivation_breakthrough")
+		uid, _ := strconv.ParseInt(userIDStr, 10, 64)
+		err := db.AddPoints(p.db, uid, rewardPoints, common.T("", "cultivation_breakthrough_reason|突破境界奖励"), "cultivation_breakthrough")
 		if err != nil {
 			log.Printf(common.T("", "cultivation_reward_failed_log|发放修炼突破奖励失败")+": %v", err)
 		}

@@ -16,9 +16,9 @@ import (
 type PointsPlugin struct {
 	db *sql.DB
 	// 存储用户上次签到时间，key为用户ID，value为签到时间
-	lastSignInTime map[string]time.Time
+	lastSignInTime map[int64]time.Time
 	// 存储用户上次领积分时间，key为用户ID，value为领积分时间
-	lastGetPointsTime map[string]time.Time
+	lastGetPointsTime map[int64]time.Time
 	// 命令解析器
 	cmdParser *CommandParser
 }
@@ -27,8 +27,8 @@ type PointsPlugin struct {
 func NewPointsPlugin(database *sql.DB) *PointsPlugin {
 	return &PointsPlugin{
 		db:                database,
-		lastSignInTime:    make(map[string]time.Time),
-		lastGetPointsTime: make(map[string]time.Time),
+		lastSignInTime:    make(map[int64]time.Time),
+		lastGetPointsTime: make(map[int64]time.Time),
 		cmdParser:         NewCommandParser(),
 	}
 }
@@ -129,34 +129,43 @@ func (p *PointsPlugin) GetSkills() []plugin.SkillCapability {
 
 // HandleSkill 处理技能调用
 func (p *PointsPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skillName string, params map[string]string) (string, error) {
-	var userID string
+	var userID int64
 	if event != nil {
-		userID = fmt.Sprintf("%d", event.UserID)
+		userID = event.UserID.Int64()
 	} else if params["user_id"] != "" {
-		userID = params["user_id"]
+		val, err := strconv.ParseInt(params["user_id"], 10, 64)
+		if err == nil {
+			userID = val
+		}
 	}
 
 	switch skillName {
 	case "get_points":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		return p.doGetPoints(userID)
 	case "sign_in_points":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		return p.doSignInPoints(userID, "")
 	case "get_points_rank":
 		return p.doGetPointsRank()
 	case "transfer_points":
-		fromUserID := params["from_user_id"]
-		if fromUserID == "" {
+		fromUserIDStr := params["from_user_id"]
+		var fromUserID int64
+		if fromUserIDStr == "" {
 			fromUserID = userID
+		} else {
+			fromUserID, _ = strconv.ParseInt(fromUserIDStr, 10, 64)
 		}
-		toUserID := params["to_user_id"]
+
+		toUserIDStr := params["to_user_id"]
+		toUserID, _ := strconv.ParseInt(toUserIDStr, 10, 64)
+
 		amountStr := params["amount"]
-		if fromUserID == "" || toUserID == "" || amountStr == "" {
+		if fromUserID == 0 || toUserID == 0 || amountStr == "" {
 			return "", fmt.Errorf(common.T("", "points_missing_params|缺少必要参数"))
 		}
 		amount, err := strconv.Atoi(amountStr)
@@ -165,12 +174,12 @@ func (p *PointsPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skil
 		}
 		return p.doTransferPoints(fromUserID, toUserID, amount, common.T("", "points_reason_transfer|转账"))
 	case "get_daily_bonus":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		return p.doGetDailyBonus(userID)
 	case "deposit_points":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		amountStr := params["amount"]
@@ -183,7 +192,7 @@ func (p *PointsPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skil
 		}
 		return p.doDepositPoints(userID, amount)
 	case "withdraw_points":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		amountStr := params["amount"]
@@ -196,7 +205,7 @@ func (p *PointsPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skil
 		}
 		return p.doWithdrawPoints(userID, amount)
 	case "freeze_points":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		amountStr := params["amount"]
@@ -207,14 +216,9 @@ func (p *PointsPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skil
 		if err != nil || amount <= 0 {
 			return "", fmt.Errorf(common.T("", "points_amount_invalid|❌ 积分数量无效，请输入大于0的整数"))
 		}
-		err = db.FreezePoints(p.db, userID, amount, common.T("", "points_reason_manual_freeze|手动冻结"))
-		if err != nil {
-			return "", err
-		}
-		frozen, _ := db.GetFrozenPoints(p.db, userID)
-		return fmt.Sprintf(common.T("", "points_freeze_success|✅ 成功冻结 %d 积分，当前已冻结总额：%d"), amount, frozen), nil
+		return p.doFreezePoints(userID, amount)
 	case "unfreeze_points":
-		if userID == "" {
+		if userID == 0 {
 			return "", fmt.Errorf(common.T("", "points_missing_user_id|缺少用户ID参数"))
 		}
 		amountStr := params["amount"]
@@ -225,14 +229,9 @@ func (p *PointsPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skil
 		if err != nil || amount <= 0 {
 			return "", fmt.Errorf(common.T("", "points_amount_invalid|❌ 积分数量无效，请输入大于0的整数"))
 		}
-		err = db.UnfreezePoints(p.db, userID, amount, common.T("", "points_reason_manual_unfreeze|手动解冻"))
-		if err != nil {
-			return "", err
-		}
-		frozen, _ := db.GetFrozenPoints(p.db, userID)
-		return fmt.Sprintf(common.T("", "points_unfreeze_success|✅ 成功解冻 %d 积分，当前已冻结总额：%d"), amount, frozen), nil
+		return p.doUnfreezePoints(userID, amount)
 	default:
-		return "", fmt.Errorf("unknown skill: %s", skillName)
+		return "", fmt.Errorf(common.T("", "points_skill_not_found|未知技能: %s"), skillName)
 	}
 }
 
@@ -444,7 +443,7 @@ func (p *PointsPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, mess
 	}
 }
 
-func (p *PointsPlugin) AddPoints(userID string, points int, reason string, category string) {
+func (p *PointsPlugin) AddPoints(userID int64, points int, reason string, category string) {
 	if p.db == nil {
 		return
 	}
@@ -452,7 +451,7 @@ func (p *PointsPlugin) AddPoints(userID string, points int, reason string, categ
 }
 
 // doGetPoints 执行获取积分逻辑
-func (p *PointsPlugin) doGetPoints(userID string) (string, error) {
+func (p *PointsPlugin) doGetPoints(userID int64) (string, error) {
 	userPoints, err := db.GetPoints(p.db, userID)
 	if err != nil {
 		log.Printf(common.T("", "points_query_log_failed|查询积分失败")+": %v", err)
@@ -462,7 +461,7 @@ func (p *PointsPlugin) doGetPoints(userID string) (string, error) {
 }
 
 // doSignInPoints 执行签到积分逻辑
-func (p *PointsPlugin) doSignInPoints(userID string, trigger string) (string, error) {
+func (p *PointsPlugin) doSignInPoints(userID int64, trigger string) (string, error) {
 	now := time.Now()
 	if lastSignIn, ok := p.lastSignInTime[userID]; ok {
 		if isSameDay(lastSignIn, now) {
@@ -517,14 +516,14 @@ func (p *PointsPlugin) doGetPointsRank() (string, error) {
 		default:
 			medal = fmt.Sprintf("%d.", i+1)
 		}
-		msg += fmt.Sprintf(common.T("", "points_rank_item|%s 用户(%s): %d 积分"), medal, item.UserID, item.Points) + "\n"
+		msg += fmt.Sprintf(common.T("", "points_rank_item|%s 用户(%d): %d 积分"), medal, item.UserID, item.Points) + "\n"
 	}
 	msg += "------------------------\n"
 	return msg, nil
 }
 
 // doTransferPoints 执行转账积分逻辑
-func (p *PointsPlugin) doTransferPoints(fromUserID, toUserID string, points int, reason string) (string, error) {
+func (p *PointsPlugin) doTransferPoints(fromUserID, toUserID int64, points int, reason string) (string, error) {
 	if fromUserID == toUserID {
 		return "", fmt.Errorf(common.T("", "points_transfer_self|不能给自己转账哦"))
 	}
@@ -534,25 +533,26 @@ func (p *PointsPlugin) doTransferPoints(fromUserID, toUserID string, points int,
 		return "", fmt.Errorf(common.T("", "points_op_failed|操作失败: %v"), err)
 	}
 
-	return fmt.Sprintf(common.T("", "points_transfer_success|✅ %s成功！\n转账给: %s\n类型: %s\n金额: %d 积分"), reason, toUserID, reason, points), nil
+	return fmt.Sprintf(common.T("", "points_transfer_success|✅ %s成功！\n转账给: %d\n类型: %s\n金额: %d 积分"), reason, toUserID, reason, points), nil
 }
 
 // doGetDailyBonus 执行领取每日福利逻辑
-func (p *PointsPlugin) doGetDailyBonus(userID string) (string, error) {
+func (p *PointsPlugin) doGetDailyBonus(userID int64) (string, error) {
 	lastGetTime, ok := p.lastGetPointsTime[userID]
 	now := time.Now()
 	if ok && isSameDay(lastGetTime, now) {
 		return "", fmt.Errorf(common.T("", "points_get_already|您今天已经领取过福利了"))
 	}
 
-	err := db.AddPoints(p.db, userID, 5, common.T("", "points_reason_daily_bonus|领取每日福利"), "daily_bonus")
+	err := db.AddPoints(p.db, userID, 20, common.T("", "points_reason_daily|每日福利"), "daily_bonus")
 	if err != nil {
-		return "", fmt.Errorf(common.T("", "points_get_failed|领取失败，请稍后再试"))
+		log.Printf(common.T("", "points_daily_log_failed|领取每日福利失败")+": %v", err)
+		return "", fmt.Errorf(common.T("", "points_daily_failed|领取失败，请稍后再试"))
 	}
 	p.lastGetPointsTime[userID] = now
 
 	userPoints, _ := db.GetPoints(p.db, userID)
-	return fmt.Sprintf(common.T("", "points_get_success|✅ 福利领取成功，获得 5 积分，当前总积分：%d"), userPoints), nil
+	return fmt.Sprintf(common.T("", "points_daily_success|✅ 领取成功，获得 20 积分，当前总积分：%d"), userPoints), nil
 }
 
 // doDepositPoints 执行存积分逻辑

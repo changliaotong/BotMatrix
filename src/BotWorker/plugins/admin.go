@@ -251,8 +251,9 @@ func (p *AdminPlugin) doSetVoice(groupID string, voice string) string {
 	}
 
 	input := strings.TrimSpace(voice)
+	gid, _ := strconv.ParseInt(groupID, 10, 64)
 	if input == "" {
-		currentID, _ := db.GetGroupVoiceID(p.db, groupID)
+		currentID, _ := db.GetGroupVoiceID(p.db, gid)
 		list := BuildVoiceList(currentID)
 		return list + "\n" + common.T("", "admin_set_voice_usage|💡 使用方法：/设置语音 <名称/编号/随机>")
 	}
@@ -279,7 +280,7 @@ func (p *AdminPlugin) doSetVoice(groupID string, voice string) string {
 		return "❌ " + common.T("", "admin_voice_not_found_hint|未找到匹配的语音，请输入正确的名称或编号。")
 	}
 
-	if err := db.SetGroupVoiceID(p.db, groupID, item.ID); err != nil {
+	if err := db.SetGroupVoiceID(p.db, gid, item.ID); err != nil {
 		log.Printf("设置群语音失败: %v", err)
 		return "❌ " + common.T("", "admin_set_voice_failed|设置语音失败，请稍后再试。")
 	}
@@ -316,13 +317,15 @@ func (p *AdminPlugin) doEnableFeature(groupID string, rawFeature string, userID 
 	// 权限检查
 	uid, _ := strconv.ParseInt(userID, 10, 64)
 	gid, _ := strconv.ParseInt(groupID, 10, 64)
+	fuid := onebot.FlexibleInt64(uid)
+	fgid := onebot.FlexibleInt64(gid)
 
 	if requireSuperAdmin {
-		if !isSuperAdmin(p.db, gid, uid) {
+		if !isSuperAdmin(p.db, fgid, fuid) {
 			return common.T("", "admin_insufficient_perms_super|❌ 只有超级管理员才能操作此功能。"), nil
 		}
 	} else if requireAdmin {
-		if !isGroupAdmin(p.db, gid, uid) {
+		if !isGroupAdmin(p.db, fgid, fuid) {
 			return common.T("", "admin_insufficient_perms_admin|❌ 只有群管理员才能操作此功能。"), nil
 		}
 	}
@@ -334,9 +337,9 @@ func (p *AdminPlugin) doEnableFeature(groupID string, rawFeature string, userID 
 
 	var err error
 	if defaultEnabled {
-		err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
+		err = db.DeleteGroupFeatureOverride(p.db, gid, feature)
 	} else {
-		err = db.SetGroupFeatureOverride(p.db, groupID, feature, true)
+		err = db.SetGroupFeatureOverride(p.db, gid, feature, true)
 	}
 
 	if err != nil {
@@ -361,13 +364,15 @@ func (p *AdminPlugin) doDisableFeature(groupID string, rawFeature string, userID
 	// 权限检查
 	uid, _ := strconv.ParseInt(userID, 10, 64)
 	gid, _ := strconv.ParseInt(groupID, 10, 64)
+	fuid := onebot.FlexibleInt64(uid)
+	fgid := onebot.FlexibleInt64(gid)
 
 	if requireSuperAdmin {
-		if !isSuperAdmin(p.db, gid, uid) {
+		if !isSuperAdmin(p.db, fgid, fuid) {
 			return common.T("", "admin_insufficient_perms_super|❌ 只有超级管理员才能操作此功能。"), nil
 		}
 	} else if requireAdmin {
-		if !isGroupAdmin(p.db, gid, uid) {
+		if !isGroupAdmin(p.db, fgid, fuid) {
 			return common.T("", "admin_insufficient_perms_admin|❌ 只有群管理员才能操作此功能。"), nil
 		}
 	}
@@ -379,9 +384,9 @@ func (p *AdminPlugin) doDisableFeature(groupID string, rawFeature string, userID
 
 	var err error
 	if defaultEnabled {
-		err = db.SetGroupFeatureOverride(p.db, groupID, feature, false)
+		err = db.SetGroupFeatureOverride(p.db, gid, feature, false)
 	} else {
-		err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
+		err = db.DeleteGroupFeatureOverride(p.db, gid, feature)
 	}
 
 	if err != nil {
@@ -398,8 +403,9 @@ func (p *AdminPlugin) doSetQAMode(groupID string, mode string) string {
 		return common.T("", "admin_no_db_feature|数据库未连接，无法设置功能。")
 	}
 
-	if err := db.SetGroupQAMode(p.db, groupID, mode); err != nil {
-		log.Printf("设置模式 %s 失败: %v", mode, err)
+	gid, _ := strconv.ParseInt(groupID, 10, 64)
+	if err := db.SetGroupQAMode(p.db, gid, mode); err != nil {
+		log.Printf("设置群问答模式失败: %v", err)
 		return "设置失败"
 	}
 
@@ -487,7 +493,8 @@ func (p *AdminPlugin) handleSaveGroupVoice(robot plugin.Robot, event *onebot.Eve
 		return
 	}
 
-	if err := db.SetGroupVoiceID(p.db, groupID, voiceID); err != nil {
+	gid, _ := strconv.ParseInt(groupID, 10, 64)
+	if err := db.SetGroupVoiceID(p.db, gid, voiceID); err != nil {
 		log.Printf("设置群语音失败: %v", err)
 		p.sendMessage(robot, event, "❌ "+common.T("", "admin_set_voice_failed|设置语音失败，请稍后再试。"))
 		return
@@ -616,36 +623,30 @@ func normalizeFeatureName(name string) (string, bool, bool) {
 	return featureID, requireAdmin, requireSuperAdmin
 }
 
-func isGroupAdmin(database *sql.DB, groupID, userID int64) bool {
+func isGroupAdmin(database *sql.DB, groupID, userID onebot.FlexibleInt64) bool {
 	if database == nil {
 		return false
 	}
 
-	groupIDStr := fmt.Sprintf("%d", groupID)
-	userIDStr := fmt.Sprintf("%d", userID)
-
-	isAdmin, err := db.IsGroupAdmin(database, groupIDStr, userIDStr)
+	isAdmin, err := db.IsGroupAdmin(database, groupID.Int64(), userID.Int64())
 	if err != nil {
-		log.Printf("检查群 %d 中用户 %d 的管理员状态失败: %v", groupID, userID, err)
+		log.Printf("检查群 %d 中用户 %d 的管理员状态失败: %v", groupID.Int64(), userID.Int64(), err)
 		return false
 	}
 
 	return isAdmin
 }
 
-func isSuperAdmin(database *sql.DB, groupID, userID int64) bool {
+func isSuperAdmin(database *sql.DB, groupID, userID onebot.FlexibleInt64) bool {
 	if database == nil {
 		return false
 	}
 
-	groupIDStr := fmt.Sprintf("%d", groupID)
-	userIDStr := fmt.Sprintf("%d", userID)
-
-	ok, err := db.IsSuperAdmin(database, groupIDStr, userIDStr)
+	isSuper, err := db.IsSuperAdmin(database, groupID.Int64(), userID.Int64())
 	if err != nil {
-		log.Printf("检查群 %d 中用户 %d 的超级管理员状态失败: %v", groupID, userID, err)
+		log.Printf("检查群 %d 中用户 %d 的超级管理员状态失败: %v", groupID.Int64(), userID.Int64(), err)
 		return false
 	}
 
-	return ok
+	return isSuper
 }

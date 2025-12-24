@@ -12,6 +12,12 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### [v1.5.0] - 2025-12-24
+- **PostgreSQL-First Architecture**: Completely removed legacy SQLite support to focus on enterprise-grade performance and scalability with PostgreSQL.
+- **Dependency Optimization**: Stripped out unused database drivers and legacy dependencies, resulting in a cleaner and more maintainable core codebase.
+- **Modernized Config UI**: Re-engineered the Admin Web UI configuration grid to provide direct, real-time management of PostgreSQL, Redis, and core system parameters.
+- **Improved Type Safety**: Resolved API data type mismatches for configuration fields, ensuring robust communication between the Vue.js frontend and Go backend.
+
 ### [v1.4.0] - 2025-12-24
 - **Web UI Standardization**: Standardized the administrative Web UI across all major BotMatrix components (FeishuBot, KookBot, SlackBot, TelegramBot, EmailBot, etc.) with a consistent tabbed interface.
 - **Enhanced Log Management**: Integrated real-time log streaming with 2000ms auto-refresh and log rotation management into each bot's local admin panel.

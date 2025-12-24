@@ -1201,14 +1201,14 @@ func (p *GroupManagerPlugin) containsSensitiveWords(message string) bool {
 }
 
 // 检查是否为管理员
-func (p *GroupManagerPlugin) isAdmin(groupID, userID int64) bool {
+func (p *GroupManagerPlugin) isAdmin(groupID, userID onebot.FlexibleInt64) bool {
 	// 从数据库检查是否为群管理员
-	groupIDStr := fmt.Sprintf("%d", groupID)
-	userIDStr := fmt.Sprintf("%d", userID)
+	groupIDStr := groupID.String()
+	userIDStr := userID.String()
 
 	isAdmin, err := db.IsGroupAdmin(p.db, groupIDStr, userIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_check_admin_status|检查管理员状态"), groupID, common.T("", "of_user|用户"), userID, common.T("", "failed|失败"), err)
+		log.Printf("[GroupManager] %s %s %s %s %s: %v", common.T("", "group_manager_check_admin_status|检查管理员状态"), groupIDStr, common.T("", "of_user|用户"), userIDStr, common.T("", "failed|失败"), err)
 		return false
 	}
 
@@ -1216,14 +1216,14 @@ func (p *GroupManagerPlugin) isAdmin(groupID, userID int64) bool {
 }
 
 // 检查是否为超级管理员
-func (p *GroupManagerPlugin) isSuperAdmin(groupID, userID int64) bool {
+func (p *GroupManagerPlugin) isSuperAdmin(groupID, userID onebot.FlexibleInt64) bool {
 	// 从数据库检查是否为超级管理员
-	groupIDStr := fmt.Sprintf("%d", groupID)
-	userIDStr := fmt.Sprintf("%d", userID)
+	groupIDStr := groupID.String()
+	userIDStr := userID.String()
 
 	isSuperAdmin, err := db.IsSuperAdmin(p.db, groupIDStr, userIDStr)
 	if err != nil {
-		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_check_superadmin_status|检查超级管理员状态"), groupID, common.T("", "of_user|用户"), userID, common.T("", "failed|失败"), err)
+		log.Printf("[GroupManager] %s %s %s %s %s: %v", common.T("", "group_manager_check_superadmin_status|检查超级管理员状态"), groupIDStr, common.T("", "of_user|用户"), userIDStr, common.T("", "failed|失败"), err)
 		return false
 	}
 
@@ -1304,7 +1304,7 @@ func (p *GroupManagerPlugin) handleSetTitleLogic(robot plugin.Robot, event *oneb
 }
 
 // 检查是否为群主
-func (p *GroupManagerPlugin) isOwner(robot plugin.Robot, groupID, userID int64) bool {
+func (p *GroupManagerPlugin) isOwner(robot plugin.Robot, groupID, userID onebot.FlexibleInt64) bool {
 	if robot == nil {
 		return false
 	}
@@ -1314,7 +1314,7 @@ func (p *GroupManagerPlugin) isOwner(robot plugin.Robot, groupID, userID int64) 
 		UserID:  userID,
 	})
 	if err != nil {
-		log.Printf("[GroupManager] %s %d %s %d %s: %v", common.T("", "group_manager_get_member_info_failed_user_log|获取用户群成员信息失败"), userID, common.T("", "in_group|在群"), groupID, common.T("", "failed|失败"), err)
+		log.Printf("[GroupManager] %s %s %s %s %s: %v", common.T("", "group_manager_get_member_info_failed_user_log|获取用户群成员信息失败"), userID.String(), common.T("", "in_group|在群"), groupID.String(), common.T("", "failed|失败"), err)
 		return false
 	}
 
@@ -1596,7 +1596,7 @@ func (p *GroupManagerPlugin) checkBanExpiration(robot plugin.Robot) {
 }
 
 // 解析用户ID
-func parseUserID(str string) (int64, error) {
+func parseUserID(str string) (onebot.FlexibleInt64, error) {
 	// 处理 @ 开头的用户ID
 	if strings.HasPrefix(str, "@") {
 		str = str[1:]
@@ -1615,7 +1615,7 @@ func parseUserID(str string) (int64, error) {
 		userID = userID*10 + int64(c-'0')
 	}
 
-	return userID, nil
+	return onebot.FlexibleInt64(userID), nil
 }
 
 // 解析时长

@@ -187,6 +187,11 @@ type WeatherInfo struct {
 
 // getWeatherInfo 获取天气信息
 func (p *WeatherPlugin) getWeatherInfo(city string) (*WeatherInfo, error) {
+	// 如果启用了模拟数据，或者API密钥为空且城市名为"模拟"或"mock"
+	if p.cfg.Mock || (p.cfg.APIKey == "" && (city == "模拟" || strings.ToLower(city) == "mock")) {
+		return p.getMockWeatherInfo(city), nil
+	}
+
 	// 检查API密钥是否配置
 	if p.cfg.APIKey == "" {
 		return nil, fmt.Errorf(common.T("", "weather_api_key_not_set|❌ 未配置天气API Key"))
@@ -256,4 +261,60 @@ func (p *WeatherPlugin) formatWeatherInfo(info *WeatherInfo) string {
 		time.Unix(info.Sys.Sunrise, 0).Format("15:04"),
 		time.Unix(info.Sys.Sunset, 0).Format("15:04"),
 	)
+}
+
+// getMockWeatherInfo 返回模拟的天气信息
+func (p *WeatherPlugin) getMockWeatherInfo(city string) *WeatherInfo {
+	if city == "模拟" || strings.ToLower(city) == "mock" {
+		city = "北京"
+	}
+
+	return &WeatherInfo{
+		Name: city + " (模拟数据)",
+		Main: struct {
+			Temp      float64 `json:"temp"`
+			FeelsLike float64 `json:"feels_like"`
+			TempMin   float64 `json:"temp_min"`
+			TempMax   float64 `json:"temp_max"`
+			Pressure  int     `json:"pressure"`
+			Humidity  int     `json:"humidity"`
+		}{
+			Temp:      25.5,
+			FeelsLike: 26.8,
+			TempMin:   20.0,
+			TempMax:   30.0,
+			Pressure:  1013,
+			Humidity:  65,
+		},
+		Weather: []struct {
+			Main        string `json:"main"`
+			Description string `json:"description"`
+			Icon        string `json:"icon"`
+		}{
+			{
+				Main:        "Clear",
+				Description: "晴朗",
+				Icon:        "01d",
+			},
+		},
+		Wind: struct {
+			Speed float64 `json:"speed"`
+			Deg   int     `json:"deg"`
+		}{
+			Speed: 3.5,
+			Deg:   180,
+		},
+		Clouds: struct {
+			All int `json:"all"`
+		}{
+			All: 10,
+		},
+		Sys: struct {
+			Sunrise int64 `json:"sunrise"`
+			Sunset  int64 `json:"sunset"`
+		}{
+			Sunrise: time.Now().Add(-6 * time.Hour).Unix(),
+			Sunset:  time.Now().Add(6 * time.Hour).Unix(),
+		},
+	}
 }

@@ -868,119 +868,60 @@
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- Server Config -->
+                        <!-- Core System Config -->
                         <div class="p-6 rounded-[2.5rem] card-blur border border-black/5 dark:border-white/5 space-y-4">
                             <h3 class="font-bold dark:text-white uppercase tracking-wider text-sm flex items-center gap-2">
-                                <i data-lucide="server" class="w-4 h-4 text-matrix"></i>
-                                {{ t('core_config') || 'Core Configuration' }}
+                                <i data-lucide="shield-check" class="w-4 h-4 text-matrix"></i>
+                                {{ t('settings_server') || 'Core System Config' }}
                             </h3>
                             <div class="space-y-4">
-                                <div class="space-y-1">
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('system_name') }}</label>
-                                    <input v-model="backendConfig.site_name" placeholder="BotMatrix Intelligence"
-                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
-                                </div>
-                                <div class="space-y-1">
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('admin_email') }}</label>
-                                    <input v-model="backendConfig.admin_email" placeholder="admin@botmatrix.ai"
-                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
-                                </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div class="space-y-1">
-                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('http_host') }}</label>
-                                        <input v-model="backendConfig.http_host" placeholder="0.0.0.0"
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_ws_port') }}</label>
+                                        <input v-model="backendConfig.ws_port" placeholder=":3001"
                                                class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
                                     </div>
                                     <div class="space-y-1">
-                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('http_port') }}</label>
-                                        <input v-model="backendConfig.http_port" placeholder="8080"
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_webui_port') }}</label>
+                                        <input v-model="backendConfig.webui_port" placeholder=":5000"
                                                class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-3 p-4 rounded-2xl bg-black/5 dark:bg-white/5">
-                                    <div class="flex-1">
-                                        <div class="text-sm font-bold dark:text-white">{{ t('debug_mode') }}</div>
-                                        <p class="text-[10px] text-gray-500 uppercase tracking-wider">{{ t('debug_mode_desc') }}</p>
-                                    </div>
-                                    <button @click="backendConfig.debug = !backendConfig.debug" 
-                                            :class="backendConfig.debug ? 'bg-matrix' : 'bg-gray-400'"
-                                            class="w-12 h-6 rounded-full relative transition-colors duration-300">
-                                        <div :class="backendConfig.debug ? 'translate-x-6' : 'translate-x-1'"
-                                             class="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300"></div>
-                                    </button>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_jwt_secret') }}</label>
+                                    <input v-model="backendConfig.jwt_secret" type="password"
+                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                    <p class="text-[8px] text-gray-500 uppercase tracking-widest ml-1">{{ t('config_jwt_secret_help') }}</p>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_admin_pwd') }}</label>
+                                    <input v-model="backendConfig.default_admin_password" type="password"
+                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Network Protocols -->
+                        <!-- Redis Config -->
                         <div class="p-6 rounded-[2.5rem] card-blur border border-black/5 dark:border-white/5 space-y-4">
                             <h3 class="font-bold dark:text-white uppercase tracking-wider text-sm flex items-center gap-2">
-                                <i data-lucide="network" class="w-4 h-4 text-matrix"></i>
-                                {{ t('network_config') }}
+                                <i data-lucide="zap" class="w-4 h-4 text-matrix"></i>
+                                {{ t('redis_config_title') || 'Redis Configuration' }}
                             </h3>
-                            <div class="space-y-6">
-                                <!-- WebSocket Server -->
-                                <div class="space-y-3">
-                                    <div class="flex items-center justify-between">
-                                        <h4 class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('ws_server_config') }}</h4>
-                                        <span class="px-2 py-0.5 rounded text-[8px] font-bold bg-matrix/10 text-matrix uppercase">{{ t('status_active') }}</span>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div class="space-y-1">
-                                            <label class="text-[8px] font-bold text-gray-500 uppercase ml-1">{{ t('host') }}</label>
-                                            <input v-model="backendConfig.ws_host" placeholder="0.0.0.0"
-                                                   class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-matrix outline-none">
-                                        </div>
-                                        <div class="space-y-1">
-                                            <label class="text-[8px] font-bold text-gray-500 uppercase ml-1">{{ t('port') }}</label>
-                                            <input v-model="backendConfig.ws_port" placeholder="3001"
-                                                   class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-matrix outline-none">
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div class="space-y-1">
-                                            <label class="text-[8px] font-bold text-gray-500 uppercase ml-1">{{ t('heartbeat_ms') }}</label>
-                                            <input v-model="backendConfig.ws_heartbeat" type="number"
-                                                   class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-matrix outline-none">
-                                        </div>
-                                        <div class="space-y-1">
-                                            <label class="text-[8px] font-bold text-gray-500 uppercase ml-1">{{ t('format') }}</label>
-                                            <select v-model="backendConfig.ws_format" 
-                                                    class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-matrix outline-none">
-                                                <option value="json">{{ t('format_json') }}</option>
-                                                <option value="string">{{ t('format_string') }}</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                            <div class="space-y-4">
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_redis_addr') }}</label>
+                                    <input v-model="backendConfig.redis_addr" placeholder="localhost:6379"
+                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
                                 </div>
-
-                                <!-- Bot Management -->
-                                <div class="pt-4 border-t border-black/5 dark:border-white/5">
-                                    <h4 class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">{{ t('instance_management') }}</h4>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-dashed border-gray-500/30 flex flex-col items-center justify-center text-center space-y-3">
-                                            <div class="w-8 h-8 rounded-full bg-matrix/10 flex items-center justify-center text-matrix">
-                                                <i data-lucide="plus" class="w-4 h-4"></i>
-                                            </div>
-                                            <div>
-                                                <div class="text-[10px] font-bold dark:text-white">{{ t('add_bot') }}</div>
-                                            </div>
-                                            <button @click="showAddBotModal = true" class="px-4 py-1.5 rounded-lg bg-matrix/20 text-matrix text-[10px] font-bold hover:bg-matrix/30 transition-colors">
-                                                {{ t('deploy') }}
-                                            </button>
-                                        </div>
-                                        <div class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-dashed border-gray-500/30 flex flex-col items-center justify-center text-center space-y-3">
-                                            <div class="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                                                <i data-lucide="container" class="w-4 h-4"></i>
-                                            </div>
-                                            <div>
-                                                <div class="text-[10px] font-bold dark:text-white">{{ t('docker_bot') }}</div>
-                                            </div>
-                                            <button @click="addDockerBot" class="px-4 py-1.5 rounded-lg bg-blue-500/20 text-blue-500 text-[10px] font-bold hover:bg-blue-500/30 transition-colors">
-                                                {{ t('container') }}
-                                            </button>
-                                        </div>
-                                    </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_redis_pwd') }}</label>
+                                    <input v-model="backendConfig.redis_pwd" type="password" placeholder="******"
+                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_stats_file') }}</label>
+                                    <input v-model="backendConfig.stats_file" placeholder="stats.json"
+                                           class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
                                 </div>
                             </div>
                         </div>
@@ -1011,6 +952,79 @@
                                             :class="backendConfig.auto_reply ? 'bg-matrix' : 'bg-gray-400'"
                                             class="w-12 h-6 rounded-full relative transition-colors duration-300">
                                         <div :class="backendConfig.auto_reply ? 'translate-x-6' : 'translate-x-1'"
+                                             class="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300"></div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Database Config (PostgreSQL) -->
+                        <div class="p-6 rounded-[2.5rem] card-blur border border-black/5 dark:border-white/5 space-y-4">
+                            <h3 class="font-bold dark:text-white uppercase tracking-wider text-sm flex items-center gap-2">
+                                <i data-lucide="database" class="w-4 h-4 text-matrix"></i>
+                                {{ t('db_config_title') }}
+                            </h3>
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_pg_host') }}</label>
+                                        <input v-model="backendConfig.pg_host" placeholder="localhost"
+                                               class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_pg_port') }}</label>
+                                        <input v-model.number="backendConfig.pg_port" placeholder="5432"
+                                               class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_pg_user') }}</label>
+                                        <input v-model="backendConfig.pg_user" placeholder="postgres"
+                                               class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_pg_password') }}</label>
+                                        <input v-model="backendConfig.pg_password" type="password" placeholder="******"
+                                               class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_pg_dbname') }}</label>
+                                        <input v-model="backendConfig.pg_dbname" placeholder="botmatrix"
+                                               class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{{ t('config_pg_sslmode') }}</label>
+                                        <select v-model="backendConfig.pg_sslmode" 
+                                                class="w-full bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm dark:text-white focus:ring-1 focus:ring-matrix outline-none">
+                                            <option value="disable">disable</option>
+                                            <option value="require">require</option>
+                                            <option value="verify-ca">verify-ca</option>
+                                            <option value="verify-full">verify-full</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Features Config -->
+                        <div class="p-6 rounded-[2.5rem] card-blur border border-black/5 dark:border-white/5 space-y-4">
+                            <h3 class="font-bold dark:text-white uppercase tracking-wider text-sm flex items-center gap-2">
+                                <i data-lucide="zap" class="w-4 h-4 text-matrix"></i>
+                                {{ t('features_config_title') }}
+                            </h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-3 p-4 rounded-2xl bg-black/5 dark:bg-white/5">
+                                    <div class="flex-1">
+                                        <div class="text-sm font-bold dark:text-white">{{ t('config_enable_skill') }}</div>
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-wider">{{ t('config_enable_skill_help') }}</p>
+                                    </div>
+                                    <button @click="backendConfig.enable_skill = !backendConfig.enable_skill" 
+                                            :class="backendConfig.enable_skill ? 'bg-matrix' : 'bg-gray-400'"
+                                            class="w-12 h-6 rounded-full relative transition-colors duration-300">
+                                        <div :class="backendConfig.enable_skill ? 'translate-x-6' : 'translate-x-1'"
                                              class="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300"></div>
                                     </button>
                                 </div>

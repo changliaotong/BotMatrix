@@ -39,15 +39,13 @@ BotMatrix uses a modular architecture. You only need to configure and enable the
         *   `REDIS_ADDR`: Redis server address (e.g., `127.0.0.1:6379`).
         *   `REDIS_PWD`: Redis password.
         *   `JWT_SECRET`: Secret for JWT token generation.
-        *   **Database Configuration** (PostgreSQL recommended):
-            *   `DB_TYPE`: Database type (`postgres` or `sqlite`, default: `postgres`)
+        *   **Database Configuration** (PostgreSQL mandatory):
             *   `DB_HOST`: PostgreSQL host (e.g., `localhost`)
             *   `DB_PORT`: PostgreSQL port (e.g., `5432`)
             *   `DB_USER`: PostgreSQL username
             *   `DB_PASSWORD`: PostgreSQL password
             *   `DB_NAME`: PostgreSQL database name
             *   `DB_SSL_MODE`: PostgreSQL SSL mode (e.g., `disable`)
-            *   `DB_PATH`: SQLite database file path (used when `DB_TYPE=sqlite`)
     *   **WebUI Config**: Once logged in as an administrator, you can modify these settings directly in the **System Settings** tab. Most changes (like Redis) take effect immediately, while port changes require a service restart.
 
 ### 🟢 WxBot (WeChat)
