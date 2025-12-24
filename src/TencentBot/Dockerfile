@@ -15,7 +15,7 @@ ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 
 # Copy source code
-COPY main.go ./
+COPY . .
 
 # Build the application
 RUN go build -o TencentBot main.go
@@ -31,8 +31,12 @@ RUN apk add --no-cache tzdata ca-certificates
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binary and sample config from builder
 COPY --from=builder /build/TencentBot ./
+COPY config.sample.json ./config.json
+
+# Expose HTTP Log Viewer, File Server and Config UI
+EXPOSE 3133
 
 # Run the application
 CMD ["./TencentBot"]

@@ -2,6 +2,7 @@ package main
 
 import (
 	"BotMatrix/common"
+	"BotNexus/tasks"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -451,6 +452,7 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	case "message", "notice", "request":
 		// 3. Check idempotency (prevent duplicate replies)
 		msgID := common.ToString(msg["message_id"])
+		var userID, groupID string
 		if msgID == "" {
 			// notice/request may not have message_id, try using post_type + time + user_id as unique identifier
 			msgID = fmt.Sprintf("%s:%v:%v", msgType, msg["time"], msg["user_id"])
@@ -462,30 +464,31 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 		}
 
 		// 4. Check rate limit (prevent spam and abuse)
-		userID := common.ToString(msg["user_id"])
-		groupID := common.ToString(msg["group_id"])
+		userID = common.ToString(msg["user_id"])
+		groupID = common.ToString(msg["group_id"])
 		if !m.CheckRateLimit(userID, groupID) {
 			log.Printf("[REDIS] Rate limit exceeded for user %s / group %s", userID, groupID)
 			return
 		}
 
-	// 5. Update session context (supports TTL)
-	if userID != "" {
-		m.UpdateContext(bot.Platform, userID, msg)
-	}
-
-	// 拦截器检查：在分发给 Worker 之前进行全局控制
-	if m.TaskManager != nil {
-		interceptorCtx := &tasks.InterceptorContext{
-			Platform: bot.Platform,
-			SelfID:   bot.SelfID,
-			UserID:   userID,
-			GroupID:  groupID,
-			Event:    msg,
+		// 5. Update session context (supports TTL)
+		if userID != "" {
+			m.UpdateContext(bot.Platform, userID, msg)
 		}
-		if !m.TaskManager.Interceptors.ProcessBeforeDispatch(interceptorCtx) {
-			// 如果被拦截器拦截，则不继续分发
-			return
+
+		// 拦截器检查：在分发给 Worker 之前进行全局控制
+		if m.TaskManager != nil {
+			interceptorCtx := &tasks.InterceptorContext{
+				Platform: bot.Platform,
+				SelfID:   bot.SelfID,
+				UserID:   userID,
+				GroupID:  groupID,
+				Event:    msg,
+			}
+			if !m.TaskManager.Interceptors.ProcessBeforeDispatch(interceptorCtx) {
+				// 如果被拦截器拦截，则不继续分发
+				return
+			}
 		}
 	}
 

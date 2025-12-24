@@ -30,7 +30,7 @@ RUN apk --no-cache add ca-certificates
 
 # Copy binary from builder
 COPY --from=builder /app/FeishuBot .
-COPY --from=builder /app/config.sample.json ./config.sample.json
+COPY --from=builder /app/config.sample.json ./config.json
 
 # Expose port (if needed, though it's mainly websocket client)
 # EXPOSE 8080

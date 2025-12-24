@@ -1,8 +1,10 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
+	"fmt"
 	"log"
 )
 
@@ -15,14 +17,13 @@ func (p *EchoPlugin) Name() string {
 }
 
 func (p *EchoPlugin) Description() string {
-	return common.T("", "echo_plugin_desc")
+	return common.T("", "echo_plugin_desc|复读插件，可以重复用户说的话")
 }
 
 func (p *EchoPlugin) Version() string {
 	return "1.0.0"
 }
 
-// NewEchoPlugin 创建回声插件实例
 func NewEchoPlugin() *EchoPlugin {
 	return &EchoPlugin{
 		cmdParser: NewCommandParser(),
@@ -30,35 +31,32 @@ func NewEchoPlugin() *EchoPlugin {
 }
 
 func (p *EchoPlugin) Init(robot plugin.Robot) {
-	log.Println(common.T("", "echo_plugin_loaded"))
-
-	// 响应消息事件
 	robot.OnMessage(func(event *onebot.Event) error {
-		log.Printf(common.T("", "echo_msg_received"), event.RawMessage)
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
 
-		// 只处理私聊消息
-		if event.MessageType == "private" {
-			// 发送回声消息
-			params := &onebot.SendMessageParams{
-				UserID:  event.UserID,
-				Message: common.T("", "echo_reply_prefix") + event.RawMessage,
+		// 复读命令: /echo <message>
+		if match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "echo_cmd|复读"), `(.*)`, event.RawMessage); match && len(params) > 0 {
+			message := params[0]
+			if message == "" {
+				return nil
 			}
-			robot.SendMessage(params)
+
+			log.Printf("Echoing message: %s\n", message)
+			_, err := SendTextReply(robot, event, message)
+			return err
 		}
 
 		return nil
 	})
 
-	// 处理帮助命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if match, _ := p.cmdParser.MatchCommand("help", event.RawMessage); match {
-			params := &onebot.SendMessageParams{
-				UserID:  event.UserID,
-				Message: common.T("", "echo_help_msg"),
-			}
-			robot.SendMessage(params)
+	// 报备技能
+	robot.HandleSkill("echo", func(params map[string]string) (string, error) {
+		message, ok := params["message"]
+		if !ok || message == "" {
+			return "", fmt.Errorf("missing message parameter")
 		}
-
-		return nil
+		return message, nil
 	})
 }

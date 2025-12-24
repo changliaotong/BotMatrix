@@ -18,9 +18,9 @@ def ensure_configs():
     """Ensure config.json exists for all bots by copying config.sample.json if needed"""
     root_dir = os.path.dirname(os.path.abspath(__file__))
     bot_dirs = [
-        "DingTalkBot", "DiscordBot", "EmailBot", "FeishuBot", 
-        "KookBot", "SlackBot", "TelegramBot", "TencentBot", 
-        "WeComBot", "WxBot"
+        "src/DingTalkBot", "src/DiscordBot", "src/EmailBot", "src/FeishuBot", 
+        "src/KookBot", "src/SlackBot", "src/TelegramBot", "src/TencentBot", 
+        "src/WeComBot", "src/WxBot"
     ]
     
     print("Checking config files...")
@@ -55,6 +55,7 @@ def main():
     parser.add_argument('--target', default=None, help='Target to deploy (manager, wxbot, all, etc.)')
     parser.add_argument('--fast', action='store_true', help='Fast deploy (copy files + restart, no rebuild)')
     parser.add_argument('--docker-fix', action='store_true', help='Use Docker fix mode (minimal build)')
+    parser.add_argument('--no-source', action='store_true', help='Deploy without source code (build locally)')
     args = parser.parse_args()
 
     SERVER_IP = args.ip
@@ -62,6 +63,7 @@ def main():
     TARGET = args.target
     FAST_MODE = args.fast
     DOCKER_FIX_MODE = args.docker_fix
+    NO_SOURCE = args.no_source
 
     # Interactive Menu if no target specified
     if TARGET is None:
@@ -105,7 +107,7 @@ def main():
     if TARGET == "overmind":
         print("\n[Step 0/3] Building Overmind (Flutter Web)...")
         root_dir = os.path.dirname(os.path.abspath(__file__))
-        overmind_dir = os.path.join(root_dir, "Overmind")
+        overmind_dir = os.path.join(root_dir, "src", "Overmind")
         
         # Build Command
         build_cmd = "flutter build web --release --base-href /overmind/"
@@ -118,7 +120,7 @@ def main():
             
         # Copy Artifacts
         src_dir = os.path.join(overmind_dir, "build", "web")
-        dest_dir = os.path.join(root_dir, "BotNexus", "overmind")
+        dest_dir = os.path.join(root_dir, "src", "BotNexus", "overmind")
         
         print(f"Copying artifacts from {src_dir} to {dest_dir}...")
         if os.path.exists(dest_dir):
@@ -140,15 +142,59 @@ def main():
     # Ensure configs exist before packing
     ensure_configs()
 
+    # 0.5 Local Build (If no-source requested)
+    if NO_SOURCE:
+        print("\n[Step 0.5/3] Building binaries locally (GOOS=linux GOARCH=amd64)...")
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        go_projects = {
+            "BotNexus": {"path": "src/BotNexus", "bin": "BotNexus"},
+            "BotWorker": {"path": "src/BotWorker", "bin": "bot-worker"},
+            "TencentBot": {"path": "src/TencentBot", "bin": "TencentBot"},
+            "WxBotGo": {"path": "src/WxBotGo", "bin": "wxbot-go"},
+            "DingTalkBot": {"path": "src/DingTalkBot", "bin": "DingTalkBot"},
+            "FeishuBot": {"path": "src/FeishuBot", "bin": "FeishuBot"},
+            "TelegramBot": {"path": "src/TelegramBot", "bin": "TelegramBot"},
+            "DiscordBot": {"path": "src/DiscordBot", "bin": "DiscordBot"},
+            "SlackBot": {"path": "src/SlackBot", "bin": "slack-bot"},
+            "KookBot": {"path": "src/KookBot", "bin": "kook-bot"},
+            "EmailBot": {"path": "src/EmailBot", "bin": "email-bot"},
+            "WeComBot": {"path": "src/WeComBot", "bin": "wecom-bot"},
+        }
+
+        env = os.environ.copy()
+        env["GOOS"] = "linux"
+        env["GOARCH"] = "amd64"
+        env["CGO_ENABLED"] = "0" # Ensure static binary for alpine
+
+        for name, info in go_projects.items():
+            proj_path = os.path.join(root_dir, info["path"])
+            if not os.path.exists(proj_path):
+                print(f"  [-] Skipping {name}: path not found")
+                continue
+            
+            print(f"  [+] Building {name} in {info['path']}...")
+            build_target = "."
+            if os.path.exists(os.path.join(proj_path, "cmd", "main.go")):
+                build_target = "./cmd"
+            
+            ret = subprocess.run(["go", "build", "-o", info["bin"], build_target], 
+                                 cwd=proj_path, env=env)
+            if ret.returncode != 0:
+                print(f"Error: Local build for {name} failed!")
+                sys.exit(1)
+        
+        print("Local builds successful.")
+
     # 1. 打包项目
     print("\n[Step 1/3] Packing project files...")
     
-    try:
-        import pack_project
-        pack_project.pack_project()
-    except ImportError:
-        print("Error: pack_project module not found!")
-        sys.exit(1)
+    pack_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pack_project.py")
+    pack_cmd = f"{sys.executable} {pack_script}"
+    if NO_SOURCE:
+        pack_cmd += " --no-source"
+    
+    run_command(pack_cmd)
     
     root_dir = os.path.dirname(os.path.abspath(__file__))
     local_zip = os.path.join(root_dir, "botmatrix_deploy.zip")
@@ -168,18 +214,32 @@ def main():
     remote_cmds = [
         f"echo '--> Creating directory {REMOTE_DEPLOY_DIR} ...'",
         f"sudo mkdir -p {REMOTE_DEPLOY_DIR}",
-        f"echo '--> Cleaning up stale Go files in BotNexus...'",
-        f"sudo rm -f {REMOTE_DEPLOY_DIR}/BotNexus/*.go || true",
         f"echo '--> Checking for directory/file conflicts...'",
         f"sudo find {REMOTE_DEPLOY_DIR} -name config.json -type d -exec rm -rf {{}} + || true",
+    ]
+
+    if NO_SOURCE:
+        remote_cmds.append(f"echo '--> Cleaning up ALL stale Go source files...'")
+        remote_cmds.append(f"sudo find {REMOTE_DEPLOY_DIR} -name '*.go' -delete || true")
+        remote_cmds.append(f"sudo find {REMOTE_DEPLOY_DIR} -name 'go.mod' -delete || true")
+        remote_cmds.append(f"sudo find {REMOTE_DEPLOY_DIR} -name 'go.sum' -delete || true")
+    else:
+        remote_cmds.append(f"echo '--> Cleaning up stale Go files in BotNexus...'")
+        remote_cmds.append(f"sudo rm -f {REMOTE_DEPLOY_DIR}/src/BotNexus/*.go || true")
+
+    remote_cmds.extend([
         f"echo '--> Unzipping files...'",
         f"sudo unzip -o {REMOTE_TMP_PATH} -d {REMOTE_DEPLOY_DIR}",
+        f"echo '--> Initializing missing config files from samples...'",
+        f"sudo find {REMOTE_DEPLOY_DIR}/src -name 'config.sample.json' -exec bash -c 'p=\"{{}}\"; cp -n \"$p\" \"${{p%.sample.json}}.json\"' \\; || true",
+        f"sudo find {REMOTE_DEPLOY_DIR}/src -name 'config.example.json' -exec bash -c 'p=\"{{}}\"; cp -n \"$p\" \"${{p%.example.json}}.json\"' \\; || true",
+        f"sudo find {REMOTE_DEPLOY_DIR}/src -name 'config.example.yaml' -exec bash -c 'p=\"{{}}\"; cp -n \"$p\" \"${{p%.example.yaml}}.yaml\"' \\; || true",
         f"echo '--> Cleaning up temporary zip...'",
         f"sudo rm {REMOTE_TMP_PATH}",
         f"echo '--> Switching directory...'",
         f"cd {REMOTE_DEPLOY_DIR}",
         f"echo '--> Starting services with Docker Compose...'",
-    ]
+    ])
 
     docker_cmd = ""
     if FAST_MODE:
@@ -200,30 +260,73 @@ def main():
         cleanup_cmd = ""
         if TARGET == 'manager':
             cleanup_cmd = "sudo docker rm -f botmatrix-manager || true"
-            if DOCKER_FIX_MODE:
-                docker_cmd = f"{cleanup_cmd} && sudo docker build -f BotNexus/Dockerfile.minimal -t botmatrix-manager BotNexus/ && sudo docker-compose up -d --force-recreate --no-deps bot-manager"
+            if NO_SOURCE:
+                docker_cmd = f"{cleanup_cmd} && sudo docker build -f src/BotNexus/Dockerfile.prod -t botmatrix-manager src/BotNexus/ && sudo docker-compose up -d --force-recreate --no-deps bot-manager"
+            elif DOCKER_FIX_MODE:
+                docker_cmd = f"{cleanup_cmd} && sudo docker build -f src/BotNexus/Dockerfile.minimal -t botmatrix-manager src/BotNexus/ && sudo docker-compose up -d --force-recreate --no-deps bot-manager"
             else:
                 docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps bot-manager"
         elif TARGET == 'wxbot':
             cleanup_cmd = "sudo docker rm -f wxbot || true"
             docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps wxbot"
         elif TARGET == 'tencent-bot':
-            cleanup_cmd = "sudo docker rm -f tencent-bot || true"
-            docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps tencent-bot"
+            cleanup_cmd = "sudo docker rm -f btqq || true"
+            if NO_SOURCE:
+                docker_cmd = f"{cleanup_cmd} && sudo docker build -f src/TencentBot/Dockerfile.prod -t botmatrix-tencent-bot src/TencentBot/ && sudo docker-compose up -d --force-recreate --no-deps tencent-bot"
+            else:
+                docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps tencent-bot"
         elif TARGET == 'system-worker':
             cleanup_cmd = "sudo docker rm -f botmatrix-system-worker || true"
-            docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps system-worker"
+            if NO_SOURCE:
+                docker_cmd = f"{cleanup_cmd} && sudo docker build -f src/BotWorker/Dockerfile.prod -t botmatrix-system-worker src/BotWorker/ && sudo docker-compose up -d --force-recreate --no-deps system-worker"
+            else:
+                docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps system-worker"
         elif TARGET == 'no-wx':
             services_to_up = "bot-manager system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wecom-bot"
             containers_to_clean = "botmatrix-manager botmatrix-system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wecom-bot"
             cleanup_cmd = f"sudo docker rm -f {containers_to_clean} || true"
-            if DOCKER_FIX_MODE:
-                docker_cmd = f"{cleanup_cmd} && sudo docker build -f BotNexus/Dockerfile.minimal -t botmatrix-manager BotNexus/ && sudo docker-compose up -d --force-recreate {services_to_up}"
+            
+            if NO_SOURCE:
+                # Build all Go bots using their Dockerfile.prod
+                build_cmds = [
+                    "sudo docker build -f src/BotNexus/Dockerfile.prod -t botmatrix-manager src/BotNexus/",
+                    "sudo docker build -f src/BotWorker/Dockerfile.prod -t botmatrix-system-worker src/BotWorker/",
+                    "sudo docker build -f src/TencentBot/Dockerfile.prod -t botmatrix-tencent-bot src/TencentBot/",
+                    "sudo docker build -f src/WxBotGo/Dockerfile.prod -t botmatrix-wxbot-go src/WxBotGo/",
+                    "sudo docker build -f src/DingTalkBot/Dockerfile.prod -t botmatrix-dingtalk-bot src/DingTalkBot/",
+                    "sudo docker build -f src/FeishuBot/Dockerfile.prod -t botmatrix-feishu-bot src/FeishuBot/",
+                    "sudo docker build -f src/TelegramBot/Dockerfile.prod -t botmatrix-telegram-bot src/TelegramBot/",
+                    "sudo docker build -f src/DiscordBot/Dockerfile.prod -t botmatrix-discord-bot src/DiscordBot/",
+                    "sudo docker build -f src/SlackBot/Dockerfile.prod -t botmatrix-slack-bot src/SlackBot/",
+                    "sudo docker build -f src/KookBot/Dockerfile.prod -t botmatrix-kook-bot src/KookBot/",
+                    "sudo docker build -f src/EmailBot/Dockerfile.prod -t botmatrix-email-bot src/EmailBot/",
+                    "sudo docker build -f src/WeComBot/Dockerfile.prod -t botmatrix-wecom-bot src/WeComBot/"
+                ]
+                docker_cmd = f"{cleanup_cmd} && {' && '.join(build_cmds)} && sudo docker-compose up -d --force-recreate {services_to_up}"
+            elif DOCKER_FIX_MODE:
+                docker_cmd = f"{cleanup_cmd} && sudo docker build -f src/BotNexus/Dockerfile.minimal -t botmatrix-manager src/BotNexus/ && sudo docker-compose up -d --force-recreate {services_to_up}"
             else:
                 docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate {services_to_up}"
         else:
-            if DOCKER_FIX_MODE:
-                docker_cmd = "sudo docker-compose down --remove-orphans && sudo docker build -f BotNexus/Dockerfile.minimal -t botmatrix-manager BotNexus/ && sudo docker-compose up -d --force-recreate"
+            if NO_SOURCE:
+                 # Full deployment without source
+                 build_cmds = [
+                     "sudo docker build -f src/BotNexus/Dockerfile.prod -t botmatrix-manager src/BotNexus/",
+                     "sudo docker build -f src/BotWorker/Dockerfile.prod -t botmatrix-system-worker src/BotWorker/",
+                     "sudo docker build -f src/TencentBot/Dockerfile.prod -t botmatrix-tencent-bot src/TencentBot/",
+                     "sudo docker build -f src/WxBotGo/Dockerfile.prod -t botmatrix-wxbot-go src/WxBotGo/",
+                     "sudo docker build -f src/DingTalkBot/Dockerfile.prod -t botmatrix-dingtalk-bot src/DingTalkBot/",
+                     "sudo docker build -f src/FeishuBot/Dockerfile.prod -t botmatrix-feishu-bot src/FeishuBot/",
+                     "sudo docker build -f src/TelegramBot/Dockerfile.prod -t botmatrix-telegram-bot src/TelegramBot/",
+                     "sudo docker build -f src/DiscordBot/Dockerfile.prod -t botmatrix-discord-bot src/DiscordBot/",
+                     "sudo docker build -f src/SlackBot/Dockerfile.prod -t botmatrix-slack-bot src/SlackBot/",
+                     "sudo docker build -f src/KookBot/Dockerfile.prod -t botmatrix-kook-bot src/KookBot/",
+                     "sudo docker build -f src/EmailBot/Dockerfile.prod -t botmatrix-email-bot src/EmailBot/",
+                     "sudo docker build -f src/WeComBot/Dockerfile.prod -t botmatrix-wecom-bot src/WeComBot/"
+                 ]
+                 docker_cmd = f"sudo docker-compose down --remove-orphans && {' && '.join(build_cmds)} && sudo docker-compose up -d --force-recreate"
+            elif DOCKER_FIX_MODE:
+                docker_cmd = "sudo docker-compose down --remove-orphans && sudo docker build -f src/BotNexus/Dockerfile.minimal -t botmatrix-manager src/BotNexus/ && sudo docker-compose up -d --force-recreate"
             else:
                 docker_cmd = "sudo docker-compose down --remove-orphans && sudo docker-compose up -d --build --force-recreate"
 

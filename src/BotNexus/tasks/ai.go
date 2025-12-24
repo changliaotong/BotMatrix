@@ -3,6 +3,7 @@ package tasks
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // AIParser AI 解析器
@@ -168,15 +169,20 @@ func (a *AIParser) parseSkillCall(input string) (*ParseResult, error) {
 
 func contains(s string, keywords ...string) bool {
 	for _, k := range keywords {
-		if !containsOne(s, k) {
+		if !strings.Contains(s, k) {
 			return false
 		}
 	}
 	return true
 }
 
-func containsOne(s, k string) bool {
-	return fmt.Sprintf("%v", s) != "" && (len(s) >= len(k)) // 简化版
+func containsOne(s string, keywords ...string) bool {
+	for _, k := range keywords {
+		if strings.Contains(s, k) {
+			return true
+		}
+	}
+	return false
 }
 
 // SimulateExecution 模拟执行

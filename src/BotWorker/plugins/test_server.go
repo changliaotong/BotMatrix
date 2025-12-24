@@ -53,7 +53,7 @@ func (p *TestServerPlugin) Version() string {
 // Init 初始化插件
 func (p *TestServerPlugin) Init(robot plugin.Robot) {
 	p.robot = robot
-	p.db = GetGlobalDB()
+	p.db = GlobalDB
 
 	// 初始化数据库表
 	p.initDatabase()
@@ -90,35 +90,38 @@ func (p *TestServerPlugin) initDatabase() {
 }
 
 // handleMessage 处理消息事件
-func (p *TestServerPlugin) handleMessage(robot plugin.Robot, event *onebot.Event) error {
+func (p *TestServerPlugin) handleMessage(event *onebot.Event) error {
 	if event.MessageType != "private" && event.MessageType != "group" {
 		return nil
 	}
 
 	// 获取用户ID
 	userID := event.UserID
-	if userID == "" {
+	if userID == 0 {
 		return nil
 	}
 
-	// 处理测试服相关命令
-	msg := event.RawMessage
-
-	// 切换测试服状态
-	if msg == "切换测试服" {
-		p.toggleTestServerStatus(robot, event, userID)
+	// 检查是否为启用测试服命令
+	if match, _ := p.cmdParser.MatchCommand("开启测试服|启用测试服", event.RawMessage); match {
+		p.toggleTestServerStatus(event, fmt.Sprintf("%d", userID), true)
 		return nil
 	}
 
-	// 查看测试服状态
-	if msg == "测试服状态" {
-		p.checkTestServerStatus(robot, event, userID)
+	// 检查是否为禁用测试服命令
+	if match, _ := p.cmdParser.MatchCommand("关闭测试服|禁用测试服", event.RawMessage); match {
+		p.toggleTestServerStatus(event, fmt.Sprintf("%d", userID), false)
 		return nil
 	}
 
-	// 测试服功能说明
-	if msg == "测试服说明" {
-		p.showTestServerHelp(robot, event)
+	// 检查是否为查看测试服状态命令
+	if match, _ := p.cmdParser.MatchCommand("测试服状态", event.RawMessage); match {
+		p.checkTestServerStatus(event, fmt.Sprintf("%d", userID))
+		return nil
+	}
+
+	// 检查是否为查看测试服帮助命令
+	if match, _ := p.cmdParser.MatchCommand("测试服帮助|测试服说明", event.RawMessage); match {
+		p.showTestServerHelp(event)
 		return nil
 	}
 
@@ -126,21 +129,11 @@ func (p *TestServerPlugin) handleMessage(robot plugin.Robot, event *onebot.Event
 }
 
 // toggleTestServerStatus 切换用户测试服状态
-func (p *TestServerPlugin) toggleTestServerStatus(robot plugin.Robot, event *onebot.Event, userID string) {
+func (p *TestServerPlugin) toggleTestServerStatus(event *onebot.Event, userID string, enabled bool) {
 	if p.db == nil {
-		p.sendMessage(robot, event, "⚠️ 数据库未连接，无法使用测试服功能")
+		p.sendMessage(p.robot, event, "⚠️ 数据库未连接，无法使用测试服功能")
 		return
 	}
-
-	// 获取当前状态
-	currentStatus, err := p.getUserTestServerStatus(userID)
-	if err != nil {
-		p.sendMessage(robot, event, "⚠️ 查询测试服状态失败")
-		return
-	}
-
-	// 切换状态
-	newStatus := !currentStatus.Enabled
 
 	// 更新数据库
 	query := `
@@ -150,34 +143,34 @@ func (p *TestServerPlugin) toggleTestServerStatus(robot plugin.Robot, event *one
 	SET enabled = $2, last_updated_at = CURRENT_TIMESTAMP;
 	`
 
-	_, err = p.db.Exec(query, userID, newStatus)
+	_, err := p.db.Exec(query, userID, enabled)
 	if err != nil {
-		p.sendMessage(robot, event, "⚠️ 更新测试服状态失败")
+		p.sendMessage(p.robot, event, "⚠️ 更新测试服状态失败")
 		return
 	}
 
 	// 发送结果消息
-	if newStatus {
-		p.sendMessage(robot, event, "✅ 测试服功能已启用！您现在可以体验机器人的最新功能")
+	if enabled {
+		p.sendMessage(p.robot, event, "✅ 测试服功能已启用！您现在可以体验机器人的最新功能")
 	} else {
-		p.sendMessage(robot, event, "✅ 测试服功能已关闭！您将使用机器人的稳定版本")
+		p.sendMessage(p.robot, event, "✅ 测试服功能已关闭！您将使用机器人的稳定版本")
 	}
 
 	// 记录操作
-	p.logAction(userID, fmt.Sprintf("切换测试服状态: %t", newStatus), "user")
+	p.logAction(userID, fmt.Sprintf("切换测试服状态: %t", enabled), "user")
 }
 
 // checkTestServerStatus 查看用户测试服状态
-func (p *TestServerPlugin) checkTestServerStatus(robot plugin.Robot, event *onebot.Event, userID string) {
+func (p *TestServerPlugin) checkTestServerStatus(event *onebot.Event, userID string) {
 	if p.db == nil {
-		p.sendMessage(robot, event, "⚠️ 数据库未连接，无法查询测试服状态")
+		p.sendMessage(p.robot, event, "⚠️ 数据库未连接，无法查询测试服状态")
 		return
 	}
 
 	// 获取当前状态
 	status, err := p.getUserTestServerStatus(userID)
 	if err != nil {
-		p.sendMessage(robot, event, "⚠️ 查询测试服状态失败")
+		p.sendMessage(p.robot, event, "⚠️ 查询测试服状态失败")
 		return
 	}
 
@@ -190,11 +183,11 @@ func (p *TestServerPlugin) checkTestServerStatus(robot plugin.Robot, event *oneb
 	response := fmt.Sprintf("📋 您的测试服状态：%s\n", statusText)
 	response += fmt.Sprintf("📅 上次更新：%s", status.LastUpdatedAt.Format("2006-01-02 15:04:05"))
 
-	p.sendMessage(robot, event, response)
+	p.sendMessage(p.robot, event, response)
 }
 
 // showTestServerHelp 显示测试服功能说明
-func (p *TestServerPlugin) showTestServerHelp(robot plugin.Robot, event *onebot.Event) {
+func (p *TestServerPlugin) showTestServerHelp(event *onebot.Event) {
 	helpMsg := `📚 测试服功能说明
 
 🔹 测试服是机器人新功能的体验环境，您可以在这里率先体验最新开发的功能
@@ -202,13 +195,14 @@ func (p *TestServerPlugin) showTestServerHelp(robot plugin.Robot, event *onebot.
 🔹 您可以随时切换测试服状态
 
 📌 可用命令：
-🔸 切换测试服 - 开启/关闭测试服功能
+🔸 开启测试服/启用测试服 - 开启测试服功能
+🔸 关闭测试服/禁用测试服 - 关闭测试服功能
 🔸 测试服状态 - 查看当前测试服状态
 🔸 测试服说明 - 查看本说明
 
 💡 提示：新功能会在测试服中优先发布，欢迎您提供反馈！`
 
-	p.sendMessage(robot, event, helpMsg)
+	p.sendMessage(p.robot, event, helpMsg)
 }
 
 // getUserTestServerStatus 获取用户测试服状态

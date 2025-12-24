@@ -160,11 +160,13 @@ func (s *HTTPServer) dispatchEvent(event onebot.Event) {
 }
 
 func (s *HTTPServer) Run() error {
-	http.HandleFunc("/event", s.handleEvent)
-	http.HandleFunc("/api", s.handleAPIRequest)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/event", s.handleEvent)
+	mux.HandleFunc("/api", s.handleAPIRequest)
 
 	server := &http.Server{
 		Addr:         s.config.Addr,
+		Handler:      mux,
 		ReadTimeout:  s.config.ReadTimeout,
 		WriteTimeout: s.config.WriteTimeout,
 	}

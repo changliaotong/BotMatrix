@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -12,6 +13,142 @@ import (
 // MedalPlugin 勋章系统插件
 type MedalPlugin struct {
 	cmdParser *CommandParser
+}
+
+// GetSkills 实现 SkillCapable 接口
+func (p *MedalPlugin) GetSkills() []plugin.SkillCapability {
+	return []plugin.SkillCapability{
+		{
+			Name:        "my_medals",
+			Description: common.T("", "medal_skill_my_desc|查看我的勋章列表"),
+		},
+		{
+			Name:        "list_medals",
+			Description: common.T("", "medal_skill_list_desc|查看系统所有勋章"),
+		},
+		{
+			Name:        "medal_detail",
+			Description: common.T("", "medal_skill_detail_desc|查看指定勋章详情"),
+			Usage:       "medal_detail name=勋章名称",
+			Params: map[string]string{
+				"name": "勋章名称",
+			},
+		},
+		{
+			Name:        "grant_medal",
+			Description: common.T("", "medal_skill_grant_desc|发放勋章给用户"),
+			Usage:       "grant_medal user_id=123456 name=勋章名称",
+			Params: map[string]string{
+				"user_id": "用户ID",
+				"name":    "勋章名称",
+			},
+		},
+		{
+			Name:        "remove_medal",
+			Description: common.T("", "medal_skill_remove_desc|移除用户的勋章"),
+			Usage:       "remove_medal user_id=123456 name=勋章名称",
+			Params: map[string]string{
+				"user_id": "用户ID",
+				"name":    "勋章名称",
+			},
+		},
+		{
+			Name:        "upgrade_medal",
+			Description: common.T("", "medal_skill_upgrade_desc|升级用户的勋章等级"),
+			Usage:       "upgrade_medal user_id=123456 name=勋章名称 level=2",
+			Params: map[string]string{
+				"user_id": "用户ID",
+				"name":    "勋章名称",
+				"level":   "等级",
+			},
+		},
+		{
+			Name:        "enable_medal_system",
+			Description: common.T("", "medal_skill_enable_desc|开启勋章系统"),
+		},
+		{
+			Name:        "disable_medal_system",
+			Description: common.T("", "medal_skill_disable_desc|关闭勋章系统"),
+		},
+	}
+}
+
+// HandleSkill 实现 SkillCapable 接口
+func (p *MedalPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skillName string, params map[string]string) error {
+	var userID string
+	if event != nil {
+		userID = fmt.Sprintf("%d", event.UserID)
+	} else if params["user_id"] != "" {
+		userID = params["user_id"]
+	}
+
+	switch skillName {
+	case "my_medals":
+		msg, err := p.doMyMedals(userID)
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "list_medals":
+		msg, err := p.doListMedals()
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "medal_detail":
+		name := params["name"]
+		msg, err := p.doMedalDetail(userID, name)
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "grant_medal":
+		targetUserID := params["user_id"]
+		name := params["name"]
+		msg, err := p.doGrantMedal(userID, targetUserID, name)
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "remove_medal":
+		targetUserID := params["user_id"]
+		name := params["name"]
+		msg, err := p.doRemoveMedal(userID, targetUserID, name)
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "upgrade_medal":
+		targetUserID := params["user_id"]
+		name := params["name"]
+		level, _ := p.cmdParser.ParseInt(params["level"])
+		msg, err := p.doUpgradeMedal(userID, targetUserID, name, level)
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "enable_medal_system":
+		msg, err := p.doEnableSystem()
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	case "disable_medal_system":
+		msg, err := p.doDisableSystem()
+		if err != nil {
+			p.sendMessage(robot, event, err.Error())
+			return err
+		}
+		p.sendMessage(robot, event, msg)
+	}
+	return nil
 }
 
 // Medal 勋章定义
@@ -70,7 +207,7 @@ func (p *MedalPlugin) Name() string {
 }
 
 func (p *MedalPlugin) Description() string {
-	return "勋章系统插件，提供勋章发放、查询和管理功能"
+	return common.T("", "medal_plugin_desc|勋章系统插件，提供勋章发放、查询和管理功能")
 }
 
 func (p *MedalPlugin) Version() string {
@@ -78,7 +215,16 @@ func (p *MedalPlugin) Version() string {
 }
 
 func (p *MedalPlugin) Init(robot plugin.Robot) {
-	log.Println("加载勋章系统插件")
+	log.Println(common.T("", "medal_plugin_loaded|勋章系统插件已加载"))
+
+	// 注册技能处理器
+	skills := p.GetSkills()
+	for _, skill := range skills {
+		skillName := skill.Name
+		robot.HandleSkill(skillName, func(params map[string]string) (string, error) {
+			return "", p.HandleSkill(robot, nil, skillName, params)
+		})
+	}
 
 	// 初始化数据库
 	p.initDatabase()
@@ -97,59 +243,101 @@ func (p *MedalPlugin) Init(robot plugin.Robot) {
 			return nil
 		}
 
+		userID := fmt.Sprintf("%d", event.UserID)
+
 		// 我的勋章
 		if match, _ := p.cmdParser.MatchCommand("我的勋章", event.RawMessage); match {
-			p.myMedals(robot, event)
+			msg, err := p.doMyMedals(userID)
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 查看勋章
 		if match, _ := p.cmdParser.MatchCommand("查看勋章", event.RawMessage); match {
-			p.listMedals(robot, event)
+			msg, err := p.doListMedals()
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 查看勋章详情
-		if match, params := p.cmdParser.MatchCommandWithParams("勋章详情", `(\S+)`, event.RawMessage); match && len(params) == 1 {
+		if match, _, params := p.cmdParser.MatchCommandWithParams("勋章详情", `(\S+)`, event.RawMessage); match && len(params) == 1 {
 			medalName := params[0]
-			p.medalDetail(robot, event, medalName)
+			msg, err := p.doMedalDetail(userID, medalName)
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 管理员命令：发放勋章
-		if match, params := p.cmdParser.MatchCommandWithParams("发放勋章", `(\S+)\s+(\S+)`, event.RawMessage); match && len(params) == 2 {
-			userID := params[0]
+		if match, _, params := p.cmdParser.MatchCommandWithParams("发放勋章", `(\S+)\s+(\S+)`, event.RawMessage); match && len(params) == 2 {
+			targetUserID := params[0]
 			medalName := params[1]
-			p.grantMedal(robot, event, userID, medalName)
+			msg, err := p.doGrantMedal(userID, targetUserID, medalName)
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 管理员命令：移除勋章
-		if match, params := p.cmdParser.MatchCommandWithParams("移除勋章", `(\S+)\s+(\S+)`, event.RawMessage); match && len(params) == 2 {
-			userID := params[0]
+		if match, _, params := p.cmdParser.MatchCommandWithParams("移除勋章", `(\S+)\s+(\S+)`, event.RawMessage); match && len(params) == 2 {
+			targetUserID := params[0]
 			medalName := params[1]
-			p.removeMedal(robot, event, userID, medalName)
+			msg, err := p.doRemoveMedal(userID, targetUserID, medalName)
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 管理员命令：升级勋章
-		if match, params := p.cmdParser.MatchCommandWithParams("升级勋章", `(\S+)\s+(\S+)\s+(\d+)`, event.RawMessage); match && len(params) == 3 {
-			userID := params[0]
+		if match, _, params := p.cmdParser.MatchCommandWithParams("升级勋章", `(\S+)\s+(\S+)\s+(\d+)`, event.RawMessage); match && len(params) == 3 {
+			targetUserID := params[0]
 			medalName := params[1]
 			level, _ := p.cmdParser.ParseInt(params[2])
-			p.upgradeMedal(robot, event, userID, medalName, level)
+			msg, err := p.doUpgradeMedal(userID, targetUserID, medalName, level)
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 管理员命令：开启勋章系统
 		if match, _ := p.cmdParser.MatchCommand("开启勋章系统", event.RawMessage); match {
-			p.enableSystem(robot, event)
+			msg, err := p.doEnableSystem()
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
 		// 管理员命令：关闭勋章系统
 		if match, _ := p.cmdParser.MatchCommand("关闭勋章系统", event.RawMessage); match {
-			p.disableSystem(robot, event)
+			msg, err := p.doDisableSystem()
+			if err != nil {
+				p.sendMessage(robot, event, err.Error())
+				return nil
+			}
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
@@ -160,7 +348,7 @@ func (p *MedalPlugin) Init(robot plugin.Robot) {
 // initDatabase 初始化数据库
 func (p *MedalPlugin) initDatabase() {
 	if GlobalDB == nil {
-		log.Println("警告: 数据库未初始化，勋章系统将无法正常工作")
+		log.Println(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 		return
 	}
 
@@ -180,7 +368,7 @@ func (p *MedalPlugin) initDatabase() {
 	`
 	_, err := GlobalDB.Exec(createMedalTable)
 	if err != nil {
-		log.Printf("创建勋章表失败: %v\n", err)
+		log.Printf(common.T("", "medal_db_init_failed|勋章系统：数据库初始化失败：%v"), err)
 		return
 	}
 
@@ -201,7 +389,7 @@ func (p *MedalPlugin) initDatabase() {
 	`
 	_, err = GlobalDB.Exec(createUserMedalTable)
 	if err != nil {
-		log.Printf("创建用户勋章表失败: %v\n", err)
+		log.Printf(common.T("", "medal_db_init_failed|勋章系统：数据库初始化失败：%v"), err)
 		return
 	}
 
@@ -219,7 +407,7 @@ func (p *MedalPlugin) initDatabase() {
 	`
 	_, err = GlobalDB.Exec(createMedalGrantLogTable)
 	if err != nil {
-		log.Printf("创建勋章发放日志表失败: %v\n", err)
+		log.Printf(common.T("", "medal_db_init_failed|勋章系统：数据库初始化失败：%v"), err)
 		return
 	}
 
@@ -233,7 +421,7 @@ func (p *MedalPlugin) initDatabase() {
 	`
 	_, err = GlobalDB.Exec(createMedalConfigTable)
 	if err != nil {
-		log.Printf("创建勋章系统配置表失败: %v\n", err)
+		log.Printf(common.T("", "medal_db_init_failed|勋章系统：数据库初始化失败：%v"), err)
 		return
 	}
 
@@ -245,7 +433,7 @@ func (p *MedalPlugin) initDatabase() {
 	`
 	_, err = GlobalDB.Exec(insertDefaultConfig)
 	if err != nil {
-		log.Printf("初始化勋章系统配置失败: %v\n", err)
+		log.Printf(common.T("", "medal_init_default_failed|勋章系统：初始化默认数据失败：%v"), err)
 		return
 	}
 }
@@ -260,7 +448,7 @@ func (p *MedalPlugin) initDefaultMedals() {
 	var count int
 	err := GlobalDB.QueryRow("SELECT COUNT(*) FROM medal").Scan(&count)
 	if err != nil {
-		log.Printf("查询勋章数量失败: %v\n", err)
+		log.Printf(common.T("", "medal_init_default_failed|勋章系统：初始化默认数据失败：%v"), err)
 		return
 	}
 
@@ -303,7 +491,7 @@ func (p *MedalPlugin) initDefaultMedals() {
 			medal.Name, medal.Description, medal.Icon, medal.Type, medal.Condition, medal.IsEnabled,
 		)
 		if err != nil {
-			log.Printf("插入默认勋章失败: %v\n", err)
+			log.Printf(common.T("", "medal_init_default_failed|勋章系统：初始化默认数据失败：%v"), err)
 		}
 	}
 }
@@ -317,55 +505,46 @@ func (p *MedalPlugin) isSystemEnabled() bool {
 	var isEnabled bool
 	err := GlobalDB.QueryRow("SELECT is_enabled FROM medal_config LIMIT 1").Scan(&isEnabled)
 	if err != nil {
-		log.Printf("查询勋章系统配置失败: %v\n", err)
 		return true // 默认开启
 	}
 
 	return isEnabled
 }
 
-// enableSystem 开启系统
-func (p *MedalPlugin) enableSystem(robot plugin.Robot, event *onebot.Event) {
+// doEnableSystem 开启系统
+func (p *MedalPlugin) doEnableSystem() (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法操作")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	_, err := GlobalDB.Exec("UPDATE medal_config SET is_enabled = TRUE, update_at = CURRENT_TIMESTAMP")
 	if err != nil {
-		log.Printf("开启勋章系统失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
-	p.sendMessage(robot, event, "勋章系统已开启")
+	return common.T("", "medal_system_enabled|勋章系统已开启"), nil
 }
 
-// disableSystem 关闭系统
-func (p *MedalPlugin) disableSystem(robot plugin.Robot, event *onebot.Event) {
+// doDisableSystem 关闭系统
+func (p *MedalPlugin) doDisableSystem() (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法操作")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	_, err := GlobalDB.Exec("UPDATE medal_config SET is_enabled = FALSE, update_at = CURRENT_TIMESTAMP")
 	if err != nil {
-		log.Printf("关闭勋章系统失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
-	p.sendMessage(robot, event, "勋章系统已关闭")
+	return common.T("", "medal_system_disabled_msg|勋章系统已关闭"), nil
 }
 
-// myMedals 查看我的勋章
-func (p *MedalPlugin) myMedals(robot plugin.Robot, event *onebot.Event) {
+// doMyMedals 查看我的勋章
+func (p *MedalPlugin) doMyMedals(userID string) (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法查询")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
-	userID := fmt.Sprintf("%d", event.UserID)
 	rows, err := GlobalDB.Query(`
 		SELECT m.id, m.name, m.icon, m.type, um.level, um.progress 
 		FROM user_medal um 
@@ -374,9 +553,7 @@ func (p *MedalPlugin) myMedals(robot plugin.Robot, event *onebot.Event) {
 		ORDER BY m.type, um.level DESC
 	`, userID)
 	if err != nil {
-		log.Printf("查询用户勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "查询失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 	defer rows.Close()
 
@@ -386,26 +563,23 @@ func (p *MedalPlugin) myMedals(robot plugin.Robot, event *onebot.Event) {
 		var name, icon, medalType string
 		var level, progress int
 		if err := rows.Scan(&id, &name, &icon, &medalType, &level, &progress); err != nil {
-			log.Printf("扫描用户勋章数据失败: %v\n", err)
 			continue
 		}
-		medals = append(medals, fmt.Sprintf("%s %s (等级 %d, 进度 %d)", icon, name, level, progress))
+		medals = append(medals, common.T("", "medal_my_item|%s %s (等级: %d, 进度: %d)", icon, name, level, progress))
 	}
 
 	if len(medals) == 0 {
-		p.sendMessage(robot, event, "您还没有获得任何勋章")
-		return
+		return common.T("", "medal_my_empty|你目前还没有获得任何勋章哦，加油！"), nil
 	}
 
-	message := "🏅 我的勋章\n" + strings.Join(medals, "\n")
-	p.sendMessage(robot, event, message)
+	message := common.T("", "medal_my_title|📜 我的勋章库") + "\n" + strings.Join(medals, "\n")
+	return message, nil
 }
 
-// listMedals 查看所有勋章
-func (p *MedalPlugin) listMedals(robot plugin.Robot, event *onebot.Event) {
+// doListMedals 查看所有勋章
+func (p *MedalPlugin) doListMedals() (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法查询")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	rows, err := GlobalDB.Query(`
@@ -415,9 +589,7 @@ func (p *MedalPlugin) listMedals(robot plugin.Robot, event *onebot.Event) {
 		ORDER BY type
 	`)
 	if err != nil {
-		log.Printf("查询所有勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "查询失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 	defer rows.Close()
 
@@ -426,26 +598,23 @@ func (p *MedalPlugin) listMedals(robot plugin.Robot, event *onebot.Event) {
 		var id uint
 		var name, icon, medalType, description string
 		if err := rows.Scan(&id, &name, &icon, &medalType, &description); err != nil {
-			log.Printf("扫描勋章数据失败: %v\n", err)
 			continue
 		}
-		medals = append(medals, fmt.Sprintf("%s %s (%s): %s", icon, name, medalType, description))
+		medals = append(medals, common.T("", "medal_list_item|%s %s [%s]: %s", icon, name, medalType, description))
 	}
 
 	if len(medals) == 0 {
-		p.sendMessage(robot, event, "当前没有可用的勋章")
-		return
+		return common.T("", "medal_list_empty|系统目前没有任何勋章。"), nil
 	}
 
-	message := "🏅 所有勋章\n" + strings.Join(medals, "\n")
-	p.sendMessage(robot, event, message)
+	message := common.T("", "medal_list_title|🏅 勋章列表") + "\n" + strings.Join(medals, "\n")
+	return message, nil
 }
 
-// medalDetail 查看勋章详情
-func (p *MedalPlugin) medalDetail(robot plugin.Robot, event *onebot.Event, medalName string) {
+// doMedalDetail 查看勋章详情
+func (p *MedalPlugin) doMedalDetail(userID string, medalName string) (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法查询")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	var medal Medal
@@ -455,13 +624,10 @@ func (p *MedalPlugin) medalDetail(robot plugin.Robot, event *onebot.Event, medal
 		WHERE name = $1 AND is_enabled = TRUE
 	`, medalName).Scan(&medal.ID, &medal.Name, &medal.Description, &medal.Icon, &medal.Type, &medal.Condition)
 	if err != nil {
-		log.Printf("查询勋章详情失败: %v\n", err)
-		p.sendMessage(robot, event, "勋章不存在或已关闭")
-		return
+		return "", fmt.Errorf(common.T("", "medal_not_found|勋章系统：未找到勋章“%s”"), medalName)
 	}
 
 	// 查询用户是否拥有该勋章
-	userID := fmt.Sprintf("%d", event.UserID)
 	var hasMedal bool
 	var level, progress int
 	err = GlobalDB.QueryRow(
@@ -471,37 +637,32 @@ func (p *MedalPlugin) medalDetail(robot plugin.Robot, event *onebot.Event, medal
 
 	var userStatus string
 	if hasMedal {
-		userStatus = fmt.Sprintf("\n🔹 您已拥有该勋章 (等级 %d, 进度 %d)", level, progress)
+		userStatus = common.T("", "medal_detail_has|【我的状态】：已拥有 (等级: %d, 进度: %d)", level, progress)
 	} else {
-		userStatus = "\n🔹 您尚未获得该勋章"
+		userStatus = common.T("", "medal_detail_not_has|【我的状态】：尚未获得")
 	}
 
-	message := fmt.Sprintf(
-		"🏅 勋章详情\n"+
-			"名称：%s %s\n"+
-			"类型：%s\n"+
-			"描述：%s\n"+
-			"获取条件：%s\n"+
-			"%s",
-		medal.Icon, medal.Name, medal.Type, medal.Description, medal.Condition, userStatus,
-	)
-	p.sendMessage(robot, event, message)
+	message := common.T("", "medal_detail_title|🔍 勋章详情") + "\n" +
+		common.T("", "medal_detail_name|【勋章名称】：%s %s", medal.Icon, medal.Name) + "\n" +
+		common.T("", "medal_detail_type|【勋章类型】：%s", medal.Type) + "\n" +
+		common.T("", "medal_detail_desc|【勋章描述】：%s", medal.Description) + "\n" +
+		common.T("", "medal_detail_condition|【获取条件】：%s", medal.Condition) + "\n" +
+		userStatus
+
+	return message, nil
 }
 
-// grantMedal 发放勋章
-func (p *MedalPlugin) grantMedal(robot plugin.Robot, event *onebot.Event, userID string, medalName string) {
+// doGrantMedal 发放勋章
+func (p *MedalPlugin) doGrantMedal(operatorID string, userID string, medalName string) (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法操作")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	// 查找勋章
 	var medalID uint
 	err := GlobalDB.QueryRow("SELECT id FROM medal WHERE name = $1 AND is_enabled = TRUE", medalName).Scan(&medalID)
 	if err != nil {
-		log.Printf("查询勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "勋章不存在或已关闭")
-		return
+		return "", fmt.Errorf(common.T("", "medal_not_found|勋章系统：未找到勋章“%s”"), medalName)
 	}
 
 	// 检查用户是否已拥有
@@ -511,14 +672,11 @@ func (p *MedalPlugin) grantMedal(robot plugin.Robot, event *onebot.Event, userID
 		userID, medalID,
 	).Scan(&exists)
 	if err != nil {
-		log.Printf("检查用户勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
 	if exists {
-		p.sendMessage(robot, event, "该用户已拥有此勋章")
-		return
+		return common.T("", "medal_grant_exists|用户已经拥有该勋章了。"), nil
 	}
 
 	// 发放勋章
@@ -527,37 +685,32 @@ func (p *MedalPlugin) grantMedal(robot plugin.Robot, event *onebot.Event, userID
 		userID, medalID,
 	)
 	if err != nil {
-		log.Printf("发放勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
 	// 记录日志
 	_, err = GlobalDB.Exec(
 		"INSERT INTO medal_grant_log (user_id, medal_id, operator, reason, level) VALUES ($1, $2, $3, $4, $5)",
-		userID, medalID, fmt.Sprintf("%d", event.UserID), "管理员发放", 1,
+		userID, medalID, operatorID, "管理员发放", 1,
 	)
 	if err != nil {
 		log.Printf("记录勋章发放日志失败: %v\n", err)
 	}
 
-	p.sendMessage(robot, event, fmt.Sprintf("成功为用户 %s 发放勋章 %s", userID, medalName))
+	return common.T("", "medal_grant_success|成功为用户 %s 发放了勋章“%s”！", userID, medalName), nil
 }
 
-// removeMedal 移除勋章
-func (p *MedalPlugin) removeMedal(robot plugin.Robot, event *onebot.Event, userID string, medalName string) {
+// doRemoveMedal 移除勋章
+func (p *MedalPlugin) doRemoveMedal(operatorID string, userID string, medalName string) (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法操作")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	// 查找勋章
 	var medalID uint
 	err := GlobalDB.QueryRow("SELECT id FROM medal WHERE name = $1 AND is_enabled = TRUE", medalName).Scan(&medalID)
 	if err != nil {
-		log.Printf("查询勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "勋章不存在或已关闭")
-		return
+		return "", fmt.Errorf(common.T("", "medal_not_found|勋章系统：未找到勋章“%s”"), medalName)
 	}
 
 	// 检查用户是否拥有
@@ -567,14 +720,11 @@ func (p *MedalPlugin) removeMedal(robot plugin.Robot, event *onebot.Event, userI
 		userID, medalID,
 	).Scan(&exists)
 	if err != nil {
-		log.Printf("检查用户勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
 	if !exists {
-		p.sendMessage(robot, event, "该用户未拥有此勋章")
-		return
+		return common.T("", "medal_remove_not_exists|该用户并未拥有此勋章。"), nil
 	}
 
 	// 移除勋章
@@ -583,42 +733,36 @@ func (p *MedalPlugin) removeMedal(robot plugin.Robot, event *onebot.Event, userI
 		userID, medalID,
 	)
 	if err != nil {
-		log.Printf("移除勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
 	// 记录日志
 	_, err = GlobalDB.Exec(
 		"INSERT INTO medal_grant_log (user_id, medal_id, operator, reason, level) VALUES ($1, $2, $3, $4, $5)",
-		userID, medalID, fmt.Sprintf("%d", event.UserID), "管理员移除", 0,
+		userID, medalID, operatorID, "管理员移除", 0,
 	)
 	if err != nil {
 		log.Printf("记录勋章移除日志失败: %v\n", err)
 	}
 
-	p.sendMessage(robot, event, fmt.Sprintf("成功为用户 %s 移除勋章 %s", userID, medalName))
+	return common.T("", "medal_remove_success|成功为用户 %s 移除了勋章“%s”！", userID, medalName), nil
 }
 
-// upgradeMedal 升级勋章
-func (p *MedalPlugin) upgradeMedal(robot plugin.Robot, event *onebot.Event, userID string, medalName string, level int) {
+// doUpgradeMedal 升级勋章
+func (p *MedalPlugin) doUpgradeMedal(operatorID string, userID string, medalName string, level int) (string, error) {
 	if GlobalDB == nil {
-		p.sendMessage(robot, event, "数据库未初始化，无法操作")
-		return
+		return "", fmt.Errorf(common.T("", "medal_db_not_init|勋章系统：数据库未初始化"))
 	}
 
 	if level <= 0 {
-		p.sendMessage(robot, event, "等级必须大于0")
-		return
+		return "", fmt.Errorf(common.T("", "medal_upgrade_level_invalid|勋章系统：等级必须大于0"))
 	}
 
 	// 查找勋章
 	var medalID uint
 	err := GlobalDB.QueryRow("SELECT id FROM medal WHERE name = $1 AND is_enabled = TRUE", medalName).Scan(&medalID)
 	if err != nil {
-		log.Printf("查询勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "勋章不存在或已关闭")
-		return
+		return "", fmt.Errorf(common.T("", "medal_not_found|勋章系统：未找到勋章“%s”"), medalName)
 	}
 
 	// 检查用户是否拥有
@@ -628,44 +772,38 @@ func (p *MedalPlugin) upgradeMedal(robot plugin.Robot, event *onebot.Event, user
 		userID, medalID,
 	).Scan(&exists)
 	if err != nil {
-		log.Printf("检查用户勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
 	if !exists {
-		p.sendMessage(robot, event, "该用户未拥有此勋章")
-		return
+		return common.T("", "medal_remove_not_exists|该用户并未拥有此勋章。"), nil
 	}
 
 	// 升级勋章
 	_, err = GlobalDB.Exec(
-		"UPDATE user_medal SET level = $3, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND medal_id = $2",
-		userID, medalID, level,
+		"UPDATE user_medal SET level = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 AND medal_id = $3",
+		level, userID, medalID,
 	)
 	if err != nil {
-		log.Printf("升级勋章失败: %v\n", err)
-		p.sendMessage(robot, event, "操作失败")
-		return
+		return "", fmt.Errorf(common.T("", "medal_op_failed|勋章系统：操作失败，请重试"))
 	}
 
 	// 记录日志
 	_, err = GlobalDB.Exec(
 		"INSERT INTO medal_grant_log (user_id, medal_id, operator, reason, level) VALUES ($1, $2, $3, $4, $5)",
-		userID, medalID, fmt.Sprintf("%d", event.UserID), "管理员升级", level,
+		userID, medalID, operatorID, "管理员升级", level,
 	)
 	if err != nil {
 		log.Printf("记录勋章升级日志失败: %v\n", err)
 	}
 
-	p.sendMessage(robot, event, fmt.Sprintf("成功将用户 %s 的勋章 %s 升级到等级 %d", userID, medalName, level))
+	return common.T("", "medal_upgrade_success|成功将用户 %s 的勋章“%s”升级到第 %d 级！", userID, medalName, level), nil
 }
 
 // sendMessage 发送消息
-func (p *MedalPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	if event.MessageType == "group" {
-		robot.SendGroupMessage(event.GroupID, message)
-	} else {
-		robot.SendPrivateMessage(event.UserID, message)
+func (p *MedalPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, msg string) {
+	if robot == nil || event == nil || msg == "" {
+		return
 	}
+	_, _ = SendTextReply(robot, event, msg)
 }

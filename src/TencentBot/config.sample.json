@@ -2,8 +2,16 @@
     "app_id": 123456789,
     "token": "YOUR_BOT_TOKEN",
     "secret": "YOUR_APP_SECRET",
-    "nexus_addr": "ws://localhost:3001",
+    "sandbox": true,
     "log_port": 3133,
-    "file_host": "https://www.sz84.com",
-    "media_route": "/bot-files/"
+    "file_host": "https://your-public-host.com",
+    "media_route": "/bot-files/",
+    "websocket_addrs": [
+        {
+            "name": "Default",
+            "url": "ws://localhost:3001",
+            "enabled": true,
+            "priority": 1
+        }
+    ]
 }

@@ -16,7 +16,7 @@ func HandleListTasks(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var taskList []tasks.Task
-		m.DB.Preload("Tags").Find(&taskList)
+		m.GORMDB.Preload("Tags").Find(&taskList)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"data":    taskList,
@@ -97,18 +97,18 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 		}
 
 		// 将解析结果存入草稿箱
-		draftID := common.GenerateUUID()
+		draftID := common.GenerateRandomToken(8)
 		dataJSON, _ := json.Marshal(result.Data)
 		claims := r.Context().Value(common.UserClaimsKey).(*common.UserClaims)
 		
 		draft := tasks.AIDraft{
 			DraftID:    draftID,
-			UserID:     uint(claims.ID),
+			UserID:     uint(claims.UserID),
 			Intent:     string(result.Intent),
 			Data:       string(dataJSON),
 			ExpireTime: time.Now().Add(15 * time.Minute), // 15分钟有效
 		}
-		m.DB.Create(&draft)
+		m.GORMDB.Create(&draft)
 
 		result.DraftID = draftID
 
@@ -132,7 +132,7 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 		}
 
 		var draft tasks.AIDraft
-		if err := m.DB.Where("draft_id = ? AND status = 'pending'", req.DraftID).First(&draft).Error; err != nil {
+		if err := m.GORMDB.Where("draft_id = ? AND status = 'pending'", req.DraftID).First(&draft).Error; err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
@@ -142,7 +142,7 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 		}
 
 		if time.Now().After(draft.ExpireTime) {
-			m.DB.Model(&draft).Update("status", "expired")
+			m.GORMDB.Model(&draft).Update("status", "expired")
 			w.WriteHeader(http.StatusGone)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
@@ -195,7 +195,7 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		m.DB.Model(&draft).Update("status", "confirmed")
+		m.GORMDB.Model(&draft).Update("status", "confirmed")
 
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,

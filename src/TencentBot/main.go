@@ -51,9 +51,14 @@ type Config struct {
 	NexusAddr      string            `json:"nexus_addr"`      // Backward compatibility
 }
 
+type NexusConn struct {
+	Conn *websocket.Conn
+	Name string
+}
+
 var (
 	config         Config
-	nexusConns     []*websocket.Conn
+	nexusConns     []*NexusConn
 	nexusMu        sync.Mutex
 	api            openapi.OpenAPI
 	ctx            context.Context
@@ -63,7 +68,152 @@ var (
 	accessToken    string
 	tokenExpiresAt int64
 	tokenMu        sync.Mutex
+
+	// Bot lifecycle management
+	botCtx    context.Context
+	botCancel context.CancelFunc
+	botMu     sync.Mutex
+
+	// Nexus lifecycle management
+	nexusCtx    context.Context
+	nexusCancel context.CancelFunc
 )
+
+// stopNexus stops only the WebSocket connections to BotNexus
+func stopNexus() {
+	nexusMu.Lock()
+	if nexusCancel != nil {
+		log.Println("Stopping Nexus connections...")
+		nexusCancel()
+		nexusCancel = nil
+	}
+	for _, nc := range nexusConns {
+		nc.Conn.Close()
+	}
+	nexusConns = nil
+	nexusMu.Unlock()
+}
+
+// startNexus starts WebSocket connections to BotNexus
+func startNexus() {
+	nexusMu.Lock()
+	defer nexusMu.Unlock()
+
+	if nexusCancel != nil {
+		nexusCancel()
+	}
+
+	nexusCtx, nexusCancel = context.WithCancel(botCtx)
+	log.Println("Starting Nexus connections...")
+	go NexusConnect(nexusCtx)
+}
+
+// stopBot stops all bot-related goroutines and connections
+func stopBot() {
+	botMu.Lock()
+	defer botMu.Unlock()
+
+	stopNexus()
+
+	if botCancel != nil {
+		log.Println("Stopping bot services...")
+		botCancel()
+		botCancel = nil
+	}
+}
+
+// startBot starts all bot-related goroutines (Nexus and Tencent WebSocket)
+func startBot() {
+	botMu.Lock()
+	defer botMu.Unlock()
+
+	// Ensure previous bot is stopped
+	if botCancel != nil {
+		botCancel()
+	}
+
+	botCtx, botCancel = context.WithCancel(context.Background())
+	ctx = botCtx // Update global ctx for API calls
+
+	log.Println("Starting bot services...")
+
+	// Initialize Bot Token and API
+	botToken := token.NewQQBotTokenSource(
+		&token.QQBotCredentials{
+			AppID:     fmt.Sprintf("%d", config.AppID),
+			AppSecret: config.Secret,
+		},
+	)
+
+	if config.Sandbox {
+		log.Println("Initializing Tencent Bot API in SANDBOX mode...")
+		api = botgo.NewSandboxOpenAPI(fmt.Sprintf("%d", config.AppID), botToken).WithTimeout(3 * time.Second)
+	} else {
+		log.Println("Initializing Tencent Bot API in PRODUCTION mode...")
+		api = botgo.NewOpenAPI(fmt.Sprintf("%d", config.AppID), botToken).WithTimeout(3 * time.Second)
+	}
+
+	// Get Bot Info (SelfID)
+	for {
+		me, err := api.Me(botCtx)
+		if err != nil {
+			log.Printf("Error getting bot info: %v. Retrying in 5s...", err)
+			select {
+			case <-botCtx.Done():
+				return
+			case <-time.After(5 * time.Second):
+				continue
+			}
+		}
+		selfID = me.ID
+		log.Printf("Bot Identity: %s (%s)", me.Username, selfID)
+		break
+	}
+
+	// Connect to BotNexus
+	startNexus()
+
+	// Connect to Tencent WebSocket
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Tencent WebSocket loop stopped.")
+				return
+			default:
+				wsInfo, err := api.WS(ctx, nil, "")
+				if err != nil {
+					log.Printf("Error getting WS info: %v. Retrying in 5s...", err)
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				intent := event.RegisterHandlers(
+					event.ATMessageEventHandler(atMessageEventHandler),
+					event.DirectMessageEventHandler(directMessageEventHandler),
+					event.GuildEventHandler(guildEventHandler),
+					event.GuildMemberEventHandler(guildMemberEventHandler),
+					event.ChannelEventHandler(channelEventHandler),
+					event.MessageReactionEventHandler(messageReactionEventHandler),
+					event.GroupATMessageEventHandler(groupATMessageEventHandler),
+					event.C2CMessageEventHandler(c2cMessageEventHandler),
+				)
+				// Add mandatory intents
+				intent = intent | (1 << 30) | (1 << 12) | (1 << 0) | (1 << 1) | (1 << 10) | (1 << 25)
+
+				log.Printf("Starting Tencent Bot Session Manager with Intent: %d...", intent)
+
+				// The SDK might not support context directly in Start,
+				// but closing the connection or cancelling the underlying requests usually works.
+				// For now, we'll just run it and hope for the best, or rely on process restart if needed.
+				if err := botgo.NewSessionManager().Start(wsInfo, botToken, &intent); err != nil {
+					log.Printf("Session Manager ended: %v. Retrying in 5s...", err)
+					time.Sleep(5 * time.Second)
+				}
+			}
+		}
+	}(botCtx)
+}
 
 // getAppAccessToken fetches or returns a valid access token
 func getAppAccessToken() (string, error) {
@@ -300,7 +450,47 @@ func (s *SessionCache) Get(keyType, key string) string {
 	return ""
 }
 
+func needsFullRestart(old, new Config) bool {
+	if old.AppID != new.AppID ||
+		old.Token != new.Token ||
+		old.Secret != new.Secret ||
+		old.Sandbox != new.Sandbox ||
+		old.LogPort != new.LogPort {
+		return true
+	}
+	return false
+}
+
+func validateConfig(c Config) error {
+	if c.AppID == 0 {
+		return fmt.Errorf("AppID is required")
+	}
+	if c.Token == "" {
+		return fmt.Errorf("Token is required")
+	}
+	if c.Secret == "" {
+		return fmt.Errorf("Secret is required")
+	}
+	if c.LogPort <= 0 || c.LogPort > 65535 {
+		return fmt.Errorf("Invalid LogPort (must be 1-65535)")
+	}
+
+	for _, ws := range c.WebSocketAddrs {
+		if ws.Enabled {
+			if ws.URL == "" {
+				return fmt.Errorf("WebSocket URL is required for enabled connection '%s'", ws.Name)
+			}
+			if !strings.HasPrefix(ws.URL, "ws://") && !strings.HasPrefix(ws.URL, "wss://") {
+				return fmt.Errorf("WebSocket URL must start with ws:// or wss:// (connection '%s')", ws.Name)
+			}
+		}
+	}
+	return nil
+}
+
 func loadConfig() {
+	botMu.Lock()
+	defer botMu.Unlock()
 	// Try to load from file first
 	file, err := os.Open("config.json")
 	if err == nil {
@@ -313,41 +503,63 @@ func loadConfig() {
 		log.Println("config.json not found, using environment variables.")
 	}
 
-	// Override with environment variables if present
-	if envAppID := os.Getenv("TENCENT_APP_ID"); envAppID != "" {
-		fmt.Sscanf(envAppID, "%d", &config.AppID)
+	// Override with environment variables ONLY if fields are empty
+	if config.AppID == 0 {
+		if envAppID := os.Getenv("TENCENT_APP_ID"); envAppID != "" {
+			fmt.Sscanf(envAppID, "%d", &config.AppID)
+		}
 	}
-	if envToken := os.Getenv("TENCENT_TOKEN"); envToken != "" {
-		config.Token = envToken
+	if config.Token == "" {
+		if envToken := os.Getenv("TENCENT_TOKEN"); envToken != "" {
+			config.Token = envToken
+		}
 	}
-	if envSecret := os.Getenv("TENCENT_SECRET"); envSecret != "" {
-		config.Secret = envSecret
+	if config.Secret == "" {
+		if envSecret := os.Getenv("TENCENT_SECRET"); envSecret != "" {
+			config.Secret = envSecret
+		}
 	}
 	if envSandbox := os.Getenv("TENCENT_SANDBOX"); envSandbox != "" {
 		config.Sandbox = (envSandbox == "true" || envSandbox == "1")
 	}
-	if envSelfID := os.Getenv("TENCENT_SELF_ID"); envSelfID != "" {
-		config.SelfID = envSelfID
-	}
-	// Backward compatibility: if NexusAddr is set, add it to WebSocketAddrs
-	if envNexusAddr := os.Getenv("NEXUS_ADDR"); envNexusAddr != "" {
-		config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
-			Name:     "Default",
-			URL:      envNexusAddr,
-			Enabled:  true,
-			Priority: 1,
-		})
+	if config.SelfID == "" {
+		if envSelfID := os.Getenv("TENCENT_SELF_ID"); envSelfID != "" {
+			config.SelfID = envSelfID
+		}
 	}
 
-	// Backward compatibility: if old NexusAddr is set in config.json
-	if config.NexusAddr != "" && len(config.WebSocketAddrs) == 0 {
-		config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
-			Name:     "Default",
-			URL:      config.NexusAddr,
-			Enabled:  true,
-			Priority: 1,
-		})
-		config.NexusAddr = "" // Clear old field
+	// Backward compatibility: only add if no WebSocket addresses exist AND no config file was loaded
+	if len(config.WebSocketAddrs) == 0 {
+		hasConfigFile := false
+		if _, err := os.Stat("config.json"); err == nil {
+			hasConfigFile = true
+		}
+
+		if envNexusAddr := os.Getenv("NEXUS_ADDR"); envNexusAddr != "" {
+			config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
+				Name:     "Default",
+				URL:      envNexusAddr,
+				Enabled:  true,
+				Priority: 1,
+			})
+		} else if config.NexusAddr != "" {
+			config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
+				Name:     "Default",
+				URL:      config.NexusAddr,
+				Enabled:  true,
+				Priority: 1,
+			})
+			config.NexusAddr = ""
+		} else if !hasConfigFile {
+			// ONLY add default if NO config file exists
+			log.Println("No config file found and no WebSocket addresses configured. Adding default connection.")
+			config.WebSocketAddrs = append(config.WebSocketAddrs, WebSocketConfig{
+				Name:     "Default",
+				URL:      "ws://bot-nexus:3001",
+				Enabled:  true,
+				Priority: 1,
+			})
+		}
 	}
 
 	if envLogPort := os.Getenv("LOG_PORT"); envLogPort != "" {
@@ -372,78 +584,131 @@ func loadConfig() {
 		config.MediaRoute = config.MediaRoute + "/"
 	}
 
-	// Validation
-	if config.AppID == 0 || config.Token == "" || config.Secret == "" {
-		log.Fatal("Missing configuration. Please check config.json or environment variables (TENCENT_APP_ID, TENCENT_TOKEN, TENCENT_SECRET).")
+	// Default LogPort if not set
+	if config.LogPort == 0 {
+		config.LogPort = 3133 // Default port
 	}
-	if config.NexusAddr == "" {
-		config.NexusAddr = "ws://192.168.0.167:3005/ws/bots"
+
+	// Validation
+	if err := validateConfig(config); err != nil {
+		log.Printf("WARNING: Configuration validation failed: %v", err)
 	}
 }
 
 // NexusConnect connects to BotNexus
-func NexusConnect() {
+func NexusConnect(ctx context.Context) {
 	headers := http.Header{}
 	// Wait for selfID to be populated
 	for selfID == "" {
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 	headers.Add("X-Self-ID", selfID)
 	headers.Add("X-Platform", "Guild")
 
 	// If no WebSocket configs, wait for configuration
 	for len(config.WebSocketAddrs) == 0 {
-		log.Println("No WebSocket connections configured. Waiting for configuration...")
-		time.Sleep(5 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			log.Println("No WebSocket connections configured. Waiting for configuration...")
+			time.Sleep(5 * time.Second)
+		}
 	}
 
 	// Connect to all enabled WebSocket servers
-	for _, wsConfig := range config.WebSocketAddrs {
+	botMu.Lock()
+	wsAddrs := make([]WebSocketConfig, len(config.WebSocketAddrs))
+	copy(wsAddrs, config.WebSocketAddrs)
+	botMu.Unlock()
+
+	for _, wsConfig := range wsAddrs {
 		if !wsConfig.Enabled {
 			continue
 		}
 
-		go connectToWebSocket(wsConfig, headers)
+		// Use a local copy for the goroutine to avoid loop variable capture issues (Go < 1.22)
+		currentConfig := wsConfig
+		go connectToWebSocket(ctx, currentConfig, headers)
 	}
 }
 
-func connectToWebSocket(wsConfig WebSocketConfig, headers http.Header) {
+func connectToWebSocket(ctx context.Context, wsConfig WebSocketConfig, headers http.Header) {
 	for {
-		log.Printf("Connecting to WebSocket '%s' at %s...", wsConfig.Name, wsConfig.URL)
-		conn, _, err := websocket.DefaultDialer.Dial(wsConfig.URL, headers)
-		if err != nil {
-			log.Printf("WebSocket '%s' connection failed: %v. Retrying in 5s...", wsConfig.Name, err)
-			time.Sleep(5 * time.Second)
-			continue
+		select {
+		case <-ctx.Done():
+			log.Printf("WebSocket '%s' connection loop stopped by context.", wsConfig.Name)
+			return
+		default:
+			log.Printf("Connecting to WebSocket '%s' at %s...", wsConfig.Name, wsConfig.URL)
+			conn, _, err := websocket.DefaultDialer.Dial(wsConfig.URL, headers)
+			if err != nil {
+				log.Printf("WebSocket '%s' connection failed: %v. Retrying in 5s...", wsConfig.Name, err)
+				select {
+				case <-time.After(5 * time.Second):
+					continue
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			// Check if context was cancelled while dialing
+			select {
+			case <-ctx.Done():
+				log.Printf("WebSocket '%s' connected but context was cancelled. Closing.", wsConfig.Name)
+				conn.Close()
+				return
+			default:
+			}
+
+			nexusMu.Lock()
+			nexusConns = append(nexusConns, &NexusConn{Conn: conn, Name: wsConfig.Name})
+			nexusMu.Unlock()
+			log.Printf("Connected to WebSocket '%s'!", wsConfig.Name)
+
+			// Handle incoming messages from this WebSocket (blocking call)
+			handleNexusMessages(ctx, conn, wsConfig.Name)
+
+			log.Printf("WebSocket '%s' disconnected. Retrying in 5s...", wsConfig.Name)
+			select {
+			case <-time.After(5 * time.Second):
+				// continue loop
+			case <-ctx.Done():
+				return
+			}
 		}
-
-		nexusMu.Lock()
-		nexusConns = append(nexusConns, conn)
-		nexusMu.Unlock()
-		log.Printf("Connected to WebSocket '%s'!", wsConfig.Name)
-
-		// Handle incoming messages from this WebSocket
-		go handleNexusMessages(conn, wsConfig.Name)
-
-		return
 	}
 }
 
-func handleNexusMessages(conn *websocket.Conn, name string) {
-	defer conn.Close()
+func handleNexusMessages(ctx context.Context, conn *websocket.Conn, name string) {
+	// Ensure connection is closed and removed from list on exit
+	defer func() {
+		conn.Close()
+		nexusMu.Lock()
+		for i, nc := range nexusConns {
+			if nc.Conn == conn {
+				nexusConns = append(nexusConns[:i], nexusConns[i+1:]...)
+				break
+			}
+		}
+		nexusMu.Unlock()
+	}()
+
+	// Close connection when context is cancelled to interrupt blocking ReadMessage
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
+
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket '%s' connection lost: %v", name, err)
-			// Remove closed connection from list
-			nexusMu.Lock()
-			for i, c := range nexusConns {
-				if c == conn {
-					nexusConns = append(nexusConns[:i], nexusConns[i+1:]...)
-					break
-				}
-			}
-			nexusMu.Unlock()
 			return
 		}
 
@@ -453,8 +718,7 @@ func handleNexusMessages(conn *websocket.Conn, name string) {
 			continue
 		}
 
-		// Handle Actions (e.g. send_msg)
-		// This is where we translate OneBot actions to Tencent SDK calls
+		// Handle Actions
 		handleAction(actionMap)
 	}
 }
@@ -1922,18 +2186,25 @@ func handleSendResponse(err error, msg *dto.Message, action map[string]interface
 
 func sendToNexus(data interface{}) {
 	nexusMu.Lock()
-	defer nexusMu.Unlock()
 	if len(nexusConns) == 0 {
+		nexusMu.Unlock()
 		return
 	}
+	// Copy the slice to avoid holding the lock during network I/O
+	conns := make([]*NexusConn, len(nexusConns))
+	copy(conns, nexusConns)
+	nexusMu.Unlock()
 
-	for i, conn := range nexusConns {
-		if err := conn.WriteJSON(data); err != nil {
-			log.Printf("Error sending to WebSocket #%d: %v", i, err)
-			// Remove broken connection
-			conn.Close()
-			nexusConns = append(nexusConns[:i], nexusConns[i+1:]...)
-		}
+	for _, nc := range conns {
+		go func(nc *NexusConn) {
+			// Set a write deadline to prevent hanging
+			nc.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if err := nc.Conn.WriteJSON(data); err != nil {
+				log.Printf("Error sending to WebSocket '%s' (%s): %v. Closing connection.", nc.Name, nc.Conn.RemoteAddr(), err)
+				nc.Conn.Close()
+				// The connection will be removed from nexusConns by the handleNexusMessages defer block
+			}
+		}(nc)
 	}
 }
 
@@ -2295,6 +2566,14 @@ func main() {
 	// Start HTTP Log Viewer and File Server if configured
 	if config.LogPort > 0 {
 		go func() {
+			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/" {
+					http.Redirect(w, r, "/config-ui", http.StatusFound)
+					return
+				}
+				http.NotFound(w, r)
+			})
+
 			http.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
 				lines := 100
 				if l := r.URL.Query().Get("lines"); l != "" {
@@ -2369,18 +2648,23 @@ func main() {
 					// Update config
 					var newConfig Config
 					if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
-						http.Error(w, err.Error(), http.StatusBadRequest)
+						http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 						return
 					}
 
 					// Validate
-					if newConfig.AppID == 0 || newConfig.Token == "" || newConfig.Secret == "" {
-						http.Error(w, "Missing required configuration", http.StatusBadRequest)
+					if err := validateConfig(newConfig); err != nil {
+						http.Error(w, err.Error(), http.StatusBadRequest)
 						return
 					}
 
-					// Update config
+					// Check if core fields changed
+					fullRestart := needsFullRestart(config, newConfig)
+
+					// Update config with lock
+					botMu.Lock()
 					config = newConfig
+					botMu.Unlock()
 
 					// Save to file
 					file, err := os.Create("config.json")
@@ -2391,16 +2675,32 @@ func main() {
 					defer file.Close()
 					encoder := json.NewEncoder(file)
 					encoder.SetIndent("", "  ")
-					if err := encoder.Encode(config); err != nil {
+					if err := encoder.Encode(newConfig); err != nil {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
 
-					// Reconnect to WebSocket servers
-					go NexusConnect()
+					// Apply changes
+					if fullRestart {
+						log.Println("Core configuration changed. Performing full restart...")
+						go func() {
+							stopBot()
+							startBot()
+						}()
+					} else {
+						log.Println("Non-core configuration changed. Reloading Nexus connections...")
+						stopNexus()
+						startNexus()
+					}
 
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "message": "Configuration updated successfully"})
+					msg := "Configuration updated successfully"
+					if fullRestart {
+						msg = "Configuration updated. Full bot restart initiated."
+					} else {
+						msg = "Configuration updated. Nexus connections reloaded."
+					}
+					json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "message": msg})
 					return
 				}
 
@@ -2411,185 +2711,236 @@ func main() {
 			http.HandleFunc("/config-ui", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				fmt.Fprint(w, `
-				<!DOCTYPE html>
-				<html lang="zh-CN">
-				<head>
-					<meta charset="UTF-8">
-					<meta name="viewport" content="width=device-width, initial-scale=1.0">
-					<title>机器人配置</title>
-					<style>
-						body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
-						.container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-						h1 { text-align: center; color: #333; }
-						.form-group { margin-bottom: 15px; }
-						label { display: block; margin-bottom: 5px; font-weight: bold; }
-						input, textarea, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-						button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
-						button:hover { background-color: #0056b3; }
-						.websocket-config { margin: 10px 0; padding: 10px; border: 1px solid #eee; border-radius: 4px; }
-						.add-ws-btn { background-color: #28a745; margin: 10px 0; }
-						.add-ws-btn:hover { background-color: #218838; }
-						.remove-ws-btn { background-color: #dc3545; margin-left: 10px; }
-						.remove-ws-btn:hover { background-color: #c82333; }
-						.status { margin-top: 20px; padding: 10px; border-radius: 4px; }
-						.status.success { background-color: #d4edda; color: #155724; }
-						.status.error { background-color: #f8d7da; color: #721c24; }
-					</style>
-				</head>
-				<body>
-					<div class="container">
-						<h1>机器人配置</h1>
-						<form id="config-form">
-							<div class="form-group">
-								<label for="app_id">App ID:</label>
-								<input type="number" id="app_id" name="app_id" required>
-							</div>
-							<div class="form-group">
-								<label for="token">Token:</label>
-								<input type="text" id="token" name="token" required>
-							</div>
-							<div class="form-group">
-								<label for="secret">Secret:</label>
-								<input type="text" id="secret" name="secret" required>
-							</div>
-							<div class="form-group">
-								<label for="sandbox">Sandbox:</label>
-								<input type="checkbox" id="sandbox" name="sandbox">
-							</div>
-							<div class="form-group">
-								<label for="self_id">Self ID:</label>
-								<input type="text" id="self_id" name="self_id">
-							</div>
-							<div class="form-group">
-								<label for="log_port">Log Port:</label>
-								<input type="number" id="log_port" name="log_port" value="8080">
-							</div>
-							<div class="form-group">
-								<label for="file_host">File Host:</label>
-								<input type="text" id="file_host" name="file_host" placeholder="http://1.2.3.4:8080">
-							</div>
-							<div class="form-group">
-								<label for="media_route">Media Route:</label>
-								<input type="text" id="media_route" name="media_route" value="/media/">
-							</div>
-							<div class="form-group">
-								<label>WebSocket Connections:</label>
-								<div id="websocket-list"></div>
-								<button type="button" class="add-ws-btn" onclick="addWebSocketConfig()">Add WebSocket</button>
-							</div>
-							<button type="submit">Save Configuration</button>
-						</form>
-						<div id="status"></div>
-					</div>
-					<script>
-						// Load current config
-						fetch('/config')
-							.then(response => response.json())
-							.then(config => {
-								document.getElementById('app_id').value = config.app_id;
-								document.getElementById('token').value = config.token;
-								document.getElementById('secret').value = config.secret;
-								document.getElementById('sandbox').checked = config.sandbox;
-								document.getElementById('self_id').value = config.self_id || '';
-								document.getElementById('log_port').value = config.log_port || 8080;
-								document.getElementById('file_host').value = config.file_host || '';
-								document.getElementById('media_route').value = config.media_route || '/media/';
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TencentBot 配置中心</title>
+    <style>
+        :root { --primary-color: #007bff; --success-color: #28a745; --danger-color: #dc3545; --bg-color: #f4f7f6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; display: flex; height: 100vh; }
+        .sidebar { width: 280px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; font-size: 20px; font-weight: bold; border-bottom: 1px solid #34495e; }
+        .nav-item { padding: 15px 20px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px; }
+        .nav-item:hover { background: #34495e; }
+        .nav-item.active { background: var(--primary-color); }
+        .main-content { flex: 1; overflow-y: auto; padding: 30px; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 25px; }
+        .section-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #2c3e50; display: flex; justify-content: space-between; align-items: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; color: #666; }
+        input[type="text"], input[type="number"], input[type="password"], select { 
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; 
+        }
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: opacity 0.2s; }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        .btn:hover { opacity: 0.9; }
+        .websocket-item { background: #f8f9fa; border: 1px solid #eee; padding: 15px; border-radius: 6px; margin-bottom: 15px; position: relative; }
+        .logs-container { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; height: 400px; overflow-y: auto; font-size: 13px; line-height: 1.5; }
+        .log-entry { margin-bottom: 2px; border-bottom: 1px solid #2d2d2d; padding-bottom: 2px; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        .checkbox-group input { width: 18px; height: 18px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">TencentBot</div>
+        <div class="nav-item active" onclick="switchTab('config')">配置管理</div>
+        <div class="nav-item" onclick="switchTab('logs')">实时日志</div>
+    </div>
+    <div class="main-content">
+        <div id="config-tab">
+            <div class="card">
+                <div class="section-title">核心配置</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label>App ID</label>
+                        <input type="number" id="app_id">
+                    </div>
+                    <div class="form-group">
+                        <label>Self ID (可选)</label>
+                        <input type="text" id="self_id" placeholder="自动获取">
+                    </div>
+                    <div class="form-group">
+                        <label>Token</label>
+                        <input type="password" id="token">
+                    </div>
+                    <div class="form-group">
+                        <label>Secret</label>
+                        <input type="password" id="secret">
+                    </div>
+                    <div class="form-group">
+                        <label>Log Port</label>
+                        <input type="number" id="log_port">
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group" style="margin-top: 30px;">
+                            <input type="checkbox" id="sandbox">
+                            <label style="margin-bottom: 0;">沙箱模式 (Sandbox)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-								// Load WebSocket configs
-								const wsList = document.getElementById('websocket-list');
-								config.websocket_addrs.forEach((ws, index) => {
-									addWebSocketConfig(ws, index);
-								});
-								if (config.websocket_addrs.length === 0) {
-									addWebSocketConfig();
-								}
-							})
-							.catch(error => console.error('Error loading config:', error));
+            <div class="card">
+                <div class="section-title">文件与媒体配置</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label>文件访问域名 (File Host)</label>
+                        <input type="text" id="file_host" placeholder="https://your-bot.com">
+                    </div>
+                    <div class="form-group">
+                        <label>媒体文件路由</label>
+                        <input type="text" id="media_route" value="/media/">
+                    </div>
+                </div>
+            </div>
 
-						function addWebSocketConfig(ws = {}, index = Date.now()) {
-							const wsList = document.getElementById('websocket-list');
-							const wsDiv = document.createElement('div');
-							wsDiv.className = 'websocket-config';
-							wsDiv.innerHTML = 
-								'<div class="form-group">' +
-									'<label>Name:</label>' +
-									'<input type="text" name="websocket_addrs[' + index + '].name" value="' + (ws.name || 'Default') + '" required>' +
-								'</div>' +
-								'<div class="form-group">' +
-									'<label>URL:</label>' +
-									'<input type="text" name="websocket_addrs[' + index + '].url" value="' + (ws.url || 'ws://192.168.0.167:3005/ws/bots') + '" required>' +
-								'</div>' +
-								'<div class="form-group">' +
-									'<label>Enabled:</label>' +
-									'<input type="checkbox" name="websocket_addrs[' + index + '].enabled" ' + (ws.enabled !== false ? 'checked' : '') + '>' +
-								'</div>' +
-								'<div class="form-group">' +
-									'<label>Priority:</label>' +
-									'<input type="number" name="websocket_addrs[' + index + '].priority" value="' + (ws.priority || 1) + '" min="1" max="10">' +
-								'</div>' +
-								'<button type="button" class="remove-ws-btn" onclick="removeWebSocketConfig(this)">Remove</button>';
-							wsList.appendChild(wsDiv);
-						}
+            <div class="card">
+                <div class="section-title">
+                    WebSocket 连接 (BotNexus)
+                    <button class="btn btn-success" onclick="addWebSocket()">+ 添加连接</button>
+                </div>
+                <div id="websocket-list"></div>
+            </div>
 
-						function removeWebSocketConfig(btn) {
-							btn.parentElement.remove();
-						}
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="btn btn-primary" style="padding: 15px 40px; font-size: 16px;" onclick="saveConfig()">保存配置并重启</button>
+            </div>
+        </div>
 
-						// Handle form submission
-						document.getElementById('config-form').addEventListener('submit', function(e) {
-							e.preventDefault();
-							const formData = new FormData(this);
-							const config = {
-								app_id: parseInt(formData.get('app_id')),
-								token: formData.get('token'),
-								secret: formData.get('secret'),
-								sandbox: formData.get('sandbox') === 'on',
-								self_id: formData.get('self_id'),
-								log_port: parseInt(formData.get('log_port')),
-								file_host: formData.get('file_host'),
-								media_route: formData.get('media_route'),
-								websocket_addrs: []
-							};
+        <div id="logs-tab" style="display: none;">
+            <div class="card">
+                <div class="section-title">
+                    系统日志
+                    <button class="btn btn-danger" onclick="clearLogs()">清空显示</button>
+                </div>
+                <div id="logs" class="logs-container"></div>
+            </div>
+        </div>
+    </div>
 
-							// Collect WebSocket configs
-							const wsConfigs = [];
-							const wsDivs = document.querySelectorAll('.websocket-config');
-							wsDivs.forEach((div, index) => {
-								const wsConfig = {
-								name: div.querySelector('input[name="websocket_addrs[' + index + '].name"]').value,
-								url: div.querySelector('input[name="websocket_addrs[' + index + '].url"]').value,
-								enabled: div.querySelector('input[name="websocket_addrs[' + index + '].enabled"]').checked,
-								priority: parseInt(div.querySelector('input[name="websocket_addrs[' + index + '].priority"]').value)
-							};
-								wsConfigs.push(wsConfig);
-							});
-							config.websocket_addrs = wsConfigs;
+    <script>
+        let currentTab = 'config';
+        function switchTab(tab) {
+            document.getElementById(currentTab + '-tab').style.display = 'none';
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tab + '-tab').style.display = 'block';
+            event.currentTarget.classList.add('active');
+            currentTab = tab;
+        }
 
-							// Send to server
-							fetch('/config', {
-								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json'
-								},
-								body: JSON.stringify(config)
-							})
-							.then(response => response.json())
-							.then(data => {
-								const statusDiv = document.getElementById('status');
-								statusDiv.className = 'status success';
-								statusDiv.textContent = data.message || 'Configuration saved successfully';
-								setTimeout(() => statusDiv.textContent = '', 3000);
-							})
-							.catch(error => {
-								const statusDiv = document.getElementById('status');
-								statusDiv.className = 'status error';
-								statusDiv.textContent = 'Error saving configuration: ' + error.message;
-								setTimeout(() => statusDiv.textContent = '', 3000);
-							});
-						});
-					</script>
-				</body>
-				</html>
+        function addWebSocket(ws = {}) {
+            const list = document.getElementById('websocket-list');
+            const item = document.createElement('div');
+            item.className = 'websocket-item';
+            item.innerHTML = `+"`"+`
+                <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 15px; align-items: start;">
+                    <div class="form-group">
+                        <label>名称</label>
+                        <input type="text" class="ws-name" value="${ws.name || 'BotNexus'}">
+                    </div>
+                    <div class="form-group">
+                        <label>WebSocket URL</label>
+                        <input type="text" class="ws-url" value="${ws.url || ''}" placeholder="ws://...">
+                    </div>
+                    <button class="btn btn-danger" style="margin-top: 25px;" onclick="this.parentElement.parentElement.remove()">删除</button>
+                    <div class="form-group">
+                        <label>权重 (Priority)</label>
+                        <input type="number" class="ws-priority" value="${ws.priority || 1}">
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group" style="margin-top: 30px;">
+                            <input type="checkbox" class="ws-enabled" ${ws.enabled !== false ? 'checked' : ''}>
+                            <label style="margin-bottom: 0;">启用</label>
+                        </div>
+                    </div>
+                </div>
+            `+"`"+`;
+            list.appendChild(item);
+        }
+
+        async function loadConfig() {
+            const resp = await fetch('/config');
+            const config = await resp.json();
+            
+            document.getElementById('app_id').value = config.app_id || '';
+            document.getElementById('self_id').value = config.self_id || '';
+            document.getElementById('token').value = config.token || '';
+            document.getElementById('secret').value = config.secret || '';
+            document.getElementById('log_port').value = config.log_port || 3133;
+            document.getElementById('sandbox').checked = !!config.sandbox;
+            document.getElementById('file_host').value = config.file_host || '';
+            document.getElementById('media_route').value = config.media_route || '/media/';
+
+            const wsList = document.getElementById('websocket-list');
+            wsList.innerHTML = '';
+            if (config.websocket_addrs) {
+                config.websocket_addrs.forEach(ws => addWebSocket(ws));
+            }
+        }
+
+        async function saveConfig() {
+            const wsConfigs = [];
+            document.querySelectorAll('.websocket-item').forEach(el => {
+                wsConfigs.push({
+                    name: el.querySelector('.ws-name').value,
+                    url: el.querySelector('.ws-url').value,
+                    priority: parseInt(el.querySelector('.ws-priority').value),
+                    enabled: el.querySelector('.ws-enabled').checked
+                });
+            });
+
+            const config = {
+                app_id: parseInt(document.getElementById('app_id').value),
+                self_id: document.getElementById('self_id').value,
+                token: document.getElementById('token').value,
+                secret: document.getElementById('secret').value,
+                log_port: parseInt(document.getElementById('log_port').value),
+                sandbox: document.getElementById('sandbox').checked,
+                file_host: document.getElementById('file_host').value,
+                media_route: document.getElementById('media_route').value,
+                websocket_addrs: wsConfigs
+            };
+
+            const resp = await fetch('/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            if (resp.ok) {
+                alert('配置已保存，机器人正在重启...');
+            } else {
+                const err = await resp.text();
+                alert('保存失败: ' + err);
+            }
+        }
+
+        async function updateLogs() {
+            if (currentTab !== 'logs') return;
+            try {
+                const resp = await fetch('/logs?lines=100');
+                const text = await resp.text();
+                const logsDiv = document.getElementById('logs');
+                logsDiv.innerText = text;
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            } catch (e) {}
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerText = '';
+        }
+
+        setInterval(updateLogs, 2000);
+        loadConfig();
+    </script>
+</body>
+</html>
 				`)
 			})
 
@@ -2601,92 +2952,10 @@ func main() {
 		}()
 	}
 
-	log.Println("Step 4: Initializing Bot Token...")
-	// Initialize Bot Token
-	botToken := token.NewQQBotTokenSource(
-		&token.QQBotCredentials{
-			AppID:     fmt.Sprintf("%d", config.AppID),
-			AppSecret: config.Secret,
-		},
-	)
+	log.Println("Step 4: Starting bot services...")
+	startBot()
 
-	log.Println("Step 5: Initializing Bot API...")
-	// Initialize API
-	if config.Sandbox {
-		log.Println("Initializing Tencent Bot API in SANDBOX mode...")
-		api = botgo.NewSandboxOpenAPI(fmt.Sprintf("%d", config.AppID), botToken).WithTimeout(3 * time.Second)
-	} else {
-		log.Println("Initializing Tencent Bot API in PRODUCTION mode...")
-		api = botgo.NewOpenAPI(fmt.Sprintf("%d", config.AppID), botToken).WithTimeout(3 * time.Second)
-	}
-
-	log.Println("Step 6: Retrieving bot info from API...")
-	// Get Bot Info (SelfID)
-	// Always try to get nickname from API for better UX
-	me, err := api.Me(ctx)
-	if err != nil {
-		log.Printf("Error getting bot info: %v", err)
-	}
-
-	if config.SelfID != "" {
-		selfID = config.SelfID
-		nickname := "Unknown"
-		if err == nil {
-			nickname = me.Username
-		}
-		log.Printf("Using configured Bot SelfID: %s, Nickname: %s", selfID, nickname)
-	} else {
-		if err == nil {
-			selfID = me.ID
-			log.Printf("Using Bot SelfID from API: %s, Nickname: %s", selfID, me.Username)
-		} else {
-			log.Printf("Error getting bot info and no SelfID configured. Using AppID as fallback (Not recommended).")
-			selfID = fmt.Sprintf("%d", config.AppID)
-		}
-	}
-
-	log.Println("Step 7: Starting BotNexus connection...")
-	// Connect to BotNexus
-	go NexusConnect()
-
-	log.Println("Step 8: Starting Tencent WebSocket connection...")
-	// Connect to Tencent WebSocket
-	go func() {
-		wsInfo, err := api.WS(ctx, nil, "")
-		if err != nil {
-			log.Fatal("Error getting WS info:", err)
-		}
-
-		// Register handlers using event package and explicit casting
-		intent := event.RegisterHandlers(
-			event.ATMessageEventHandler(atMessageEventHandler),
-			event.DirectMessageEventHandler(directMessageEventHandler),
-			event.GuildEventHandler(guildEventHandler),
-			event.GuildMemberEventHandler(guildMemberEventHandler),
-			event.ChannelEventHandler(channelEventHandler),
-			event.MessageReactionEventHandler(messageReactionEventHandler),
-			event.GroupATMessageEventHandler(groupATMessageEventHandler),
-			event.C2CMessageEventHandler(c2cMessageEventHandler),
-		)
-		log.Printf("Calculated Intent from Handlers: %d", intent)
-
-		// Explicitly enable intents to ensure they are active
-		// 1<<30 (Public/At Messages) | 1<<12 (Direct Messages) | 1<<0 (Guilds)
-		// 1<<1 (Guild Members) | 1<<10 (Guild Message Reactions)
-		// 1<<25 (Group & C2C)
-		// 1<<9 (Guild Messages - for private bots ONLY, causes 4014 in sandbox/public)
-		// Forum/Audio/Interaction removed as not fully supported in v0.2.1
-		intent = intent | (1 << 30) | (1 << 12) | (1 << 0) | (1 << 1) | (1 << 10) | (1 << 25)
-
-		log.Printf("Final Intent after manual override: %d", intent)
-
-		log.Printf("Starting Tencent Bot Session Manager with Intent: %d...", intent)
-		if err := botgo.NewSessionManager().Start(wsInfo, botToken, &intent); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	log.Println("Step 9: Application initialization complete. Entering keep-alive loop...")
+	log.Println("Step 5: Application initialization complete. Entering keep-alive loop...")
 	// Keep alive
 	select {}
 }

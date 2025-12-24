@@ -36,17 +36,66 @@ func (p *SignInPlugin) Name() string {
 }
 
 func (p *SignInPlugin) Description() string {
-	return common.T("", "signin_plugin_desc")
+	return common.T("", "signin_plugin_desc|📅 签到系统插件，支持每日签到和连续签到统计")
 }
 
 func (p *SignInPlugin) Version() string {
 	return "1.0.0"
 }
 
+// GetSkills 报备插件技能
+func (p *SignInPlugin) GetSkills() []plugin.SkillCapability {
+	return []plugin.SkillCapability{
+		{
+			Name:        "signin",
+			Description: common.T("", "signin_skill_signin_desc|执行每日签到"),
+			Usage:       "signin user_id=123456",
+			Params: map[string]string{
+				"user_id": common.T("", "signin_skill_param_userid|用户ID"),
+			},
+		},
+		{
+			Name:        "get_signin_stats",
+			Description: common.T("", "signin_skill_stats_desc|获取签到统计信息"),
+			Usage:       "get_signin_stats",
+			Params:      map[string]string{},
+		},
+	}
+}
+
+// HandleSkill 处理技能调用
+func (p *SignInPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skillName string, params map[string]string) (string, error) {
+	switch skillName {
+	case "signin":
+		userID := params["user_id"]
+		if userID == "" {
+			return "", fmt.Errorf(common.T("", "signin_missing_userid|❌ 缺少用户ID"))
+		}
+		msg := p.doSignIn(userID)
+		p.sendMessage(robot, event, msg)
+		return msg, nil
+	case "get_signin_stats":
+		msg := p.doGetSignInStats()
+		p.sendMessage(robot, event, msg)
+		return msg, nil
+	default:
+		return "", fmt.Errorf("unknown skill: %s", skillName)
+	}
+}
+
 func (p *SignInPlugin) Init(robot plugin.Robot) {
-	log.Println(common.T("", "signin_plugin_loaded"))
+	log.Println(common.T("", "signin_plugin_loaded|✅ 签到系统插件已加载"))
 
-	// 处理签到命令
+	// 注册技能处理器
+	skills := p.GetSkills()
+	for _, skill := range skills {
+		skillName := skill.Name
+		robot.HandleSkill(skillName, func(params map[string]string) (string, error) {
+			return p.HandleSkill(robot, nil, skillName, params)
+		})
+	}
+
+	// 处理签到相关命令
 	robot.OnMessage(func(event *onebot.Event) error {
 		if event.MessageType != "group" && event.MessageType != "private" {
 			return nil
@@ -60,110 +109,64 @@ func (p *SignInPlugin) Init(robot plugin.Robot) {
 			}
 		}
 
-		// 检查是否为签到命令
-		if match, _ := p.cmdParser.MatchCommand(common.T("", "signin_cmd_sign"), event.RawMessage); !match {
-			return nil
-		}
-
-		// 获取用户ID
 		userID := event.UserID
 		if userID == 0 {
-			p.sendMessage(robot, event, common.T("", "signin_no_userid"))
 			return nil
 		}
-
-		// 执行签到
 		userIDStr := fmt.Sprintf("%d", userID)
-		p.processSignIn(robot, event, userIDStr)
 
-		return nil
-	})
-
-	// 自动签到功能：群或私聊发言时自动签到
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
+		// 1. 处理签到命令
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "signin_cmd_sign|签到|sign in|打卡|signin"), event.RawMessage); match {
+			msg := p.doSignIn(userIDStr)
+			p.sendMessage(robot, event, msg)
 			return nil
 		}
 
-		if event.MessageType == "group" {
-			groupIDStr := fmt.Sprintf("%d", event.GroupID)
-			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "signin") {
-				HandleFeatureDisabled(robot, event, "signin")
-				return nil
-			}
-		}
-
-		// 获取用户ID
-		userID := event.UserID
-		if userID == 0 {
+		// 2. 处理签到统计命令
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "signin_cmd_stats|签到统计|sign stats|sign_stats"), event.RawMessage); match {
+			p.sendMessage(robot, event, p.doGetSignInStats())
 			return nil
 		}
 
-		// 检查是否已经签到
+		// 3. 自动签到逻辑
 		now := time.Now()
-		userIDStr := fmt.Sprintf("%d", userID)
 		if lastSignIn, ok := p.signInRecords[userIDStr]; ok {
-			// 检查是否在同一天
-			if isSameDay(lastSignIn, now) {
-				return nil // 已经签到过了
+			if !isSameDay(lastSignIn, now) {
+				p.doSignIn(userIDStr)
 			}
+		} else {
+			p.doSignIn(userIDStr)
 		}
-
-		// 执行自动签到
-		p.processSignIn(robot, event, userIDStr)
-
-		return nil
-	})
-
-	// 处理签到统计命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		if event.MessageType == "group" {
-			groupIDStr := fmt.Sprintf("%d", event.GroupID)
-			if !IsFeatureEnabledForGroup(GlobalDB, groupIDStr, "signin") {
-				HandleFeatureDisabled(robot, event, "signin")
-				return nil
-			}
-		}
-
-		if match, _ := p.cmdParser.MatchCommand(common.T("", "signin_cmd_stats"), event.RawMessage); !match {
-			return nil
-		}
-
-		// 发送签到统计信息
-		statsMsg := fmt.Sprintf(common.T("", "signin_stats_msg"),
-			len(p.signInRecords), p.getTodaySignInCount())
-		p.sendMessage(robot, event, statsMsg)
 
 		return nil
 	})
 }
 
-// processSignIn 处理签到逻辑
-func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, userID string) {
+// doSignIn 处理签到逻辑
+func (p *SignInPlugin) doSignIn(userID string) string {
 	now := time.Now()
 	continuousDay := 1
 	if lastSignIn, ok := p.signInRecords[userID]; ok {
 		if isSameDay(lastSignIn, now) {
 			continuousDay := p.continuousDays[userID]
-			totalDays := continuousDay
+			totalDays := 0
+			for _, t := range p.signInRecords {
+				if !t.IsZero() {
+					totalDays++
+				}
+			}
 			superPoints := 0
 			if p.pointsPlugin != nil {
 				superPoints = p.pointsPlugin.GetPoints(userID)
 			}
 			todaySignCount := p.getTodaySignInCount()
-			msg := fmt.Sprintf(common.T("", "signin_already_signed"),
+			return fmt.Sprintf(common.T("", "signin_already_signed|📅 您今天已经签到过了！\n💰 当前积分：%d\n📈 今日收益：+%d (%d)\n🔥 连续签到：%d 天\n📊 累计签到：%d 天\n🆙 当前等级：Lv.%d (%d/%d)\n🏆 今日第 %d 位签到者\n🔮 今日运势：%d"),
 				superPoints,
 				0, 0,
 				continuousDay, totalDays,
 				0, 0,
 				todaySignCount, 0,
 			)
-			p.sendMessage(robot, event, msg)
-			return
 		}
 	}
 
@@ -187,7 +190,7 @@ func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, us
 	totalPoints := basePoints + extraPoints
 
 	if p.pointsPlugin != nil {
-		p.pointsPlugin.AddPoints(userID, totalPoints, fmt.Sprintf(common.T("", "signin_reward_desc"), continuousDay), "sign_in")
+		p.pointsPlugin.AddPoints(userID, totalPoints, fmt.Sprintf(common.T("", "signin_reward_desc|🎁 第 %d 天连续签到奖励"), continuousDay), "sign_in")
 	}
 
 	currentPoints := 0
@@ -201,20 +204,29 @@ func (p *SignInPlugin) processSignIn(robot plugin.Robot, event *onebot.Event, us
 			totalDays++
 		}
 	}
-	msg := fmt.Sprintf(common.T("", "signin_success_msg"),
+	return fmt.Sprintf(common.T("", "signin_success_msg|✅ 签到成功！\n💰 获得积分：+%d\n💳 当前总积分：%d\n📈 今日收益：+%d (%d)\n🔥 连续签到：%d 天\n📊 累计签到：%d 天\n🆙 当前等级：Lv.%d (%d/%d)\n🏆 今日第 %d 位签到者\n🔮 今日运势：%d"),
 		totalPoints, currentPoints,
 		0, 0,
 		continuousDay, totalDays,
 		0, 0,
 		todaySignCount, 0,
 	)
-	p.sendMessage(robot, event, msg)
+}
+
+// doGetSignInStats 获取签到统计信息
+func (p *SignInPlugin) doGetSignInStats() string {
+	return fmt.Sprintf(common.T("", "signin_stats_msg|📊 当前签到统计：\n👥 累计签到人数：%d\n📅 今日签到人数：%d"),
+		len(p.signInRecords), p.getTodaySignInCount())
 }
 
 // sendMessage 发送消息
 func (p *SignInPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
+	if robot == nil || event == nil {
+		log.Printf(common.T("", "signin_send_failed_log|❌ 发送签到消息失败，机器人或事件为空"), message)
+		return
+	}
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf(common.T("", "signin_send_failed_log"), err)
+		log.Printf(common.T("", "signin_send_failed_log|❌ 发送签到消息失败")+": %v", err)
 	}
 }
 

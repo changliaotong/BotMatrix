@@ -35,10 +35,9 @@ Create `config.json` from the sample:
     "websocket_addrs": [
         {
             "name": "Default",
-            "url": "ws://192.168.0.167:3005/ws/bots"
+            "url": "ws://bot-nexus:3001"
         }
-    ],
-    "nexus_addr": "ws://localhost:3001"
+    ]
 }
 ```
 
@@ -62,7 +61,7 @@ Create `config.json` from the sample:
 ### Option 1: Local Development
 
 ```bash
-cd TencentBot
+cd src/TencentBot
 go build -o TencentBot.exe main.go
 ./TencentBot.exe
 ```

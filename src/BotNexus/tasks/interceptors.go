@@ -1,12 +1,9 @@
 package tasks
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"math/rand"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 )

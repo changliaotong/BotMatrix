@@ -28,7 +28,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 WORKDIR /app
 
 COPY --from=builder /build/TelegramBot ./
-COPY config.sample.json ./config.sample.json
+COPY config.sample.json ./config.json
 
 # Use Shanghai Timezone
 ENV TZ=Asia/Shanghai

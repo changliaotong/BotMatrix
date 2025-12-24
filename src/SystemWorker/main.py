@@ -16,8 +16,8 @@ except ImportError as e:
     generate_status_image = None
 
 # 配置
-BOT_MANAGER_URL = os.getenv("BOT_MANAGER_URL", "ws://192.168.0.167:3005/ws/workers")
-BOT_MANAGER_API = os.getenv("BOT_MANAGER_API", "http://192.168.0.167:5000") # HTTP API for Bot List
+BOT_MANAGER_URL = os.getenv("BOT_MANAGER_URL", "ws://bot-nexus:3001/ws/workers")
+BOT_MANAGER_API = os.getenv("BOT_MANAGER_API", "http://bot-nexus:5000") # HTTP API for Bot List
 WORKER_NAME = "SystemWorker-Core"
 ADMIN_USER_ID = 1653346663 # 请替换为您的 UserID，或者实现动态鉴权
 

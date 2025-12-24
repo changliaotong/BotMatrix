@@ -40,6 +40,9 @@ type Config struct {
 
 	// AI配置
 	AI AIConfig `json:"ai"`
+
+	// Web UI 端口
+	LogPort int `json:"log_port"`
 }
 
 // HTTPConfig 定义HTTP服务器配置
@@ -136,6 +139,8 @@ type jsonConfig struct {
 		Timeout         string `json:"timeout"`
 		OfficialGroupID string `json:"official_group_id"`
 	} `json:"ai"`
+
+	LogPort int `json:"log_port"`
 }
 
 // LogConfig 定义日志配置
@@ -283,6 +288,7 @@ func DefaultConfig() *Config {
 			Timeout:         15 * time.Second,
 			OfficialGroupID: "",
 		},
+		LogPort: 8082,
 	}
 }
 
@@ -456,6 +462,10 @@ func LoadConfig(configPath string) (*Config, error) {
 		config.AI.OfficialGroupID = jsonCfg.AI.OfficialGroupID
 	}
 
+	if jsonCfg.LogPort != 0 {
+		config.LogPort = jsonCfg.LogPort
+	}
+
 	return config, nil
 }
 
@@ -466,6 +476,7 @@ func LoadFromCLI() (*Config, string, error) {
 	httpAddr := flag.String("http-addr", "", "HTTP服务器监听地址")
 	wsAddr := flag.String("ws-addr", "", "WebSocket服务器监听地址")
 	logLevel := flag.String("log-level", "", "日志级别")
+	logPort := flag.Int("log-port", 0, "Web UI 端口")
 
 	// 数据库配置命令行参数
 	dbHost := flag.String("db-host", "", "数据库服务器地址")
@@ -505,6 +516,9 @@ func LoadFromCLI() (*Config, string, error) {
 
 	if *logLevel != "" {
 		config.Log.Level = *logLevel
+	}
+	if *logPort != 0 {
+		config.LogPort = *logPort
 	}
 
 	// 数据库配置命令行参数处理

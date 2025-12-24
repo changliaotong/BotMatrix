@@ -6,12 +6,14 @@ import (
 	"log"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 // Dispatcher 执行分发器
 type Dispatcher struct {
 	db      *gorm.DB
+	rdb     *redis.Client
 	manager interface{} // 引用 main.Manager 以便调用机器人操作
 	actions map[string]ActionHandler
 }
@@ -19,9 +21,10 @@ type Dispatcher struct {
 // ActionHandler 定义动作执行接口
 type ActionHandler func(task Task, execution *Execution) error
 
-func NewDispatcher(db *gorm.DB, manager interface{}) *Dispatcher {
+func NewDispatcher(db *gorm.DB, rdb *redis.Client, manager interface{}) *Dispatcher {
 	d := &Dispatcher{
 		db:      db,
+		rdb:     rdb,
 		manager: manager,
 		actions: make(map[string]ActionHandler),
 	}
@@ -29,18 +32,10 @@ func NewDispatcher(db *gorm.DB, manager interface{}) *Dispatcher {
 	return d
 }
 
-func (d *Dispatcher) registerDefaultActions() {
-	// 这些动作将在 actions.go 中实现
-	// d.actions["send_message"] = d.handleSendMessage
-	// d.actions["mute_group"] = d.handleMuteGroup
-	// d.actions["unmute_group"] = d.handleUnmuteGroup
-}
-
 func (d *Dispatcher) RegisterAction(name string, handler ActionHandler) {
 	d.actions[name] = handler
 }
 
-// Dispatch 执行任务
 func (d *Dispatcher) Dispatch(execution Execution) {
 	// 1. 更新状态为 Dispatching
 	if err := d.updateStatus(execution.ID, ExecDispatching, nil); err != nil {
@@ -74,13 +69,20 @@ func (d *Dispatcher) Dispatch(execution Execution) {
 	if err != nil {
 		// 5. 失败处理
 		execution.RetryCount++
+		updates := map[string]interface{}{
+			"retry_count": execution.RetryCount,
+		}
+
 		if execution.RetryCount >= execution.MaxRetries {
-			d.updateStatus(execution.ID, ExecDead, err)
+			updates["status"] = ExecDead
+			d.updateStatusDetailed(execution.ID, updates, err)
 		} else {
 			// 计算下次重试时间 (指数退避)
 			nextRetry := time.Now().Add(time.Duration(execution.RetryCount*execution.RetryCount) * time.Minute)
 			execution.NextRetryTime = &nextRetry
-			d.updateStatus(execution.ID, ExecFailed, err)
+			updates["status"] = ExecFailed
+			updates["next_retry_time"] = nextRetry
+			d.updateStatusDetailed(execution.ID, updates, err)
 		}
 	} else {
 		// 6. 成功处理
@@ -88,10 +90,7 @@ func (d *Dispatcher) Dispatch(execution Execution) {
 	}
 }
 
-func (d *Dispatcher) updateStatus(executionID string, status ExecutionStatus, execErr error) error {
-	updates := map[string]interface{}{
-		"status": status,
-	}
+func (d *Dispatcher) updateStatusDetailed(id uint, updates map[string]interface{}, execErr error) error {
 	if execErr != nil {
 		result := map[string]string{
 			"error": execErr.Error(),
@@ -101,5 +100,12 @@ func (d *Dispatcher) updateStatus(executionID string, status ExecutionStatus, ex
 		updates["result"] = string(resultJSON)
 	}
 
-	return d.db.Model(&Execution{}).Where("execution_id = ?", executionID).Updates(updates).Error
+	return d.db.Model(&Execution{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (d *Dispatcher) updateStatus(id uint, status ExecutionStatus, execErr error) error {
+	updates := map[string]interface{}{
+		"status": status,
+	}
+	return d.updateStatusDetailed(id, updates, execErr)
 }

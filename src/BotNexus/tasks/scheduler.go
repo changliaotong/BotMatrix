@@ -78,6 +78,17 @@ func (s *Scheduler) scanAndTrigger() {
 
 	// 扫描并重试失败的 Execution
 	s.scanAndRetryExecutions()
+
+	// 清理过期的 AI 草稿
+	s.cleanExpiredDrafts()
+}
+
+func (s *Scheduler) cleanExpiredDrafts() {
+	now := time.Now()
+	err := s.db.Model(&AIDraft{}).Where("status = ? AND expire_time <= ?", "pending", now).Update("status", "expired").Error
+	if err != nil {
+		log.Printf("[Scheduler] Failed to clean expired drafts: %v", err)
+	}
 }
 
 func (s *Scheduler) triggerTask(task Task) {
@@ -93,6 +104,7 @@ func (s *Scheduler) triggerTask(task Task) {
 		}
 
 		executionID := uuid.New().String()
+		now := time.Now()
 		triggerTime := now
 		if task.NextRunTime != nil {
 			triggerTime = *task.NextRunTime

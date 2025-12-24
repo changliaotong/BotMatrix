@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"net/smtp"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,100 +35,206 @@ type Config struct {
 	SmtpPassword string `json:"smtp_password"` // Usually same as Password
 	PollInterval int    `json:"poll_interval"` // Seconds
 	NexusAddr    string `json:"nexus_addr"`
+	LogPort      int    `json:"log_port"`
 }
 
 var (
-	config Config
-	conn   *websocket.Conn
-	selfID string
+	config      Config
+	configMutex sync.RWMutex
+	nexusConn   *websocket.Conn
+	connMutex   sync.Mutex
+	selfID      string
+
+	nexusCtx    context.Context
+	nexusCancel context.CancelFunc
+	botCtx      context.Context
+	botCancel   context.CancelFunc
+
+	logManager = NewLogManager(1000)
 )
 
+// LogManager handles log rotation and retrieval
+type LogManager struct {
+	logs  []string
+	max   int
+	mutex sync.Mutex
+}
+
+func NewLogManager(max int) *LogManager {
+	return &LogManager{
+		logs: make([]string, 0, max),
+		max:  max,
+	}
+}
+
+func (m *LogManager) Write(p []byte) (n int, err error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	line := string(p)
+	m.logs = append(m.logs, line)
+	if len(m.logs) > m.max {
+		m.logs = m.logs[len(m.logs)-m.max:]
+	}
+	return os.Stderr.Write(p)
+}
+
+func (m *LogManager) GetLogs(lines int) []string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if lines > len(m.logs) {
+		lines = len(m.logs)
+	}
+	result := make([]string, lines)
+	copy(result, m.logs[len(m.logs)-lines:])
+	return result
+}
+
 func loadConfig() {
-	file, err := os.Open("config.json")
-	if err != nil {
-		log.Fatalf("Error opening config.json: %v", err)
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	file, err := os.ReadFile("config.json")
+	if err == nil {
+		json.Unmarshal(file, &config)
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&config)
-	if err != nil {
-		log.Fatalf("Error decoding config.json: %v", err)
+
+	if envUser := os.Getenv("EMAIL_USERNAME"); envUser != "" {
+		config.Username = envUser
 	}
+	if envPass := os.Getenv("EMAIL_PASSWORD"); envPass != "" {
+		config.Password = envPass
+	}
+	if envAddr := os.Getenv("NEXUS_ADDR"); envAddr != "" {
+		config.NexusAddr = envAddr
+	}
+	if envLogPort := os.Getenv("LOG_PORT"); envLogPort != "" {
+		if p, err := strconv.Atoi(envLogPort); err == nil {
+			config.LogPort = p
+		}
+	}
+
 	if config.SmtpUsername == "" {
 		config.SmtpUsername = config.Username
 	}
 	if config.SmtpPassword == "" {
 		config.SmtpPassword = config.Password
 	}
+	if config.NexusAddr == "" {
+		config.NexusAddr = "ws://bot-nexus:3001"
+	}
+	if config.LogPort == 0 {
+		config.LogPort = 8086
+	}
+	if config.PollInterval == 0 {
+		config.PollInterval = 60
+	}
 	selfID = config.Username
 }
 
-func connectToNexus() {
+func connectToNexus(ctx context.Context, addr string) {
 	for {
-		log.Printf("Connecting to BotNexus at %s...", config.NexusAddr)
-		c, _, err := websocket.DefaultDialer.Dial(config.NexusAddr, nil)
-		if err != nil {
-			log.Printf("Connection error: %v. Retrying in 5s...", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		conn = c
-		log.Println("Connected to BotNexus!")
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			log.Printf("Connecting to BotNexus at %s...", addr)
+			header := http.Header{}
+			header.Add("X-Self-ID", selfID)
+			header.Add("X-Platform", "Email")
 
-		// Send Lifecycle Event: Connect
-		sendEvent(map[string]interface{}{
-			"post_type":       "meta_event",
-			"meta_event_type": "lifecycle",
-			"sub_type":        "connect",
-			"self_id":         selfID,
-			"time":            time.Now().Unix(),
-		})
-
-		// Send Heartbeat
-		go func() {
-			ticker := time.NewTicker(10 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				if conn == nil {
-					return
-				}
-				sendEvent(map[string]interface{}{
-					"post_type":       "meta_event",
-					"meta_event_type": "heartbeat",
-					"self_id":         selfID,
-					"time":            time.Now().Unix(),
-					"status": map[string]interface{}{
-						"online": true,
-						"good":   true,
-					},
-				})
-			}
-		}()
-
-		// Handle Incoming Actions
-		for {
-			_, message, err := conn.ReadMessage()
+			c, _, err := websocket.DefaultDialer.Dial(addr, header)
 			if err != nil {
-				log.Printf("Read error: %v", err)
-				conn = nil
-				break
+				log.Printf("Connection error: %v. Retrying in 5s...", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+					continue
+				}
 			}
-			handleAction(message)
+
+			connMutex.Lock()
+			nexusConn = c
+			connMutex.Unlock()
+			log.Println("Connected to BotNexus!")
+
+			// Send Lifecycle Event: Connect
+			sendEvent(map[string]interface{}{
+				"post_type":       "meta_event",
+				"meta_event_type": "lifecycle",
+				"sub_type":        "connect",
+				"self_id":         selfID,
+				"time":            time.Now().Unix(),
+			})
+
+			// Heartbeat ticker
+			ticker := time.NewTicker(30 * time.Second)
+			done := make(chan struct{})
+
+			// Message reading loop
+			go func() {
+				defer close(done)
+				defer ticker.Stop()
+				for {
+					_, message, err := c.ReadMessage()
+					if err != nil {
+						log.Printf("Read error: %v", err)
+						return
+					}
+					handleAction(message)
+				}
+			}()
+
+			// Wait for disconnect or context cancel
+			for {
+				select {
+				case <-ctx.Done():
+					c.Close()
+					<-done
+					return
+				case <-done:
+					connMutex.Lock()
+					nexusConn = nil
+					connMutex.Unlock()
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(1 * time.Second):
+						goto next_reconnect
+					}
+				case <-ticker.C:
+					sendEvent(map[string]interface{}{
+						"post_type":       "meta_event",
+						"meta_event_type": "heartbeat",
+						"self_id":         selfID,
+						"time":            time.Now().Unix(),
+						"status": map[string]interface{}{
+							"online": true,
+							"good":   true,
+						},
+					})
+				}
+			}
+		next_reconnect:
 		}
 	}
 }
 
 func sendEvent(event map[string]interface{}) {
-	if conn == nil {
+	connMutex.Lock()
+	defer connMutex.Unlock()
+	if nexusConn == nil {
 		return
 	}
 	// Add platform info
 	event["platform"] = "email"
 
-	err := conn.WriteJSON(event)
+	err := nexusConn.WriteJSON(event)
 	if err != nil {
 		log.Printf("Write error: %v", err)
-		conn = nil
+		nexusConn = nil
 	}
 }
 
@@ -168,7 +279,10 @@ func handleAction(msg []byte) {
 			}
 		}
 
+		configMutex.RLock()
 		err := sendEmail(userID, subject, body)
+		configMutex.RUnlock()
+
 		if err != nil {
 			log.Printf("Failed to send email to %s: %v", userID, err)
 			response["status"] = "failed"
@@ -178,9 +292,7 @@ func handleAction(msg []byte) {
 		}
 	}
 
-	if conn != nil {
-		conn.WriteJSON(response)
-	}
+	sendEvent(response)
 }
 
 func sendEmail(to, subject, body string) error {
@@ -196,61 +308,111 @@ func sendEmail(to, subject, body string) error {
 	return e.Send(addr, auth)
 }
 
-func pollEmails() {
-	log.Println("Connecting to IMAP server...")
-	c, err := client.DialTLS(fmt.Sprintf("%s:%d", config.ImapServer, config.ImapPort), nil)
-	if err != nil {
-		log.Fatalf("IMAP connection failed: %v", err)
-	}
-	log.Println("IMAP Connected")
-
-	if err := c.Login(config.Username, config.Password); err != nil {
-		log.Fatalf("IMAP Login failed: %v", err)
-	}
-	defer c.Logout()
-
+func pollEmails(ctx context.Context) {
 	for {
-		_, err := c.Select("INBOX", false)
-		if err != nil {
-			log.Printf("Select INBOX failed: %v", err)
-			time.Sleep(time.Duration(config.PollInterval) * time.Second)
-			continue
-		}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			configMutex.RLock()
+			imapServer := config.ImapServer
+			imapPort := config.ImapPort
+			username := config.Username
+			password := config.Password
+			pollInterval := config.PollInterval
+			configMutex.RUnlock()
 
-		// Search for UNSEEN messages
-		criteria := imap.NewSearchCriteria()
-		criteria.WithoutFlags = []string{imap.SeenFlag}
-		uids, err := c.Search(criteria)
-		if err != nil {
-			log.Printf("Search failed: %v", err)
-			time.Sleep(time.Duration(config.PollInterval) * time.Second)
-			continue
-		}
-
-		if len(uids) > 0 {
-			log.Printf("Found %d new emails", len(uids))
-			seqset := new(imap.SeqSet)
-			seqset.AddNum(uids...)
-
-			section := &imap.BodySectionName{}
-			items := []imap.FetchItem{section.FetchItem(), imap.FetchEnvelope}
-
-			messages := make(chan *imap.Message, 10)
-			done := make(chan error, 1)
-			go func() {
-				done <- c.Fetch(seqset, items, messages)
-			}()
-
-			for msg := range messages {
-				processMessage(msg, section)
+			if imapServer == "" || username == "" || password == "" {
+				log.Println("IMAP configuration missing, waiting 10s...")
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(10 * time.Second):
+					continue
+				}
 			}
 
-			if err := <-done; err != nil {
-				log.Printf("Fetch failed: %v", err)
+			log.Println("Connecting to IMAP server...")
+			c, err := client.DialTLS(fmt.Sprintf("%s:%d", imapServer, imapPort), nil)
+			if err != nil {
+				log.Printf("IMAP connection failed: %v, retrying in 30s...", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(30 * time.Second):
+					continue
+				}
 			}
-		}
+			log.Println("IMAP Connected")
 
-		time.Sleep(time.Duration(config.PollInterval) * time.Second)
+			if err := c.Login(username, password); err != nil {
+				log.Printf("IMAP Login failed: %v, retrying in 30s...", err)
+				c.Close()
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(30 * time.Second):
+					continue
+				}
+			}
+
+			// Polling loop for this connection
+			for {
+				select {
+				case <-ctx.Done():
+					c.Logout()
+					return
+				default:
+					_, err := c.Select("INBOX", false)
+					if err != nil {
+						log.Printf("Select INBOX failed: %v", err)
+						goto next_imap_conn
+					}
+
+					// Search for UNSEEN messages
+					criteria := imap.NewSearchCriteria()
+					criteria.WithoutFlags = []string{imap.SeenFlag}
+					uids, err := c.Search(criteria)
+					if err != nil {
+						log.Printf("Search failed: %v", err)
+						goto next_imap_conn
+					}
+
+					if len(uids) > 0 {
+						log.Printf("Found %d new emails", len(uids))
+						seqset := new(imap.SeqSet)
+						seqset.AddNum(uids...)
+
+						section := &imap.BodySectionName{}
+						items := []imap.FetchItem{section.FetchItem(), imap.FetchEnvelope}
+
+						messages := make(chan *imap.Message, 10)
+						done := make(chan error, 1)
+						go func() {
+							done <- c.Fetch(seqset, items, messages)
+						}()
+
+						for msg := range messages {
+							processMessage(msg, section)
+						}
+
+						if err := <-done; err != nil {
+							log.Printf("Fetch failed: %v", err)
+						}
+					}
+
+					select {
+					case <-ctx.Done():
+						c.Logout()
+						return
+					case <-time.After(time.Duration(pollInterval) * time.Second):
+						continue
+					}
+				}
+			}
+		next_imap_conn:
+			c.Logout()
+		}
 	}
 }
 
@@ -300,14 +462,326 @@ func processMessage(msg *imap.Message, section *imap.BodySectionName) {
 	sendEvent(event)
 }
 
+func startHTTPServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/config-ui", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
+		lines := 100
+		if l := r.URL.Query().Get("lines"); l != "" {
+			if v, err := strconv.Atoi(l); err == nil {
+				lines = v
+			}
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		logs := logManager.GetLogs(lines)
+		for _, line := range logs {
+			fmt.Fprint(w, line)
+		}
+	})
+
+	mux.HandleFunc("/config", handleConfig)
+	mux.HandleFunc("/config-ui", handleConfigUI)
+
+	configMutex.RLock()
+	port := config.LogPort
+	configMutex.RUnlock()
+
+	addr := fmt.Sprintf(":%d", port)
+	log.Printf("Starting HTTP Server at http://localhost%s (UI: /config-ui, Logs: /logs)", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Printf("Failed to start HTTP Server: %v", err)
+	}
+}
+
+func handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		configMutex.RLock()
+		defer configMutex.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(config)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var newConfig Config
+		if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		configMutex.Lock()
+		config = newConfig
+		configMutex.Unlock()
+
+		// Save to file
+		data, _ := json.MarshalIndent(config, "", "  ")
+		os.WriteFile("config.json", data, 0644)
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Config updated successfully"))
+
+		// Restart bot with new config
+		go restartBot()
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleConfigUI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmailBot 配置中心</title>
+    <style>
+        :root { --primary-color: #1a73e8; --success-color: #28a745; --danger-color: #dc3545; --bg-color: #f4f7f6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; display: flex; height: 100vh; }
+        .sidebar { width: 280px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; font-size: 20px; font-weight: bold; border-bottom: 1px solid #34495e; }
+        .nav-item { padding: 15px 20px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px; }
+        .nav-item:hover { background: #34495e; }
+        .nav-item.active { background: var(--primary-color); }
+        .main-content { flex: 1; overflow-y: auto; padding: 30px; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 25px; }
+        .section-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #2c3e50; display: flex; justify-content: space-between; align-items: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; color: #666; }
+        input[type="text"], input[type="number"], input[type="password"], select { 
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; 
+        }
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: opacity 0.2s; }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        .btn:hover { opacity: 0.9; }
+        .logs-container { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; height: 500px; overflow-y: auto; font-size: 13px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">EmailBot</div>
+        <div class="nav-item active" onclick="switchTab('config')">核心配置</div>
+        <div class="nav-item" onclick="switchTab('logs')">实时日志</div>
+    </div>
+    <div class="main-content">
+        <div id="config-tab">
+            <div class="card">
+                <div class="section-title">IMAP 接收配置</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label>IMAP 服务器</label>
+                        <input type="text" id="imap_server">
+                    </div>
+                    <div class="form-group">
+                        <label>IMAP 端口</label>
+                        <input type="number" id="imap_port">
+                    </div>
+                    <div class="form-group">
+                        <label>邮箱账号</label>
+                        <input type="text" id="username">
+                    </div>
+                    <div class="form-group">
+                        <label>邮箱密码/授权码</label>
+                        <input type="password" id="password">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">SMTP 发送配置</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label>SMTP 服务器</label>
+                        <input type="text" id="smtp_server">
+                    </div>
+                    <div class="form-group">
+                        <label>SMTP 端口</label>
+                        <input type="number" id="smtp_port">
+                    </div>
+                    <div class="form-group">
+                        <label>SMTP 账号 (留空则同邮箱账号)</label>
+                        <input type="text" id="smtp_username">
+                    </div>
+                    <div class="form-group">
+                        <label>SMTP 密码 (留空则同邮箱密码)</label>
+                        <input type="password" id="smtp_password">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-title">通用配置</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label>BotNexus 地址</label>
+                        <input type="text" id="nexus_addr">
+                    </div>
+                    <div class="form-group">
+                        <label>轮询间隔 (秒)</label>
+                        <input type="number" id="poll_interval">
+                    </div>
+                    <div class="form-group">
+                        <label>Web UI 端口 (LogPort)</label>
+                        <input type="number" id="log_port">
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="btn btn-primary" style="padding: 15px 40px; font-size: 16px;" onclick="saveConfig()">保存配置并重启</button>
+            </div>
+        </div>
+
+        <div id="logs-tab" style="display: none;">
+            <div class="card">
+                <div class="section-title">
+                    系统日志
+                    <button class="btn btn-danger" onclick="clearLogs()">清空显示</button>
+                </div>
+                <div id="logs" class="logs-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'config';
+        function switchTab(tab) {
+            document.getElementById(currentTab + '-tab').style.display = 'none';
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tab + '-tab').style.display = 'block';
+            event.currentTarget.classList.add('active');
+            currentTab = tab;
+        }
+
+        async function loadConfig() {
+            const resp = await fetch('/config');
+            const cfg = await resp.json();
+            
+            document.getElementById('imap_server').value = cfg.imap_server || '';
+            document.getElementById('imap_port').value = cfg.imap_port || 0;
+            document.getElementById('username').value = cfg.username || '';
+            document.getElementById('password').value = cfg.password || '';
+            document.getElementById('smtp_server').value = cfg.smtp_server || '';
+            document.getElementById('smtp_port').value = cfg.smtp_port || 0;
+            document.getElementById('smtp_username').value = cfg.smtp_username || '';
+            document.getElementById('smtp_password').value = cfg.smtp_password || '';
+            document.getElementById('nexus_addr').value = cfg.nexus_addr || '';
+            document.getElementById('poll_interval').value = cfg.poll_interval || 60;
+            document.getElementById('log_port').value = cfg.log_port || 0;
+        }
+
+        async function saveConfig() {
+            const cfg = {
+                imap_server: document.getElementById('imap_server').value,
+                imap_port: parseInt(document.getElementById('imap_port').value),
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value,
+                smtp_server: document.getElementById('smtp_server').value,
+                smtp_port: parseInt(document.getElementById('smtp_port').value),
+                smtp_username: document.getElementById('smtp_username').value,
+                smtp_password: document.getElementById('smtp_password').value,
+                nexus_addr: document.getElementById('nexus_addr').value,
+                poll_interval: parseInt(document.getElementById('poll_interval').value),
+                log_port: parseInt(document.getElementById('log_port').value)
+            };
+
+            const resp = await fetch('/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cfg)
+            });
+
+            if (resp.ok) {
+                alert('配置已保存，机器人正在重启...');
+                setTimeout(() => window.location.reload(), 3000);
+            } else {
+                const err = await resp.text();
+                alert('保存失败: ' + err);
+            }
+        }
+
+        async function updateLogs() {
+            if (currentTab !== 'logs') return;
+            try {
+                const resp = await fetch('/logs?lines=100');
+                const text = await resp.text();
+                const logsDiv = document.getElementById('logs');
+                logsDiv.innerText = text;
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            } catch (e) {}
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerText = '';
+        }
+
+        setInterval(updateLogs, 2000);
+        loadConfig();
+    </script>
+</body>
+</html>
+	`)
+}
+
 func main() {
+	log.SetOutput(logManager)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	loadConfig()
 
-	go connectToNexus()
-	go pollEmails()
+	go startHTTPServer()
 
+	// Initial start
+	restartBot()
+
+	// Wait for signal
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, os.Interrupt, syscall.SIGTERM)
 	<-sc
+
+	stopBot()
+}
+
+func restartBot() {
+	stopBot()
+
+	configMutex.RLock()
+	nexusAddr := config.NexusAddr
+	configMutex.RUnlock()
+
+	botCtx, botCancel = context.WithCancel(context.Background())
+	nexusCtx, nexusCancel = context.WithCancel(context.Background())
+
+	// Connect to BotNexus
+	go connectToNexus(nexusCtx, nexusAddr)
+
+	// Start polling
+	go pollEmails(botCtx)
+}
+
+func stopBot() {
+	if botCancel != nil {
+		botCancel()
+	}
+	if nexusCancel != nil {
+		nexusCancel()
+	}
+
+	connMutex.Lock()
+	if nexusConn != nil {
+		nexusConn.Close()
+		nexusConn = nil
+	}
+	connMutex.Unlock()
 }

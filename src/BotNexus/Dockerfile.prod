@@ -1,0 +1,13 @@
+FROM alpine:latest
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk add --no-cache tzdata ca-certificates
+WORKDIR /app
+COPY BotNexus ./
+RUN chmod +x BotNexus
+COPY web ./web
+COPY overmind ./overmind
+EXPOSE 3001 5000
+ENV WS_PORT=:3001
+ENV WEBUI_PORT=:5000
+RUN mkdir -p /app/data
+CMD ["./BotNexus"]

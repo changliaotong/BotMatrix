@@ -12,6 +12,22 @@ type Plugin interface {
 	Init(robot Robot)
 }
 
+// Skill 插件提供的技能函数类型
+type Skill func(params map[string]string) (string, error)
+
+// SkillCapability 描述插件提供的技能
+type SkillCapability struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Usage       string            `json:"usage"`
+	Params      map[string]string `json:"params"`
+}
+
+// SkillCapable 插件可选实现的接口，用于报备技能
+type SkillCapable interface {
+	GetSkills() []SkillCapability
+}
+
 type Robot interface {
 	OnMessage(fn onebot.EventHandler)
 	OnNotice(fn onebot.EventHandler)
@@ -32,6 +48,9 @@ type Robot interface {
 	GetSessionContext(platform, userID string) (map[string]interface{}, error)
 	SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error
 	GetSessionState(platform, userID string) (map[string]interface{}, error)
+
+	// Task & Skill Management
+	HandleSkill(skillName string, fn func(params map[string]string) (string, error))
 }
 
 type Manager struct {

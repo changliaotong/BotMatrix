@@ -3,12 +3,14 @@ package tasks
 import (
 	"log"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 // TaskManager 任务系统总管理器
 type TaskManager struct {
 	DB             *gorm.DB
+	Rdb            *redis.Client
 	Scheduler      *Scheduler
 	Dispatcher     *Dispatcher
 	Tagging        *TaggingManager
@@ -17,14 +19,14 @@ type TaskManager struct {
 	BotManager     BotManager
 }
 
-func NewTaskManager(db *gorm.DB, botManager BotManager) *TaskManager {
+func NewTaskManager(db *gorm.DB, rdb *redis.Client, botManager BotManager) *TaskManager {
 	// 自动迁移表结构
 	err := db.AutoMigrate(&Task{}, &Execution{}, &Tag{}, &TaskTag{}, &Strategy{}, &AIDraft{}, &UserIdentity{}, &ShadowRule{})
 	if err != nil {
 		log.Printf("[TaskManager] AutoMigrate failed: %v", err)
 	}
 
-	dispatcher := NewDispatcher(db, botManager)
+	dispatcher := NewDispatcher(db, rdb, botManager)
 	scheduler := NewScheduler(db, dispatcher)
 	tagging := NewTaggingManager(db)
 	ai := NewAIParser()
@@ -32,6 +34,7 @@ func NewTaskManager(db *gorm.DB, botManager BotManager) *TaskManager {
 
 	return &TaskManager{
 		DB:           db,
+		Rdb:          rdb,
 		Scheduler:    scheduler,
 		Dispatcher:   dispatcher,
 		Tagging:      tagging,

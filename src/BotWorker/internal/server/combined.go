@@ -18,6 +18,7 @@ type CombinedServer struct {
 	pluginManager *plugin.Manager
 	redisClient   *redis.Client
 	config        *config.Config
+	skillHandlers map[string]func(map[string]string) (string, error)
 }
 
 func NewCombinedServer(cfg *config.Config, rdb *redis.Client) *CombinedServer {
@@ -27,10 +28,11 @@ func NewCombinedServer(cfg *config.Config, rdb *redis.Client) *CombinedServer {
 	}
 
 	server := &CombinedServer{
-		wsServer:    NewWebSocketServer(&cfg.WebSocket),
-		httpServer:   NewHTTPServer(&cfg.HTTP),
-		redisClient: rdb,
-		config:      cfg,
+		wsServer:      NewWebSocketServer(&cfg.WebSocket),
+		httpServer:    NewHTTPServer(&cfg.HTTP),
+		redisClient:   rdb,
+		config:        cfg,
+		skillHandlers: make(map[string]func(map[string]string) (string, error)),
 	}
 	server.pluginManager = plugin.NewManager(server)
 	return server
@@ -121,6 +123,11 @@ func (s *CombinedServer) GetSessionState(platform, userID string) (map[string]in
 	return s.redisClient.GetSessionState(platform, userID)
 }
 
+// HandleSkill 注册技能处理器
+func (s *CombinedServer) HandleSkill(skillName string, fn func(params map[string]string) (string, error)) {
+	s.skillHandlers[skillName] = fn
+}
+
 // 插件管理
 func (s *CombinedServer) GetPluginManager() *plugin.Manager {
 	return s.pluginManager
@@ -142,6 +149,9 @@ func (s *CombinedServer) Run() error {
 		}
 	}()
 
+	// 报备能力给 BotNexus
+	go s.reportCapabilities()
+
 	// 启动Redis队列监听 (如果配置了Redis)
 	if s.redisClient != nil {
 		go s.startRedisQueueListener()
@@ -149,6 +159,49 @@ func (s *CombinedServer) Run() error {
 
 	// 保持主运行状态
 	select {}
+}
+
+func (s *CombinedServer) reportCapabilities() {
+	if s.redisClient == nil {
+		return
+	}
+
+	// 等待插件加载完成
+	time.Sleep(2 * time.Second)
+
+	capabilities := []map[string]interface{}{}
+	for _, p := range s.pluginManager.GetPlugins() {
+		if cp, ok := p.(plugin.SkillCapable); ok {
+			for _, skill := range cp.GetSkills() {
+				capabilities = append(capabilities, map[string]interface{}{
+					"name":        skill.Name,
+					"description": skill.Description,
+					"usage":       skill.Usage,
+					"params":      skill.Params,
+				})
+			}
+		}
+	}
+
+	if len(capabilities) == 0 {
+		return
+	}
+
+	regMsg := map[string]interface{}{
+		"type":         "worker_register",
+		"worker_id":    s.config.WorkerID,
+		"capabilities": capabilities,
+		"timestamp":    time.Now().Unix(),
+	}
+
+	payload, _ := json.Marshal(regMsg)
+	ctx := context.Background()
+	err := s.redisClient.Publish(ctx, "botmatrix:worker:register", payload).Err()
+	if err != nil {
+		log.Printf("[Combined] Failed to report capabilities: %v", err)
+	} else {
+		log.Printf("[Combined] Successfully reported %d capabilities to BotNexus", len(capabilities))
+	}
 }
 
 func (s *CombinedServer) startRedisQueueListener() {
@@ -203,10 +256,45 @@ func (s *CombinedServer) startRedisQueueListener() {
 }
 
 func (s *CombinedServer) processQueueMessage(msg map[string]interface{}) {
+	// 检查是否为指令 (skill_call)
+	if msgType, ok := msg["type"].(string); ok && msgType == "skill_call" {
+		s.handleSkillCall(msg)
+		return
+	}
+
 	// 提取消息类型并分发给插件管理器
 	if s.pluginManager != nil {
 		s.pluginManager.HandleEvent(msg)
 	}
+}
+
+func (s *CombinedServer) handleSkillCall(msg map[string]interface{}) {
+	skillName, _ := msg["skill"].(string)
+	paramsMap, _ := msg["params"].(map[string]interface{})
+	
+	// 转换参数为 map[string]string
+	params := make(map[string]string)
+	for k, v := range paramsMap {
+		params[k] = fmt.Sprint(v)
+	}
+
+	log.Printf("[SkillCall] Handling skill: %s with params: %v", skillName, params)
+
+	handler, ok := s.skillHandlers[skillName]
+	if !ok {
+		log.Printf("[SkillCall] No handler for skill: %s", skillName)
+		return
+	}
+
+	result, err := handler(params)
+	if err != nil {
+		log.Printf("[SkillCall] Error executing skill %s: %v", skillName, err)
+		return
+	}
+
+	log.Printf("[SkillCall] Skill %s executed successfully: %s", skillName, result)
+	
+	// 如果需要，这里可以将结果发回 BotNexus
 }
 
 func (s *CombinedServer) HandleQueueEvent(msg map[string]interface{}) {

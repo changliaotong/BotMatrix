@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -40,6 +41,19 @@ func (p *CommandParser) MatchCommandWithParams(pattern string, paramPattern stri
 		return false, "", nil
 	}
 	return true, matches[1], matches[2:]
+}
+
+// MatchRegex 匹配自定义正则表达式
+// pattern: 正则表达式模式
+// message: 输入消息
+// 返回值: 是否匹配，捕获组列表
+func (p *CommandParser) MatchRegex(pattern string, message string) (bool, []string) {
+	regPattern := regexp.MustCompile(pattern)
+	matches := regPattern.FindStringSubmatch(message)
+	if len(matches) == 0 {
+		return false, nil
+	}
+	return true, matches
 }
 
 // MatchCommandWithSingleParam 匹配带单个参数的命令
@@ -92,4 +106,20 @@ func (p *CommandParser) ExtractCommand(message string) string {
 		return parts[0]
 	}
 	return ""
+}
+
+// ParseArgs 解析命令参数
+// message: 输入消息
+// 返回值: 参数列表（包括命令本身作为第一个元素）
+func (p *CommandParser) ParseArgs(message string) []string {
+	cmd := strings.TrimSpace(message)
+	if strings.HasPrefix(cmd, "/") {
+		cmd = strings.TrimSpace(cmd[1:])
+	}
+	return strings.Fields(cmd)
+}
+
+// ParseInt 将字符串转换为整数
+func (p *CommandParser) ParseInt(s string) (int, error) {
+	return strconv.Atoi(s)
 }

@@ -12,6 +12,13 @@
 
 ## 📢 Recent Updates | 最近更新
 
+### [v1.4.0] - 2025-12-24
+- **Web UI Standardization**: Standardized the administrative Web UI across all major BotMatrix components (FeishuBot, KookBot, SlackBot, TelegramBot, EmailBot, etc.) with a consistent tabbed interface.
+- **Enhanced Log Management**: Integrated real-time log streaming with 2000ms auto-refresh and log rotation management into each bot's local admin panel.
+- **Secure Configuration**: Sensitive credentials (Tokens, Keys) are now masked with password fields in the Web UI to prevent accidental exposure.
+- **Bot Lifecycle Management**: Implemented graceful restart and shutdown logic using Go's `context` and `sync` packages across all bot workers.
+- **Chinese Localization**: Full Chinese language support for all administrative interfaces, improving usability for regional users.
+
 ### [v1.3.2] - 2025-12-22
 - **BotWorker Stateless Sessions**: Added Redis/DB-backed confirmation and dialog state so multiple workers can safely handle the same group without losing context.
 - **Dangerous Action Protection**: Introduced 3-digit numeric confirmation codes for operations like clearing blacklists/whitelists, reducing mis-operations by admins.

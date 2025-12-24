@@ -1,0 +1,16 @@
+FROM alpine:latest
+
+# 使用阿里云镜像源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# 安装运行基础依赖
+RUN apk add --no-cache tzdata ca-certificates
+
+WORKDIR /app
+
+# 直接从本地上下文拷贝预编译好的 Linux 二进制文件
+COPY wxbot-go ./
+RUN chmod +x wxbot-go
+
+# 运行程序
+CMD ["./wxbot-go"]

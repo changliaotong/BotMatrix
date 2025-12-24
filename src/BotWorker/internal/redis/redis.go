@@ -24,6 +24,9 @@ type Client struct {
 	*redis.Client
 }
 
+// Nil Redis空结果错误
+var Nil = redis.Nil
+
 // NewClient 创建新的Redis客户端
 func NewClient(cfg *config.RedisConfig) (*Client, error) {
 	// 构建Redis客户端配置

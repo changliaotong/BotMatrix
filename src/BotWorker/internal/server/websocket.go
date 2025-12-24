@@ -180,7 +180,8 @@ func (s *WebSocketServer) handleAPIRequest(conn *websocket.Conn, request onebot.
 }
 
 func (s *WebSocketServer) Run() error {
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := s.upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println("升级WebSocket连接错误:", err)
@@ -200,6 +201,7 @@ func (s *WebSocketServer) Run() error {
 
 	server := &http.Server{
 		Addr:         s.config.Addr,
+		Handler:      mux,
 		ReadTimeout:  s.config.ReadTimeout,
 		WriteTimeout: s.config.WriteTimeout,
 	}

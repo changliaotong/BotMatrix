@@ -59,16 +59,39 @@ func InitTranslator(localesPath string, defaultLang string) {
 	GlobalTranslator = t
 }
 
-// T 翻译指定的键
+// T 翻译指定的键。支持 "键名|默认文本" 格式。
+// 如果语言是中文，则优先使用默认文本。
+// 如果语言不是中文，则根据键名在语言包中查找翻译。
 func T(lang string, key string, args ...interface{}) string {
+	// 解析 key，支持 "ID|默认文本" 格式
+	id := key
+	defaultText := key
+	if strings.Contains(key, "|") {
+		parts := strings.SplitN(key, "|", 2)
+		id = parts[0]
+		defaultText = parts[1]
+	}
+
 	if GlobalTranslator == nil {
-		return key
+		if len(args) > 0 {
+			return fmt.Sprintf(defaultText, args...)
+		}
+		return defaultText
 	}
 
 	if lang == "" {
 		lang = GlobalTranslator.DefaultLang
 	}
 
+	// 如果目标语言是中文，直接使用默认文本（代码中的中文）
+	if lang == "zh-CN" || lang == "zh" || strings.HasPrefix(lang, "zh-") {
+		if len(args) > 0 {
+			return fmt.Sprintf(defaultText, args...)
+		}
+		return defaultText
+	}
+
+	// 尝试在翻译包中查找
 	// 尝试精确匹配 (例如 en-US)
 	translations, ok := GlobalTranslator.Translations[lang]
 	if !ok {
@@ -76,30 +99,43 @@ func T(lang string, key string, args ...interface{}) string {
 		baseLang := strings.Split(lang, "-")[0]
 		translations, ok = GlobalTranslator.Translations[baseLang]
 		if !ok {
-			// 退回到默认语言
+			// 退回到默认语言，但如果默认语言是中文，我们已经处理过了
+			// 这里处理的是默认语言非中文的情况
 			translations, ok = GlobalTranslator.Translations[GlobalTranslator.DefaultLang]
 		}
 	}
 
 	if !ok {
-		return key
+		if len(args) > 0 {
+			return fmt.Sprintf(defaultText, args...)
+		}
+		return defaultText
 	}
 
-	val, ok := translations[key]
+	val, ok := translations[id]
 	if !ok {
 		// 如果当前语言没有这个键，尝试在默认语言中查找
 		if lang != GlobalTranslator.DefaultLang {
 			if defaultTrans, ok := GlobalTranslator.Translations[GlobalTranslator.DefaultLang]; ok {
-				if defaultVal, ok := defaultTrans[key]; ok {
+				if defaultVal, ok := defaultTrans[id]; ok {
 					val = defaultVal
 				} else {
-					return key
+					if len(args) > 0 {
+						return fmt.Sprintf(defaultText, args...)
+					}
+					return defaultText
 				}
 			} else {
-				return key
+				if len(args) > 0 {
+					return fmt.Sprintf(defaultText, args...)
+				}
+				return defaultText
 			}
 		} else {
-			return key
+			if len(args) > 0 {
+				return fmt.Sprintf(defaultText, args...)
+			}
+			return defaultText
 		}
 	}
 

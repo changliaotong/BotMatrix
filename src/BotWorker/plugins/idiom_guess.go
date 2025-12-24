@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -29,13 +30,13 @@ type Idiom struct {
 
 // IdiomGame 游戏数据结构
 type IdiomGame struct {
-	UserID     string
-	Idiom      Idiom
-	Hint       string
-	Guessed    string
-	Attempts   int
+	UserID      string
+	Idiom       Idiom
+	Hint        string
+	Guessed     string
+	Attempts    int
 	MaxAttempts int
-	StartTime  time.Time
+	StartTime   time.Time
 }
 
 // NewIdiomGuessPlugin 创建猜成语插件实例
@@ -55,7 +56,7 @@ func (p *IdiomGuessPlugin) Name() string {
 }
 
 func (p *IdiomGuessPlugin) Description() string {
-	return "猜成语游戏，可以随机选择成语让用户猜测"
+	return common.T("", "idiom_guess_plugin_desc|猜成语游戏插件")
 }
 
 func (p *IdiomGuessPlugin) Version() string {
@@ -89,9 +90,68 @@ func (p *IdiomGuessPlugin) initIdiomList() {
 	}
 }
 
+// GetSkills 实现 SkillCapable 接口
+func (p *IdiomGuessPlugin) GetSkills() []plugin.SkillCapability {
+	return []plugin.SkillCapability{
+		{
+			Name:        "start",
+			Description: common.T("", "idiom_guess_skill_start_desc|开始一个新的猜成语游戏"),
+			Usage:       "start",
+		},
+		{
+			Name:        "submit",
+			Description: common.T("", "idiom_guess_skill_submit_desc|提交你的成语答案"),
+			Usage:       "submit <answer>",
+			Params: map[string]string{
+				"answer": common.T("", "idiom_guess_skill_submit_param_answer|你猜的成语答案"),
+			},
+		},
+		{
+			Name:        "status",
+			Description: common.T("", "idiom_guess_skill_status_desc|查看当前游戏的状态和进度"),
+			Usage:       "status",
+		},
+		{
+			Name:        "give_up",
+			Description: common.T("", "idiom_guess_skill_giveup_desc|放弃当前游戏并查看正确答案"),
+			Usage:       "give_up",
+		},
+	}
+}
+
+// HandleSkill 处理技能调用
+func (p *IdiomGuessPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skillName string, params map[string]string) error {
+	userIDStr := fmt.Sprintf("%d", event.UserID)
+	switch skillName {
+	case "start":
+		p.startNewGameLogic(robot, event, userIDStr)
+	case "submit":
+		answer := params["answer"]
+		if answer == "" {
+			p.sendMessage(robot, event, common.T("", "idiom_guess_enter_answer|请输入要提交的答案"))
+			return nil
+		}
+		p.submitAnswerLogic(robot, event, userIDStr, answer)
+	case "status":
+		p.showGameStatusLogic(robot, event, userIDStr)
+	case "give_up":
+		p.giveUpGameLogic(robot, event, userIDStr)
+	}
+	return nil
+}
+
 // Init 初始化插件
 func (p *IdiomGuessPlugin) Init(robot plugin.Robot) {
-	log.Println("加载猜成语插件")
+	log.Println(common.T("", "idiom_guess_plugin_loaded|猜成语插件已加载"))
+
+	// 注册技能处理器
+	skills := p.GetSkills()
+	for _, skill := range skills {
+		skillName := skill.Name
+		robot.HandleSkill(skillName, func(params map[string]string) (string, error) {
+			return "", p.HandleSkill(robot, nil, skillName, params)
+		})
+	}
 
 	// 处理消息事件
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -112,7 +172,7 @@ func (p *IdiomGuessPlugin) Init(robot plugin.Robot) {
 
 		// 检查是否为开始猜成语命令
 		if match, _ := p.cmdParser.MatchCommand("猜成语|开始猜成语", event.RawMessage); match {
-			p.startNewGame(robot, event, userIDStr)
+			p.startNewGameLogic(robot, event, userIDStr)
 			return nil
 		}
 
@@ -120,23 +180,23 @@ func (p *IdiomGuessPlugin) Init(robot plugin.Robot) {
 		match, _, params := p.cmdParser.MatchCommandWithParams("提交", "(.+)", event.RawMessage)
 		if match {
 			if len(params) != 1 {
-				p.sendMessage(robot, event, "提交命令格式：提交 <答案>")
+				p.sendMessage(robot, event, common.T("", "idiom_guess_cmd_submit_usage|用法：提交 <成语>"))
 				return nil
 			}
 			answer := strings.TrimSpace(params[0])
-			p.submitAnswer(robot, event, userIDStr, answer)
+			p.submitAnswerLogic(robot, event, userIDStr, answer)
 			return nil
 		}
 
 		// 检查是否为查看当前游戏状态命令
 		if match, _ := p.cmdParser.MatchCommand("查看游戏|游戏状态", event.RawMessage); match {
-			p.showGameStatus(robot, event, userIDStr)
+			p.showGameStatusLogic(robot, event, userIDStr)
 			return nil
 		}
 
 		// 检查是否为放弃游戏命令
 		if match, _ := p.cmdParser.MatchCommand("放弃游戏|结束游戏", event.RawMessage); match {
-			p.giveUpGame(robot, event, userIDStr)
+			p.giveUpGameLogic(robot, event, userIDStr)
 			return nil
 		}
 
@@ -144,20 +204,20 @@ func (p *IdiomGuessPlugin) Init(robot plugin.Robot) {
 	})
 }
 
-// startNewGame 开始新游戏
-func (p *IdiomGuessPlugin) startNewGame(robot plugin.Robot, event *onebot.Event, userID string) {
+// startNewGameLogic 开始新游戏逻辑
+func (p *IdiomGuessPlugin) startNewGameLogic(robot plugin.Robot, event *onebot.Event, userID string) {
 	// 检查是否已有正在进行的游戏
 	if _, exists := p.games[userID]; exists {
-		p.sendMessage(robot, event, "您已经有一个正在进行的猜成语游戏，请先完成当前游戏或放弃游戏")
+		p.sendMessage(robot, event, common.T("", "idiom_guess_already_started|你已经有一个正在进行的猜成语游戏了！"))
 		return
 	}
 
 	// 随机选择一个成语
 	idiom := p.idiomList[rand.Intn(len(p.idiomList))]
-	
+
 	// 生成提示
 	hint := fmt.Sprintf("解释：%s\n示例：%s", idiom.Explanation, idiom.Example)
-	
+
 	// 生成已猜字符串（初始全为下划线）
 	guessed := strings.Repeat("_", len(idiom.Word))
 
@@ -176,21 +236,17 @@ func (p *IdiomGuessPlugin) startNewGame(robot plugin.Robot, event *onebot.Event,
 
 	// 发送游戏开始消息
 	p.sendMessage(robot, event, fmt.Sprintf(
-		"🎮 猜成语游戏开始！\n"+
-		"%s\n"+
-		"成语：%s\n"+
-		"剩余次数：%d\n"+
-		"输入 '提交 <答案>' 来猜测",
-		game.Hint, game.Guessed, game.MaxAttempts
+		common.T("", "idiom_guess_start_msg|猜成语游戏开始！\n%s\n当前：\n%s\n你有 %d 次尝试机会。"),
+		game.Hint, game.Guessed, game.MaxAttempts,
 	))
 }
 
-// submitAnswer 提交答案
-func (p *IdiomGuessPlugin) submitAnswer(robot plugin.Robot, event *onebot.Event, userID string, answer string) {
+// submitAnswerLogic 提交答案逻辑
+func (p *IdiomGuessPlugin) submitAnswerLogic(robot plugin.Robot, event *onebot.Event, userID string, answer string) {
 	// 检查是否有正在进行的游戏
 	game, exists := p.games[userID]
 	if !exists {
-		p.sendMessage(robot, event, "您还没有开始猜成语游戏，请先输入 '猜成语' 开始游戏")
+		p.sendMessage(robot, event, common.T("", "idiom_guess_no_game|你当前没有正在进行的猜成语游戏。"))
 		return
 	}
 
@@ -202,12 +258,8 @@ func (p *IdiomGuessPlugin) submitAnswer(robot plugin.Robot, event *onebot.Event,
 		// 猜对了
 		duration := time.Since(game.StartTime)
 		p.sendMessage(robot, event, fmt.Sprintf(
-			"🎉 恭喜您猜对了！\n"+
-			"成语：%s\n"+
-			"拼音：%s\n"+
-			"用时：%v\n"+
-			"尝试次数：%d/%d",
-			game.Idiom.Word, game.Idiom.Pinyin, duration, game.Attempts, game.MaxAttempts
+			common.T("", "idiom_guess_correct|恭喜你猜对了！\n正确答案是：%s (%s)\n用时：%v\n尝试次数：%d/%d"),
+			game.Idiom.Word, game.Idiom.Pinyin, duration.Round(time.Second), game.Attempts, game.MaxAttempts,
 		))
 		// 删除游戏
 		delete(p.games, userID)
@@ -219,11 +271,8 @@ func (p *IdiomGuessPlugin) submitAnswer(robot plugin.Robot, event *onebot.Event,
 	if remaining <= 0 {
 		// 游戏结束
 		p.sendMessage(robot, event, fmt.Sprintf(
-			"😔 游戏结束，您没有猜对！\n"+
-			"正确答案：%s\n"+
-			"拼音：%s\n"+
-			"解释：%s",
-			game.Idiom.Word, game.Idiom.Pinyin, game.Idiom.Explanation
+			common.T("", "idiom_guess_game_over|游戏结束！机会已用完。\n正确答案是：%s (%s)\n释义：%s"),
+			game.Idiom.Word, game.Idiom.Pinyin, game.Idiom.Explanation,
 		))
 		// 删除游戏
 		delete(p.games, userID)
@@ -232,20 +281,17 @@ func (p *IdiomGuessPlugin) submitAnswer(robot plugin.Robot, event *onebot.Event,
 
 	// 显示当前状态
 	p.sendMessage(robot, event, fmt.Sprintf(
-		"❌ 猜测错误！\n"+
-		"成语：%s\n"+
-		"剩余次数：%d\n"+
-		"请继续猜测",
-		game.Guessed, remaining
+		common.T("", "idiom_guess_wrong|很遗憾，猜错了。\n当前：%s\n剩余机会：%d"),
+		game.Guessed, remaining,
 	))
 }
 
-// showGameStatus 显示当前游戏状态
-func (p *IdiomGuessPlugin) showGameStatus(robot plugin.Robot, event *onebot.Event, userID string) {
+// showGameStatusLogic 显示当前游戏状态逻辑
+func (p *IdiomGuessPlugin) showGameStatusLogic(robot plugin.Robot, event *onebot.Event, userID string) {
 	// 检查是否有正在进行的游戏
 	game, exists := p.games[userID]
 	if !exists {
-		p.sendMessage(robot, event, "您还没有开始猜成语游戏，请先输入 '猜成语' 开始游戏")
+		p.sendMessage(robot, event, common.T("", "idiom_guess_no_game|你当前没有正在进行的猜成语游戏。"))
 		return
 	}
 
@@ -253,32 +299,24 @@ func (p *IdiomGuessPlugin) showGameStatus(robot plugin.Robot, event *onebot.Even
 	duration := time.Since(game.StartTime)
 
 	p.sendMessage(robot, event, fmt.Sprintf(
-		"🎮 当前游戏状态\n"+
-		"%s\n"+
-		"成语：%s\n"+
-		"尝试次数：%d/%d\n"+
-		"剩余次数：%d\n"+
-		"游戏时长：%v",
-		game.Hint, game.Guessed, game.Attempts, game.MaxAttempts, remaining, duration
+		common.T("", "idiom_guess_status|当前猜成语游戏状态：\n%s\n进度：%s\n已尝试：%d/%d 次\n剩余机会：%d 次\n已用时间：%v"),
+		game.Hint, game.Guessed, game.Attempts, game.MaxAttempts, remaining, duration.Round(time.Second),
 	))
 }
 
-// giveUpGame 放弃游戏
-func (p *IdiomGuessPlugin) giveUpGame(robot plugin.Robot, event *onebot.Event, userID string) {
+// giveUpGameLogic 放弃游戏逻辑
+func (p *IdiomGuessPlugin) giveUpGameLogic(robot plugin.Robot, event *onebot.Event, userID string) {
 	// 检查是否有正在进行的游戏
 	game, exists := p.games[userID]
 	if !exists {
-		p.sendMessage(robot, event, "您还没有开始猜成语游戏，请先输入 '猜成语' 开始游戏")
+		p.sendMessage(robot, event, common.T("", "idiom_guess_no_game|你当前没有正在进行的猜成语游戏。"))
 		return
 	}
 
 	// 显示放弃消息
 	p.sendMessage(robot, event, fmt.Sprintf(
-		"😔 您放弃了游戏！\n"+
-		"正确答案：%s\n"+
-		"拼音：%s\n"+
-		"解释：%s",
-		game.Idiom.Word, game.Idiom.Pinyin, game.Idiom.Explanation
+		common.T("", "idiom_guess_give_up|好吧，你选择了放弃。游戏已结束。\n正确答案是：%s (%s)\n释义：%s"),
+		game.Idiom.Word, game.Idiom.Pinyin, game.Idiom.Explanation,
 	))
 
 	// 删除游戏
@@ -287,6 +325,9 @@ func (p *IdiomGuessPlugin) giveUpGame(robot plugin.Robot, event *onebot.Event, u
 
 // sendMessage 发送消息
 func (p *IdiomGuessPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
+	if robot == nil || event == nil {
+		return
+	}
 	params := &onebot.SendMessageParams{
 		MessageType: event.MessageType,
 		UserID:      event.UserID,

@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"fmt"
@@ -13,30 +14,37 @@ import (
 
 // AchievementPlugin 成就系统插件
 type AchievementPlugin struct {
-	cmdParser *CommandParser
-	db        *gorm.DB
+	cmdParser   *CommandParser
+	db          *gorm.DB
 	redisClient *redis.Client
 }
 
-// Achievement 成就结构体
+// Achievement 成就定义
 type Achievement struct {
-	ID          string    `json:"id" gorm:"primaryKey"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Icon        string    `json:"icon"`
-	Points      int       `json:"points"`
-	Type        string    `json:"type"`
-	Condition   string    `json:"condition"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string `gorm:"primaryKey"`
+	Name        string `gorm:"uniqueIndex"`
+	Description string
+	Icon        string
+	Points      int
+	Condition   string
+	Type        string
 }
 
-// UserAchievement 用户成就结构体
+// UserAchievement 用户成就获得情况
 type UserAchievement struct {
-	UserID        string    `json:"user_id" gorm:"primaryKey"`
-	AchievementID string    `json:"achievement_id" gorm:"primaryKey"`
-	UnlockedAt    time.Time `json:"unlocked_at"`
-	Progress      int       `json:"progress"`
-	IsCompleted   bool      `json:"is_completed"`
+	ID            uint   `gorm:"primaryKey"`
+	UserID        string `gorm:"index"`
+	AchievementID string `gorm:"index"`
+	IsCompleted   bool
+	Progress      int
+	UnlockedAt    time.Time
+}
+
+func (p *AchievementPlugin) initDatabase() {
+	if p.db == nil {
+		return
+	}
+	p.db.AutoMigrate(&Achievement{}, &UserAchievement{})
 }
 
 func (p *AchievementPlugin) Name() string {
@@ -44,11 +52,45 @@ func (p *AchievementPlugin) Name() string {
 }
 
 func (p *AchievementPlugin) Description() string {
-	return "成就系统插件，管理用户成就"
+	return common.T("", "achievement_plugin_desc|成就系统插件，记录并展示用户的各种成就和荣誉")
 }
 
 func (p *AchievementPlugin) Version() string {
-	return "1.0.0"
+	return "1.1.0"
+}
+
+// GetSkills 报备插件技能
+func (p *AchievementPlugin) GetSkills() []plugin.SkillCapability {
+	return []plugin.SkillCapability{
+		{
+			Name:        "list_achievements",
+			Description: common.T("", "achievement_skill_list_desc|查看所有成就列表"),
+			Usage:       "list_achievements",
+			Params:      map[string]string{},
+		},
+		{
+			Name:        "my_achievements",
+			Description: common.T("", "achievement_skill_my_desc|查看我的成就"),
+			Usage:       "my_achievements user_id=123456",
+			Params: map[string]string{
+				"user_id": common.T("", "achievement_param_user_id|用户ID"),
+			},
+		},
+		{
+			Name:        "achievement_progress",
+			Description: common.T("", "achievement_skill_progress_desc|查看我的成就进度"),
+			Usage:       "achievement_progress user_id=123456",
+			Params: map[string]string{
+				"user_id": common.T("", "achievement_param_user_id|用户ID"),
+			},
+		},
+		{
+			Name:        "achievement_rank",
+			Description: common.T("", "achievement_skill_rank_desc|查看成就排行榜"),
+			Usage:       "achievement_rank",
+			Params:      map[string]string{},
+		},
+	}
 }
 
 // NewAchievementPlugin 创建成就系统插件实例
@@ -58,8 +100,49 @@ func NewAchievementPlugin() *AchievementPlugin {
 	}
 }
 
+// HandleSkill 实现 SkillCapable 接口
+func (p *AchievementPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skillName string, params map[string]string) (string, error) {
+	userID := ""
+	if event != nil {
+		userID = fmt.Sprintf("%d", event.UserID)
+	} else if uid, ok := params["user_id"]; ok {
+		userID = uid
+	}
+
+	switch skillName {
+	case "list_achievements":
+		return p.doShowAllAchievements(), nil
+	case "my_achievements":
+		if userID == "" {
+			return "", fmt.Errorf(common.T("", "achievement_missing_user_id|缺少用户ID参数"))
+		}
+		return p.doShowMyAchievements(userID), nil
+	case "achievement_progress":
+		if userID == "" {
+			return "", fmt.Errorf(common.T("", "achievement_missing_user_id|缺少用户ID参数"))
+		}
+		return p.doShowAchievementProgress(userID), nil
+	case "achievement_rank":
+		return p.doShowAchievementRank(), nil
+	default:
+		return "", fmt.Errorf("unknown skill: %s", skillName)
+	}
+}
+
 func (p *AchievementPlugin) Init(robot plugin.Robot) {
-	log.Println("加载成就系统插件")
+	log.Println(common.T("", "achievement_plugin_loaded|成就系统插件加载成功"))
+
+	// 注册技能处理器
+	skills := p.GetSkills()
+	for _, skill := range skills {
+		skillName := skill.Name
+		robot.HandleSkill(skillName, func(params map[string]string) (string, error) {
+			return p.HandleSkill(robot, nil, skillName, params)
+		})
+	}
+
+	// 初始化数据库
+	p.initDatabase()
 
 	// 处理成就系统命令
 	robot.OnMessage(func(event *onebot.Event) error {
@@ -68,7 +151,7 @@ func (p *AchievementPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为成就命令
-		if match, _ := p.cmdParser.MatchCommand("成就|achievement|achieve", event.RawMessage); match {
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "achievement_cmd|成就"), event.RawMessage); match {
 			// 处理成就命令
 			p.handleAchievementCommand(robot, event)
 		}
@@ -85,97 +168,96 @@ func (p *AchievementPlugin) handleAchievementCommand(robot plugin.Robot, event *
 	args := p.cmdParser.ParseArgs(event.RawMessage)
 	if len(args) == 1 {
 		// 发送成就系统使用说明
-		usage := "🏆 成就系统命令使用说明:\n"
-		usage += "====================\n"
-		usage += "/成就 列表 - 查看所有成就\n"
-		usage += "/成就 我的 - 查看已获得的成就\n"
-		usage += "/成就 进度 - 查看成就进度\n"
-		usage += "/成就 排行 - 查看成就排行榜\n"
-		p.sendMessage(robot, event, usage)
+		p.sendMessage(robot, event, common.T("", "achievement_usage|成就系统使用说明：\n- 成就 列表：查看所有成就\n- 成就 我的：查看已获得成就\n- 成就 进度：查看进行中成就\n- 成就 排行：查看成就点数排行"))
 		return
 	}
 
 	// 处理子命令
 	subCmd := args[1]
-	switch subCmd {
-	case "列表", "list":
-		p.showAllAchievements(robot, event)
-	case "我的", "my":
-		p.showMyAchievements(robot, event, userIDStr)
-	case "进度", "progress":
-		p.showAchievementProgress(robot, event, userIDStr)
-	case "排行", "rank":
-		p.showAchievementRank(robot, event)
-	default:
-		p.sendMessage(robot, event, "❌ 未知子命令，请使用/成就查看帮助")
+	if match, _ := p.cmdParser.MatchCommand(common.T("", "achievement_subcmd_list|列表"), subCmd); match {
+		p.sendMessage(robot, event, p.doShowAllAchievements())
+	} else if match, _ := p.cmdParser.MatchCommand(common.T("", "achievement_subcmd_my|我的"), subCmd); match {
+		p.sendMessage(robot, event, p.doShowMyAchievements(userIDStr))
+	} else if match, _ := p.cmdParser.MatchCommand(common.T("", "achievement_subcmd_progress|进度"), subCmd); match {
+		p.sendMessage(robot, event, p.doShowAchievementProgress(userIDStr))
+	} else if match, _ := p.cmdParser.MatchCommand(common.T("", "achievement_subcmd_rank|排行"), subCmd); match {
+		p.sendMessage(robot, event, p.doShowAchievementRank())
+	} else {
+		p.sendMessage(robot, event, common.T("", "achievement_unknown_subcmd|未知的子命令。请输入'成就'查看使用说明。"))
 	}
 }
 
-// showAllAchievements 显示所有成就
-func (p *AchievementPlugin) showAllAchievements(robot plugin.Robot, event *onebot.Event) {
+// doShowAllAchievements 显示所有成就
+func (p *AchievementPlugin) doShowAllAchievements() string {
+	if p.db == nil {
+		return common.T("", "achievement_db_conn_failed|❌ 数据库连接失败")
+	}
 	var achievements []Achievement
 	if err := p.db.Find(&achievements).Error; err != nil {
-		log.Printf("[Achievement] 查询成就列表失败: %v", err)
-		p.sendMessage(robot, event, "❌ 查询成就列表失败")
-		return
+		log.Printf("[Achievement] %s: %v", common.T("", "achievement_query_list_failed_log|查询成就列表失败"), err)
+		return common.T("", "achievement_query_list_failed|❌ 查询成就列表失败")
 	}
 
 	var msg string
-	msg += "🏆 所有成就列表:\n"
+	msg += common.T("", "achievement_list_title|🏆 所有成就列表") + "\n"
 	msg += "====================\n\n"
 
 	for _, achievement := range achievements {
 		msg += fmt.Sprintf("%s %s\n", achievement.Icon, achievement.Name)
 		msg += fmt.Sprintf("📝 %s\n", achievement.Description)
-		msg += fmt.Sprintf("💎 奖励: %d 积分\n\n", achievement.Points)
+		msg += fmt.Sprintf(common.T("", "achievement_reward_item|💰 奖励： %d 积分"), achievement.Points) + "\n\n"
 	}
 
 	if len(achievements) == 0 {
-		msg += "暂无成就"
+		msg += common.T("", "achievement_no_achievements|暂无任何成就数据")
 	}
 
-	p.sendMessage(robot, event, msg)
+	return msg
 }
 
-// showMyAchievements 显示用户已获得的成就
-func (p *AchievementPlugin) showMyAchievements(robot plugin.Robot, event *onebot.Event, userID string) {
+// doShowMyAchievements 显示用户已获得的成就
+func (p *AchievementPlugin) doShowMyAchievements(userID string) string {
+	if p.db == nil {
+		return common.T("", "achievement_db_conn_failed|❌ 数据库连接失败")
+	}
 	var userAchievements []UserAchievement
 	if err := p.db.Where("user_id = ? AND is_completed = ?", userID, true).Find(&userAchievements).Error; err != nil {
-		log.Printf("[Achievement] 查询用户成就失败: %v", err)
-		p.sendMessage(robot, event, "❌ 查询用户成就失败")
-		return
+		log.Printf("[Achievement] %s: %v", common.T("", "achievement_query_user_failed_log|查询用户成就失败"), err)
+		return common.T("", "achievement_query_user_failed|❌ 查询用户成就失败")
 	}
 
 	var msg string
-	msg += "🏆 我的成就:\n"
+	msg += common.T("", "achievement_my_title|🏅 我的成就") + "\n"
 	msg += "====================\n\n"
 
 	for _, ua := range userAchievements {
 		var achievement Achievement
 		if err := p.db.First(&achievement, "id = ?", ua.AchievementID).Error; err == nil {
 			msg += fmt.Sprintf("%s %s\n", achievement.Icon, achievement.Name)
-			msg += fmt.Sprintf("📅 获得时间: %s\n\n", ua.UnlockedAt.Format("2006-01-02 15:04:05"))
+			msg += fmt.Sprintf(common.T("", "achievement_unlocked_at|🔓 解锁时间： %s"), ua.UnlockedAt.Format("2006-01-02 15:04:05")) + "\n\n"
 		}
 	}
 
 	if len(userAchievements) == 0 {
-		msg += "暂无获得的成就"
+		msg += common.T("", "achievement_no_unlocked|你还没有获得任何成就哦，继续努力吧！")
 	}
 
-	p.sendMessage(robot, event, msg)
+	return msg
 }
 
-// showAchievementProgress 显示成就进度
-func (p *AchievementPlugin) showAchievementProgress(robot plugin.Robot, event *onebot.Event, userID string) {
+// doShowAchievementProgress 显示成就进度
+func (p *AchievementPlugin) doShowAchievementProgress(userID string) string {
+	if p.db == nil {
+		return common.T("", "achievement_db_conn_failed|❌ 数据库连接失败")
+	}
 	var userAchievements []UserAchievement
 	if err := p.db.Where("user_id = ? AND is_completed = ?", userID, false).Find(&userAchievements).Error; err != nil {
-		log.Printf("[Achievement] 查询成就进度失败: %v", err)
-		p.sendMessage(robot, event, "❌ 查询成就进度失败")
-		return
+		log.Printf("[Achievement] %s: %v", common.T("", "achievement_query_progress_failed_log|查询成就进度失败"), err)
+		return common.T("", "achievement_query_progress_failed|❌ 查询成就进度失败")
 	}
 
 	var msg string
-	msg += "📊 成就进度:\n"
+	msg += common.T("", "achievement_progress_title|📈 成就进度") + "\n"
 	msg += "====================\n\n"
 
 	for _, ua := range userAchievements {
@@ -183,19 +265,22 @@ func (p *AchievementPlugin) showAchievementProgress(robot plugin.Robot, event *o
 		if err := p.db.First(&achievement, "id = ?", ua.AchievementID).Error; err == nil {
 			msg += fmt.Sprintf("%s %s\n", achievement.Icon, achievement.Name)
 			msg += fmt.Sprintf("📝 %s\n", achievement.Description)
-			msg += fmt.Sprintf("📊 进度: %d%%\n\n", ua.Progress)
+			msg += fmt.Sprintf(common.T("", "achievement_progress_item|📊 当前进度： %d"), ua.Progress) + "\n\n"
 		}
 	}
 
 	if len(userAchievements) == 0 {
-		msg += "暂无进行中的成就"
+		msg += common.T("", "achievement_no_in_progress|暂无进行中的成就")
 	}
 
-	p.sendMessage(robot, event, msg)
+	return msg
 }
 
-// showAchievementRank 显示成就排行榜
-func (p *AchievementPlugin) showAchievementRank(robot plugin.Robot, event *onebot.Event) {
+// doShowAchievementRank 显示成就排行榜
+func (p *AchievementPlugin) doShowAchievementRank() string {
+	if p.db == nil {
+		return common.T("", "achievement_db_conn_failed|❌ 数据库连接失败")
+	}
 	// 查询用户成就数量排行榜
 	var rankData []struct {
 		UserID string
@@ -204,30 +289,32 @@ func (p *AchievementPlugin) showAchievementRank(robot plugin.Robot, event *onebo
 
 	query := `SELECT user_id, COUNT(*) as count FROM user_achievements WHERE is_completed = true GROUP BY user_id ORDER BY count DESC LIMIT 10`
 	if err := p.db.Raw(query).Scan(&rankData).Error; err != nil {
-		log.Printf("[Achievement] 查询成就排行失败: %v", err)
-		p.sendMessage(robot, event, "❌ 查询成就排行失败")
-		return
+		log.Printf("[Achievement] %s: %v", common.T("", "achievement_query_rank_failed_log|查询成就排行榜失败"), err)
+		return common.T("", "achievement_query_rank_failed|❌ 查询成就排行榜失败")
 	}
 
 	var msg string
-	msg += "🏆 成就排行榜:\n"
+	msg += common.T("", "achievement_rank_title|📊 成就排行榜") + "\n"
 	msg += "====================\n\n"
 
 	for i, item := range rankData {
-		msg += fmt.Sprintf("%d. 用户 %s: %d 个成就\n", i+1, item.UserID, item.Count)
+		msg += fmt.Sprintf(common.T("", "achievement_rank_item|第 %d 名： 用户 %s (成就数：%d)"), i+1, item.UserID, item.Count) + "\n"
 	}
 
 	if len(rankData) == 0 {
-		msg += "暂无成就数据"
+		msg += common.T("", "achievement_no_rank_data|暂无排行数据")
 	}
 
-	p.sendMessage(robot, event, msg)
+	return msg
 }
 
 // sendMessage 发送消息
 func (p *AchievementPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
+	if robot == nil || event == nil || message == "" {
+		return
+	}
 	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+		log.Printf(common.T("", "achievement_send_failed_log|发送消息失败: %v"), err)
 	}
 }
 

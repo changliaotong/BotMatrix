@@ -64,15 +64,13 @@ func (p *PluginManagerPlugin) Init(robot plugin.Robot) {
 		}
 
 		// 检查是否为启用插件命令
-		match, cmd, params := p.cmdParser.MatchCommandWithParams("启用插件|开启插件", `(\S+)`, event.RawMessage)
-		if match && len(params) == 1 {
+		if match, _, params := p.cmdParser.MatchCommandWithParams("启用插件|开启插件", `(\S+)`, event.RawMessage); match && len(params) == 1 {
 			p.enablePlugin(robot, event, params[0])
 			return nil
 		}
 
 		// 检查是否为禁用插件命令
-		match, cmd, params = p.cmdParser.MatchCommandWithParams("禁用插件|关闭插件", `(\S+)`, event.RawMessage)
-		if match && len(params) == 1 {
+		if match, _, params := p.cmdParser.MatchCommandWithParams("禁用插件|关闭插件", `(\S+)`, event.RawMessage); match && len(params) == 1 {
 			p.disablePlugin(robot, event, params[0])
 			return nil
 		}
@@ -233,7 +231,7 @@ func (p *PluginManagerPlugin) disablePlugin(robot plugin.Robot, event *onebot.Ev
 // showEnabledPlugins 显示已启用的插件
 func (p *PluginManagerPlugin) showEnabledPlugins(robot plugin.Robot, event *onebot.Event) {
 	if event.MessageType != "group" && event.MessageType != "private" {
-		return nil
+		return
 	}
 
 	var groupIDStr string
@@ -271,8 +269,6 @@ func (p *PluginManagerPlugin) showEnabledPlugins(robot plugin.Robot, event *oneb
 
 	// 发送已启用插件列表
 	p.sendMessage(robot, event, enabledList.String())
-
-	return nil
 }
 
 // addEnabledPluginToList 将已启用的插件添加到列表

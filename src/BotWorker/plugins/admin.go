@@ -23,11 +23,101 @@ func (p *AdminPlugin) Name() string {
 }
 
 func (p *AdminPlugin) Description() string {
-	return common.T("", "admin_plugin_desc")
+	return common.T("", "admin_plugin_desc|管理插件，支持群管理、功能设置等功能")
 }
 
 func (p *AdminPlugin) Version() string {
 	return "1.0.0"
+}
+
+// GetSkills 报备插件技能
+func (p *AdminPlugin) GetSkills() []plugin.SkillCapability {
+	return []plugin.SkillCapability{
+		{
+			Name:        "set_voice",
+			Description: common.T("", "admin_skill_set_voice_desc|设置群聊语音包"),
+			Usage:       "set_voice group_id=654321 voice=1",
+			Params: map[string]string{
+				"group_id": common.T("", "admin_skill_set_voice_param_group_id|群号"),
+				"voice":    common.T("", "admin_skill_set_voice_param_voice|语音包名称或编号"),
+			},
+		},
+		{
+			Name:        "enable_feature",
+			Description: common.T("", "admin_skill_enable_feature_desc|开启群功能"),
+			Usage:       "enable_feature group_id=654321 feature=signin user_id=123456",
+			Params: map[string]string{
+				"group_id": common.T("", "admin_skill_enable_feature_param_group_id|群号"),
+				"feature":  common.T("", "admin_skill_enable_feature_param_feature|功能名称"),
+				"user_id":  common.T("", "admin_skill_enable_feature_param_user_id|操作用户ID"),
+			},
+		},
+		{
+			Name:        "disable_feature",
+			Description: common.T("", "admin_skill_disable_feature_desc|关闭群功能"),
+			Usage:       "disable_feature group_id=654321 feature=signin user_id=123456",
+			Params: map[string]string{
+				"group_id": common.T("", "admin_skill_disable_feature_param_group_id|群号"),
+				"feature":  common.T("", "admin_skill_disable_feature_param_feature|功能名称"),
+				"user_id":  common.T("", "admin_skill_disable_feature_param_user_id|操作用户ID"),
+			},
+		},
+		{
+			Name:        "set_qa_mode",
+			Description: common.T("", "admin_skill_set_qa_mode_desc|设置群聊问答模式"),
+			Usage:       "set_qa_mode group_id=654321 mode=chatty",
+			Params: map[string]string{
+				"group_id": common.T("", "admin_skill_set_qa_mode_param_group_id|群号"),
+				"mode":     common.T("", "admin_skill_set_qa_mode_param_mode|模式名称（chatty, ultimate, agent, silent, group, official）"),
+			},
+		},
+	}
+}
+
+// HandleSkill 实现 SkillCapable 接口
+func (p *AdminPlugin) HandleSkill(robot plugin.Robot, event *onebot.Event, skillName string, params map[string]string) (string, error) {
+	var userID string
+	if event != nil {
+		userID = fmt.Sprintf("%d", event.UserID)
+	} else if params["user_id"] != "" {
+		userID = params["user_id"]
+	}
+
+	var groupID string
+	if event != nil && event.MessageType == "group" {
+		groupID = fmt.Sprintf("%d", event.GroupID)
+	} else if params["group_id"] != "" {
+		groupID = params["group_id"]
+	}
+
+	switch skillName {
+	case "set_voice":
+		voice := params["voice"]
+		if groupID == "" {
+			return "", fmt.Errorf("missing parameter: group_id")
+		}
+		return p.doSetVoice(groupID, voice), nil
+	case "enable_feature":
+		feature := params["feature"]
+		if groupID == "" || feature == "" || userID == "" {
+			return "", fmt.Errorf("missing parameter: group_id, feature or user_id")
+		}
+		return p.doEnableFeature(groupID, feature, userID)
+	case "disable_feature":
+		feature := params["feature"]
+		if groupID == "" || feature == "" || userID == "" {
+			return "", fmt.Errorf("missing parameter: group_id, feature or user_id")
+		}
+		return p.doDisableFeature(groupID, feature, userID)
+	case "set_qa_mode":
+		mode := params["mode"]
+		if groupID == "" || mode == "" {
+			return "", fmt.Errorf("missing parameter: group_id or mode")
+		}
+		return p.doSetQAMode(groupID, mode), nil
+	default:
+		return "", fmt.Errorf("unknown skill: %s", skillName)
+	}
 }
 
 // NewAdminPlugin 创建admin plugin实例
@@ -40,449 +130,165 @@ func NewAdminPlugin(database *sql.DB) *AdminPlugin {
 }
 
 func (p *AdminPlugin) Init(robot plugin.Robot) {
-	log.Println(common.T("", "admin_plugin_loaded"))
-
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		matchNoArg, _ := p.cmdParser.MatchCommand("设置语音|setvoice", event.RawMessage)
-		matchWithArg, _, arg := p.cmdParser.MatchCommandWithSingleParam("设置语音|setvoice", event.RawMessage)
-
-		if !matchNoArg && !matchWithArg {
-			return nil
-		}
-
-		if event.MessageType != "group" {
-			p.sendMessage(robot, event, common.T("", "admin_group_only_voice"))
-			return nil
-		}
-
-		if p.db == nil {
-			p.sendMessage(robot, event, common.T("", "admin_no_db_voice"))
-			return nil
-		}
-
-		groupID := fmt.Sprintf("%d", event.GroupID)
-
-		if matchNoArg && !matchWithArg {
-			currentID, _ := db.GetGroupVoiceID(p.db, groupID)
-			list := BuildVoiceList(currentID)
-			msg := list + "\n" + common.T("", "admin_set_voice_usage")
-			p.sendMessage(robot, event, msg)
-			return nil
-		}
-
-		if !matchWithArg {
-			return nil
-		}
-
-		input := strings.TrimSpace(arg)
-		if input == "" {
-			currentID, _ := db.GetGroupVoiceID(p.db, groupID)
-			list := BuildVoiceList(currentID)
-			msg := list + "\n" + common.T("", "admin_set_voice_usage")
-			p.sendMessage(robot, event, msg)
-			return nil
-		}
-
-		if num, err := strconv.Atoi(input); err == nil {
-			item := FindVoiceByGlobalIndex(num)
-			if item == nil {
-				p.sendMessage(robot, event, "❌ "+common.T("", "admin_voice_not_found"))
-				return nil
-			}
-			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "")
-			return nil
-		}
-
-		if strings.EqualFold(input, "随机") || strings.EqualFold(input, "random") {
-			item := GetRandomVoice()
-			if item == nil {
-				p.sendMessage(robot, event, "❌ "+common.T("", "admin_voice_list_not_supported"))
-				return nil
-			}
-			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "（"+common.T("", "admin_random")+"）")
-			return nil
-		}
-
-		if item := FindVoiceByName(input); item != nil {
-			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "")
-			return nil
-		}
-
-		if item := FindVoiceFuzzy(input); item != nil {
-			p.handleSaveGroupVoice(robot, event, groupID, item.ID, item.Name, "（"+common.T("", "admin_fuzzy_match")+"）")
-			return nil
-		}
-
-		p.sendMessage(robot, event, "❌ "+common.T("", "admin_voice_not_found_hint"))
-
-		return nil
-	})
-
-	// 处理后台命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		// 检查是否为后台命令
-		if match, _ := p.cmdParser.MatchCommand("后台|admin", event.RawMessage); !match {
-			return nil
-		}
-
-		// 发送后台菜单
-		adminMenu := "🔧 " + common.T("", "admin_menu_title") + "\n"
-		adminMenu += "====================\n"
-		adminMenu += common.T("", "admin_menu_enable") + "\n"
-		adminMenu += common.T("", "admin_menu_disable") + "\n"
-		adminMenu += common.T("", "admin_menu_set") + "\n"
-		adminMenu += common.T("", "admin_menu_teach") + "\n"
-		adminMenu += common.T("", "admin_menu_group_info") + "\n"
-		adminMenu += common.T("", "admin_menu_chatty") + "\n"
-		adminMenu += common.T("", "admin_menu_ultimate") + "\n"
-		adminMenu += common.T("", "admin_menu_agent") + "\n"
-		p.sendMessage(robot, event, adminMenu)
-
-		return nil
-	})
-
-	// 处理开启命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		match, _, params := p.cmdParser.MatchCommandWithParams("开启|enable", `(.*)`, event.RawMessage)
-		if !match || len(params) < 1 {
-			return nil
-		}
-
-		rawFeature := strings.TrimSpace(params[0])
-		feature, requireAdmin, requireSuperAdmin := normalizeFeatureName(rawFeature)
-		if feature == "" {
-			feature = rawFeature
-		}
-
-		if event.MessageType == "group" && p.db != nil {
-			if requireSuperAdmin {
-				if !isSuperAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_super"))
-					return nil
-				}
-			} else if requireAdmin {
-				if !isGroupAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_admin"))
-					return nil
-				}
-			}
-		}
-		defaultEnabled, ok := FeatureDefaults[feature]
-		if !ok {
-			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_feature_not_found"), feature))
-			return nil
-		}
-
-		if event.MessageType != "group" {
-			p.sendMessage(robot, event, common.T("", "admin_group_only_feature"))
-			return nil
-		}
-
-		if p.db == nil {
-			p.sendMessage(robot, event, common.T("", "admin_no_db_feature"))
-			return nil
-		}
-
-		groupID := fmt.Sprintf("%d", event.GroupID)
-		var err error
-		if defaultEnabled {
-			err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
-		} else {
-			err = db.SetGroupFeatureOverride(p.db, groupID, feature, true)
-		}
-		if err != nil {
-			log.Printf("设置功能开启失败: %v", err)
-			p.sendMessage(robot, event, fmt.Sprintf("开启功能%s失败", feature))
-			return nil
-		}
-
-		p.sendMessage(robot, event, fmt.Sprintf("功能%s已开启", feature))
-
-		return nil
-	})
-
-	// 处理关闭命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		match, _, params := p.cmdParser.MatchCommandWithParams("关闭|disable", `(.*)`, event.RawMessage)
-		if !match || len(params) < 1 {
-			return nil
-		}
-
-		rawFeature := strings.TrimSpace(params[0])
-		feature, requireAdmin, requireSuperAdmin := normalizeFeatureName(rawFeature)
-		if feature == "" {
-			feature = rawFeature
-		}
-
-		if event.MessageType == "group" && p.db != nil {
-			if requireSuperAdmin {
-				if !isSuperAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_super"))
-					return nil
-				}
-			} else if requireAdmin {
-				if !isGroupAdmin(p.db, event.GroupID, event.UserID) {
-					p.sendMessage(robot, event, common.T("", "admin_insufficient_perms_admin"))
-					return nil
-				}
-			}
-		}
-		defaultEnabled, ok := FeatureDefaults[feature]
-		if !ok {
-			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_feature_not_found"), feature))
-			return nil
-		}
-
-		if event.MessageType != "group" {
-			p.sendMessage(robot, event, common.T("", "admin_group_only_feature"))
-			return nil
-		}
-
-		if p.db == nil {
-			p.sendMessage(robot, event, common.T("", "admin_no_db_feature"))
-			return nil
-		}
-
-		groupID := fmt.Sprintf("%d", event.GroupID)
-		var err error
-		if defaultEnabled {
-			err = db.SetGroupFeatureOverride(p.db, groupID, feature, false)
-		} else {
-			err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
-		}
-		if err != nil {
-			log.Printf("设置功能关闭失败: %v", err)
-			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_disable_feature_failed"), feature))
-			return nil
-		}
-
-		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_feature_disabled"), feature))
-
-		return nil
-	})
-
-	// 处理设置命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		// 检查是否为设置命令
-		match, _, params := p.cmdParser.MatchCommandWithParams("设置|set", `([^\s]+)\s+(.+)`, event.RawMessage)
-		if !match || len(params) < 2 {
-			return nil
-		}
-
-		// 解析参数和值
-		param := params[0]
-		value := params[1]
-
-		// 模拟设置
-		p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_param_set_success"), param, value))
-
-		return nil
-	})
-
-	// 处理教学命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		// 检查是否为教学命令
-		if match, _ := p.cmdParser.MatchCommand("教学|help", event.RawMessage); !match {
-			return nil
-		}
-
-		// 发送教学内容
-		teaching := "📚 " + common.T("", "admin_tutorial_title") + "\n"
-		teaching += "====================\n"
-		teaching += "/菜单 - " + common.T("", "admin_help_menu") + "\n"
-		teaching += "/help - " + common.T("", "admin_help_help") + "\n"
-		teaching += "/签到 - " + common.T("", "admin_help_signin") + "\n"
-		teaching += "/积分 - " + common.T("", "admin_help_points") + "\n"
-		teaching += "/天气 <城市> - " + common.T("", "admin_help_weather") + "\n"
-		teaching += "/翻译 <文本> - " + common.T("", "admin_help_translate") + "\n"
-		teaching += "/点歌 <歌曲> - " + common.T("", "admin_help_music") + "\n"
-		teaching += "/猜拳 <选择> - " + common.T("", "admin_help_rps") + "\n"
-		teaching += "/猜大小 <选择> - " + common.T("", "admin_help_guess") + "\n"
-		teaching += "/抽奖 - " + common.T("", "admin_help_lottery") + "\n"
-		teaching += "/早安 - " + common.T("", "admin_help_morning") + "\n"
-		teaching += "/晚安 - " + common.T("", "admin_help_night") + "\n"
-		teaching += "/报时 - " + common.T("", "admin_help_time") + "\n"
-		teaching += "/计算 <表达式> - " + common.T("", "admin_help_calc") + "\n"
-		teaching += "/笑话 - " + common.T("", "admin_help_joke") + "\n"
-		teaching += "/鬼故事 - " + common.T("", "admin_help_ghost") + "\n"
-		teaching += "/成语接龙 <成语> - " + common.T("", "admin_help_idiom") + "\n"
-		p.sendMessage(robot, event, teaching)
-
-		return nil
-	})
-
-	// 处理本群命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		// 检查是否为本群命令
-		if match, _ := p.cmdParser.MatchCommand("本群|group", event.RawMessage); !match {
-			return nil
-		}
-
-		// 发送本群信息
-		groupInfo := "🏠 " + common.T("", "admin_group_info_title") + "\n"
-		groupInfo += "====================\n"
-		groupInfo += common.T("", "admin_group_name") + "：" + common.T("", "admin_unknown") + "\n"
-		groupInfo += common.T("", "admin_group_member_count") + "：" + common.T("", "admin_unknown") + "\n"
-		groupInfo += common.T("", "admin_group_create_time") + "：" + common.T("", "admin_unknown") + "\n"
-		groupInfo += common.T("", "admin_group_notice") + "：" + common.T("", "admin_none") + "\n"
-		p.sendMessage(robot, event, groupInfo)
-
-		return nil
-	})
-
-	// 处理话唠命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		if match, _ := p.cmdParser.MatchCommand("话唠|chatty", event.RawMessage); !match {
-			return nil
-		}
-
-		if event.MessageType == "group" && p.db != nil {
-			groupID := fmt.Sprintf("%d", event.GroupID)
-			if err := db.SetGroupQAMode(p.db, groupID, "chatty"); err != nil {
-				log.Printf("设置话唠模式失败: %v", err)
-			}
-		}
-
-		p.sendMessage(robot, event, common.T("", "admin_chatty_mode_enabled"))
-
-		return nil
-	})
-
-	// 处理终极命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		if match, _ := p.cmdParser.MatchCommand("终极|ultimate", event.RawMessage); !match {
-			return nil
-		}
-
-		if event.MessageType == "group" && p.db != nil {
-			groupID := fmt.Sprintf("%d", event.GroupID)
-			if err := db.SetGroupQAMode(p.db, groupID, "ultimate"); err != nil {
-				log.Printf("设置终极模式失败: %v", err)
-			}
-		}
-
-		p.sendMessage(robot, event, common.T("", "admin_ultimate_mode_enabled"))
-
-		return nil
-	})
-
-	// 处理智能体命令
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		if match, _ := p.cmdParser.MatchCommand("智能体|agent", event.RawMessage); !match {
-			return nil
-		}
-
-		p.sendMessage(robot, event, common.T("", "admin_agent_mode_enabled"))
-
-		return nil
-	})
-
-	robot.OnMessage(func(event *onebot.Event) error {
-		if event.MessageType != "group" && event.MessageType != "private" {
-			return nil
-		}
-
-		if match, _ := p.cmdParser.MatchCommand("闭嘴|silent", event.RawMessage); match {
-			if event.MessageType == "group" && p.db != nil {
-				groupID := fmt.Sprintf("%d", event.GroupID)
-				if err := db.SetGroupQAMode(p.db, groupID, "silent"); err != nil {
-					log.Printf("设置闭嘴模式失败: %v", err)
-				}
-			}
-			p.sendMessage(robot, event, common.T("", "admin_silent_mode_enabled"))
-			return nil
-		}
-
-		if match, _ := p.cmdParser.MatchCommand("本群模式|本群问答|本群", event.RawMessage); match {
-			if event.MessageType == "group" && p.db != nil {
-				groupID := fmt.Sprintf("%d", event.GroupID)
-				if err := db.SetGroupQAMode(p.db, groupID, "group"); err != nil {
-					log.Printf("设置本群模式失败: %v", err)
-				}
-			}
-			p.sendMessage(robot, event, common.T("", "admin_group_mode_enabled"))
-			return nil
-		}
-
-		if match, _ := p.cmdParser.MatchCommand("官方模式|官方问答|官方", event.RawMessage); match {
-			if event.MessageType == "group" && p.db != nil {
-				groupID := fmt.Sprintf("%d", event.GroupID)
-				if err := db.SetGroupQAMode(p.db, groupID, "official"); err != nil {
-					log.Printf("设置官方模式失败: %v", err)
-				}
-			}
-			p.sendMessage(robot, event, common.T("", "admin_official_mode_enabled"))
-			return nil
-		}
-
-		return nil
-	})
-}
-
-// sendMessage 发送消息
-func (p *AdminPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
-	if _, err := SendTextReply(robot, event, message); err != nil {
-		log.Printf("发送消息失败: %v\n", err)
+	log.Println(common.T("", "admin_plugin_loaded|管理插件已加载"))
+
+	// 注册技能处理器
+	skills := p.GetSkills()
+	for _, skill := range skills {
+	skillName := skill.Name
+	robot.HandleSkill(skillName, func(params map[string]string) (string, error) {
+			return p.HandleSkill(robot, nil, skillName, params)
+		})
 	}
+
+	// 统一消息处理器
+	robot.OnMessage(func(event *onebot.Event) error {
+		if event.MessageType != "group" && event.MessageType != "private" {
+			return nil
+		}
+
+		// 1. 设置语音
+		matchNoArg, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_set_voice|设置语音"), event.RawMessage)
+		matchWithArg, _, arg := p.cmdParser.MatchCommandWithSingleParam(common.T("", "admin_cmd_set_voice|设置语音"), event.RawMessage)
+		if matchNoArg || matchWithArg {
+			if event.MessageType != "group" {
+				p.sendMessage(robot, event, common.T("", "admin_group_only_voice|❌ 该命令仅限群聊使用。"))
+				return nil
+			}
+			groupID := fmt.Sprintf("%d", event.GroupID)
+			p.sendMessage(robot, event, p.doSetVoice(groupID, arg))
+			return nil
+		}
+
+		// 2. 后台菜单
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_admin|后台"), event.RawMessage); match {
+			p.sendMessage(robot, event, p.doShowAdminMenu())
+			return nil
+		}
+
+		// 3. 开启功能
+		if match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "admin_cmd_enable|开启"), `(.*)`, event.RawMessage); match && len(params) >= 1 {
+			if event.MessageType != "group" {
+				p.sendMessage(robot, event, common.T("", "admin_group_only_feature|❌ 该功能设置仅限群聊使用。"))
+				return nil
+			}
+			groupID := fmt.Sprintf("%d", event.GroupID)
+			userID := fmt.Sprintf("%d", event.UserID)
+			feature := strings.TrimSpace(params[0])
+			msg, _ := p.doEnableFeature(groupID, feature, userID)
+			p.sendMessage(robot, event, msg)
+			return nil
+		}
+
+		// 4. 关闭功能
+		if match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "admin_cmd_disable|关闭"), `(.*)`, event.RawMessage); match && len(params) >= 1 {
+			if event.MessageType != "group" {
+				p.sendMessage(robot, event, common.T("", "admin_group_only_feature|❌ 该功能设置仅限群聊使用。"))
+				return nil
+			}
+			groupID := fmt.Sprintf("%d", event.GroupID)
+			userID := fmt.Sprintf("%d", event.UserID)
+			feature := strings.TrimSpace(params[0])
+			msg, _ := p.doDisableFeature(groupID, feature, userID)
+			p.sendMessage(robot, event, msg)
+			return nil
+		}
+
+		// 5. 设置参数
+		if match, _, params := p.cmdParser.MatchCommandWithParams(common.T("", "admin_cmd_set|设置"), `([^\s]+)\s+(.+)`, event.RawMessage); match && len(params) >= 2 {
+			param := params[0]
+			value := params[1]
+			p.sendMessage(robot, event, fmt.Sprintf(common.T("", "admin_param_set_success|✅ 参数 %s 已设置为：%s"), param, value))
+			return nil
+		}
+
+		// 6. 教学内容
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_help|帮助"), event.RawMessage); match {
+			p.sendMessage(robot, event, p.doShowTeaching())
+			return nil
+		}
+
+		// 7. 本群信息
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_group|本群"), event.RawMessage); match {
+			p.sendMessage(robot, event, p.doShowGroupInfo())
+			return nil
+		}
+
+		// 8. 问答模式
+		var mode string
+		if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_chatty|话唠模式"), event.RawMessage); match {
+			mode = "chatty"
+		} else if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_ultimate|终极模式"), event.RawMessage); match {
+			mode = "ultimate"
+		} else if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_agent|代理模式"), event.RawMessage); match {
+			mode = "agent"
+		} else if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_silent|静默模式"), event.RawMessage); match {
+			mode = "silent"
+		} else if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_group_qa|本群问答"), event.RawMessage); match {
+			mode = "group"
+		} else if match, _ := p.cmdParser.MatchCommand(common.T("", "admin_cmd_official_qa|官方问答"), event.RawMessage); match {
+			mode = "official"
+		}
+
+		if mode != "" {
+			if event.MessageType == "group" {
+				groupID := fmt.Sprintf("%d", event.GroupID)
+				p.sendMessage(robot, event, p.doSetQAMode(groupID, mode))
+			} else {
+				p.sendMessage(robot, event, common.T("", "admin_group_only_feature|❌ 该功能设置仅限群聊使用。"))
+			}
+			return nil
+		}
+
+		return nil
+	})
 }
 
-func (p *AdminPlugin) handleSaveGroupVoice(robot plugin.Robot, event *onebot.Event, groupID, voiceID, voiceName, suffix string) {
+// doSetVoice 执行设置语音逻辑
+func (p *AdminPlugin) doSetVoice(groupID string, voice string) string {
 	if p.db == nil {
-		p.sendMessage(robot, event, common.T("", "admin_no_db_voice"))
-		return
+		return common.T("", "admin_no_db_voice|数据库未连接，无法设置语音。")
 	}
 
-	if err := db.SetGroupVoiceID(p.db, groupID, voiceID); err != nil {
+	input := strings.TrimSpace(voice)
+	if input == "" {
+		currentID, _ := db.GetGroupVoiceID(p.db, groupID)
+		list := BuildVoiceList(currentID)
+		return list + "\n" + common.T("", "admin_set_voice_usage|💡 使用方法：/设置语音 <名称/编号/随机>")
+	}
+
+	var item *VoiceItem
+	var suffix string
+
+	if num, err := strconv.Atoi(input); err == nil {
+		item = FindVoiceByGlobalIndex(num)
+	} else if strings.EqualFold(input, "随机") || strings.EqualFold(input, "random") {
+		item = GetRandomVoice()
+		suffix = "（" + common.T("", "admin_random|随机") + "）"
+	} else {
+		item = FindVoiceByName(input)
+		if item == nil {
+			item = FindVoiceFuzzy(input)
+			if item != nil {
+				suffix = "（" + common.T("", "admin_fuzzy_match|模糊匹配") + "）"
+			}
+		}
+	}
+
+	if item == nil {
+		return "❌ " + common.T("", "admin_voice_not_found_hint|未找到匹配的语音，请输入正确的名称或编号。")
+	}
+
+	if err := db.SetGroupVoiceID(p.db, groupID, item.ID); err != nil {
 		log.Printf("设置群语音失败: %v", err)
-		p.sendMessage(robot, event, "❌ "+common.T("", "admin_set_voice_failed"))
-		return
+		return "❌ " + common.T("", "admin_set_voice_failed|设置语音失败，请稍后再试。")
 	}
 
-	categories := GetVoiceCategoriesForID(voiceID)
+	categories := GetVoiceCategoriesForID(item.ID)
 	categoryName := strings.Join(categories, "、")
-	url := GetVoicePreviewURL(voiceID)
+	url := GetVoicePreviewURL(item.ID)
 
-	msg := "✅ " + common.T("", "admin_set_voice_success") + voiceName
+	msg := "✅ " + common.T("", "admin_set_voice_success|设置成功！当前语音包：") + item.Name
 	if categoryName != "" {
 		msg += "（" + categoryName + "）"
 	}
@@ -490,7 +296,216 @@ func (p *AdminPlugin) handleSaveGroupVoice(robot plugin.Robot, event *onebot.Eve
 		msg += suffix
 	}
 	if url != "" {
-		msg += "\n" + common.T("", "admin_preview") + "：" + url
+		msg += "\n" + common.T("", "admin_preview|预览") + "：" + url
+	}
+
+	return msg
+}
+
+// doEnableFeature 执行开启功能逻辑
+func (p *AdminPlugin) doEnableFeature(groupID string, rawFeature string, userID string) (string, error) {
+	if p.db == nil {
+		return common.T("", "admin_no_db_feature|数据库未连接，无法设置功能。"), nil
+	}
+
+	feature, requireAdmin, requireSuperAdmin := normalizeFeatureName(rawFeature)
+	if feature == "" {
+		feature = rawFeature
+	}
+
+	// 权限检查
+	uid, _ := strconv.ParseInt(userID, 10, 64)
+	gid, _ := strconv.ParseInt(groupID, 10, 64)
+
+	if requireSuperAdmin {
+		if !isSuperAdmin(p.db, gid, uid) {
+			return common.T("", "admin_insufficient_perms_super|❌ 只有超级管理员才能操作此功能。"), nil
+		}
+	} else if requireAdmin {
+		if !isGroupAdmin(p.db, gid, uid) {
+			return common.T("", "admin_insufficient_perms_admin|❌ 只有群管理员才能操作此功能。"), nil
+		}
+	}
+
+	defaultEnabled, ok := FeatureDefaults[feature]
+	if !ok {
+		return fmt.Sprintf(common.T("", "admin_feature_not_found|❌ 未找到功能：%s"), feature), nil
+	}
+
+	var err error
+	if defaultEnabled {
+		err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
+	} else {
+		err = db.SetGroupFeatureOverride(p.db, groupID, feature, true)
+	}
+
+	if err != nil {
+		log.Printf("设置功能开启失败: %v", err)
+		return fmt.Sprintf("开启功能%s失败", feature), err
+	}
+
+	return fmt.Sprintf("功能%s已开启", feature), nil
+}
+
+// doDisableFeature 执行关闭功能逻辑
+func (p *AdminPlugin) doDisableFeature(groupID string, rawFeature string, userID string) (string, error) {
+	if p.db == nil {
+		return common.T("", "admin_no_db_feature|数据库未连接，无法设置功能。"), nil
+	}
+
+	feature, requireAdmin, requireSuperAdmin := normalizeFeatureName(rawFeature)
+	if feature == "" {
+		feature = rawFeature
+	}
+
+	// 权限检查
+	uid, _ := strconv.ParseInt(userID, 10, 64)
+	gid, _ := strconv.ParseInt(groupID, 10, 64)
+
+	if requireSuperAdmin {
+		if !isSuperAdmin(p.db, gid, uid) {
+			return common.T("", "admin_insufficient_perms_super|❌ 只有超级管理员才能操作此功能。"), nil
+		}
+	} else if requireAdmin {
+		if !isGroupAdmin(p.db, gid, uid) {
+			return common.T("", "admin_insufficient_perms_admin|❌ 只有群管理员才能操作此功能。"), nil
+		}
+	}
+
+	defaultEnabled, ok := FeatureDefaults[feature]
+	if !ok {
+		return fmt.Sprintf(common.T("", "admin_feature_not_found|❌ 未找到功能：%s"), feature), nil
+	}
+
+	var err error
+	if defaultEnabled {
+		err = db.SetGroupFeatureOverride(p.db, groupID, feature, false)
+	} else {
+		err = db.DeleteGroupFeatureOverride(p.db, groupID, feature)
+	}
+
+	if err != nil {
+		log.Printf("设置功能关闭失败: %v", err)
+		return fmt.Sprintf(common.T("", "admin_disable_feature_failed|❌ 关闭功能 %s 失败"), feature), err
+	}
+
+	return fmt.Sprintf(common.T("", "admin_feature_disabled|✅ 功能 %s 已关闭"), feature), nil
+}
+
+// doSetQAMode 执行设置问答模式逻辑
+func (p *AdminPlugin) doSetQAMode(groupID string, mode string) string {
+	if p.db == nil {
+		return common.T("", "admin_no_db_feature|数据库未连接，无法设置功能。")
+	}
+
+	if err := db.SetGroupQAMode(p.db, groupID, mode); err != nil {
+		log.Printf("设置模式 %s 失败: %v", mode, err)
+		return "设置失败"
+	}
+
+	switch mode {
+	case "chatty":
+		return common.T("", "admin_chatty_mode_enabled|✅ 已开启话唠模式")
+	case "ultimate":
+		return common.T("", "admin_ultimate_mode_enabled|✅ 已开启终极模式")
+	case "agent":
+		return common.T("", "admin_agent_mode_enabled|✅ 已开启代理模式")
+	case "silent":
+		return common.T("", "admin_silent_mode_enabled|✅ 已开启静默模式")
+	case "group":
+		return common.T("", "admin_group_mode_enabled|✅ 已开启本群问答模式")
+	case "official":
+		return common.T("", "admin_official_mode_enabled|✅ 已开启官方问答模式")
+	}
+
+	return "设置成功"
+}
+
+// doShowAdminMenu 获取后台菜单
+func (p *AdminPlugin) doShowAdminMenu() string {
+	adminMenu := "🔧 " + common.T("", "admin_menu_title|管理后台") + "\n"
+	adminMenu += "====================\n"
+	adminMenu += common.T("", "admin_menu_enable|1. /开启 <功能>") + "\n"
+	adminMenu += common.T("", "admin_menu_disable|2. /关闭 <功能>") + "\n"
+	adminMenu += common.T("", "admin_menu_set|3. /设置 <参数> <值>") + "\n"
+	adminMenu += common.T("", "admin_menu_teach|4. /帮助 - 查看功能说明") + "\n"
+	adminMenu += common.T("", "admin_menu_group_info|5. /本群 - 查看群信息") + "\n"
+	adminMenu += common.T("", "admin_menu_chatty|6. /话唠模式 - 开启话唠模式") + "\n"
+	adminMenu += common.T("", "admin_menu_ultimate|7. /终极模式 - 开启终极模式") + "\n"
+	adminMenu += common.T("", "admin_menu_agent|8. /代理模式 - 开启代理模式") + "\n"
+	return adminMenu
+}
+
+// doShowTeaching 获取教学内容
+func (p *AdminPlugin) doShowTeaching() string {
+	teaching := "📚 " + common.T("", "admin_tutorial_title|功能教学") + "\n"
+	teaching += "====================\n"
+	teaching += "/菜单 - " + common.T("", "admin_help_menu|查看所有功能菜单") + "\n"
+	teaching += "/help - " + common.T("", "admin_help_help|查看帮助说明") + "\n"
+	teaching += "/签到 - " + common.T("", "admin_help_signin|每日签到领取积分") + "\n"
+	teaching += "/积分 - " + common.T("", "admin_help_points|查询自己的积分") + "\n"
+	teaching += "/天气 <城市> - " + common.T("", "admin_help_weather|查询城市天气") + "\n"
+	teaching += "/翻译 <文本> - " + common.T("", "admin_help_translate|中英文互译") + "\n"
+	teaching += "/点歌 <歌曲> - " + common.T("", "admin_help_music|在线点歌") + "\n"
+	teaching += "/猜拳 <选择> - " + common.T("", "admin_help_rps|和机器人猜拳") + "\n"
+	teaching += "/猜大小 <选择> - " + common.T("", "admin_help_guess|猜大小游戏") + "\n"
+	teaching += "/抽奖 - " + common.T("", "admin_help_lottery|积分抽奖") + "\n"
+	teaching += "/早安 - " + common.T("", "admin_help_morning|早安打卡") + "\n"
+	teaching += "/晚安 - " + common.T("", "admin_help_night|晚安打卡") + "\n"
+	teaching += "/报时 - " + common.T("", "admin_help_time|当前时间报时") + "\n"
+	teaching += "/计算 <表达式> - " + common.T("", "admin_help_calc|数学表达式计算") + "\n"
+	teaching += "/笑话 - " + common.T("", "admin_help_joke|讲个笑话") + "\n"
+	teaching += "/鬼故事 - " + common.T("", "admin_help_ghost|讲个鬼故事") + "\n"
+	teaching += "/成语接龙 <成语> - " + common.T("", "admin_help_idiom|成语接龙游戏") + "\n"
+	return teaching
+}
+
+// doShowGroupInfo 获取本群信息
+func (p *AdminPlugin) doShowGroupInfo() string {
+	groupInfo := "🏠 " + common.T("", "admin_group_info_title|本群信息") + "\n"
+	groupInfo += "====================\n"
+	groupInfo += common.T("", "admin_group_name|群名称") + "：" + common.T("", "admin_unknown|未知") + "\n"
+	groupInfo += common.T("", "admin_group_member_count|成员数量") + "：" + common.T("", "admin_unknown|未知") + "\n"
+	groupInfo += common.T("", "admin_group_create_time|创建时间") + "：" + common.T("", "admin_unknown|未知") + "\n"
+	groupInfo += common.T("", "admin_group_notice|群公告") + "：" + common.T("", "admin_none|无") + "\n"
+	return groupInfo
+}
+
+// sendMessage 发送消息
+func (p *AdminPlugin) sendMessage(robot plugin.Robot, event *onebot.Event, message string) {
+	if robot == nil || event == nil || message == "" {
+		return
+	}
+	if _, err := SendTextReply(robot, event, message); err != nil {
+		log.Printf("发送消息失败: %v\n", err)
+	}
+}
+
+func (p *AdminPlugin) handleSaveGroupVoice(robot plugin.Robot, event *onebot.Event, groupID, voiceID, voiceName, suffix string) {
+	if p.db == nil {
+		p.sendMessage(robot, event, common.T("", "admin_no_db_voice|数据库未连接，无法设置语音。"))
+		return
+	}
+
+	if err := db.SetGroupVoiceID(p.db, groupID, voiceID); err != nil {
+		log.Printf("设置群语音失败: %v", err)
+		p.sendMessage(robot, event, "❌ "+common.T("", "admin_set_voice_failed|设置语音失败，请稍后再试。"))
+		return
+	}
+
+	categories := GetVoiceCategoriesForID(voiceID)
+	categoryName := strings.Join(categories, "、")
+	url := GetVoicePreviewURL(voiceID)
+
+	msg := "✅ " + common.T("", "admin_set_voice_success|设置成功！当前语音包：") + voiceName
+	if categoryName != "" {
+		msg += "（" + categoryName + "）"
+	}
+	if suffix != "" {
+		msg += suffix
+	}
+	if url != "" {
+		msg += "\n" + common.T("", "admin_preview|预览") + "：" + url
 	}
 
 	p.sendMessage(robot, event, msg)
