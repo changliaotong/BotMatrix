@@ -65,6 +65,14 @@ func (b *WxBot) Start() {
 		go b.HandleWeChatMsg(msg)
 	}
 
+	// Add message handlers for different types
+	b.bot.MessageHandler = func(msg *openwechat.Message) {
+		if msg.IsText() {
+			b.Log("[WeChat] Recv Text: %s", msg.Content)
+		}
+		go b.HandleWeChatMsg(msg)
+	}
+
 	b.bot.UUIDCallback = func(uuid string) {
 		qrcodeUrl := "https://login.weixin.qq.com/l/" + uuid
 		b.Log("QRCODE:%s", qrcodeUrl) // Special prefix for easy parsing if callback fails
@@ -301,6 +309,132 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 		resp.Data = map[string]interface{}{
 			"user_id":  user.UserName,
 			"nickname": user.NickName,
+		}
+	case "get_self_info":
+		user, _ := b.bot.GetCurrentUser()
+		resp.Data = map[string]interface{}{
+			"user_id":     user.UserName,
+			"nickname":    user.NickName,
+			"user_remark": user.RemarkName,
+		}
+	case "get_friend_list":
+		friends, err := b.mySelf.Friends()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var friendList []map[string]interface{}
+		for _, f := range friends {
+			friend := map[string]interface{}{
+				"user_id":  f.UserName,
+				"nickname": f.NickName,
+				"remark":   f.RemarkName,
+			}
+			friendList = append(friendList, friend)
+		}
+		resp.Data = map[string]interface{}{
+			"data": friendList,
+		}
+	case "get_group_list":
+		groups, err := b.mySelf.Groups()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var groupList []map[string]interface{}
+		for _, g := range groups {
+			group := map[string]interface{}{
+				"group_id":   g.UserName,
+				"group_name": g.NickName,
+			}
+			groupList = append(groupList, group)
+		}
+		resp.Data = map[string]interface{}{
+			"data": groupList,
+		}
+	case "get_group_member_list":
+		groups, err := b.mySelf.Groups()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var group *openwechat.Group
+		for _, g := range groups {
+			if g.UserName == params.GroupID {
+				group = g
+				break
+			}
+		}
+		if group == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Group not found: " + params.GroupID
+			break
+		}
+		members, err := group.Members()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var memberList []map[string]interface{}
+		for _, m := range members {
+			member := map[string]interface{}{
+				"user_id":  m.UserName,
+				"nickname": m.NickName,
+				"card":     m.DisplayName,
+			}
+			memberList = append(memberList, member)
+		}
+		resp.Data = map[string]interface{}{
+			"data": memberList,
+		}
+	case "set_group_kick":
+		resp.Status = "failed"
+		resp.RetCode = 100
+		resp.Message = "Unsupported action: set_group_kick (openwechat library does not support this operation)"
+	case "set_group_ban":
+		resp.Status = "failed"
+		resp.RetCode = 100
+		resp.Message = "Unsupported action: set_group_ban (openwechat library does not support this operation)"
+	case "set_group_name":
+		groups, err := b.mySelf.Groups()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		var group *openwechat.Group
+		for _, g := range groups {
+			if g.UserName == params.GroupID {
+				group = g
+				break
+			}
+		}
+		if group == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Group not found: " + params.GroupID
+			break
+		}
+		// Change group name
+		err = group.Rename(params.Message)
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = err.Error()
+			break
+		}
+		resp.Data = map[string]interface{}{
+			"result": true,
 		}
 	default:
 		resp.Status = "failed"

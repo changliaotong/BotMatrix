@@ -15,6 +15,14 @@ type OneBotEvent struct {
 	Font        int         `json:"font,omitempty"`
 	Sender      *Sender     `json:"sender,omitempty"`
 
+	// Request Event
+	RequestType string `json:"request_type,omitempty"`
+	Comment     string `json:"comment,omitempty"`
+	Flag        string `json:"flag,omitempty"`
+
+	// Notice Event
+	NoticeType string `json:"notice_type,omitempty"`
+
 	// Meta Event
 	MetaEventType string `json:"meta_event_type,omitempty"`
 	Platform      string `json:"platform,omitempty"`
@@ -40,6 +48,12 @@ type ActionParams struct {
 	GroupID     string `json:"group_id"`
 	Message     string `json:"message"`
 	MessageType string `json:"message_type"`
+	// 管理类动作参数
+	UserIDs  []string `json:"user_ids"`
+	Duration int      `json:"duration"`
+	Reason   string   `json:"reason"`
+	// 信息查询类参数
+	NoCache bool `json:"no_cache"`
 }
 
 // Action Response

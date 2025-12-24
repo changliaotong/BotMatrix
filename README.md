@@ -383,7 +383,7 @@ The `WxBot` container will automatically try to connect to `BotNexus`.
 
 - **客户端 / Clients**
   - `Overmind/README.md` - Overmind 可视化控制台（Flutter 桌面/移动端）
-  - `wx_bot_app/README.md` - 实验性移动端控制应用（Flutter）
+  - `WxBotApp/README.md` - 实验性移动端控制应用（Flutter）
 
 - **子模块 / Bots & Workers**
   - `BotNexus/` - Go 网关与 Web 面板
