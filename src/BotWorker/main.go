@@ -2,6 +2,7 @@ package main
 
 import (
 	"BotMatrix/common"
+	"BotMatrix/common/log"
 	"botworker/internal/config"
 	"botworker/internal/db"
 	"botworker/internal/plugin"
@@ -14,11 +15,12 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 // LogManager 处理日志滚动和获取
@@ -106,7 +108,7 @@ func restartBot() {
 	go func() {
 		err := startBot(ctx)
 		if err != nil && err != context.Canceled {
-			log.Printf("机器人运行错误: %v", err)
+			log.Error("机器人运行错误", zap.Error(err))
 		}
 	}()
 }
@@ -116,26 +118,26 @@ func startBot(ctx context.Context) error {
 	cfg := currentConfig
 	configMutex.RUnlock()
 
-	log.Println(common.T("", "server_starting"), "BotWorker")
+	log.Info(common.T("", "server_starting"), zap.String("component", "BotWorker"))
 
 	// 测试数据库连接
 	database, err := db.NewDBConnection(&cfg.Database)
 	if err != nil {
-		log.Printf("警告: 无法连接到数据库: %v", err)
+		log.Warn("无法连接到数据库", zap.Error(err))
 	} else {
-		log.Println("成功连接到数据库")
+		log.Info("成功连接到数据库")
 		plugins.SetGlobalDB(database)
 		if err := db.InitDatabase(database); err != nil {
-			log.Printf("警告: 初始化数据库表失败: %v", err)
+			log.Warn("初始化数据库表失败", zap.Error(err))
 		}
 	}
 
 	// 测试Redis连接
 	redisClient, err := redis.NewClient(&cfg.Redis)
 	if err != nil {
-		log.Printf("警告: 无法连接到Redis服务器: %v", err)
+		log.Warn("无法连接到Redis服务器", zap.Error(err))
 	} else {
-		log.Println("成功连接到Redis服务器")
+		log.Info("成功连接到Redis服务器")
 		plugins.SetGlobalRedis(redisClient)
 	}
 
@@ -151,22 +153,25 @@ func startBot(ctx context.Context) error {
 	loadAllPlugins(pluginManager, cfg, database, redisClient)
 
 	// 打印已加载的插件
-	log.Println("已加载的插件:")
+	log.Info("已加载的插件:")
 	for _, p := range pluginManager.GetPlugins() {
-		log.Printf("- %s v%s: %s", p.Name(), p.Version(), p.Description())
+		log.Info("插件信息",
+			zap.String("name", p.Name()),
+			zap.String("version", p.Version()),
+			zap.String("description", p.Description()))
 	}
-	log.Printf("管理后台已启动: http://localhost:%d/config-ui", cfg.LogPort)
+	log.Info("管理后台已启动", zap.String("url", fmt.Sprintf("http://localhost:%d/config-ui", cfg.LogPort)))
 
 	// 启动服务器
-	log.Println("启动OneBot协议机器人服务器...")
+	log.Info("启动OneBot协议机器人服务器...")
 	go func() {
 		if err := workerServer.Run(); err != nil {
-			log.Printf("服务器启动失败: %v", err)
+			log.Error("服务器启动失败", zap.Error(err))
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("停止 BotWorker...")
+	log.Info("停止 BotWorker...")
 	serverMutex.Lock()
 	if workerServer != nil {
 		workerServer.Stop()

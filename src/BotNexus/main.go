@@ -3,11 +3,11 @@ package main
 
 import (
 	"BotMatrix/common"
+	"BotMatrix/common/log"
 	"BotNexus/tasks"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 // 版本号定义
@@ -54,7 +55,7 @@ func (lm *LogManager) GetLogs(lines int) string {
 var logMgr = &LogManager{max: 1000}
 
 func restartBot() {
-	log.Println("重启 BotNexus...")
+	log.Info("重启 BotNexus...")
 	os.Exit(0)
 }
 
@@ -67,13 +68,13 @@ type Manager struct {
 
 // 主函数 - 整合所有功能
 func main() {
-	// 设置日志输出
-	log.SetOutput(logMgr)
+	// 初始化日志系统
+	log.InitDefaultLogger()
 
 	// 初始化翻译器
 	common.InitTranslator("locales", "zh-CN")
 
-	log.Printf(common.T("", "server_starting"), VERSION)
+	log.Info(common.T("", "server_starting"), zap.String("version", VERSION))
 
 	// 创建管理器 (内部会初始化数据库和管理员)
 	manager := NewManager()
@@ -94,9 +95,9 @@ func main() {
 	// 启动 Core Gateway (WebSocket 转发引擎 - 仅处理机器人和工作节点连接)
 	coreMux := manager.createCoreHandler()
 	go func() {
-		log.Printf(common.T("", "core_engine_starting"), common.WS_PORT)
+		log.Info(common.T("", "core_engine_starting"), zap.String("port", common.WS_PORT))
 		if err := http.ListenAndServe(common.WS_PORT, coreMux); err != nil {
-			log.Fatalf(common.T("", "core_engine_failed"), err)
+			log.Error(common.T("", "core_engine_failed"), zap.Error(err))
 		}
 	}()
 

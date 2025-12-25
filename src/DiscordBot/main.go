@@ -1,10 +1,11 @@
 package main
 
 import (
+	"BotMatrix/common/log"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"html/template"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -79,8 +81,8 @@ func (m *LogManager) GetLogs(lines int) []string {
 }
 
 func main() {
-	log.SetOutput(logManager)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// 初始化日志系统
+	log.InitDefaultLogger()
 
 	loadConfig()
 
@@ -139,15 +141,15 @@ func startBot() {
 	token := config.BotToken
 	configMutex.RUnlock()
 
-	if token == "" {
-		log.Println("WARNING: Discord Bot Token is not configured. Bot will not start until configured via Web UI.")
+	if config.BotToken == "" {
+		log.Warn("Discord Bot Token is not configured. Bot will not start until configured via Web UI.")
 		return
 	}
 
 	var err error
 	dg, err = discordgo.New("Bot " + token)
 	if err != nil {
-		log.Printf("Error creating Discord session: %v", err)
+		log.Error("Error creating Discord session", zap.Error(err))
 		return
 	}
 
@@ -156,12 +158,15 @@ func startBot() {
 
 	err = dg.Open()
 	if err != nil {
-		log.Printf("Error opening Discord connection: %v", err)
+		log.Error("Error opening Discord connection", zap.Error(err))
 		return
 	}
 
 	selfID = dg.State.User.ID
-	log.Printf("Bot is now running. Logged in as %s#%s (%s)", dg.State.User.Username, dg.State.User.Discriminator, selfID)
+	log.Info("Bot is now running",
+		zap.String("username", dg.State.User.Username),
+		zap.String("discriminator", dg.State.User.Discriminator),
+		zap.String("self_id", selfID))
 
 	startNexus()
 

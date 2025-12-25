@@ -2,11 +2,11 @@ package main
 
 import (
 	"BotMatrix/common"
+	"BotMatrix/common/log"
 	"BotNexus/tasks"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 )
 
 // WebSocket upgrader
@@ -26,12 +27,14 @@ var upgrader = websocket.Upgrader{
 // handleBotWebSocket handles Bot WebSocket connections
 func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Record detailed info of Bot connection attempt
-	log.Printf("Bot WebSocket connection attempt from %s - Headers: X-Self-ID=%s, X-Platform=%s",
-		r.RemoteAddr, r.Header.Get("X-Self-ID"), r.Header.Get("X-Platform"))
+	log.Info("Bot WebSocket connection attempt",
+		zap.String("remote_addr", r.RemoteAddr),
+		zap.String("self_id", r.Header.Get("X-Self-ID")),
+		zap.String("platform", r.Header.Get("X-Platform")))
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("Bot WebSocket upgrade failed: %v", err)
+		log.Error("Bot WebSocket upgrade failed", zap.Error(err))
 		return
 	}
 

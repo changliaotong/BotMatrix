@@ -1,10 +1,10 @@
 package main
 
 import (
+	"BotMatrix/common/log"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/lonelyevil/kook"
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -101,8 +102,8 @@ func (e *ConsoleEntry) IPAddr(key string, ip net.IP) kook.Entry        { return 
 func (e *ConsoleEntry) Int(key string, i int) kook.Entry               { return e }
 func (e *ConsoleEntry) Int64(key string, i int64) kook.Entry           { return e }
 func (e *ConsoleEntry) Interface(key string, i interface{}) kook.Entry { return e }
-func (e *ConsoleEntry) Msg(msg string)                                 { log.Println(msg) }
-func (e *ConsoleEntry) Msgf(f string, i ...interface{})                { log.Printf(f, i...) }
+func (e *ConsoleEntry) Msg(msg string)                                 { log.Info(msg) }
+func (e *ConsoleEntry) Msgf(f string, i ...interface{})                { log.Info(fmt.Sprintf(f, i...)) }
 func (e *ConsoleEntry) Str(key string, s string) kook.Entry            { return e }
 func (e *ConsoleEntry) Strs(key string, s []string) kook.Entry         { return e }
 func (e *ConsoleEntry) Time(key string, t time.Time) kook.Entry        { return e }
@@ -110,8 +111,8 @@ func (e *ConsoleEntry) Time(key string, t time.Time) kook.Entry        { return 
 // ------------------------------------
 
 func main() {
-	log.SetOutput(logManager)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// 初始化日志系统
+	log.InitDefaultLogger()
 	loadConfig()
 
 	go startHTTPServer()
@@ -136,7 +137,7 @@ func restartBot() {
 	configMutex.RUnlock()
 
 	if token == "" {
-		log.Printf("KOOK_BOT_TOKEN is not set, bot will not start")
+		log.Warn("KOOK_BOT_TOKEN is not set, bot will not start")
 		return
 	}
 
@@ -150,19 +151,21 @@ func restartBot() {
 	session.AddHandler(imageMessageHandler)
 	session.AddHandler(kmarkdownMessageHandler)
 
-	// Open connection
-	err := session.Open()
+	// Open the session
+	err = session.Open()
 	if err != nil {
-		log.Printf("Error opening connection: %v", err)
+		log.Error("Error opening connection", zap.Error(err))
 		return
 	}
 
 	// Get Self Info
-	me, err := session.UserMe()
-	if err == nil {
-		selfID = me.ID
-		log.Printf("Bot logged in as %s (ID: %s)", me.Username, selfID)
+	me, err := session.Me()
+	if err != nil {
+		log.Error("Error getting self info", zap.Error(err))
+		return
 	}
+	selfID = me.ID
+	log.Info("Bot logged in", zap.String("username", me.Username), zap.String("id", selfID))
 
 	// Connect to BotNexus
 	go connectToNexus(nexusCtx, nexusAddr)

@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/smtp"
 	"os"
@@ -21,6 +19,7 @@ import (
 	"github.com/emersion/go-imap/client"
 	"github.com/gorilla/websocket"
 	"github.com/jordan-wright/email"
+	"go.uber.org/zap"
 )
 
 // Config holds the bot configuration
@@ -139,14 +138,14 @@ func connectToNexus(ctx context.Context, addr string) {
 		case <-ctx.Done():
 			return
 		default:
-			log.Printf("Connecting to BotNexus at %s...", addr)
+			Info("Connecting to BotNexus", zap.String("addr", addr))
 			header := http.Header{}
 			header.Add("X-Self-ID", selfID)
 			header.Add("X-Platform", "Email")
 
 			c, _, err := websocket.DefaultDialer.Dial(addr, header)
 			if err != nil {
-				log.Printf("Connection error: %v. Retrying in 5s...", err)
+				Error("Connection error", zap.Error(err))
 				select {
 				case <-ctx.Done():
 					return
@@ -158,7 +157,7 @@ func connectToNexus(ctx context.Context, addr string) {
 			connMutex.Lock()
 			nexusConn = c
 			connMutex.Unlock()
-			log.Println("Connected to BotNexus!")
+			Info("Connected to BotNexus!")
 
 			// Send Lifecycle Event: Connect
 			sendEvent(map[string]interface{}{
@@ -180,7 +179,7 @@ func connectToNexus(ctx context.Context, addr string) {
 				for {
 					_, message, err := c.ReadMessage()
 					if err != nil {
-						log.Printf("Read error: %v", err)
+						Error("Read error", zap.Error(err))
 						return
 					}
 					handleAction(message)
@@ -233,7 +232,7 @@ func sendEvent(event map[string]interface{}) {
 
 	err := nexusConn.WriteJSON(event)
 	if err != nil {
-		log.Printf("Write error: %v", err)
+		Error("Write error", zap.Error(err))
 		nexusConn = nil
 	}
 }
@@ -241,7 +240,7 @@ func sendEvent(event map[string]interface{}) {
 func handleAction(msg []byte) {
 	var action map[string]interface{}
 	if err := json.Unmarshal(msg, &action); err != nil {
-		log.Printf("JSON Unmarshal error: %v", err)
+		Error("JSON Unmarshal error", zap.Error(err))
 		return
 	}
 
@@ -284,11 +283,11 @@ func handleAction(msg []byte) {
 		configMutex.RUnlock()
 
 		if err != nil {
-			log.Printf("Failed to send email to %s: %v", userID, err)
+			Error("Failed to send email", zap.String("to", userID), zap.Error(err))
 			response["status"] = "failed"
 			response["retcode"] = -1
 		} else {
-			log.Printf("Email sent to %s", userID)
+			Info("Email sent", zap.String("to", userID))
 		}
 	}
 
@@ -323,7 +322,7 @@ func pollEmails(ctx context.Context) {
 			configMutex.RUnlock()
 
 			if imapServer == "" || username == "" || password == "" {
-				log.Println("IMAP configuration missing, waiting 10s...")
+				Warn("IMAP configuration missing")
 				select {
 				case <-ctx.Done():
 					return
@@ -332,10 +331,10 @@ func pollEmails(ctx context.Context) {
 				}
 			}
 
-			log.Println("Connecting to IMAP server...")
+			Info("Connecting to IMAP server")
 			c, err := client.DialTLS(fmt.Sprintf("%s:%d", imapServer, imapPort), nil)
 			if err != nil {
-				log.Printf("IMAP connection failed: %v, retrying in 30s...", err)
+				Error("IMAP connection failed", zap.Error(err))
 				select {
 				case <-ctx.Done():
 					return
@@ -343,10 +342,10 @@ func pollEmails(ctx context.Context) {
 					continue
 				}
 			}
-			log.Println("IMAP Connected")
+			Info("IMAP Connected")
 
 			if err := c.Login(username, password); err != nil {
-				log.Printf("IMAP Login failed: %v, retrying in 30s...", err)
+				Error("IMAP Login failed", zap.Error(err))
 				c.Close()
 				select {
 				case <-ctx.Done():
@@ -365,7 +364,7 @@ func pollEmails(ctx context.Context) {
 				default:
 					_, err := c.Select("INBOX", false)
 					if err != nil {
-						log.Printf("Select INBOX failed: %v", err)
+						Error("Select INBOX failed", zap.Error(err))
 						goto next_imap_conn
 					}
 
@@ -374,12 +373,12 @@ func pollEmails(ctx context.Context) {
 					criteria.WithoutFlags = []string{imap.SeenFlag}
 					uids, err := c.Search(criteria)
 					if err != nil {
-						log.Printf("Search failed: %v", err)
+						Error("Search failed", zap.Error(err))
 						goto next_imap_conn
 					}
 
 					if len(uids) > 0 {
-						log.Printf("Found %d new emails", len(uids))
+						Info("Found new emails", zap.Int("count", len(uids)))
 						seqset := new(imap.SeqSet)
 						seqset.AddNum(uids...)
 
@@ -397,7 +396,7 @@ func pollEmails(ctx context.Context) {
 						}
 
 						if err := <-done; err != nil {
-							log.Printf("Fetch failed: %v", err)
+							Error("Fetch failed", zap.Error(err))
 						}
 					}
 
@@ -441,7 +440,7 @@ func processMessage(msg *imap.Message, section *imap.BodySectionName) {
 
 	content := fmt.Sprintf("Subject: %s\n\n%s", msg.Envelope.Subject, bodyStr)
 
-	log.Printf("Received email from %s: %s", senderEmail, msg.Envelope.Subject)
+	Info("Received email", zap.String("from", senderEmail), zap.String("subject", msg.Envelope.Subject))
 
 	event := map[string]interface{}{
 		"post_type":    "message",
@@ -494,9 +493,9 @@ func startHTTPServer() {
 	configMutex.RUnlock()
 
 	addr := fmt.Sprintf(":%d", port)
-	log.Printf("Starting HTTP Server at http://localhost%s (UI: /config-ui, Logs: /logs)", addr)
+	Info("Starting HTTP Server", zap.String("addr", addr), zap.String("ui_path", "/config-ui"), zap.String("logs_path", "/logs"))
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Printf("Failed to start HTTP Server: %v", err)
+		Error("Failed to start HTTP Server", zap.Error(err))
 	}
 }
 
@@ -736,8 +735,10 @@ func handleConfigUI(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	log.SetOutput(logManager)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// 初始化日志系统
+	InitDefaultLogger()
+	defer Sync()
+
 	loadConfig()
 
 	go startHTTPServer()

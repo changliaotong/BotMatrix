@@ -142,6 +142,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 *   **SlackBot (Enterprise)**: A **Go-based** implementation for Slack, utilizing Socket Mode for enterprise integration.
 *   **KookBot (Community)**: A **Go-based** implementation for Kook (Kaiheila), utilizing WebSocket for real-time interaction.
 *   **EmailBot (Utility)**: A **Go-based** implementation for Email (IMAP/SMTP), bridging emails to OneBot messages.
+*   **OneBot 11 Compatibility**: All protocol clients now support OneBot 11 standard for unified communication, including message/event structures, API actions, and WebSocket communication protocols.
 
 ---
 
@@ -293,6 +294,8 @@ graph TD
     WeComBot <-->|Callback/API| WeCom["WeCom Cloud"]
 ```
 
+All protocol clients communicate with BotNexus using the **OneBot 11 standard protocol**, ensuring unified message/event structures, API actions, and WebSocket communication across all platforms.
+
 ## 📂 Project Structure | 项目结构
 
 ```text
@@ -334,6 +337,7 @@ BotMatrix/
 ├── NapCat/              # [Docker] The Personal (QQ Worker)
 │   ├── config/          # OneBot 11 Config
 │   └── qq/              # QQ Session Data
+├── ONEBOT_COMPATIBILITY.md  # OneBot 11 Compatibility Documentation
 └── docker-compose.yml   # One-Click Deployment
 ```
 
@@ -379,6 +383,7 @@ The `WxBot` container will automatically try to connect to `BotNexus`.
 - **特性与协议说明 / Features & Protocols**
   - [docs/QQ_GUILD_SMART_SEND_CN.md](docs/QQ_GUILD_SMART_SEND_CN.md) - QQ 频道/群组 **智能协作发送（Smart Send / WakeUp）** 机制说明
   - [docs/CSharpReconnectExample.cs](docs/CSharpReconnectExample.cs) - C# 客户端重连示例代码
+  - [ONEBOT_COMPATIBILITY.md](ONEBOT_COMPATIBILITY.md) - **OneBot 11 协议兼容性文档**（详细说明各协议客户端的 OneBot 11 兼容性实现）
   - `BotNexus/test_routing_simple.html` - **路由规则测试工具**（Web界面用于验证消息路由功能）
 
 - **客户端 / Clients**

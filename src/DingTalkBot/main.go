@@ -1,6 +1,7 @@
 package main
 
 import (
+	"BotMatrix/common/log"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -9,10 +10,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,17 +39,17 @@ type Config struct {
 }
 
 var (
-	config         Config
-	nexusConn      *websocket.Conn
-	nexusMu        sync.Mutex // Added mutex
-	httpClient     = &http.Client{Timeout: 10 * time.Second}
-	streamClient   *client.StreamClient
-	logManager     *LogManager
-	botCtx         context.Context
-	botCancel      context.CancelFunc
-	botMu          sync.Mutex
-	nexusCtx       context.Context
-	nexusCancel    context.CancelFunc
+	config       Config
+	nexusConn    *websocket.Conn
+	nexusMu      sync.Mutex // Added mutex
+	httpClient   = &http.Client{Timeout: 10 * time.Second}
+	streamClient *client.StreamClient
+	logManager   *LogManager
+	botCtx       context.Context
+	botCancel    context.CancelFunc
+	botMu        sync.Mutex
+	nexusCtx     context.Context
+	nexusCancel  context.CancelFunc
 )
 
 type LogManager struct {
@@ -154,7 +155,7 @@ func startBot() {
 
 	botCtx, botCancel = context.WithCancel(context.Background())
 
-	log.Println("Starting bot services...")
+	log.Info("Starting bot services...")
 
 	// Connect to BotNexus
 	startNexus()
@@ -163,7 +164,7 @@ func startBot() {
 	if config.ClientID != "" && config.ClientSecret != "" {
 		go startStreamClient(botCtx)
 	} else {
-		log.Println("Stream Mode not configured (missing client_id/client_secret). Running in Webhook Send-Only mode.")
+		log.Info("Stream Mode not configured (missing client_id/client_secret). Running in Webhook Send-Only mode.")
 	}
 }
 
@@ -223,8 +224,8 @@ func loadConfig() {
 func main() {
 	// Initialize Log Manager
 	logManager = NewLogManager(2000)
-	log.SetOutput(logManager)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// 初始化日志系统
+	log.InitDefaultLogger()
 	loadConfig()
 
 	// Start HTTP Server for Config UI

@@ -1,10 +1,10 @@
 package main
 
 import (
+	"BotMatrix/common/log"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +19,7 @@ import (
 	larkevent "github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
+	"go.uber.org/zap"
 )
 
 // Config holds the bot configuration
@@ -106,8 +107,8 @@ type Sender struct {
 }
 
 func main() {
-	log.SetOutput(logManager)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// 初始化日志系统
+	log.InitDefaultLogger()
 
 	// Load Configuration
 	loadConfig()
@@ -175,8 +176,8 @@ func startBot() {
 	appSecret := config.AppSecret
 	configMutex.RUnlock()
 
-	if appID == "" || appSecret == "" {
-		log.Println("WARNING: Feishu AppID or AppSecret is not configured. Bot will not start until configured via Web UI.")
+	if config.AppID == "" || config.AppSecret == "" {
+		log.Warn("Feishu AppID or AppSecret is not configured. Bot will not start until configured via Web UI.")
 		return
 	}
 
@@ -235,10 +236,10 @@ func startLarkWS(ctx context.Context) {
 	)
 
 	// Start WebSocket Client
-	log.Println("Connecting to Feishu/Lark Gateway...")
+	log.Info("Connecting to Feishu/Lark Gateway...")
 	err := cli.Start(ctx)
 	if err != nil {
-		log.Printf("Failed to start Feishu WebSocket client: %v", err)
+		log.Error("Failed to start Feishu WebSocket client", zap.Error(err))
 	}
 }
 
