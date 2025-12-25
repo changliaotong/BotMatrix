@@ -20,8 +20,8 @@ type BotCallback interface {
 }
 
 type WxBot struct {
-	ManagerURL string
-	SelfID     string
+	ManagerURL    string
+	SelfID        string
 	ReportSelfMsg bool // 是否上报自身消息
 
 	wsConn  *websocket.Conn
@@ -40,10 +40,10 @@ func NewWxBot(managerUrl, selfId string, cb BotCallback) *WxBot {
 		selfId = "1098299491"
 	}
 	return &WxBot{
-		ManagerURL: managerUrl,
-		SelfID:     selfId,
+		ManagerURL:    managerUrl,
+		SelfID:        selfId,
 		ReportSelfMsg: true, // 默认上报自身消息
-		callback:   cb,
+		callback:      cb,
 	}
 }
 
@@ -149,19 +149,19 @@ func (b *WxBot) connectToNexus() {
 			"self_id":         b.SelfID,
 			"platform":        "wechat-go",
 		}
-		
+
 		// Send Identify and wait for configuration
 		b.wsMutex.Lock()
 		b.wsConn.WriteJSON(identify)
 		b.wsMutex.Unlock()
-		
+
 		// Receive initial configuration from BotNexus
 		_, configMsg, err := b.wsConn.ReadMessage()
 		if err != nil {
 			b.Log("[WebSocket] Failed to receive configuration: %v", err)
 			break
 		}
-		
+
 		// Parse configuration
 		var config map[string]interface{}
 		if err := json.Unmarshal(configMsg, &config); err == nil {
@@ -229,7 +229,7 @@ func (b *WxBot) connectToNexus() {
 					continue
 				}
 			}
-			
+
 			// Handle Action
 			var action OneBotAction
 			if err := json.Unmarshal(message, &action); err == nil && action.Action != "" {
@@ -261,13 +261,8 @@ func (b *WxBot) sendEvent(event OneBotEvent) {
 	b.wsConn.WriteMessage(websocket.TextMessage, bytes)
 }
 
-// Handle WeChat Message -> OneBot Event
-func (b *WxBot) HandleWeChatMsg(msg *openwechat.Message) {
-	// 如果是自身消息且未开启上报，则忽略
-	if msg.IsSendBySelf() && !b.ReportSelfMsg {
-		return
-	}
-
+// ConvertToOneBotEvent converts a WeChat message to OneBot event format
+func (b *WxBot) ConvertToOneBotEvent(msg *openwechat.Message) OneBotEvent {
 	event := OneBotEvent{
 		PostType: "message",
 	}
@@ -319,17 +314,49 @@ func (b *WxBot) HandleWeChatMsg(msg *openwechat.Message) {
 		}
 	}
 
+	// Handle different message types according to OneBot 11 specification
 	if msg.IsText() {
+		// For text messages, we can send as plain string
 		event.Message = msg.Content
 		event.RawMessage = msg.Content
 	} else if msg.IsPicture() {
-		event.Message = "[图片]"
+		// For picture messages, we need to convert to CQ code format
+		// However, since we don't have access to the actual image URL, we use a placeholder
+		event.Message = "[CQ:image,file=placeholder.jpg]"
 		event.RawMessage = "[图片]"
+	} else if msg.IsVoice() {
+		// For voice messages, we need to convert to CQ code format
+		event.Message = "[CQ:record,file=placeholder.amr]"
+		event.RawMessage = "[语音]"
+	} else if msg.IsCard() {
+		// For card messages, we need to convert to CQ code format
+		event.Message = "[CQ:contact,type=qq,id=123456]"
+		event.RawMessage = "[名片]"
+	} else if msg.IsEmoticon() {
+		// For emoticon messages, we need to convert to CQ code format
+		event.Message = "[CQ:face,id=1]"
+		event.RawMessage = "[表情]"
 	} else {
-		return
+		// Unsupported message type
+		event.Message = "[不支持的消息类型]"
+		event.RawMessage = "[不支持的消息类型]"
 	}
 
 	event.MessageID = msg.MsgId
+	return event
+}
+
+// Handle WeChat Message -> OneBot Event
+func (b *WxBot) HandleWeChatMsg(msg *openwechat.Message) {
+	// 如果是自身消息且未开启上报，则忽略
+	if msg.IsSendBySelf() && !b.ReportSelfMsg {
+		return
+	}
+
+	// Convert to OneBot event format
+	event := b.ConvertToOneBotEvent(msg)
+
+	// Send to BotNexus via WebSocket
 	b.sendEvent(event)
 }
 
@@ -341,23 +368,53 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 		Data:   map[string]interface{}{},
 	}
 
-	bytes, _ := json.Marshal(action.Params)
+	// Parse action parameters
 	var params ActionParams
-	json.Unmarshal(bytes, &params)
+	bytes, _ := json.Marshal(action.Params)
+	if err := json.Unmarshal(bytes, &params); err != nil {
+		resp.Status = "failed"
+		resp.RetCode = -1
+		resp.Message = fmt.Sprintf("failed to parse action params: %v", err)
+		b.wsMutex.Lock()
+		if b.wsConn != nil {
+			respBytes, _ := json.Marshal(resp)
+			b.wsConn.WriteMessage(websocket.TextMessage, respBytes)
+		}
+		b.wsMutex.Unlock()
+		return
+	}
 
 	var err error
 
 	switch action.Action {
 	case "send_private_msg":
-		err = b.sendText(params.UserID, params.Message)
-	case "send_group_msg":
-		err = b.sendText(params.GroupID, params.Message)
-	case "send_msg":
-		if params.MessageType == "group" {
-			err = b.sendText(params.GroupID, params.Message)
-		} else {
-			err = b.sendText(params.UserID, params.Message)
+		// Convert to SendMessageParams format
+		msgParams := &SendMessageParams{
+			MessageType: "private",
+			UserID:      params.UserID,
+			Message:     params.Message,
+			AutoEscape:  false, // Default to false
 		}
+		_, err = b.SendMessage(msgParams)
+	case "send_group_msg":
+		// Convert to SendMessageParams format
+		msgParams := &SendMessageParams{
+			MessageType: "group",
+			GroupID:     params.GroupID,
+			Message:     params.Message,
+			AutoEscape:  false, // Default to false
+		}
+		_, err = b.SendMessage(msgParams)
+	case "send_msg":
+		// Convert to SendMessageParams format
+		msgParams := &SendMessageParams{
+			MessageType: params.MessageType,
+			UserID:      params.UserID,
+			GroupID:     params.GroupID,
+			Message:     params.Message,
+			AutoEscape:  false, // Default to false
+		}
+		_, err = b.SendMessage(msgParams)
 	case "get_login_info":
 		user, _ := b.bot.GetCurrentUser()
 		resp.Data = map[string]interface{}{
@@ -451,10 +508,28 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			"data": memberList,
 		}
 	case "set_group_kick":
+		// Check if group ID and user ID are valid
+		if params.GroupID == "" || params.UserID == "" {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "group_id and user_id are required"
+			break
+		}
+		// Try to kick user from group
+		// Note: openwechat library does not support this operation
 		resp.Status = "failed"
 		resp.RetCode = 100
 		resp.Message = "Unsupported action: set_group_kick (openwechat library does not support this operation)"
 	case "set_group_ban":
+		// Check if group ID and user ID are valid
+		if params.GroupID == "" || params.UserID == "" {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "group_id and user_id are required"
+			break
+		}
+		// Try to ban user from group
+		// Note: openwechat library does not support this operation
 		resp.Status = "failed"
 		resp.RetCode = 100
 		resp.Message = "Unsupported action: set_group_ban (openwechat library does not support this operation)"
@@ -492,23 +567,41 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 		}
 	case "get_version_info":
 		resp.Data = map[string]interface{}{
-			"app_name":    "WxBotGo",
-			"app_version": "1.0.2",
+			"app_name":         "WxBotGo",
+			"app_version":      "1.0.2",
 			"protocol_version": "11",
-			"onebot_version": "11",
+			"onebot_version":   "11",
 		}
 	case "get_status":
 		resp.Data = map[string]interface{}{
 			"online": true,
-			"good": true,
+			"good":   true,
 		}
 	case "set_friend_add_request":
 		// 处理好友请求
+		// Check if flag is valid
+		if params.Flag == "" {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "flag is required"
+			break
+		}
+		// Try to handle friend add request
+		// Note: openwechat library does not support this operation
 		resp.Status = "failed"
 		resp.RetCode = 100
 		resp.Message = "Unsupported action: set_friend_add_request (openwechat library does not support this operation)"
 	case "set_group_add_request":
 		// 处理群请求
+		// Check if flag is valid
+		if params.Flag == "" {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "flag is required"
+			break
+		}
+		// Try to handle group add request
+		// Note: openwechat library does not support this operation
 		resp.Status = "failed"
 		resp.RetCode = 100
 		resp.Message = "Unsupported action: set_group_add_request (openwechat library does not support this operation)"
@@ -535,8 +628,8 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 		}
 		members, _ := group.Members()
 		resp.Data = map[string]interface{}{
-			"group_id": group.UserName,
-			"group_name": group.NickName,
+			"group_id":     group.UserName,
+			"group_name":   group.NickName,
 			"member_count": len(members),
 		}
 	case "get_group_member_info":
@@ -568,33 +661,42 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			break
 		}
 		var member *openwechat.User
-	for _, m := range members {
-		if m.UserName == params.UserID {
-			member = m
+		for _, m := range members {
+			if m.UserName == params.UserID {
+				member = m
+				break
+			}
+		}
+		if member == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Member not found: " + params.UserID
 			break
 		}
-	}
-	if member == nil {
+		resp.Data = map[string]interface{}{
+			"user_id":  member.UserName,
+			"nickname": member.NickName,
+			"card":     member.DisplayName,
+		}
+	case "delete_msg":
+		// 删除消息（撤回）
+		// Check if message ID is valid
+		if params.MessageID == "" {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "message_id is required"
+			break
+		}
+		// Try to delete message
+		// Note: openwechat library does not support deleting messages by ID
 		resp.Status = "failed"
-		resp.RetCode = -1
-		resp.Message = "Member not found: " + params.UserID
-		break
+		resp.RetCode = 100
+		resp.Message = "Unsupported action: delete_msg (openwechat library does not support deleting messages by ID)"
+	default:
+		resp.Status = "failed"
+		resp.RetCode = 100
+		resp.Message = "Unsupported action: " + action.Action
 	}
-	resp.Data = map[string]interface{}{
-	"user_id": member.UserName,
-	"nickname": member.NickName,
-	"card": member.DisplayName,
-	}
-case "delete_msg":
-	// 删除消息（撤回）
-	resp.Status = "failed"
-	resp.RetCode = 100
-	resp.Message = "Unsupported action: delete_msg (openwechat library does not support deleting messages by ID)"
-default:
-	resp.Status = "failed"
-	resp.RetCode = 100
-	resp.Message = "Unsupported action: " + action.Action
-}
 
 	if err != nil {
 		resp.Status = "failed"
@@ -608,6 +710,60 @@ default:
 		b.wsConn.WriteMessage(websocket.TextMessage, respBytes)
 	}
 	b.wsMutex.Unlock()
+}
+
+// SendMessageParams represents the parameters for sending a message
+// according to OneBot 11 protocol
+
+type SendMessageParams struct {
+	MessageType string `json:"message_type"`
+	UserID      string `json:"user_id"`
+	GroupID     string `json:"group_id"`
+	Message     string `json:"message"`
+	AutoEscape  bool   `json:"auto_escape"`
+}
+
+// SendMessage sends a message according to OneBot 11 protocol
+func (b *WxBot) SendMessage(params *SendMessageParams) (*OneBotResponse, error) {
+	// Check message type
+	if params.MessageType != "private" && params.MessageType != "group" {
+		return &OneBotResponse{
+			Status:  "failed",
+			RetCode: 100,
+			Message: fmt.Sprintf("unsupported message type: %s", params.MessageType),
+		}, nil
+	}
+
+	// Determine target ID
+	targetID := params.UserID
+	if params.MessageType == "group" {
+		targetID = params.GroupID
+	}
+
+	// Handle auto_escape parameter
+	message := params.Message
+	if params.AutoEscape {
+		// If auto_escape is true, we need to escape special characters
+		// However, since we're sending plain text, we can just send it as-is
+		// because the openwechat library handles escaping internally
+	}
+
+	// Send message to target
+	err := b.sendText(targetID, message)
+	if err != nil {
+		return &OneBotResponse{
+			Status:  "failed",
+			RetCode: -1,
+			Message: err.Error(),
+		}, err
+	}
+
+	return &OneBotResponse{
+		Status: "ok",
+		Data: map[string]interface{}{
+			"message_id": "1", // WeChat doesn't return message ID, so we use a placeholder
+		},
+	}, nil
 }
 
 func (b *WxBot) sendText(targetID string, text string) error {
@@ -637,10 +793,10 @@ func (b *WxBot) sendText(targetID string, text string) error {
 		for _, c := range contacts {
 			if c.UserName == targetID {
 				// 检查是否为公众号
-			if mp, ok := c.AsMP(); ok {
-				_, err = mp.SendText(text)
-				return err
-			}
+				if mp, ok := c.AsMP(); ok {
+					_, err = mp.SendText(text)
+					return err
+				}
 				// 检查是否为好友
 				if friend, ok := c.AsFriend(); ok {
 					_, err = friend.SendText(text)

@@ -56,6 +56,8 @@ type ActionParams struct {
 	NoCache bool `json:"no_cache"`
 	// 删除消息参数
 	MessageID string `json:"message_id"`
+	// 请求处理参数
+	Flag string `json:"flag"`
 }
 
 // Action Response
