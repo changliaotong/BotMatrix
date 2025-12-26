@@ -1,0 +1,8 @@
+{
+  "name": "system_info",
+  "description": "system_info plugin",
+  "version": "1.0.0",
+  "entry_point": "system_info.exe",
+  "timeout_ms": 5000,
+  "max_restarts": 3
+}

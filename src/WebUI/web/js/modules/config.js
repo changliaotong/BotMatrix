@@ -90,6 +90,12 @@ export async function loadBackendConfig() {
         document.getElementById('cfg-jwt-secret').value = config.jwt_secret || '';
         document.getElementById('cfg-admin-pwd').value = config.default_admin_password || '';
         document.getElementById('cfg-stats-file').value = config.stats_file || '';
+        
+        const logLevelEl = document.getElementById('cfg-log-level');
+        if (logLevelEl) logLevelEl.value = config.log_level || 'INFO';
+        
+        const autoReplyEl = document.getElementById('cfg-auto-reply');
+        if (autoReplyEl) autoReplyEl.checked = !!config.auto_reply;
     } catch (e) {
         console.error('Error loading backend config:', e);
     }
@@ -103,7 +109,9 @@ export async function updateBackendConfig() {
         redis_pwd: document.getElementById('cfg-redis-pwd').value,
         jwt_secret: document.getElementById('cfg-jwt-secret').value,
         default_admin_password: document.getElementById('cfg-admin-pwd').value,
-        stats_file: document.getElementById('cfg-stats-file').value
+        stats_file: document.getElementById('cfg-stats-file').value,
+        log_level: document.getElementById('cfg-log-level')?.value || 'INFO',
+        auto_reply: document.getElementById('cfg-auto-reply')?.checked || false
     };
 
     if (!confirm('确定要保存后端配置吗？部分修改（如端口）需要重启服务后生效。')) return;

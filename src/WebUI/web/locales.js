@@ -1,3 +1,4 @@
+console.log('locales.js loading...');
 const translations = {
     "zh-CN": {
         "app_title": "BotMatrix Manager",
@@ -52,6 +53,20 @@ const translations = {
         "time_uptime": "运行时长",
         "time_current": "当前时间",
         "time_days": "天",
+
+        // Sidebar Tabs
+        "dashboard": "运行状态",
+        "bots": "云端矩阵",
+        "visualization": "转发可视化",
+        "groups": "群组管理",
+        "friends": "好友管理",
+        "logs": "日志中心",
+        "docker": "Docker管理",
+        "users": "用户管理",
+        "settings": "系统设置",
+        "overview": "总览",
+        "management": "业务管理",
+        "system": "系统维护",
 
         // Menu Groups
         "menu_group_overview": "总览",
@@ -430,6 +445,11 @@ const translations = {
         "worker_nodes": "Worker 节点",
         "central_nexus": "中央核心",
         "bot_nodes": "机器人节点",
+        "worker_nodes": "工作节点",
+        "group_nodes": "群组节点",
+        "user_nodes": "用户节点",
+        "processed_count": "累计处理",
+        "avg_rtt": "平均延迟",
         "save_changes": "保存修改",
         "system_params": "系统参数",
         "log_level": "日志级别",
@@ -447,9 +467,15 @@ const translations = {
         "sort_status": "状态",
         "monitor_events": "实时消息",
         "monitor_logs": "系统日志",
-        "monitor_events_title": "实时消息监控",
+        "monitor_events_title": "实时事件流",
+        "filter_all": "全部事件",
+        "filter_message": "消息内容",
+        "filter_system": "系统通知",
+        "filter_routing": "消息流转",
+        "filter_meta": "元数据",
+        "status_live": "正在监控",
         "clear": "清空",
-        "waiting_events_connection": "等待事件连接...",
+        "waiting_events_connection": "正在等待事件连接...",
         "system_logs_title": "系统日志",
         "auto_refresh": "自动刷新",
         "debug_test_title": "调试测试",
@@ -1024,6 +1050,8 @@ const translations = {
         "group_count": "群組數",
         "friend_count": "好友數",
         "worker_nodes": "Worker 節點",
+        "group_nodes": "群組節點",
+        "user_nodes": "用戶節點",
         "central_nexus": "中央核心",
         "bot_nodes": "機器人節點",
         "save_changes": "保存修改",
@@ -1459,6 +1487,21 @@ const translations = {
         "switch_theme": "Switch Theme",
         "placeholder_target_id": "Group/User ID",
         "placeholder_rule_path": "worker://default",
+
+        // Sidebar Tabs
+        "dashboard": "Dashboard",
+        "bots": "Bot Matrix",
+        "visualization": "Visualizer",
+        "groups": "Groups",
+        "friends": "Friends",
+        "logs": "Logs",
+        "docker": "Docker",
+        "users": "Users",
+        "settings": "Settings",
+        "overview": "Overview",
+        "management": "Management",
+        "system": "System",
+
         "neural_link_active": "Neural Link Active",
         "status_live": "Live",
         "os": "OS",
@@ -1681,8 +1724,13 @@ const translations = {
         "group_count": "Groups",
         "friend_count": "Friends",
         "worker_nodes": "Worker Nodes",
+        "group_nodes": "Group Nodes",
+        "user_nodes": "User Nodes",
         "central_nexus": "Central Nexus",
         "bot_nodes": "Bot Nodes",
+        "worker_nodes": "Worker Nodes",
+        "processed_count": "Processed",
+        "avg_rtt": "Avg Latency",
         "save_changes": "Save Changes",
         "system_params": "System Parameters",
         "log_level": "Log Level",
@@ -1700,9 +1748,15 @@ const translations = {
         "sort_status": "Status",
         "monitor_events": "Real-time Events",
         "monitor_logs": "System Logs",
-        "monitor_events_title": "Event Monitor",
+        "monitor_events_title": "Live Event Stream",
+        "filter_all": "ALL EVENTS",
+        "filter_message": "MESSAGES",
+        "filter_system": "SYSTEM",
+        "filter_routing": "ROUTING",
+        "filter_meta": "META",
+        "status_live": "LIVE",
         "clear": "Clear",
-        "waiting_events_connection": "Waiting for connection...",
+        "waiting_events_connection": "Waiting for events connection...",
         "system_logs_title": "System Logs",
         "auto_refresh": "Auto Refresh",
         "debug_test_title": "Debug & Test",
@@ -2059,13 +2113,6 @@ const translations = {
     }
 };
 
-// Export for ES modules and global window
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { translations };
-} else {
+if (typeof window !== 'undefined') {
     window.translations = translations;
 }
-
-export { translations };
-
-

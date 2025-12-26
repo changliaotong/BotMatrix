@@ -1,0 +1,26 @@
+[
+  {
+    "name": "echo_test_1",
+    "input": "hello world",
+    "expected": "hello world",
+    "timeout": 5000
+  },
+  {
+    "name": "echo_test_2",
+    "input": "test message",
+    "expected": "test message",
+    "timeout": 5000
+  },
+  {
+    "name": "time_test",
+    "input": "time",
+    "expected": "Current time",
+    "timeout": 5000
+  },
+  {
+    "name": "weather_test",
+    "input": "weather Beijing",
+    "expected": "Weather",
+    "timeout": 5000
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "name": "echo",
+  "description": "echo plugin",
+  "api_version": "1.0",
+  "version": "1.0.0",
+  "entry_point": "plugins/echo/echo.exe",
+  "run_on": ["worker"],
+  "capabilities": ["message"],
+  "actions": ["send_message"],
+  "timeout_ms": 5000,
+  "max_concurrency": 1,
+  "max_restarts": 3,
+  "plugin_level": "feature",
+  "source": "local"
+}

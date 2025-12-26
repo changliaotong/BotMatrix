@@ -131,12 +131,41 @@ func (m *Manager) InitDB() error {
 		nickname TEXT,
 		card TEXT,
 		last_seen TIMESTAMP,
+		last_sign_time TIMESTAMP,
+		streak INTEGER DEFAULT 0,
+		total_sign_days INTEGER DEFAULT 0,
+		total_points INTEGER DEFAULT 0,
 		PRIMARY KEY (group_id, user_id)
 	);`
 	_, err = m.DB.Exec(m.prepareQuery(memberCacheQuery))
 	if err != nil {
 		log.Printf("创建群成员缓存表失败: %v", err)
 		return err
+	}
+
+	// 添加签到相关字段（如果不存在）
+	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS last_sign_time TIMESTAMP`))
+	if err != nil {
+		log.Printf("为 member_cache 表添加 last_sign_time 字段失败: %v", err)
+		// 不返回错误，继续执行
+	}
+
+	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0`))
+	if err != nil {
+		log.Printf("为 member_cache 表添加 streak 字段失败: %v", err)
+		// 不返回错误，继续执行
+	}
+
+	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS total_sign_days INTEGER DEFAULT 0`))
+	if err != nil {
+		log.Printf("为 member_cache 表添加 total_sign_days 字段失败: %v", err)
+		// 不返回错误，继续执行
+	}
+
+	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS total_points INTEGER DEFAULT 0`))
+	if err != nil {
+		log.Printf("为 member_cache 表添加 total_points 字段失败: %v", err)
+		// 不返回错误，继续执行
 	}
 
 	// 创建系统统计表

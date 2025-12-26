@@ -1,0 +1,8 @@
+{
+  "name": "group_manager",
+  "description": "group_manager plugin",
+  "version": "1.0.0",
+  "entry_point": "group_manager.exe",
+  "timeout_ms": 5000,
+  "max_restarts": 3
+}

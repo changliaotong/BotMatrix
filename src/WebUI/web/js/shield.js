@@ -141,6 +141,7 @@
         "dynamically imported module",
         "index.ts-e1d874e5.js",
         "index.ts-loader3.js",
+        "index.ts-fb37b312.js",
         "Duplicate export of 'translations'",
         "setting 'innerHTML'",
         "Failed to execute 'observe'",

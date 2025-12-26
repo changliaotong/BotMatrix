@@ -1,0 +1,8 @@
+{
+  "name": "time",
+  "description": "报时插件，显示当前时间",
+  "version": "1.0.0",
+  "entry_point": "time.exe",
+  "timeout_ms": 5000,
+  "max_restarts": 3
+}

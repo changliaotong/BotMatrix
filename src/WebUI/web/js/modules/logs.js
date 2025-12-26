@@ -62,7 +62,7 @@ export async function fetchLogsFull() {
         const data = await response.json();
         const logs = data.logs || [];
         
-        container.innerHTML = logs.map(log => `
+        container.innerHTML = logs.slice().reverse().map(log => `
             <div class="log-entry">
                 <span class="log-time">[${log.time}]</span>
                 <span class="log-level-${log.level}">${log.level}</span>: 
@@ -70,8 +70,8 @@ export async function fetchLogsFull() {
             </div>
         `).join('');
         
-        // 自动滚动到底部
-        container.scrollTop = container.scrollHeight;
+        // 自动滚动到顶部
+        container.scrollTop = 0;
     } catch (err) {
         console.error('获取日志失败:', err);
     }
@@ -120,7 +120,7 @@ export async function fetchLogs() {
         const data = await response.json();
         const logs = data.logs || [];
         
-        container.innerHTML = logs.map(log => `
+        container.innerHTML = logs.slice().reverse().map(log => `
             <div class="log-entry">
                 <span class="log-time">[${log.time}]</span>
                 <span class="log-level-${log.level}">${log.level}</span>: 
@@ -128,7 +128,7 @@ export async function fetchLogs() {
             </div>
         `).join('');
         
-        container.scrollTop = container.scrollHeight;
+        container.scrollTop = 0;
     } catch (err) {
         console.error('获取小组件日志失败:', err);
     }
@@ -139,10 +139,16 @@ export async function fetchLogs() {
  * @param {Object} data 事件数据
  */
 export function addEventLog(data) {
-    const container = document.getElementById('event-container');
-    if (!container) return;
+    if (data.type === 'sync_state' || data.meta_event_type === 'heartbeat') {
+        return; 
+    }
 
-    if (container.children.length === 1 && container.children[0].classList.contains('text-muted')) {
+    const container = document.getElementById('event-container');
+    if (!container) {
+        return;
+    }
+
+    if (container.querySelector('.animate-pulse') || container.innerText.includes('等待事件连接')) {
         container.innerHTML = '';
     }
     
@@ -155,9 +161,17 @@ export function addEventLog(data) {
     
     // 格式化内容
     let content = '';
+    let category = 'other';
+
     if (data.type === 'system') {
+        category = 'system';
         content = `<span class="text-info">[SYSTEM]</span> ${data.message}`;
+    } else if (data.type === 'routing_event') {
+        category = 'routing';
+        const direction = data.direction === 'bot_to_user' ? '→' : (data.direction === 'user_to_bot' ? '←' : '↔');
+        content = `<span class="text-matrix">[FLOW]</span> <span class="text-info">${data.source}</span> ${direction} <span class="text-success">${data.target}</span> <span class="text-muted ms-2">(${data.msg_type})</span>`;
     } else if (data.post_type === 'message' || data.post_type === 'message_sent') {
+        category = 'message';
         const sender = data.sender ? (data.sender.nickname || data.sender.card || data.user_id) : data.user_id;
         const group = data.group_id ? `[群:${data.group_id}] ` : '[私聊] ';
         let msg = data.message;
@@ -166,39 +180,61 @@ export function addEventLog(data) {
         }
         content = `<span class="text-success">[MSG]</span> ${group}<span class="fw-bold text-warning">${sender}</span>: ${msg}`;
     } else if (data.post_type === 'log') {
-        const log = data.data;
-        const levelClass = log.level === 'ERROR' ? 'text-danger' : (log.level === 'WARN' ? 'text-warning' : 'text-info');
-        content = `<span class="${levelClass}">[${log.level}]</span> ${log.message}`;
+        // 日志不再显示在事件流中，因为已有专门的日志页面
+        return;
     } else if (data.post_type === 'meta_event') {
+        category = 'meta';
         if (data.meta_event_type === 'heartbeat') return; // 忽略心跳包
         content = `<span class="text-secondary">[META]</span> ${data.meta_event_type}`;
     } else {
         content = `<span class="text-muted">[EVENT]</span> <pre class="d-inline m-0" style="font-size:0.8em">${JSON.stringify(data)}</pre>`;
     }
     
+    div.setAttribute('data-category', category);
     div.innerHTML = `<span class="log-time">${time}</span> ${content}`;
     
-    container.appendChild(div);
-    
-    // 限制条目数量
-    if (container.children.length > 200) {
-        container.removeChild(container.firstChild);
+    // 根据当前过滤器决定是否隐藏
+    const filterSelect = document.getElementById('event-filter');
+    const filter = filterSelect ? filterSelect.value : 'all';
+    if (filter !== 'all' && filter !== category) {
+        div.style.display = 'none';
     }
     
-    const autoScroll = document.getElementById('auto-scroll-events');
-    if (autoScroll && autoScroll.checked) {
-        container.scrollTop = container.scrollHeight;
+    container.prepend(div);
+    
+    // 限制条目数量
+    if (container.children.length > 500) {
+        container.removeChild(container.lastChild);
     }
 
     // 更新仪表板最近日志
     const dashLog = document.getElementById('recent-logs');
     if (dashLog) {
         const clone = div.cloneNode(true);
+        clone.style.display = ''; // 仪表板不应用过滤器
         dashLog.prepend(clone);
         if (dashLog.children.length > 20) {
             dashLog.removeChild(dashLog.lastChild);
         }
     }
+}
+
+/**
+ * 过滤事件显示
+ * @param {string} category 类别
+ */
+export function filterEvents(category) {
+    const container = document.getElementById('event-container');
+    if (!container) return;
+
+    const entries = container.querySelectorAll('.log-entry');
+    entries.forEach(entry => {
+        if (category === 'all' || entry.getAttribute('data-category') === category) {
+            entry.style.display = '';
+        } else {
+            entry.style.display = 'none';
+        }
+    });
 }
 
 /**

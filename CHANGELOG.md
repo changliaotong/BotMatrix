@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.6.0 (2025-12-25)
+*   **🌌 3D Visualization Overhaul**:
+    *   **Enhanced Labels**: Increased node label font size for better visibility at a distance.
+    *   **Sprite Orientation**: Fixed avatar sprite orientation to always face the camera, regardless of node rotation.
+    *   **Visual Identification**: Improved user/bot identification and avatar handling for diverse platforms.
+    *   **Dynamic Links**: Introduced a new blue-themed link palette with dynamic transmission flash—links brighten instantly upon message transmission and fade slowly back to baseline.
+    *   **User-Group Connectivity**: Added persistent, visible links between users and their respective groups in the 3D space.
+*   **🛣️ Full Path Routing Visualization**:
+    *   Implemented full-path event visualization: `User -> Group -> Nexus -> Worker` for incoming messages, and the reverse path for responses.
+*   **📡 Smart Cache Enrichment**:
+    *   **Metadata Caching**: BotNexus now automatically caches group names and user nicknames from Napcat events.
+    *   **Message Enrichment**: Forwarded messages are now enriched with cached metadata before reaching Workers, significantly reducing the need for Workers to call external APIs for basic info.
+*   **⚙️ System Reliability & Auto-Reply**:
+    *   **Settings Persistence**: Fixed a critical bug where `LogLevel` and `AutoReply` settings were not saved correctly to the configuration file.
+    *   **Intelligent Auto-Reply**: Implemented global `AutoReply` logic that automatically notifies users with a maintenance message when the system is closed.
+*   **🧹 Dynamic Worker Management**: Added real-time state filtering to the 3D visualizer to ensure only online Worker nodes are displayed.
+
 ## v1.5.0 (2025-12-24)
 *   **🐘 PostgreSQL-First Architecture**: Completely removed legacy SQLite support to streamline database operations and focus on enterprise-grade performance with PostgreSQL.
 *   **🧹 Dependency Modernization**: Eliminated `modernc.org/sqlite` and related CGO-free SQLite drivers, reducing binary size and complexity.

@@ -1359,6 +1359,13 @@ export function handleSyncState(data) {
             });
         }
 
+        // Sync workers
+        if (data.workers) {
+            data.workers.forEach(w => {
+                window.visualizer.getOrCreateNode(w.id, 'worker', w.id, null, null, null, t('viz_worker') || 'Worker');
+            });
+        }
+
         // Sync groups
         if (data.groups) {
             Object.values(data.groups).forEach(g => {

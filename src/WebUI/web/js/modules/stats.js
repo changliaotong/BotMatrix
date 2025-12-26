@@ -75,6 +75,7 @@ export function loadStatsFromCache() {
 }
 
 export function initCharts() {
+    console.debug('initCharts called');
     if (typeof Chart === 'undefined') {
         console.error('Chart.js is not loaded');
         return;
@@ -84,7 +85,10 @@ export function initCharts() {
         const el = document.getElementById(id);
         if (el) {
             const existingChart = Chart.getChart(el);
-            if (existingChart) existingChart.destroy();
+            if (existingChart) {
+                console.debug(`Destroying existing chart for ${id}`);
+                existingChart.destroy();
+            }
         }
     };
 
@@ -96,10 +100,13 @@ export function initCharts() {
         const el = document.getElementById(id);
         if (el) {
             try {
+                console.debug(`Initializing chart ${id}`);
                 callback(el);
             } catch (e) {
                 console.error(`Error initializing chart ${id}:`, e);
             }
+        } else {
+            console.debug(`Element ${id} not found for chart initialization`);
         }
     };
 
@@ -177,14 +184,25 @@ export function initCharts() {
     });
 }
 
-export async function updateStats() {
+export async function updateStats(providedData = null) {
+    console.debug('updateStats called', providedData ? 'with data' : 'fetching data');
     const authToken = window.authToken || localStorage.getItem('wxbot_token');
-    if (!authToken) return;
+    if (!authToken && !providedData) {
+        console.debug('updateStats: no authToken and no provided data');
+        return;
+    }
     try {
-        const response = await fetchWithAuth('/api/stats');
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
+        let data;
+        if (providedData) {
+            data = providedData;
+        } else {
+            const response = await fetchWithAuth('/api/stats');
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            data = await response.json();
+        }
+        
         window.latestStats = data;
+        console.debug('updateStats: processing data', data);
             
         const setVal = (id, val) => {
             const el = document.getElementById(id);
@@ -245,117 +263,69 @@ export async function updateStats() {
         const now = new Date().toLocaleTimeString();
         let justInitialized = false;
 
-        // Init History
-        if (data.cpu_trend && cpuChart && cpuChart.data.labels.length === 0) {
-            data.cpu_trend.forEach(() => cpuChart.data.labels.push(''));
-            cpuChart.data.datasets[0].data = data.cpu_trend;
-            cpuChart.update();
-            justInitialized = true;
-        }
-        if (data.mem_trend && memChart && memChart.data.labels.length === 0) {
-            data.mem_trend.forEach(() => memChart.data.labels.push(''));
-            memChart.data.datasets[0].data = data.mem_trend.map(v => v / 1024 / 1024);
-            memChart.update();
-            justInitialized = true;
-        }
-        if (data.msg_trend && msgChart && msgChart.data.labels.length === 0) {
-            const historyWindowSize = 12; 
-            msgHistory = [...data.msg_trend];
-            sentHistory = data.sent_trend ? [...data.sent_trend] : new Array(msgHistory.length).fill(0);
-            recvHistory = data.recv_trend ? [...data.recv_trend] : new Array(msgHistory.length).fill(0);
-
-            const chartDataRecv = [];
-            const chartDataSent = [];
-            const chartDataTotal = [];
-            const labels = [];
-            
-            for (let i = 0; i < msgHistory.length; i++) {
-                let start = Math.max(0, i - historyWindowSize + 1);
-                let sumTotal = 0, sumSent = 0, sumRecv = 0;
-                for (let j = start; j <= i; j++) {
-                    sumTotal += msgHistory[j] || 0;
-                    sumSent += sentHistory[j] || 0;
-                    sumRecv += recvHistory[j] || 0;
+        // CPU Chart Update
+        if (cpuChart) {
+            if (data.cpu_trend && data.cpu_trend.length > 0 && (cpuChart.data.datasets[0].data.length === 0 || justInitialized)) {
+                console.debug('Initializing cpuChart trend data, points:', data.cpu_trend.length);
+                cpuChart.data.labels = data.cpu_trend.map(() => '');
+                cpuChart.data.datasets[0].data = [...data.cpu_trend];
+                cpuChart.update();
+                justInitialized = true;
+            } else if (data.cpu_usage !== undefined) {
+                const cpuVal = typeof data.cpu_usage === 'string' ? parseFloat(data.cpu_usage) : data.cpu_usage;
+                cpuChart.data.labels.push('');
+                cpuChart.data.datasets[0].data.push(cpuVal);
+                if (cpuChart.data.labels.length > 60) {
+                    cpuChart.data.labels.shift();
+                    cpuChart.data.datasets[0].data.shift();
                 }
-                chartDataRecv.push(sumRecv);
-                chartDataSent.push(sumSent);
-                chartDataTotal.push(sumTotal);
-                labels.push('');
+                cpuChart.update();
             }
-            
-            if (msgHistory.length > MSG_HISTORY_SIZE) {
-                msgHistory = msgHistory.slice(-MSG_HISTORY_SIZE);
-                sentHistory = sentHistory.slice(-MSG_HISTORY_SIZE);
-                recvHistory = recvHistory.slice(-MSG_HISTORY_SIZE);
-            }
-            msgChart.data.labels = labels;
-            msgChart.data.datasets[0].data = chartDataRecv;
-            msgChart.data.datasets[1].data = chartDataSent;
-            msgChart.data.datasets[2].data = chartDataTotal;
-            msgChart.update();
-            
-            lastMsgCount = data.message_count || 0;
-            lastSentCount = data.sent_message_count || 0;
-            justInitialized = true;
         }
 
-        // Real-time Updates
-        if (memChart && !justInitialized) {
-            if (memChart.data.labels.length > MAX_CHART_POINTS) {
-                memChart.data.labels.shift();
-                memChart.data.datasets[0].data.shift();
+        // Memory Chart Update
+        if (memChart) {
+            if (data.mem_trend && data.mem_trend.length > 0 && (memChart.data.datasets[0].data.length === 0 || justInitialized)) {
+                console.debug('Initializing memChart trend data, points:', data.mem_trend.length);
+                memChart.data.labels = data.mem_trend.map(() => '');
+                memChart.data.datasets[0].data = data.mem_trend.map(v => parseFloat((v / 1024 / 1024).toFixed(1)));
+                memChart.update();
+                justInitialized = true;
+            } else if (data.memory_used !== undefined) {
+                memChart.data.labels.push('');
+                memChart.data.datasets[0].data.push(parseFloat((data.memory_used / 1024 / 1024).toFixed(1)));
+                if (memChart.data.labels.length > 60) {
+                    memChart.data.labels.shift();
+                    memChart.data.datasets[0].data.shift();
+                }
+                memChart.update();
             }
-            memChart.data.labels.push(now);
-            memChart.data.datasets[0].data.push(data.memory_alloc / 1024 / 1024);
-            memChart.update();
-        }
-        
-        if (msgChart && !justInitialized) {
-            const currentTotal = data.message_count || 0;
-            const currentSent = data.sent_message_count || 0;
-            const diffTotal = currentTotal - lastMsgCount;
-            const diffSent = currentSent - lastSentCount;
-            
-            const valTotal = lastMsgCount === 0 ? 0 : (diffTotal < 0 ? 0 : diffTotal);
-            const valSent = lastSentCount === 0 ? 0 : (diffSent < 0 ? 0 : diffSent);
-            const valRecv = Math.max(0, valTotal - valSent);
-
-            msgHistory.push(valTotal);
-            sentHistory.push(valSent);
-            recvHistory.push(valRecv);
-
-            if (msgHistory.length > MSG_HISTORY_SIZE) {
-                msgHistory.shift(); sentHistory.shift(); recvHistory.shift();
-            }
-
-            const sumTotal = msgHistory.reduce((a, b) => a + b, 0);
-            const sumSent = sentHistory.reduce((a, b) => a + b, 0);
-            const sumRecv = recvHistory.reduce((a, b) => a + b, 0);
-
-            if (msgChart.data.labels.length > MAX_CHART_POINTS) {
-                msgChart.data.labels.shift();
-                msgChart.data.datasets[0].data.shift();
-                msgChart.data.datasets[1].data.shift();
-                msgChart.data.datasets[2].data.shift();
-            }
-            msgChart.data.labels.push(now);
-            msgChart.data.datasets[0].data.push(sumRecv);
-            msgChart.data.datasets[1].data.push(sumSent);
-            msgChart.data.datasets[2].data.push(sumTotal);
-            msgChart.update();
-
-            lastMsgCount = currentTotal;
-            lastSentCount = currentSent;
         }
 
-        if (cpuChart && !justInitialized) {
-            if (cpuChart.data.labels.length > MAX_CHART_POINTS) {
-                cpuChart.data.labels.shift();
-                cpuChart.data.datasets[0].data.shift();
+        // Message Chart Update
+        if (msgChart) {
+            if (data.msg_trend && data.msg_trend.length > 0 && (msgChart.data.datasets[0].data.length === 0 || justInitialized)) {
+                console.debug('Initializing msgChart trend data, points:', data.msg_trend.length);
+                msgChart.data.labels = data.msg_trend.map(() => '');
+                const sentTrend = data.sent_trend || data.msg_trend;
+                const recvTrend = data.recv_trend || data.msg_trend;
+                msgChart.data.datasets[0].data = sentTrend.map(v => parseFloat(v));
+                msgChart.data.datasets[1].data = recvTrend.map(v => parseFloat(v));
+                msgChart.update();
+            } else if (data.message_count !== undefined) {
+                msgChart.data.labels.push('');
+                // 使用传入的 msg_per_sec/sent_per_sec 或计算出的增量
+                const sentVal = parseFloat(data.sent_per_sec || 0);
+                const recvVal = parseFloat(data.msg_per_sec || 0);
+                msgChart.data.datasets[0].data.push(sentVal);
+                msgChart.data.datasets[1].data.push(recvVal);
+                if (msgChart.data.labels.length > 60) {
+                    msgChart.data.labels.shift();
+                    msgChart.data.datasets[0].data.shift();
+                    msgChart.data.datasets[1].data.shift();
+                }
+                msgChart.update();
             }
-            cpuChart.data.labels.push(now);
-            cpuChart.data.datasets[0].data.push(data.cpu_percent || 0);
-            cpuChart.update();
         }
 
         saveStatsToCache({
@@ -573,4 +543,12 @@ export function showAllStats(type) {
         modalEl.style.display = 'flex';
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+}
+
+// Expose functions to window for legacy compatibility
+if (typeof window !== 'undefined') {
+    window.initCharts = initCharts;
+    window.updateStats = updateStats;
+    window.updateChatStats = updateChatStats;
+    window.showAllStats = showAllStats;
 }

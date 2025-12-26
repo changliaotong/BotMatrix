@@ -1,0 +1,75 @@
+site_name: BotMatrix Documentation
+site_url: https://changliaotong.github.io/BotMatrix
+site_description: Multi-protocol chatbot framework with unified management interface
+
+repo_name: changliaotong/BotMatrix
+repo_url: https://github.com/changliaotong/BotMatrix
+
+nav:
+  - Home: index.md
+  - Features: features.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - API Reference:
+    - Go API: reference/go-api.md
+    - REST API: reference/rest-api.md
+  - Protocols:
+    - WeChat: protocols/wechat.md
+    - DingTalk: protocols/dingtalk.md
+    - Discord: protocols/discord.md
+    - Feishu: protocols/feishu.md
+    - Kook: protocols/kook.md
+    - OneBot: protocols/onebot.md
+  - Configuration: configuration.md
+  - Logging: logging.md
+  - Monitoring: monitoring.md
+  - Contributing: contributing.md
+  - Changelog: CHANGELOG.md
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - footnotes
+  - toc:
+      permalink: true
+
+plugins:
+  - search:
+      lang: zh
+  - git-revision-date-localized:
+      type: date
+
+extra:
+  version:
+    provider: git
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/changliaotong/BotMatrix
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/r/changliaotong/botmatrix

@@ -90,7 +90,7 @@ export function initWebSocket() {
                 
                 if (data.type === 'routing_event') {
                     handleRoutingEvent(data);
-                    return;
+                    // Do not return, let it fall through to addEventLog for text display in monitor
                 }
 
                 if (data.type === 'sync_state') {
@@ -129,13 +129,13 @@ export function initWebSocket() {
                             const div = document.createElement('div');
                             div.className = 'log-entry';
                             div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
-                            container.appendChild(div);
+                            container.prepend(div);
                             if (container.children.length > 500) {
-                                container.removeChild(container.firstChild);
+                                container.removeChild(container.lastChild);
                             }
                             const autoRefresh = document.getElementById('auto-refresh-logs');
                             if (autoRefresh && autoRefresh.checked) {
-                                container.scrollTop = container.scrollHeight;
+                                container.scrollTop = 0;
                             }
                         }
                     }
@@ -149,13 +149,13 @@ export function initWebSocket() {
                             const div = document.createElement('div');
                             div.className = 'log-entry';
                             div.innerHTML = `<span class="log-time">[${log.time}]</span><span class="log-level-${log.level}">${log.level}</span>: ${renderLogMessage(log.message)}`;
-                            containerFull.appendChild(div);
+                            containerFull.prepend(div);
                             if (containerFull.children.length > 500) {
-                                containerFull.removeChild(containerFull.firstChild);
+                                containerFull.removeChild(containerFull.lastChild);
                             }
                             const autoRefreshFull = document.getElementById('auto-refresh-logs-full');
                             if (autoRefreshFull && autoRefreshFull.checked) {
-                                containerFull.scrollTop = containerFull.scrollHeight;
+                                containerFull.scrollTop = 0;
                             }
                         }
                     }

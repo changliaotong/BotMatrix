@@ -1,0 +1,17 @@
+{
+  "name": "dialog_demo",
+  "description": "dialog_demo plugin",
+  "api_version": "1.0.0",
+  "version": "1.0.0",
+  "entry_point": "dialog_demo.exe",
+  "run_on": ["worker"],
+  "capabilities": ["dialog_demo"],
+  "actions": ["send_message", "user_info_query"],
+
+  "timeout_ms": 5000,
+  "max_concurrency": 1,
+  "max_restarts": 3,
+  "signature": "",
+  "plugin_level": "feature",
+  "source": "internal"
+}

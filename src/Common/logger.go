@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -26,24 +25,16 @@ func (m *Manager) AddLog(level string, message string) {
 
 	// Broadcast to all subscribers
 	go func() {
-		m.Mutex.RLock()
-		defer m.Mutex.RUnlock()
-		
 		msg := map[string]interface{}{
 			"post_type": "log",
 			"data":      entry,
 			"self_id":   "", // System logs have no self_id
 		}
-		
-		for _, sub := range m.Subscribers {
-			sub.Mutex.Lock()
-			sub.Conn.WriteJSON(msg)
-			sub.Mutex.Unlock()
-		}
+		m.BroadcastEvent(msg)
 	}()
 
-	// Also print to console
-	log.Printf("[%s] %s", level, message)
+	// Also print to console without using log.Printf to avoid infinite loops if redirected
+	fmt.Printf("[%s] [%s] %s\n", now.Format("2006-01-02 15:04:05"), level, message)
 }
 
 // GetLogs gets recent logs

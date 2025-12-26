@@ -8,7 +8,6 @@
     <link rel="icon" href="data:,">
     <script src="js/shield.js"></script>
     <script src="locales.js"></script>
-    <script src="js/modules/i18n.js"></script>
     
     <!-- Scripts -->
     <script src="https://cdn.staticfile.org/vue/3.3.4/vue.global.prod.js"></script>
@@ -37,7 +36,7 @@
                         }
                     },
                     fontFamily: {
-                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                        mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', 'Consolas', 'monospace']
                     }
                 }
             }
@@ -45,8 +44,6 @@
     </script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap');
-        
         [v-cloak] { display: none; }
         [v-cloak] > * { display: none; }
         
@@ -135,18 +132,29 @@
     <div id="app" class="h-full">
         <!-- Main Application Layout -->
         <div v-if="isLoggedIn" class="main-app h-full flex overflow-hidden">
+            <!-- Sidebar Overlay (Mobile) -->
+            <div v-if="showMobileMenu" @click="showMobileMenu = false" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"></div>
+
             <!-- Sidebar -->
-            <aside class="w-64 flex-shrink-0 border-r border-black/5 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col z-50 transition-all duration-300"
-               :class="{'w-20': isSidebarCollapsed, '-translate-x-full lg:translate-x-0': !showMobileMenu}">
+            <aside class="fixed lg:static inset-y-0 left-0 flex-shrink-0 border-r border-black/5 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col z-50 transition-all duration-300 overflow-hidden"
+               :class="[
+                   isSidebarCollapsed ? 'w-64 lg:w-20' : 'w-64 lg:w-64',
+                   showMobileMenu ? 'translate-x-0' : '-translate-x-full ' + (isSidebarCollapsed ? 'lg:-ml-20' : 'lg:-ml-64')
+               ]">
             
             <!-- Logo Area -->
-            <div class="h-16 flex items-center px-6 border-b border-black/5 dark:border-white/5 overflow-hidden">
+            <div class="h-16 flex items-center justify-between px-6 border-b border-black/5 dark:border-white/5 overflow-hidden">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-matrix flex items-center justify-center shadow-lg shadow-matrix/20">
+                    <div class="w-8 h-8 rounded-lg bg-matrix flex items-center justify-center shadow-lg shadow-matrix/20 flex-shrink-0">
                         <i data-lucide="cpu" class="w-5 h-5 text-slate-900"></i>
                     </div>
-                    <span v-show="!isSidebarCollapsed" class="font-bold tracking-tight dark:text-white">BotMatrix</span>
+                    <span v-show="!isSidebarCollapsed" class="font-bold tracking-tight dark:text-white whitespace-nowrap">BotMatrix</span>
                 </div>
+                <!-- Collapse Toggle (Desktop) -->
+                <button @click="toggleSidebar" 
+                        class="hidden lg:flex p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-gray-400 transition-colors flex-shrink-0">
+                    <i :data-lucide="isSidebarCollapsed ? 'panel-left-open' : 'panel-left-close'" class="w-4 h-4"></i>
+                </button>
             </div>
 
             <!-- Navigation -->
@@ -158,7 +166,7 @@
                     <div class="space-y-1">
                         <button v-for="item in group.items" 
                                 :key="item.id"
-                                @click="activeTab = item.id"
+                                @click="activeTab = item.id; if(window.innerWidth < 1024) showMobileMenu = false"
                                 :class="[
                                     'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative border border-transparent',
                                     activeTab === item.id 
@@ -174,14 +182,6 @@
                         </button>
                     </div>
                     <div class="h-6"></div>
-                </div>
-                
-                <!-- Legacy Link -->
-                <div class="px-3 pt-4 border-t border-black/5 dark:border-white/5">
-                    <a href="legacy.html" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-matrix transition-colors">
-                        <i data-lucide="history" class="w-5 h-5"></i>
-                        <span v-show="!isSidebarCollapsed" class="text-xs font-medium">{{ t('legacy_view') }}</span>
-                    </a>
                 </div>
             </nav>
 
@@ -205,13 +205,26 @@
             <!-- Header -->
             <header class="h-16 flex-shrink-0 flex items-center justify-between px-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-black/5 dark:border-white/5 z-40">
                 <div class="flex items-center gap-4">
-                    <button @click="showMobileMenu = !showMobileMenu" class="lg:hidden p-2 text-gray-500">
+                    <button @click="showMobileMenu = !showMobileMenu" class="p-2 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors">
                         <i data-lucide="menu" class="w-5 h-5"></i>
                     </button>
                     <h2 class="text-lg font-bold tracking-tight dark:text-white">{{ t(activeTab) }}</h2>
                 </div>
                 
                 <div class="flex items-center gap-4">
+                    <!-- Uptime & Time -->
+                    <div class="flex items-center gap-2 sm:gap-6 px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                        <div class="flex flex-col">
+                            <span class="text-[7px] sm:text-[8px] font-bold text-gray-500 uppercase tracking-[0.2em]">{{ t('system_uptime') }}</span>
+                            <span class="text-[10px] sm:text-xs font-bold text-matrix mono">{{ stats.uptime }}</span>
+                        </div>
+                        <div class="h-4 sm:h-6 w-px bg-black/10 dark:bg-white/10"></div>
+                        <div class="flex flex-col text-right">
+                            <span class="text-[7px] sm:text-[8px] font-bold text-gray-500 uppercase tracking-[0.2em]">{{ t('current_time') }}</span>
+                            <span class="text-[10px] sm:text-xs font-bold dark:text-white mono">{{ currentTime }}</span>
+                        </div>
+                    </div>
+
                     <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-matrix/10 border border-matrix/20">
                         <div class="w-2 h-2 rounded-full bg-matrix animate-pulse"></div>
                         <span class="text-[10px] font-bold text-matrix uppercase tracking-wider">{{ t('neural_link_active') }}</span>
@@ -226,20 +239,19 @@
                         </button>
                     </div>
                     <div class="h-6 w-px bg-black/5 dark:border-white/5"></div>
-                    <button @click="logout" class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-red-500 transition-colors">
+                    <button @click="logout" class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all" :title="t('logout')">
                         <i data-lucide="log-out" class="w-4 h-4"></i>
-                        <span class="hidden md:inline">{{ t('logout') }}</span>
                     </button>
                 </div>
             </header>
 
             <!-- Tab Content Area -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
                 
                 <!-- Dashboard Tab -->
-                <div v-if="activeTab === 'dashboard'" class="space-y-6">
+                <div v-show="activeTab === 'dashboard'" class="space-y-4 sm:space-y-6">
                     <!-- Stats Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                         <div v-for="stat in statsCards" :key="stat.label" 
                              class="p-6 rounded-3xl card-blur border border-black/5 dark:border-white/5 shadow-sm group hover:shadow-xl transition-all duration-300">
                             <div class="flex items-start justify-between mb-4">
@@ -256,11 +268,11 @@
                     </div>
 
                     <!-- Charts & Monitor Grid -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                         <!-- Charts Section -->
-                        <div class="lg:col-span-2 space-y-6">
+                        <div class="lg:col-span-2 space-y-4 sm:space-y-6">
                             <!-- CPU & Memory Charts -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                 <div class="p-6 rounded-3xl card-blur border border-black/5 dark:border-white/5 cursor-pointer hover:border-matrix/30 transition-all"
                                      onclick="if(window.showSystemDetail) window.showSystemDetail('cpu')">
                                     <div class="flex items-center justify-between mb-4">
@@ -287,7 +299,7 @@
                             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <div class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
                                     <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{{ t('throughput') }}</div>
-                                    <div class="text-xl font-bold dark:text-white mono">{{ (stats.msg_per_sec + stats.sent_per_sec).toFixed(1) }} <span class="text-xs text-gray-500">msg/s</span></div>
+                                    <div class="text-xl font-bold dark:text-white mono">{{ (Number(stats.msg_per_sec || 0) + Number(stats.sent_per_sec || 0)).toFixed(1) }} <span class="text-xs text-gray-500">msg/s</span></div>
                                 </div>
                                 <div class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
                                     <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{{ t('memory_used') }}</div>
@@ -345,17 +357,25 @@
                             <!-- System Health -->
                             <div class="p-6 rounded-3xl card-blur border border-black/5 dark:border-white/5 flex flex-col">
                                 <h3 class="font-bold mb-6 dark:text-white uppercase tracking-wider text-sm">{{ t('system_uptime') }}</h3>
-                                <div class="flex flex-col items-center justify-center space-y-6">
-                                    <div class="relative w-40 h-40 flex items-center justify-center">
+                                <div class="flex flex-col items-center justify-center space-y-4 sm:space-y-6">
+                                    <div class="relative w-32 h-32 sm:w-40 sm:h-40 flex items-center justify-center">
                                         <svg class="w-full h-full transform -rotate-90">
-                                            <circle cx="80" cy="80" r="72" stroke="currentColor" stroke-width="8" fill="transparent" class="text-black/5 dark:text-white/5"></circle>
+                                            <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="6" fill="transparent" class="text-black/5 dark:text-white/5 sm:hidden"></circle>
+                                            <circle cx="80" cy="80" r="72" stroke="currentColor" stroke-width="8" fill="transparent" class="text-black/5 dark:text-white/5 hidden sm:block"></circle>
+                                            
+                                            <!-- Mobile Circle -->
+                                            <circle cx="64" cy="64" r="58" stroke="currentColor" stroke-width="6" fill="transparent" 
+                                                    stroke-dasharray="364.4" :stroke-dashoffset="364.4 * (1 - 0.75)" 
+                                                    class="text-matrix shadow-[0_0_15px_rgba(0,255,65,0.5)] sm:hidden"></circle>
+                                            
+                                            <!-- Desktop Circle -->
                                             <circle cx="80" cy="80" r="72" stroke="currentColor" stroke-width="8" fill="transparent" 
                                                     stroke-dasharray="452" :stroke-dashoffset="452 * (1 - 0.75)" 
-                                                    class="text-matrix shadow-[0_0_15px_rgba(0,255,65,0.5)]"></circle>
+                                                    class="text-matrix shadow-[0_0_15px_rgba(0,255,65,0.5)] hidden sm:block"></circle>
                                         </svg>
                                         <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                            <span class="text-2xl font-bold dark:text-white mono">{{ uptimeDisplay.value }}</span>
-                                            <span class="text-[8px] font-bold text-gray-500 uppercase tracking-widest">{{ uptimeDisplay.unit }}</span>
+                                            <span class="text-xl sm:text-2xl font-bold dark:text-white mono">{{ uptimeDisplay.value }}</span>
+                                            <span class="text-[7px] sm:text-[8px] font-bold text-gray-500 uppercase tracking-widest">{{ uptimeDisplay.unit }}</span>
                                         </div>
                                     </div>
                                     <div class="w-full space-y-3">
@@ -407,8 +427,8 @@
                             </button>
                         </div>
                         
-                        <div class="overflow-hidden rounded-2xl border border-black/5 dark:border-white/5">
-                            <table class="w-full text-left border-collapse">
+                        <div class="overflow-x-auto rounded-2xl border border-black/5 dark:border-white/5">
+                            <table class="w-full text-left border-collapse min-w-[600px]">
                                 <thead>
                                     <tr class="bg-black/5 dark:bg-white/5">
                                         <th class="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('platform') }}</th>
@@ -465,48 +485,94 @@
                 </div>
 
                 <!-- Visualization Tab -->
-                <div v-show="activeTab === 'visualization'" class="h-[calc(100vh-160px)] relative rounded-[2.5rem] overflow-hidden border border-black/5 dark:border-white/5 bg-slate-950">
-                    <div id="visualizerContainer" class="absolute inset-0"></div>
-                    
-                    <!-- Visualization Overlay Controls -->
-                    <div class="absolute top-8 left-8 flex flex-col gap-4">
-                        <div class="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl">
-                            <h2 class="text-xl font-bold text-matrix uppercase tracking-tight mb-1">{{ t('nexus_map') }}</h2>
-                            <p class="text-[10px] text-gray-400 uppercase tracking-widest">{{ t('real_time_node_topology') }}</p>
+                <!-- Real-time Message Monitor -->
+                <div v-show="activeTab === 'monitor'" class="space-y-4 h-[calc(100vh-140px)] flex flex-col">
+                    <div class="flex items-center justify-between px-2">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-xl bg-matrix/10 text-matrix">
+                                <i data-lucide="activity" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold dark:text-white leading-tight">{{ t('monitor_events_title') }}</h2>
+                                <p class="text-[10px] text-gray-500 uppercase tracking-widest">{{ t('status_live') }} // EVENT STREAM</p>
+                            </div>
                         </div>
-                        
-                        <div class="flex gap-2">
-                            <button @click="resetCamera" 
-                                    class="p-4 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 text-white hover:text-matrix transition-all shadow-xl group">
-                                <i data-lucide="scan-eye" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
-                            </button>
-                            <button @click="fetchAllData" 
-                                    class="p-4 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 text-white hover:text-matrix transition-all shadow-xl group">
-                                <i data-lucide="refresh-cw" class="w-5 h-5 group-hover:rotate-180 transition-transform duration-500"></i>
+                        <div class="flex items-center gap-4">
+                            <select id="event-filter" onchange="window.filterEvents(this.value)"
+                                    class="px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[10px] font-bold uppercase tracking-widest text-gray-500 outline-none focus:border-matrix/50 transition-all cursor-pointer">
+                                <option value="all">{{ t('filter_all') || 'ALL EVENTS' }}</option>
+                                <option value="message">{{ t('filter_message') || 'MESSAGES' }}</option>
+                                <option value="system">{{ t('filter_system') || 'SYSTEM' }}</option>
+                                <option value="log">{{ t('filter_log') || 'LOGS' }}</option>
+                                <option value="meta">{{ t('filter_meta') || 'META' }}</option>
+                            </select>
+                            <button onclick="document.getElementById('event-container').innerHTML = '';" 
+                                    class="px-4 py-2 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">
+                                {{ t('clear') }}
                             </button>
                         </div>
                     </div>
 
-                    <div class="absolute bottom-8 right-8">
-                        <div class="flex flex-col gap-2 p-4 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 text-[10px] mono text-gray-400">
+                    <div class="flex-1 min-h-0 rounded-[2.5rem] card-blur border border-black/5 dark:border-white/5 overflow-hidden flex flex-col">
+                        <div id="event-container" 
+                             class="flex-1 overflow-y-auto p-6 font-mono text-xs space-y-1 custom-scrollbar">
+                            <div class="text-center py-20 text-gray-500 animate-pulse uppercase tracking-widest text-[10px]">
+                                {{ t('waiting_events_connection') || 'Waiting for events connection...' }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-show="activeTab === 'visualization'" class="h-[calc(100vh-160px)] relative rounded-[2.5rem] overflow-hidden border border-black/5 dark:border-white/5 bg-slate-950">
+                    <div id="visualizerContainer" class="absolute inset-0"></div>
+                    
+                    <!-- Visualization Overlay Controls -->
+                    <div class="absolute top-4 left-4 sm:top-8 sm:left-8 flex flex-col gap-3 sm:gap-4">
+                        <div class="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl">
+                            <h2 class="text-lg sm:text-xl font-bold text-matrix uppercase tracking-tight mb-1">{{ t('nexus_map') }}</h2>
+                            <p class="text-[8px] sm:text-[10px] text-gray-400 uppercase tracking-widest">{{ t('real_time_node_topology') }}</p>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button @click="resetCamera" 
+                                    class="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 text-white hover:text-matrix transition-all shadow-xl group">
+                                <i data-lucide="scan-eye" class="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform"></i>
+                            </button>
+                            <button @click="fetchAllData" 
+                                    class="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 text-white hover:text-matrix transition-all shadow-xl group">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-180 transition-transform duration-500"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="absolute bottom-4 right-4 sm:bottom-8 sm:right-8">
+                        <div class="flex flex-col gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 text-[8px] sm:text-[10px] mono text-gray-400">
                             <div class="flex items-center gap-3">
-                                <div class="w-2 h-2 rounded-full bg-matrix shadow-[0_0_8px_rgba(0,255,65,0.8)]"></div>
+                                <div class="w-2 h-2 rounded-full bg-[#facc15] shadow-[0_0_8px_rgba(250,204,21,0.8)]"></div>
                                 <span>{{ t('central_nexus') }}</span>
                             </div>
                             <div class="flex items-center gap-3">
-                                <div class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
+                                <div class="w-2 h-2 rounded-full bg-[#ff3366] shadow-[0_0_8px_rgba(255,51,102,0.8)]"></div>
                                 <span>{{ t('bot_nodes') }}</span>
                             </div>
                             <div class="flex items-center gap-3">
-                                <div class="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
+                                <div class="w-2 h-2 rounded-full bg-[#33ccff] shadow-[0_0_8px_rgba(51,204,255,0.8)]"></div>
                                 <span>{{ t('worker_nodes') }}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-[#a855f7] shadow-[0_0_8px_rgba(168,85,247,0.8)]"></div>
+                                <span>{{ t('group_nodes') || 'Groups' }}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                                <span>{{ t('user_nodes') || 'Users' }}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Bot Matrix Tab -->
-                <div v-if="activeTab === 'bot_matrix'" class="space-y-6">
+                <div v-show="activeTab === 'bots'" class="space-y-6">
                     <div class="flex items-center justify-between">
                         <div class="relative w-72">
                             <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
@@ -515,56 +581,104 @@
                         </div>
                         <div class="flex gap-2">
                             <button @click="fetchAllData" class="p-2 rounded-xl bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 text-gray-500 hover:text-matrix">
-                                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                                <i data-lucide="refresh-cw" class="w-5 h-5" :class="{'animate-spin': loading}"></i>
                             </button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        <div v-for="bot in filteredBots" :key="bot.self_id"
-                             class="p-6 rounded-3xl card-blur border border-black/5 dark:border-white/5 hover:border-matrix/30 transition-all duration-300 group">
-                            <div class="flex items-center gap-4 mb-6">
-                                <div class="relative">
-                                    <div class="w-16 h-16 rounded-2xl bg-matrix/10 flex items-center justify-center text-matrix overflow-hidden">
-                                        <img :src="`https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`" class="w-full h-full object-cover">
-                                    </div>
-                                    <div :class="['absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-white dark:border-slate-900', bot.online ? 'bg-matrix' : 'bg-gray-400']"></div>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <h4 class="font-bold truncate dark:text-white">{{ bot.nickname || 'Unknown Bot' }}</h4>
-                                    <p class="text-xs text-gray-500 mono">{{ bot.self_id }}</p>
-                                </div>
-                                <div class="px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">{{ bot.platform || 'OneBot' }}</div>
-                            </div>
-                            
-                            <div class="grid grid-cols-2 gap-4 mb-6">
-                                <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('group_count') }}</div>
-                                    <div class="text-lg font-bold dark:text-white mono">{{ bot.group_count || 0 }}</div>
-                                </div>
-                                <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('friend_count') }}</div>
-                                    <div class="text-lg font-bold dark:text-white mono">{{ bot.friend_count || 0 }}</div>
-                                </div>
-                            </div>
-
-                            <button @click="manageBot(bot)" 
-                                    class="w-full py-3 rounded-2xl bg-matrix text-slate-900 font-bold text-sm hover:shadow-lg hover:shadow-matrix/20 transition-all active:scale-[0.98]">
-                                {{ t('manage_node') }}
-                            </button>
+                    <!-- Bot Section -->
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-1.5 h-6 bg-matrix rounded-full"></div>
+                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest">{{ t('bot_nodes') }}</h3>
+                            <span class="px-2 py-0.5 rounded-lg bg-matrix/10 text-matrix text-[10px] font-bold">{{ filteredBots.length }}</span>
                         </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            <div v-for="bot in filteredBots" :key="bot.self_id"
+                                 class="p-6 rounded-3xl card-blur border border-black/5 dark:border-white/5 hover:border-matrix/30 transition-all duration-300 group">
+                                <div class="flex items-center gap-4 mb-6">
+                                    <div class="relative">
+                                        <div class="w-16 h-16 rounded-2xl bg-matrix/10 flex items-center justify-center text-matrix overflow-hidden">
+                                            <img :src="`https://q1.qlogo.cn/g?b=qq&nk=${bot.self_id}&s=640`" class="w-full h-full object-cover">
+                                        </div>
+                                        <div :class="['absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-white dark:border-slate-900', bot.is_alive ? 'bg-matrix' : 'bg-gray-400']"></div>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-bold truncate dark:text-white">{{ bot.nickname || 'Unknown Bot' }}</h4>
+                                        <p class="text-xs text-gray-500 mono">{{ bot.self_id }}</p>
+                                    </div>
+                                    <div class="px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">{{ bot.platform || 'OneBot' }}</div>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4 mb-6">
+                                    <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 text-center">
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('group_count') }}</div>
+                                        <div class="text-lg font-bold dark:text-white mono">{{ bot.group_count || 0 }}</div>
+                                    </div>
+                                    <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 text-center">
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('friend_count') }}</div>
+                                        <div class="text-lg font-bold dark:text-white mono">{{ bot.friend_count || 0 }}</div>
+                                    </div>
+                                </div>
+
+                                <button @click="manageBot(bot)" 
+                                        class="w-full py-3 rounded-2xl bg-matrix text-slate-900 font-bold text-sm hover:shadow-lg hover:shadow-matrix/20 transition-all active:scale-[0.98]">
+                                    {{ t('manage_node') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Worker Section -->
+                    <div class="space-y-4 mt-12">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-1.5 h-6 bg-blue-500 rounded-full"></div>
+                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest">{{ t('worker_nodes') }}</h3>
+                            <span class="px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-500 text-[10px] font-bold">{{ workers.length }}</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            <div v-for="worker in workers" :key="worker.id"
+                                 class="p-6 rounded-3xl card-blur border border-black/5 dark:border-white/5 hover:border-blue-500/30 transition-all duration-300 group">
+                                <div class="flex items-center gap-4 mb-6">
+                                    <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                        <i data-lucide="cpu" class="w-8 h-8"></i>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-bold truncate dark:text-white">{{ worker.id }}</h4>
+                                        <p class="text-xs text-gray-500 mono">{{ worker.remote_addr || 'WebSocket' }}</p>
+                                    </div>
+                                    <div class="px-2 py-1 rounded-lg bg-blue-500/10 text-[10px] font-bold text-blue-500 uppercase tracking-wider">Active</div>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 text-center">
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('processed_count') }}</div>
+                                        <div class="text-lg font-bold dark:text-white mono">{{ worker.handled_count || 0 }}</div>
+                                    </div>
+                                    <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 text-center">
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{{ t('avg_rtt') }}</div>
+                                        <div class="text-lg font-bold dark:text-white mono">{{ worker.avg_rtt || '0ms' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="filteredBots.length === 0 && workers.length === 0" class="flex flex-col items-center justify-center py-20 text-gray-500">
+                        <i data-lucide="bot" class="w-12 h-12 mb-4 opacity-20"></i>
+                        <p>{{ t('no_bot_data') }}</p>
                     </div>
                 </div>
 
                 <!-- Groups Tab -->
                 <div v-show="activeTab === 'groups'" class="space-y-6">
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                         <div>
-                            <h2 class="text-2xl font-bold dark:text-white uppercase tracking-tight">{{ t('groups') }}</h2>
-                            <p class="text-sm text-gray-500">{{ t('manage_groups_desc') }}</p>
+                            <h2 class="text-xl sm:text-2xl font-bold dark:text-white uppercase tracking-tight">{{ t('groups') }}</h2>
+                            <p class="text-xs sm:text-sm text-gray-500">{{ t('manage_groups_desc') }}</p>
                         </div>
                         <button @click="fetchGroups" 
-                                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-matrix/10 text-matrix hover:bg-matrix/20 transition-all">
+                                class="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-matrix/10 text-matrix hover:bg-matrix/20 transition-all w-full sm:w-auto">
                             <i data-lucide="refresh-cw" class="w-4 h-4" :class="{'animate-spin': loading}"></i>
                             <span class="text-xs font-bold uppercase tracking-wider">{{ t('refresh') }}</span>
                         </button>
@@ -630,13 +744,13 @@
 
                 <!-- Friends Tab -->
                 <div v-show="activeTab === 'friends'" class="space-y-6">
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                         <div>
-                            <h2 class="text-2xl font-bold dark:text-white uppercase tracking-tight">{{ t('friends') }}</h2>
-                            <p class="text-sm text-gray-500">{{ t('manage_friends_desc') }}</p>
+                            <h2 class="text-xl sm:text-2xl font-bold dark:text-white uppercase tracking-tight">{{ t('friends') }}</h2>
+                            <p class="text-xs sm:text-sm text-gray-500">{{ t('manage_friends_desc') }}</p>
                         </div>
                         <button @click="fetchFriends" 
-                                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-matrix/10 text-matrix hover:bg-matrix/20 transition-all">
+                                class="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-matrix/10 text-matrix hover:bg-matrix/20 transition-all w-full sm:w-auto">
                             <i data-lucide="refresh-cw" class="w-4 h-4" :class="{'animate-spin': loading}"></i>
                             <span class="text-xs font-bold uppercase tracking-wider">{{ t('refresh') }}</span>
                         </button>
@@ -670,19 +784,19 @@
 
                 <!-- Docker Management Tab -->
                 <div v-show="activeTab === 'docker'" class="space-y-6">
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                         <div>
-                            <h2 class="text-2xl font-bold dark:text-white uppercase tracking-tight">{{ t('docker_mgmt') }}</h2>
-                            <p class="text-sm text-gray-500">{{ t('manage_docker_desc') }}</p>
+                            <h2 class="text-xl sm:text-2xl font-bold dark:text-white uppercase tracking-tight">{{ t('docker_mgmt') }}</h2>
+                            <p class="text-xs sm:text-sm text-gray-500">{{ t('manage_docker_desc') }}</p>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             <button @click="showDockerBotModal = true" 
-                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-matrix text-slate-900 hover:shadow-lg hover:shadow-matrix/20 transition-all font-bold">
+                                    class="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-matrix text-slate-900 hover:shadow-lg hover:shadow-matrix/20 transition-all font-bold w-full sm:w-auto">
                                 <i data-lucide="plus" class="w-4 h-4"></i>
                                 <span class="text-xs uppercase tracking-wider">{{ t('add_bot') }}</span>
                             </button>
                             <button @click="fetchDockerContainers" 
-                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-matrix/10 text-matrix hover:bg-matrix/20 transition-all">
+                                    class="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-matrix/10 text-matrix hover:bg-matrix/20 transition-all w-full sm:w-auto">
                                 <i data-lucide="refresh-cw" class="w-4 h-4" :class="{'animate-spin': loading}"></i>
                                 <span class="text-xs font-bold uppercase tracking-wider">{{ t('refresh') }}</span>
                             </button>
@@ -1125,7 +1239,7 @@
         <!-- Add Bot Modal -->
         <div v-if="showAddBotModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-md" @click="showAddBotModal = false"></div>
-            <div class="relative w-full max-w-md rounded-[2.5rem] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-2xl p-8 space-y-6">
+            <div class="relative w-full max-w-md rounded-3xl sm:rounded-[2.5rem] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-2xl p-6 sm:p-8 space-y-6">
                 <div class="flex items-center justify-between">
                     <h3 class="text-xl font-bold dark:text-white uppercase tracking-tight">{{ t('add_bot') }}</h3>
                     <button @click="showAddBotModal = false" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-400">
@@ -1162,7 +1276,7 @@
         <!-- User Management Modal -->
         <div v-if="showingUserModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-md" @click="showingUserModal = false"></div>
-            <div class="relative w-full max-w-md rounded-[2.5rem] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-2xl p-8 space-y-6">
+            <div class="relative w-full max-w-md rounded-3xl sm:rounded-[2.5rem] bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-2xl p-6 sm:p-8 space-y-6">
                 <div class="flex items-center justify-between">
                     <h3 class="text-xl font-bold dark:text-white uppercase tracking-tight">{{ userModalData.action === 'create' ? t('add_user') : t('edit_user') }}</h3>
                     <button @click="showingUserModal = false" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-400">
@@ -1330,6 +1444,7 @@
     <script type="module">
         import { initCharts, updateStats, updateChatStats, showAllStats } from './js/modules/stats.js?v=1.1.88';
         import { showSystemDetail, updateDetailChart } from './js/modules/system.js?v=1.1.88';
+        import { addEventLog, filterEvents } from './js/modules/logs.js?v=1.1.88';
         
         window.initCharts = initCharts;
         window.updateStats = updateStats;
@@ -1337,6 +1452,8 @@
         window.showAllStats = showAllStats;
         window.showSystemDetailLegacy = showSystemDetail;
         window.updateDetailChart = updateDetailChart;
+        window.addEventLog = addEventLog;
+        window.filterEvents = filterEvents;
     </script>
     <script>
         // Global modal control functions

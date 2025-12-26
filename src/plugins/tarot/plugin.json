@@ -1,0 +1,8 @@
+{
+  "name": "tarot",
+  "description": "tarot plugin",
+  "version": "1.0.0",
+  "entry_point": "tarot.exe",
+  "timeout_ms": 5000,
+  "max_restarts": 3
+}

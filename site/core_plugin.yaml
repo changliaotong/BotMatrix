@@ -1,0 +1,76 @@
+core_plugin:
+  description: "系统级核心插件（必须在系统内部实现），负责消息流控制、权限裁决、黑白名单、敏感词、流量控制、统计和管理员指令。注意：这是系统级功能，不属于普通 Worker 模块。"
+  system_control:
+    enable_open_close: true
+    maintenance_mode: true
+    downgrade_mode: true
+  permissions:
+    levels:
+      - system_admin
+      - robot_admin
+      - group_admin
+    whitelist:
+      system: []
+      robot: []
+      group: []
+    blacklist:
+      system: []
+      robot: []
+      group: []
+      cloud_official: []
+  message_flow_control:
+    types:
+      user_message: can_block
+      system_event: always_forward
+      admin_command: always_forward
+  sensitive_words:
+    levels:
+      system: []
+      robot: []
+      group: []
+    match_modes:
+      - exact
+      - prefix
+      - regex
+  url_filter:
+    whitelist: []
+    blacklist: []
+    match_modes:
+      - exact
+      - domain_suffix
+      - regex
+  statistics:
+    enable: true
+    async: true
+    record_short_circuit_messages: true
+  admin_commands:
+    support:
+      - system_open_close
+      - strategy_update
+      - robot_control
+      - query_status
+      - broadcast_event
+    permission_required: true
+  flow_priority:
+    whitelist_highest: true
+    blacklist_enforce: true
+    sensitive_words_check: true
+    url_filter_check: true
+  scalability:
+    multi_instance: true
+    redis_sync:
+      system_state: true
+      permissions: true
+      blacklist_whitelist: true
+      statistics_queue: true
+  monitoring:
+    enable: true
+    alert_on_exception: true
+    report_statistics: true
+  potential_enhancements:
+    - intelligent_flow_control_based_on_activity
+    - AI_based_behavior_prediction
+    - automated_strategy_recommendation
+    - message_priority_scheduling
+    - cloud_policy_management
+  note: "⚠️ 强调：此插件必须集成在系统核心层（消息路由中心），不是 Worker 模块。"

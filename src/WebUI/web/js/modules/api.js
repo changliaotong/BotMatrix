@@ -7,7 +7,8 @@ import { currentBotId } from './bots.js';
 export const pendingRequests = new Map(); // echo -> {resolve, reject, timeout}
 
 export async function fetchWithAuth(url, options = {}) {
-    const token = authToken || localStorage.getItem('wxbot_token');
+    // Prefer window.authToken if set by matrix.js, then localStorage
+    const token = window.authToken || localStorage.getItem('wxbot_token');
     if (!token) {
         console.error('No auth token found');
         // If we're not on the login page already, we might want to show it

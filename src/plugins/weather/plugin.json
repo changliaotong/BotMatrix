@@ -1,0 +1,8 @@
+{
+  "name": "weather",
+  "description": "weather plugin",
+  "version": "1.0.0",
+  "entry_point": "weather.exe",
+  "timeout_ms": 5000,
+  "max_restarts": 3
+}

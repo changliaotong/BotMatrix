@@ -1,0 +1,8 @@
+{
+  "name": "idiom_guess",
+  "description": "idiom_guess plugin",
+  "version": "1.0.0",
+  "entry_point": "idiom_guess.exe",
+  "timeout_ms": 5000,
+  "max_restarts": 3
+}

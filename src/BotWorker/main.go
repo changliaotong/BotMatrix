@@ -3,6 +3,8 @@ package main
 import (
 	"BotMatrix/common"
 	"BotMatrix/common/log"
+	"BotMatrix/common/plugin/core"
+	"BotMatrix/common/plugin/policy"
 	"botworker/internal/config"
 	"botworker/internal/db"
 	"botworker/internal/plugin"
@@ -17,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -149,8 +152,39 @@ func startBot(ctx context.Context) error {
 	// 获取插件管理器
 	pluginManager := workerServer.GetPluginManager()
 
+	// 加载目录中的插件
+	pluginsDir := filepath.Join("..", "..", "plugins")
+	if err := pluginManager.LoadPlugins(pluginsDir); err != nil {
+		log.Error("加载插件失败", zap.Error(err))
+	}
+
 	// 加载所有插件
 	loadAllPlugins(pluginManager, cfg, database, redisClient)
+
+	// 初始化新的插件系统
+	pm := core.NewPluginManager()
+	
+	// 设置插件策略
+	pm.SetPolicy(policy.NewWorkerPolicy())
+	
+	// 扫描并加载插件
+	if err := pm.ScanPlugins("plugins"); err != nil {
+		log.Error("扫描插件失败", zap.Error(err))
+	}
+	
+	// 启动所有插件
+	for name := range pm.GetPlugins() {
+		if err := pm.StartPlugin(name); err != nil {
+			log.Error("启动插件失败", zap.String("plugin", name), zap.Error(err))
+		}
+	}
+	
+	// 注册事件处理
+	pm.RegisterEventHandler(func(event *core.EventMessage) {
+		// 将插件事件转换为BotWorker事件
+		// 这里需要实现事件转换逻辑
+		log.Info("插件事件", zap.Any("event", event))
+	})
 
 	// 打印已加载的插件
 	log.Info("已加载的插件:")
