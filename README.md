@@ -172,9 +172,7 @@ SOFTWARE.
 
 ### 团队
 - **GitHub**: [@BotMatrix](https://github.com/BotMatrix)
-- **Email**: team@botmatrix.io
-- **Website**: https://botmatrix.io
 
 ---
 
-**BotMatrix Team** | 2024
+**BotMatrix Team** | 2025
