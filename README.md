@@ -2,13 +2,14 @@
 
 ## 📚 文档 (Documentation)
 
-详细的文档请参考：**[BotMatrix 文档中心](docs/README.md)**
+- **[简体中文文档中心](docs/zh-CN/README.md)**
+- **[English Documentation Hub](docs/en-US/README.md)**
 
-### 主要文档索引：
-- **[快速部署](docs/DEPLOY.md)**
-- **[服务端手册](docs/SERVER_MANUAL.md)**
-- **[插件开发指南](PLUGIN_DEVELOPMENT.md)**
-- **[路由规则](docs/ROUTING_RULES.md)**
+### 主要文档索引 (Main Index):
+- **[系统架构 (Architecture)](docs/zh-CN/ARCHITECTURE.md)**
+- **[API 参考 (API Reference)](docs/zh-CN/API_REFERENCE.md)**
+- **[插件开发 (Plugin Dev)](docs/zh-CN/PLUGIN_DEVELOPMENT.md)**
+- **[部署指南 (Deployment)](docs/zh-CN/DEPLOY.md)**
 
 ## 🎯 项目概述
 

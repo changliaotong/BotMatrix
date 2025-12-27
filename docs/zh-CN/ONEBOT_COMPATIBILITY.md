@@ -1,5 +1,8 @@
 # OneBot 11 协议兼容性文档
 
+> [🌐 English](../en-US/ONEBOT_COMPATIBILITY.md) | [简体中文](ONEBOT_COMPATIBILITY.md)
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
+
 本文档记录了 BotMatrix 项目中各种协议客户端与 OneBot 11 标准协议的兼容性情况。
 
 ## 协议客户端兼容性状态
@@ -98,44 +101,3 @@
 - `send_private_msg` - 发送私聊消息
 - `send_group_msg` - 发送群消息
 - `delete_msg` - 撤回消息
-- `get_login_info` - 获取登录信息
-- `get_group_list` - 获取群列表
-- `get_group_member_list` - 获取群成员列表
-- `get_group_member_info` - 获取群成员信息
-- `get_self_info` - 获取机器人信息
-- `get_friend_list` - 获取好友列表
-- `get_version_info` - 获取版本信息
-- `get_status` - 获取状态
-
-## WebSocket 通信协议
-
-所有客户端均支持 WebSocket 与 BotNexus 通信，包括:
-- 连接建立时的识别包
-- 心跳机制（每 10-30 秒）
-- 事件上报
-- 命令接收与响应
-- 配置更新
-
-## 特殊处理
-
-### CQ 码支持
-- 基本 CQ 码处理（图片、语音等）
-- 消息元素转换
-
-### 消息类型映射
-- 不同平台的消息类型正确映射到 OneBot 11 标准
-- 文本、图片、语音、表情等消息类型支持
-
-## 已知限制
-
-1. **WxBotGo**: 由于第三方库限制，部分群管理功能不支持
-2. **EmailBot**: 将所有邮件作为私聊消息处理，不支持群聊概念
-3. **各平台特有功能**: 某些平台特有功能无法完全映射到 OneBot 11 标准
-
-## 开发建议
-
-1. 对于新添加的协议客户端，应遵循以上 OneBot 11 标准实现
-2. 优先实现核心消息和命令功能
-3. 根据平台特性进行合理的字段映射
-4. 实现 WebSocket 连接管理机制
-5. 考虑异常处理和重连机制

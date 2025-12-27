@@ -1,6 +1,7 @@
 # 服务端使用手册 (Server Manual)
 
-> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+> [🌐 English](../en-US/SERVER_MANUAL.md) | [简体中文](SERVER_MANUAL.md)
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
 
 ---
 

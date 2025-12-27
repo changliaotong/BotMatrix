@@ -1,6 +1,7 @@
 # BotMatrix 技能系统兼容性与功能开关文档
 
-> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+> [🌐 English](../en-US/SKILL_SWITCH_AND_COMPATIBILITY.md) | [简体中文](SKILL_SWITCH_AND_COMPATIBILITY.md)
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
 
 本文档记录了 BotMatrix 技能系统的兼容性设计、功能开关机制以及在测试阶段的隔离策略。
 

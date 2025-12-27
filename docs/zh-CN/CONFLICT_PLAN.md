@@ -1,29 +1,30 @@
-# 文档冲突与改进计划 (Conflict & Improvement Plan)
+# 文档冲突与改进计划
 
-> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+> [🌐 English](../en-US/CONFLICT_PLAN.md) | [简体中文](CONFLICT_PLAN.md)
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
 
 本文档记录了项目中存在的过时文档、逻辑冲突以及未来的改进方向。
 
-## 🚩 已知冲突 (Identified Conflicts)
+## 🚩 已知冲突
 
-### 1. 消息路由逻辑 (Message Routing)
-- **冲突内容**: `docs/ROUTING_RULES.md` 中描述的部分路由优先级与 `src/BotNexus/handlers.go` 中的实际实现不完全一致。
+### 1. 消息路由逻辑
+- **冲突内容**: `ROUTING_RULES.md` 中描述的部分路由优先级与 `src/BotNexus/handlers.go` 中的实际实现不完全一致。
 - **现状**: 代码中引入了更复杂的通配符匹配逻辑，但文档尚未更新。
 - **改进计划**: 同步更新文档，增加对正则路由和通配符优先级的详细说明。
 
-### 2. Redis 依赖 (Redis Dependency)
-- **冲突内容**: 部分旧文档仍提到使用本地文件存储会话，而 `docs/REDIS_UPGRADE.md` 明确指出已切换到 Redis。
+### 2. Redis 依赖
+- **冲突内容**: 部分旧文档仍提到使用本地文件存储会话，而 `REDIS_UPGRADE.md` 明确指出已切换到 Redis。
 - **现状**: 部分插件可能仍尝试读写本地 JSON 文件。
 - **改进计划**: 全面清理旧文档中的本地存储描述，统一使用 Redis 访问模式。
 
-### 3. 多平台兼容性 (Multi-platform Compatibility)
-- **冲突内容**: `docs/SERVER_MANUAL.md` 主要针对 Python 端，而 Go 端的实现细节（如 OneBot 适配层）未详尽描述。
+### 3. 多平台兼容性
+- **冲突内容**: `SERVER_MANUAL.md` 主要针对 Python 端，而 Go 端的实现细节（如 OneBot 适配层）未详尽描述。
 - **现状**: 开发者在适配新平台时缺乏统一的接口规范。
 - **改进计划**: 建立通用的 `PLATFORM_ADAPTER_GUIDE.md`。
 
 ---
 
-## 📅 改进计划列表 (Improvement Roadmap)
+## 📅 改进计划列表
 
 ### 第一阶段：文档规范化 (已完成)
 - [x] 建立文档中心索引。

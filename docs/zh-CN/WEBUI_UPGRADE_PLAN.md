@@ -1,5 +1,8 @@
 # BotMatrix WebUI 现代化升级方案
 
+> [🌐 English](../en-US/WEBUI_UPGRADE_PLAN.md) | [简体中文](WEBUI_UPGRADE_PLAN.md)
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
+
 为了应对项目规模的持续扩大，目前的 WebUI 架构（传统脚本引入 + 全局变量污染）已达到维护瓶颈。以下是建议的现代化升级方案。
 
 ## 1. 核心架构建议：Vite + Vue 3 (SFC) + TypeScript

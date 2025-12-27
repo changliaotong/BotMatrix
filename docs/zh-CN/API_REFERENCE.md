@@ -1,6 +1,7 @@
-# BotMatrix API 接口参考 (API Reference)
+# BotMatrix API 接口参考
 
-> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+> [🌐 English](../en-US/API_REFERENCE.md) | [简体中文](API_REFERENCE.md)
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
 
 BotMatrix 兼容 **OneBot v11** 协议，并在此基础上扩展了多平台支持和系统管理接口。
 
