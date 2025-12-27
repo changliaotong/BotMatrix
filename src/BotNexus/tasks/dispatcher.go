@@ -36,6 +36,14 @@ func (d *Dispatcher) RegisterAction(name string, handler ActionHandler) {
 	d.actions[name] = handler
 }
 
+func (d *Dispatcher) GetActions() []string {
+	actions := make([]string, 0, len(d.actions))
+	for name := range d.actions {
+		actions = append(actions, name)
+	}
+	return actions
+}
+
 func (d *Dispatcher) Dispatch(execution Execution) {
 	// 1. 更新状态为 Dispatching
 	if err := d.updateStatus(execution.ID, ExecDispatching, nil); err != nil {

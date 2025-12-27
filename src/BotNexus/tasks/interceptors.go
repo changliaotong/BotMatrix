@@ -49,6 +49,14 @@ func (im *InterceptorManager) Add(i Interceptor) {
 	im.interceptors = append(im.interceptors, i)
 }
 
+func (im *InterceptorManager) GetInterceptors() []string {
+	names := make([]string, len(im.interceptors))
+	for i, interceptor := range im.interceptors {
+		names[i] = interceptor.Name()
+	}
+	return names
+}
+
 func (im *InterceptorManager) ProcessBeforeDispatch(ctx *InterceptorContext) bool {
 	ctx.DB = im.db
 	for _, i := range im.interceptors {
