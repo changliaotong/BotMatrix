@@ -130,6 +130,7 @@ class BotNexusService extends ChangeNotifier {
 
   void _handleMessage(dynamic message) {
     try {
+      print('Received message: $message');
       final data = jsonDecode(message);
       final type = data['type'];
       final payload = data['data'];

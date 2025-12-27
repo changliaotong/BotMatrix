@@ -16,7 +16,7 @@ func (m *Manager) SaveGroupCache(cache *GroupCache) error {
 		bot_id = EXCLUDED.bot_id,
 		last_seen = EXCLUDED.last_seen;
 	`
-	_, err := m.DB.Exec(m.prepareQuery(query), cache.GroupID, cache.GroupName, cache.BotID, cache.LastSeen)
+	_, err := m.DB.Exec(m.PrepareQuery(query), cache.GroupID, cache.GroupName, cache.BotID, cache.LastSeen)
 	return err
 }
 
@@ -29,7 +29,7 @@ func (m *Manager) SaveFriendCache(cache *FriendCache) error {
 		nickname = EXCLUDED.nickname,
 		last_seen = EXCLUDED.last_seen;
 	`
-	_, err := m.DB.Exec(m.prepareQuery(query), cache.UserID, cache.Nickname, cache.LastSeen)
+	_, err := m.DB.Exec(m.PrepareQuery(query), cache.UserID, cache.Nickname, cache.LastSeen)
 	return err
 }
 
@@ -43,13 +43,13 @@ func (m *Manager) SaveMemberCache(cache *MemberCache) error {
 		card = EXCLUDED.card,
 		last_seen = EXCLUDED.last_seen;
 	`
-	_, err := m.DB.Exec(m.prepareQuery(query), cache.GroupID, cache.UserID, cache.Nickname, cache.Card, cache.LastSeen)
+	_, err := m.DB.Exec(m.PrepareQuery(query), cache.GroupID, cache.UserID, cache.Nickname, cache.Card, cache.LastSeen)
 	return err
 }
 
 // LoadGroupCachesFromDB 从数据库加载所有群组缓存
 func (m *Manager) LoadGroupCachesFromDB() ([]*GroupCache, error) {
-	rows, err := m.DB.Query(m.prepareQuery("SELECT group_id, group_name, bot_id, last_seen FROM group_cache"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT group_id, group_name, bot_id, last_seen FROM group_cache"))
 	if err != nil {
 		return nil, err
 	}
@@ -70,25 +70,25 @@ func (m *Manager) LoadGroupCachesFromDB() ([]*GroupCache, error) {
 
 // DeleteGroupCache 从数据库删除群组缓存
 func (m *Manager) DeleteGroupCache(groupID string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM group_cache WHERE group_id = ?"), groupID)
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM group_cache WHERE group_id = ?"), groupID)
 	return err
 }
 
 // DeleteFriendCache 从数据库删除好友缓存
 func (m *Manager) DeleteFriendCache(userID string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM friend_cache WHERE user_id = ?"), userID)
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM friend_cache WHERE user_id = ?"), userID)
 	return err
 }
 
 // DeleteMemberCache 从数据库删除群成员缓存
 func (m *Manager) DeleteMemberCache(groupID, userID string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM member_cache WHERE group_id = ? AND user_id = ?"), groupID, userID)
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM member_cache WHERE group_id = ? AND user_id = ?"), groupID, userID)
 	return err
 }
 
 // LoadFriendCachesFromDB 从数据库加载所有好友缓存
 func (m *Manager) LoadFriendCachesFromDB() ([]*FriendCache, error) {
-	rows, err := m.DB.Query(m.prepareQuery("SELECT user_id, nickname, last_seen FROM friend_cache"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT user_id, nickname, last_seen FROM friend_cache"))
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (m *Manager) LoadFriendCachesFromDB() ([]*FriendCache, error) {
 
 // LoadMemberCachesFromDB 从数据库加载所有群成员缓存
 func (m *Manager) LoadMemberCachesFromDB() ([]*MemberCache, error) {
-	rows, err := m.DB.Query(m.prepareQuery("SELECT group_id, user_id, nickname, card, last_seen FROM member_cache"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT group_id, user_id, nickname, card, last_seen FROM member_cache"))
 	if err != nil {
 		return nil, err
 	}

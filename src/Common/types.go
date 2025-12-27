@@ -101,6 +101,7 @@ type LogEntry struct {
 	Message   string    `json:"message"`
 	Time      string    `json:"time"`
 	Timestamp time.Time `json:"timestamp"`
+	Source    string    `json:"source,omitempty"`
 }
 
 // SyncState represents the initial state for subscribers
@@ -246,6 +247,11 @@ type AppConfig struct {
 	EnableSkill bool   `json:"enable_skill"`
 	LogLevel    string `json:"log_level"`
 	AutoReply   bool   `json:"auto_reply"`
+
+	// Azure Translator Config
+	AzureTranslateKey      string `json:"azure_translate_key"`
+	AzureTranslateEndpoint string `json:"azure_translate_endpoint"`
+	AzureTranslateRegion   string `json:"azure_translate_region"`
 }
 
 // Manager holds the state

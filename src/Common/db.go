@@ -33,8 +33,6 @@ func (m *Manager) InitDB() error {
 		m.UserStatsToday = make(map[string]int64)
 	}
 
-	m.InitDefaultAdmin()
-
 	var db *sql.DB
 	var err error
 
@@ -45,8 +43,13 @@ func (m *Manager) InitDB() error {
 	if err != nil {
 		return fmt.Errorf("无法连接 PostgreSQL: %v", err)
 	}
+	if err = db.Ping(); err != nil {
+		return fmt.Errorf("无法验证 PostgreSQL 连接: %v", err)
+	}
 
 	m.DB = db
+
+	m.InitDefaultAdmin()
 
 	// PostgreSQL 建表逻辑
 	idType := "SERIAL PRIMARY KEY"
@@ -64,20 +67,23 @@ func (m *Manager) InitDB() error {
 		updated_at TIMESTAMP
 	);`, idType)
 
-	_, err = m.DB.Exec(m.prepareQuery(query))
+	_, err = m.DB.Exec(m.PrepareQuery(query))
 	if err != nil {
 		log.Printf("创建用户表失败: %v", err)
 		return err
 	}
 
 	// 兼容已有数据库：确保 active 字段存在
-	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE users ADD COLUMN active BOOLEAN DEFAULT TRUE`))
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE users ADD COLUMN active BOOLEAN DEFAULT TRUE`))
 	if err != nil {
 		errMsg := err.Error()
 		if !strings.Contains(errMsg, "duplicate column name") && !strings.Contains(errMsg, "already exists") {
 			log.Printf("为 users 表添加 active 字段失败: %v", err)
 			return err
 		}
+	} else {
+		// 如果是新添加的字段，确保所有现有用户都是启用状态
+		m.DB.Exec(m.PrepareQuery(`UPDATE users SET active = TRUE WHERE active IS NULL`))
 	}
 
 	// 创建路由规则表
@@ -90,7 +96,7 @@ func (m *Manager) InitDB() error {
 		updated_at TIMESTAMP
 	);`, idType)
 
-	_, err = m.DB.Exec(m.prepareQuery(routingQuery))
+	_, err = m.DB.Exec(m.PrepareQuery(routingQuery))
 	if err != nil {
 		log.Printf("创建路由规则表失败: %v", err)
 		return err
@@ -104,7 +110,7 @@ func (m *Manager) InitDB() error {
 		bot_id TEXT,
 		last_seen TIMESTAMP
 	);`
-	_, err = m.DB.Exec(m.prepareQuery(groupCacheQuery))
+	_, err = m.DB.Exec(m.PrepareQuery(groupCacheQuery))
 	if err != nil {
 		log.Printf("创建群组缓存表失败: %v", err)
 		return err
@@ -117,7 +123,7 @@ func (m *Manager) InitDB() error {
 		nickname TEXT,
 		last_seen TIMESTAMP
 	);`
-	_, err = m.DB.Exec(m.prepareQuery(friendCacheQuery))
+	_, err = m.DB.Exec(m.PrepareQuery(friendCacheQuery))
 	if err != nil {
 		log.Printf("创建好友缓存表失败: %v", err)
 		return err
@@ -137,32 +143,32 @@ func (m *Manager) InitDB() error {
 		total_points INTEGER DEFAULT 0,
 		PRIMARY KEY (group_id, user_id)
 	);`
-	_, err = m.DB.Exec(m.prepareQuery(memberCacheQuery))
+	_, err = m.DB.Exec(m.PrepareQuery(memberCacheQuery))
 	if err != nil {
 		log.Printf("创建群成员缓存表失败: %v", err)
 		return err
 	}
 
 	// 添加签到相关字段（如果不存在）
-	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS last_sign_time TIMESTAMP`))
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS last_sign_time TIMESTAMP`))
 	if err != nil {
 		log.Printf("为 member_cache 表添加 last_sign_time 字段失败: %v", err)
 		// 不返回错误，继续执行
 	}
 
-	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0`))
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0`))
 	if err != nil {
 		log.Printf("为 member_cache 表添加 streak 字段失败: %v", err)
 		// 不返回错误，继续执行
 	}
 
-	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS total_sign_days INTEGER DEFAULT 0`))
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS total_sign_days INTEGER DEFAULT 0`))
 	if err != nil {
 		log.Printf("为 member_cache 表添加 total_sign_days 字段失败: %v", err)
 		// 不返回错误，继续执行
 	}
 
-	_, err = m.DB.Exec(m.prepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS total_points INTEGER DEFAULT 0`))
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE member_cache ADD COLUMN IF NOT EXISTS total_points INTEGER DEFAULT 0`))
 	if err != nil {
 		log.Printf("为 member_cache 表添加 total_points 字段失败: %v", err)
 		// 不返回错误，继续执行
@@ -175,29 +181,29 @@ func (m *Manager) InitDB() error {
 		value TEXT,
 		updated_at TIMESTAMP
 	);`
-	_, err = m.DB.Exec(m.prepareQuery(statsQuery))
+	_, err = m.DB.Exec(m.PrepareQuery(statsQuery))
 	if err != nil {
 		log.Printf("创建系统统计表失败: %v", err)
 		return err
 	}
 
 	// 创建详细统计表
-	_, err = m.DB.Exec(m.prepareQuery(`CREATE TABLE IF NOT EXISTS group_stats (id TEXT PRIMARY KEY, count BIGINT, updated_at TIMESTAMP)`))
+	_, err = m.DB.Exec(m.PrepareQuery(`CREATE TABLE IF NOT EXISTS group_stats (id TEXT PRIMARY KEY, count BIGINT, updated_at TIMESTAMP)`))
 	if err != nil {
 		log.Printf("创建群组统计表失败: %v", err)
 		return err
 	}
-	_, err = m.DB.Exec(m.prepareQuery(`CREATE TABLE IF NOT EXISTS user_stats (id TEXT PRIMARY KEY, count BIGINT, updated_at TIMESTAMP)`))
+	_, err = m.DB.Exec(m.PrepareQuery(`CREATE TABLE IF NOT EXISTS user_stats (id TEXT PRIMARY KEY, count BIGINT, updated_at TIMESTAMP)`))
 	if err != nil {
 		log.Printf("创建用户统计表失败: %v", err)
 		return err
 	}
-	_, err = m.DB.Exec(m.prepareQuery(`CREATE TABLE IF NOT EXISTS group_stats_today (id TEXT PRIMARY KEY, count BIGINT, day TEXT, updated_at TIMESTAMP)`))
+	_, err = m.DB.Exec(m.PrepareQuery(`CREATE TABLE IF NOT EXISTS group_stats_today (id TEXT PRIMARY KEY, count BIGINT, day TEXT, updated_at TIMESTAMP)`))
 	if err != nil {
 		log.Printf("创建群组每日统计表失败: %v", err)
 		return err
 	}
-	_, err = m.DB.Exec(m.prepareQuery(`CREATE TABLE IF NOT EXISTS user_stats_today (id TEXT PRIMARY KEY, count BIGINT, day TEXT, updated_at TIMESTAMP)`))
+	_, err = m.DB.Exec(m.PrepareQuery(`CREATE TABLE IF NOT EXISTS user_stats_today (id TEXT PRIMARY KEY, count BIGINT, day TEXT, updated_at TIMESTAMP)`))
 	if err != nil {
 		log.Printf("创建用户每日统计表失败: %v", err)
 		return err
@@ -221,8 +227,8 @@ func (m *Manager) InitDB() error {
 	return nil
 }
 
-// prepareQuery 根据数据库类型转换 SQL 语句 (目前固定为 PostgreSQL)
-func (m *Manager) prepareQuery(query string) string {
+// PrepareQuery 根据数据库类型转换 SQL 语句 (目前固定为 PostgreSQL)
+func (m *Manager) PrepareQuery(query string) string {
 	// 1. 替换 ? 为 $1, $2, $3...
 	// 注意：简单的字符串替换可能会有问题，如果 SQL 中包含问号（如 JSON 操作），
 	// 但在这个项目中目前没有这种情况。
@@ -260,11 +266,11 @@ func (m *Manager) SaveStatToDB(key string, value interface{}) error {
 		updated_at = EXCLUDED.updated_at;
 	`
 	now := time.Now()
-	_, err := m.DB.Exec(m.prepareQuery(query), key, fmt.Sprintf("%v", value), now)
+	_, err := m.DB.Exec(m.PrepareQuery(query), key, fmt.Sprintf("%v", value), now)
 	return err
 }
 
-// loadStatsFromDB 从数据库加载系统统计
+// LoadStatsFromDB 从数据库加载系统统计
 func (m *Manager) LoadStatsFromDB() error {
 	m.StatsMutex.Lock()
 	defer m.StatsMutex.Unlock()
@@ -276,7 +282,7 @@ func (m *Manager) LoadStatsFromDB() error {
 	m.UserStatsToday = make(map[string]int64)
 
 	// 1. 加载系统统计
-	rows, err := m.DB.Query(m.prepareQuery("SELECT key, value FROM system_stats"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT key, value FROM system_stats"))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -292,7 +298,7 @@ func (m *Manager) LoadStatsFromDB() error {
 	}
 
 	// 2. 加载群组/用户全量统计
-	rows, err = m.DB.Query(m.prepareQuery("SELECT id, count FROM group_stats"))
+	rows, err = m.DB.Query(m.PrepareQuery("SELECT id, count FROM group_stats"))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -304,7 +310,7 @@ func (m *Manager) LoadStatsFromDB() error {
 		}
 	}
 
-	rows, err = m.DB.Query(m.prepareQuery("SELECT id, count FROM user_stats"))
+	rows, err = m.DB.Query(m.PrepareQuery("SELECT id, count FROM user_stats"))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -319,7 +325,7 @@ func (m *Manager) LoadStatsFromDB() error {
 	// 3. 加载今日统计
 	today := time.Now().Format("2006-01-02")
 	m.LastResetDate = today // 初始化重置日期
-	rows, err = m.DB.Query(m.prepareQuery("SELECT id, count FROM group_stats_today WHERE day = ?"), today)
+	rows, err = m.DB.Query(m.PrepareQuery("SELECT id, count FROM group_stats_today WHERE day = ?"), today)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -331,7 +337,7 @@ func (m *Manager) LoadStatsFromDB() error {
 		}
 	}
 
-	rows, err = m.DB.Query(m.prepareQuery("SELECT id, count FROM user_stats_today WHERE day = ?"), today)
+	rows, err = m.DB.Query(m.PrepareQuery("SELECT id, count FROM user_stats_today WHERE day = ?"), today)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -357,7 +363,7 @@ func (m *Manager) SaveGroupToDB(groupID, groupName, botID string) error {
 		last_seen = EXCLUDED.last_seen;
 	`
 	now := time.Now()
-	_, err := m.DB.Exec(m.prepareQuery(query), groupID, groupName, botID, now)
+	_, err := m.DB.Exec(m.PrepareQuery(query), groupID, groupName, botID, now)
 	return err
 }
 
@@ -371,7 +377,7 @@ func (m *Manager) SaveFriendToDB(userID, nickname string) error {
 		last_seen = EXCLUDED.last_seen;
 	`
 	now := time.Now()
-	_, err := m.DB.Exec(m.prepareQuery(query), userID, nickname, now)
+	_, err := m.DB.Exec(m.PrepareQuery(query), userID, nickname, now)
 	return err
 }
 
@@ -386,17 +392,17 @@ func (m *Manager) SaveMemberToDB(groupID, userID, nickname, card string) error {
 		last_seen = EXCLUDED.last_seen;
 	`
 	now := time.Now()
-	_, err := m.DB.Exec(m.prepareQuery(query), groupID, userID, nickname, card, now)
+	_, err := m.DB.Exec(m.PrepareQuery(query), groupID, userID, nickname, card, now)
 	return err
 }
 
-// loadCachesFromDB 从数据库加载所有缓存到内存
+// LoadCachesFromDB 从数据库加载所有缓存到内存
 func (m *Manager) LoadCachesFromDB() error {
 	m.CacheMutex.Lock()
 	defer m.CacheMutex.Unlock()
 
 	// 1. 加载群组
-	rows, err := m.DB.Query(m.prepareQuery("SELECT group_id, group_name, bot_id FROM group_cache"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT group_id, group_name, bot_id FROM group_cache"))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -413,7 +419,7 @@ func (m *Manager) LoadCachesFromDB() error {
 	}
 
 	// 2. 加载好友
-	rowsF, err := m.DB.Query(m.prepareQuery("SELECT user_id, nickname FROM friend_cache"))
+	rowsF, err := m.DB.Query(m.PrepareQuery("SELECT user_id, nickname FROM friend_cache"))
 	if err == nil {
 		defer rowsF.Close()
 		for rowsF.Next() {
@@ -429,7 +435,7 @@ func (m *Manager) LoadCachesFromDB() error {
 	}
 
 	// 3. 加载群成员
-	rowsM, err := m.DB.Query(m.prepareQuery("SELECT group_id, user_id, nickname, card FROM member_cache"))
+	rowsM, err := m.DB.Query(m.PrepareQuery("SELECT group_id, user_id, nickname, card FROM member_cache"))
 	if err == nil {
 		defer rowsM.Close()
 		for rowsM.Next() {
@@ -451,12 +457,12 @@ func (m *Manager) LoadCachesFromDB() error {
 	return nil
 }
 
-// loadRoutingRulesFromDB 从数据库加载所有路由规则到内存缓存
+// LoadRoutingRulesFromDB 从数据库加载所有路由规则到内存缓存
 func (m *Manager) LoadRoutingRulesFromDB() error {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 
-	rows, err := m.DB.Query(m.prepareQuery("SELECT pattern, target_worker_id FROM routing_rules"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT pattern, target_worker_id FROM routing_rules"))
 	if err != nil {
 		return err
 	}
@@ -494,36 +500,36 @@ func (m *Manager) SaveAllStatsToDB() {
 
 	// 1. 保存全量群组统计
 	for id, count := range m.GroupStats {
-		_, _ = tx.Exec(m.prepareQuery(`INSERT INTO group_stats (id, count, updated_at) VALUES (?, ?, ?) 
+		_, _ = tx.Exec(m.PrepareQuery(`INSERT INTO group_stats (id, count, updated_at) VALUES (?, ?, ?) 
 			ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at`),
 			id, count, now)
 	}
 
 	// 2. 保存全量用户统计
 	for id, count := range m.UserStats {
-		_, _ = tx.Exec(m.prepareQuery(`INSERT INTO user_stats (id, count, updated_at) VALUES (?, ?, ?) 
+		_, _ = tx.Exec(m.PrepareQuery(`INSERT INTO user_stats (id, count, updated_at) VALUES (?, ?, ?) 
 			ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at`),
 			id, count, now)
 	}
 
 	// 3. 保存今日群组统计
 	for id, count := range m.GroupStatsToday {
-		_, _ = tx.Exec(m.prepareQuery(`INSERT INTO group_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
+		_, _ = tx.Exec(m.PrepareQuery(`INSERT INTO group_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
 			ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at, day = EXCLUDED.day`),
 			id, count, today, now)
 	}
 
 	// 4. 保存今日用户统计
 	for id, count := range m.UserStatsToday {
-		_, _ = tx.Exec(m.prepareQuery(`INSERT INTO user_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
+		_, _ = tx.Exec(m.PrepareQuery(`INSERT INTO user_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
 			ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at, day = EXCLUDED.day`),
 			id, count, today, now)
 	}
 
 	// 5. 保存基本统计
-	_, _ = tx.Exec(m.prepareQuery(`INSERT INTO system_stats (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`),
+	_, _ = tx.Exec(m.PrepareQuery(`INSERT INTO system_stats (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`),
 		"total_messages", fmt.Sprintf("%d", m.TotalMessages), now)
-	_, _ = tx.Exec(m.prepareQuery(`INSERT INTO system_stats (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`),
+	_, _ = tx.Exec(m.PrepareQuery(`INSERT INTO system_stats (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`),
 		"sent_messages", fmt.Sprintf("%d", m.SentMessages), now)
 
 	if err := tx.Commit(); err != nil {
@@ -541,17 +547,17 @@ func (m *Manager) SaveRoutingRuleToDB(pattern, target string) error {
 		updated_at = EXCLUDED.updated_at;
 	`
 	now := time.Now()
-	_, err := m.DB.Exec(m.prepareQuery(query), pattern, target, now, now)
+	_, err := m.DB.Exec(m.PrepareQuery(query), pattern, target, now, now)
 	return err
 }
 
 // DeleteRoutingRuleFromDB 从数据库删除路由规则
 func (m *Manager) DeleteRoutingRuleFromDB(pattern string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM routing_rules WHERE pattern = ?"), pattern)
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM routing_rules WHERE pattern = ?"), pattern)
 	return err
 }
 
-// loadUsersFromDB 从数据库加载所有用户到内存缓存
+// LoadUsersFromDB 从数据库加载所有用户到内存缓存
 func (m *Manager) LoadUsersFromDB() error {
 	m.UsersMutex.Lock()
 	defer m.UsersMutex.Unlock()
@@ -560,7 +566,7 @@ func (m *Manager) LoadUsersFromDB() error {
 
 // LoadUsersFromDBNoLock 从数据库加载所有用户到内存缓存 (无锁版本)
 func (m *Manager) LoadUsersFromDBNoLock() error {
-	rows, err := m.DB.Query(m.prepareQuery("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users"))
 	if err != nil {
 		return err
 	}
@@ -615,7 +621,7 @@ func (m *Manager) SaveUserToDB(user *User) error {
 		updated_at = EXCLUDED.updated_at;
 	`
 
-	_, err := m.DB.Exec(m.prepareQuery(query),
+	_, err := m.DB.Exec(m.PrepareQuery(query),
 		user.Username,
 		user.PasswordHash,
 		user.IsAdmin,
@@ -629,7 +635,7 @@ func (m *Manager) SaveUserToDB(user *User) error {
 
 // DeleteUserFromDB 从数据库删除用户
 func (m *Manager) DeleteUserFromDB(username string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM users WHERE username = ?"), username)
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM users WHERE username = ?"), username)
 	return err
 }
 
@@ -718,154 +724,6 @@ func (m *Manager) SaveSystemStat(key string, value interface{}) error {
 }
 
 // LoadSystemStatsFromDB 从数据库加载所有系统统计
-func (m *Manager) LoadSystemStatsFromDB() (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
-
-	rows, err := m.DB.Query(m.prepareQuery("SELECT key, value FROM system_stats"))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
-			continue
-		}
-		stats[key] = value
-	}
-
-	return stats, nil
-}
-
-// LoadSystemStat 从数据库加载单个系统统计
-func (m *Manager) LoadSystemStat(key string) (interface{}, error) {
-	var value string
-	err := m.DB.QueryRow(m.prepareQuery("SELECT value FROM system_stats WHERE key = ?"), key).Scan(&value)
-	if err != nil {
-		return nil, err
-	}
-	return value, nil
-}
-
-// DeleteSystemStat 从数据库删除系统统计
-func (m *Manager) DeleteSystemStat(key string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM system_stats WHERE key = ?"), key)
-	return err
-}
-
-// SaveGroupStats 保存群组统计到数据库
-func (m *Manager) SaveGroupStats(id string, count int64) error {
-	query := `
-	INSERT INTO stats_groups (group_id, message_count, updated_at)
-	VALUES (?, ?, ?)
-	ON CONFLICT(group_id) DO UPDATE SET
-		message_count = EXCLUDED.message_count,
-		updated_at = EXCLUDED.updated_at;
-	`
-	_, err := m.DB.Exec(m.prepareQuery(query), id, count, time.Now())
-	return err
-}
-
-// LoadGroupStats 从数据库加载单个群组统计
-func (m *Manager) LoadGroupStats(id string) (int64, error) {
-	var count int64
-	err := m.DB.QueryRow(m.prepareQuery("SELECT message_count FROM stats_groups WHERE group_id = ?"), id).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// SaveUserStats 保存用户统计到数据库
-func (m *Manager) SaveUserStats(id string, count int64) error {
-	query := `
-	INSERT INTO stats_users (user_id, message_count, updated_at)
-	VALUES (?, ?, ?)
-	ON CONFLICT(user_id) DO UPDATE SET
-		message_count = EXCLUDED.message_count,
-		updated_at = EXCLUDED.updated_at;
-	`
-	_, err := m.DB.Exec(m.prepareQuery(query), id, count, time.Now())
-	return err
-}
-
-// LoadUserStats 从数据库加载单个用户统计
-func (m *Manager) LoadUserStats(id string) (int64, error) {
-	var count int64
-	err := m.DB.QueryRow(m.prepareQuery("SELECT message_count FROM stats_users WHERE user_id = ?"), id).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// SaveGroupStatsToday 保存群组今日统计到数据库
-func (m *Manager) SaveGroupStatsToday(id string, day string, count int64) error {
-	query := `
-	INSERT INTO stats_groups_today (group_id, day, message_count, updated_at)
-	VALUES (?, ?, ?, ?)
-	ON CONFLICT(group_id, day) DO UPDATE SET
-		message_count = EXCLUDED.message_count,
-		updated_at = EXCLUDED.updated_at;
-	`
-	_, err := m.DB.Exec(m.prepareQuery(query), id, day, count, time.Now())
-	return err
-}
-
-// LoadGroupStatsToday 从数据库加载单个群组今日统计
-func (m *Manager) LoadGroupStatsToday(id string, day string) (int64, error) {
-	var count int64
-	err := m.DB.QueryRow(m.prepareQuery("SELECT message_count FROM stats_groups_today WHERE group_id = ? AND day = ?"), id, day).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// SaveUserStatsToday 保存用户今日统计到数据库
-func (m *Manager) SaveUserStatsToday(id string, day string, count int64) error {
-	query := `
-	INSERT INTO stats_users_today (user_id, day, message_count, updated_at)
-	VALUES (?, ?, ?, ?)
-	ON CONFLICT(user_id, day) DO UPDATE SET
-		message_count = EXCLUDED.message_count,
-		updated_at = EXCLUDED.updated_at;
-	`
-	_, err := m.DB.Exec(m.prepareQuery(query), id, day, count, time.Now())
-	return err
-}
-
-// LoadUserStatsToday 从数据库加载单个用户今日统计
-func (m *Manager) LoadUserStatsToday(id string, day string) (int64, error) {
-	var count int64
-	err := m.DB.QueryRow(m.prepareQuery("SELECT message_count FROM stats_users_today WHERE user_id = ? AND day = ?"), id, day).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// DeleteGroupStats 从数据库删除群组统计
-func (m *Manager) DeleteGroupStats(id string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM stats_groups WHERE group_id = ?"), id)
-	return err
-}
-
-// DeleteUserStats 从数据库删除用户统计
-func (m *Manager) DeleteUserStats(id string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM stats_users WHERE user_id = ?"), id)
-	return err
-}
-
-// DeleteGroupStatsToday 从数据库删除群组今日统计
-func (m *Manager) DeleteGroupStatsToday(id string, day string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM stats_groups_today WHERE group_id = ? AND day = ?"), id, day)
-	return err
-}
-
-// DeleteUserStatsToday 从数据库删除用户今日统计
-func (m *Manager) DeleteUserStatsToday(id string, day string) error {
-	_, err := m.DB.Exec(m.prepareQuery("DELETE FROM stats_users_today WHERE user_id = ? AND day = ?"), id, day)
-	return err
+func (m *Manager) LoadSystemStatsFromDB() error {
+	return m.LoadStatsFromDB()
 }

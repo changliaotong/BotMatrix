@@ -7,11 +7,18 @@ import 'services/language_provider.dart';
 import 'screens/dashboard_screen.dart';
 
 void main() {
+  print('App starting...');
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => BotNexusService()..connect()),
-        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) {
+          print('Initializing BotNexusService...');
+          return BotNexusService()..connect();
+        }),
+        ChangeNotifierProvider(create: (_) {
+          print('Initializing LanguageProvider...');
+          return LanguageProvider();
+        }),
       ],
       child: const OvermindApp(),
     ),
@@ -23,8 +30,9 @@ class OvermindApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('Building OvermindApp...');
     final languageProvider = Provider.of<LanguageProvider>(context);
-    
+
     return MaterialApp(
       title: 'Overmind',
       debugShowCheckedModeBanner: false,

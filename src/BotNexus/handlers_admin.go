@@ -54,16 +54,26 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 		m.UsersMutex.RUnlock()
 
 		if !exists {
-			row := m.DB.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", loginData.Username)
+			row := m.DB.QueryRow(m.PrepareQuery("SELECT id, username, password_hash, is_admin, active, session_version, created_at, updated_at FROM users WHERE username = ?"), loginData.Username)
 			var u common.User
-			var createdAt, updatedAt string
-			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.SessionVersion, &createdAt, &updatedAt)
+			var createdAt, updatedAt interface{}
+			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.Active, &u.SessionVersion, &createdAt, &updatedAt)
 			if err == nil {
-				if createdAt != "" {
-					u.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+				if createdAt != nil {
+					switch v := createdAt.(type) {
+					case time.Time:
+						u.CreatedAt = v
+					case string:
+						u.CreatedAt, _ = time.Parse(time.RFC3339, v)
+					}
 				}
-				if updatedAt != "" {
-					u.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+				if updatedAt != nil {
+					switch v := updatedAt.(type) {
+					case time.Time:
+						u.UpdatedAt = v
+					case string:
+						u.UpdatedAt, _ = time.Parse(time.RFC3339, v)
+					}
 				}
 				user = &u
 				exists = true
@@ -80,6 +90,16 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
 				"message": common.T(lang, "invalid_username_password"),
+			})
+			return
+		}
+
+		if !user.Active {
+			log.Printf("用户未激活: %s", loginData.Username)
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": common.T(lang, "user_not_active"),
 			})
 			return
 		}
@@ -110,6 +130,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 				"id":         user.ID,
 				"username":   user.Username,
 				"is_admin":   user.IsAdmin,
+				"role":       role,
 				"created_at": user.CreatedAt.Format(time.RFC3339),
 			},
 		})
@@ -145,15 +166,54 @@ func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 			return
 		}
 
+		role := "user"
+		if user.IsAdmin {
+			role = "admin"
+		}
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"user": map[string]interface{}{
 				"id":         user.ID,
 				"username":   user.Username,
 				"is_admin":   user.IsAdmin,
+				"role":       role,
 				"created_at": user.CreatedAt.Format(time.RFC3339),
 				"updated_at": user.UpdatedAt.Format(time.RFC3339),
 			},
+		})
+	}
+}
+
+// HandleGetNexusStatus 获取 Nexus 运行状态
+func HandleGetNexusStatus(m *common.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		m.Mutex.RLock()
+		defer m.Mutex.RUnlock()
+
+		// 获取连接统计
+		m.ConnectionStats.Mutex.Lock()
+		botCount := m.ConnectionStats.TotalBotConnections
+		workerCount := m.ConnectionStats.TotalWorkerConnections
+		m.ConnectionStats.Mutex.Unlock()
+
+		// 获取当前在线数
+		onlineBots := len(m.Bots)
+		onlineWorkers := len(m.Workers)
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   true,
+			"running":   true,
+			"connected": onlineBots > 0 || onlineWorkers > 0,
+			"stats": map[string]interface{}{
+				"online_bots":    onlineBots,
+				"online_workers": onlineWorkers,
+				"total_bots":     botCount,
+				"total_workers":  workerCount,
+			},
+			"version": VERSION,
 		})
 	}
 }
@@ -409,15 +469,17 @@ func HandleGetLogs(m *common.Manager) http.HandlerFunc {
 			if level != "" && level != "all" && !strings.EqualFold(entry.Level, level) {
 				continue
 			}
-			// BotId 过滤 (目前 LogEntry 结构中没有 BotId，如果未来添加了可以过滤)
-			// if botId != "" && botId != "all" && entry.BotId != botId { continue }
-			_ = botId // 暂时忽略
+			// BotId/Source 过滤
+			if botId != "" && botId != "all" && !strings.EqualFold(entry.Source, botId) {
+				continue
+			}
 
 			// 搜索过滤
 			if search != "" {
 				searchLower := strings.ToLower(search)
 				if !strings.Contains(strings.ToLower(entry.Message), searchLower) &&
-					!strings.Contains(strings.ToLower(entry.Level), searchLower) {
+					!strings.Contains(strings.ToLower(entry.Level), searchLower) &&
+					!strings.Contains(strings.ToLower(entry.Source), searchLower) {
 					continue
 				}
 			}
@@ -692,8 +754,37 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.Background()
+		var req struct {
+			Platform string            `json:"platform"`
+			Image    string            `json:"image"`
+			Env      map[string]string `json:"env"`
+			Cmd      []string          `json:"cmd"`
+		}
+
+		// 尝试解析请求体，如果解析失败则使用默认值 (向后兼容)
 		imageName := "botmatrix-wxbot"
+		platform := "WeChat"
+		envVars := make(map[string]string)
+		cmd := []string{"python", "onebot.py"}
+
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+				if req.Image != "" {
+					imageName = req.Image
+				}
+				if req.Platform != "" {
+					platform = req.Platform
+				}
+				if req.Env != nil {
+					envVars = req.Env
+				}
+				if req.Cmd != nil {
+					cmd = req.Cmd
+				}
+			}
+		}
+
+		ctx := context.Background()
 
 		_, _, err := m.DockerClient.ImageInspectWithRaw(ctx, imageName)
 		if err != nil {
@@ -711,16 +802,43 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 			io.Copy(io.Discard, reader)
 		}
 
-		containerName := fmt.Sprintf("wxbot-%d", time.Now().Unix())
+		containerName := fmt.Sprintf("%s-%d", strings.ToLower(platform), time.Now().Unix())
+
+		// 构建环境变量列表
+		finalEnv := []string{
+			"TZ=Asia/Shanghai",
+		}
+
+		// 如果没有指定 MANAGER_URL，使用默认值
+		if _, ok := envVars["MANAGER_URL"]; !ok {
+			finalEnv = append(finalEnv, "MANAGER_URL=ws://btmgr:3001")
+		}
+		if _, ok := envVars["NEXUS_ADDR"]; !ok {
+			finalEnv = append(finalEnv, "NEXUS_ADDR=ws://btmgr:3001/ws/bots")
+		}
+
+		for k, v := range envVars {
+			finalEnv = append(finalEnv, fmt.Sprintf("%s=%s", k, v))
+		}
+
+		// 如果没有指定 BOT_SELF_ID 且是微信平台，添加一个随机 ID (兼容旧版)
+		if platform == "WeChat" {
+			foundSelfID := false
+			for k := range envVars {
+				if k == "BOT_SELF_ID" {
+					foundSelfID = true
+					break
+				}
+			}
+			if !foundSelfID {
+				finalEnv = append(finalEnv, "BOT_SELF_ID="+fmt.Sprintf("%d", time.Now().Unix()%1000000))
+			}
+		}
 
 		config := &container.Config{
 			Image: imageName,
-			Env: []string{
-				"TZ=Asia/Shanghai",
-				"MANAGER_URL=ws://btmgr:3001",
-				"BOT_SELF_ID=" + fmt.Sprintf("%d", time.Now().Unix()%1000000),
-			},
-			Cmd: []string{"python", "onebot.py"},
+			Env:   finalEnv,
+			Cmd:   cmd,
 		}
 
 		hostConfig := &container.HostConfig{
@@ -768,8 +886,37 @@ func HandleDockerAddWorker(m *common.Manager) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.Background()
+		var req struct {
+			Image string            `json:"image"`
+			Env   map[string]string `json:"env"`
+			Cmd   []string          `json:"cmd"`
+			Name  string            `json:"name"`
+		}
+
+		// 默认值
 		imageName := "botmatrix-system-worker"
+		workerName := fmt.Sprintf("sysworker-%d", time.Now().Unix())
+		envVars := make(map[string]string)
+		var cmd []string
+
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+				if req.Image != "" {
+					imageName = req.Image
+				}
+				if req.Name != "" {
+					workerName = req.Name
+				}
+				if req.Env != nil {
+					envVars = req.Env
+				}
+				if req.Cmd != nil {
+					cmd = req.Cmd
+				}
+			}
+		}
+
+		ctx := context.Background()
 
 		_, _, err := m.DockerClient.ImageInspectWithRaw(ctx, imageName)
 		if err != nil {
@@ -787,21 +934,31 @@ func HandleDockerAddWorker(m *common.Manager) http.HandlerFunc {
 			io.Copy(io.Discard, reader)
 		}
 
-		containerName := fmt.Sprintf("sysworker-%d", time.Now().Unix())
+		// 构建环境变量列表
+		finalEnv := []string{
+			"TZ=Asia/Shanghai",
+		}
+
+		// 如果没有指定 BOT_MANAGER_URL，使用默认值
+		if _, ok := envVars["BOT_MANAGER_URL"]; !ok {
+			finalEnv = append(finalEnv, "BOT_MANAGER_URL=ws://btmgr:3001")
+		}
+
+		for k, v := range envVars {
+			finalEnv = append(finalEnv, fmt.Sprintf("%s=%s", k, v))
+		}
 
 		config := &container.Config{
 			Image: imageName,
-			Env: []string{
-				"TZ=Asia/Shanghai",
-				"BOT_MANAGER_URL=ws://btmgr:3001",
-			},
+			Env:   finalEnv,
+			Cmd:   cmd,
 		}
 
 		hostConfig := &container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "always"},
 		}
 
-		resp, err := m.DockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
+		resp, err := m.DockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, workerName)
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
@@ -1215,6 +1372,7 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 					}
 
 					echo := fmt.Sprintf("batch|%d|%s", time.Now().UnixNano(), action)
+					log.Printf("[API] [Batch] Sending action to bot %s: %s, params: %+v", bot.SelfID, action, params)
 					msg := map[string]interface{}{
 						"action": action,
 						"params": params,
@@ -1375,10 +1533,13 @@ func HandleGetConfig(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
+		log.Printf("[DEBUG] HandleGetConfig returning config: %+v", m.Config)
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"status":  "ok",
 			"config":  m.Config,
+			"path":    common.GetResolvedConfigPath(),
 		})
 	}
 }
@@ -1389,8 +1550,13 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
-		var newConfig common.AppConfig
-		if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		log.Printf("[DEBUG] HandleUpdateConfig received body: %s", string(bodyBytes))
+
+		// 使用当前配置作为基础，只更新提交的字段
+		updatedConfig := *m.Config
+		if err := json.Unmarshal(bodyBytes, &updatedConfig); err != nil {
+			log.Printf("[ERROR] HandleUpdateConfig decode error: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":  "error",
@@ -1399,28 +1565,13 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 			return
 		}
 
-		m.Config.WSPort = newConfig.WSPort
-		m.Config.WebUIPort = newConfig.WebUIPort
-		m.Config.RedisAddr = newConfig.RedisAddr
-		m.Config.RedisPwd = newConfig.RedisPwd
-		m.Config.JWTSecret = newConfig.JWTSecret
-		m.Config.DefaultAdminPassword = newConfig.DefaultAdminPassword
-		m.Config.StatsFile = newConfig.StatsFile
+		log.Printf("[INFO] Updating config: LogLevel=%s, AutoReply=%v, EnableSkill=%v, PGPort=%d", updatedConfig.LogLevel, updatedConfig.AutoReply, updatedConfig.EnableSkill, updatedConfig.PGPort)
 
-		// 数据库配置 (PostgreSQL)
-		m.Config.PGHost = newConfig.PGHost
-		m.Config.PGPort = newConfig.PGPort
-		m.Config.PGUser = newConfig.PGUser
-		m.Config.PGPassword = newConfig.PGPassword
-		m.Config.PGDBName = newConfig.PGDBName
-		m.Config.PGSSLMode = newConfig.PGSSLMode
-
-		// 功能开关
-		m.Config.EnableSkill = newConfig.EnableSkill
-		m.Config.LogLevel = newConfig.LogLevel
-		m.Config.AutoReply = newConfig.AutoReply
+		// 更新管理器中的配置
+		*m.Config = updatedConfig
 
 		if err := m.SaveConfig(); err != nil {
+			log.Printf("[ERROR] HandleUpdateConfig save error: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
@@ -1430,10 +1581,12 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 			return
 		}
 
+		log.Printf("[INFO] Config updated successfully, file path: %s", common.GetResolvedConfigPath())
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"status":  "ok",
 			"message": common.T(lang, "config_updated"),
+			"config":  m.Config,
 		})
 	}
 }
@@ -1640,7 +1793,7 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 
 		log.Printf("[DEBUG] HandleAdminListUsers called")
 
-		rows, err := m.DB.Query("SELECT id, username, is_admin, active, created_at, updated_at FROM users")
+		rows, err := m.DB.Query(m.PrepareQuery("SELECT id, username, is_admin, active, created_at, updated_at FROM users"))
 		if err != nil {
 			log.Printf("[ERROR] HandleAdminListUsers DB query failed: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1654,20 +1807,38 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 
 		var users []map[string]interface{}
 		for rows.Next() {
-			var id int
-			var username, createdAt, updatedAt string
+			var id int64
+			var username string
+			var createdAt, updatedAt interface{}
 			var isAdmin, active bool
 			if err := rows.Scan(&id, &username, &isAdmin, &active, &createdAt, &updatedAt); err != nil {
 				log.Printf("[ERROR] HandleAdminListUsers scan failed: %v", err)
 				continue
 			}
+
+			var createdAtStr, updatedAtStr string
+			if createdAt != nil {
+				if t, ok := createdAt.(time.Time); ok {
+					createdAtStr = t.Format(time.RFC3339)
+				} else if s, ok := createdAt.(string); ok {
+					createdAtStr = s
+				}
+			}
+			if updatedAt != nil {
+				if t, ok := updatedAt.(time.Time); ok {
+					updatedAtStr = t.Format(time.RFC3339)
+				} else if s, ok := updatedAt.(string); ok {
+					updatedAtStr = s
+				}
+			}
+
 			users = append(users, map[string]interface{}{
 				"id":         id,
 				"username":   username,
 				"is_admin":   isAdmin,
 				"active":     active,
-				"created_at": createdAt,
-				"updated_at": updatedAt,
+				"created_at": createdAtStr,
+				"updated_at": updatedAtStr,
 			})
 		}
 
@@ -1790,7 +1961,7 @@ func handleAdminUpdateUser(m *common.Manager, w http.ResponseWriter, lang, usern
 		return
 	}
 
-	if _, err := m.DB.Exec("UPDATE users SET is_admin = ?, updated_at = ? WHERE username = ?", isAdmin, time.Now().Format(time.RFC3339), username); err != nil {
+	if _, err := m.DB.Exec(m.PrepareQuery("UPDATE users SET is_admin = ?, updated_at = ? WHERE username = ?"), isAdmin, time.Now(), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -1822,7 +1993,7 @@ func handleAdminDeleteUser(m *common.Manager, w http.ResponseWriter, lang, usern
 		return
 	}
 
-	if _, err := m.DB.Exec("DELETE FROM users WHERE username = ?", username); err != nil {
+	if _, err := m.DB.Exec(m.PrepareQuery("DELETE FROM users WHERE username = ?"), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -1861,7 +2032,7 @@ func handleAdminResetPassword(m *common.Manager, w http.ResponseWriter, lang, us
 		return
 	}
 
-	if _, err := m.DB.Exec("UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?", hash, time.Now().Format(time.RFC3339), username); err != nil {
+	if _, err := m.DB.Exec(m.PrepareQuery("UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?"), hash, time.Now(), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -1894,28 +2065,44 @@ func handleAdminToggleUser(m *common.Manager, w http.ResponseWriter, lang, usern
 	}
 
 	m.UsersMutex.Lock()
+	defer m.UsersMutex.Unlock()
+
 	user, exists := m.Users[username]
-	if !exists {
-		m.UsersMutex.Unlock()
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "user_not_found"),
-		})
-		return
+	var currentStatus bool
+
+	if exists {
+		currentStatus = user.Active
+	} else {
+		// If not in cache, load from DB
+		err := m.DB.QueryRow(m.PrepareQuery("SELECT active FROM users WHERE username = ?"), username).Scan(&currentStatus)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": common.T(lang, "user_not_found"),
+			})
+			return
+		}
 	}
 
-	newStatus := !user.Active
-	user.Active = newStatus
-	m.UsersMutex.Unlock()
+	newStatus := !currentStatus
 
-	if _, err := m.DB.Exec("UPDATE users SET active = ? WHERE username = ?", newStatus, username); err != nil {
+	if _, err := m.DB.Exec(m.PrepareQuery("UPDATE users SET active = ?, updated_at = ? WHERE username = ?"), newStatus, time.Now(), username); err != nil {
+		log.Printf("更新用户状态失败: %v (username: %s, newStatus: %v)", err, username, newStatus)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"message": fmt.Sprintf(common.T(lang, "user_update_failed"), err),
 		})
 		return
+	}
+
+	// Update cache if it exists
+	if exists {
+		user.Active = newStatus
+	} else {
+		// Optionally load full user into cache if needed,
+		// but for now just letting it stay out of cache until next login/access
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{

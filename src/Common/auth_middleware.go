@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // AuthKey is the key for the user claims in the request context
@@ -48,12 +49,28 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		m.UsersMutex.RUnlock()
 
 		// 如果内存中不存在，尝试从数据库加载
-		if !exists {
-			row := m.DB.QueryRow("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users WHERE username = ?", claims.Username)
+		if !exists && m.DB != nil {
+			row := m.DB.QueryRow(m.PrepareQuery("SELECT id, username, password_hash, is_admin, active, session_version, created_at, updated_at FROM users WHERE username = ?"), claims.Username)
 			var u User
-			var createdAt, updatedAt string
-			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.SessionVersion, &createdAt, &updatedAt)
+			var createdAt, updatedAt interface{}
+			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.Active, &u.SessionVersion, &createdAt, &updatedAt)
 			if err == nil {
+				if createdAt != nil {
+					switch v := createdAt.(type) {
+					case time.Time:
+						u.CreatedAt = v
+					case string:
+						u.CreatedAt, _ = time.Parse(time.RFC3339, v)
+					}
+				}
+				if updatedAt != nil {
+					switch v := updatedAt.(type) {
+					case time.Time:
+						u.UpdatedAt = v
+					case string:
+						u.UpdatedAt, _ = time.Parse(time.RFC3339, v)
+					}
+				}
 				user = &u
 				exists = true
 

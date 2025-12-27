@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.7.0 (2025-12-27)
+*   **🧠 AI Task Orchestrator | AI 任务调度中心**:
+    - **Natural Language Parsing**: Users can now describe automation tasks in plain Chinese/English (e.g., "Mute group every night at 11 PM").
+    - **Structured Task Generation**: AI automatically generates cron-based tasks with correct actions and parameters.
+    - **Draft & Confirmation Flow**: Introduced a multi-step workflow where AI proposes a task and the user confirms before deployment.
+*   **🛡️ Advanced Routing & Security | 高级路由与安全**:
+    - **Strategy Management**: Added a new "Strategies" module for defining complex routing policies and reusable logic blocks.
+    - **Shadow Rules**: Implemented non-intrusive message monitoring and redirection rules for auditing and testing.
+*   **👤 Identity Mapping System | 身份映射系统**:
+    - **Cross-Platform Identity**: Users from different platforms (QQ, WeChat, Discord) can now be mapped to a single "System Identity".
+    - **Centralized Permission Management**: Permissions and stats are now tracked against the unified identity rather than fragmented platform IDs.
+*   **🛠️ WebUI Modernization | 界面现代化**:
+    - **Vue 3 & Pinia Architecture**: Refactored the core dashboard to use Vue 3 Composition API and Pinia for ultra-responsive state management.
+    - **System Capabilities Discovery**: Frontend now dynamically discovers backend actions, interceptors, and skills via a new capabilities API.
+*   **📊 Real-time System Monitoring | 实时系统监控**:
+    - **Enhanced Docker Integration**: Added live CPU/Memory usage tracking for bot containers directly in the dashboard.
+    - **Nexus Status Dashboard**: Real-time visualization of global connection stats, including total bots, workers, and system uptime.
+
 ## v1.6.0 (2025-12-25)
 *   **🌌 3D Visualization Overhaul**:
     *   **Enhanced Labels**: Increased node label font size for better visibility at a distance.

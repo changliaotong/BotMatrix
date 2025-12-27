@@ -6,9 +6,14 @@ import (
 )
 
 // AddLog adds a log entry
-func (m *Manager) AddLog(level string, message string) {
+func (m *Manager) AddLog(level string, message string, source ...string) {
 	m.LogMutex.Lock()
 	defer m.LogMutex.Unlock()
+
+	logSource := ""
+	if len(source) > 0 {
+		logSource = source[0]
+	}
 
 	now := time.Now()
 	entry := LogEntry{
@@ -16,6 +21,7 @@ func (m *Manager) AddLog(level string, message string) {
 		Message:   message,
 		Time:      now.Format("15:04:05"),
 		Timestamp: now,
+		Source:    logSource,
 	}
 
 	m.LogBuffer = append(m.LogBuffer, entry)
@@ -34,7 +40,11 @@ func (m *Manager) AddLog(level string, message string) {
 	}()
 
 	// Also print to console without using log.Printf to avoid infinite loops if redirected
-	fmt.Printf("[%s] [%s] %s\n", now.Format("2006-01-02 15:04:05"), level, message)
+	sourceStr := ""
+	if logSource != "" {
+		sourceStr = fmt.Sprintf("[%s] ", logSource)
+	}
+	fmt.Printf("[%s] %s[%s] %s\n", now.Format("2006-01-02 15:04:05"), sourceStr, level, message)
 }
 
 // GetLogs gets recent logs

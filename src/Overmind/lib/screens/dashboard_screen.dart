@@ -14,10 +14,11 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('Building DashboardScreen...');
     final l10n = AppLocalizations.of(context)!;
     
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: const Color(0xFF0D1117), // Dark sci-fi background
         appBar: AppBar(
@@ -30,7 +31,7 @@ class DashboardScreen extends StatelessWidget {
             tabs: [
               Tab(icon: const Icon(Icons.hub), text: l10n.tabNexus),
               Tab(icon: const Icon(Icons.dns), text: l10n.tabFleet),
-              Tab(icon: const Icon(Icons.route), text: '路由'), // 添加路由管理标签页
+              const Tab(icon: Icon(Icons.route), text: '路由'), // 添加路由管理标签页
               Tab(icon: const Icon(Icons.terminal), text: l10n.tabLogs),
             ],
           ),
@@ -56,12 +57,12 @@ class DashboardScreen extends StatelessWidget {
             )
           ],
         ),
-        body: TabBarView(
+        body: const TabBarView(
           children: [
-            const BotListTab(),
-            const FleetScreen(),
-            const RoutingScreen(), // 添加路由管理界面
-            const LogConsoleTab(),
+            BotListTab(),
+            FleetScreen(),
+            RoutingScreen(), // 添加路由管理界面
+            LogConsoleTab(),
           ],
         ),
       ),

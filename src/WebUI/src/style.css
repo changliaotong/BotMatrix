@@ -1,0 +1,906 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Gaegu:wght@400;700&family=Cherry+Bomb+One&family=M+PLUS+Rounded+1c:wght@400;700&display=swap');
+
+:root {
+  --matrix-green: #00ff41;
+  --matrix-green-dark: #003b00;
+  --matrix-green-glow: 0 0 5px rgba(0, 255, 65, 0.5);
+  --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --text-transform: none;
+  --font-size-base: 18px;
+  --radius-main: 12px;
+  --radius-card: 16px;
+  --radius-sm: 8px;
+}
+
+/* --- Classic Style --- */
+.classic.light {
+  --bg-body: #f3f4f6;
+  --bg-card: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.8);
+  --bg-sidebar: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --border-color: rgba(0, 0, 0, 0.05);
+  --matrix-color: #3b82f6;
+  --matrix-glow: 0 0 10px rgba(59, 130, 246, 0.2);
+  --radius-main: 12px;
+  --radius-card: 16px;
+  --radius-sm: 8px;
+}
+
+.classic.dark {
+  --bg-body: #111827;
+  --bg-card: #1f2937;
+  --bg-header: rgba(17, 24, 39, 0.8);
+  --bg-sidebar: #111827;
+  --text-main: #f9fafb;
+  --text-muted: #9ca3af;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --matrix-color: #60a5fa;
+  --matrix-glow: 0 0 15px rgba(96, 165, 250, 0.3);
+  --radius-main: 12px;
+  --radius-card: 16px;
+  --radius-sm: 8px;
+}
+
+/* --- Matrix Style (The Matrix Redesign) --- */
+.matrix.light {
+  --bg-body: #d8e6d8; /* Retro Digital Paper / Light Console */
+  --bg-card: rgba(255, 255, 255, 0.6);
+  --bg-header: rgba(200, 220, 200, 0.9);
+  --bg-sidebar: #c0d0c0;
+  --text-main: #004400; /* Deep Matrix Green */
+  --text-muted: #006600;
+  --border-color: #88aa88;
+  --matrix-color: #008800;
+  --matrix-glow: 0 0 5px rgba(0, 100, 0, 0.2);
+  --font-main: 'Share Tech Mono', 'VT323', monospace;
+  --text-transform: uppercase;
+  --font-size-base: 20px;
+  --crt-flicker: matrix-flicker 0.2s infinite;
+  --radius-main: 0px;
+  --radius-card: 0px;
+  --radius-sm: 0px;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+}
+
+.matrix.dark {
+  --bg-body: #000000;
+  --bg-card: rgba(0, 15, 0, 0.4);
+  --bg-header: rgba(0, 5, 0, 0.9);
+  --bg-sidebar: rgba(0, 0, 0, 1);
+  --text-main: #00ff41;
+  --text-muted: #008f11;
+  --border-color: #003b00;
+  --matrix-color: #00ff41;
+  --matrix-glow: 0 0 12px rgba(0, 255, 65, 0.7);
+  --font-main: 'Share Tech Mono', 'VT323', monospace;
+  --text-transform: uppercase;
+  --font-size-base: 20px;
+  --crt-flicker: matrix-flicker 0.15s infinite;
+  --radius-main: 0px;
+  --radius-card: 0px;
+  --radius-sm: 0px;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+}
+
+/* Global Text Glow for Matrix */
+.matrix * {
+  text-shadow: var(--matrix-glow);
+}
+
+@keyframes matrix-flicker {
+  0% { opacity: 0.98; }
+  50% { opacity: 1; }
+  100% { opacity: 0.99; }
+}
+
+/* Matrix CRT Scanlines Overlay */
+.matrix-overlay {
+  display: none;
+}
+
+.matrix .matrix-overlay {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.1) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.03),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 255, 0, 0.03)
+  );
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.matrix.light .matrix-overlay {
+  background: linear-gradient(
+    rgba(0, 50, 0, 0.05) 50%,
+    rgba(255, 255, 255, 0.05) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(0, 255, 0, 0.02),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 255, 0, 0.02)
+  );
+  background-size: 100% 4px, 4px 100%;
+}
+
+.matrix .matrix-overlay::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(18, 16, 16, 0.1);
+  opacity: 0;
+  z-index: 10000;
+  pointer-events: none;
+  animation: matrix-flicker 0.15s infinite;
+}
+
+/* Sharp Borders for Matrix UI */
+.matrix .matrix-card {
+  border: 1px solid var(--matrix-color);
+  box-shadow: inset 0 0 15px rgba(0, 255, 65, 0.1), 0 0 10px rgba(0, 255, 65, 0.2);
+  background: var(--bg-card);
+}
+
+.matrix.light .matrix-card {
+  box-shadow: inset 0 0 10px rgba(0, 100, 0, 0.05), 0 0 5px rgba(0, 100, 0, 0.1);
+}
+
+.matrix .matrix-btn {
+  background: transparent;
+  border: 1px solid var(--matrix-color);
+  color: var(--matrix-color);
+  text-shadow: var(--matrix-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.matrix .matrix-btn::before {
+  content: "> ";
+}
+
+.matrix .matrix-btn:hover {
+  background: var(--matrix-color);
+  color: #000;
+  box-shadow: 0 0 20px var(--matrix-color);
+  text-shadow: none;
+}
+
+/* --- XP Style (Ultimate Bliss) --- */
+.xp.light {
+  --bg-body: #5a7edc; 
+  --bg-card: #ffffff;
+  --bg-header: #0058e6;
+  --bg-sidebar: #d6dff7;
+  --text-main: #000000;
+  --text-muted: #4d4d4d;
+  --border-color: #0054e3;
+  --matrix-color: #24a124;
+  --matrix-glow: none;
+  --radius-main: 0px; 
+  --radius-card: 0px;
+  --radius-sm: 0px;
+  --font-main: 'Tahoma', 'Segoe UI', sans-serif;
+  --font-size-base: 13px;
+}
+
+.xp body {
+  background-image: url('https://upload.wikimedia.org/wikipedia/en/2/27/Bliss_%28Windows_XP%29.png') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+
+.xp header {
+  background: linear-gradient(to bottom, #0058e6 0%, #3a93ff 10%, #0058e6 50%, #0046ad 100%) !important;
+  border-bottom: 2px solid #003399 !important;
+  height: 32px !important;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.4) !important;
+}
+
+.xp aside {
+  background: linear-gradient(to right, #d6dff7 0%, #f1f4ff 100%) !important;
+  border-right: 2px solid #0054e3 !important;
+}
+
+/* XP Taskbar Button Simulation */
+.xp header button {
+  background: linear-gradient(to bottom, #3a93ff 0%, #0058e6 50%, #0046ad 100%) !important;
+  border: 1px solid #003399 !important;
+  border-radius: 3px !important;
+  margin: 2px !important;
+  padding: 0 15px !important;
+  height: 26px !important;
+  color: white !important;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.3) !important;
+}
+
+.xp .matrix-btn, .xp button.bg-primary {
+  background: linear-gradient(to bottom, #3cc03c 0%, #24a124 45%, #197b19 55%, #3cc03c 100%) !important;
+  color: white !important;
+  border: 1px solid #104a10 !important;
+  border-radius: 3px !important;
+  font-weight: bold !important;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.5) !important;
+}
+
+/* XP Window Styles */
+.xp .matrix-card, .xp [class*="bg-card"], .xp .bg-white {
+  background-color: #ece9d8 !important;
+  border: 4px solid #0054e3 !important;
+  border-radius: 8px 8px 0 0 !important;
+  padding: 0 !important;
+  position: relative !important;
+  overflow: hidden !important;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.4) !important;
+}
+
+.xp .matrix-card > *, .xp [class*="bg-card"] > *, .xp .bg-white > * {
+  padding: 15px !important;
+}
+
+/* XP Window Title Bar */
+.xp .matrix-card::before, .xp [class*="bg-card"]::before, .xp .bg-white::before {
+  content: "BotMatrix System Explorer";
+  display: block;
+  background: linear-gradient(to right, #0058e6 0%, #3a93ff 10%, #0058e6 50%, #0046ad 100%);
+  height: 28px;
+  width: 100%;
+  color: white;
+  font-weight: bold;
+  padding: 5px 10px;
+  font-size: 12px;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+  box-sizing: border-box;
+}
+
+/* XP Window Buttons (Close/Min/Max) */
+.xp .matrix-card::after, .xp [class*="bg-card"]::after, .xp .bg-white::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  background-image: radial-gradient(circle, #ff5f56 50%, transparent 50%);
+  background-color: #e04343;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  z-index: 20;
+}
+
+/* --- Kawaii Style (Ultimate Magical Girl v2) --- */
+.kawaii.light {
+  --bg-body: #fff0f6;
+  --bg-card: rgba(255, 255, 255, 0.95);
+  --bg-header: rgba(255, 255, 255, 0.9);
+  --bg-sidebar: #fff9fb;
+  --text-main: #ff6b9d;
+  --text-muted: #ff9db4;
+  --border-color: #ffdae9;
+  --matrix-color: #ff6b9d;
+  --matrix-glow: 0 0 20px rgba(255, 107, 157, 0.4);
+  --font-main: 'M PLUS Rounded 1c', 'Quicksand', 'Gaegu', cursive;
+  --font-header: 'Cherry Bomb One', cursive;
+  --radius-main: 25px;
+  --radius-card: 35px;
+  --radius-sm: 15px;
+  --font-size-base: 19px;
+  letter-spacing: 0.02em;
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'  width='32' height='32' style='font-size:24px'><text y='20'>💖</text></svg>"), auto;
+}
+
+.kawaii body {
+  background-image: 
+    radial-gradient(#ffdae9 2px, transparent 2px),
+    linear-gradient(135deg, #fff0f6 25%, #fff9fb 25%, #fff9fb 50%, #fff0f6 50%, #fff0f6 75%, #fff9fb 75%, #fff9fb 100%) !important;
+  background-size: 30px 30px, 100px 100px !important;
+  animation: kawaii-bg-move 20s linear infinite;
+}
+
+@keyframes kawaii-bg-move {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 30px 30px, 100px 100px; }
+}
+
+.kawaii .matrix-card {
+  border: 4px solid var(--border-color) !important;
+  box-shadow: 
+    0 10px 0 var(--border-color), 
+    0 20px 40px rgba(255, 107, 157, 0.15),
+    inset 0 0 20px rgba(255, 255, 255, 0.8) !important;
+  background: var(--bg-card) !important;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.4) !important;
+  overflow: visible !important;
+}
+
+/* Kawaii Card Decorations */
+.kawaii .matrix-card::after {
+  content: "✨";
+  position: absolute;
+  top: -15px;
+  right: -15px;
+  font-size: 24px;
+  animation: kawaii-sparkle 2s ease-in-out infinite;
+}
+
+@keyframes kawaii-sparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(1.3) rotate(20deg); opacity: 0.7; }
+}
+
+.kawaii .matrix-btn, .kawaii button.bg-primary {
+  background: linear-gradient(45deg, #ff85a1, #ffb6d1, #ff85a1) !important;
+  background-size: 200% 200% !important;
+  animation: rainbow-bg 3s linear infinite !important;
+  border: 3px solid #fff !important;
+  color: white !important;
+  border-radius: 50px !important;
+  padding: 12px 30px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  box-shadow: 0 6px 0 #ff6b9d, 0 12px 20px rgba(255, 107, 157, 0.4) !important;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.1) !important;
+}
+
+@keyframes rainbow-bg {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.kawaii .matrix-btn:active {
+  transform: translateY(4px) !important;
+  box-shadow: 0 2px 0 #ff6b9d !important;
+}
+
+.kawaii input, .kawaii textarea, .kawaii select {
+  background: #fff !important;
+  border: 3px solid #ffdae9 !important;
+  border-radius: 15px !important;
+  padding: 10px 15px !important;
+  color: #ff6b9d !important;
+  font-family: var(--font-main) !important;
+  transition: all 0.3s ease !important;
+}
+
+.kawaii input:focus {
+  border-color: #ff6b9d !important;
+  box-shadow: 0 0 15px rgba(255, 107, 157, 0.3) !important;
+  transform: scale(1.02) !important;
+}
+
+/* Kawaii Scrollbar */
+.kawaii ::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #ff85a1, #ffb6d1) !important;
+  border: 2px solid #fff !important;
+  border-radius: 10px !important;
+}
+
+.kawaii ::-webkit-scrollbar-track {
+  background: #fff0f6 !important;
+}
+
+/* --- Matrix Style (Extreme Glitch v2) --- */
+.matrix .matrix-card:hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 255, 65, 0.05);
+  z-index: -1;
+  animation: matrix-glitch 0.3s steps(2) infinite;
+}
+
+@keyframes matrix-glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
+.matrix .text-main {
+  animation: matrix-text-flicker 3s linear infinite;
+}
+
+@keyframes matrix-text-flicker {
+  0%, 100% { opacity: 1; }
+  98% { opacity: 1; }
+  99% { opacity: 0.5; }
+}
+
+.matrix aside {
+  border-right: 1px solid var(--matrix-color) !important;
+  background: rgba(0, 5, 0, 0.95) !important;
+  box-shadow: 5px 0 20px rgba(0, 255, 65, 0.1) !important;
+}
+
+.matrix header {
+  border-bottom: 1px solid var(--matrix-color) !important;
+  background: rgba(0, 5, 0, 0.95) !important;
+}
+
+/* --- XP Style (The Clippy Spirit v2) --- */
+.xp.light {
+  --bg-body: #5a7edc; 
+  --bg-card: #ffffff;
+  --bg-header: #0058e6;
+  --bg-sidebar: #7ba2e7; /* XP Sidebar Blue */
+  --text-main: #000000;
+  --text-muted: #4d4d4d;
+  --border-color: #0054e3;
+  --matrix-color: #24a124;
+  --matrix-glow: none;
+  --radius-main: 0px; 
+  --radius-card: 0px;
+  --radius-sm: 0px;
+  --font-main: 'Tahoma', 'Segoe UI', sans-serif;
+  --font-size-base: 13px;
+}
+
+.xp aside {
+  background: linear-gradient(to bottom, #7ba2e7 0%, #6382c5 100%) !important;
+  border-right: 2px solid #0054e3 !important;
+}
+
+.xp aside .border-b {
+  border-bottom: 1px solid rgba(255,255,255,0.3) !important;
+  background: linear-gradient(to right, #0058e6 0%, #3a93ff 100%) !important;
+}
+
+.xp aside nav > div > div:first-child {
+  background: linear-gradient(to right, #2151d1 0%, #7ba2e7 100%) !important;
+  color: white !important;
+  padding: 5px 12px !important;
+  margin: 0 -12px 8px -12px !important;
+  font-weight: bold !important;
+  border-radius: 4px 4px 0 0 !important;
+  border: 1px solid #0054e3 !important;
+  border-bottom: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-size: 11px !important;
+}
+
+.xp aside nav button {
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 4px 10px !important;
+  color: #2151d1 !important;
+  font-weight: normal !important;
+  border: 1px solid transparent !important;
+}
+
+.xp aside nav button:hover {
+  text-decoration: underline !important;
+  background: transparent !important;
+  color: #ff6600 !important; /* XP Link Hover Orange */
+}
+
+.xp aside nav button.bg-\[var\(--matrix-color\)\]\/10 {
+  background: rgba(255,255,255,0.3) !important;
+  border: 1px solid rgba(0,0,0,0.1) !important;
+  color: #000 !important;
+  font-weight: bold !important;
+}
+
+.xp aside nav button .absolute.left-0 {
+  display: none !important; /* Hide modern active indicator */
+}
+
+.xp aside .p-4.border-t {
+  background: #ece9d8 !important;
+  border-top: 2px solid #0054e3 !important;
+  color: black !important;
+}
+
+.xp aside .p-4.border-t .text-main {
+  color: black !important;
+}
+
+.xp .matrix-card {
+  border: 2px solid #0054e3 !important;
+  box-shadow: 3px 3px 0px rgba(0,0,0,0.2) !important;
+}
+
+.xp .matrix-card::before {
+  background: linear-gradient(to right, #0058e6 0%, #3a93ff 10%, #0058e6 50%, #0046ad 100%) !important;
+  border-bottom: 1px solid #003399 !important;
+}
+
+/* XP Taskbar detail */
+.xp header {
+  border-bottom: 2px solid #0831d9 !important;
+  background: linear-gradient(to bottom, #245edb 0%, #3f8cf3 9%, #245edb 18%, #245edb 92%, #333 100%) !important;
+}
+
+/* XP "Clippy" style tooltips (mock) */
+.xp [title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  background: #ffffe1;
+  border: 1px solid #000;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #000;
+  z-index: 100;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+}
+
+/* iOS Specific Overrides */
+.ios {
+  --radius-main: 14px;
+  --radius-card: 28px;
+}
+
+.ios body {
+  background: radial-gradient(circle at top left, #555, #111) !important;
+}
+
+.ios aside, .ios header, .ios .matrix-card {
+  backdrop-filter: blur(25px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(25px) saturate(180%) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+}
+
+.ios .matrix-card {
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.ios .matrix-card:hover {
+  transform: scale(1.02) translateY(-5px) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important;
+}
+
+.ios .matrix-btn {
+  background: #fff !important;
+  color: #000 !important;
+  border: none !important;
+  font-weight: 600 !important;
+  border-radius: 50px !important;
+  transition: all 0.3s ease !important;
+}
+
+.ios .matrix-btn:hover {
+  opacity: 0.8 !important;
+  transform: scale(0.98) !important;
+}
+
+/* Matrix Text Glow */
+.matrix .text-main, .matrix h1, .matrix h2, .matrix h3, .matrix span {
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.6) !important;
+}
+
+.matrix .matrix-btn:hover {
+  background: #00ff41 !important;
+  box-shadow: 0 0 30px #00ff41 !important;
+}
+
+/* --- Classic Style (Modern Premium) --- */
+.classic.light {
+  --bg-body: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.8);
+  --bg-sidebar: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --matrix-color: #3b82f6;
+  --radius-main: 12px;
+  --radius-card: 16px;
+  --radius-sm: 8px;
+}
+
+.classic.dark {
+  --bg-body: #020617;
+  --bg-card: #0f172a;
+  --bg-header: rgba(15, 23, 42, 0.8);
+  --bg-sidebar: #0f172a;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #1e293b;
+  --matrix-color: #60a5fa;
+  --radius-main: 12px;
+  --radius-card: 16px;
+  --radius-sm: 8px;
+}
+
+.classic .matrix-card {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid var(--border-color) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.classic .matrix-card:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* 
+   ==========================================================================
+   EXTREME MATRIX REDESIGN (Minimalist & Cold)
+   ==========================================================================
+*/
+
+.matrix {
+  background-color: #000 !important;
+  color: #00ff41 !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Force high contrast for all text in matrix mode */
+.matrix .text-gray-400,
+.matrix .text-gray-500,
+.matrix .text-gray-600,
+.matrix .text-slate-500 {
+  color: rgba(0, 255, 65, 0.6) !important;
+}
+
+.matrix .text-black,
+.matrix .text-gray-900,
+.matrix .text-slate-900 {
+  color: #00ff41 !important;
+}
+
+/* Global Border Unification */
+.matrix * {
+  border-color: rgba(0, 255, 65, 0.4) !important;
+}
+
+/* Data Stream Borders & Enhanced Hierarchy */
+.matrix .card, 
+.matrix .bg-white, 
+.matrix .bg-gray-50,
+.matrix .bg-slate-50,
+.matrix [class*="bg-opacity"] {
+  background: rgba(0, 10, 0, 0.95) !important; /* Slightly deeper green-black */
+  border: 1px solid #00ff41 !important;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.15) !important;
+  backdrop-filter: blur(8px);
+  border-radius: 0 !important;
+}
+
+/* Modal/Dropdown Elevation */
+.matrix .shadow-lg,
+.matrix .shadow-xl,
+.matrix .fixed.inset-0 {
+  background: rgba(0, 0, 0, 0.9) !important;
+  border: 2px solid #00ff41 !important;
+  box-shadow: 0 0 40px rgba(0, 255, 65, 0.3) !important;
+}
+
+/* Extreme Scanlines */
+.matrix-scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 255, 65, 0.05) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.3;
+}
+
+/* Hacker Buttons */
+.matrix button:not(.close-btn),
+.matrix .matrix-btn {
+  background: rgba(0, 40, 0, 0.3) !important;
+  color: #00ff41 !important;
+  border: 1px solid #00ff41 !important;
+  text-transform: uppercase;
+  font-weight: bold;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.1s steps(2);
+  border-radius: 0 !important;
+  box-shadow: inset 0 0 10px rgba(0, 255, 65, 0.1);
+}
+
+.matrix button:not(.close-btn):hover,
+.matrix .matrix-btn:hover {
+  background: #00ff41 !important;
+  color: #000 !important;
+  box-shadow: 0 0 25px #00ff41;
+  text-shadow: none;
+}
+
+/* Inputs */
+.matrix input, 
+.matrix textarea, 
+.matrix select {
+  background: #000 !important;
+  border: 1px solid #00ff41 !important;
+  color: #00ff41 !important;
+  border-radius: 0 !important;
+}
+
+.matrix input::placeholder {
+  color: rgba(0, 255, 65, 0.4) !important;
+}
+
+.matrix input:focus {
+  outline: 2px solid #00ff41 !important;
+  outline-offset: 2px;
+  background: rgba(0, 20, 0, 1) !important;
+}
+
+/* Matrix Text Glow */
+.matrix h1, .matrix h2, .matrix h3 {
+  text-shadow: 0 0 10px #00ff41, 0 0 20px rgba(0, 255, 65, 0.5);
+  color: #fff !important; /* High contrast for headers */
+}
+
+/* Custom Scrollbar for Matrix */
+.matrix ::-webkit-scrollbar {
+  width: 6px;
+}
+.matrix ::-webkit-scrollbar-track {
+  background: #000;
+}
+.matrix ::-webkit-scrollbar-thumb {
+  background: #00ff41;
+}
+
+/* Kawaii Specific Text Overrides (Extreme Global) */
+.kawaii, .kawaii * {
+  font-family: var(--font-main) !important;
+}
+
+.kawaii h1, .kawaii h2, .kawaii h3, .kawaii .text-2xl, .kawaii .text-3xl {
+  font-family: var(--font-header) !important;
+  letter-spacing: 0.05em;
+}
+
+.kawaii .text-gray-500, 
+.kawaii .text-gray-400, 
+.kawaii .text-muted-foreground,
+.kawaii .text-[var(--text-muted)] {
+  color: #ff9db4 !important;
+}
+
+.kawaii .text-[var(--text-main)],
+.kawaii h4, .kawaii h5, .kawaii h6,
+.kawaii span, .kawaii p, .kawaii label, .kawaii b, .kawaii strong, .kawaii i,
+.kawaii input, .kawaii button, .kawaii textarea, .kawaii select {
+  color: var(--text-main) !important;
+}
+
+.kawaii * {
+  border-color: var(--border-color);
+}
+
+.kawaii aside {
+  background: linear-gradient(to bottom, #fff9fb 0%, #fff0f6 100%) !important;
+  border-right: 2px solid #ffdae9 !important;
+}
+
+.kawaii header {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 3px solid #ffdae9 !important;
+}
+
+@theme {
+  --color-matrix: var(--matrix-color);
+  --color-matrix-dark: var(--matrix-green-dark);
+}
+
+/* Global Rounded Overrides to support dynamic themes */
+.rounded-xl, .rounded-2xl, .rounded-lg, .rounded-md, .rounded-sm {
+  border-radius: var(--radius-main) !important;
+}
+
+.rounded-2xl {
+  border-radius: var(--radius-card) !important;
+}
+
+.rounded-lg, .rounded-md {
+  border-radius: var(--radius-main) !important;
+}
+
+.rounded-sm, .rounded {
+  border-radius: var(--radius-sm) !important;
+}
+
+/* Specific elements that should stay circular */
+.rounded-full {
+  border-radius: 9999px !important;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-body);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  font-size: var(--font-size-base);
+  text-transform: var(--text-transform);
+  /* Use auto to let OS handle smoothing for better clarity on Windows/Linux */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Specific sharpening for Matrix/Pixel fonts */
+.matrix body, 
+.matrix {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: none;
+  font-smooth: never;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.matrix-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--matrix-green-glow);
+}
+
+.matrix-btn {
+  background: var(--matrix-green-dark);
+  border: 1px solid var(--matrix-color);
+  color: var(--matrix-color);
+  transition: all 0.3s ease;
+}
+
+.matrix-btn:hover {
+  background: var(--matrix-color);
+  color: black;
+  box-shadow: var(--matrix-green-glow);
+}
+
+.text-matrix {
+  color: var(--matrix-color);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 65, 0.2);
+}

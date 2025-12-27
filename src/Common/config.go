@@ -5,26 +5,27 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 // GlobalConfig 全局配置实例
 var GlobalConfig = &AppConfig{
-	WSPort:               ":3001",
-	WebUIPort:            ":5000",
-	StatsFile:            "stats.json",
-	RedisAddr:            "192.168.0.126:6379",
-	RedisPwd:             "redis_zsYik8",
-	JWTSecret:            "botnexus_secret_key_for_jwt_token_generation",
-	DefaultAdminPassword: "admin123",
-	PGHost:               "localhost",
-	PGPort:               5432,
-	PGUser:               "postgres",
-	PGPassword:           "postgres",
-	PGDBName:             "botnexus",
-	PGSSLMode:            "disable",
-	EnableSkill:          false, // 默认关闭技能系统，仅供测试使用
-	LogLevel:             "INFO",
-	AutoReply:            true,
+	WSPort:               "",
+	WebUIPort:            "",
+	StatsFile:            "",
+	RedisAddr:            "",
+	RedisPwd:             "",
+	JWTSecret:            "",
+	DefaultAdminPassword: "",
+	PGHost:               "",
+	PGPort:               0,
+	PGUser:               "",
+	PGPassword:           "",
+	PGDBName:             "",
+	PGSSLMode:            "",
+	EnableSkill:          false,
+	LogLevel:             "",
+	AutoReply:            false,
 }
 
 // 注意：为了兼容现有代码，保留这些全局变量
@@ -45,7 +46,12 @@ var (
 	ENABLE_SKILL           bool
 	LOG_LEVEL              string
 	AUTO_REPLY             bool
+	AZURE_TRANSLATE_KEY    string
+	AZURE_TRANSLATE_END    string
+	AZURE_TRANSLATE_REG    string
 )
+
+var resolvedConfigPath = CONFIG_FILE
 
 const CONFIG_FILE = "config.json"
 
@@ -102,11 +108,35 @@ func init() {
 
 	// 4. 同步回 GlobalConfig
 	syncToGlobalConfig()
+	absPath, _ := filepath.Abs(resolvedConfigPath)
+	log.Printf("[INFO] 系统配置初始化完成: LogLevel=%s, AutoReply=%v, WebUIPort=%s, ConfigFile=%s", GlobalConfig.LogLevel, GlobalConfig.AutoReply, GlobalConfig.WebUIPort, absPath)
 }
 
 func loadConfigFromFile() {
-	if _, err := os.Stat(CONFIG_FILE); err == nil {
-		data, err := os.ReadFile(CONFIG_FILE)
+	// 尝试加载配置文件
+	// 首先检查当前目录下的 config.json
+	// 如果不存在，检查可执行文件所在目录下的 config.json
+
+	targetFile := CONFIG_FILE
+	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
+		// 尝试从可执行文件目录查找
+		exePath, err := os.Executable()
+		if err == nil {
+			exeDir := filepath.Dir(exePath)
+			potentialFile := filepath.Join(exeDir, CONFIG_FILE)
+			if _, err := os.Stat(potentialFile); err == nil {
+				targetFile = potentialFile
+			}
+		}
+	}
+
+	absPath, _ := filepath.Abs(targetFile)
+	resolvedConfigPath = absPath
+	log.Printf("[INFO] 配置文件解析路径: %s", absPath)
+
+	if _, err := os.Stat(targetFile); err == nil {
+		log.Printf("[INFO] 正在从配置文件加载: %s", absPath)
+		data, err := os.ReadFile(targetFile)
 		if err != nil {
 			log.Printf("[WARN] 读取配置文件失败: %v", err)
 			return
@@ -159,10 +189,22 @@ func loadConfigFromFile() {
 		if fileConfig.LogLevel != "" {
 			LOG_LEVEL = fileConfig.LogLevel
 		}
+		if fileConfig.AzureTranslateKey != "" {
+			AZURE_TRANSLATE_KEY = fileConfig.AzureTranslateKey
+		}
+		if fileConfig.AzureTranslateEndpoint != "" {
+			AZURE_TRANSLATE_END = fileConfig.AzureTranslateEndpoint
+		}
+		if fileConfig.AzureTranslateRegion != "" {
+			AZURE_TRANSLATE_REG = fileConfig.AzureTranslateRegion
+		}
 		// EnableSkill 和 AutoReply 只要在配置文件中存在就覆盖默认值
 		ENABLE_SKILL = fileConfig.EnableSkill
 		AUTO_REPLY = fileConfig.AutoReply
 		log.Printf("[INFO] 已从 %s 加载配置", CONFIG_FILE)
+
+		// 同步到 GlobalConfig
+		syncToGlobalConfig()
 	}
 }
 
@@ -213,8 +255,21 @@ func loadConfigFromEnv() {
 		LOG_LEVEL = v
 	}
 	if v := os.Getenv("AUTO_REPLY"); v != "" {
-		AUTO_REPLY = (v == "true" || v == "1")
+		AUTO_REPLY = v == "true"
 	}
+	if v := os.Getenv("AZURE_TRANSLATE_KEY"); v != "" {
+		AZURE_TRANSLATE_KEY = v
+	}
+	if v := os.Getenv("AZURE_TRANSLATE_ENDPOINT"); v != "" {
+		AZURE_TRANSLATE_END = v
+	}
+	if v := os.Getenv("AZURE_TRANSLATE_REGION"); v != "" {
+		AZURE_TRANSLATE_REG = v
+	}
+}
+
+// 同步到 GlobalConfig
+	syncToGlobalConfig()
 }
 
 func syncToGlobalConfig() {
@@ -234,6 +289,14 @@ func syncToGlobalConfig() {
 	GlobalConfig.EnableSkill = ENABLE_SKILL
 	GlobalConfig.LogLevel = LOG_LEVEL
 	GlobalConfig.AutoReply = AUTO_REPLY
+	GlobalConfig.AzureTranslateKey = AZURE_TRANSLATE_KEY
+	GlobalConfig.AzureTranslateEndpoint = AZURE_TRANSLATE_END
+	GlobalConfig.AzureTranslateRegion = AZURE_TRANSLATE_REG
+}
+
+func GetResolvedConfigPath() string {
+	absPath, _ := filepath.Abs(resolvedConfigPath)
+	return absPath
 }
 
 // SaveConfigToFile 保存配置到文件
@@ -241,9 +304,18 @@ func SaveConfigToFile() error {
 	syncToGlobalConfig()
 	data, err := json.MarshalIndent(GlobalConfig, "", "  ")
 	if err != nil {
+		log.Printf("[ERROR] Marshal config failed: %v", err)
 		return err
 	}
-	return os.WriteFile(CONFIG_FILE, data, 0644)
+	absPath, _ := filepath.Abs(resolvedConfigPath)
+	log.Printf("[INFO] Saving config to file: %s", absPath)
+	err = os.WriteFile(resolvedConfigPath, data, 0644)
+	if err != nil {
+		log.Printf("[ERROR] Write config file failed: %v", err)
+	} else {
+		log.Printf("[INFO] Config file saved successfully. Content length: %d", len(data))
+	}
+	return err
 }
 
 // SaveConfig 保存 Manager 的配置并持久化

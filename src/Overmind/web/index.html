@@ -38,8 +38,12 @@
         const isSafeNode = (target) => {
             try {
                 if (!target) return false;
-                if (target instanceof Node) return true;
-                return (typeof target === 'object' && typeof target.nodeType === 'number' && typeof target.nodeName === 'string');
+                if (typeof Node !== 'undefined' && target instanceof Node) return true;
+                return (typeof target === 'object' && 
+                        typeof target.nodeType === 'number' && 
+                        typeof target.nodeName === 'string' &&
+                        typeof target.appendChild === 'function' &&
+                        typeof target.cloneNode === 'function');
             } catch (e) { return false; }
         };
         const safeObserve = function(target, options) {
@@ -47,9 +51,11 @@
                 let effectiveTarget = target;
                 if (typeof effectiveTarget === 'string') effectiveTarget = document.querySelector(effectiveTarget);
                 if (!isSafeNode(effectiveTarget)) return;
-                try {
-                    return nativeObserve.call(this, effectiveTarget, options || { childList: true, subtree: true });
-                } catch (inner) { return; }
+                
+                const isMutation = (this instanceof MutationObserver) || (typeof WebKitMutationObserver !== 'undefined' && this instanceof WebKitMutationObserver);
+                const safeOptions = options || (isMutation ? { childList: true, subtree: true } : {});
+                
+                return nativeObserve.call(this, effectiveTarget, safeOptions);
             } catch (e) { return; }
         };
         const ProxyMO = new Proxy(OriginalMO, {
