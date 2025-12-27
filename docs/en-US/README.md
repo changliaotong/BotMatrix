@@ -8,6 +8,7 @@ Welcome to the BotMatrix Documentation Hub. This includes detailed system archit
 ## 🗺️ Navigation
 
 ### 🚀 Quick Start & Deployment
+- **[Changelog](CHANGELOG.md)** - Project version iterations and feature changes.
 - **[System Architecture](ARCHITECTURE.md)** - Core design principles and component collaboration.
 - **[API Reference](API_REFERENCE.md)** - Detailed JSON message formats and communication protocols.
 - **[Deployment Guide](DEPLOY.md)** - How to install and run BotMatrix in different environments.

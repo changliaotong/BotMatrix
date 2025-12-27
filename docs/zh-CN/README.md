@@ -8,6 +8,7 @@
 ## 🗺️ 文档导航
 
 ### 🚀 快速开始 & 部署
+- **[更新日志](CHANGELOG.md)** - 项目版本迭代与功能变更记录。
 - **[系统架构图](ARCHITECTURE.md)** - 了解 BotMatrix 的核心设计思想与组件协作。
 - **[API 接口参考](API_REFERENCE.md)** - 详细的 JSON 消息格式与通信协议说明。
 - **[部署指南](DEPLOY.md)** - 如何在不同环境下安装 and 运行 BotMatrix。
