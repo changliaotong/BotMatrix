@@ -1,5 +1,15 @@
 # BotMatrix
 
+## 📚 文档 (Documentation)
+
+详细的文档请参考：**[BotMatrix 文档中心](docs/README.md)**
+
+### 主要文档索引：
+- **[快速部署](docs/DEPLOY.md)**
+- **[服务端手册](docs/SERVER_MANUAL.md)**
+- **[插件开发指南](PLUGIN_DEVELOPMENT.md)**
+- **[路由规则](docs/ROUTING_RULES.md)**
+
 ## 🎯 项目概述
 
 BotMatrix是一个跨平台、分布式的机器人矩阵系统，支持多语言插件扩展。

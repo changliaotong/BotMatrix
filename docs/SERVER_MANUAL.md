@@ -1,5 +1,9 @@
 # 服务端使用手册 (Server Manual)
 
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+
+---
+
 本文档详细介绍了 Python 服务端（OneBot Gateway）的功能、配置、插件指令及运维操作。
 
 ---

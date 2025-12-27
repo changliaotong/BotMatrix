@@ -1,5 +1,7 @@
 # BotMatrix 裂变系统 (Fission System)
 
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+
 裂变系统是 BotMatrix 的核心增长引擎，通过激励机制引导用户自发邀请好友，实现机器人的病毒式增长。
 
 ## 1. 裂变系统文案 (Promotional Copy)

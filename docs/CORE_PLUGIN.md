@@ -1,5 +1,7 @@
 # Nexus Core Plugin (系统级核心插件)
 
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+
 ## 概述
 `CorePlugin` 是集成在 `BotNexus` 消息路由层的系统级核心插件。它负责在消息转发到 Worker 模块之前，对所有原始消息进行安全性、合规性和状态性的裁决。
 

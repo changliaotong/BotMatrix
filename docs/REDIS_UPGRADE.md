@@ -1,5 +1,7 @@
 # BotMatrix Redis 系统升级文档 (Redis-Based System Upgrade)
 
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+
 ## 1. 概述 (Overview)
 本项目通过引入 Redis 作为核心中间件，实现了「消息路由中心」(BotNexus) 与「机器人执行端」(BotWorker) 的彻底解耦。该升级在不引入复杂中间件（如 RabbitMQ/Kafka）的前提下，提供了高并发处理、动态扩展、限流保护、幂等去重及会话管理能力。
 

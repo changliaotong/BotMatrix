@@ -1,5 +1,7 @@
 # BotMatrix Deployment Guide
 
+> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../README.md)
+
 This guide describes how to deploy the **BotMatrix** ecosystem using Docker.
 
 ## 1. Prerequisites
