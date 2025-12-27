@@ -16,17 +16,21 @@ Welcome to the BotMatrix Documentation Hub. This includes detailed system archit
 
 ### 📖 Manuals
 - **[Server Manual](SERVER_MANUAL.md)** - Detailed feature descriptions, configuration guides, and admin commands.
+- **[Plugin Manual](plugins/README.md)** - Detailed guide for all built-in plugins.
 - **[Routing Rules](ROUTING_RULES.md)** - Definition of message routing and distribution logic.
 - **[Skills & Compatibility](SKILL_SWITCH_AND_COMPATIBILITY.md)** - Bot skill management and OneBot compatibility.
 
 ### 🛠️ Core Systems
 - **[Conflict & Improvement Plan](CONFLICT_PLAN.md)** - Records known conflicts and future optimization directions.
+- **[Component Documentation](components/README.md)** - Technical details for adapters and core components.
+- **[Miniprogram Admin](MINIPROGRAM.md)** - Documentation for the mobile miniprogram management platform.
 - **[Fission System](FISSION_SYSTEM.md)** - Implementation of automated group invitations and user growth.
 - **[Marriage System](BABY_AND_MARRIAGE_SYSTEM.md)** - Logic for interactive marriage and baby systems.
 - **[Core Plugins](CORE_PLUGIN.md)** - Features and configuration of built-in core plugins.
 - **[QQ Guild Smart Send](QQ_GUILD_SMART_SEND.md)** - Optimized message sending for QQ Guilds.
 
 ### 💻 Developer Guide
+- **[Development & Planning Hub](development/README.md)** - Plugin development, protocol compatibility, and system planning.
 - **[Plugin Development](PLUGIN_DEVELOPMENT.md)** - How to write custom plugins for BotMatrix.
 - **[OneBot Compatibility](ONEBOT_COMPATIBILITY.md)** - Details on protocol implementation coverage.
 - **[Website Plan](WEBSITE_PLAN.md)** - Planning for the official documentation website.

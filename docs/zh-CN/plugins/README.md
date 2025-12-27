@@ -1,5 +1,7 @@
 # BotWorker 插件文档
 
+[English](../../en-US/plugins/README.md) | [返回项目主页](../../../README.md) | [返回文档中心](../README.md)
+
 ## 概述
 
 本目录包含所有BotWorker插件的详细文档。
