@@ -1,13 +1,14 @@
 package core
 
 import (
+	log "BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"time"
 
-	"github.com/BotMatrix/src/plugin/policy"
+	"BotNexus/plugin/policy"
 )
 
 func (pm *PluginManager) StartPlugin(name string) error {
@@ -45,12 +46,12 @@ func (pm *PluginManager) monitorPlugin(plugin *Plugin) {
 
 func (pm *PluginManager) restartPlugin(plugin *Plugin) {
 	if plugin.RestartCount >= plugin.Config.MaxRestarts {
-		fmt.Printf("plugin %s has reached max restarts\n", plugin.ID)
+		log.Printf("plugin %s has reached max restarts", plugin.ID)
 		return
 	}
 
 	if time.Since(plugin.LastRestart) < 5*time.Second {
-		fmt.Printf("plugin %s restarted too recently, waiting...\n", plugin.ID)
+		log.Printf("plugin %s restarted too recently, waiting...", plugin.ID)
 		time.Sleep(5 * time.Second)
 	}
 
@@ -67,7 +68,7 @@ func (pm *PluginManager) readPluginOutput(plugin *Plugin) {
 			if plugin.State != "running" {
 				return
 			}
-			fmt.Printf("plugin %s output error: %v\n", plugin.ID, err)
+			log.Printf("plugin %s output error: %v", plugin.ID, err)
 			return
 		}
 
@@ -78,11 +79,11 @@ func (pm *PluginManager) readPluginOutput(plugin *Plugin) {
 func (pm *PluginManager) handlePluginResponse(plugin *Plugin, resp *ResponseMessage) {
 	for _, action := range resp.Actions {
 		if !pm.isActionAllowed(plugin, action.Type) {
-			fmt.Printf("plugin %s tried to execute forbidden action %s\n", plugin.ID, action.Type)
+			log.Printf("plugin %s tried to execute forbidden action %s", plugin.ID, action.Type)
 			continue
 		}
 
-		fmt.Printf("executing action %s from plugin %s\n", action.Type, plugin.ID)
+		log.Printf("executing action %s from plugin %s", action.Type, plugin.ID)
 	}
 }
 
@@ -163,9 +164,9 @@ func (pm *PluginManager) HotUpdatePlugin(name string, newVersion string) error {
 
 	// Create new plugin instance with updated version
 	newPlugin := &Plugin{
-		ID:     plugin.ID,
-		Config: plugin.Config,
-		State:  "stopped",
+		ID:      plugin.ID,
+		Config:  plugin.Config,
+		State:   "stopped",
 		Version: newVersion,
 	}
 

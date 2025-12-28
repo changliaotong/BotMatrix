@@ -15,7 +15,7 @@ export interface TranslationResponse {
 
 export const translateApi = {
   /**
-   * 基础翻译接口 (目前对接 Azure)
+   * Base translation interface (currently using Azure)
    */
   translate: (data: TranslationRequest) => 
     api.post<TranslationResponse>('/api/translate', data),

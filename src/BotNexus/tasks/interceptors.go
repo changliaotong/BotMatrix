@@ -1,7 +1,7 @@
 package tasks
 
 import (
-	"log"
+	log "BotMatrix/common/log"
 	"math/rand"
 	"strings"
 

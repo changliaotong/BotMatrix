@@ -14,8 +14,16 @@ import {
   CheckCircle2,
   XCircle,
   Search,
-  Key
+  Key,
+  ArrowRight,
+  User
 } from 'lucide-vue-next';
+import { 
+  getPlatformIcon, 
+  getPlatformColor, 
+  isPlatformAvatar, 
+  getPlatformFromAvatar 
+} from '@/utils/avatar';
 
 const systemStore = useSystemStore();
 const botStore = useBotStore();
@@ -97,7 +105,7 @@ const handleEditIdentity = (identity: any) => {
 };
 
 const handleDeleteIdentity = async (id: number) => {
-  if (!confirm('Delete this identity mapping?')) return;
+  if (!confirm(t('confirm_delete_identity'))) return;
   try {
     const data = await botStore.deleteIdentity(id);
     if (data.success) {
@@ -120,7 +128,7 @@ const handleEditUser = (user: any) => {
 };
 
 const handleDeleteUser = async (userId: string) => {
-  if (!confirm('Are you sure you want to delete this user?')) return;
+  if (!confirm(t('confirm_delete_user'))) return;
   try {
     const data = await botStore.deleteUser(userId);
     if (data.success) {
@@ -160,7 +168,7 @@ onMounted(fetchUsers);
           <input 
             v-model="search"
             type="text"
-            placeholder="Search users..."
+            :placeholder="t('search_users_placeholder')"
             class="pl-10 pr-4 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-xs font-bold text-[var(--text-main)] w-64 transition-all"
           />
         </div>
@@ -176,7 +184,7 @@ onMounted(fetchUsers);
           class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
         >
           <Plus class="w-4 h-4" />
-          Add User
+          {{ t('add_new_user') }}
         </button>
       </div>
     </div>
@@ -185,11 +193,11 @@ onMounted(fetchUsers);
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+          <div class="p-3 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
             <Users class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Total Users</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('total_users') }}</div>
             <div class="text-2xl font-black text-[var(--text-main)]">{{ users.length }}</div>
           </div>
         </div>
@@ -200,7 +208,7 @@ onMounted(fetchUsers);
             <Shield class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Admins</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('admins') }}</div>
             <div class="text-2xl font-black text-[var(--text-main)]">{{ users.filter(u => u.role === 'admin').length }}</div>
           </div>
         </div>
@@ -211,7 +219,7 @@ onMounted(fetchUsers);
             <CheckCircle2 class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Active</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('active') }}</div>
             <div class="text-2xl font-black text-[var(--text-main)]">{{ users.filter(u => u.status === 'active').length }}</div>
           </div>
         </div>
@@ -238,18 +246,18 @@ onMounted(fetchUsers);
               <div class="flex items-center gap-3">
                 <h3 class="font-black text-[var(--text-main)] tracking-tight">{{ user.username }}</h3>
                 <span 
-                  :class="user.role === 'admin' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'"
+                  :class="user.role === 'admin' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] border-[var(--matrix-color)]/20'"
                   class="px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-widest"
                 >
-                  {{ user.role }}
+                  {{ t(user.role) }}
                 </span>
               </div>
               <div class="flex items-center gap-4 mt-1">
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full" :class="user.status === 'active' ? 'bg-green-500' : 'bg-red-500'"></span>
-                  <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ user.status }}</span>
+                  <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t(user.status) }}</span>
                 </div>
-                <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">Last Login: {{ user.last_login || 'Never' }}</div>
+                <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('last_login') }}: {{ user.last_login || t('never') }}</div>
               </div>
             </div>
           </div>
@@ -274,8 +282,8 @@ onMounted(fetchUsers);
       <!-- Empty State -->
       <div v-if="filteredUsers().length === 0" class="flex flex-col items-center justify-center py-20 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl">
         <Users class="w-16 h-16 text-[var(--text-muted)] mb-4 opacity-20" />
-        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">No Users Found</h2>
-        <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2">Try adjusting your search criteria</p>
+        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('no_users_found') }}</h2>
+        <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2">{{ t('search_adjust_desc') }}</p>
       </div>
     </div>
 
@@ -283,15 +291,15 @@ onMounted(fetchUsers);
     <div class="space-y-6 pt-12">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">Identity Mapping</h2>
-          <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Unified Nexus IDs for multi-platform users</p>
+          <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('identity_mapping') }}</h2>
+          <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ t('identity_mapping_desc') }}</p>
         </div>
         <button 
           @click="resetIdentityForm(); showIdentityModal = true"
-          class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500 text-white font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
+          class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
         >
           <Plus class="w-4 h-4" />
-          Map Identity
+          {{ t('map_identity') }}
         </button>
       </div>
 
@@ -299,22 +307,30 @@ onMounted(fetchUsers);
         <div 
           v-for="id in identities" 
           :key="id.ID"
-          class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between group hover:border-blue-500/30 transition-all"
+          class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between group hover:border-[var(--matrix-color)]/30 transition-all"
         >
           <div class="flex items-center gap-4">
-            <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
-              <Shield class="w-5 h-5" />
+            <div class="w-12 h-12 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] flex items-center justify-center overflow-hidden">
+              <template v-if="id.Avatar && !isPlatformAvatar(id.Avatar)">
+                <img :src="id.Avatar" class="w-full h-full object-cover" />
+              </template>
+              <template v-else>
+                <component 
+                  :is="isPlatformAvatar(id.Avatar) ? getPlatformIcon(getPlatformFromAvatar(id.Avatar)) : getPlatformIcon(id.Platform)" 
+                  :class="['w-6 h-6', isPlatformAvatar(id.Avatar) ? getPlatformColor(getPlatformFromAvatar(id.Avatar)) : getPlatformColor(id.Platform)]" 
+                />
+              </template>
             </div>
             <div>
-              <p class="font-black text-sm text-[var(--text-main)] uppercase tracking-tight">{{ id.Nickname || 'Unknown User' }}</p>
+              <p class="font-black text-sm text-[var(--text-main)] uppercase tracking-tight">{{ id.Nickname || t('unknown') }}</p>
               <div class="flex items-center gap-3 mt-1">
-                <span class="text-[10px] font-black px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 text-[var(--text-muted)] uppercase tracking-widest">{{ id.Platform }}</span>
-                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">NexusUID: {{ id.NexusUID }}</span>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 text-[var(--text-muted)] uppercase tracking-widest">{{ t('platform_' + id.Platform.toLowerCase()) || id.Platform }}</span>
+                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('nexus_uid') }}: {{ id.NexusUID }}</span>
               </div>
             </div>
           </div>
           <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button @click="handleEditIdentity(id)" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-muted)] hover:text-blue-500 transition-all">
+            <button @click="handleEditIdentity(id)" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-all">
               <Edit2 class="w-4 h-4" />
             </button>
             <button @click="handleDeleteIdentity(id.ID)" class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all">
@@ -323,129 +339,145 @@ onMounted(fetchUsers);
           </div>
         </div>
         <div v-if="identities.length === 0" class="lg:col-span-2 text-center py-12 bg-[var(--bg-card)] border border-[var(--border-color)] border-dashed rounded-3xl text-[var(--text-muted)] text-[10px] font-black uppercase tracking-widest">
-          No identity mappings defined
+          {{ t('no_identities_defined') }}
         </div>
       </div>
     </div>
 
     <!-- Add/Edit Identity Modal -->
-    <div v-if="showIdentityModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showIdentityModal = false; resetIdentityForm()"></div>
-      <div class="relative w-full max-w-md bg-[var(--bg-main)] border border-[var(--border-color)] rounded-3xl p-8 shadow-2xl">
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ isEditing ? 'Edit Mapping' : 'Map New Identity' }}</h2>
-            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Connect platform ID to Nexus ID</p>
+    <div v-if="showIdentityModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="p-6 sm:p-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ isEditing ? t('edit_mapping') : t('map_new_identity') }}</h2>
+              <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ t('connect_platform_id_desc') }}</p>
+            </div>
+            <button @click="showIdentityModal = false; resetIdentityForm()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <X class="w-6 h-6 text-[var(--text-muted)]" />
+            </button>
           </div>
-          <button @click="showIdentityModal = false; resetIdentityForm()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <X class="w-6 h-6 text-[var(--text-muted)]" />
-          </button>
-        </div>
 
-        <form @submit.prevent="handleManageIdentity" class="space-y-6">
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Nexus UID</label>
-            <input v-model="newIdentity.NexusUID" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-blue-500 outline-none text-[var(--text-main)] transition-all font-bold" required />
-          </div>
-          <div class="grid grid-cols-2 gap-4">
+          <form @submit.prevent="handleManageIdentity" class="space-y-6">
             <div class="space-y-2">
-              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Platform</label>
-              <select v-model="newIdentity.Platform" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-blue-500 outline-none text-[var(--text-main)] transition-all font-bold appearance-none">
-                <option value="qq">QQ</option>
-                <option value="wechat">WeChat</option>
-                <option value="telegram">Telegram</option>
-              </select>
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('nexus_uid') }}</label>
+              <input v-model="newIdentity.NexusUID" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm" required />
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('platform') }}</label>
+                <div class="relative">
+                  <select v-model="newIdentity.Platform" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none text-sm">
+                    <option value="qq">{{ t('platform_qq') }}</option>
+                    <option value="wechat">{{ t('platform_wechat') }}</option>
+                    <option value="telegram">{{ t('platform_telegram') }}</option>
+                  </select>
+                  <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('platform_uid') }}</label>
+                <input v-model="newIdentity.PlatformUID" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm" required />
+              </div>
             </div>
             <div class="space-y-2">
-              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Platform UID</label>
-              <input v-model="newIdentity.PlatformUID" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-blue-500 outline-none text-[var(--text-main)] transition-all font-bold" required />
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('nickname') }}</label>
+              <input v-model="newIdentity.Nickname" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm" />
             </div>
-          </div>
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Nickname</label>
-            <input v-model="newIdentity.Nickname" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-blue-500 outline-none text-[var(--text-main)] transition-all font-bold" />
-          </div>
-          <button type="submit" class="w-full py-4 rounded-2xl bg-blue-500 text-white font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4">
-            {{ isEditing ? 'Update Mapping' : 'Create Mapping' }}
-          </button>
-        </form>
+            <button type="submit" class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4">
+              {{ isEditing ? t('update_mapping') : t('create_mapping') }}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
 
     <!-- Add/Edit User Modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showModal = false; resetForm()"></div>
-      <div class="relative w-full max-w-md bg-[var(--bg-main)] border border-[var(--border-color)] rounded-3xl p-8 shadow-2xl">
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ isEditing ? 'Edit User' : 'Add New User' }}</h2>
-            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Configure system access</p>
+    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="p-6 sm:p-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ isEditing ? t('edit_user') : t('add_new_user') }}</h2>
+              <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ t('configure_system_access') }}</p>
+            </div>
+            <button @click="showModal = false; resetForm()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <X class="w-6 h-6 text-[var(--text-muted)]" />
+            </button>
           </div>
-          <button @click="showModal = false; resetForm()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <X class="w-6 h-6 text-[var(--text-muted)]" />
-          </button>
+
+          <form @submit.prevent="handleManageUser" class="space-y-6">
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('username') }}</label>
+              <div class="relative">
+                <Mail class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input 
+                  v-model="newUser.username"
+                  type="text"
+                  :placeholder="t('enter_username')"
+                  class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                  required
+                  :disabled="isEditing"
+                />
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ isEditing ? t('new_password_desc') : t('password') }}</label>
+              <div class="relative">
+                <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input 
+                  v-model="newUser.password"
+                  type="password"
+                  :placeholder="t('enter_password')"
+                  class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                  :required="!isEditing"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('role') }}</label>
+                <div class="relative">
+                  <select 
+                    v-model="newUser.role"
+                    class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none text-sm"
+                  >
+                    <option value="user">{{ t('user') }}</option>
+                    <option value="admin">{{ t('admin') }}</option>
+                  </select>
+                  <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('status') }}</label>
+                <div class="relative">
+                  <select 
+                    v-model="newUser.status"
+                    class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none text-sm"
+                  >
+                    <option value="active">{{ t('active') }}</option>
+                    <option value="inactive">{{ t('inactive') }}</option>
+                  </select>
+                  <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4 flex items-center justify-center gap-2">
+              <CheckCircle2 v-if="isEditing" class="w-4 h-4" />
+              <Plus v-else class="w-4 h-4" />
+              {{ isEditing ? t('update_user') : t('create_user') }}
+            </button>
+          </form>
         </div>
-
-        <form @submit.prevent="handleManageUser" class="space-y-6">
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Username</label>
-            <div class="relative">
-              <Mail class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input 
-                v-model="newUser.username"
-                type="text"
-                placeholder="Enter username"
-                class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-                required
-                :disabled="isEditing"
-              />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ isEditing ? 'New Password (leave blank to keep current)' : 'Password' }}</label>
-            <div class="relative">
-              <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input 
-                v-model="newUser.password"
-                type="password"
-                placeholder="Enter password"
-                class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-                :required="!isEditing"
-              />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Role</label>
-              <select 
-                v-model="newUser.role"
-                class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none"
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div class="space-y-2">
-              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Status</label>
-              <select 
-                v-model="newUser.status"
-                class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none"
-              >
-                <option value="active">Active</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </div>
-          </div>
-
-          <button 
-            type="submit"
-            class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4 shadow-lg shadow-[var(--matrix-color)]/20"
-          >
-            {{ isEditing ? 'Save Changes' : 'Create User' }}
-          </button>
-        </form>
       </div>
     </div>
   </div>

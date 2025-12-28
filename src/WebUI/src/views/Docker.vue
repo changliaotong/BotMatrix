@@ -50,7 +50,7 @@ const fetchContainers = async (isRefresh = false) => {
 
 const handleAction = async (containerId: string, action: string) => {
   if (action === 'delete') {
-    if (!confirm('Are you sure you want to delete this container? This action cannot be undone.')) return;
+    if (!confirm(t('confirm_delete_container'))) return;
   }
   
   try {
@@ -76,7 +76,7 @@ const showLogs = async (containerId: string) => {
     }
   } catch (err) {
     console.error('Failed to fetch logs:', err);
-    currentLogs.value = 'Failed to fetch logs.';
+    currentLogs.value = t('failed_fetch_logs');
   } finally {
     loadingLogs.value = false;
   }
@@ -137,7 +137,7 @@ onUnmounted(() => {
           <input 
             v-model="search"
             type="text"
-            placeholder="Search containers..."
+            :placeholder="t('search_containers')"
             class="pl-10 pr-4 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-xs font-bold text-[var(--text-main)] w-64 transition-all"
           />
         </div>
@@ -147,7 +147,7 @@ onUnmounted(() => {
           class="flex items-center gap-2 px-3 py-2 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
         >
           <div :class="autoRefresh ? 'bg-[var(--matrix-color)] animate-pulse' : 'bg-[var(--text-muted)]/30'" class="w-1.5 h-1.5 rounded-full"></div>
-          Auto Refresh
+          {{ t('auto_refresh') }}
         </button>
         <button 
           @click="fetchContainers(true)"
@@ -167,7 +167,7 @@ onUnmounted(() => {
             <Box class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Total</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('total') }}</div>
             <div class="text-2xl font-black text-[var(--text-main)]">{{ containers.length }}</div>
           </div>
         </div>
@@ -178,7 +178,7 @@ onUnmounted(() => {
             <CheckCircle2 class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Running</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('running') }}</div>
             <div class="text-2xl font-black text-[var(--text-main)]">
               {{ containers.filter(c => c.status.includes('Up')).length }}
             </div>
@@ -191,7 +191,7 @@ onUnmounted(() => {
             <XCircle class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Stopped</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('stopped') }}</div>
             <div class="text-2xl font-black text-[var(--text-main)]">
               {{ containers.filter(c => !c.status.includes('Up')).length }}
             </div>
@@ -204,8 +204,8 @@ onUnmounted(() => {
             <Activity class="w-6 h-6" />
           </div>
           <div>
-            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Health</div>
-            <div class="text-2xl font-black text-[var(--text-main)]">Good</div>
+            <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('health') }}</div>
+            <div class="text-2xl font-black text-[var(--text-main)]">{{ t('good') }}</div>
           </div>
         </div>
       </div>
@@ -236,11 +236,11 @@ onUnmounted(() => {
               </div>
               <div class="flex flex-wrap items-center gap-4 mt-2">
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">ID:</span>
+                  <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('id') }}:</span>
                   <span class="text-[10px] font-bold text-[var(--text-main)] opacity-60">{{ container.id.substring(0, 12) }}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Image:</span>
+                  <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('image') }}:</span>
                   <span class="text-[10px] font-bold text-[var(--text-main)] opacity-60">{{ container.image }}</span>
                 </div>
               </div>
@@ -250,11 +250,11 @@ onUnmounted(() => {
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-6 mr-6 border-r border-[var(--border-color)] pr-6">
               <div class="text-center">
-                <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest mb-1">CPU</div>
+                <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest mb-1">{{ t('cpu') }}</div>
                 <div class="text-xs font-black text-[var(--text-main)]">{{ container.cpu || '0.0%' }}</div>
               </div>
               <div class="text-center">
-                <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest mb-1">MEM</div>
+                <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest mb-1">{{ t('memory') }}</div>
                 <div class="text-xs font-black text-[var(--text-main)]">{{ container.memory || '0B' }}</div>
               </div>
             </div>
@@ -264,7 +264,7 @@ onUnmounted(() => {
                 v-if="!container.status.includes('Up')"
                 @click="handleAction(container.id, 'start')"
                 class="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500 hover:text-white transition-all"
-                title="Start"
+                :title="t('start')"
               >
                 <Play class="w-4 h-4" />
               </button>
@@ -272,7 +272,7 @@ onUnmounted(() => {
                 v-else
                 @click="handleAction(container.id, 'stop')"
                 class="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-white transition-all"
-                title="Stop"
+                :title="t('stop')"
               >
                 <Square class="w-4 h-4" />
               </button>
@@ -280,7 +280,7 @@ onUnmounted(() => {
               <button 
                 @click="handleAction(container.id, 'restart')"
                 class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500 hover:text-white transition-all"
-                title="Restart"
+                :title="t('restart')"
               >
                 <RotateCcw class="w-4 h-4" />
               </button>
@@ -288,7 +288,7 @@ onUnmounted(() => {
               <button 
                 @click="showLogs(container.id)"
                 class="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--matrix-color)]/30 hover:text-[var(--matrix-color)] transition-all"
-                title="Logs"
+                :title="t('logs')"
               >
                 <Terminal class="w-4 h-4" />
               </button>
@@ -296,7 +296,7 @@ onUnmounted(() => {
               <button 
                 @click="handleAction(container.id, 'delete')"
                 class="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
-                title="Delete"
+                :title="t('delete')"
               >
                 <Trash2 class="w-4 h-4" />
               </button>
@@ -308,55 +308,55 @@ onUnmounted(() => {
       <!-- Empty State -->
       <div v-if="filteredContainers().length === 0" class="flex flex-col items-center justify-center py-20 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl">
         <Box class="w-16 h-16 text-[var(--text-muted)] mb-4 opacity-20" />
-        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">No Containers Found</h2>
-        <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2">No docker containers match your search criteria</p>
+        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('no_containers_found') }}</h2>
+        <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2">{{ t('no_containers_desc') }}</p>
       </div>
     </div>
   </div>
 
   <!-- Logs Modal -->
   <div v-if="showLogsModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div class="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
-      <div class="p-6 border-b border-[var(--border-color)] flex items-center justify-between bg-black/5 dark:bg-white/5">
+    <div class="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div class="p-6 sm:p-8 border-b border-[var(--border-color)] flex items-center justify-between bg-black/5 dark:bg-white/5">
         <div class="flex items-center gap-3">
-          <div class="p-2 rounded-xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
-            <Terminal class="w-5 h-5" />
+          <div class="p-3 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
+            <Terminal class="w-6 h-6" />
           </div>
           <div>
-            <h2 class="text-lg font-black text-[var(--text-main)] tracking-tight uppercase">Container Logs</h2>
-            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ selectedContainerId }}</p>
+            <h2 class="text-xl font-black text-[var(--text-main)] tracking-tight uppercase">{{ t('container_logs') }}</h2>
+            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1 opacity-60">{{ selectedContainerId }}</p>
           </div>
         </div>
         <button 
           @click="showLogsModal = false"
           class="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all"
         >
-          <XCircle class="w-6 h-6" />
+          <XCircle class="w-8 h-8" />
         </button>
       </div>
       
-      <div class="flex-1 p-6 overflow-hidden">
-        <div class="h-full bg-black/90 rounded-2xl p-4 overflow-y-auto font-mono text-xs text-green-500/90 leading-relaxed scrollbar-thin scrollbar-thumb-[var(--matrix-color)]/20">
-          <div v-if="loadingLogs" class="flex items-center justify-center h-full gap-3 text-[var(--matrix-color)]/50">
-            <RefreshCw class="w-5 h-5 animate-spin" />
-            <span class="font-black uppercase tracking-widest">Fetching logs...</span>
+      <div class="flex-1 p-6 sm:p-8 overflow-hidden">
+        <div class="h-full bg-black/90 rounded-[1.5rem] p-6 overflow-y-auto font-mono text-xs text-green-500/90 leading-relaxed scrollbar-thin scrollbar-thumb-[var(--matrix-color)]/20 shadow-inner">
+          <div v-if="loadingLogs" class="flex flex-col items-center justify-center h-full gap-4 text-[var(--matrix-color)]/50">
+            <RefreshCw class="w-8 h-8 animate-spin" />
+            <span class="text-xs font-black uppercase tracking-widest">{{ t('fetching_logs') }}</span>
           </div>
-          <pre v-else class="whitespace-pre-wrap">{{ currentLogs || 'No logs available for this container.' }}</pre>
+          <pre v-else class="whitespace-pre-wrap break-all">{{ currentLogs || t('no_logs_available') }}</pre>
         </div>
       </div>
 
-      <div class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-black/5 dark:bg-white/5">
+      <div class="p-6 sm:p-8 border-t border-[var(--border-color)] flex justify-end gap-4 bg-black/5 dark:bg-white/5">
         <button 
           @click="showLogs(selectedContainerId)"
-          class="px-6 py-2.5 rounded-2xl bg-[var(--matrix-color)] text-white text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[var(--matrix-color)]/20"
+          class="px-8 py-3 rounded-2xl bg-[var(--matrix-color)] text-white text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[var(--matrix-color)]/20"
         >
-          Refresh Logs
+          {{ t('refresh_logs') }}
         </button>
         <button 
           @click="showLogsModal = false"
-          class="px-6 py-2.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-main)] text-xs font-black uppercase tracking-widest hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+          class="px-8 py-3 rounded-2xl bg-black/5 dark:hover:bg-black/10 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-main)] text-xs font-black uppercase tracking-widest transition-all"
         >
-          Close
+          {{ t('close') }}
         </button>
       </div>
     </div>

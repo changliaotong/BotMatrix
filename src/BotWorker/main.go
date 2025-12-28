@@ -4,7 +4,7 @@ import (
 	"BotMatrix/common"
 	"BotMatrix/common/log"
 	"BotMatrix/common/plugin/core"
-	"BotMatrix/common/plugin/policy"
+
 	"botworker/internal/config"
 	"botworker/internal/db"
 	"botworker/internal/plugin"
@@ -163,22 +163,22 @@ func startBot(ctx context.Context) error {
 
 	// 初始化新的插件系统
 	pm := core.NewPluginManager()
-	
-	// 设置插件策略
-	pm.SetPolicy(policy.NewWorkerPolicy())
-	
+
+	// 设置插件路径
+	pm.SetPluginPath("plugins")
+
 	// 扫描并加载插件
 	if err := pm.ScanPlugins("plugins"); err != nil {
 		log.Error("扫描插件失败", zap.Error(err))
 	}
-	
+
 	// 启动所有插件
 	for name := range pm.GetPlugins() {
 		if err := pm.StartPlugin(name); err != nil {
 			log.Error("启动插件失败", zap.String("plugin", name), zap.Error(err))
 		}
 	}
-	
+
 	// 注册事件处理
 	pm.RegisterEventHandler(func(event *core.EventMessage) {
 		// 将插件事件转换为BotWorker事件
@@ -215,8 +215,10 @@ func startBot(ctx context.Context) error {
 }
 
 func loadAllPlugins(pluginManager *plugin.Manager, cfg *config.Config, database *sql.DB, redisClient *redis.Client) {
-	// 加载示例插件
-	pluginManager.LoadPlugin(&plugins.EchoPlugin{})
+	// 加载插件
+	if err := pluginManager.LoadPlugin(&plugins.EchoPlugin{}); err != nil {
+		log.Error("加载 Echo 插件失败", zap.Error(err))
+	}
 	pluginManager.LoadPlugin(&plugins.WelcomePlugin{})
 	pluginManager.LoadPlugin(plugins.NewGroupManagerPlugin(database, redisClient))
 	pluginManager.LoadPlugin(plugins.NewWeatherPlugin(&cfg.Weather))
@@ -286,7 +288,7 @@ func startHTTPServer() {
 
 	addr := fmt.Sprintf(":%d", port)
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Printf("Failed to start HTTP Server: %v", err)
+		log.Errorf("Failed to start HTTP Server: %v", err)
 	}
 }
 

@@ -3,7 +3,8 @@ package main
 
 import (
 	"BotMatrix/common"
-	"BotMatrix/common/log"
+	clog "BotMatrix/common/log"
+	"BotMatrix/common/plugin/core"
 	"BotNexus/tasks"
 	"context"
 	"encoding/json"
@@ -24,7 +25,7 @@ import (
 const VERSION = "87"
 
 // 插件系统集成
-var pluginManager *PluginManager
+var pluginManager *core.PluginManager
 
 // LogManager 用于捕获日志并显示在 Web UI
 type LogManager struct {
@@ -90,7 +91,7 @@ func (lm *LogManager) GetLogs(lines int) string {
 var logMgr = &LogManager{max: 1000}
 
 func restartBot() {
-	log.Info("重启 BotNexus...")
+	clog.Info("重启 BotNexus...")
 	os.Exit(0)
 }
 
@@ -104,22 +105,22 @@ type Manager struct {
 // 主函数 - 整合所有功能
 func main() {
 	// 初始化日志系统
-	log.InitDefaultLogger()
+	clog.InitDefaultLogger()
 
 	// 初始化翻译器
 	common.InitTranslator("locales", "zh-CN")
 
-	log.Info(common.T("", "server_starting"), zap.String("version", VERSION))
+	clog.Info(common.T("", "server_starting"), zap.String("version", VERSION))
 
-	// 创建管理器 (内部会初始化数据库和管理员)
+	// 创建管理器 (内部会初始化数据库 and 管理员)
 	manager := NewManager()
 	logMgr.SetManager(manager.Manager)
 
 	// 初始化插件系统
-	pluginManager := NewPluginManager()
+	pluginManager := core.NewPluginManager()
 	pluginsDir := filepath.Join("..", "..", "plugins")
 	if err := pluginManager.LoadPlugins(pluginsDir); err != nil {
-		log.Error("加载插件失败", zap.Error(err))
+		clog.Error("加载插件失败", zap.Error(err))
 	}
 
 	// 启动超时检测
@@ -138,9 +139,9 @@ func main() {
 	// 启动 Core Gateway (WebSocket 转发引擎 - 仅处理机器人和工作节点连接)
 	coreMux := manager.createCoreHandler()
 	go func() {
-		log.Info(common.T("", "core_engine_starting"), zap.String("port", common.WS_PORT))
+		clog.Info(common.T("", "core_engine_starting"), zap.String("port", common.WS_PORT))
 		if err := http.ListenAndServe(common.WS_PORT, coreMux); err != nil {
-			log.Error(common.T("", "core_engine_failed"), zap.Error(err))
+			clog.Error(common.T("", "core_engine_failed"), zap.Error(err))
 		}
 	}()
 
@@ -164,6 +165,7 @@ func main() {
 	mux.HandleFunc("/api/bots", manager.JWTMiddleware(HandleGetBots(manager.Manager)))
 	mux.HandleFunc("/api/admin/bots", manager.JWTMiddleware(HandleGetBots(manager.Manager)))
 	mux.HandleFunc("/api/workers", manager.JWTMiddleware(HandleGetWorkers(manager.Manager)))
+	mux.HandleFunc("/api/admin/workers", manager.JWTMiddleware(HandleGetWorkers(manager.Manager)))
 	mux.HandleFunc("/api/proxy/avatar", HandleProxyAvatar(manager.Manager))
 	mux.HandleFunc("/api/stats", manager.JWTMiddleware(HandleGetStats(manager.Manager)))
 	mux.HandleFunc("/api/admin/stats", manager.JWTMiddleware(HandleGetStats(manager.Manager)))
@@ -173,12 +175,17 @@ func main() {
 	mux.HandleFunc("/api/admin/logs", manager.JWTMiddleware(HandleGetLogs(manager.Manager)))
 	mux.HandleFunc("/api/admin/logs/clear", manager.AdminMiddleware(HandleClearLogs(manager.Manager)))
 	mux.HandleFunc("/api/contacts", manager.JWTMiddleware(HandleGetContacts(manager.Manager)))
+	mux.HandleFunc("/api/admin/contacts", manager.AdminMiddleware(HandleGetContacts(manager.Manager)))
+	mux.HandleFunc("/api/admin/contacts/sync", manager.AdminMiddleware(HandleGetContacts(manager.Manager)))
+	mux.HandleFunc("/api/admin/group/members", manager.AdminMiddleware(HandleGetGroupMembers(manager.Manager)))
+	mux.HandleFunc("/api/admin/messages", manager.AdminMiddleware(HandleGetMessages(manager.Manager)))
+	mux.HandleFunc("/api/admin/batch_send", manager.AdminMiddleware(HandleBatchSend(manager.Manager)))
 	mux.HandleFunc("/api/action", manager.JWTMiddleware(HandleSendAction(manager.Manager)))
 	mux.HandleFunc("/api/smart_action", manager.JWTMiddleware(HandleSendAction(manager.Manager)))
 
 	// 任务系统接口
-	mux.HandleFunc("/api/admin/tasks/capabilities", manager.AdminMiddleware(HandleListSystemCapabilities(manager)))
-	mux.HandleFunc("/api/tasks", manager.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/admin/tasks/capabilities", manager.AdminMiddleware(manager.SkillMiddleware(HandleListSystemCapabilities(manager))))
+	mux.HandleFunc("/api/tasks", manager.JWTMiddleware(manager.SkillMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			HandleListTasks(manager)(w, r)
@@ -187,15 +194,15 @@ func main() {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
-	}))
-	mux.HandleFunc("/api/tasks/executions", manager.JWTMiddleware(HandleGetExecutions(manager)))
-	mux.HandleFunc("/api/ai/parse", manager.JWTMiddleware(HandleAIParse(manager)))
-	mux.HandleFunc("/api/ai/confirm", manager.JWTMiddleware(HandleAIConfirm(manager)))
-	mux.HandleFunc("/api/system/capabilities", manager.JWTMiddleware(HandleGetCapabilities(manager)))
-	mux.HandleFunc("/api/tags", manager.JWTMiddleware(HandleManageTags(manager)))
+	})))
+	mux.HandleFunc("/api/tasks/executions", manager.JWTMiddleware(manager.SkillMiddleware(HandleGetExecutions(manager))))
+	mux.HandleFunc("/api/ai/parse", manager.JWTMiddleware(manager.SkillMiddleware(HandleAIParse(manager))))
+	mux.HandleFunc("/api/ai/confirm", manager.JWTMiddleware(manager.SkillMiddleware(HandleAIConfirm(manager))))
+	mux.HandleFunc("/api/system/capabilities", manager.JWTMiddleware(manager.SkillMiddleware(HandleGetCapabilities(manager))))
+	mux.HandleFunc("/api/tags", manager.JWTMiddleware(manager.SkillMiddleware(HandleManageTags(manager))))
 
 	// 高级任务与策略接口
-	mux.HandleFunc("/api/admin/strategies", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/admin/strategies", manager.AdminMiddleware(manager.SkillMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			HandleListStrategies(manager)(w, r)
@@ -206,9 +213,9 @@ func main() {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 
-	mux.HandleFunc("/api/admin/identities", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/admin/identities", manager.AdminMiddleware(manager.SkillMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			HandleListIdentities(manager)(w, r)
@@ -219,9 +226,9 @@ func main() {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 
-	mux.HandleFunc("/api/admin/shadow-rules", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/admin/shadow-rules", manager.AdminMiddleware(manager.SkillMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			HandleListShadowRules(manager)(w, r)
@@ -232,7 +239,7 @@ func main() {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
-	}))
+	})))
 
 	// 管理员接口
 	mux.HandleFunc("/api/admin/config", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -337,27 +344,60 @@ func main() {
 
 	mux.HandleFunc("/api/admin/nexus/status", manager.JWTMiddleware(HandleGetNexusStatus(manager.Manager)))
 
-	// 静态文件服务
+	// 静态文件服务 (支持 SPA 路由刷新)
 	webDir := "../WebUI/web"
 	if _, err := os.Stat("./web"); err == nil {
 		webDir = "./web"
+	} else if _, err := os.Stat("../WebUI/dist"); err == nil {
+		webDir = "../WebUI/dist"
 	} else if _, err := os.Stat("/app/web"); err == nil {
 		webDir = "/app/web"
 	}
-	mux.Handle("/", http.FileServer(http.Dir(webDir)))
 
-	// Overmind (Flutter Web) 静态服务
+	// 统一处理 WebUI 路由
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// 排除 API 和 WS 路径（理论上 ServeMux 会优先匹配更长的路径，但为了保险）
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/ws/") || strings.HasPrefix(r.URL.Path, "/login") {
+			http.NotFound(w, r)
+			return
+		}
+
+		path := filepath.Join(webDir, r.URL.Path)
+		if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
+			// 物理文件存在，正常服务
+			http.ServeFile(w, r, path)
+			return
+		}
+		// 物理文件不存在或为目录，返回 index.html 支持 SPA 路由
+		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+	})
+
+	// Overmind (Flutter Web) 静态服务 (支持 SPA 路由刷新)
 	overmindDir := "../WebUI/overmind"
 	if _, err := os.Stat("./overmind"); err == nil {
 		overmindDir = "./overmind"
+	} else if _, err := os.Stat("../Overmind/build/web"); err == nil {
+		overmindDir = "../Overmind/build/web"
 	} else if _, err := os.Stat("/app/overmind"); err == nil {
 		overmindDir = "/app/overmind"
 	}
-	mux.Handle("/overmind/", http.StripPrefix("/overmind/", http.FileServer(http.Dir(overmindDir))))
 
-	log.Info(common.T("", "admin_starting"), zap.String("port", webuiPort))
+	mux.HandleFunc("/overmind/", func(w http.ResponseWriter, r *http.Request) {
+		// 去掉 /overmind/ 前缀
+		relPath := strings.TrimPrefix(r.URL.Path, "/overmind/")
+		path := filepath.Join(overmindDir, relPath)
+
+		if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
+			http.ServeFile(w, r, path)
+			return
+		}
+		// Fallback to overmind/index.html
+		http.ServeFile(w, r, filepath.Join(overmindDir, "index.html"))
+	})
+
+	clog.Info(common.T("", "admin_starting"), zap.String("port", webuiPort))
 	if err := http.ListenAndServe(webuiPort, mux); err != nil {
-		log.Fatal(common.T("", "admin_failed"), zap.Error(err))
+		clog.Fatal(common.T("", "admin_failed"), zap.Error(err))
 	}
 }
 
@@ -369,6 +409,30 @@ func (m *Manager) createCoreHandler() http.Handler {
 	mux.HandleFunc("/ws/workers", m.handleWorkerWebSocket)
 
 	return mux
+}
+
+// SkillMiddleware 检查技能系统是否启用的中间件
+func (m *Manager) SkillMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !common.ENABLE_SKILL || m.GORMDB == nil || m.TaskManager == nil {
+			lang := r.Header.Get("Accept-Language")
+			if lang == "" {
+				lang = "zh-CN"
+			}
+			msg := common.T(lang, "skill_system_disabled|技能系统已禁用。请在配置中设置 ENABLE_SKILL=true 以启用任务和策略功能。")
+
+			w.Header().Set("Content-Type", "application/json")
+			// 使用 200 状态码以允许前端优雅地处理“服务已关闭”的提示，而不是触发网络错误
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": msg,
+				"code":    "SKILL_DISABLED",
+			})
+			return
+		}
+		next(w, r)
+	}
 }
 
 // 简化的管理器创建函数
@@ -384,19 +448,19 @@ func NewManager() *Manager {
 
 	// 初始化数据库
 	if err := m.InitDB(); err != nil {
-		log.Error(common.T("", "db_init_failed"), zap.Error(err))
+		clog.Error(common.T("", "db_init_failed"), zap.Error(err))
 	} else {
 		// 从数据库加载路由规则
 		if err := m.LoadRoutingRulesFromDB(); err != nil {
-			log.Error(common.T("", "load_route_rules_failed"), zap.Error(err))
+			clog.Error(common.T("", "load_route_rules_failed"), zap.Error(err))
 		}
 		// 从数据库加载联系人缓存
 		if err := m.LoadCachesFromDB(); err != nil {
-			log.Error(common.T("", "load_contacts_failed"), zap.Error(err))
+			clog.Error(common.T("", "load_contacts_failed"), zap.Error(err))
 		}
 		// 从数据库加载系统统计
 		if err := m.LoadStatsFromDB(); err != nil {
-			log.Error(common.T("", "load_stats_failed"), zap.Error(err))
+			clog.Error(common.T("", "load_stats_failed"), zap.Error(err))
 		}
 	}
 
@@ -411,15 +475,15 @@ func NewManager() *Manager {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := m.Rdb.Ping(ctx).Err(); err != nil {
-		log.Error(common.T("", "redis_conn_failed"), zap.Error(err))
+		clog.Error(common.T("", "redis_conn_failed"), zap.Error(err))
 		m.Rdb = nil
 	} else {
-		log.Info(common.T("", "redis_connected"))
+		clog.Info(common.T("", "redis_connected"))
 	}
 
 	// 初始化 Docker 客户端
 	if err := m.InitDockerClient(); err != nil {
-		log.Error("Docker 初始化失败", zap.Error(err))
+		clog.Error("Docker 初始化失败", zap.Error(err))
 	}
 
 	// 初始化核心插件
@@ -427,26 +491,26 @@ func NewManager() *Manager {
 
 	// 技能系统 (任务系统) 默认关闭，仅在 ENABLE_SKILL 为 true 时开启
 	if common.ENABLE_SKILL {
-		log.Info("[SKILL] 技能系统正在启动...")
+		clog.Info("[SKILL] 技能系统正在启动...")
 		// 初始化GORM (任务系统需要)
 		m.GORMManager = common.NewGORMManager()
 		if err := m.GORMManager.InitGORM(); err != nil {
-			log.Error("[GORM] 初始化失败", zap.Error(err))
+			clog.Error("[GORM] 初始化失败", zap.Error(err))
 		} else {
 			m.GORMDB = m.GORMManager.DB
-			log.Info("[GORM] 任务系统已准备就绪")
-		}
+			clog.Info("[GORM] 任务系统已准备就绪")
 
-		// 初始化任务管理器
-		m.TaskManager = tasks.NewTaskManager(m.GORMDB, m.Rdb, m)
-		m.TaskManager.Start()
+			// 初始化任务管理器 (仅在 GORMDB 成功初始化后)
+			m.TaskManager = tasks.NewTaskManager(m.GORMDB, m.Rdb, m)
+			m.TaskManager.Start()
 
-		// 启动 Redis 订阅监听 (用于接收 Worker 报备的能力)
-		if m.Rdb != nil {
-			go m.startRedisWorkerSubscription()
+			// 启动 Redis 订阅监听 (用于接收 Worker 报备的能力)
+			if m.Rdb != nil {
+				go m.startRedisWorkerSubscription()
+			}
 		}
 	} else {
-		log.Info("[SKILL] 技能系统已禁用 (ENABLE_SKILL=false)")
+		clog.Info("[SKILL] 技能系统已禁用 (ENABLE_SKILL=false)")
 	}
 
 	return m
@@ -468,10 +532,10 @@ func (m *Manager) SendToWorker(workerID string, msg map[string]interface{}) erro
 
 		err := m.Rdb.RPush(ctx, queue, payload).Err()
 		if err == nil {
-			log.Info("[Dispatcher] Sent message to worker via Redis queue", zap.String("worker_id", workerID), zap.String("queue", queue))
+			clog.Info("[Dispatcher] Sent message to worker via Redis queue", zap.String("worker_id", workerID), zap.String("queue", queue))
 			return nil
 		}
-		log.Warn("[Dispatcher] Failed to send via Redis. Falling back to WebSocket.", zap.Error(err))
+		clog.Warn("[Dispatcher] Failed to send via Redis. Falling back to WebSocket.", zap.Error(err))
 	}
 
 	// 2. 尝试通过 WebSocket 发送
@@ -481,7 +545,7 @@ func (m *Manager) SendToWorker(workerID string, msg map[string]interface{}) erro
 			err := w.Conn.WriteJSON(msg)
 			w.Mutex.Unlock()
 			if err == nil {
-				log.Info("[Dispatcher] Sent message to worker via WebSocket", zap.String("worker_id", workerID))
+				clog.Info("[Dispatcher] Sent message to worker via WebSocket", zap.String("worker_id", workerID))
 				return nil
 			}
 			return fmt.Errorf("websocket send failed: %v", err)
@@ -501,10 +565,10 @@ func (m *Manager) HandleSkillResult(rawMsg map[string]interface{}) {
 	errStr := fmt.Sprint(rawMsg["error"])
 	workerID := fmt.Sprint(rawMsg["worker_id"])
 
-	log.Info("[Task] Received skill result", 
-		zap.String("worker_id", workerID), 
-		zap.String("task_id", taskIDStr), 
-		zap.String("execution_id", executionID), 
+	clog.Info("[Task] Received skill result",
+		zap.String("worker_id", workerID),
+		zap.String("task_id", taskIDStr),
+		zap.String("execution_id", executionID),
 		zap.String("status", statusStr))
 
 	// 转换状态
@@ -529,12 +593,12 @@ func (m *Manager) HandleSkillResult(rawMsg map[string]interface{}) {
 	// 如果有 executionID，优先根据 executionID 更新
 	if executionID != "" && executionID != "<nil>" && executionID != "0" {
 		if err := m.GORMDB.Model(&tasks.Execution{}).Where("execution_id = ?", executionID).Updates(updates).Error; err != nil {
-			log.Error("[Task] Failed to update execution", zap.String("execution_id", executionID), zap.Error(err))
+			clog.Error("[Task] Failed to update execution", zap.String("execution_id", executionID), zap.Error(err))
 		}
 	} else {
 		// 否则根据 taskID 更新最新的执行记录 (兼容旧版 Worker)
 		if err := m.GORMDB.Model(&tasks.Execution{}).Where("task_id = ?", taskIDStr).Order("created_at desc").Limit(1).Updates(updates).Error; err != nil {
-			log.Error("[Task] Failed to update execution for task", zap.String("task_id", taskIDStr), zap.Error(err))
+			clog.Error("[Task] Failed to update execution for task", zap.String("task_id", taskIDStr), zap.Error(err))
 		}
 	}
 
@@ -552,19 +616,19 @@ func (m *Manager) startRedisWorkerSubscription() {
 	pubsub := m.Rdb.Subscribe(ctx, "botmatrix:worker:register", "botmatrix:worker:skill_result")
 	defer pubsub.Close()
 
-	log.Info("[Redis] Subscribed to worker channels: register, skill_result")
+	clog.Info("[Redis] Subscribed to worker channels: register, skill_result")
 
 	for {
 		msg, err := pubsub.ReceiveMessage(ctx)
 		if err != nil {
-			log.Error("[Redis] Subscription error", zap.Error(err))
+			clog.Error("[Redis] Subscription error", zap.Error(err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
 		var rawMsg map[string]interface{}
 		if err := json.Unmarshal([]byte(msg.Payload), &rawMsg); err != nil {
-			log.Error("[Redis] Failed to unmarshal message", zap.Error(err))
+			clog.Error("[Redis] Failed to unmarshal message", zap.Error(err))
 			continue
 		}
 
@@ -578,12 +642,12 @@ func (m *Manager) startRedisWorkerSubscription() {
 			}
 			payloadBytes, _ := json.Marshal(rawMsg)
 			if err := json.Unmarshal(payloadBytes, &regMsg); err != nil {
-				log.Error("[Redis] Failed to unmarshal worker registration", zap.Error(err))
+				clog.Error("[Redis] Failed to unmarshal worker registration", zap.Error(err))
 				continue
 			}
 
-			log.Info("[Redis] Received registration from worker", 
-				zap.String("worker_id", regMsg.WorkerID), 
+			clog.Info("[Redis] Received registration from worker",
+				zap.String("worker_id", regMsg.WorkerID),
 				zap.Int("capabilities_count", len(regMsg.Capabilities)))
 
 			// 更新或添加 Worker 信息，确保调度器能找到它

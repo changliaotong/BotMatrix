@@ -65,10 +65,10 @@ func InitConnectionManager() (*common.ConnectionManager, error) {
 func StartAllConnections(manager *common.ConnectionManager) error {
 	connections := manager.GetConnections()
 	
-	for i, conn := range connections {
+	for _, conn := range connections {
 		if conn.Enabled {
 			handler := NewWxConnectionHandler(conn)
-			err := manager.StartConnection(i, handler)
+			err := manager.StartConnection(conn.Name, handler)
 			if err != nil {
 				return err
 			}

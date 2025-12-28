@@ -290,7 +290,7 @@ func (m *Manager) sendBotHeartbeat(bot *common.BotClient, stop chan struct{}) {
 				log.Printf("Failed to send ping to Bot %s: %v", bot.SelfID, err)
 				return
 			}
-			log.Printf("Sent ping to Bot %s", bot.SelfID)
+			// log.Printf("Sent ping to Bot %s", bot.SelfID)
 
 		case <-stop:
 			return
@@ -315,7 +315,7 @@ func (m *Manager) sendWorkerHeartbeat(worker *common.WorkerClient, stop chan str
 				log.Printf("Failed to send ping to Worker %s: %v", worker.ID, err)
 				return
 			}
-			log.Printf("Sent ping to Worker %s", worker.ID)
+			// log.Printf("Sent ping to Worker %s", worker.ID)
 
 		case <-stop:
 			return
@@ -447,40 +447,57 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	}
 
 	// Handle according to message type
+	userID := common.ToString(msg["user_id"])
+	groupID := common.ToString(msg["group_id"])
+
 	switch msgType {
+	case "log":
+		// 机器人上报的运行日志，直接丢弃，不进行转发
+		return
 	case "meta_event":
 		// Meta event (heartbeat etc.)
 		if heartbeat, ok := msg["meta_event_type"].(string); ok && heartbeat == "heartbeat" {
 			// Heartbeat event, update status
 			if status, ok := msg["status"].(map[string]interface{}); ok {
 				if online, ok := status["online"].(bool); ok {
+					_ = online
 					// Only log heartbeat if debug is enabled or status changed
 					if common.GlobalConfig.LogLevel == "DEBUG" {
-						log.Printf("Bot %s heartbeat: online=%v", bot.SelfID, online)
+						// log.Printf("Bot %s heartbeat: online=%v", bot.SelfID, online)
 					}
 				}
 			}
+			return // 心跳消息处理完内部状态后直接返回，不转发给 Worker 和 Web UI
 		}
-	case "message", "notice", "request":
+	case "message", "message_sent", "notice", "request":
+		// Debug log for self-messages
+		if userID == bot.SelfID || msgType == "message_sent" {
+			log.Printf("[Bot] Received self-message from Bot %s: %v", bot.SelfID, msg)
+		}
+
 		// 3. Check idempotency (prevent duplicate replies)
 		msgID := common.ToString(msg["message_id"])
-		var userID, groupID string
 		if msgID == "" {
 			// notice/request may not have message_id, try using post_type + time + user_id as unique identifier
 			msgID = fmt.Sprintf("%s:%v:%v", msgType, msg["time"], msg["user_id"])
 		}
 
-		if msgID != "" && !m.CheckIdempotency(msgID) {
-			log.Printf("[REDIS] Duplicate %s detected: %s, skipping", msgType, msgID)
-			return
-		}
+		// Self-messages skip idempotency and rate limit checks to ensure they are tracked
+		if userID != bot.SelfID && msgType != "message_sent" {
+			if msgID != "" && !m.CheckIdempotency(msgID) {
+				log.Printf("[REDIS] Duplicate %s detected: %s, skipping", msgType, msgID)
+				return
+			}
 
-		// 4. Check rate limit (prevent spam and abuse)
-		userID = common.ToString(msg["user_id"])
-		groupID = common.ToString(msg["group_id"])
-		if !m.CheckRateLimit(userID, groupID) {
-			log.Printf("[REDIS] Rate limit exceeded for user %s / group %s", userID, groupID)
-			return
+			// 4. Check rate limit (prevent spam and abuse)
+			if !m.CheckRateLimit(userID, groupID) {
+				log.Printf("[REDIS] Rate limit exceeded for user %s / group %s", userID, groupID)
+				return
+			}
+		} else {
+			if common.GlobalConfig.LogLevel == "DEBUG" {
+				log.Printf("[Bot] Self-message %s skipping idempotency and rate limit checks", msgID)
+			}
 		}
 
 		// 5. Update session context (supports TTL)
@@ -510,7 +527,7 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	// Enrich message with cached data (names, cards) before forwarding to workers
 	m.enrichMessageWithCache(msg)
 
-	if msgType == "message" {
+	if msgType == "message" || msgType == "message_sent" {
 		m.handleBotMessageEvent(bot, msg)
 	}
 
@@ -549,13 +566,23 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	// 5.5 Broadcast to subscribers (Web UI Monitor)
 	m.BroadcastEvent(msg)
 
+	// 打印转发详情，方便排查频繁转发的消息
+	log.Printf("[Forwarding] Bot: %s, PostType: %v, EventType: %v/%v, Msg: %+v",
+		bot.SelfID, msg["post_type"], msg["message_type"], msg["notice_type"], msg)
+
 	// 6. Use Redis queue for asynchronous decoupling
 	// 如果启用了技能系统，则优先进入 Redis 队列进行异步分发
 	if common.ENABLE_SKILL && m.Rdb != nil {
 		targetWorkerID := m.getTargetWorkerID(msg)
+		if userID == bot.SelfID {
+			log.Printf("[Routing] Self-message from Bot %s, TargetWorkerID: %s", bot.SelfID, targetWorkerID)
+		}
 		err := m.PushToRedisQueue(targetWorkerID, msg)
 		if err == nil {
 			m.BroadcastRoutingEvent("Nexus", "RedisQueue", "nexus_to_redis", "push", nil)
+			if userID == bot.SelfID {
+				log.Printf("[Routing] Self-message from Bot %s pushed to Redis queue", bot.SelfID)
+			}
 
 			// 影子执行 (Shadow Mode): 如果有影子 Worker，额外推送一份
 			if shadowID, ok := msg["shadow_worker_id"].(string); ok && shadowID != "" {
@@ -590,7 +617,7 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 // enrichMessageWithCache supplements the message with cached group and user information
 func (m *Manager) enrichMessageWithCache(msg map[string]interface{}) {
 	postType := common.ToString(msg["post_type"])
-	if postType != "message" && postType != "notice" && postType != "request" {
+	if postType != "message" && postType != "notice" && postType != "request" && postType != "message_sent" {
 		return
 	}
 
@@ -602,7 +629,7 @@ func (m *Manager) enrichMessageWithCache(msg map[string]interface{}) {
 
 	// Ensure sender object exists for message type
 	var sender map[string]interface{}
-	if postType == "message" {
+	if postType == "message" || postType == "message_sent" {
 		if s, ok := msg["sender"].(map[string]interface{}); ok {
 			sender = s
 		} else {
@@ -823,10 +850,11 @@ func (m *Manager) cacheBotDataFromMessage(bot *common.BotClient, msg map[string]
 			m.FriendCache[uID] = map[string]interface{}{
 				"user_id":   uID,
 				"nickname":  nickname,
+				"bot_id":    bot.SelfID,
 				"is_cached": true,
 			}
 			// Persist to database
-			go m.SaveFriendToDB(uID, nickname)
+			go m.SaveFriendToDB(uID, nickname, bot.SelfID)
 		}
 	}
 }
@@ -1013,6 +1041,12 @@ func (m *Manager) handleBotMessageEvent(bot *common.BotClient, msg map[string]in
 	// Update detailed stats (exclude system messages)
 	if !isSystemMessage(msg) {
 		m.UpdateBotStats(bot.SelfID, userID, groupID)
+
+		// 保存到数据库
+		messageID := common.ToString(msg["message_id"])
+		msgType := common.ToString(msg["message_type"])
+		rawMsg, _ := json.Marshal(msg)
+		go m.SaveMessageToDB(messageID, bot.SelfID, userID, groupID, msgType, message, string(rawMsg))
 	}
 }
 

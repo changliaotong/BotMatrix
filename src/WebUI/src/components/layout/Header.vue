@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useSystemStore, type Style } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
+import { useBotStore } from '@/stores/bot';
 import { useRoute } from 'vue-router';
 import { Menu, Github, Sun, Moon, LogOut, Palette, Check, Languages } from 'lucide-vue-next';
 import { type Language } from '@/utils/i18n';
 
 const systemStore = useSystemStore();
 const authStore = useAuthStore();
+const botStore = useBotStore();
 const route = useRoute();
 
 const showStylePicker = ref(false);
@@ -15,27 +17,56 @@ const stylePickerRef = ref<HTMLElement | null>(null);
 const showLangPicker = ref(false);
 const langPickerRef = ref<HTMLElement | null>(null);
 
+// Calculate uptime locally to ensure it updates every second
+const localUptime = ref('0s');
+let uptimeTimer: number | null = null;
+
+const updateUptime = () => {
+  const startTime = botStore.stats?.start_time;
+  if (!startTime) {
+    localUptime.value = '0s';
+    return;
+  }
+  
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - startTime;
+  
+  if (diff < 60) {
+    localUptime.value = `${diff}s`;
+  } else if (diff < 3600) {
+    localUptime.value = `${Math.floor(diff / 60)}m ${diff % 60}s`;
+  } else if (diff < 86400) {
+    localUptime.value = `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
+  } else {
+    localUptime.value = `${Math.floor(diff / 86400)}d ${Math.floor((diff % 86400) / 3600)}h`;
+  }
+};
+
 // Map route paths back to translation keys
 const routeTitleMap: Record<string, string> = {
   '/': 'dashboard',
   '/bots': 'bots',
+  '/workers': 'workers',
+  '/contacts': 'contacts',
+  '/nexus': 'nexus',
+  '/tasks': 'tasks',
+  '/fission': 'fission',
+  '/docker': 'docker',
+  '/routing': 'routing',
+  '/users': 'users',
+  '/settings': 'settings',
   '/logs': 'logs',
-  '/settings': 'settings'
+  '/manual': 'manual',
+  '/monitor': 'monitor'
 };
 
 const t = (key: string) => systemStore.t(key);
-const langNameMap: Record<string, string> = {
-  'zh-CN': '简体中文',
-  'zh-TW': '繁體中文',
-  'en-US': 'English',
-  'ja-JP': '日本語'
-};
 
 const langShortNameMap: Record<string, string> = {
-  'zh-CN': '简',
-  'zh-TW': '繁',
-  'en-US': 'EN',
-  'ja-JP': 'JA'
+  'zh-CN': 'lang_zh_cn_short',
+  'zh-TW': 'lang_zh_tw_short',
+  'en-US': 'lang_en_us_short',
+  'ja-JP': 'lang_ja_jp_short'
 };
 
 const styleIconMap: Record<string, string> = {
@@ -52,7 +83,7 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
     nameKey: 'style_classic',
     colors: {
       light: { bg: '#f3f4f6', sidebar: '#ffffff', header: '#ffffff', accent: '#3b82f6', text: '#111827', border: '#e5e7eb' },
-      dark: { bg: '#111827', sidebar: '#111827', header: '#111827', accent: '#60a5fa', text: '#f9fafb', border: '#1f2937' }
+      dark: { bg: '#0f172a', sidebar: '#0f172a', header: '#0f172a', accent: '#f59e0b', text: '#f8fafc', border: '#1e293b' }
     }
   },
   { 
@@ -89,11 +120,11 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
   }
 ];
 
-const languages: { id: Language; name: string }[] = [
-  { id: 'zh-CN', name: '简体中文' },
-  { id: 'zh-TW', name: '繁體中文' },
-  { id: 'en-US', name: 'English' },
-  { id: 'ja-JP', name: '日本語' }
+const languages: { id: Language; nameKey: string }[] = [
+  { id: 'zh-CN', nameKey: 'lang_zh_cn' },
+  { id: 'zh-TW', nameKey: 'lang_zh_tw' },
+  { id: 'en-US', nameKey: 'lang_en_us' },
+  { id: 'ja-JP', nameKey: 'lang_ja_jp' }
 ];
 
 const toggleStylePicker = () => {
@@ -128,10 +159,20 @@ const handleClickOutside = (event: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside);
+  
+  // Update uptime every second
+  updateUptime();
+  uptimeTimer = window.setInterval(updateUptime, 1000);
+  
+  // Fetch initial stats if not already loaded to get start_time
+  if (!botStore.stats?.start_time) {
+    botStore.fetchStats();
+  }
 });
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleClickOutside);
+  if (uptimeTimer) clearInterval(uptimeTimer);
 });
 </script>
 
@@ -152,7 +193,7 @@ onUnmounted(() => {
       <div class="hidden sm:flex items-center gap-2 sm:gap-6 px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
         <div class="flex flex-col">
           <span class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] leading-tight">{{ t('system_uptime') }}</span>
-          <span class="text-xs sm:text-sm font-bold text-[var(--matrix-color)] mono">{{ systemStore.uptime }}</span>
+          <span class="text-xs sm:text-sm font-bold text-[var(--matrix-color)] mono">{{ localUptime }}</span>
         </div>
         <div class="h-4 sm:h-6 w-px bg-black/10 dark:bg-white/10"></div>
         <div class="flex flex-col text-right">
@@ -161,11 +202,6 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20">
-        <div class="w-2 h-2 rounded-full bg-[var(--matrix-color)] animate-pulse"></div>
-        <span class="text-[10px] font-bold text-[var(--matrix-color)] uppercase tracking-wider">{{ t('neural_link_active') }}</span>
-      </div>
-      
       <div class="h-6 w-px bg-black/5 dark:bg-white/5 hidden sm:block"></div>
       
       <div class="flex items-center gap-1">
@@ -185,7 +221,7 @@ onUnmounted(() => {
             ]"
             :title="t('switch_lang')"
           >
-            <span class="text-[10px] sm:text-xs font-bold">{{ langShortNameMap[systemStore.lang] }}</span>
+            <span class="text-[10px] sm:text-xs font-bold">{{ t(langShortNameMap[systemStore.lang]) }}</span>
           </button>
 
           <!-- Language Picker Panel -->
@@ -201,7 +237,7 @@ onUnmounted(() => {
                 class="w-full flex items-center justify-between px-3 py-2 hover:bg-[var(--matrix-color)]/10 transition-colors group"
                 :class="{ 'text-[var(--matrix-color)]': systemStore.lang === l.id }"
               >
-                <span class="text-xs font-bold">{{ l.name }}</span>
+                <span class="text-xs font-bold">{{ t(l.nameKey) }}</span>
                 <Check v-if="systemStore.lang === l.id" class="w-3 h-3" />
               </button>
             </div>
@@ -277,7 +313,7 @@ onUnmounted(() => {
       
       <div class="h-6 w-px bg-black/5 dark:bg-white/5 hidden xs:block"></div>
       
-      <button @click="authStore.logout()" class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors">
+      <button @click="authStore.logout()" class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
         <LogOut class="w-4 h-4" />
         <span class="text-xs font-bold hidden md:inline">{{ t('logout') }}</span>
       </button>

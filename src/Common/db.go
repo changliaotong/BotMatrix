@@ -49,6 +49,7 @@ func (m *Manager) InitDB() error {
 
 	m.DB = db
 
+	m.DB.Exec(m.PrepareQuery(`UPDATE users SET active = TRUE WHERE username = 'admin' AND active = FALSE`))
 	m.InitDefaultAdmin()
 
 	// PostgreSQL 建表逻辑
@@ -116,17 +117,32 @@ func (m *Manager) InitDB() error {
 		return err
 	}
 
+	// 添加 bot_id 字段（如果不存在）
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE group_cache ADD COLUMN IF NOT EXISTS bot_id TEXT`))
+	if err != nil {
+		log.Printf("为 group_cache 表添加 bot_id 字段失败: %v", err)
+		// 不返回错误，继续执行
+	}
+
 	// 创建好友缓存表
 	friendCacheQuery := `
 	CREATE TABLE IF NOT EXISTS friend_cache (
 		user_id TEXT PRIMARY KEY,
 		nickname TEXT,
+		bot_id TEXT,
 		last_seen TIMESTAMP
 	);`
 	_, err = m.DB.Exec(m.PrepareQuery(friendCacheQuery))
 	if err != nil {
 		log.Printf("创建好友缓存表失败: %v", err)
 		return err
+	}
+
+	// 添加 bot_id 字段（如果不存在）
+	_, err = m.DB.Exec(m.PrepareQuery(`ALTER TABLE friend_cache ADD COLUMN IF NOT EXISTS bot_id TEXT`))
+	if err != nil {
+		log.Printf("为 friend_cache 表添加 bot_id 字段失败: %v", err)
+		// 不返回错误，继续执行
 	}
 
 	// 创建群成员缓存表
@@ -209,6 +225,25 @@ func (m *Manager) InitDB() error {
 		return err
 	}
 
+	// 创建消息记录表
+	messageTableQuery := `
+	CREATE TABLE IF NOT EXISTS messages (
+		id SERIAL PRIMARY KEY,
+		message_id TEXT,
+		bot_id TEXT,
+		user_id TEXT,
+		group_id TEXT,
+		type TEXT,
+		content TEXT,
+		raw_message TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
+	_, err = m.DB.Exec(m.PrepareQuery(messageTableQuery))
+	if err != nil {
+		log.Printf("创建消息记录表失败: %v", err)
+		return err
+	}
+
 	log.Printf("PostgreSQL 数据库初始化成功")
 
 	// 初始化GORM（可选，如果USE_GORM环境变量设置为true）
@@ -224,6 +259,24 @@ func (m *Manager) InitDB() error {
 		}
 	}
 
+	return nil
+}
+
+// SaveMessageToDB 保存消息到数据库
+func (m *Manager) SaveMessageToDB(messageID, botID, userID, groupID, msgType, content, rawMessage string) error {
+	if m.DB == nil {
+		return nil
+	}
+
+	query := `
+	INSERT INTO messages (message_id, bot_id, user_id, group_id, type, content, raw_message)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := m.DB.Exec(m.PrepareQuery(query), messageID, botID, userID, groupID, msgType, content, rawMessage)
+	if err != nil {
+		log.Printf("保存消息到数据库失败: %v", err)
+		return err
+	}
 	return nil
 }
 
@@ -368,16 +421,17 @@ func (m *Manager) SaveGroupToDB(groupID, groupName, botID string) error {
 }
 
 // SaveFriendToDB 保存好友到数据库
-func (m *Manager) SaveFriendToDB(userID, nickname string) error {
+func (m *Manager) SaveFriendToDB(userID, nickname, botID string) error {
 	query := `
-	INSERT INTO friend_cache (user_id, nickname, last_seen)
-	VALUES (?, ?, ?)
+	INSERT INTO friend_cache (user_id, nickname, bot_id, last_seen)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT(user_id) DO UPDATE SET
 		nickname = EXCLUDED.nickname,
+		bot_id = EXCLUDED.bot_id,
 		last_seen = EXCLUDED.last_seen;
 	`
 	now := time.Now()
-	_, err := m.DB.Exec(m.PrepareQuery(query), userID, nickname, now)
+	_, err := m.DB.Exec(m.PrepareQuery(query), userID, nickname, botID, now)
 	return err
 }
 
@@ -419,16 +473,17 @@ func (m *Manager) LoadCachesFromDB() error {
 	}
 
 	// 2. 加载好友
-	rowsF, err := m.DB.Query(m.PrepareQuery("SELECT user_id, nickname FROM friend_cache"))
+	rowsF, err := m.DB.Query(m.PrepareQuery("SELECT user_id, nickname, bot_id FROM friend_cache"))
 	if err == nil {
 		defer rowsF.Close()
 		for rowsF.Next() {
-			var uID, nickname string
-			if err := rowsF.Scan(&uID, &nickname); err == nil {
+			var uID, nickname, botID string
+			if err := rowsF.Scan(&uID, &nickname, &botID); err == nil {
 				m.FriendCache[uID] = map[string]interface{}{
 					"user_id":   uID,
 					"nickname":  nickname,
-					"is_cached": true,
+					"bot_id":     botID,
+					"is_cached":  true,
 				}
 			}
 		}
@@ -566,7 +621,7 @@ func (m *Manager) LoadUsersFromDB() error {
 
 // LoadUsersFromDBNoLock 从数据库加载所有用户到内存缓存 (无锁版本)
 func (m *Manager) LoadUsersFromDBNoLock() error {
-	rows, err := m.DB.Query(m.PrepareQuery("SELECT id, username, password_hash, is_admin, session_version, created_at, updated_at FROM users"))
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT id, username, password_hash, is_admin, session_version, active, created_at, updated_at FROM users"))
 	if err != nil {
 		return err
 	}
@@ -578,7 +633,7 @@ func (m *Manager) LoadUsersFromDBNoLock() error {
 	for rows.Next() {
 		var user User
 		var createdAt, updatedAt interface{}
-		err := rows.Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &user.SessionVersion, &createdAt, &updatedAt)
+		err := rows.Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &user.SessionVersion, &user.Active, &createdAt, &updatedAt)
 		if err != nil {
 			log.Printf("解析用户行失败: %v", err)
 			continue
@@ -612,12 +667,13 @@ func (m *Manager) LoadUsersFromDBNoLock() error {
 // SaveUserToDB 保存或更新用户信息到数据库
 func (m *Manager) SaveUserToDB(user *User) error {
 	query := `
-	INSERT INTO users (username, password_hash, is_admin, session_version, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?)
+	INSERT INTO users (username, password_hash, is_admin, session_version, active, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(username) DO UPDATE SET
 		password_hash = EXCLUDED.password_hash,
 		is_admin = EXCLUDED.is_admin,
 		session_version = EXCLUDED.session_version,
+		active = EXCLUDED.active,
 		updated_at = EXCLUDED.updated_at;
 	`
 
@@ -626,6 +682,7 @@ func (m *Manager) SaveUserToDB(user *User) error {
 		user.PasswordHash,
 		user.IsAdmin,
 		user.SessionVersion,
+		user.Active,
 		user.CreatedAt,
 		user.UpdatedAt,
 	)
@@ -650,6 +707,133 @@ func (m *Manager) DeleteRoutingRule(pattern string) error {
 }
 
 // Transaction 原生SQL事务包装器
+// SaveSystemStat 保存单个系统统计到数据库
+func (m *Manager) SaveSystemStat(key string, value interface{}) error {
+	return m.SaveStatToDB(key, value)
+}
+
+// LoadSystemStat 从数据库加载单个系统统计
+func (m *Manager) LoadSystemStat(key string) (interface{}, error) {
+	var value string
+	err := m.DB.QueryRow(m.PrepareQuery("SELECT value FROM system_stats WHERE key = ?"), key).Scan(&value)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+// LoadSystemStatsFromDB 从数据库加载所有系统统计
+func (m *Manager) LoadSystemStatsFromDB() (map[string]interface{}, error) {
+	rows, err := m.DB.Query(m.PrepareQuery("SELECT key, value FROM system_stats"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := make(map[string]interface{})
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err == nil {
+			stats[key] = value
+		}
+	}
+	return stats, nil
+}
+
+// SaveGroupStats 保存群组统计
+func (m *Manager) SaveGroupStats(id string, count int64) error {
+	now := time.Now()
+	_, err := m.DB.Exec(m.PrepareQuery(`INSERT INTO group_stats (id, count, updated_at) VALUES (?, ?, ?) 
+		ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at`),
+		id, count, now)
+	return err
+}
+
+// LoadGroupStats 加载群组统计
+func (m *Manager) LoadGroupStats(id string) (int64, error) {
+	var count int64
+	err := m.DB.QueryRow(m.PrepareQuery("SELECT count FROM group_stats WHERE id = ?"), id).Scan(&count)
+	return count, err
+}
+
+// SaveUserStats 保存用户统计
+func (m *Manager) SaveUserStats(id string, count int64) error {
+	now := time.Now()
+	_, err := m.DB.Exec(m.PrepareQuery(`INSERT INTO user_stats (id, count, updated_at) VALUES (?, ?, ?) 
+		ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at`),
+		id, count, now)
+	return err
+}
+
+// LoadUserStats 加载用户统计
+func (m *Manager) LoadUserStats(id string) (int64, error) {
+	var count int64
+	err := m.DB.QueryRow(m.PrepareQuery("SELECT count FROM user_stats WHERE id = ?"), id).Scan(&count)
+	return count, err
+}
+
+// SaveGroupStatsToday 保存今日群组统计
+func (m *Manager) SaveGroupStatsToday(id string, day string, count int64) error {
+	now := time.Now()
+	_, err := m.DB.Exec(m.PrepareQuery(`INSERT INTO group_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
+		ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at, day = EXCLUDED.day`),
+		id, count, day, now)
+	return err
+}
+
+// LoadGroupStatsToday 加载今日群组统计
+func (m *Manager) LoadGroupStatsToday(id string, day string) (int64, error) {
+	var count int64
+	err := m.DB.QueryRow(m.PrepareQuery("SELECT count FROM group_stats_today WHERE id = ? AND day = ?"), id, day).Scan(&count)
+	return count, err
+}
+
+// SaveUserStatsToday 保存今日用户统计
+func (m *Manager) SaveUserStatsToday(id string, day string, count int64) error {
+	now := time.Now()
+	_, err := m.DB.Exec(m.PrepareQuery(`INSERT INTO user_stats_today (id, count, day, updated_at) VALUES (?, ?, ?, ?) 
+		ON CONFLICT(id) DO UPDATE SET count = EXCLUDED.count, updated_at = EXCLUDED.updated_at, day = EXCLUDED.day`),
+		id, count, day, now)
+	return err
+}
+
+// LoadUserStatsToday 加载今日用户统计
+func (m *Manager) LoadUserStatsToday(id string, day string) (int64, error) {
+	var count int64
+	err := m.DB.QueryRow(m.PrepareQuery("SELECT count FROM user_stats_today WHERE id = ? AND day = ?"), id, day).Scan(&count)
+	return count, err
+}
+
+// DeleteSystemStat 从数据库删除系统统计
+func (m *Manager) DeleteSystemStat(key string) error {
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM system_stats WHERE key = ?"), key)
+	return err
+}
+
+// DeleteUserStatsToday 从数据库删除今日用户统计
+func (m *Manager) DeleteUserStatsToday(id string, day string) error {
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM user_stats_today WHERE id = ? AND day = ?"), id, day)
+	return err
+}
+
+// DeleteGroupStats 从数据库删除群组统计
+func (m *Manager) DeleteGroupStats(id string) error {
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM group_stats WHERE id = ?"), id)
+	return err
+}
+
+// DeleteUserStats 从数据库删除用户统计
+func (m *Manager) DeleteUserStats(id string) error {
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM user_stats WHERE id = ?"), id)
+	return err
+}
+
+// DeleteGroupStatsToday 从数据库删除今日群组统计
+func (m *Manager) DeleteGroupStatsToday(id string, day string) error {
+	_, err := m.DB.Exec(m.PrepareQuery("DELETE FROM group_stats_today WHERE id = ? AND day = ?"), id, day)
+	return err
+}
+
 func (m *Manager) Transaction(fn func(tx *Manager) error) error {
 	if m.DB == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -700,6 +884,7 @@ func (m *Manager) InitDefaultAdmin() {
 			Username:       "admin",
 			PasswordHash:   hash,
 			IsAdmin:        true,
+			Active:         true,
 			SessionVersion: 1,
 			CreatedAt:      now,
 			UpdatedAt:      now,
@@ -716,14 +901,4 @@ func (m *Manager) InitDefaultAdmin() {
 			log.Printf("数据库未初始化，默认管理员已存入内存")
 		}
 	}
-}
-
-// SaveSystemStat 保存系统统计到数据库
-func (m *Manager) SaveSystemStat(key string, value interface{}) error {
-	return m.SaveStatToDB(key, value)
-}
-
-// LoadSystemStatsFromDB 从数据库加载所有系统统计
-func (m *Manager) LoadSystemStatsFromDB() error {
-	return m.LoadStatsFromDB()
 }

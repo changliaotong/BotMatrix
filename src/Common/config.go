@@ -268,10 +268,6 @@ func loadConfigFromEnv() {
 	}
 }
 
-// 同步到 GlobalConfig
-	syncToGlobalConfig()
-}
-
 func syncToGlobalConfig() {
 	GlobalConfig.WSPort = WS_PORT
 	GlobalConfig.WebUIPort = WEBUI_PORT

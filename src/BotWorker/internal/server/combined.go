@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"BotMatrix/common/log"
 	"time"
 )
 

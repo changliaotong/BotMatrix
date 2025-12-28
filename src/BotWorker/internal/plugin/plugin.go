@@ -2,6 +2,9 @@ package plugin
 
 import (
 	"botworker/internal/onebot"
+	"log"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -68,6 +71,38 @@ func NewManager(robot Robot) *Manager {
 func (m *Manager) LoadPlugin(plugin Plugin) error {
 	plugin.Init(m.robot)
 	m.plugins = append(m.plugins, plugin)
+	return nil
+}
+
+func (m *Manager) LoadPlugins(dir string) error {
+	log.Printf("正在从目录加载插件: %s", dir)
+
+	// 检查目录是否存在
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil // 目录不存在不报错，直接返回
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		pluginDir := filepath.Join(dir, entry.Name())
+		configPath := filepath.Join(pluginDir, "plugin.json")
+
+		// 检查是否有 plugin.json
+		if _, err := os.Stat(configPath); err == nil {
+			log.Printf("发现插件目录: %s", entry.Name())
+			// 这里未来可以扩展为加载动态链接库 (.so) 或 脚本插件
+			// 目前原生插件主要通过 main.go 中的 loadAllPlugins 硬编码加载
+		}
+	}
+
 	return nil
 }
 

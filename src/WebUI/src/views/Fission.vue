@@ -104,7 +104,7 @@ const handleCreateTask = async () => {
 };
 
 const handleDeleteTask = async (taskId: string) => {
-  if (!confirm('Are you sure you want to delete this campaign?')) return;
+  if (!confirm(t('confirm_delete_campaign'))) return;
   try {
     const data = await botStore.deleteFissionTask(taskId);
     if (data.success) {
@@ -140,28 +140,28 @@ const getTaskStatusStyle = (status: string) => {
           :class="activeTab === 'tasks' ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'"
           class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap"
         >
-          Tasks
+          {{ t('tasks') }}
         </button>
         <button 
           @click="activeTab = 'leaderboard'"
           :class="activeTab === 'leaderboard' ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'"
           class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap"
         >
-          Leaderboard
+          {{ t('leaderboard') }}
         </button>
         <button 
           @click="activeTab = 'invitations'"
           :class="activeTab === 'invitations' ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'"
           class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap"
         >
-          Invitations
+          {{ t('invitations') }}
         </button>
         <button 
           @click="activeTab = 'config'"
           :class="activeTab === 'config' ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'"
           class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap"
         >
-          Config
+          {{ t('config') }}
         </button>
       </div>
     </div>
@@ -176,9 +176,9 @@ const getTaskStatusStyle = (status: string) => {
           <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500 w-fit mb-4">
             <TrendingUp class="w-6 h-6" />
           </div>
-          <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Growth Rate</div>
+          <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('growth_rate') }}</div>
           <div class="text-3xl font-black text-[var(--text-main)] mt-1">{{ stats?.growth_rate || '+0.0%' }}</div>
-          <div class="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-2">↑ {{ stats?.growth_increase || '0.0%' }} from last week</div>
+          <div class="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-2">↑ {{ stats?.growth_increase || '0.0%' }} {{ t('from_last_week') }}</div>
         </div>
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] relative overflow-hidden group">
@@ -189,9 +189,9 @@ const getTaskStatusStyle = (status: string) => {
           <div class="p-3 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] w-fit mb-4">
             <Users class="w-6 h-6" />
           </div>
-          <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Total Invites</div>
+          <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('total_invites') }}</div>
           <div class="text-3xl font-black text-[var(--text-main)] mt-1">{{ stats?.total_invites || 0 }}</div>
-          <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-2">Across all campaigns</div>
+          <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-2">{{ t('across_all_campaigns') }}</div>
         </div>
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] relative overflow-hidden group">
@@ -202,9 +202,9 @@ const getTaskStatusStyle = (status: string) => {
           <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500 w-fit mb-4">
             <Activity class="w-6 h-6" />
           </div>
-          <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Active Tasks</div>
+          <div class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('active_tasks') }}</div>
           <div class="text-3xl font-black text-[var(--text-main)] mt-1">{{ tasks.filter(t => t.status === 'active').length }}</div>
-          <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-2">Currently running</div>
+          <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-2">{{ t('currently_running') }}</div>
         </div>
       </div>
     </div>
@@ -212,13 +212,13 @@ const getTaskStatusStyle = (status: string) => {
     <!-- Content Sections -->
     <div v-if="activeTab === 'tasks'" class="space-y-6">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">Active Campaigns</h2>
+        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('active_campaigns') }}</h2>
         <button 
           @click="showCreateModal = true"
           class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
         >
           <Plus class="w-4 h-4" />
-          New Campaign
+          {{ t('new_campaign') }}
         </button>
       </div>
 
@@ -242,11 +242,11 @@ const getTaskStatusStyle = (status: string) => {
                 <div class="flex items-center gap-4 mt-1">
                   <div class="flex items-center gap-1.5">
                     <Users class="w-3 h-3 text-[var(--text-muted)]" />
-                    <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ task.participants || 0 }} Participants</span>
+                    <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ task.participants || 0 }} {{ t('participants') }}</span>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <Clock class="w-3 h-3 text-[var(--text-muted)]" />
-                    <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">Ends: {{ task.end_date || 'Ongoing' }}</span>
+                    <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('ends') }}: {{ task.end_date || t('ongoing') }}</span>
                   </div>
                 </div>
               </div>
@@ -254,7 +254,7 @@ const getTaskStatusStyle = (status: string) => {
 
             <div class="flex items-center gap-6">
               <div :class="getTaskStatusStyle(task.status)" class="px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest">
-                {{ task.status }}
+                {{ t(task.status) || task.status }}
               </div>
               <div class="flex items-center gap-2">
                 <button class="p-2 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-all">
@@ -273,25 +273,25 @@ const getTaskStatusStyle = (status: string) => {
 
         <div v-if="tasks.length === 0" class="flex flex-col items-center justify-center py-20 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl">
           <Share2 class="w-16 h-16 text-[var(--text-muted)] mb-4 opacity-20" />
-          <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">No Active Campaigns</h2>
-          <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2">Launch your first fission campaign to grow your community</p>
+          <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('no_active_campaigns') }}</h2>
+          <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2">{{ t('launch_fission_desc') }}</p>
         </div>
       </div>
     </div>
 
     <div v-else-if="activeTab === 'leaderboard'" class="space-y-6">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">Top Inviters</h2>
+        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('top_inviters') }}</h2>
       </div>
       
       <div class="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl overflow-hidden">
         <table class="w-full">
           <thead>
             <tr class="border-b border-[var(--border-color)] bg-black/5 dark:bg-white/5">
-              <th class="px-6 py-4 text-left text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Rank</th>
-              <th class="px-6 py-4 text-left text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">User</th>
-              <th class="px-6 py-4 text-right text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Invites</th>
-              <th class="px-6 py-4 text-right text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Points</th>
+              <th class="px-6 py-4 text-left text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('rank') }}</th>
+              <th class="px-6 py-4 text-left text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('user') }}</th>
+              <th class="px-6 py-4 text-right text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('invites') }}</th>
+              <th class="px-6 py-4 text-right text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('points') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-[var(--border-color)]">
@@ -314,7 +314,7 @@ const getTaskStatusStyle = (status: string) => {
               <td class="px-6 py-4 text-right text-[var(--matrix-color)] font-black">{{ user.points }}</td>
             </tr>
             <tr v-if="leaderboard.length === 0">
-              <td colspan="4" class="px-6 py-20 text-center text-[var(--text-muted)] font-bold uppercase tracking-widest">No leaderboard data available</td>
+              <td colspan="4" class="px-6 py-20 text-center text-[var(--text-muted)] font-bold uppercase tracking-widest">{{ t('no_leaderboard_data') }}</td>
             </tr>
           </tbody>
         </table>
@@ -323,7 +323,7 @@ const getTaskStatusStyle = (status: string) => {
 
     <div v-else-if="activeTab === 'invitations'" class="space-y-6">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">Recent Invitations</h2>
+        <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('recent_invitations') }}</h2>
       </div>
       
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -332,12 +332,12 @@ const getTaskStatusStyle = (status: string) => {
             <CheckCircle2 class="w-5 h-5" />
           </div>
           <div>
-            <div class="font-bold text-[var(--text-main)]">{{ invite.inviter }} invited {{ invite.invitee }}</div>
+            <div class="font-bold text-[var(--text-main)]">{{ invite.inviter }} {{ t('invited') }} {{ invite.invitee }}</div>
             <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ invite.time }} • {{ invite.group }}</div>
           </div>
         </div>
         <div v-if="invitations.length === 0" class="col-span-full py-20 text-center text-[var(--text-muted)] font-bold uppercase tracking-widest bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl">
-          No invitations recorded yet
+          {{ t('no_invitations_recorded') }}
         </div>
       </div>
     </div>
@@ -346,33 +346,33 @@ const getTaskStatusStyle = (status: string) => {
       <div class="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-8 space-y-8">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">Global Fission Config</h2>
-            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Configure default behavior for all campaigns</p>
+            <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('global_fission_config') }}</h2>
+            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ t('fission_config_desc') }}</p>
           </div>
           <button 
             @click="handleSaveConfig"
             class="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity shadow-lg shadow-[var(--matrix-color)]/20"
           >
             <Save class="w-4 h-4" />
-            Save Changes
+            {{ t('save_changes') }}
           </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Invite Keyword</label>
+            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('invite_keyword') }}</label>
             <input v-model="config.invite_keyword" type="text" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] font-bold" />
           </div>
           <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Max Invites Per Day</label>
+            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('max_invites_per_day') }}</label>
             <input v-model.number="config.max_invites_per_day" type="number" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] font-bold" />
           </div>
           <div class="md:col-span-2 space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Welcome Message</label>
+            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('welcome_message') }}</label>
             <textarea v-model="config.welcome_msg" rows="3" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] font-bold resize-none"></textarea>
           </div>
           <div class="md:col-span-2 space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Invite Message Template</label>
+            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('invite_template') }}</label>
             <textarea v-model="config.invite_msg" rows="3" class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] font-bold resize-none"></textarea>
           </div>
           <div class="flex items-center gap-3 ml-1">
@@ -386,85 +386,81 @@ const getTaskStatusStyle = (status: string) => {
                 class="absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
               ></div>
             </div>
-            <span class="text-[10px] font-black text-[var(--text-main)] uppercase tracking-widest">Auto Approve Requests</span>
+            <span class="text-[10px] font-black text-[var(--text-main)] uppercase tracking-widest">{{ t('auto_approve_requests') }}</span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Create Campaign Modal -->
-    <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showCreateModal = false"></div>
-      <div class="relative w-full max-w-md bg-[var(--bg-main)] border border-[var(--border-color)] rounded-3xl p-8 shadow-2xl">
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">New Fission Campaign</h2>
-            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Configure growth campaign</p>
+    <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="p-6 sm:p-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('new_fission_campaign') }}</h2>
+              <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ t('campaign_config_desc') }}</p>
+            </div>
+            <button @click="showCreateModal = false" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <X class="w-6 h-6 text-[var(--text-muted)]" />
+            </button>
           </div>
-          <button @click="showCreateModal = false" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <X class="w-6 h-6 text-[var(--text-muted)]" />
-          </button>
+
+          <form @submit.prevent="handleCreateTask" class="space-y-6">
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('campaign_name') }}</label>
+              <div class="relative">
+                <Type class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input 
+                  v-model="newTask.name"
+                  type="text"
+                  :placeholder="t('campaign_name')"
+                  class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('trigger_keyword') }}</label>
+                <input 
+                  v-model="newTask.keyword"
+                  type="text"
+                  placeholder="#invite"
+                  class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                  required
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('target_group') }}</label>
+                <input 
+                  v-model="newTask.target_group"
+                  type="text"
+                  :placeholder="t('target_group_id')"
+                  class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                />
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('end_date') }}</label>
+              <div class="relative">
+                <Calendar class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input 
+                  v-model="newTask.end_date"
+                  type="date"
+                  class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                />
+              </div>
+            </div>
+
+            <button type="submit" class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4 flex items-center justify-center gap-2">
+              <Plus class="w-4 h-4" />
+              {{ t('launch_campaign') }}
+            </button>
+          </form>
         </div>
-
-        <form @submit.prevent="handleCreateTask" class="space-y-6">
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Campaign Name</label>
-            <div class="relative">
-              <Type class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input 
-                v-model="newTask.name"
-                type="text"
-                placeholder="e.g. Summer Growth"
-                class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-                required
-              />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Trigger Keyword</label>
-            <div class="relative">
-              <MessageSquare class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input 
-                v-model="newTask.keyword"
-                type="text"
-                placeholder="e.g. join"
-                class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-                required
-              />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Target Group ID</label>
-            <input 
-              v-model="newTask.target_group"
-              type="text"
-              placeholder="e.g. group_123"
-              class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-              required
-            />
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">End Date</label>
-            <div class="relative">
-              <Calendar class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input 
-                v-model="newTask.end_date"
-                type="date"
-                class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit"
-            class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4 shadow-lg shadow-[var(--matrix-color)]/20"
-          >
-            Launch Campaign
-          </button>
-        </form>
       </div>
     </div>
   </div>

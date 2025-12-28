@@ -32,38 +32,6 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
     }
   },
   { 
-    id: 'vaporwave', 
-    nameKey: 'style_vaporwave',
-    colors: {
-      light: { bg: '#ffdef2', sidebar: '#ffffff', header: '#ffffff', accent: '#e91e63', text: '#4a0e4e', border: '#fce7f3' },
-      dark: { bg: '#2d1b4e', sidebar: '#1e0b36', header: '#1e0b36', accent: '#ff00ff', text: '#00f3ff', border: '#ff00ff' }
-    }
-  },
-  { 
-    id: 'blood', 
-    nameKey: 'style_blood',
-    colors: {
-      light: { bg: '#fff5f5', sidebar: '#ffffff', header: '#ffffff', accent: '#c53030', text: '#742a2a', border: '#feb2b2' },
-      dark: { bg: '#1a0505', sidebar: '#150000', header: '#150000', accent: '#ff0000', text: '#ff4d4d', border: '#ff0000' }
-    }
-  },
-  { 
-    id: 'xp', 
-    nameKey: 'style_xp',
-    colors: {
-      light: { bg: '#ece9d8', sidebar: '#d6dff7', header: '#0058e6', accent: '#24a124', text: '#000000', border: '#0054e3' },
-      dark: { bg: '#1c1c1c', sidebar: '#1a1a1a', header: '#003399', accent: '#33cc33', text: '#ffffff', border: '#003399' }
-    }
-  },
-  { 
-    id: 'kawaii', 
-    nameKey: 'style_kawaii',
-    colors: {
-      light: { bg: '#fff0f6', sidebar: '#ffffff', header: '#ffffff', accent: '#d6336c', text: '#d6336c', border: '#ffdeeb' },
-      dark: { bg: '#2b0b1a', sidebar: '#1a050f', header: '#1a050f', accent: '#ff85b3', text: '#ff85b3', border: '#ff85b3' }
-    }
-  },
-  { 
     id: 'tech', 
     nameKey: 'style_tech',
     colors: {
@@ -97,10 +65,13 @@ const languages: { id: Language; nameKey: string }[] = [
 <template>
   <div class="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <h1 class="text-xl sm:text-2xl font-bold text-[var(--text-main)] flex items-center gap-3">
-        <Settings class="w-6 h-6 sm:w-8 sm:h-8 text-[var(--matrix-color)]" /> {{ t('settings') }}
-      </h1>
-      <button class="w-full sm:w-auto px-6 py-2 bg-[var(--matrix-color)] text-black font-bold rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-[var(--matrix-color)]/20">
+      <div>
+        <h1 class="text-xl font-black text-[var(--text-main)] tracking-tight flex items-center gap-3">
+          <Settings class="w-8 h-8 text-[var(--matrix-color)]" /> {{ t('settings') }}
+        </h1>
+        <p class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('system_settings_desc') }}</p>
+      </div>
+      <button class="w-full sm:w-auto px-6 py-2 bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-[var(--matrix-color)]/20">
         <Save class="w-4 h-4" /> {{ t('save_changes') }}
       </button>
     </div>
@@ -111,25 +82,25 @@ const languages: { id: Language; nameKey: string }[] = [
         <button 
           @click="activeTab = 'general'"
           :class="activeTab === 'general' ? 'bg-[var(--matrix-color)] text-black' : 'hover:bg-[var(--matrix-color)]/10 text-[var(--text-muted)]'"
-          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-bold transition-all whitespace-nowrap">
+          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap">
           <Settings class="w-5 h-5" /> {{ t('general') }}
         </button>
         <button 
           @click="activeTab = 'security'"
           :class="activeTab === 'security' ? 'bg-[var(--matrix-color)] text-black' : 'hover:bg-[var(--matrix-color)]/10 text-[var(--text-muted)]'"
-          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-bold transition-all whitespace-nowrap">
+          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap">
           <Shield class="w-5 h-5" /> {{ t('security') }}
         </button>
         <button 
           @click="activeTab = 'notifications'"
           :class="activeTab === 'notifications' ? 'bg-[var(--matrix-color)] text-black' : 'hover:bg-[var(--matrix-color)]/10 text-[var(--text-muted)]'"
-          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-bold transition-all whitespace-nowrap">
+          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap">
           <Bell class="w-5 h-5" /> {{ t('notifications') }}
         </button>
         <button 
           @click="activeTab = 'language'"
           :class="activeTab === 'language' ? 'bg-[var(--matrix-color)] text-black' : 'hover:bg-[var(--matrix-color)]/10 text-[var(--text-muted)]'"
-          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-bold transition-all whitespace-nowrap">
+          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap">
           <Globe class="w-5 h-5" /> {{ t('language_region') }}
         </button>
       </div>
@@ -138,22 +109,22 @@ const languages: { id: Language; nameKey: string }[] = [
       <div class="md:col-span-3 space-y-6">
         <div v-if="activeTab === 'general'" class="space-y-6">
           <div class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-4">
-            <h3 class="text-lg font-bold flex items-center gap-2">
+            <h3 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">
               <Settings class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('basic_config') }}
             </h3>
             <div class="space-y-2">
-              <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{{ t('system_name') }}</label>
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('system_name') }}</label>
               <input 
                 v-model="settings.systemName"
                 type="text" 
-                class="w-full p-3 sm:p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none transition-colors"
+                class="w-full p-3 sm:p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-xs font-bold text-[var(--text-main)] transition-colors"
               />
             </div>
           </div>
 
           <div class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-4">
-            <h3 class="text-lg font-bold flex items-center gap-2">
-              <Sun class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('mode_selection') || '显示模式' }}
+            <h3 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+              <Sun class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('mode_selection') }}
             </h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button 
@@ -183,7 +154,7 @@ const languages: { id: Language; nameKey: string }[] = [
                 
                 <!-- Label -->
                 <div class="p-3 flex items-center justify-center border-t border-[var(--border-color)]">
-                  <span class="font-bold text-sm" :class="systemStore.mode === mode.id ? 'text-[var(--matrix-color)]' : 'text-[var(--text-main)]'">
+                  <span class="font-black text-[10px] uppercase tracking-widest" :class="systemStore.mode === mode.id ? 'text-[var(--matrix-color)]' : 'text-[var(--text-main)]'">
                     {{ t(mode.nameKey) }}
                   </span>
                 </div>
@@ -192,7 +163,7 @@ const languages: { id: Language; nameKey: string }[] = [
           </div>
 
           <div class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-4">
-            <h3 class="text-lg font-bold flex items-center gap-2">
+            <h3 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">
               <Palette class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('interface_theme') }}
             </h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -236,7 +207,7 @@ const languages: { id: Language; nameKey: string }[] = [
                 
                 <!-- Label -->
                 <div class="p-3 flex items-center justify-between border-t border-[var(--border-color)]">
-                  <span class="font-bold text-sm" :class="systemStore.style === style.id ? 'text-[var(--matrix-color)]' : 'text-[var(--text-main)]'">
+                  <span class="font-black text-[10px] uppercase tracking-widest" :class="systemStore.style === style.id ? 'text-[var(--matrix-color)]' : 'text-[var(--text-main)]'">
                     {{ t(style.nameKey) }}
                   </span>
                   <div 
@@ -251,7 +222,7 @@ const languages: { id: Language; nameKey: string }[] = [
 
         <div v-if="activeTab === 'language'" class="space-y-6">
           <div class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-4">
-            <h3 class="text-lg font-bold flex items-center gap-2">
+            <h3 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">
               <Languages class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('language_region') }}
             </h3>
             <div class="grid grid-cols-1 gap-3">
@@ -262,7 +233,7 @@ const languages: { id: Language; nameKey: string }[] = [
                 :class="systemStore.lang === lang.id ? 'border-[var(--matrix-color)] bg-[var(--matrix-color)]/10' : 'border-[var(--border-color)] hover:border-[var(--matrix-color)]/50'"
                 class="flex items-center justify-between p-4 rounded-2xl border-2 transition-all"
               >
-                <span class="font-bold text-sm sm:text-base">{{ t(lang.nameKey) }}</span>
+                <span class="font-black text-xs uppercase tracking-widest">{{ t(lang.nameKey) }}</span>
                 <div v-if="systemStore.lang === lang.id" class="w-2 h-2 rounded-full bg-[var(--matrix-color)]"></div>
               </button>
             </div>
@@ -271,13 +242,13 @@ const languages: { id: Language; nameKey: string }[] = [
 
         <div v-if="activeTab === 'notifications'" class="space-y-6">
           <div class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-4">
-            <h3 class="text-lg font-bold flex items-center gap-2">
+            <h3 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">
               <Bell class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('notifications') }}
             </h3>
             <div class="flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5">
               <div class="space-y-1">
-                <p class="font-bold text-sm sm:text-base">{{ t('system_notifications') }}</p>
-                <p class="text-[10px] sm:text-xs text-[var(--text-muted)]">启用或禁用实时系统状态通知</p>
+                <p class="font-black text-xs uppercase tracking-widest">{{ t('system_notifications') }}</p>
+                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('notification_desc') }}</p>
               </div>
               <button 
                 @click="settings.notifications = !settings.notifications"

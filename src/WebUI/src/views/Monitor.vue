@@ -22,18 +22,23 @@ const botStore = useBotStore();
 const t = (key: string) => systemStore.t(key);
 
 const activeType = ref((route.query.type as string) || 'cpu');
-let refreshTimer: number | null = null;
+const refreshing = ref(false);
 
 onMounted(async () => {
   await botStore.fetchStats();
-  refreshTimer = window.setInterval(async () => {
-    await botStore.fetchStats();
-  }, 3000);
 });
 
-onUnmounted(() => {
-  if (refreshTimer) clearInterval(refreshTimer);
-});
+const refreshData = async () => {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try {
+    await botStore.fetchStats();
+  } catch (err) {
+    console.error('Monitor refresh failed:', err);
+  } finally {
+    refreshing.value = false;
+  }
+};
 
 const chartData = computed(() => {
   const stats = botStore.stats;
@@ -71,11 +76,11 @@ const chartData = computed(() => {
 });
 
 const systemInfo = computed(() => [
-  { label: 'OS', value: `${botStore.stats.os_platform} ${botStore.stats.os_version}` },
-  { label: 'Arch', value: botStore.stats.os_arch },
-  { label: 'CPU', value: botStore.stats.cpu_model },
-  { label: 'Cores', value: `${botStore.stats.cpu_cores_physical} Physical / ${botStore.stats.cpu_cores_logical} Logical` },
-  { label: 'Uptime', value: formatUptime(botStore.stats.start_time) },
+  { label: t('os'), value: `${botStore.stats.os_platform} ${botStore.stats.os_version}` },
+  { label: t('arch'), value: botStore.stats.os_arch },
+  { label: t('cpu'), value: botStore.stats.cpu_model },
+  { label: t('cores'), value: `${botStore.stats.cpu_cores_physical} ${t('physical')} / ${botStore.stats.cpu_cores_logical} ${t('logical')}` },
+  { label: t('uptime'), value: formatUptime(botStore.stats.start_time) },
 ]);
 
 const formatUptime = (startTime: number) => {
@@ -84,7 +89,7 @@ const formatUptime = (startTime: number) => {
   const d = Math.floor(seconds / (3600 * 24));
   const h = Math.floor((seconds % (3600 * 24)) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  return `${d}d ${h}h ${m}m`;
+  return `${d}${t('unit_day')} ${h}${t('unit_hour')} ${m}${t('unit_minute')}`;
 };
 
 const formatBytes = (bytes: number) => {
@@ -98,24 +103,42 @@ const formatBytes = (bytes: number) => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="p-4 sm:p-8 space-y-4 sm:space-y-8">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
-        <router-link to="/" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors border border-[var(--border-color)]">
-          <ChevronLeft class="w-6 h-6" />
-        </router-link>
-        <h1 class="text-2xl font-black text-[var(--text-main)] tracking-tight">{{ t('monitor_detail') }}</h1>
-      </div>
-      <div class="flex gap-2">
-        <button 
-          v-for="type in ['cpu', 'memory', 'throughput']" 
-          :key="type"
-          @click="activeType = type"
-          class="px-4 py-2 rounded-xl text-sm font-bold transition-all border"
-          :class="activeType === type ? 'bg-[var(--matrix-color)] text-black border-transparent' : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border-color)] hover:border-[var(--matrix-color)]/30'"
+        <router-link 
+          to="/"
+          class="w-10 h-10 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 transition-colors border border-[var(--border-color)]"
         >
-          {{ t(type === 'cpu' ? 'cpu_usage' : type === 'memory' ? 'memory_usage' : 'throughput') }}
+          <ChevronLeft class="w-5 h-5 text-[var(--text-main)]" />
+        </router-link>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-black text-[var(--text-main)] tracking-tight uppercase italic">{{ t('system_monitor') }}</h1>
+          <p class="text-[var(--text-muted)] text-[10px] sm:text-xs font-bold tracking-widest uppercase">{{ t('monitor_description') }}</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <div class="flex bg-[var(--bg-card)] rounded-xl p-1 border border-[var(--border-color)]">
+          <button 
+            v-for="type in ['cpu', 'memory', 'throughput']" 
+            :key="type"
+            @click="activeType = type"
+            class="px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-widest"
+            :class="activeType === type ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'"
+          >
+            {{ t(type === 'cpu' ? 'cpu_usage' : type === 'memory' ? 'memory_usage' : 'throughput') }}
+          </button>
+        </div>
+        
+        <button 
+          @click="refreshData" 
+          class="flex items-center gap-2 px-6 py-2 rounded-xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-[var(--matrix-color)]/20 disabled:opacity-50"
+          :disabled="refreshing"
+        >
+          <ListRestart :class="{ 'animate-spin': refreshing }" class="w-4 h-4" />
+          {{ t('refresh') }}
         </button>
       </div>
     </div>
@@ -141,7 +164,7 @@ const formatBytes = (bytes: number) => {
               <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-bold">
                 <ArrowUpRight class="w-4 h-4" /> 12%
               </div>
-              <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">VS LAST HOUR</p>
+              <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('vs_last_hour') }}</p>
             </div>
           </div>
           
@@ -160,11 +183,11 @@ const formatBytes = (bytes: number) => {
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
-                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-1">Upload</p>
+                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-1">{{ t('upload') }}</p>
                 <p class="font-black text-[var(--text-main)]">{{ formatBytes(botStore.stats.net_sent_trend?.[botStore.stats.net_sent_trend.length-1] || 0) }}/s</p>
               </div>
               <div class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
-                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-1">Download</p>
+                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-1">{{ t('download') }}</p>
                 <p class="font-black text-[var(--text-main)]">{{ formatBytes(botStore.stats.net_recv_trend?.[botStore.stats.net_recv_trend.length-1] || 0) }}/s</p>
               </div>
             </div>
@@ -178,7 +201,7 @@ const formatBytes = (bytes: number) => {
             </div>
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <p class="text-xs font-bold text-[var(--text-main)]">System Disk</p>
+                <p class="text-xs font-bold text-[var(--text-main)]">{{ t('system_disk') }}</p>
                 <p class="text-xs font-bold text-[var(--text-muted)]">{{ botStore.stats.disk_usage }}</p>
               </div>
               <div class="w-full h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
@@ -194,7 +217,7 @@ const formatBytes = (bytes: number) => {
         <!-- System Specs -->
         <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-6">
           <h3 class="font-bold uppercase tracking-widest text-sm flex items-center gap-2">
-            <ListRestart class="w-5 h-5 text-[var(--matrix-color)]" /> System Info
+            <ListRestart class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('system_info') }}
           </h3>
           <div class="space-y-4">
             <div v-for="info in systemInfo" :key="info.label" class="flex flex-col gap-1 p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
@@ -206,11 +229,11 @@ const formatBytes = (bytes: number) => {
 
         <!-- Quick Actions -->
         <div class="p-6 rounded-3xl bg-[var(--matrix-color)] text-black space-y-4">
-          <h3 class="font-black uppercase tracking-widest text-sm">System Control</h3>
-          <p class="text-xs font-bold opacity-70">Perform critical system operations from this terminal.</p>
+          <h3 class="font-black uppercase tracking-widest text-sm">{{ t('system_control') }}</h3>
+          <p class="text-xs font-bold opacity-70">{{ t('system_control_desc') }}</p>
           <div class="grid grid-cols-2 gap-3">
-            <button class="px-4 py-3 rounded-2xl bg-black text-white text-xs font-black hover:opacity-80 transition-opacity">RESTART</button>
-            <button class="px-4 py-3 rounded-2xl bg-black/20 text-black text-xs font-black hover:bg-black/30 transition-colors">DUMP</button>
+            <button class="px-4 py-3 rounded-2xl bg-black text-white text-xs font-black hover:opacity-80 transition-opacity">{{ t('restart') }}</button>
+            <button class="px-4 py-3 rounded-2xl bg-black/20 text-black text-xs font-black hover:bg-black/30 transition-colors">{{ t('dump') }}</button>
           </div>
         </div>
       </div>

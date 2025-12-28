@@ -1,7 +1,7 @@
 package tasks
 
 import (
-	"log"
+	log "BotMatrix/common/log"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"

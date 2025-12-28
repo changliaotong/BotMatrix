@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute, useRouter } from 'vue-router';
@@ -7,6 +8,7 @@ import {
   PanelLeftClose, 
   LayoutDashboard, 
   Bot, 
+  MessageSquare,
   Network, 
   Terminal, 
   Settings,
@@ -17,7 +19,8 @@ import {
   Box,
   Route,
   UserCog,
-  BookOpen
+  BookOpen,
+  Activity
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
@@ -30,6 +33,7 @@ const checkMobile = () => window.innerWidth < 1024;
 const iconMap: Record<string, any> = {
   LayoutDashboard,
   Bot,
+  MessageSquare,
   Cpu,
   Network,
   Terminal,
@@ -40,31 +44,66 @@ const iconMap: Record<string, any> = {
   Box,
   Route,
   UserCog,
-  BookOpen
+  BookOpen,
+  Activity
 };
 
 // Map item IDs to routes
 const routeMap: Record<string, string> = {
   'dashboard': '/',
   'bots': '/bots',
+  'messages': '/messages',
   'workers': '/workers',
   'contacts': '/contacts',
   'nexus': '/nexus',
+  'visualization': '/visualization',
   'tasks': '/tasks',
   'fission': '/fission',
   'docker': '/docker',
   'routing': '/routing',
+  'monitor': '/monitor',
   'users': '/users',
   'logs': '/logs',
   'settings': '/settings',
   'manual': '/manual'
 };
 
-const navigateTo = (itemId: string) => {
+const isNavigating = ref(false);
+let navTimeout: any = null;
+
+const navigateTo = async (itemId: string) => {
+  if (isNavigating.value) return;
+  
   const path = routeMap[itemId];
   if (path) {
-    router.push(path);
-    if (checkMobile()) systemStore.showMobileMenu = false;
+    if (path === route.path) return;
+    
+    isNavigating.value = true;
+    
+    // Safety timeout to prevent deadlock
+    if (navTimeout) clearTimeout(navTimeout);
+    navTimeout = setTimeout(() => {
+      isNavigating.value = false;
+    }, 2000);
+
+    try {
+      await router.push(path);
+      if (checkMobile()) systemStore.showMobileMenu = false;
+    } catch (err: any) {
+      console.error('Navigation failed:', err);
+      // Fallback for critical failures
+      if (err.name !== 'NavigationDuplicated') {
+        window.location.href = path;
+      }
+    } finally {
+      setTimeout(() => {
+        isNavigating.value = false;
+        if (navTimeout) {
+          clearTimeout(navTimeout);
+          navTimeout = null;
+        }
+      }, 300);
+    }
   }
 };
 
@@ -96,7 +135,7 @@ const t = (key: string) => systemStore.t(key);
             <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)] flex items-center justify-center shadow-lg shadow-[var(--matrix-color)]/20 flex-shrink-0">
                 <Cpu class="w-5 h-5 text-black" />
             </div>
-            <span v-show="!systemStore.isSidebarCollapsed" class="font-bold tracking-tight text-[var(--text-main)] whitespace-nowrap">BotMatrix</span>
+            <span v-show="!systemStore.isSidebarCollapsed" class="font-bold tracking-tight text-[var(--text-main)] whitespace-nowrap">{{ t('botmatrix') }}</span>
         </div>
         <!-- Collapse Toggle (Desktop) -->
         <button v-show="!systemStore.isSidebarCollapsed"
@@ -112,10 +151,10 @@ const t = (key: string) => systemStore.t(key);
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-1 custom-scrollbar">
+    <nav class="flex-1 overflow-y-auto py-2 px-3 space-y-2 custom-scrollbar">
         <template v-for="(group, idx) in systemStore.menuGroups" :key="group?.id || idx">
             <div v-if="group">
-                <div v-show="!systemStore.isSidebarCollapsed" class="px-3 mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                <div v-show="!systemStore.isSidebarCollapsed" class="px-3 mt-4 mb-1 text-[9px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] opacity-80">
                     {{ t(group.titleKey) }}
                 </div>
                 <div class="space-y-1">
@@ -124,7 +163,7 @@ const t = (key: string) => systemStore.t(key);
                                 @click="navigateTo(item.id)"
                                 :class="[
                                     'w-full flex items-center transition-all duration-200 group relative border border-transparent',
-                                    systemStore.isSidebarCollapsed ? 'justify-center px-0 py-2.5 rounded-lg' : 'gap-3 px-3 py-2.5 rounded-xl',
+                                    systemStore.isSidebarCollapsed ? 'justify-center px-0 py-2.5 rounded-lg' : 'gap-3 px-3 py-2 rounded-lg',
                                     isItemActive(item.id) 
                                         ? 'bg-[var(--matrix-color)]/10 border-[var(--matrix-color)]/20 text-[var(--matrix-color)] shadow-sm' 
                                         : 'text-[var(--text-muted)] hover:bg-[var(--matrix-color)]/10 hover:text-[var(--matrix-color)]'
@@ -142,11 +181,11 @@ const t = (key: string) => systemStore.t(key);
                             
                             <!-- Active Indicator -->
                             <div v-if="isItemActive(item.id)" 
-                                 class="absolute left-0 w-1 h-6 bg-[var(--matrix-color)] rounded-r-full"></div>
+                                 class="absolute left-0 w-1 h-5 bg-[var(--matrix-color)] rounded-r-full"></div>
                         </button>
                     </template>
                 </div>
-                <div class="h-6"></div>
+                <div class="h-0.5"></div>
             </div>
         </template>
     </nav>

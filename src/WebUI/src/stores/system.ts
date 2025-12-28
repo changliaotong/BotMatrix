@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { type Language, t } from '../utils/i18n';
 
-export type Style = 'classic' | 'matrix' | 'xp' | 'ios' | 'kawaii' | 'vaporwave' | 'blood' | 'tech' | 'mac';
+export type Style = 'classic' | 'matrix' | 'xp' | 'ios' | 'kawaii';
 export type Mode = 'light' | 'dark';
 
 export const useSystemStore = defineStore('system', {
@@ -36,9 +36,10 @@ export const useSystemStore = defineStore('system', {
           items: [
             { id: 'dashboard', icon: 'LayoutDashboard', titleKey: 'dashboard' },
             { id: 'bots', icon: 'Bot', titleKey: 'bots' },
+            { id: 'messages', icon: 'MessageSquare', titleKey: 'messages' },
             { id: 'workers', icon: 'Cpu', titleKey: 'workers' },
             { id: 'contacts', icon: 'Users', titleKey: 'contacts' },
-            { id: 'nexus', icon: 'Network', titleKey: 'nexus' },
+            { id: 'visualization', icon: 'Share2', titleKey: 'sidebar_visualization' },
           ]
         },
         {
@@ -55,6 +56,7 @@ export const useSystemStore = defineStore('system', {
           items: [
             { id: 'docker', icon: 'Box', titleKey: 'docker' },
             { id: 'routing', icon: 'Route', titleKey: 'routing' },
+            { id: 'monitor', icon: 'Activity', titleKey: 'sidebar_monitor' },
           ]
         },
         {
@@ -63,8 +65,8 @@ export const useSystemStore = defineStore('system', {
           items: [
             { id: 'users', icon: 'UserCog', titleKey: 'users' },
             { id: 'logs', icon: 'Terminal', titleKey: 'logs' },
-            { id: 'settings', icon: 'Settings', titleKey: 'settings' },
             { id: 'manual', icon: 'BookOpen', titleKey: 'manual' },
+            { id: 'settings', icon: 'Settings', titleKey: 'settings' },
           ]
         }
       ]
@@ -79,6 +81,21 @@ export const useSystemStore = defineStore('system', {
     }
   },
   actions: {
+    initTheme() {
+      this.applyTheme();
+      // Start clock updates
+      setInterval(() => {
+        this.updateTime();
+      }, 1000);
+      
+      // Listen for AI translation update events
+      if (typeof window !== 'undefined') {
+        window.addEventListener('ai-translation-updated', ((e: CustomEvent) => {
+          const { lang, key } = e.detail;
+          this.aiTranslations[`${lang}:${key}`] = (window as any).translatedKeys[lang][key];
+        }) as EventListener);
+      }
+    },
     toggleSidebar() {
       this.isSidebarCollapsed = !this.isSidebarCollapsed;
       localStorage.setItem('wxbot_sidebar_collapsed', String(this.isSidebarCollapsed));
@@ -88,6 +105,9 @@ export const useSystemStore = defineStore('system', {
     },
     updateTime() {
       this.currentTime = new Date().toLocaleTimeString();
+    },
+    setUptime(uptime: string) {
+      this.uptime = uptime;
     },
     setLang(lang: Language) {
       this.lang = lang;
@@ -118,17 +138,6 @@ export const useSystemStore = defineStore('system', {
     },
     toggleMode() {
       this.setMode(this.mode === 'light' ? 'dark' : 'light');
-    },
-    initTheme() {
-      this.applyTheme();
-      
-      // 监听 AI 翻译更新事件
-      if (typeof window !== 'undefined') {
-        window.addEventListener('ai-translation-updated', ((e: CustomEvent) => {
-          const { lang, key } = e.detail;
-          this.aiTranslations[`${lang}:${key}`] = (window as any).translatedKeys[lang][key];
-        }) as EventListener);
-      }
     }
   }
 });

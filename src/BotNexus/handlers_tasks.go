@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"BotNexus/tasks"
 	"BotMatrix/common"
+	"BotNexus/tasks"
 )
 
 // HandleListTasks 获取任务列表
@@ -28,7 +29,7 @@ func HandleListTasks(m *Manager) http.HandlerFunc {
 func HandleListSystemCapabilities(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		actions := m.TaskManager.Dispatcher.GetActions()
 		interceptors := m.TaskManager.Interceptors.GetInterceptors()
 
@@ -47,7 +48,7 @@ func HandleCreateTask(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
-		
+
 		var task tasks.Task
 		if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -56,7 +57,7 @@ func HandleCreateTask(m *Manager) http.HandlerFunc {
 
 		claims := r.Context().Value(common.UserClaimsKey).(*common.UserClaims)
 		// 简单检查是否为企业版 (这里可以根据用户权限或配置决定)
-		isEnterprise := claims.IsAdmin 
+		isEnterprise := claims.IsAdmin
 
 		if err := m.TaskManager.CreateTask(&task, isEnterprise); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -118,7 +119,7 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 		draftID := common.GenerateRandomToken(8)
 		dataJSON, _ := json.Marshal(result.Data)
 		claims := r.Context().Value(common.UserClaimsKey).(*common.UserClaims)
-		
+
 		draft := tasks.AIDraft{
 			DraftID:    draftID,
 			UserID:     uint(claims.UserID),
@@ -193,9 +194,9 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 			} else {
 				// 构造指令发送给 Worker
 				cmd := map[string]interface{}{
-					"type":   "skill_call",
-					"skill":  skillReq.Skill,
-					"params": skillReq.Params,
+					"type":    "skill_call",
+					"skill":   skillReq.Skill,
+					"params":  skillReq.Params,
 					"user_id": draft.UserID,
 				}
 				err = m.SendToWorker(workerID, cmd)
@@ -249,7 +250,7 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 		}
 
 		apiURL := fmt.Sprintf("%s?api-version=3.0&to=%s", endpoint, req.TargetLang)
-		
+
 		// Azure 目标语言映射 (简单的映射，实际可能更复杂)
 		targetLang := req.TargetLang
 		switch targetLang {
@@ -358,7 +359,7 @@ func HandleManageTags(m *Manager) http.HandlerFunc {
 func HandleGetCapabilities(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		manifest := m.TaskManager.AI.Manifest
 		prompt := m.TaskManager.AI.GetSystemPrompt()
 
@@ -422,9 +423,28 @@ func HandleListIdentities(m *Manager) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		var identities []tasks.UserIdentity
 		m.GORMDB.Find(&identities)
+
+		// 增加头像逻辑
+		respIdentities := make([]map[string]interface{}, 0, len(identities))
+		for _, id := range identities {
+			// 将 UserIdentity 转换为 map 并添加 avatar
+			item := map[string]interface{}{
+				"ID":          id.ID,
+				"CreatedAt":   id.CreatedAt,
+				"UpdatedAt":   id.UpdatedAt,
+				"NexusUID":    id.NexusUID,
+				"Platform":    id.Platform,
+				"PlatformUID": id.PlatformUID,
+				"Nickname":    id.Nickname,
+				"Metadata":    id.Metadata,
+				"Avatar":      GetAvatarURL(id.Platform, id.PlatformUID, false, ""),
+			}
+			respIdentities = append(respIdentities, item)
+		}
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"data":    identities,
+			"data":    respIdentities,
 		})
 	}
 }

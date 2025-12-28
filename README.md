@@ -31,6 +31,7 @@ BotMatrix 是一个高度可扩展、分布式的跨平台机器人矩阵系统�
   - [部署指南](docs/zh-CN/DEPLOY.md)
   - [AI 助手指南](docs/zh-CN/development/AI_GUIDE.md)
   - [插件开发手册](docs/zh-CN/PLUGIN_DEVELOPMENT.md)
+  - [国际化 (I18N) 开发指南](docs/zh-CN/development/I18N_GUIDE.md)
 
 ### 🚀 快速开始
 
@@ -65,6 +66,7 @@ BotMatrix is a highly scalable, distributed, and cross-platform bot matrix syste
   - [Deployment Guide](docs/en-US/DEPLOY.md)
   - [AI Assistant Guide](docs/en-US/development/AI_GUIDE.md)
   - [Plugin Development](docs/en-US/PLUGIN_DEVELOPMENT.md)
+  - [I18N Development Guide](docs/zh-CN/development/I18N_GUIDE.md)
 
 ### � Quick Start
 

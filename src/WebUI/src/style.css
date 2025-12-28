@@ -30,15 +30,15 @@
 }
 
 .classic.dark {
-  --bg-body: #111827;
-  --bg-card: #1f2937;
-  --bg-header: rgba(17, 24, 39, 0.8);
-  --bg-sidebar: #111827;
-  --text-main: #f9fafb;
-  --text-muted: #9ca3af;
-  --border-color: rgba(255, 255, 255, 0.1);
-  --matrix-color: #60a5fa;
-  --matrix-glow: 0 0 15px rgba(96, 165, 250, 0.3);
+  --bg-body: #0f172a;
+  --bg-card: #1e293b;
+  --bg-header: rgba(15, 23, 42, 0.9);
+  --bg-sidebar: #0f172a;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --matrix-color: #f59e0b; /* Amber instead of blue for better contrast on dark blue */
+  --matrix-glow: 0 0 15px rgba(245, 158, 11, 0.3);
   --radius-main: 12px;
   --radius-card: 16px;
   --radius-sm: 8px;
@@ -623,7 +623,7 @@
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --border-color: #1e293b;
-  --matrix-color: #60a5fa;
+  --matrix-color: #f59e0b; /* Amber instead of blue for better contrast on dark blue */
   --radius-main: 12px;
   --radius-card: 16px;
   --radius-sm: 8px;
@@ -729,10 +729,10 @@
 
 .matrix button:not(.close-btn):hover,
 .matrix .matrix-btn:hover {
-  background: #00ff41 !important;
-  color: #000 !important;
-  box-shadow: 0 0 25px #00ff41;
-  text-shadow: none;
+  background: rgba(0, 255, 65, 0.2) !important;
+  color: #00ff41 !important;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+  text-shadow: 0 0 5px #00ff41;
 }
 
 /* Inputs */

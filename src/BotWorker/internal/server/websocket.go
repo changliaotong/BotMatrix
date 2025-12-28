@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"BotMatrix/common/log"
 	"net/http"
 	"sync"
 	"time"

@@ -64,7 +64,7 @@ func (gm *GORMManager) autoMigrate() error {
 	log.Println("🔄 GORM: Starting auto migration...")
 	
 	// 迁移所有表
-	err := gm.DB.AutoMigrate(
+	tables := []interface{}{
 		&UserGORM{},
 		&RoutingRuleGORM{},
 		&GroupCacheGORM{},
@@ -80,13 +80,15 @@ func (gm *GORMManager) autoMigrate() error {
 		&FissionTaskGORM{},
 		&UserFissionRecordGORM{},
 		&FissionRewardLogGORM{},
-	)
-	
-	if err != nil {
-		return err
+	}
+
+	for _, table := range tables {
+		if err := gm.DB.AutoMigrate(table); err != nil {
+			log.Printf("[WARN] GORM: 迁移表失败 (将继续): %v", err)
+		}
 	}
 	
-	log.Println("✅ GORM: Auto migration completed successfully")
+	log.Println("✅ GORM: Auto migration finished (with potential warnings)")
 	return nil
 }
 

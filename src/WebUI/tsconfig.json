@@ -9,6 +9,7 @@
     "importHelpers": true,
     "experimentalDecorators": true,
     "allowJs": true,
+    "noEmit": true,
     "sourceMap": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

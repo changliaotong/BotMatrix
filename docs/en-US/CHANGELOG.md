@@ -3,6 +3,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.7.1 (2025-12-28)
+*   **🖼️ Avatar Standardization**:
+    - **Real Avatar Integration**: Fully integrated official QQ group and user avatars, utilizing a backend proxy to bypass CORS and Referer restrictions.
+    - **Smart Platform Logo Fallback**: Automatically displays platform logos for non-QQ protocols when the user ID exceeds 980000000000.
+    - **Global Consistency**: Standardized avatar display across all modules, including Bot List, Contacts, Group Members, Message Logs, and Identity Mapping.
+    - **Backend Proxy Support**: Introduced a new `/api/proxy/avatar` endpoint to ensure reliable loading of external avatar images within the WebUI.
+
 ## v1.7.0 (2025-12-27)
 *   **🧠 AI Task Orchestrator**:
     - **Natural Language Parsing**: Users can now describe automation tasks in plain Chinese/English (e.g., "Mute group every night at 11 PM").

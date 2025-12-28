@@ -1,7 +1,7 @@
 import api from './index';
 
 /**
- * 统一 AI 系统接口规划
+ * Unified AI system interface planning
  */
 export interface TranslationRequest {
   text: string;
@@ -30,19 +30,19 @@ export interface AIStatus {
 
 export const aiApi = {
   /**
-   * 日志智能分析接口 (预留)
+   * AI log analysis interface (reserved)
    */
   analyzeLogs: (data: LogAnalysisRequest) => 
     api.post('/api/ai/analyze-logs', data),
 
   /**
-   * 系统状态诊断 (预留)
+   * System diagnosis (reserved)
    */
   getSystemDiagnosis: () => 
     api.get('/api/ai/diagnosis'),
 
   /**
-   * 获取当前 AI 系统状态
+   * Get current AI system status
    */
   getStatus: () => 
     api.get<AIStatus>('/api/ai/status')

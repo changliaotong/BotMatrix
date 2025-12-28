@@ -88,12 +88,17 @@ Web 管理后台使用的 RESTful API。
         "self_id": "12345678",
         "platform": "qq",
         "connected_at": "2023-10-01T12:00:00Z",
-        "status": "online"
+        "status": "online",
+        "avatar": "https://q.qlogo.cn/headimg_dl?dst_uin=12345678&spec=640"
     }
 ]
 ```
 
-### 3. 更新路由规则 (POST /api/routing/update)
+### 3. 头像代理 (GET /api/proxy/avatar?url=...)
+- **描述**: 代理外部头像图片，解决跨域 (CORS) 和 Referer 限制问题。
+- **参数**: `url` - 原始头像图片的编码 URL。
+
+### 4. 更新路由规则 (POST /api/routing/update)
 - **描述**: 动态修改消息路由规则。
 
 ---

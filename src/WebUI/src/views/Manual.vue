@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useBotStore } from '@/stores/bot';
 import { 
@@ -22,7 +22,7 @@ const t = (key: string) => systemStore.t(key);
 const manualContent = ref('');
 const loading = ref(true);
 const search = ref('');
-const selectedSection = ref('System Overview');
+const selectedSection = ref(t('system_overview'));
 
 const fetchManual = async () => {
   loading.value = true;
@@ -42,28 +42,28 @@ const selectSection = (item: string) => {
   selectedSection.value = item;
 };
 
-const categories = [
+const categories = computed(() => [
   {
-    title: 'Getting Started',
+    title: t('getting_started'),
     icon: Zap,
-    items: ['System Overview', 'Installation Guide', 'First Bot Setup']
+    items: [t('system_overview'), t('installation_guide'), t('first_bot_setup')]
   },
   {
-    title: 'Core Features',
+    title: t('core_features'),
     icon: Cpu,
-    items: ['Worker Management', 'Routing Rules', 'Docker Integration']
+    items: [t('worker_mgmt'), t('routing_rules'), t('docker_integration')]
   },
   {
-    title: 'Security & Access',
+    title: t('security_access'),
     icon: Shield,
-    items: ['User Roles', 'API Authentication', 'Permission Matrix']
+    items: [t('user_roles'), t('api_auth'), t('permission_matrix')]
   },
   {
-    title: 'Advanced',
+    title: t('advanced'),
     icon: Globe,
-    items: ['Nexus Gateway', 'Fission Campaigns', 'Custom Tasks']
+    items: [t('nexus_gateway'), t('fission_campaigns'), t('custom_tasks')]
   }
-];
+]);
 </script>
 
 <template>
@@ -79,7 +79,7 @@ const categories = [
         <input 
           v-model="search"
           type="text"
-          placeholder="Search documentation..."
+          :placeholder="t('search_docs')"
           class="pl-10 pr-4 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-xs font-bold text-[var(--text-main)] w-64 transition-all"
         />
       </div>
@@ -109,11 +109,11 @@ const categories = [
 
         <div class="p-6 rounded-3xl bg-[var(--matrix-color)] text-black mt-8">
           <HelpCircle class="w-8 h-8 mb-4" />
-          <h3 class="font-black text-sm uppercase tracking-tight">Need Help?</h3>
-          <p class="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">Join our community for support and updates.</p>
+          <h3 class="font-black text-sm uppercase tracking-tight">{{ t('need_help') }}</h3>
+          <p class="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">{{ t('join_community_desc') }}</p>
           <button class="w-full mt-4 py-3 rounded-xl bg-black text-white text-[10px] font-black uppercase tracking-widest hover:bg-black/80 transition-all flex items-center justify-center gap-2">
             <MessageSquare class="w-3 h-3" />
-            Join Discord
+            {{ t('join_discord') }}
           </button>
         </div>
       </div>
@@ -133,51 +133,50 @@ const categories = [
 
           <div v-else class="prose prose-invert max-w-none">
             <div v-if="manualContent" v-html="manualContent"></div>
-            <div v-else-if="selectedSection === 'System Overview'" class="space-y-8">
+            <div v-else-if="selectedSection === t('system_overview')" class="space-y-8">
               <div class="flex items-center gap-4 text-[var(--matrix-color)]">
                 <BookOpen class="w-10 h-10" />
-                <h2 class="text-3xl font-black text-[var(--text-main)] uppercase tracking-tight m-0">System Overview</h2>
+                <h2 class="text-3xl font-black text-[var(--text-main)] uppercase tracking-tight m-0">{{ t('system_overview') }}</h2>
               </div>
               
               <div class="p-8 rounded-[2rem] bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
-                <h3 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight mt-0">Architecture</h3>
+                <h3 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight mt-0">{{ t('architecture') }}</h3>
                 <p class="text-[var(--text-muted)] font-medium leading-relaxed mt-4">
-                  BotMatrix follows a distributed architecture with a central **Nexus Gateway** and multiple **Workers**. 
-                  The Nexus acts as the brain, managing configurations and routing, while Workers handle the actual bot connections.
+                  {{ t('architecture_desc') }}
                 </p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                   <div class="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
-                    <div class="text-[10px] font-black text-[var(--matrix-color)] uppercase tracking-widest mb-2">Centralized</div>
-                    <div class="text-sm font-black text-[var(--text-main)] uppercase">Nexus Gateway</div>
-                    <p class="text-xs text-[var(--text-muted)] font-medium mt-2">API endpoints, database, and orchestration layer.</p>
+                    <div class="text-[10px] font-black text-[var(--matrix-color)] uppercase tracking-widest mb-2">{{ t('centralized') }}</div>
+                    <div class="text-sm font-black text-[var(--text-main)] uppercase">{{ t('nexus_gateway') }}</div>
+                    <p class="text-xs text-[var(--text-muted)] font-medium mt-2">{{ t('nexus_gateway_desc') }}</p>
                   </div>
                   <div class="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
-                    <div class="text-[10px] font-black text-[var(--matrix-color)] uppercase tracking-widest mb-2">Distributed</div>
-                    <div class="text-sm font-black text-[var(--text-main)] uppercase">Workers</div>
-                    <p class="text-xs text-[var(--text-muted)] font-medium mt-2">Scalable nodes running the bot instances.</p>
+                    <div class="text-[10px] font-black text-[var(--matrix-color)] uppercase tracking-widest mb-2">{{ t('distributed') }}</div>
+                    <div class="text-sm font-black text-[var(--text-main)] uppercase">{{ t('workers') }}</div>
+                    <p class="text-xs text-[var(--text-muted)] font-medium mt-2">{{ t('workers_desc_manual') }}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div v-else-if="selectedSection === 'Installation Guide'" class="space-y-8">
+            <div v-else-if="selectedSection === t('installation_guide')" class="space-y-8">
               <div class="flex items-center gap-4 text-[var(--matrix-color)]">
                 <Zap class="w-10 h-10" />
-                <h2 class="text-3xl font-black text-[var(--text-main)] uppercase tracking-tight m-0">Installation Guide</h2>
+                <h2 class="text-3xl font-black text-[var(--text-main)] uppercase tracking-tight m-0">{{ t('installation_guide') }}</h2>
               </div>
               <div class="space-y-6">
                 <div class="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
-                  <h3 class="text-lg font-black text-[var(--text-main)] uppercase tracking-tight">Prerequisites</h3>
+                  <h3 class="text-lg font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('prerequisites') }}</h3>
                   <ul class="list-disc list-inside mt-4 space-y-2 text-sm text-[var(--text-muted)] font-medium">
-                    <li>Docker and Docker Compose</li>
-                    <li>Go 1.21+ (for source builds)</li>
-                    <li>Node.js 18+ (for WebUI development)</li>
+                    <li>{{ t('prerequisite_docker') }}</li>
+                    <li>{{ t('prerequisite_go') }}</li>
+                    <li>{{ t('prerequisite_node') }}</li>
                   </ul>
                 </div>
                 <div class="p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] font-mono text-xs">
-                  <p class="text-[var(--matrix-color)] mb-2"># Clone and Start</p>
-                  <p class="text-[var(--text-main)]">git clone https://github.com/BotMatrix/BotMatrix.git</p>
-                  <p class="text-[var(--text-main)]">cd BotMatrix</p>
+                  <p class="text-[var(--matrix-color)] mb-2"># {{ t('clone_and_start') }}</p>
+                  <p class="text-[var(--text-main)]">git clone https://github.com/{{ t('botmatrix') }}/{{ t('botmatrix') }}.git</p>
+                  <p class="text-[var(--text-main)]">cd {{ t('botmatrix') }}</p>
                   <p class="text-[var(--text-main)]">docker-compose up -d</p>
                 </div>
               </div>
@@ -187,10 +186,10 @@ const categories = [
               <HelpCircle class="w-16 h-16 text-[var(--text-muted)] mb-4 opacity-20" />
               <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ selectedSection }}</h2>
               <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2 max-w-md">
-                Detailed documentation for this section is coming soon. Please refer to our online Wiki for more information.
+                {{ t('coming_soon_desc') }}
               </p>
               <button class="mt-8 px-8 py-3 rounded-2xl bg-[var(--matrix-color)] text-black text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
-                Visit Online Wiki
+                {{ t('visit_wiki') }}
               </button>
             </div>
           </div>

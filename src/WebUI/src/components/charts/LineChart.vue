@@ -73,7 +73,8 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
     },
     y: {
       display: false,
-      beginAtZero: true,
+      beginAtZero: false,
+      grace: '10%'
     },
   },
 }));

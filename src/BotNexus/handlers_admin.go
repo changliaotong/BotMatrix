@@ -1,11 +1,11 @@
 package main
 
 import (
+	log "BotMatrix/common/log"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"runtime"
 	"sort"
@@ -25,6 +25,49 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/net"
 )
+
+// GetAvatarURL 根据平台、ID 和是否为群组返回头像地址
+func GetAvatarURL(platform string, id string, isGroup bool, providedAvatar string) string {
+	platform = strings.ToUpper(platform)
+
+	// 如果 ID 是纯数字且在特定范围内，处理 QQ 逻辑
+	isQQ := platform == "QQ"
+	if !isQQ && id != "" {
+		isNumeric := true
+		for _, c := range id {
+			if c < '0' || c > '9' {
+				isNumeric = false
+				break
+			}
+		}
+		if isNumeric && len(id) >= 5 && len(id) <= 11 {
+			isQQ = true
+		}
+	}
+
+	if isQQ {
+		if isGroup {
+			return "https://p.qlogo.cn/gh/" + id + "/" + id + "/640"
+		}
+		return "https://q.qlogo.cn/headimg_dl?dst_uin=" + id + "&spec=640"
+	}
+
+	// 非 QQ 协议，检查 ID 是否大于 980000000000
+	if id != "" {
+		idInt, err := strconv.ParseInt(id, 10, 64)
+		if err == nil && idInt > 980000000000 {
+			// 返回特殊前缀，由前端识别显示平台 logo
+			return "platform://" + strings.ToLower(platform)
+		}
+	}
+
+	// 否则使用提供的头像
+	if providedAvatar != "" {
+		return providedAvatar
+	}
+
+	return ""
+}
 
 // HandleLogin 处理登录请求
 func HandleLogin(m *common.Manager) http.HandlerFunc {
@@ -301,8 +344,21 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 			cpuUsage = cpuTrend[len(cpuTrend)-1]
 		}
 
+		uptimeSec := int64(time.Since(m.StartTime).Seconds())
+		uptimeStr := fmt.Sprintf("%ds", uptimeSec)
+		if uptimeSec >= 60 {
+			uptimeStr = fmt.Sprintf("%dm %ds", uptimeSec/60, uptimeSec%60)
+		}
+		if uptimeSec >= 3600 {
+			uptimeStr = fmt.Sprintf("%dh %dm", uptimeSec/3600, (uptimeSec%3600)/60)
+		}
+		if uptimeSec >= 86400 {
+			uptimeStr = fmt.Sprintf("%dd %dh", uptimeSec/86400, (uptimeSec%86400)/3600)
+		}
+
 		stats := map[string]interface{}{
 			"goroutines":          runtime.NumGoroutine(),
+			"uptime":              uptimeStr,
 			"memory_alloc":        mStats.Alloc,
 			"memory_total":        vm.Total,
 			"memory_used":         vm.Used,
@@ -337,9 +393,13 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 			"recv_trend":          recvTrend,
 			"net_sent_trend":      netSentTrend,
 			"net_recv_trend":      netRecvTrend,
+			"top_processes":       m.TopProcesses,
 		}
 
-		json.NewEncoder(w).Encode(stats)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"stats":   stats,
+		})
 	}
 }
 
@@ -434,7 +494,10 @@ func HandleGetSystemStats(m *common.Manager) http.HandlerFunc {
 			"timestamp":      time.Now().Unix(),
 		}
 
-		json.NewEncoder(w).Encode(stats)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"stats":   stats,
+		})
 	}
 }
 
@@ -576,6 +639,7 @@ func HandleGetBots(m *common.Manager) http.HandlerFunc {
 				"id":              id,
 				"self_id":         bot.SelfID,
 				"nickname":        bot.Nickname,
+				"avatar":          GetAvatarURL(bot.Platform, bot.SelfID, false, ""),
 				"group_count":     bot.GroupCount,
 				"friend_count":    bot.FriendCount,
 				"connected":       bot.Connected.Format("2006-01-02 15:04:05"),
@@ -1061,170 +1125,552 @@ func HandleChangePassword(m *common.Manager) http.HandlerFunc {
 	}
 }
 
+// HandleGetMessages 获取最新消息列表
+func HandleGetMessages(m *common.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		limitStr := r.URL.Query().Get("limit")
+		limit := 50
+		if limitStr != "" {
+			if l, err := strconv.Atoi(limitStr); err == nil {
+				limit = l
+			}
+		}
+
+		if m.DB == nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success":  false,
+				"messages": []interface{}{},
+				"error":    "Database not initialized",
+			})
+			return
+		}
+
+		query := `
+		SELECT id, message_id, bot_id, user_id, group_id, type, content, created_at
+		FROM messages
+		ORDER BY created_at DESC
+		LIMIT ?
+		`
+		rows, err := m.DB.Query(m.PrepareQuery(query), limit)
+		if err != nil {
+			log.Printf("获取最新消息失败: %v", err)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success":  false,
+				"messages": []interface{}{},
+				"error":    err.Error(),
+			})
+			return
+		}
+		defer rows.Close()
+
+		messages := []map[string]interface{}{}
+		for rows.Next() {
+			var id int
+			var messageID, botID, userID, groupID, msgType, content string
+			var createdAt time.Time
+			err := rows.Scan(&id, &messageID, &botID, &userID, &groupID, &msgType, &content, &createdAt)
+			if err != nil {
+				log.Printf("扫描消息失败: %v", err)
+				continue
+			}
+
+			// 获取昵称和群名
+			userName := userID
+			groupName := groupID
+			userAvatar := ""
+			groupAvatar := ""
+
+			m.Mutex.RLock()
+			bot, hasBot := m.Bots[botID]
+			platform := ""
+			if hasBot {
+				platform = bot.Platform
+			}
+			m.Mutex.RUnlock()
+
+			m.CacheMutex.RLock()
+			if friend, ok := m.FriendCache[userID]; ok {
+				if n, ok := friend["nickname"].(string); ok {
+					userName = n
+				}
+				if a, ok := friend["avatar"].(string); ok {
+					userAvatar = a
+				}
+			}
+			// 如果在好友缓存没找到头像，尝试在成员缓存找
+			if userAvatar == "" && groupID != "" && groupID != "0" {
+				memberKey := groupID + "_" + userID
+				if member, ok := m.MemberCache[memberKey]; ok {
+					if a, ok := member["avatar"].(string); ok {
+						userAvatar = a
+					}
+					// 也可以尝试更新下昵称，如果之前没找到的话
+					if userName == userID {
+						if n, ok := member["nickname"].(string); ok {
+							userName = n
+						}
+					}
+				}
+			}
+
+			if group, ok := m.GroupCache[groupID]; ok {
+				if n, ok := group["group_name"].(string); ok {
+					groupName = n
+				}
+				if a, ok := group["avatar"].(string); ok {
+					groupAvatar = a
+				}
+			}
+			m.CacheMutex.RUnlock()
+
+			messages = append(messages, map[string]interface{}{
+				"id":           id,
+				"message_id":   messageID,
+				"bot_id":       botID,
+				"user_id":      userID,
+				"user_name":    userName,
+				"user_avatar":  GetAvatarURL(platform, userID, false, userAvatar),
+				"group_id":     groupID,
+				"group_name":   groupName,
+				"group_avatar": GetAvatarURL(platform, groupID, true, groupAvatar),
+				"type":         msgType,
+				"content":      content,
+				"created_at":   createdAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":  true,
+			"messages": messages,
+		})
+	}
+}
+
 // HandleGetContacts 获取联系人列表 (群组和好友)
 func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		botID := r.URL.Query().Get("bot_id")
-		refresh := r.URL.Query().Get("refresh") == "true"
+		var botID string
+		refresh := false
+
+		if r.Method == http.MethodPost {
+			var body struct {
+				BotID   string `json:"bot_id"`
+				Refresh bool   `json:"refresh"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+				botID = body.BotID
+				refresh = true // Sync endpoint defaults to refresh
+			}
+		} else {
+			botID = r.URL.Query().Get("bot_id")
+			refresh = r.URL.Query().Get("refresh") == "true"
+		}
+
+		lang := r.Header.Get("Accept-Language")
+		if lang == "" {
+			lang = "zh-CN"
+		}
+
+		// 如果不强制刷新，检查缓存是否为空
+		if !refresh && botID != "" {
+			m.CacheMutex.RLock()
+			hasCache := false
+			// 检查群组缓存
+			for _, g := range m.GroupCache {
+				if common.ToString(g["bot_id"]) == botID {
+					hasCache = true
+					break
+				}
+			}
+			// 如果群组没有，检查好友缓存
+			if !hasCache {
+				for _, f := range m.FriendCache {
+					if common.ToString(f["bot_id"]) == botID {
+						hasCache = true
+						break
+					}
+				}
+			}
+			m.CacheMutex.RUnlock()
+
+			// 如果完全没有缓存，则强制触发一次刷新
+			if !hasCache {
+				refresh = true
+			}
+		}
 
 		if refresh && botID != "" {
 			m.Mutex.RLock()
 			bot, ok := m.Bots[botID]
 			m.Mutex.RUnlock()
 
-			if ok {
-				echoGroups := "refresh_groups_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"message": common.T(lang, "bot_not_found|未找到机器人实例"),
+				})
+				return
+			}
+
+			// 检查机器人连接状态和心跳
+			if bot.Conn == nil || time.Since(bot.LastHeartbeat) > 5*time.Minute {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"message": common.T(lang, "bot_disconnected|机器人已断开连接或心跳超时"),
+				})
+				return
+			}
+
+			echoGroups := "refresh_groups_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			m.PendingMutex.Lock()
+			respChanGroups := make(chan map[string]interface{}, 1)
+			m.PendingRequests[echoGroups] = respChanGroups
+			m.PendingMutex.Unlock()
+
+			bot.Mutex.Lock()
+			err := bot.Conn.WriteJSON(map[string]interface{}{
+				"action": "get_group_list",
+				"params": map[string]interface{}{},
+				"echo":   echoGroups,
+			})
+			bot.Mutex.Unlock()
+
+			if err != nil {
+				log.Printf("Failed to send get_group_list to bot %s: %v", botID, err)
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"message": common.T(lang, "bot_communication_error|与机器人通信失败"),
+				})
+				return
+			}
+
+			// Group fetch with its own timeout
+			select {
+			case resp := <-respChanGroups:
+				if data, ok := resp["data"].([]interface{}); ok {
+					m.CacheMutex.Lock()
+					for _, g := range data {
+						if group, ok := g.(map[string]interface{}); ok {
+							gID := common.ToString(group["group_id"])
+							gName := common.ToString(group["group_name"])
+
+							m.GroupCache[gID] = map[string]interface{}{
+								"group_id":   gID,
+								"group_name": gName,
+								"bot_id":     botID,
+							}
+							go m.SaveGroupToDB(gID, gName, botID)
+						}
+					}
+					m.CacheMutex.Unlock()
+				}
+			case <-time.After(8 * time.Second):
+				log.Printf(common.T("", "contacts_timeout_groups"), botID)
+			}
+
+			m.PendingMutex.Lock()
+			delete(m.PendingRequests, echoGroups)
+			m.PendingMutex.Unlock()
+
+			echoFriends := "refresh_friends_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			m.PendingMutex.Lock()
+			respChanFriends := make(chan map[string]interface{}, 1)
+			m.PendingRequests[echoFriends] = respChanFriends
+			m.PendingMutex.Unlock()
+
+			bot.Mutex.Lock()
+			err = bot.Conn.WriteJSON(map[string]interface{}{
+				"action": "get_friend_list",
+				"params": map[string]interface{}{},
+				"echo":   echoFriends,
+			})
+			bot.Mutex.Unlock()
+
+			if err == nil {
+				// Friend fetch with its own timeout
+				select {
+				case resp := <-respChanFriends:
+					if data, ok := resp["data"].([]interface{}); ok {
+						m.CacheMutex.Lock()
+						for _, f := range data {
+							if friend, ok := f.(map[string]interface{}); ok {
+								uID := common.ToString(friend["user_id"])
+								nickname := common.ToString(friend["nickname"])
+
+								m.FriendCache[uID] = map[string]interface{}{
+									"user_id":  uID,
+									"nickname": nickname,
+									"bot_id":   botID,
+								}
+								go m.SaveFriendToDB(uID, nickname, botID)
+							}
+						}
+						m.CacheMutex.Unlock()
+					}
+				case <-time.After(8 * time.Second):
+					log.Printf(common.T("", "contacts_timeout_friends"), botID)
+				}
+			}
+
+			m.PendingMutex.Lock()
+			delete(m.PendingRequests, echoFriends)
+			m.PendingMutex.Unlock()
+
+			if bot.Platform == "qq_guild" || bot.Platform == "guild" {
+				echoGuilds := "refresh_guilds_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 				m.PendingMutex.Lock()
-				respChanGroups := make(chan map[string]interface{}, 1)
-				m.PendingRequests[echoGroups] = respChanGroups
+				respChanGuilds := make(chan map[string]interface{}, 1)
+				m.PendingRequests[echoGuilds] = respChanGuilds
 				m.PendingMutex.Unlock()
 
 				bot.Mutex.Lock()
 				bot.Conn.WriteJSON(map[string]interface{}{
-					"action": "get_group_list",
+					"action": "get_guild_list",
 					"params": map[string]interface{}{},
-					"echo":   echoGroups,
+					"echo":   echoGuilds,
 				})
 				bot.Mutex.Unlock()
 
-				timeout := time.After(5 * time.Second)
+				// Guild fetch with its own timeout
 				select {
-				case resp := <-respChanGroups:
+				case resp := <-respChanGuilds:
 					if data, ok := resp["data"].([]interface{}); ok {
 						for _, g := range data {
-							if group, ok := g.(map[string]interface{}); ok {
-								gID := fmt.Sprintf("%v", group["group_id"])
-								gName := fmt.Sprintf("%v", group["group_name"])
+							if guild, ok := g.(map[string]interface{}); ok {
+								gID := common.ToString(guild["guild_id"])
+								gName := common.ToString(guild["guild_name"])
 
 								m.CacheMutex.Lock()
 								m.GroupCache[gID] = map[string]interface{}{
 									"group_id":   gID,
 									"group_name": gName,
 									"bot_id":     botID,
+									"is_guild":   true,
 								}
 								m.CacheMutex.Unlock()
-								m.SaveGroupToDB(gID, gName, botID)
+								go m.SaveGroupToDB(gID, gName, botID)
 							}
 						}
 					}
-				case <-timeout:
-					log.Printf(common.T("", "contacts_timeout_groups"), botID)
+				case <-time.After(8 * time.Second):
+					log.Printf("[Contacts] 获取频道列表超时: %s", botID)
 				}
 
 				m.PendingMutex.Lock()
-				delete(m.PendingRequests, echoGroups)
+				delete(m.PendingRequests, echoGuilds)
 				m.PendingMutex.Unlock()
-
-				echoFriends := "refresh_friends_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
-				m.PendingMutex.Lock()
-				respChanFriends := make(chan map[string]interface{}, 1)
-				m.PendingRequests[echoFriends] = respChanFriends
-				m.PendingMutex.Unlock()
-
-				bot.Mutex.Lock()
-				bot.Conn.WriteJSON(map[string]interface{}{
-					"action": "get_friend_list",
-					"params": map[string]interface{}{},
-					"echo":   echoFriends,
-				})
-				bot.Mutex.Unlock()
-
-				select {
-				case resp := <-respChanFriends:
-					if data, ok := resp["data"].([]interface{}); ok {
-						for _, f := range data {
-							if friend, ok := f.(map[string]interface{}); ok {
-								uID := fmt.Sprintf("%v", friend["user_id"])
-								nickname := fmt.Sprintf("%v", friend["nickname"])
-
-								m.CacheMutex.Lock()
-								m.FriendCache[uID] = map[string]interface{}{
-									"user_id":  uID,
-									"nickname": nickname,
-								}
-								m.CacheMutex.Unlock()
-								m.SaveFriendToDB(uID, nickname)
-							}
-						}
-					}
-				case <-timeout:
-					log.Printf(common.T("", "contacts_timeout_friends"), botID)
-				}
-
-				m.PendingMutex.Lock()
-				delete(m.PendingRequests, echoFriends)
-				m.PendingMutex.Unlock()
-
-				if bot.Platform == "qq_guild" || bot.Platform == "guild" {
-					echoGuilds := "refresh_guilds_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
-					m.PendingMutex.Lock()
-					respChanGuilds := make(chan map[string]interface{}, 1)
-					m.PendingRequests[echoGuilds] = respChanGuilds
-					m.PendingMutex.Unlock()
-
-					bot.Mutex.Lock()
-					bot.Conn.WriteJSON(map[string]interface{}{
-						"action": "get_guild_list",
-						"params": map[string]interface{}{},
-						"echo":   echoGuilds,
-					})
-					bot.Mutex.Unlock()
-
-					select {
-					case resp := <-respChanGuilds:
-						if data, ok := resp["data"].([]interface{}); ok {
-							for _, g := range data {
-								if guild, ok := g.(map[string]interface{}); ok {
-									gID := fmt.Sprintf("%v", guild["guild_id"])
-									gName := fmt.Sprintf("%v", guild["guild_name"])
-
-									m.CacheMutex.Lock()
-									m.GroupCache[gID] = map[string]interface{}{
-										"group_id":   gID,
-										"group_name": gName,
-										"bot_id":     botID,
-										"is_guild":   true,
-									}
-									m.CacheMutex.Unlock()
-									m.SaveGroupToDB(gID, gName, botID)
-								}
-							}
-						}
-					case <-timeout:
-						log.Printf("[Contacts] 获取频道列表超时: %s", botID)
-					}
-
-					m.PendingMutex.Lock()
-					delete(m.PendingRequests, echoGuilds)
-					m.PendingMutex.Unlock()
-				}
 			}
 		}
 
 		m.CacheMutex.RLock()
 		defer m.CacheMutex.RUnlock()
 
-		groups := make([]interface{}, 0, len(m.GroupCache))
+		contacts := make([]map[string]interface{}, 0)
 		for _, g := range m.GroupCache {
-			if botID == "" || g["bot_id"] == botID {
-				groups = append(groups, g)
+			gBotID, _ := g["bot_id"].(string)
+			if botID == "" || gBotID == botID {
+				platform := ""
+				m.Mutex.RLock()
+				if b, ok := m.Bots[gBotID]; ok {
+					platform = b.Platform
+				}
+				m.Mutex.RUnlock()
+
+				gID := common.ToString(g["group_id"])
+				providedAvatar, _ := g["avatar"].(string)
+
+				contacts = append(contacts, map[string]interface{}{
+					"id":       gID,
+					"name":     g["group_name"],
+					"nickname": g["group_name"],
+					"avatar":   GetAvatarURL(platform, gID, true, providedAvatar),
+					"bot_id":   gBotID,
+					"type":     "group",
+				})
 			}
 		}
 
-		friends := make([]interface{}, 0, len(m.FriendCache))
 		for _, f := range m.FriendCache {
-			friends = append(friends, f)
+			fBotID, _ := f["bot_id"].(string)
+			if botID == "" || fBotID == botID {
+				platform := ""
+				m.Mutex.RLock()
+				if b, ok := m.Bots[fBotID]; ok {
+					platform = b.Platform
+				}
+				m.Mutex.RUnlock()
+
+				uID := common.ToString(f["user_id"])
+				providedAvatar, _ := f["avatar"].(string)
+
+				contacts = append(contacts, map[string]interface{}{
+					"id":       uID,
+					"name":     f["nickname"],
+					"nickname": f["nickname"],
+					"avatar":   GetAvatarURL(platform, uID, false, providedAvatar),
+					"bot_id":   fBotID,
+					"type":     "private",
+				})
+			}
 		}
 
-		log.Printf("[DEBUG] HandleGetContacts botID=%s totalGroups=%d totalFriends=%d filteredGroups=%d", botID, len(m.GroupCache), len(m.FriendCache), len(groups))
-
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "ok",
-			"groups":  groups,
-			"friends": friends,
+			"success":  true,
+			"contacts": contacts,
 		})
+	}
+}
+
+// HandleGetGroupMembers 获取群成员列表
+func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		lang := common.GetLangFromRequest(r)
+
+		botID := r.URL.Query().Get("bot_id")
+		groupID := r.URL.Query().Get("group_id")
+		refresh := r.URL.Query().Get("refresh") == "true"
+
+		if botID == "" || groupID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": common.T(lang, "missing_parameters"),
+			})
+			return
+		}
+
+		m.Mutex.RLock()
+		bot, ok := m.Bots[botID]
+		m.Mutex.RUnlock()
+
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": common.T(lang, "bot_not_found"),
+			})
+			return
+		}
+
+		// 检查机器人连接状态和心跳
+		if bot.Conn == nil || time.Since(bot.LastHeartbeat) > 5*time.Minute {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": common.T(lang, "bot_disconnected|机器人已断开连接或心跳超时"),
+			})
+			return
+		}
+
+		// 1. 优先尝试从缓存读取 (如果不需要强制刷新)
+		if !refresh {
+			m.CacheMutex.RLock()
+			cachedMembers := make([]map[string]interface{}, 0)
+			for _, member := range m.MemberCache {
+				if common.ToString(member["group_id"]) == groupID {
+					// 注入头像
+					m.Mutex.RLock()
+					platform := ""
+					if botID, ok := member["bot_id"].(string); ok {
+						if b, ok := m.Bots[botID]; ok {
+							platform = b.Platform
+						}
+					}
+					m.Mutex.RUnlock()
+
+					uID := common.ToString(member["user_id"])
+					providedAvatar, _ := member["avatar"].(string)
+					member["avatar"] = GetAvatarURL(platform, uID, false, providedAvatar)
+
+					cachedMembers = append(cachedMembers, member)
+				}
+			}
+			m.CacheMutex.RUnlock()
+
+			if len(cachedMembers) > 0 {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": true,
+					"data":    cachedMembers,
+					"cached":  true,
+				})
+				return
+			}
+		}
+
+		// 2. 如果需要刷新或缓存中没有，则从机器人获取
+		echo := "get_members_" + groupID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+		m.PendingMutex.Lock()
+		respChan := make(chan map[string]interface{}, 1)
+		m.PendingRequests[echo] = respChan
+		m.PendingMutex.Unlock()
+
+		defer func() {
+			m.PendingMutex.Lock()
+			delete(m.PendingRequests, echo)
+			m.PendingMutex.Unlock()
+		}()
+
+		bot.Mutex.Lock()
+		bot.Conn.WriteJSON(map[string]interface{}{
+			"action": "get_group_member_list",
+			"params": map[string]interface{}{
+				"group_id": groupID,
+			},
+			"echo": echo,
+		})
+		bot.Mutex.Unlock()
+
+		select {
+		case resp := <-respChan:
+			if data, ok := resp["data"].([]interface{}); ok {
+				// 更新缓存
+				m.CacheMutex.Lock()
+				for _, it := range data {
+					if member, ok := it.(map[string]interface{}); ok {
+						uID := common.ToString(member["user_id"])
+						nickname := common.ToString(member["nickname"])
+						card := common.ToString(member["card"])
+						key := fmt.Sprintf("%s:%s", groupID, uID)
+
+						m.MemberCache[key] = map[string]interface{}{
+							"group_id":  groupID,
+							"user_id":   uID,
+							"nickname":  nickname,
+							"card":      card,
+							"bot_id":    botID, // 确保缓存中有 bot_id
+							"avatar":    GetAvatarURL(bot.Platform, uID, false, common.ToString(member["avatar"])),
+							"is_cached": true,
+						}
+						// 同时更新返回给前端的数据
+						member["avatar"] = GetAvatarURL(bot.Platform, uID, false, common.ToString(member["avatar"]))
+						// 持久化到数据库
+						go m.SaveMemberToDB(groupID, uID, nickname, card)
+					}
+				}
+				m.CacheMutex.Unlock()
+
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": true,
+					"data":    data,
+				})
+				return
+			}
+		case <-time.After(10 * time.Second):
+			w.WriteHeader(http.StatusGatewayTimeout)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": common.T(lang, "bot_timeout"),
+			})
+			return
+		}
 	}
 }
 
@@ -1287,6 +1733,16 @@ func HandleProxyAvatar(m *common.Manager) http.HandlerFunc {
 	}
 }
 
+// HandleBatchSend 处理批量发送消息
+func HandleBatchSend(m *common.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 拦截并设置 action 为 batch_send_msg
+		// 这样可以复用 HandleSendAction 的逻辑
+		r.Header.Set("X-Internal-Action", "batch_send_msg")
+		HandleSendAction(m)(w, r)
+	}
+}
+
 // HandleSendAction 处理发送 API 动作
 func HandleSendAction(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1311,6 +1767,11 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 				"message": common.T(lang, "invalid_request_format"),
 			})
 			return
+		}
+
+		// 如果是内部路由调用，强制设置 action
+		if req.Action == "" && r.Header.Get("X-Internal-Action") != "" {
+			req.Action = r.Header.Get("X-Internal-Action")
 		}
 
 		if req.Action == "batch_send_msg" {
@@ -1480,21 +1941,50 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 		defer m.CacheMutex.RUnlock()
 
 		groupNames := make(map[string]string)
+		groupAvatars := make(map[string]string)
 		for id, g := range m.GroupCache {
 			if name, ok := g["group_name"].(string); ok {
 				groupNames[id] = name
 			}
+			platform := ""
+			if botID, ok := g["bot_id"].(string); ok {
+				if b, ok := m.Bots[botID]; ok {
+					platform = b.Platform
+				}
+			}
+			avatar, _ := g["avatar"].(string)
+			groupAvatars[id] = GetAvatarURL(platform, id, true, avatar)
 		}
 
 		userNames := make(map[string]string)
-		for id, u := range m.MemberCache {
+		userAvatars := make(map[string]string)
+		for _, u := range m.MemberCache {
+			id := common.ToString(u["user_id"])
 			if name, ok := u["nickname"].(string); ok {
 				userNames[id] = name
 			}
+			platform := ""
+			if botID, ok := u["bot_id"].(string); ok {
+				if b, ok := m.Bots[botID]; ok {
+					platform = b.Platform
+				}
+			}
+			avatar, _ := u["avatar"].(string)
+			userAvatars[id] = GetAvatarURL(platform, id, false, avatar)
 		}
 		for id, f := range m.FriendCache {
 			if name, ok := f["nickname"].(string); ok {
 				userNames[id] = name
+			}
+			platform := ""
+			if botID, ok := f["bot_id"].(string); ok {
+				if b, ok := m.Bots[botID]; ok {
+					platform = b.Platform
+				}
+			}
+			avatar, _ := f["avatar"].(string)
+			if _, exists := userAvatars[id]; !exists {
+				userAvatars[id] = GetAvatarURL(platform, id, false, avatar)
 			}
 		}
 
@@ -1509,10 +1999,16 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 		gst := make(map[string]int64)
 		for k, v := range m.GroupStatsToday {
 			gst[k] = v
+			if _, exists := groupAvatars[k]; !exists {
+				groupAvatars[k] = GetAvatarURL("", k, true, "")
+			}
 		}
 		ust := make(map[string]int64)
 		for k, v := range m.UserStatsToday {
 			ust[k] = v
+			if _, exists := userAvatars[k]; !exists {
+				userAvatars[k] = GetAvatarURL("", k, false, "")
+			}
 		}
 
 		resp := map[string]interface{}{
@@ -1522,9 +2018,14 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 			"user_stats_today":  ust,
 			"group_names":       groupNames,
 			"user_names":        userNames,
+			"group_avatars":     groupAvatars,
+			"user_avatars":      userAvatars,
 		}
 
-		json.NewEncoder(w).Encode(resp)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"data":    resp,
+		})
 	}
 }
 

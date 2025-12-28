@@ -176,7 +176,7 @@ const getLevelIcon = (level: string) => {
           <option value="all">{{ t('all_sources') }}</option>
           <option value="system">{{ t('system') }}</option>
           <option v-for="bot in botStore.bots" :key="bot.id" :value="bot.id">
-            BOT: {{ bot.nickname || bot.id }}
+            {{ t('bot_prefix') }}: {{ bot.nickname || bot.id }}
           </option>
         </select>
       </div>
@@ -189,9 +189,9 @@ const getLevelIcon = (level: string) => {
           class="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl py-3 pl-12 pr-4 text-xs font-bold tracking-wider text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 appearance-none transition-all cursor-pointer"
         >
           <option value="all">{{ t('all_levels') }}</option>
-          <option value="INFO">INFO</option>
-          <option value="WARN">WARNING</option>
-          <option value="ERROR">ERROR</option>
+          <option value="INFO">{{ t('info') }}</option>
+          <option value="WARN">{{ t('warning') }}</option>
+          <option value="ERROR">{{ t('error') }}</option>
         </select>
       </div>
 
@@ -218,7 +218,7 @@ const getLevelIcon = (level: string) => {
                 </span>
                 <span v-if="log.source" class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--matrix-color)]/5 text-[8px] font-bold text-[var(--matrix-color)] uppercase tracking-widest border border-[var(--matrix-color)]/10">
                   <Bot v-if="log.source !== 'system'" class="w-2 h-2" />
-                  {{ log.source }}
+                  {{ t(log.source) }}
                 </span>
               </div>
               <p :class="[

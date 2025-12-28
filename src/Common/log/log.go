@@ -1,6 +1,10 @@
 package log
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -61,7 +65,7 @@ func InitLogger(config Config) error {
 	}
 
 	// 构建日志实例
-	Logger, err = zapConfig.Build()
+	Logger, err = zapConfig.Build(zap.AddCallerSkip(1))
 	if err != nil {
 		return err
 	}
@@ -119,5 +123,63 @@ func Panic(msg string, fields ...zap.Field) {
 
 // Sync 同步日志缓冲区
 func Sync() error {
+	if Logger == nil {
+		return nil
+	}
 	return Logger.Sync()
+}
+
+// Printf 兼容标准库 log.Printf
+func Printf(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	if Logger != nil {
+		Logger.Info(msg)
+	} else {
+		fmt.Printf(msg + "\n")
+	}
+}
+
+// Println 兼容标准库 log.Println
+func Println(v ...interface{}) {
+	msg := fmt.Sprintln(v...)
+	if Logger != nil {
+		Logger.Info(msg)
+	} else {
+		fmt.Print(msg)
+	}
+}
+
+// Fatalf 格式化并记录致命错误
+func Fatalf(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	if Logger != nil {
+		Logger.Fatal(msg)
+	} else {
+		fmt.Fprintf(os.Stderr, "FATAL: %s\n", msg)
+		os.Exit(1)
+	}
+}
+
+// Errorf 格式化并记录错误
+func Errorf(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	if Logger != nil {
+		Logger.Error(msg)
+	} else {
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", msg)
+	}
+}
+
+// SetOutput 设置日志输出
+func SetOutput(w io.Writer) {
+	// 重新构建 Logger 以使用新的输出
+	config := zap.NewProductionEncoderConfig()
+	config.EncodeTime = zapcore.ISO8601TimeEncoder
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(config),
+		zapcore.AddSync(w),
+		zap.NewAtomicLevelAt(zapcore.InfoLevel),
+	)
+	Logger = zap.New(core, zap.AddCallerSkip(1))
+	zap.ReplaceGlobals(Logger)
 }

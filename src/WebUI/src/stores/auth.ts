@@ -49,12 +49,15 @@ export const useAuthStore = defineStore('auth', {
         if (data.success && data.token) {
           this.setToken(data.token);
           this.setRole(data.role || 'user');
+          if (data.user) {
+            this.user = data.user;
+          }
           return true;
         }
         return false;
       } catch (error: any) {
         console.error('Login failed:', error);
-        throw new Error(error.response?.data?.message || '登录失败');
+        throw new Error(error.response?.data?.message || 'login_failed');
       }
     },
     async loginWithMagicToken(token: string) {

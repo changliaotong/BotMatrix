@@ -25,8 +25,18 @@ const router = createRouter({
       component: () => import('@/views/Contacts.vue'),
     },
     {
+      path: '/messages',
+      name: 'messages',
+      component: () => import('@/views/Messages.vue'),
+    },
+    {
       path: '/nexus',
       name: 'nexus',
+      component: () => import('@/views/Nexus.vue'),
+    },
+    {
+      path: '/visualization',
+      name: 'visualization',
       component: () => import('@/views/Nexus.vue'),
     },
     {

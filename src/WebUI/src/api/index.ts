@@ -19,7 +19,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('wxbot_token');
       localStorage.removeItem('wxbot_role');
-      // 可以触发全局事件或跳转到登录页
+      // Trigger global event or redirect to login page
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     return Promise.reject(error);

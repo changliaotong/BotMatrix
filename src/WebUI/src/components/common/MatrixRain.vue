@@ -56,12 +56,9 @@ onMounted(() => {
       const headChar = chars[Math.floor(Math.random() * chars.length)];
       ctx!.font = `bold ${fontSize}px monospace`;
       ctx!.fillStyle = '#ffffff';
-      ctx!.shadowBlur = 8;
-      ctx!.shadowColor = '#00ff41';
       ctx!.fillText(headChar, this.x, this.y * fontSize);
 
       // Draw tail
-      ctx!.shadowBlur = 0;
       for (let i = 1; i < this.length; i++) {
         const charY = (this.y - i) * fontSize;
         if (charY < 0 || charY > canvas!.height) continue;

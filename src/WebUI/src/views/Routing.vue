@@ -24,6 +24,7 @@ const loading = ref(false);
 const showAddModal = ref(false);
 const searchQuery = ref('');
 const isEditing = ref(false);
+const error = ref<string | null>(null);
 
 const newRule = ref({
   key: '',
@@ -41,13 +42,14 @@ const filteredRules = computed(() => {
 
 const fetchRules = async () => {
   loading.value = true;
+  error.value = null;
   try {
     const [rulesData, workersData] = await Promise.all([
       botStore.fetchRoutingRules(),
       botStore.fetchWorkers()
     ]);
     
-    if (rulesData.success) {
+    if (rulesData && rulesData.success) {
       // Convert map to array if necessary
       if (rulesData.rules && typeof rulesData.rules === 'object' && !Array.isArray(rulesData.rules)) {
         rules.value = Object.entries(rulesData.rules).map(([key, worker_id]) => ({
@@ -57,10 +59,16 @@ const fetchRules = async () => {
       } else {
         rules.value = rulesData.rules || [];
       }
+    } else {
+      error.value = rulesData?.message || 'Failed to fetch rules';
     }
-    if (workersData.success) {
-      workers.value = workersData.workers;
+
+    if (workersData && workersData.success) {
+      workers.value = workersData.workers || [];
     }
+  } catch (err: any) {
+    console.error('Failed to fetch routing data:', err);
+    error.value = err.message || 'Network error';
   } finally {
     loading.value = false;
   }
@@ -93,7 +101,7 @@ const resetForm = () => {
 };
 
 const handleDeleteRule = async (key: string) => {
-  if (!confirm(`Are you sure you want to delete the routing rule for "${key}"?`)) return;
+  if (!confirm(t('confirm_delete_routing_rule').replace('{key}', key))) return;
   
   try {
     const data = await botStore.deleteRoutingRule(key);
@@ -107,7 +115,8 @@ const handleDeleteRule = async (key: string) => {
 
 const getWorkerName = (workerId: string) => {
   const worker = workers.value.find(w => w.id === workerId);
-  return worker ? worker.id : workerId;
+  if (worker && worker.name) return worker.name;
+  return t(workerId);
 };
 
 onMounted(fetchRules);
@@ -127,7 +136,7 @@ onMounted(fetchRules);
           <input 
             v-model="searchQuery"
             type="text" 
-            placeholder="Search rules..."
+            :placeholder="t('search_rules_placeholder')"
             class="w-full pl-10 pr-4 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-xs font-bold transition-all"
           />
         </div>
@@ -136,9 +145,23 @@ onMounted(fetchRules);
           class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity whitespace-nowrap"
         >
           <Plus class="w-4 h-4" />
-          Add Rule
+          {{ t('add_rule') }}
         </button>
       </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div v-if="error" class="p-4 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center gap-4 text-red-500">
+      <div class="p-3 rounded-2xl bg-red-500/10">
+        <AlertCircle class="w-6 h-6" />
+      </div>
+      <div class="flex-1">
+        <h4 class="font-black text-xs uppercase tracking-widest">{{ t('error') }}</h4>
+        <p class="text-sm font-medium">{{ error }}</p>
+      </div>
+      <button @click="fetchRules" class="p-3 rounded-2xl hover:bg-red-500/10 transition-colors">
+        <Plus class="w-5 h-5 rotate-45" />
+      </button>
     </div>
 
     <!-- Rules List -->
@@ -175,11 +198,11 @@ onMounted(fetchRules);
 
           <div class="space-y-4">
             <div>
-              <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Routing Key</span>
+              <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('routing_key') }}</span>
               <div class="flex items-center gap-2 mt-1">
                 <h3 class="font-black text-[var(--text-main)] break-all">{{ rule.key }}</h3>
                 <div v-if="rule.key.includes('*')" class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] border border-[var(--matrix-color)]/20">
-                  Pattern
+                  {{ t('pattern') }}
                 </div>
               </div>
             </div>
@@ -191,7 +214,7 @@ onMounted(fetchRules);
             </div>
 
             <div>
-              <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Target Worker</span>
+              <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('target_worker') }}</span>
               <div class="flex items-center gap-2 mt-1">
                 <Cpu class="w-4 h-4 text-[var(--matrix-color)]" />
                 <span class="font-bold text-[var(--text-main)] truncate">{{ getWorkerName(rule.worker_id) }}</span>
@@ -206,12 +229,12 @@ onMounted(fetchRules);
               'w-1.5 h-1.5 rounded-full',
               workers.find(w => w.id === rule.worker_id)?.status === 'online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'
             ]"></div>
-            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
-              {{ workers.find(w => w.id === rule.worker_id)?.status || 'Unknown' }}
+            <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">
+              {{ t(workers.find(w => w.id === rule.worker_id)?.status || 'unknown') }}
             </span>
           </div>
-          <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
-            Type: {{ workers.find(w => w.id === rule.worker_id)?.type || 'N/A' }}
+          <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">
+            {{ t('type') }}: {{ t(workers.find(w => w.id === rule.worker_id)?.type || 'unknown') }}
           </span>
         </div>
       </div>
@@ -220,81 +243,82 @@ onMounted(fetchRules);
       <div v-if="filteredRules.length === 0" class="col-span-full flex flex-col items-center justify-center py-20 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl">
         <Route class="w-16 h-16 text-[var(--text-muted)] mb-4 opacity-20" />
         <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">
-          {{ searchQuery ? 'No Matching Rules' : 'No Routing Rules' }}
+          {{ searchQuery ? t('no_matching_rules') : t('no_routing_rules') }}
         </h2>
         <p class="text-[var(--text-muted)] text-sm font-bold uppercase tracking-widest mt-2 text-center max-w-xs">
-          {{ searchQuery ? `No rules match your search for "${searchQuery}"` : 'Create a rule to route requests to specific workers' }}
+          {{ searchQuery ? t('no_matching_rules_desc') : t('no_routing_rules_desc') }}
         </p>
         <button 
           v-if="searchQuery"
           @click="searchQuery = ''"
           class="mt-6 text-xs font-black text-[var(--matrix-color)] uppercase tracking-widest hover:underline"
         >
-          Clear Search
+          {{ t('clear_search') }}
         </button>
       </div>
     </div>
 
     <!-- Add/Edit Rule Modal -->
-    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showAddModal = false"></div>
-      <div class="relative w-full max-w-md bg-[var(--bg-main)] border border-[var(--border-color)] rounded-3xl p-8 shadow-2xl">
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">
-              {{ isEditing ? 'Edit Routing Rule' : 'Add Routing Rule' }}
-            </h2>
-            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Configure request routing</p>
-          </div>
-          <button @click="showAddModal = false" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <X class="w-6 h-6 text-[var(--text-muted)]" />
-          </button>
-        </div>
-
-        <form @submit.prevent="handleAddRule" class="space-y-6">
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Routing Key</label>
-            <input 
-              v-model="newRule.key"
-              type="text"
-              placeholder="e.g. user_123 or * (for default)"
-              class="w-full px-4 py-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold"
-              required
-              :disabled="isEditing"
-            />
-            <p v-if="!isEditing" class="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-tighter ml-1">
-              Supports exact IDs or * wildcards (e.g. group_*, user_123)
-            </p>
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="p-6 sm:p-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">
+                {{ isEditing ? t('edit_routing_rule') : t('add_routing_rule') }}
+              </h2>
+              <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{{ t('configure_request_routing') }}</p>
+            </div>
+            <button @click="showAddModal = false" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <X class="w-6 h-6 text-[var(--text-muted)]" />
+            </button>
           </div>
 
-          <div class="space-y-2">
-            <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">Select Worker</label>
-            <div class="relative">
-              <select 
-                v-model="newRule.worker_id"
-                class="w-full px-4 py-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none"
+          <form @submit.prevent="handleAddRule" class="space-y-6">
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('routing_key') }}</label>
+              <input 
+                v-model="newRule.key"
+                type="text"
+                :placeholder="t('routing_key_placeholder')"
+                class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
                 required
-              >
-                <option value="" disabled>Select a worker</option>
-                <option v-for="worker in workers" :key="worker.id" :value="worker.id">
-                  {{ worker.id }} ({{ worker.status }}) - {{ worker.type }}
-                </option>
-              </select>
-              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                <ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
+                :disabled="isEditing"
+              />
+              <p v-if="!isEditing" class="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-tighter ml-1">
+                {{ t('routing_key_desc') }}
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('select_worker') }}</label>
+              <div class="relative">
+                <select 
+                  v-model="newRule.worker_id"
+                  class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold appearance-none text-sm"
+                  required
+                >
+                  <option value="" disabled>{{ t('select_worker_placeholder') }}</option>
+                  <option v-for="worker in workers" :key="worker.id" :value="worker.id">
+                    {{ getWorkerName(worker.id) }} ({{ t(worker.status || 'unknown') }}) - {{ t(worker.type || 'unknown') }}
+                  </option>
+                </select>
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <button 
-            type="submit"
-            class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4 flex items-center justify-center gap-2"
-          >
-            <CheckCircle2 v-if="isEditing" class="w-4 h-4" />
-            <Plus v-else class="w-4 h-4" />
-            {{ isEditing ? 'Update Rule' : 'Create Rule' }}
-          </button>
-        </form>
+            <button 
+              type="submit"
+              class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black font-black uppercase tracking-widest hover:opacity-90 transition-opacity mt-4 flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 v-if="isEditing" class="w-4 h-4" />
+              <Plus v-else class="w-4 h-4" />
+              {{ isEditing ? t('update_rule') : t('create_rule') }}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   </div>

@@ -1,6 +1,7 @@
 package core
 
 import (
+	log "BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,7 +33,7 @@ func NewPluginManager() *PluginManager {
 	}
 }
 
-func (pm *PluginManager) ScanPlugins(dir string) error {
+func (pm *PluginManager) LoadPlugins(dir string) error {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
@@ -44,12 +45,12 @@ func (pm *PluginManager) ScanPlugins(dir string) error {
 	for _, file := range files {
 		config, err := LoadPluginConfig(file)
 		if err != nil {
-			fmt.Printf("Invalid plugin config %s: %v\n", file, err)
+			log.Printf("Invalid plugin config %s: %v", file, err)
 			continue
 		}
 
 		if err := ValidatePluginConfig(config); err != nil {
-			fmt.Printf("Plugin config validation failed %s: %v\n", file, err)
+			log.Printf("Plugin config validation failed %s: %v", file, err)
 			continue
 		}
 

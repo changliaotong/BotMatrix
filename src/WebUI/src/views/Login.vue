@@ -2,10 +2,14 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useSystemStore } from '@/stores/system';
 import { Bot, Lock, User, ArrowRight, Loader2 } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const systemStore = useSystemStore();
+
+const t = (key: string) => systemStore.t(key);
 
 const username = ref('');
 const password = ref('');
@@ -23,10 +27,10 @@ const handleLogin = async () => {
     if (success) {
       router.push('/');
     } else {
-      error.value = '用户名或密码错误';
+      error.value = t('login_error_auth');
     }
   } catch (err: any) {
-    error.value = err.message || '登录失败，请稍后再试';
+    error.value = err.message || t('login_error_generic');
   } finally {
     loading.value = false;
   }
@@ -48,8 +52,8 @@ const handleLogin = async () => {
             <Bot class="w-10 h-10" />
           </div>
           <div class="space-y-1">
-            <h1 class="text-3xl font-black dark:text-white tracking-tighter uppercase italic">Bot<span class="text-matrix">Matrix</span></h1>
-            <p class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">智能机器人管理系统</p>
+            <h1 class="text-3xl font-black dark:text-white tracking-tighter uppercase italic">{{ t('botmatrix').substring(0, 3) }}<span class="text-matrix">{{ t('botmatrix').substring(3) }}</span></h1>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">{{ t('system_desc') }}</p>
           </div>
         </div>
 
@@ -63,7 +67,7 @@ const handleLogin = async () => {
               <input 
                 v-model="username"
                 type="text" 
-                placeholder="用户名" 
+                :placeholder="t('username')" 
                 class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all dark:text-white font-bold placeholder:text-gray-400"
               />
             </div>
@@ -74,7 +78,7 @@ const handleLogin = async () => {
               <input 
                 v-model="password"
                 type="password" 
-                placeholder="密码" 
+                :placeholder="t('password')" 
                 class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all dark:text-white font-bold placeholder:text-gray-400"
               />
             </div>
@@ -90,17 +94,17 @@ const handleLogin = async () => {
             class="w-full bg-matrix hover:bg-matrix/90 disabled:opacity-50 text-black font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all group active:scale-95 shadow-lg shadow-matrix/20 uppercase tracking-widest"
           >
             <template v-if="loading">
-              <Loader2 class="w-5 h-5 animate-spin" /> 验证中...
+              <Loader2 class="w-5 h-5 animate-spin" /> {{ t('verifying') }}
             </template>
             <template v-else>
-              进入矩阵 <ArrowRight class="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              {{ t('enter_matrix') }} <ArrowRight class="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </template>
           </button>
         </form>
 
         <div class="text-center">
           <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-            &copy; 2025 BotMatrix. Industry Best Practice.
+            {{ t('copyright') }}
           </p>
         </div>
       </div>

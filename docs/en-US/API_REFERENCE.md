@@ -80,7 +80,7 @@ RESTful API used by the Web Management Interface.
 - **Returns**: Array of strings.
 
 ### 2. Bot List (GET /api/bots)
-- **Description**: Fetch information about all currently online bots.
+- **Description**: Retrieves information for all currently online bots.
 - **Returns**:
 ```json
 [
@@ -88,12 +88,17 @@ RESTful API used by the Web Management Interface.
         "self_id": "12345678",
         "platform": "qq",
         "connected_at": "2023-10-01T12:00:00Z",
-        "status": "online"
+        "status": "online",
+        "avatar": "https://q.qlogo.cn/headimg_dl?dst_uin=12345678&spec=640"
     }
 ]
 ```
 
-### 3. Update Routing Rules (POST /api/routing/update)
+### 3. Avatar Proxy (GET /api/proxy/avatar?url=...)
+- **Description**: Proxies external avatar images to resolve CORS and Referer restriction issues.
+- **Parameters**: `url` - The encoded URL of the original avatar image.
+
+### 4. Update Routing Rules (POST /api/routing/update)
 - **Description**: Dynamically modify message routing rules.
 
 ---

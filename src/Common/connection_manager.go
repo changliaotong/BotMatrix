@@ -84,13 +84,13 @@ func (m *ConnectionManager) GetConnections() []ConnectionConfig {
 }
 
 // StartConnection 启动连接
-func (m *ConnectionManager) StartConnection(index int, handler ConnectionHandler) error {
+func (m *ConnectionManager) StartConnection(name string, handler ConnectionHandler) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if index < 0 || index >= len(m.connections) {
-		return fmt.Errorf("invalid connection index: %d", index)
+	config, exists := m.connections[name]
+	if !exists {
+		return fmt.Errorf("connection not found: %s", name)
 	}
-	config := m.connections[index]
 	if !config.Enabled {
 		return fmt.Errorf("connection is not enabled")
 	}

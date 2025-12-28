@@ -38,4 +38,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace BotMatrix/common => ../../common
+replace BotMatrix/common => ../Common

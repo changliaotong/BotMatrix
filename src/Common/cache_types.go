@@ -22,6 +22,7 @@ type GroupCache struct {
 type FriendCache struct {
 	UserID   string    `json:"user_id"`
 	Nickname string    `json:"nickname"`
+	BotID    string    `json:"bot_id"`
 	LastSeen time.Time `json:"last_seen"`
 }
 

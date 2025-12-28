@@ -5,6 +5,7 @@ export const useBotStore = defineStore('bot', {
   state: () => ({
     currentBotId: localStorage.getItem('wxbot_current_bot_id') || null,
     bots: [] as any[],
+    messages: [] as any[],
     stats: {} as any,
     pendingRequests: new Map<string, { resolve: Function; reject: Function; timeout: number }>(),
   }),
@@ -173,9 +174,25 @@ export const useBotStore = defineStore('bot', {
     async fetchStats() {
       try {
         const { data } = await api.get('/api/admin/stats');
-        this.stats = data;
+        if (data.success) {
+          this.stats = data.stats;
+        }
       } catch (err) {
         console.error('Failed to fetch stats:', err);
+      }
+    },
+
+    async fetchMessages(limit = 50) {
+      try {
+        const { data } = await api.get(`/api/admin/messages?limit=${limit}`);
+        if (data.success) {
+          this.messages = data.messages;
+          return data.messages;
+        }
+        return [];
+      } catch (err) {
+        console.error('Failed to fetch messages:', err);
+        return [];
       }
     },
     async fetchWorkers() {
@@ -235,13 +252,23 @@ export const useBotStore = defineStore('bot', {
         throw err;
       }
     },
-    async fetchContacts() {
+    async fetchContacts(botId?: string) {
       try {
-        const { data } = await api.get('/api/admin/contacts');
+        const url = botId ? `/api/admin/contacts?bot_id=${botId}` : '/api/admin/contacts';
+        const { data } = await api.get(url);
         return data;
       } catch (err) {
         console.error('Failed to fetch contacts:', err);
         return { success: false, contacts: [] };
+      }
+    },
+    async fetchGroupMembers(botId: string, groupId: string, refresh = false) {
+      try {
+        const { data } = await api.get(`/api/admin/group/members?bot_id=${botId}&group_id=${groupId}&refresh=${refresh}`);
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch group members:', err);
+        return { success: false, data: [] };
       }
     },
     async syncContacts(botId: string) {
@@ -351,6 +378,9 @@ export const useBotStore = defineStore('bot', {
     async fetchDetailedSystemStats() {
       try {
         const { data } = await api.get('/api/system/stats');
+        if (data.success) {
+          return data.stats;
+        }
         return data;
       } catch (err) {
         console.error('Failed to fetch detailed system stats:', err);
@@ -360,6 +390,9 @@ export const useBotStore = defineStore('bot', {
     async fetchChatStats() {
       try {
         const { data } = await api.get('/api/stats/chat');
+        if (data.success) {
+          return data.data;
+        }
         return data;
       } catch (err) {
         console.error('Failed to fetch chat stats:', err);

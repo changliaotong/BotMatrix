@@ -119,6 +119,7 @@ func (g *GroupCacheGORM) FromGroupCache(cache *GroupCache) {
 type FriendCacheGORM struct {
 	UserID   string    `gorm:"primaryKey;size:255"`
 	Nickname string    `gorm:"size:255"`
+	BotID    string    `gorm:"size:255"`
 	LastSeen time.Time
 }
 
@@ -132,6 +133,7 @@ func (f *FriendCacheGORM) ToFriendCache() *FriendCache {
 	return &FriendCache{
 		UserID:   f.UserID,
 		Nickname: f.Nickname,
+		BotID:    f.BotID,
 		LastSeen: f.LastSeen,
 	}
 }
@@ -140,6 +142,7 @@ func (f *FriendCacheGORM) ToFriendCache() *FriendCache {
 func (f *FriendCacheGORM) FromFriendCache(cache *FriendCache) {
 	f.UserID = cache.UserID
 	f.Nickname = cache.Nickname
+	f.BotID = cache.BotID
 	f.LastSeen = cache.LastSeen
 }
 
