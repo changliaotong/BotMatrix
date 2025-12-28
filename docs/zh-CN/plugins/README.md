@@ -10,6 +10,7 @@
 
 ### 核心插件
 - **admin.md** - 管理员命令文档
+- **super_group_manager.md** - 超级群管系统 (C# SDK v3.0)
 - **moderation.md** - 群管系统文档
 - **points.md** - 积分系统文档
 - **sign_in.md** - 签到系统文档

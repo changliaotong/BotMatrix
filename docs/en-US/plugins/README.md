@@ -10,6 +10,7 @@ This directory contains detailed documentation for all BotWorker plugins.
 
 ### Core Plugins
 - **admin.md** - Administrator commands
+- **super_group_manager.md** - Super Group Manager (C# SDK v3.0)
 - **moderation.md** - Group moderation system
 - **points.md** - Points system
 - **sign_in.md** - Sign-in system
