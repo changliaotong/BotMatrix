@@ -32,7 +32,16 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 		zap.String("self_id", r.Header.Get("X-Self-ID")),
 		zap.String("platform", r.Header.Get("X-Platform")))
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	// Determine Protocol Version
+	protocol := "v11" // Default
+	wsProtocol := r.Header.Get("Sec-WebSocket-Protocol")
+	responseHeader := http.Header{}
+	if strings.Contains(wsProtocol, "12.onebot.v12") || strings.Contains(wsProtocol, "onebot.v12") {
+		protocol = "v12"
+		responseHeader.Set("Sec-WebSocket-Protocol", "12.onebot.v12")
+	}
+
+	conn, err := upgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		log.Error("Bot WebSocket upgrade failed", zap.Error(err))
 		return
@@ -57,6 +66,7 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 		LastHeartbeat: time.Now(),
 		Platform:      platform,
 		SelfID:        selfID,
+		Protocol:      protocol,
 	}
 
 	// Register Bot
@@ -92,13 +102,12 @@ func (m *Manager) fetchBotInfo(bot *common.BotClient) {
 	// 1. Get login info (nickname, etc.)
 	echoInfo := "fetch_info_" + bot.SelfID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 	m.PendingMutex.Lock()
-	m.PendingRequests[echoInfo] = make(chan map[string]interface{}, 1)
+	m.PendingRequests[echoInfo] = make(chan common.InternalMessage, 1)
 	m.PendingMutex.Unlock()
 
-	reqInfo := map[string]interface{}{
-		"action": "get_login_info",
-		"params": map[string]interface{}{},
-		"echo":   echoInfo,
+	reqInfo := common.InternalAction{
+		Action: "get_login_info",
+		Echo:   echoInfo,
 	}
 
 	bot.Mutex.Lock()
@@ -108,13 +117,12 @@ func (m *Manager) fetchBotInfo(bot *common.BotClient) {
 	// 2. Get group list (get group count)
 	echoGroups := "fetch_groups_" + bot.SelfID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 	m.PendingMutex.Lock()
-	m.PendingRequests[echoGroups] = make(chan map[string]interface{}, 1)
+	m.PendingRequests[echoGroups] = make(chan common.InternalMessage, 1)
 	m.PendingMutex.Unlock()
 
-	reqGroups := map[string]interface{}{
-		"action": "get_group_list",
-		"params": map[string]interface{}{},
-		"echo":   echoGroups,
+	reqGroups := common.InternalAction{
+		Action: "get_group_list",
+		Echo:   echoGroups,
 	}
 
 	bot.Mutex.Lock()
@@ -129,17 +137,11 @@ func (m *Manager) fetchBotInfo(bot *common.BotClient) {
 	for !infoDone || !groupsDone {
 		select {
 		case resp := <-m.PendingRequests[echoInfo]:
-			if data, ok := resp["data"].(map[string]interface{}); ok {
+			var info common.LoginInfo
+			if err := common.DecodeMapToStruct(resp.Extras["data"], &info); err == nil {
 				bot.Mutex.Lock()
-				var newNickname string
-				var newSelfID string
-
-				if nickname, ok := data["nickname"].(string); ok {
-					newNickname = nickname
-				}
-				if userID, ok := data["user_id"]; ok {
-					newSelfID = common.ToString(userID)
-				}
+				newNickname := info.Nickname
+				newSelfID := info.UserID
 
 				if newSelfID != "" && newSelfID != bot.SelfID {
 					oldID := bot.SelfID
@@ -166,36 +168,32 @@ func (m *Manager) fetchBotInfo(bot *common.BotClient) {
 			infoDone = true
 
 		case resp := <-m.PendingRequests[echoGroups]:
-			if data, ok := resp["data"].([]interface{}); ok {
+			var groups []common.GroupListItem
+			if err := common.DecodeMapToStruct(resp.Extras["data"], &groups); err == nil {
 				bot.Mutex.Lock()
-				bot.GroupCount = len(data)
+				bot.GroupCount = len(groups)
 				bot.Mutex.Unlock()
 				log.Printf("[Bot] Updated group count for %s: %d", bot.SelfID, bot.GroupCount)
 
 				// Update group cache for subsequent routing API requests
 				m.CacheMutex.Lock()
-				for _, item := range data {
-					if group, ok := item.(map[string]interface{}); ok {
-						var gID string
-						if idVal, ok := group["group_id"]; ok {
-							gID = common.ToString(idVal)
-						}
+				for _, group := range groups {
+					gID := group.GroupID
 
-						if gID != "" {
-							name, _ := group["group_name"].(string)
-							if name == "" {
-								name = fmt.Sprintf("Group %s (Auto)", gID)
+					if gID != "" {
+						name := group.GroupName
+						if name == "" {
+							name = fmt.Sprintf("Group %s (Auto)", gID)
+						}
+							// Create GroupInfo struct
+							cachedGroup := common.GroupInfo{
+								GroupID:   gID,
+								GroupName: name,
+								BotID:     bot.SelfID,
+								IsCached:  true,
+								Source:    "get_group_list",
+								LastSeen:  time.Now(),
 							}
-							// Deep copy all fields
-							cachedGroup := make(map[string]interface{})
-							for k, v := range group {
-								cachedGroup[k] = v
-							}
-							cachedGroup["group_id"] = gID
-							cachedGroup["group_name"] = name
-							cachedGroup["bot_id"] = bot.SelfID
-							cachedGroup["is_cached"] = true
-							cachedGroup["source"] = "get_group_list"
 							m.GroupCache[gID] = cachedGroup
 							// Persist to database
 							go m.SaveGroupToDB(gID, name, bot.SelfID)
@@ -203,7 +201,7 @@ func (m *Manager) fetchBotInfo(bot *common.BotClient) {
 					}
 				}
 				m.CacheMutex.Unlock()
-				log.Printf("[Bot] Cached %d groups for Bot %s", len(data), bot.SelfID)
+				log.Printf("[Bot] Cached %d groups for Bot %s", len(groups), bot.SelfID)
 			}
 			m.PendingMutex.Lock()
 			delete(m.PendingRequests, echoGroups)
@@ -253,8 +251,7 @@ func (m *Manager) handleBotConnection(bot *common.BotClient) {
 	})
 
 	for {
-		var msg map[string]interface{}
-		err := common.ReadJSONWithNumber(bot.Conn, &msg)
+		_, rawMsg, err := bot.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Bot %s read error: %v", bot.SelfID, err)
@@ -263,7 +260,29 @@ func (m *Manager) handleBotConnection(bot *common.BotClient) {
 		}
 
 		// Handle message
-		m.handleBotMessage(bot, msg)
+		// 0. Convert to InternalMessage for Neural Nexus
+		var internalMsg common.InternalMessage
+		if bot.Protocol == "v12" {
+			var v12Msg common.V12RawMessage
+			if err := json.Unmarshal(rawMsg, &v12Msg); err != nil {
+				log.Printf("Bot %s v12 unmarshal error: %v", bot.SelfID, err)
+				continue
+			}
+			internalMsg = m.v12ToInternal(v12Msg)
+		} else {
+			var v11Msg common.V11RawMessage
+			if err := json.Unmarshal(rawMsg, &v11Msg); err != nil {
+				log.Printf("Bot %s v11 unmarshal error: %v", bot.SelfID, err)
+				continue
+			}
+			// Ensure self_id is set for v11
+			if v11Msg.SelfID == nil || v11Msg.SelfID == "" {
+				v11Msg.SelfID = bot.SelfID
+			}
+			internalMsg = m.v11ToInternal(v11Msg)
+		}
+
+		m.handleBotMessage(bot, internalMsg)
 
 		// Update activity time
 		bot.LastHeartbeat = time.Now()
@@ -324,7 +343,7 @@ func (m *Manager) sendWorkerHeartbeat(worker *common.WorkerClient, stop chan str
 }
 
 // handleBotMessage handles Bot messages
-func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interface{}) {
+func (m *Manager) handleBotMessage(bot *common.BotClient, msg common.InternalMessage) {
 	// 1. Core plugin intercept
 	if allowed, reason, err := m.Core.ProcessMessage(msg); !allowed {
 		log.Printf("[Core] Message blocked: %s (reason: %s)", bot.SelfID, reason)
@@ -351,7 +370,7 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	}
 
 	// 2. Check if self_id is included and update (if current is temporary ID)
-	msgSelfID := common.ToString(msg["self_id"])
+	msgSelfID := msg.SelfID
 	if msgSelfID != "" {
 		if bot.SelfID != msgSelfID && strings.Contains(bot.SelfID, ":") {
 			// Current is temporary IP ID, received formal ID, updating
@@ -366,7 +385,7 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	}
 
 	// Check if it's an API response (has echo field)
-	echo := common.ToString(msg["echo"])
+	echo := msg.Echo
 	if echo != "" {
 		// Broadcast routing event: Bot -> Nexus (Response)
 		m.BroadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "response", nil)
@@ -427,8 +446,8 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 
 	// Original message processing logic
 	// Get message type
-	msgType := common.ToString(msg["post_type"])
-	if msgType == "" {
+	postType := msg.PostType
+	if postType == "" {
 		log.Printf("[Bot] Warning: Received message from Bot %s without echo or post_type: %v", bot.SelfID, msg)
 		return
 	}
@@ -439,53 +458,45 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	m.Mutex.Unlock()
 
 	// Only log non-spammy message types to console
-	msgTypeLower := strings.ToLower(msgType)
+	postTypeLower := strings.ToLower(postType)
 	// Filter out common high-frequency events and anything containing "log"
-	isLogType := strings.Contains(msgTypeLower, "log")
-	if !isLogType && msgTypeLower != "meta_event" && msgTypeLower != "message" && msgTypeLower != "heartbeat" && !strings.Contains(msgTypeLower, "terminal") {
-		log.Printf("Received %s event from Bot %s", msgType, bot.SelfID)
+	isLogType := strings.Contains(postTypeLower, "log")
+	if !isLogType && postTypeLower != "meta_event" && postTypeLower != "message" && postTypeLower != "heartbeat" && !strings.Contains(postTypeLower, "terminal") {
+		log.Printf("Received %s event from Bot %s", postType, bot.SelfID)
 	}
 
 	// Handle according to message type
-	userID := common.ToString(msg["user_id"])
-	groupID := common.ToString(msg["group_id"])
+	userID := msg.UserID
+	groupID := msg.GroupID
 
-	switch msgType {
+	switch postType {
 	case "log":
 		// 机器人上报的运行日志，直接丢弃，不进行转发
 		return
 	case "meta_event":
 		// Meta event (heartbeat etc.)
-		if heartbeat, ok := msg["meta_event_type"].(string); ok && heartbeat == "heartbeat" {
+		if msg.MetaType == "heartbeat" {
 			// Heartbeat event, update status
-			if status, ok := msg["status"].(map[string]interface{}); ok {
-				if online, ok := status["online"].(bool); ok {
-					_ = online
-					// Only log heartbeat if debug is enabled or status changed
-					if common.GlobalConfig.LogLevel == "DEBUG" {
-						// log.Printf("Bot %s heartbeat: online=%v", bot.SelfID, online)
-					}
-				}
-			}
+			// For now we don't need detailed status check from Original
 			return // 心跳消息处理完内部状态后直接返回，不转发给 Worker 和 Web UI
 		}
 	case "message", "message_sent", "notice", "request":
 		// Debug log for self-messages
-		if userID == bot.SelfID || msgType == "message_sent" {
+		if userID == bot.SelfID || postType == "message_sent" {
 			log.Printf("[Bot] Received self-message from Bot %s: %v", bot.SelfID, msg)
 		}
 
 		// 3. Check idempotency (prevent duplicate replies)
-		msgID := common.ToString(msg["message_id"])
+		msgID := msg.ID
 		if msgID == "" {
 			// notice/request may not have message_id, try using post_type + time + user_id as unique identifier
-			msgID = fmt.Sprintf("%s:%v:%v", msgType, msg["time"], msg["user_id"])
+			msgID = fmt.Sprintf("%s:%v:%v", postType, msg.Time, msg.UserID)
 		}
 
 		// Self-messages skip idempotency and rate limit checks to ensure they are tracked
-		if userID != bot.SelfID && msgType != "message_sent" {
+		if userID != bot.SelfID && postType != "message_sent" {
 			if msgID != "" && !m.CheckIdempotency(msgID) {
-				log.Printf("[REDIS] Duplicate %s detected: %s, skipping", msgType, msgID)
+				log.Printf("[REDIS] Duplicate %s detected: %s, skipping", postType, msgID)
 				return
 			}
 
@@ -512,7 +523,7 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 				SelfID:   bot.SelfID,
 				UserID:   userID,
 				GroupID:  groupID,
-				Event:    msg,
+				Message:  &internalMsg, // Pass the whole InternalMessage instead of map
 			}
 			if !m.TaskManager.Interceptors.ProcessBeforeDispatch(interceptorCtx) {
 				// 如果被拦截器拦截，则不继续分发
@@ -522,62 +533,31 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	}
 
 	// Cache group/member/friend info (based on message)
-	m.cacheBotDataFromMessage(bot, msg)
+	m.cacheBotDataFromMessage(bot, internalMsg)
 
 	// Enrich message with cached data (names, cards) before forwarding to workers
-	m.enrichMessageWithCache(msg)
+	m.enrichMessageWithCache(&internalMsg)
 
-	if msgType == "message" || msgType == "message_sent" {
-		m.handleBotMessageEvent(bot, msg)
+	if postType == "message" || postType == "message_sent" {
+		m.handleBotMessageEvent(bot, internalMsg)
 	}
 
 	// Forward to Worker for processing
-	// Ensure message format conforms to OneBot 11 standard (especially ID type)
-	if userID, ok := msg["user_id"]; ok {
-		msg["user_id"] = common.ToString(userID)
-	}
-	if groupID, ok := msg["group_id"]; ok {
-		msg["group_id"] = common.ToString(groupID)
-	}
-
-	// Complete and standardize self_id (OneBot 11 standard should be int64, but we are compatible with string)
-	if selfID, ok := msg["self_id"]; ok {
-		msg["self_id"] = common.ToString(selfID)
-	} else {
-		// Complete self_id
-		msg["self_id"] = bot.SelfID
-	}
-
-	// Complete time (int64 unix timestamp)
-	if _, ok := msg["time"]; !ok {
-		msg["time"] = time.Now().Unix()
-	}
-
-	// Complete post_type if missing
-	if _, ok := msg["post_type"]; !ok {
-		msg["post_type"] = "message"
-	}
-
-	// Complete platform
-	if _, ok := msg["platform"]; !ok {
-		msg["platform"] = bot.Platform
-	}
-
 	// 5.5 Broadcast to subscribers (Web UI Monitor)
-	m.BroadcastEvent(msg)
+	m.BroadcastEvent(internalMsg.ToV11Map())
 
 	// 打印转发详情，方便排查频繁转发的消息
-	log.Printf("[Forwarding] Bot: %s, PostType: %v, EventType: %v/%v, Msg: %+v",
-		bot.SelfID, msg["post_type"], msg["message_type"], msg["notice_type"], msg)
+	log.Printf("[Forwarding] Bot: %s, PostType: %v, MessageType: %v, GroupID: %v, UserID: %v",
+		bot.SelfID, internalMsg.PostType, internalMsg.MessageType, internalMsg.GroupID, internalMsg.UserID)
 
 	// 6. Use Redis queue for asynchronous decoupling
 	// 如果启用了技能系统，则优先进入 Redis 队列进行异步分发
 	if common.ENABLE_SKILL && m.Rdb != nil {
-		targetWorkerID := m.getTargetWorkerID(msg)
+		targetWorkerID := m.getTargetWorkerID(internalMsg)
 		if userID == bot.SelfID {
 			log.Printf("[Routing] Self-message from Bot %s, TargetWorkerID: %s", bot.SelfID, targetWorkerID)
 		}
-		err := m.PushToRedisQueue(targetWorkerID, msg)
+		err := m.PushToRedisQueue(targetWorkerID, internalMsg)
 		if err == nil {
 			m.BroadcastRoutingEvent("Nexus", "RedisQueue", "nexus_to_redis", "push", nil)
 			if userID == bot.SelfID {
@@ -585,15 +565,18 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 			}
 
 			// 影子执行 (Shadow Mode): 如果有影子 Worker，额外推送一份
-			if shadowID, ok := msg["shadow_worker_id"].(string); ok && shadowID != "" {
-				log.Printf("[Shadow] Pushing shadow copy to worker: %s", shadowID)
+			var shadowWorkerID string
+			if sID, ok := internalMsg.Extras["shadow_worker_id"].(string); ok {
+				shadowWorkerID = sID
+			}
+
+			if shadowWorkerID != "" {
+				log.Printf("[Shadow] Pushing shadow copy to worker: %s", shadowWorkerID)
 				// 克隆消息并打上影子标记
-				shadowMsg := make(map[string]interface{})
-				for k, v := range msg {
-					shadowMsg[k] = v
-				}
-				shadowMsg["is_shadow"] = true
-				m.PushToRedisQueue(shadowID, shadowMsg)
+				shadowMsg := internalMsg // Struct copy
+				// How to mark shadow? InternalMessage doesn't have IsShadow field.
+				// We can add it to Original if it's a map, but we'll use ToV11Map later anyway.
+				m.PushToRedisQueue(shadowWorkerID, shadowMsg)
 			}
 			return
 		}
@@ -601,51 +584,36 @@ func (m *Manager) handleBotMessage(bot *common.BotClient, msg map[string]interfa
 	}
 
 	// Fallback: If Redis is unavailable or push fails, use original WebSocket direct forwarding
-	m.forwardMessageToWorker(msg)
+	m.forwardMessageToWorker(internalMsg)
 
 	// 影子执行 (Shadow Mode) - Fallback 路径
-	if shadowID, ok := msg["shadow_worker_id"].(string); ok && shadowID != "" {
-		shadowMsg := make(map[string]interface{})
-		for k, v := range msg {
-			shadowMsg[k] = v
-		}
-		shadowMsg["is_shadow"] = true
-		m.forwardMessageToWorkerWithTarget(shadowMsg, shadowID)
+	var shadowWorkerID string
+	if sID, ok := internalMsg.Extras["shadow_worker_id"].(string); ok {
+		shadowWorkerID = sID
+	}
+	if shadowWorkerID != "" {
+		m.forwardMessageToWorkerWithTarget(internalMsg, shadowWorkerID)
 	}
 }
 
 // enrichMessageWithCache supplements the message with cached group and user information
-func (m *Manager) enrichMessageWithCache(msg map[string]interface{}) {
-	postType := common.ToString(msg["post_type"])
-	if postType != "message" && postType != "notice" && postType != "request" && postType != "message_sent" {
+func (m *Manager) enrichMessageWithCache(msg *common.InternalMessage) {
+	if msg.MessageType != "private" && msg.MessageType != "group" {
 		return
 	}
 
 	m.CacheMutex.RLock()
 	defer m.CacheMutex.RUnlock()
 
-	groupID := common.ToString(msg["group_id"])
-	userID := common.ToString(msg["user_id"])
-
-	// Ensure sender object exists for message type
-	var sender map[string]interface{}
-	if postType == "message" || postType == "message_sent" {
-		if s, ok := msg["sender"].(map[string]interface{}); ok {
-			sender = s
-		} else {
-			sender = make(map[string]interface{})
-			msg["sender"] = sender
-		}
-	}
+	groupID := msg.GroupID
+	userID := msg.UserID
 
 	// 1. Enrich Group Name
 	if groupID != "" {
 		if group, ok := m.GroupCache[groupID]; ok {
-			if gName, ok := group["group_name"].(string); ok && gName != "" {
-				// Only set if not already present or more descriptive than "Group ID"
-				existingName := common.ToString(msg["group_name"])
-				if existingName == "" || strings.Contains(existingName, groupID) {
-					msg["group_name"] = gName
+			if group.GroupName != "" {
+				if msg.GroupName == "" || strings.Contains(msg.GroupName, groupID) {
+					msg.GroupName = group.GroupName
 				}
 			}
 		}
@@ -653,73 +621,55 @@ func (m *Manager) enrichMessageWithCache(msg map[string]interface{}) {
 
 	// 2. Enrich User Nickname and Group Card
 	if userID != "" {
+		nickname := ""
+		card := ""
+
 		// Try member cache first (for group messages)
 		if groupID != "" {
 			memberKey := fmt.Sprintf("%s:%s", groupID, userID)
 			if member, ok := m.MemberCache[memberKey]; ok {
-				nickname := common.ToString(member["nickname"])
-				card := common.ToString(member["card"])
-
-				if sender != nil {
-					if common.ToString(sender["nickname"]) == "" && nickname != "" {
-						sender["nickname"] = nickname
-					}
-					if common.ToString(sender["card"]) == "" && card != "" {
-						sender["card"] = card
-					}
-				}
-				// Also add to top level if missing
-				if common.ToString(msg["nickname"]) == "" && nickname != "" {
-					msg["nickname"] = nickname
-				}
+				nickname = member.Nickname
+				card = member.Card
 			}
 		}
 
 		// Try friend cache (or fallback for nickname)
-		if friend, ok := m.FriendCache[userID]; ok {
-			nickname := common.ToString(friend["nickname"])
-			if nickname != "" {
-				if sender != nil && common.ToString(sender["nickname"]) == "" {
-					sender["nickname"] = nickname
-				}
-				if common.ToString(msg["nickname"]) == "" {
-					msg["nickname"] = nickname
-				}
+		if nickname == "" {
+			if friend, ok := m.FriendCache[userID]; ok {
+				nickname = friend.Nickname
+			}
+		}
+
+		if nickname != "" || card != "" {
+			if msg.SenderName == "" && nickname != "" {
+				msg.SenderName = nickname
+			}
+			if msg.SenderCard == "" && card != "" {
+				msg.SenderCard = card
 			}
 		}
 	}
 }
 
 // getTargetWorkerID helper method: Get target Worker ID based on routing rules
-func (m *Manager) getTargetWorkerID(msg map[string]interface{}) string {
+func (m *Manager) getTargetWorkerID(msg common.InternalMessage) string {
 	// 0. 优先处理拦截器注入的语义路由提示 (Intelligent Semantic Routing)
-	if hint, ok := msg["intent_hint"].(string); ok && hint != "" {
+	if hint, ok := msg.Extras["intent_hint"].(string); ok && hint != "" {
 		log.Printf("[Routing] Using semantic intent hint: %s", hint)
-		// 查找对应意图的 Worker (这里假设意图直接映射到 Worker ID 或标签)
-		// 实际可建立 intent -> worker_id 的映射表
 		return hint
 	}
 
 	var matchKeys []string
 
-	// Extract match keys (logic same as forwardMessageToWorkerWithRetry)
-	if userID, ok := msg["user_id"]; ok {
-		sID := common.ToString(userID)
-		if sID != "0" && sID != "" {
-			matchKeys = append(matchKeys, fmt.Sprintf("user_%s", sID), sID)
-		}
+	// Extract match keys
+	if msg.UserID != "" && msg.UserID != "0" {
+		matchKeys = append(matchKeys, fmt.Sprintf("user_%s", msg.UserID), msg.UserID)
 	}
-	if groupID, ok := msg["group_id"]; ok {
-		sID := common.ToString(groupID)
-		if sID != "0" && sID != "" {
-			matchKeys = append(matchKeys, fmt.Sprintf("group_%s", sID), sID)
-		}
+	if msg.GroupID != "" && msg.GroupID != "0" {
+		matchKeys = append(matchKeys, fmt.Sprintf("group_%s", msg.GroupID), msg.GroupID)
 	}
-	if selfID, ok := msg["self_id"]; ok {
-		sID := common.ToString(selfID)
-		if sID != "" {
-			matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", sID), sID)
-		}
+	if msg.SelfID != "" {
+		matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", msg.SelfID), msg.SelfID)
 	}
 
 	// 1. Prioritize getting dynamic routing rules from Redis
@@ -732,8 +682,6 @@ func (m *Manager) getTargetWorkerID(msg map[string]interface{}) string {
 			}
 		}
 
-		// Check wildcard rules (Redis)
-		// Note: HGetAll has performance impact when there are many rules, but in routing scenarios the number of rules is usually limited
 		rules, err := m.Rdb.HGetAll(ctx, common.REDIS_KEY_DYNAMIC_RULES).Result()
 		if err == nil && len(rules) > 0 {
 			for p, w := range rules {
@@ -749,7 +697,7 @@ func (m *Manager) getTargetWorkerID(msg map[string]interface{}) string {
 		}
 	}
 
-	// 2. Fallback to static routing rules in memory (Fail-open/Local cache)
+	// 2. Fallback to static routing rules in memory
 	m.Mutex.RLock()
 	defer m.Mutex.RUnlock()
 
@@ -774,10 +722,11 @@ func (m *Manager) getTargetWorkerID(msg map[string]interface{}) string {
 	return ""
 }
 
-// cacheBotDataFromMessage extracts and caches data from messages (especially for Tencent channel bots)
-func (m *Manager) cacheBotDataFromMessage(bot *common.BotClient, msg map[string]interface{}) {
-	postType, _ := msg["post_type"].(string)
-	if postType != "message" {
+// cacheBotDataFromMessage extracts and caches data from messages
+func (m *Manager) cacheBotDataFromMessage(bot *common.BotClient, msg common.InternalMessage) {
+	// Only cache from messages (not notice/request/etc for now, or adapt as needed)
+	// In InternalMessage, MessageType usually indicates private/group
+	if msg.MessageType == "" {
 		return
 	}
 
@@ -785,111 +734,103 @@ func (m *Manager) cacheBotDataFromMessage(bot *common.BotClient, msg map[string]
 	defer m.CacheMutex.Unlock()
 
 	// Cache group info
-	if groupIDVal, ok := msg["group_id"]; ok && groupIDVal != nil {
-		gID := common.ToString(groupIDVal)
+	if msg.GroupID != "" {
+		gID := msg.GroupID
 
-		// If group already exists in cache, keep original name, unless original name contains "(Cached)" and current message provides more accurate info
 		existingGroup, exists := m.GroupCache[gID]
 		groupName := ""
 		if exists {
-			if name, ok := existingGroup["group_name"].(string); ok {
-				groupName = name
-			}
+			groupName = existingGroup.GroupName
 		}
 
-		// If no name or name contains "(Cached)", try setting a default value
 		if groupName == "" || strings.Contains(groupName, "(Cached)") {
-			// Only set (Cached) format when there is absolutely no name
 			if groupName == "" {
 				groupName = "Group " + gID
 			}
 		}
 
-		// Update or add group cache
-		m.GroupCache[gID] = map[string]interface{}{
-			"group_id":   gID,
-			"group_name": groupName,
-			"bot_id":     bot.SelfID,
-			"is_cached":  true,
-			"reason":     "Automatically updated from message",
-			"last_seen":  time.Now(),
+		m.GroupCache[gID] = common.GroupInfo{
+			GroupID:   gID,
+			GroupName: groupName,
+			BotID:     bot.SelfID,
+			IsCached:  true,
+			Reason:    "Automatically updated from message",
+			LastSeen:  time.Now(),
 		}
-		// Persist to database
 		go m.SaveGroupToDB(gID, groupName, bot.SelfID)
 
 		// Cache member info
-		if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
-			uID := common.ToString(userIDVal)
+		if msg.UserID != "" {
+			uID := msg.UserID
 			key := fmt.Sprintf("%s:%s", gID, uID)
-			sender, _ := msg["sender"].(map[string]interface{})
-			nickname := ""
-			card := ""
-			if sender != nil {
-				nickname, _ = sender["nickname"].(string)
-				card, _ = sender["card"].(string)
+
+			nickname := msg.SenderName
+			card := msg.SenderCard
+
+			m.MemberCache[key] = common.MemberInfo{
+				GroupID:  gID,
+				UserID:   uID,
+				Nickname: nickname,
+				Card:     card,
+				IsCached: true,
+				LastSeen: time.Now(),
 			}
-			m.MemberCache[key] = map[string]interface{}{
-				"group_id":  gID,
-				"user_id":   uID,
-				"nickname":  nickname,
-				"card":      card,
-				"is_cached": true,
-			}
-			// Persist to database
 			go m.SaveMemberToDB(gID, uID, nickname, card)
 		}
-	} else if userIDVal, ok := msg["user_id"]; ok && userIDVal != nil {
+	} else if msg.UserID != "" {
 		// Cache friend info (private chat)
-		uID := common.ToString(userIDVal)
+		uID := msg.UserID
 		if _, exists := m.FriendCache[uID]; !exists {
-			sender, _ := msg["sender"].(map[string]interface{})
-			nickname := ""
-			if sender != nil {
-				nickname, _ = sender["nickname"].(string)
+			nickname := msg.SenderName
+
+			m.FriendCache[uID] = common.FriendInfo{
+				UserID:   uID,
+				Nickname: nickname,
+				BotID:    bot.SelfID,
+				IsCached: true,
+				LastSeen: time.Now(),
 			}
-			m.FriendCache[uID] = map[string]interface{}{
-				"user_id":   uID,
-				"nickname":  nickname,
-				"bot_id":    bot.SelfID,
-				"is_cached": true,
-			}
-			// Persist to database
 			go m.SaveFriendToDB(uID, nickname, bot.SelfID)
 		}
 	}
 }
 
 // isSystemMessage checks if it's a system message or meaningless statistical data
-func isSystemMessage(msg map[string]interface{}) bool {
-	// 1. Extract basic fields, supports direct structure and params nested structure
-	userID := common.ToString(msg["user_id"])
-	msgType := common.ToString(msg["message_type"])
-	subType := common.ToString(msg["sub_type"])
-	message := ""
+func isSystemMessage(msg common.InternalMessage) bool {
+	// 1. Extract basic fields
+	userID := msg.UserID
+	msgType := msg.MessageType
+	message := msg.RawMessage
+	subType := msg.SubType
 
-	// Try to extract from params (if it's a send request)
-	if params, ok := msg["params"].(map[string]interface{}); ok {
-		if userID == "" {
-			userID = common.ToString(params["user_id"])
-		}
-		if msgType == "" {
-			msgType = common.ToString(params["message_type"])
-		}
-		if m, ok := params["message"].(string); ok {
-			message = m
-		}
+	return checkSystemMessage(userID, msgType, subType, message)
+}
+
+// isSystemAction checks if it's a system action (send message to system account)
+func isSystemAction(action common.InternalAction) bool {
+	userID := action.UserID
+	if userID == "" && action.Params != nil {
+		userID = common.ToString(action.Params["user_id"])
 	}
 
-	// Extract content
-	if message == "" {
-		if rm, ok := msg["raw_message"].(string); ok && rm != "" {
-			message = rm
-		} else if m, ok := msg["message"].(string); ok && m != "" {
-			message = m
-		}
+	msgType := action.MessageType
+	if msgType == "" && action.Params != nil {
+		msgType = common.ToString(action.Params["message_type"])
 	}
 
-	// 2. Check common system user IDs
+	message := common.ToString(action.Message)
+	if message == "" && action.Params != nil {
+		message = common.ToString(action.Params["message"])
+	}
+
+	subType := "" // Actions usually don't have sub_type at top level
+
+	return checkSystemMessage(userID, msgType, subType, message)
+}
+
+// checkSystemMessage is a helper for both isSystemMessage and isSystemAction
+func checkSystemMessage(userID, msgType, subType, message string) bool {
+	// 1. Check common system user IDs
 	systemIDs := map[string]bool{
 		"10000":      true, // System message
 		"1000000":    true, // Group system message
@@ -902,12 +843,12 @@ func isSystemMessage(msg map[string]interface{}) bool {
 		return true
 	}
 
-	// 3. Check message type and sub-type
+	// 2. Check message type and sub-type
 	if msgType == "system" || subType == "system" {
 		return true
 	}
 
-	// 4. Check if content is empty
+	// 3. Check if content is empty
 	if message == "" {
 		return true
 	}
@@ -916,23 +857,40 @@ func isSystemMessage(msg map[string]interface{}) bool {
 }
 
 // sendBotMessage sends text message back to bot (helper method)
-func (m *Manager) sendBotMessage(bot *common.BotClient, originalMsg map[string]interface{}, text string) {
-	resp := map[string]interface{}{
-		"action": "send_msg",
-		"params": map[string]interface{}{
-			"message": text,
-		},
-	}
+func (m *Manager) sendBotMessage(bot *common.BotClient, originalMsg common.InternalMessage, text string) {
+	action := common.InternalAction{}
 
-	// Copy key fields from original message to determine destination
-	if groupID, ok := originalMsg["group_id"]; ok {
-		resp["params"].(map[string]interface{})["group_id"] = groupID
-	} else if userID, ok := originalMsg["user_id"]; ok {
-		resp["params"].(map[string]interface{})["user_id"] = userID
+	if bot.Protocol == "v12" {
+		// OneBot v12 format
+		action.Action = "send_message" // v12 standard action name
+		action.Message = []common.MessageSegment{
+			{
+				Type: "text",
+				Data: common.TextSegmentData{
+					Text: text,
+				},
+			},
+		}
+		if originalMsg.GroupID != "" {
+			action.GroupID = originalMsg.GroupID
+			action.DetailType = "group"
+		} else if originalMsg.UserID != "" {
+			action.UserID = originalMsg.UserID
+			action.DetailType = "private"
+		}
+	} else {
+		// OneBot v11 format
+		action.Action = "send_msg"
+		action.Message = text
+		if originalMsg.GroupID != "" {
+			action.GroupID = originalMsg.GroupID
+		} else if originalMsg.UserID != "" {
+			action.UserID = originalMsg.UserID
+		}
 	}
 
 	bot.Mutex.Lock()
-	err := bot.Conn.WriteJSON(resp)
+	err := bot.Conn.WriteJSON(action)
 	bot.Mutex.Unlock()
 
 	if err != nil {
@@ -941,65 +899,47 @@ func (m *Manager) sendBotMessage(bot *common.BotClient, originalMsg map[string]i
 }
 
 // handleBotMessageEvent handles Bot message events
-func (m *Manager) handleBotMessageEvent(bot *common.BotClient, msg map[string]interface{}) {
+func (m *Manager) handleBotMessageEvent(bot *common.BotClient, msg common.InternalMessage) {
 	// Extract message info
-	userID := common.ToString(msg["user_id"])
-	groupID := common.ToString(msg["group_id"])
+	userID := msg.UserID
+	groupID := msg.GroupID
+	message := msg.RawMessage
 
-	// Prefer raw_message as it usually contains more complete text content
-	message := ""
-	if rm, ok := msg["raw_message"].(string); ok && rm != "" {
-		message = rm
-	} else if m, ok := msg["message"].(string); ok && m != "" {
-		message = m
+	// Prepare broadcast routing params
+	params := &common.RoutingParams{
+		UserID:   userID,
+		Content:  message,
+		Platform: bot.Platform,
 	}
 
-	// Prepare broadcast extra info
-	extras := map[string]interface{}{
-		"user_id":  userID,
-		"content":  message,
-		"platform": bot.Platform,
+	// Extract sender info (nickname and avatar) from message if available
+	if msg.SenderName != "" {
+		params.UserName = msg.SenderName
 	}
 
-	// Extract sender info (nickname and avatar)
-	if sender, ok := msg["sender"].(map[string]interface{}); ok {
-		if nickname, ok := sender["nickname"].(string); ok && nickname != "" {
-			extras["user_name"] = nickname
-		}
-
-		// Platform specific avatar logic
+	// Platform specific avatar logic
+	if msg.UserAvatar != "" {
+		params.UserAvatar = msg.UserAvatar
+	} else {
 		switch strings.ToUpper(bot.Platform) {
 		case "QQ":
 			if userID != "" {
-				extras["user_avatar"] = fmt.Sprintf("https://q1.qlogo.cn/g?b=qq&nk=%s&s=640", userID)
+				params.UserAvatar = fmt.Sprintf("https://q1.qlogo.cn/g?b=qq&nk=%s&s=640", userID)
 			}
-		case "WECHAT", "WX":
-			// WeChat avatars usually cannot be spliced directly via ID, use default or get from sender
-			if avatar, ok := sender["avatar"].(string); ok && avatar != "" {
-				extras["user_avatar"] = avatar
-			} else {
-				extras["user_avatar"] = "/static/avatars/wechat_default.png"
-			}
-		case "TENCENT":
-			// Tencent channel avatars are usually provided directly in sender
-			if avatar, ok := sender["avatar"].(string); ok && avatar != "" {
-				extras["user_avatar"] = avatar
-			}
-		default:
-			// Other platforms try to get avatar from sender
-			if avatar, ok := sender["avatar"].(string); ok && avatar != "" {
-				extras["user_avatar"] = avatar
+		case "WECHAT", "WX", "TENCENT":
+			if strings.ToUpper(bot.Platform) == "WECHAT" || strings.ToUpper(bot.Platform) == "WX" {
+				params.UserAvatar = "/static/avatars/wechat_default.png"
 			}
 		}
 	}
 
 	if groupID != "" {
-		extras["group_id"] = groupID
+		params.GroupID = groupID
 		// Try to get group name from cache
 		m.CacheMutex.RLock()
 		if group, ok := m.GroupCache[groupID]; ok {
-			if name, ok := group["group_name"].(string); ok {
-				extras["group_name"] = name
+			if group.GroupName != "" {
+				params.GroupName = group.GroupName
 			}
 		}
 		m.CacheMutex.RUnlock()
@@ -1009,33 +949,32 @@ func (m *Manager) handleBotMessageEvent(bot *common.BotClient, msg map[string]in
 	if groupID != "" {
 		// Group path: User -> Group -> Nexus
 		if userID != "" {
-			extras["source_type"] = "user"
-			extras["target_type"] = "group"
-			extras["source_label"] = extras["user_name"]
-			extras["target_label"] = extras["group_name"]
-			m.BroadcastRoutingEvent(userID, groupID, "user_to_group", "message", extras)
+			params.SourceType = "user"
+			params.TargetType = "group"
+			params.SourceLabel = params.UserName
+			params.TargetLabel = params.GroupName
+			m.BroadcastRoutingEvent(userID, groupID, "user_to_group", "message", params)
 		}
 
 		// Group -> Nexus
-		extras["source_id"] = groupID
-		extras["source_type"] = "group"
-		extras["target_type"] = "nexus"
-		extras["source_label"] = extras["group_name"]
-		m.BroadcastRoutingEvent(groupID, "Nexus", "group_to_nexus", "message", extras)
+		params.SourceType = "group"
+		params.TargetType = "nexus"
+		params.SourceLabel = params.GroupName
+		m.BroadcastRoutingEvent(groupID, "Nexus", "group_to_nexus", "message", params)
 	} else {
 		// Private path: User -> Bot -> Nexus
 		if userID != "" {
-			extras["source_type"] = "user"
-			extras["target_type"] = "bot"
-			extras["source_label"] = extras["user_name"]
-			m.BroadcastRoutingEvent(userID, bot.SelfID, "user_to_bot", "message", extras)
+			params.SourceType = "user"
+			params.TargetType = "bot"
+			params.SourceLabel = params.UserName
+			m.BroadcastRoutingEvent(userID, bot.SelfID, "user_to_bot", "message", params)
 		}
 
 		// Bot -> Nexus
-		extras["source_type"] = "bot"
-		extras["target_type"] = "nexus"
-		extras["source_label"] = bot.Nickname
-		m.BroadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "message", extras)
+		params.SourceType = "bot"
+		params.TargetType = "nexus"
+		params.SourceLabel = bot.Nickname
+		m.BroadcastRoutingEvent(bot.SelfID, "Nexus", "bot_to_nexus", "message", params)
 	}
 
 	// Update detailed stats (exclude system messages)
@@ -1043,8 +982,8 @@ func (m *Manager) handleBotMessageEvent(bot *common.BotClient, msg map[string]in
 		m.UpdateBotStats(bot.SelfID, userID, groupID)
 
 		// 保存到数据库
-		messageID := common.ToString(msg["message_id"])
-		msgType := common.ToString(msg["message_type"])
+		messageID := msg.ID
+		msgType := msg.MessageType
 		rawMsg, _ := json.Marshal(msg)
 		go m.SaveMessageToDB(messageID, bot.SelfID, userID, groupID, msgType, message, string(rawMsg))
 	}
@@ -1062,7 +1001,7 @@ func (m *Manager) removeBot(botID string) {
 }
 
 // cacheMessage caches messages that cannot be processed immediately
-func (m *Manager) cacheMessage(msg map[string]interface{}) {
+func (m *Manager) cacheMessage(msg common.InternalMessage) {
 	m.CacheMutex.Lock()
 	defer m.CacheMutex.Unlock()
 
@@ -1119,25 +1058,37 @@ func (m *Manager) findWorkerByID(workerID string) *common.WorkerClient {
 }
 
 // forwardMessageToWorker forwards the message to a Worker for processing
-func (m *Manager) forwardMessageToWorker(msg map[string]interface{}) {
+func (m *Manager) forwardMessageToWorker(msg common.InternalMessage) {
 	m.forwardMessageToWorkerWithRetry(msg, 0)
 }
 
 // forwardMessageToWorkerWithTarget 直接将消息发送给指定的 Worker
-func (m *Manager) forwardMessageToWorkerWithTarget(msg map[string]interface{}, targetWorkerID string) {
+func (m *Manager) forwardMessageToWorkerWithTarget(msg common.InternalMessage, targetWorkerID string) {
 	if targetWorkerID == "" {
 		return
 	}
 
 	// 确保消息有 echo
-	if _, ok := msg["echo"]; !ok {
-		msg["echo"] = fmt.Sprintf("shadow_%d_%d", time.Now().UnixNano(), rand.Intn(1000))
+	echo := msg.Echo
+	if echo == "" {
+		echo = fmt.Sprintf("shadow_%d_%d", time.Now().UnixNano(), rand.Intn(1000))
 	}
 
 	if w := m.findWorkerByID(targetWorkerID); w != nil {
 		log.Printf("[ROUTING] Direct forwarding to Target Worker: %s", targetWorkerID)
+
+		// 根据 Worker 协议转换消息格式
+		var finalMsg any
+		if w.Protocol == "v12" {
+			finalMsg = msg.ToV12Map()
+		} else {
+			v11Map := msg.ToV11Map()
+			v11Map["echo"] = echo
+			finalMsg = v11Map
+		}
+
 		w.Mutex.Lock()
-		err := w.Conn.WriteJSON(msg)
+		err := w.Conn.WriteJSON(finalMsg)
 		w.Mutex.Unlock()
 
 		if err == nil {
@@ -1154,7 +1105,7 @@ func (m *Manager) forwardMessageToWorkerWithTarget(msg map[string]interface{}, t
 }
 
 // forwardMessageToWorkerWithRetry message forwarding with retry limit
-func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, retryCount int) {
+func (m *Manager) forwardMessageToWorkerWithRetry(msg common.InternalMessage, retryCount int) {
 	if retryCount > 3 {
 		log.Printf("[ROUTING] [ERROR] Maximum retry count exceeded for message. Caching message.")
 		m.cacheMessage(msg)
@@ -1166,33 +1117,19 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 	var matchKeys []string
 
 	// Extract matching keys
-	// User ID match: user_123456
-	if userID, ok := msg["user_id"]; ok {
-		sID := common.ToString(userID)
-		if sID != "0" && sID != "" {
-			uID := fmt.Sprintf("user_%s", sID)
-			matchKeys = append(matchKeys, uID)
-			matchKeys = append(matchKeys, sID)
-		}
+	if msg.UserID != "" && msg.UserID != "0" {
+		matchKeys = append(matchKeys, fmt.Sprintf("user_%s", msg.UserID))
+		matchKeys = append(matchKeys, msg.UserID)
 	}
 
-	// Group ID match: group_789012
-	if groupID, ok := msg["group_id"]; ok {
-		sID := common.ToString(groupID)
-		if sID != "0" && sID != "" {
-			gID := fmt.Sprintf("group_%s", sID)
-			matchKeys = append(matchKeys, gID)
-			matchKeys = append(matchKeys, sID)
-		}
+	if msg.GroupID != "" && msg.GroupID != "0" {
+		matchKeys = append(matchKeys, fmt.Sprintf("group_%s", msg.GroupID))
+		matchKeys = append(matchKeys, msg.GroupID)
 	}
 
-	// Bot ID match: bot_123 or self_id
-	if selfID, ok := msg["self_id"]; ok {
-		sID := common.ToString(selfID)
-		if sID != "" {
-			matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", sID))
-			matchKeys = append(matchKeys, sID)
-		}
+	if msg.SelfID != "" {
+		matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", msg.SelfID))
+		matchKeys = append(matchKeys, msg.SelfID)
 	}
 
 	// Find matching rules
@@ -1210,9 +1147,6 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 
 	// B. If no exact match, try wildcard match
 	if targetWorkerID == "" {
-		// Since RoutingRules is a map, we cannot sort directly,
-		// but common.MatchRoutePattern already handles wildcard logic.
-		// For performance and simplicity, we iterate directly
 		for p, w := range m.RoutingRules {
 			if strings.Contains(p, "*") {
 				for _, key := range matchKeys {
@@ -1230,25 +1164,40 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 	}
 	m.Mutex.RUnlock()
 
-	// Ensure the message has a unique echo for tracking processing time and matching replies
-	if _, ok := msg["echo"]; !ok {
-		msg["echo"] = fmt.Sprintf("evt_%d_%d", time.Now().UnixNano(), rand.Intn(1000))
+	// Ensure the message has a unique echo
+	echo := msg.Echo
+	if echo == "" {
+		echo = fmt.Sprintf("evt_%d_%d", time.Now().UnixNano(), rand.Intn(1000))
 	}
 
 	// If a target Worker is found, try to get it
 	if targetWorkerID != "" {
 		if w := m.findWorkerByID(targetWorkerID); w != nil {
 			log.Printf("[ROUTING] Rule Matched: %s -> Target Worker: %s", matchedKey, targetWorkerID)
+
+			// 根据 Worker 协议转换
+			var finalMsg any
+			if w.Protocol == "v12" {
+				finalMsg = msg.ToV12Map()
+			} else {
+				v11Map := msg.ToV11Map()
+				v11Map["echo"] = echo
+				finalMsg = v11Map
+			}
+
 			w.Mutex.Lock()
-			err := w.Conn.WriteJSON(msg)
+			err := w.Conn.WriteJSON(finalMsg)
 			w.Mutex.Unlock()
 
 			if err == nil {
+				m.WorkerRequestMutex.Lock()
+				m.WorkerRequestTimes[echo] = time.Now()
+				m.WorkerRequestMutex.Unlock()
+
 				m.Mutex.Lock()
 				w.HandledCount++
 				m.Mutex.Unlock()
 
-				// Broadcast routing event: Nexus -> Worker (Message Forward - Rule Match)
 				m.BroadcastRoutingEvent("Nexus", targetWorkerID, "nexus_to_worker", "message", nil)
 				return
 			}
@@ -1260,10 +1209,8 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 
 	// 2. Load balancing forwarding
 	m.Mutex.RLock()
-	// Filter out healthy workers
 	var healthyWorkers []*common.WorkerClient
 	for _, w := range m.Workers {
-		// Simple check: if no heartbeat for 60 seconds and not just connected, it is considered unhealthy
 		if time.Since(w.LastHeartbeat) < 60*time.Second || time.Since(w.Connected) < 10*time.Second {
 			healthyWorkers = append(healthyWorkers, w)
 		}
@@ -1279,11 +1226,9 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 	var selectedWorker *common.WorkerClient
 	m.Mutex.Lock()
 
-	// Load balancing algorithm
 	if len(healthyWorkers) == 1 {
 		selectedWorker = healthyWorkers[0]
 	} else {
-		// 1. Prioritize choosing a Worker that has never processed a message (to get RTT)
 		var unhandled []*common.WorkerClient
 		for _, w := range healthyWorkers {
 			if w.HandledCount == 0 {
@@ -1296,7 +1241,6 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 			selectedWorker = unhandled[idx]
 			m.WorkerIndex++
 		} else {
-			// 2. Prioritize choosing the Worker with the minimum AvgProcessTime (lowest load)
 			var minProcessTime time.Duration = -1
 			for _, w := range healthyWorkers {
 				if w.AvgProcessTime > 0 {
@@ -1307,7 +1251,6 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 				}
 			}
 
-			// 3. If AvgProcessTime has no data or is not selected, choose the Worker with the minimum AvgRTT
 			if selectedWorker == nil {
 				var minRTT time.Duration = -1
 				for _, w := range healthyWorkers {
@@ -1320,7 +1263,6 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 				}
 			}
 
-			// 4. Fall back to global round-robin
 			if selectedWorker == nil {
 				idx := m.WorkerIndex % len(healthyWorkers)
 				selectedWorker = healthyWorkers[idx]
@@ -1330,34 +1272,37 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg map[string]interface{}, re
 	}
 	m.Mutex.Unlock()
 
-	// Send the message to the selected Worker
-	selectedWorker.Mutex.Lock()
-	err := selectedWorker.Conn.WriteJSON(msg)
-	selectedWorker.Mutex.Unlock()
+	if selectedWorker != nil {
+		// 根据协议转换
+		var finalMsg any
+		if selectedWorker.Protocol == "v12" {
+			finalMsg = msg.ToV12Map()
+		} else {
+			v11Map := msg.ToV11Map()
+			v11Map["echo"] = echo
+			finalMsg = v11Map
+		}
 
-	if err == nil {
-		// Record the time the message was sent to the Worker, used to calculate processing time
-		echo := common.ToString(msg["echo"])
-		if echo != "" {
+		selectedWorker.Mutex.Lock()
+		err := selectedWorker.Conn.WriteJSON(finalMsg)
+		selectedWorker.Mutex.Unlock()
+
+		if err == nil {
 			m.WorkerRequestMutex.Lock()
 			m.WorkerRequestTimes[echo] = time.Now()
 			m.WorkerRequestMutex.Unlock()
+
+			m.Mutex.Lock()
+			selectedWorker.HandledCount++
+			m.Mutex.Unlock()
+
+			m.BroadcastRoutingEvent("Nexus", selectedWorker.ID, "nexus_to_worker", "message", nil)
+			log.Printf("[ROUTING] Forwarded to worker %s (AvgRTT: %v, Handled: %d)", selectedWorker.ID, selectedWorker.AvgRTT, selectedWorker.HandledCount)
+		} else {
+			log.Printf("[ROUTING] [ERROR] Failed to forward to selected worker %s: %v. Removing and retrying...", selectedWorker.ID, err)
+			m.removeWorker(selectedWorker.ID)
+			m.forwardMessageToWorkerWithRetry(msg, retryCount+1)
 		}
-	}
-
-	if err != nil {
-		log.Printf("[ROUTING] [ERROR] Failed to forward to worker %s: %v. Removing and retrying...", selectedWorker.ID, err)
-		m.removeWorker(selectedWorker.ID)
-		m.forwardMessageToWorkerWithRetry(msg, retryCount+1)
-	} else {
-		m.Mutex.Lock()
-		selectedWorker.HandledCount++
-		m.Mutex.Unlock()
-
-		// Broadcast routing event: Nexus -> Worker (Message Forward - LB)
-		m.BroadcastRoutingEvent("Nexus", selectedWorker.ID, "nexus_to_worker", "message", nil)
-
-		log.Printf("[ROUTING] Forwarded to worker %s (AvgRTT: %v, Handled: %d)", selectedWorker.ID, selectedWorker.AvgRTT, selectedWorker.HandledCount)
 	}
 }
 
@@ -1376,12 +1321,20 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	// Generate Worker ID
 	workerID := conn.RemoteAddr().String()
 
+	// Determine Protocol Version for Worker
+	protocol := "v11" // Default for backward compatibility
+	wsProtocol := r.Header.Get("Sec-WebSocket-Protocol")
+	if strings.Contains(wsProtocol, "v12") || r.Header.Get("X-Protocol") == "v12" {
+		protocol = "v12"
+	}
+
 	// Create Worker client - explicitly identified as a Worker connection
 	worker := &common.WorkerClient{
 		ID:            workerID,
 		Conn:          conn,
 		Connected:     time.Now(),
 		LastHeartbeat: time.Now(),
+		Protocol:      protocol,
 	}
 
 	log.Printf("Worker client created successfully: %s (ID: %s)", conn.RemoteAddr(), workerID)
@@ -1392,17 +1345,17 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 	m.Mutex.Unlock()
 
 	// 广播 Worker 状态更新事件
-	go m.BroadcastEvent(map[string]interface{}{
-		"type": "worker_update",
-		"data": map[string]interface{}{
-			"id":            worker.ID,
-			"remote_addr":   worker.ID,
-			"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
-			"handled_count": worker.HandledCount,
-			"avg_rtt":       worker.AvgRTT.String(),
-			"last_rtt":      worker.LastRTT.String(),
-			"is_alive":      true,
-			"status":        "Online",
+	go m.BroadcastEvent(common.WorkerUpdateEvent{
+		Type: "worker_update",
+		Data: common.WorkerInfo{
+			ID:           worker.ID,
+			RemoteAddr:   worker.ID,
+			Connected:    worker.Connected.Format("2006-01-02 15:04:05"),
+			HandledCount: worker.HandledCount,
+			AvgRTT:       worker.AvgRTT.String(),
+			LastRTT:      worker.LastRTT.String(),
+			IsAlive:      true,
+			Status:       "Online",
 		},
 	})
 
@@ -1498,12 +1451,12 @@ func (m *Manager) handleWorkerConnection(worker *common.WorkerClient) {
 		worker.Conn.Close()
 
 		// 广播 Worker 离线事件
-		go m.BroadcastEvent(map[string]interface{}{
-			"type": "worker_update",
-			"data": map[string]interface{}{
-				"id":       worker.ID,
-				"is_alive": false,
-				"status":   "Offline",
+		go m.BroadcastEvent(common.WorkerUpdateEvent{
+			Type: "worker_update",
+			Data: common.WorkerInfo{
+				ID:      worker.ID,
+				IsAlive: false,
+				Status:  "Offline",
 			},
 		})
 
@@ -1532,7 +1485,7 @@ func (m *Manager) handleWorkerConnection(worker *common.WorkerClient) {
 	})
 
 	for {
-		var msg map[string]interface{}
+		var msg common.WorkerMessage
 		err := common.ReadJSONWithNumber(worker.Conn, &msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -1553,25 +1506,22 @@ func (m *Manager) handleWorkerConnection(worker *common.WorkerClient) {
 }
 
 // handleWorkerMessage handles Worker messages
-func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[string]interface{}) {
+func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg common.WorkerMessage) {
 	// Only record key information, do not print full message
-	msgType := common.ToString(msg["type"])
+	msgType := msg.Type
 
 	// 处理 Worker 报备的能力列表
 	if msgType == "register_capabilities" {
-		if caps, ok := msg["capabilities"].([]interface{}); ok {
-			var workerCaps []common.WorkerCapability
-			capsData, _ := json.Marshal(caps)
-			json.Unmarshal(capsData, &workerCaps)
-			worker.Capabilities = workerCaps
+		if len(msg.Capabilities) > 0 {
+			worker.Capabilities = msg.Capabilities
 			m.SyncWorkerSkills()
-			log.Printf("[Worker] Worker %s registered %d capabilities", worker.ID, len(workerCaps))
+			log.Printf("[Worker] Worker %s registered %d capabilities", worker.ID, len(msg.Capabilities))
 			return
 		}
 	}
 
-	action := common.ToString(msg["action"])
-	echo := common.ToString(msg["echo"])
+	action := msg.Action
+	echo := msg.Echo
 
 	if action != "" || (echo != "" && msgType == "") {
 		// This is an API request initiated by a Worker, needs to be forwarded to the Bot
@@ -1580,11 +1530,44 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 		// Broadcast routing event: Worker -> Nexus (Request)
 		m.BroadcastRoutingEvent(worker.ID, "Nexus", "worker_to_nexus", "request", nil)
 
-		m.forwardWorkerRequestToBot(worker, msg, echo)
+		// Convert to InternalAction
+		internalAction := common.InternalAction{
+			Action:      action,
+			Echo:        echo,
+			SelfID:      msg.SelfID,
+			Platform:    msg.Platform,
+			GroupID:     msg.GroupID,
+			UserID:      msg.UserID,
+			MessageType: msg.MessageType,
+			Message:     msg.Reply,
+		}
+
+		if msg.Params != nil {
+			internalAction.Params = make(map[string]any)
+			for k, v := range msg.Params {
+				// Avoid duplicating fields already in struct
+				if k == "self_id" || k == "platform" || k == "group_id" || k == "user_id" || k == "message_type" || k == "message" {
+					continue
+				}
+				internalAction.Params[k] = v
+			}
+		}
+
+		// Forward to Bot
+		m.forwardWorkerRequestToBot(worker, internalAction, echo)
+		return
 	} else if msgType == "skill_result" {
 		if common.ENABLE_SKILL {
 			// 处理通过 WebSocket 上报的技能执行结果
-			m.HandleSkillResult(msg)
+			skillResult := common.SkillResult{
+				TaskID:      msg.TaskID,
+				ExecutionID: msg.ExecutionID,
+				Status:      msg.Status,
+				Result:      msg.Result,
+				Error:       msg.Error,
+				WorkerID:    worker.ID,
+			}
+			m.HandleSkillResult(skillResult)
 		}
 	} else {
 		log.Printf("Worker %s event/response: type=%s", worker.ID, msgType)
@@ -1617,14 +1600,15 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 				log.Printf("[METRIC] Worker %s processed message in %v (Avg: %v)", worker.ID, duration, worker.AvgProcessTime)
 
 				// 广播 Worker 状态更新（包含处理时间）
-				go m.BroadcastEvent(map[string]interface{}{
-					"type": "worker_update",
-					"data": map[string]interface{}{
-						"id":                worker.ID,
-						"handled_count":     worker.HandledCount,
-						"last_process_time": worker.LastProcessTime.String(),
-						"avg_process_time":  worker.AvgProcessTime.String(),
-						"status":            "Online",
+				go m.BroadcastEvent(common.WorkerUpdateEvent{
+					Type: "worker_update",
+					Data: common.WorkerInfo{
+						ID:              worker.ID,
+						HandledCount:    worker.HandledCount,
+						LastProcessTime: worker.LastProcessTime.String(),
+						AvgProcessTime:  worker.AvgProcessTime.String(),
+						Status:          "Online",
+						IsAlive:         true,
 					},
 				})
 			} else {
@@ -1633,9 +1617,8 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 		}
 
 		// 2. Check if it contains a reply (some frameworks allow direct reply in event response)
-		reply := common.ToString(msg["reply"])
-		if reply != "" {
-			log.Printf("Worker %s sent passive reply: %s", worker.ID, reply)
+		if msg.Reply != "" {
+			log.Printf("Worker %s sent passive reply: %s", worker.ID, msg.Reply)
 			// Construct a send_msg request and forward it to the Bot
 			m.handleWorkerPassiveReply(worker, msg)
 		}
@@ -1643,32 +1626,31 @@ func (m *Manager) handleWorkerMessage(worker *common.WorkerClient, msg map[strin
 }
 
 // handleWorkerPassiveReply handles passive replies from Workers
-func (m *Manager) handleWorkerPassiveReply(worker *common.WorkerClient, msg map[string]interface{}) {
+func (m *Manager) handleWorkerPassiveReply(worker *common.WorkerClient, msg common.WorkerMessage) {
 	// Extract echo (if the Worker included echo in the passive reply)
-	echo := common.ToString(msg["echo"])
+	echo := msg.Echo
 
-	// Construct OneBot 11 send_msg request
-	params := make(map[string]interface{})
-	action := map[string]interface{}{
-		"action": "send_msg",
-		"params": params,
+	// Construct InternalAction
+	action := common.InternalAction{
+		Action:      "send_msg",
+		Echo:        echo,
+		SelfID:      msg.SelfID,
+		Platform:    msg.Platform,
+		Message:     msg.Reply,
+		GroupID:     msg.GroupID,
+		UserID:      msg.UserID,
+		MessageType: msg.MessageType,
 	}
 
-	// Iterate and forward all fields returned by the Worker
-	for k, v := range msg {
-		switch k {
-		case "reply":
-			params["message"] = v
-		case "action", "echo":
-			// Ignore, action is fixed to send_msg, echo is extracted separately
-			continue
-		case "self_id", "platform":
-			// Routing key fields, put in top level and params
-			action[k] = v
-			params[k] = v
-		default:
-			// Other fields pass through to params (group_id, user_id, message_type, auto_escape, etc.)
-			params[k] = v
+	// If there are other params, merge them
+	if msg.Params != nil {
+		action.Params = make(map[string]any)
+		for k, v := range msg.Params {
+			// Skip fields already handled
+			if k == "message" || k == "group_id" || k == "user_id" || k == "message_type" {
+				continue
+			}
+			action.Params[k] = v
 		}
 	}
 
@@ -1694,31 +1676,31 @@ func (m *Manager) removeWorker(workerID string) {
 }
 
 // forwardWorkerRequestToBot forwards Worker request to Bot
-func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map[string]interface{}, originalEcho string) {
+func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, action common.InternalAction, originalEcho string) {
 	// Construct internal echo, including worker ID for tracking and recording RTT
 	// Add timestamp to ensure internalEcho is unique even if originalEcho is empty or duplicated
 	internalEcho := fmt.Sprintf("%s|%s|%d", worker.ID, originalEcho, time.Now().UnixNano())
 
 	// Save request mapping
-	respChan := make(chan map[string]interface{}, 1)
+	respChan := make(chan common.InternalMessage, 1)
 	m.PendingMutex.Lock()
 	m.PendingRequests[internalEcho] = respChan
 	m.PendingTimestamps[internalEcho] = time.Now() // Record send time
 	m.PendingMutex.Unlock()
 
-	// Modify echo in message to internal echo
-	msg["echo"] = internalEcho
+	// Update Worker RTT tracking (start)
+	m.WorkerRequestMutex.Lock()
+	m.WorkerRequestTimes[internalEcho] = time.Now()
+	m.WorkerRequestMutex.Unlock()
 
 	// Intelligent routing logic: select the correct Bot based on self_id or group_id
 	var targetBot *common.BotClient
-	var routeSource string
+	routeSource := "specified" // For logging
 
-	// 1. Try to extract self_id from request parameters
-	var selfID string
-	if sid, ok := msg["self_id"]; ok {
-		selfID = common.ToString(sid)
-	} else if params, ok := msg["params"].(map[string]interface{}); ok {
-		if sid, ok := params["self_id"]; ok {
+	// 1. Try to extract self_id from action
+	selfID := action.SelfID
+	if selfID == "" {
+		if sid, ok := action.Params["self_id"]; ok {
 			selfID = common.ToString(sid)
 		}
 	}
@@ -1727,17 +1709,14 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 	if selfID != "" {
 		if bot, exists := m.Bots[selfID]; exists {
 			targetBot = bot
-			routeSource = "self_id"
 		}
 	}
 
 	// 2. If no self_id, try to find the corresponding Bot from cache based on group_id
 	if targetBot == nil {
-		var groupID string
-		if gid, ok := msg["group_id"]; ok {
-			groupID = common.ToString(gid)
-		} else if params, ok := msg["params"].(map[string]interface{}); ok {
-			if gid, ok := params["group_id"]; ok {
+		groupID := action.GroupID
+		if groupID == "" {
+			if gid, ok := action.Params["group_id"]; ok {
 				groupID = common.ToString(gid)
 			}
 		}
@@ -1745,10 +1724,11 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 		if groupID != "" {
 			m.CacheMutex.RLock()
 			if groupData, exists := m.GroupCache[groupID]; exists {
-				if botID, ok := groupData["bot_id"].(string); ok {
+				botID := groupData.BotID
+				if botID != "" {
 					if bot, exists := m.Bots[botID]; exists {
 						targetBot = bot
-						routeSource = fmt.Sprintf("group_id cache (%s)", groupID)
+						routeSource = "group_cache"
 					}
 				}
 			}
@@ -1766,20 +1746,30 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 	}
 	m.Mutex.RUnlock()
 
+	if targetBot != nil && routeSource != "specified" {
+		log.Printf("[ROUTING] Routed Worker %s request to Bot %s via %s", worker.ID, targetBot.SelfID, routeSource)
+	}
+
 	if targetBot == nil {
-		log.Printf("[ROUTING] [ERROR] No available Bot to handle Worker %s request (echo: %s, type: %v)", worker.ID, originalEcho, msg["action"])
+		log.Printf("[ROUTING] [ERROR] No available Bot to handle Worker %s request (echo: %s, action: %v)", worker.ID, originalEcho, action.Action)
 
 		// Return error response to Worker
-		response := map[string]interface{}{
-			"status":  "failed",
-			"retcode": 1404,
-			"msg":     "No Bot available",
-			"echo":    originalEcho,
-			"data":    nil,
+		response := common.InternalMessage{
+			Status:  "failed",
+			Retcode: 1404,
+			Msg:     "No Bot available",
+			Echo:    originalEcho,
+		}
+
+		var finalResponse any
+		if worker.Protocol == "v12" {
+			finalResponse = response.ToV12Map()
+		} else {
+			finalResponse = response.ToV11Map()
 		}
 
 		worker.Mutex.Lock()
-		worker.Conn.WriteJSON(response)
+		worker.Conn.WriteJSON(finalResponse)
 		worker.Mutex.Unlock()
 
 		// Clean up mapping
@@ -1791,63 +1781,70 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 	}
 
 	// Forward request to Bot
+	action.Echo = internalEcho
+
 	targetBot.Mutex.Lock()
-	err := targetBot.Conn.WriteJSON(msg)
+	err := targetBot.Conn.WriteJSON(action)
 	targetBot.Mutex.Unlock()
 
 	// Broadcast outgoing routing events: Nexus -> Group -> User
 	if err == nil {
 		go func() {
-			action := common.ToString(msg["action"])
-			if action == "send_msg" || action == "send_group_msg" || action == "send_private_msg" {
-				params, _ := msg["params"].(map[string]interface{})
-				if params == nil {
-					params = msg
+			actionName := action.Action
+			if actionName == "send_msg" || actionName == "send_group_msg" || actionName == "send_private_msg" {
+				groupID := action.GroupID
+				if groupID == "" {
+					groupID = common.ToString(action.Params["group_id"])
 				}
 
-				groupID := common.ToString(params["group_id"])
-				userID := common.ToString(params["user_id"])
-				content := common.ToString(params["message"])
+				userID := action.UserID
+				if userID == "" {
+					userID = common.ToString(action.Params["user_id"])
+				}
 
-				extras := map[string]interface{}{
-					"content":  content,
-					"platform": targetBot.Platform,
+				content := common.ToString(action.Message)
+				if content == "" {
+					content = common.ToString(action.Params["message"])
+				}
+
+				params := &common.RoutingParams{
+					Content:  content,
+					Platform: targetBot.Platform,
 				}
 
 				if groupID != "" {
 					// Nexus -> Group
 					m.CacheMutex.RLock()
 					if group, ok := m.GroupCache[groupID]; ok {
-						if name, ok := group["group_name"].(string); ok {
-							extras["group_name"] = name
+						if name := group.GroupName; name != "" {
+							params.GroupName = name
 						}
 					}
 					m.CacheMutex.RUnlock()
 
-					extras["source_type"] = "nexus"
-					extras["target_type"] = "group"
-					extras["target_label"] = extras["group_name"]
-					m.BroadcastRoutingEvent("Nexus", groupID, "nexus_to_group", "response", extras)
+					params.SourceType = "nexus"
+					params.TargetType = "group"
+					params.TargetLabel = params.GroupName
+					m.BroadcastRoutingEvent("Nexus", groupID, "nexus_to_group", "response", params)
 
 					// Group -> User
 					if userID != "" {
-						extras["source_id"] = groupID
-						extras["source_type"] = "group"
-						extras["target_type"] = "user"
-						extras["source_label"] = extras["group_name"]
-						m.BroadcastRoutingEvent(groupID, userID, "group_to_user", "response", extras)
+						params.SourceType = "group"
+						params.TargetType = "user"
+						params.SourceLabel = params.GroupName
+						m.BroadcastRoutingEvent(groupID, userID, "group_to_user", "response", params)
 					}
 				} else if userID != "" {
 					// Nexus -> Bot -> User (Private)
-					extras["source_type"] = "nexus"
-					extras["target_type"] = "bot"
-					extras["target_label"] = targetBot.Nickname
-					m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "response", extras)
+					params.SourceType = "nexus"
+					params.TargetType = "bot"
+					params.TargetLabel = targetBot.Nickname
+					m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "response", params)
 
-					extras["source_type"] = "bot"
-					extras["target_type"] = "user"
-					extras["source_label"] = targetBot.Nickname
-					m.BroadcastRoutingEvent(targetBot.SelfID, userID, "bot_to_user", "response", extras)
+					params.SourceType = "bot"
+					params.TargetType = "user"
+					params.SourceLabel = targetBot.Nickname
+					m.BroadcastRoutingEvent(targetBot.SelfID, userID, "bot_to_user", "response", params)
 				}
 			}
 		}()
@@ -1871,7 +1868,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 		if fallbackBot != nil {
 			log.Printf("[ROUTING] Falling back to Bot %s", fallbackBot.SelfID)
 			fallbackBot.Mutex.Lock()
-			err = fallbackBot.Conn.WriteJSON(msg)
+			err = fallbackBot.Conn.WriteJSON(action)
 			fallbackBot.Mutex.Unlock()
 			if err == nil {
 				targetBot = fallbackBot
@@ -1880,16 +1877,22 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 
 		if targetBot == nil || err != nil {
 			// Return error response to Worker
-			response := map[string]interface{}{
-				"status":  "failed",
-				"retcode": 1400,
-				"msg":     "Failed to forward to any Bot",
-				"echo":    originalEcho,
-				"data":    nil,
+			response := common.InternalMessage{
+				Status:  "failed",
+				Retcode: 1400,
+				Msg:     "Failed to forward to any Bot",
+				Echo:    originalEcho,
+			}
+
+			var finalResponse any
+			if worker.Protocol == "v12" {
+				finalResponse = response.ToV12Map()
+			} else {
+				finalResponse = response.ToV11Map()
 			}
 
 			worker.Mutex.Lock()
-			worker.Conn.WriteJSON(response)
+			worker.Conn.WriteJSON(finalResponse)
 			worker.Mutex.Unlock()
 
 			// 清理映射
@@ -1903,36 +1906,35 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 
 	// Successfully sent to Bot, start processing response
 	// Broadcast routing event: Nexus -> Bot (Request Forward)
-	extras := map[string]interface{}{
-		"platform": targetBot.Platform,
+	params := &common.RoutingParams{
+		Platform: targetBot.Platform,
 	}
 	// Try to extract content from message for display
-	if params, ok := msg["params"].(map[string]interface{}); ok {
-		if content, ok := params["message"]; ok {
-			extras["content"] = common.ToString(content)
+	if action.Params != nil {
+		if content, ok := action.Params["message"]; ok {
+			params.Content = common.ToString(content)
 		}
-		if userID, ok := params["user_id"]; ok {
-			extras["user_id"] = common.ToString(userID)
+		if userID, ok := action.Params["user_id"]; ok {
+			params.UserID = common.ToString(userID)
 		}
 	}
 
-	m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "request", extras)
+	m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "request", params)
 
 	// Update sending statistics (if it is a send message type operation)
-	action := common.ToString(msg["action"])
-	if action == "send_msg" || action == "send_private_msg" || action == "send_group_msg" || action == "send_guild_channel_msg" {
-		// Add check to exclude system messages
-		if !isSystemMessage(msg) {
+	actionName := action.Action
+	if actionName == "send_msg" || actionName == "send_private_msg" || actionName == "send_group_msg" || actionName == "send_guild_channel_msg" {
+		if !isSystemAction(action) {
 			m.UpdateBotSentStats(targetBot.SelfID)
 		}
 	}
 
 	// If it is a send message, additionally broadcast an event from Bot to User to complete the visual effect loop
-	if userID, ok := extras["user_id"].(string); ok && userID != "" {
-		m.BroadcastRoutingEvent(targetBot.SelfID, userID, "bot_to_user", "message", extras)
+	if params.UserID != "" {
+		m.BroadcastRoutingEvent(targetBot.SelfID, params.UserID, "bot_to_user", "message", params)
 	}
 
-	log.Printf("[ROUTING] Forwarded Worker %s request to Bot %s (Source: %s)", worker.ID, targetBot.SelfID, routeSource)
+	log.Printf("[ROUTING] Forwarded Worker %s request to Bot %s (Source: %s)", worker.ID, targetBot.SelfID, "dynamic")
 
 	// Start timeout processing (must receive response within 30 seconds)
 	go func() {
@@ -1942,65 +1944,77 @@ func (m *Manager) forwardWorkerRequestToBot(worker *common.WorkerClient, msg map
 		select {
 		case response := <-respChan:
 			// Received response, restore original echo and forward to Worker
-			if response != nil {
-				// Check response status, if Bot is found not in group, clear cache
-				retcode := common.ToInt64(response["retcode"])
-				status, _ := response["status"].(string)
-
-				if retcode == 1200 || status == "failed" {
-					// Try to extract group_id
-					var groupID string
-					if gid, ok := msg["group_id"]; ok {
-						groupID = common.ToString(gid)
-					} else if params, ok := msg["params"].(map[string]interface{}); ok {
-						if gid, ok := params["group_id"]; ok {
-							groupID = common.ToString(gid)
-						}
-					}
-
-					if groupID != "" {
-						// Check if error message contains "not in group" or similar hints
-						respMsg, _ := response["msg"].(string)
-						if strings.Contains(respMsg, "not in group") || strings.Contains(respMsg, "removed") || retcode == 1200 {
-							log.Printf("[ROUTING] Bot %s reported group error for %s: %s (retcode: %d). Clearing cache.",
-								targetBot.SelfID, groupID, respMsg, retcode)
-
-							m.CacheMutex.Lock()
-							if data, exists := m.GroupCache[groupID]; exists {
-								if cachedBotID, _ := data["bot_id"].(string); cachedBotID == targetBot.SelfID {
-									delete(m.GroupCache, groupID)
-									log.Printf("[ROUTING] Removed stale group cache for %s (Bot: %s)", groupID, targetBot.SelfID)
-								}
-							}
-							m.CacheMutex.Unlock()
-
-							// Asynchronously trigger refresh of Bot info and group list
-							go m.fetchBotInfo(targetBot)
-						}
-					}
+			// Check response status, if Bot is found not in group, clear cache
+			if response.Status == "failed" {
+				// Try to extract group_id
+				var groupID string
+				if gid, ok := action.Params["group_id"]; ok {
+					groupID = common.ToString(gid)
 				}
 
-				response["echo"] = originalEcho
-				worker.Mutex.Lock()
-				worker.Conn.WriteJSON(response)
-				worker.Mutex.Unlock()
-				log.Printf("Forwarded Bot response (echo: %s) to Worker %s", originalEcho, worker.ID)
+				if groupID != "" {
+					// Check if error message contains "not in group" or similar hints
+					respMsg := response.Msg
+					retcode := response.Retcode
+
+					if strings.Contains(respMsg, "not in group") || strings.Contains(respMsg, "removed") || retcode == 1200 {
+						log.Printf("[ROUTING] Bot %s reported group error for %s: %s (retcode: %d). Clearing cache.",
+							targetBot.SelfID, groupID, respMsg, retcode)
+
+						m.CacheMutex.Lock()
+						if data, exists := m.GroupCache[groupID]; exists {
+							if data.BotID == targetBot.SelfID {
+								delete(m.GroupCache, groupID)
+								log.Printf("[ROUTING] Removed stale group cache for %s (Bot: %s)", groupID, targetBot.SelfID)
+							}
+						}
+						m.CacheMutex.Unlock()
+
+						// Asynchronously trigger refresh of Bot info and group list
+						go m.fetchBotInfo(targetBot)
+					}
+				}
 			}
+
+			// Prepare final response for Worker
+			var finalResponse any
+			if worker.Protocol == "v12" {
+				// For v12, we can send InternalMessage converted to map
+				resMap := response.ToV12Map()
+				resMap["echo"] = originalEcho
+				finalResponse = resMap
+			} else {
+				// For v11, use ToV11Map
+				resMap := response.ToV11Map()
+				resMap["echo"] = originalEcho
+				finalResponse = resMap
+			}
+
+			worker.Mutex.Lock()
+			worker.Conn.WriteJSON(finalResponse)
+			worker.Mutex.Unlock()
+			log.Printf("Forwarded Bot response (echo: %s) to Worker %s", originalEcho, worker.ID)
 
 		case <-timeout.C:
 			// Timeout, return error response
 			log.Printf("Worker request (echo: %s) timed out", originalEcho)
 
-			response := map[string]interface{}{
-				"status":  "failed",
-				"retcode": 1401,
-				"msg":     "Request timeout",
-				"echo":    originalEcho,
-				"data":    nil,
+			response := common.InternalMessage{
+				Status:  "failed",
+				Retcode: 1401,
+				Msg:     "Request timeout",
+				Echo:    originalEcho,
+			}
+
+			var finalResponse any
+			if worker.Protocol == "v12" {
+				finalResponse = response.ToV12Map()
+			} else {
+				finalResponse = response.ToV11Map()
 			}
 
 			worker.Mutex.Lock()
-			worker.Conn.WriteJSON(response)
+			worker.Conn.WriteJSON(finalResponse)
 			worker.Mutex.Unlock()
 		}
 
@@ -2027,19 +2041,28 @@ func (m *Manager) cleanupPendingRequests() {
 
 // BroadcastEvent broadcasts any event to all subscribers
 // BroadcastRoutingEvent broadcasts routing events to all subscribers
-func (m *Manager) BroadcastRoutingEvent(source, target, direction, msgType string, extras map[string]interface{}) {
-	event := map[string]interface{}{
-		"type":      "routing_event",
-		"source":    source,
-		"target":    target,
-		"direction": direction,
-		"msg_type":  msgType,
-		"timestamp": time.Now().Unix(),
+func (m *Manager) BroadcastRoutingEvent(source, target, direction, msgType string, params *common.RoutingParams) {
+	event := common.RoutingEvent{
+		Type:      "routing_event",
+		Source:    source,
+		Target:    target,
+		Direction: direction,
+		MsgType:   msgType,
+		Timestamp: time.Now(),
 	}
-	if extras != nil {
-		for k, v := range extras {
-			event[k] = v
-		}
+
+	if params != nil {
+		event.SourceType = params.SourceType
+		event.TargetType = params.TargetType
+		event.SourceLabel = params.SourceLabel
+		event.TargetLabel = params.TargetLabel
+		event.UserID = params.UserID
+		event.UserName = params.UserName
+		event.UserAvatar = params.UserAvatar
+		event.Content = params.Content
+		event.Platform = params.Platform
+		event.GroupID = params.GroupID
+		event.GroupName = params.GroupName
 	}
 
 	m.BroadcastEvent(event)
@@ -2055,7 +2078,7 @@ func (m *Manager) StartIdempotencyCleanup() {
 		case <-ticker.C:
 			count := 0
 			now := time.Now()
-			m.LocalIdempotency.Range(func(key, value interface{}) bool {
+			m.LocalIdempotency.Range(func(key, value any) bool {
 				if lastSeen, ok := value.(time.Time); ok {
 					if now.Sub(lastSeen) > 1*time.Hour {
 						m.LocalIdempotency.Delete(key)
@@ -2190,12 +2213,17 @@ func (m *Manager) CheckRateLimit(userID, groupID string) bool {
 }
 
 // PushToRedisQueue 将消息推送到 Redis 队列 (支持重试)
-func (m *Manager) PushToRedisQueue(targetWorkerID string, msg map[string]interface{}) error {
+func (m *Manager) PushToRedisQueue(targetWorkerID string, msg common.InternalMessage) error {
 	if m.Rdb == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
 
-	data, err := json.Marshal(msg)
+	// 转换为 map 格式以便 Worker 解析
+	// 注意：这里默认转换为 v11 格式，因为目前大多数 Worker 还是基于 v11 协议
+	// 如果未来有纯 v12 的 Worker，可以根据 targetWorkerID 的协议动态选择
+	msgMap := msg.ToV11Map()
+
+	data, err := json.Marshal(msgMap)
 	if err != nil {
 		return err
 	}
@@ -2222,7 +2250,7 @@ func (m *Manager) PushToRedisQueue(targetWorkerID string, msg map[string]interfa
 }
 
 // UpdateContext 更新会话上下文 (支持更丰富的状态存储)
-func (m *Manager) UpdateContext(platform, userID string, msg map[string]interface{}) {
+func (m *Manager) UpdateContext(platform, userID string, msg common.InternalMessage) {
 	if m.Rdb == nil || userID == "" || platform == "" {
 		return
 	}
@@ -2238,38 +2266,34 @@ func (m *Manager) UpdateContext(platform, userID string, msg map[string]interfac
 	}
 
 	// 2. 获取现有上下文 (如果存在)
-	var contextData map[string]interface{}
+	var sessionContext common.SessionContext
 	if val, err := m.Rdb.Get(ctx, key).Result(); err == nil {
-		json.Unmarshal([]byte(val), &contextData)
-	}
-	if contextData == nil {
-		contextData = make(map[string]interface{})
+		json.Unmarshal([]byte(val), &sessionContext)
 	}
 
-	// 3. 更新基本信息
-	contextData["last_msg"] = msg["message"]
-	contextData["last_time"] = time.Now().Unix()
-	contextData["platform"] = platform
+	// 3. 更新信息
+	if sessionContext.CreatedAt.IsZero() {
+		sessionContext.CreatedAt = time.Now()
+	}
+	sessionContext.UpdatedAt = time.Now()
+	sessionContext.Platform = platform
+	sessionContext.UserID = userID
+	sessionContext.LastMsg = msg
 
 	// 记录消息历史 (最近 5 条)
-	var history []interface{}
-	if h, ok := contextData["history"].([]interface{}); ok {
-		history = h
+	sessionContext.History = append(sessionContext.History, msg)
+	if len(sessionContext.History) > 5 {
+		sessionContext.History = sessionContext.History[len(sessionContext.History)-5:]
 	}
-	history = append(history, msg["message"])
-	if len(history) > 5 {
-		history = history[len(history)-5:]
-	}
-	contextData["history"] = history
 
-	data, _ := json.Marshal(contextData)
+	data, _ := json.Marshal(sessionContext)
 
 	// 4. 设置过期时间
 	m.Rdb.Set(ctx, key, data, ttl)
 }
 
 // GetSessionContext 获取会话上下文
-func (m *Manager) GetSessionContext(platform, userID string) map[string]interface{} {
+func (m *Manager) GetSessionContext(platform, userID string) *common.SessionContext {
 	if m.Rdb == nil || userID == "" || platform == "" {
 		return nil
 	}
@@ -2281,27 +2305,31 @@ func (m *Manager) GetSessionContext(platform, userID string) map[string]interfac
 		return nil
 	}
 
-	var contextData map[string]interface{}
-	if err := json.Unmarshal([]byte(val), &contextData); err != nil {
+	var sessionContext common.SessionContext
+	if err := json.Unmarshal([]byte(val), &sessionContext); err != nil {
 		return nil
 	}
-	return contextData
+	return &sessionContext
 }
 
 // SetSessionState 设置特定的会话状态 (例如：正在输入、等待确认等)
-func (m *Manager) SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error {
+func (m *Manager) SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error {
 	if m.Rdb == nil || userID == "" || platform == "" {
 		return fmt.Errorf("redis not initialized or invalid params")
 	}
 	ctx := context.Background()
 	key := fmt.Sprintf("botmatrix:session:state:%s:%s", platform, userID)
 
+	if state.UpdatedAt.IsZero() {
+		state.UpdatedAt = time.Now()
+	}
+
 	data, _ := json.Marshal(state)
 	return m.Rdb.Set(ctx, key, data, ttl).Err()
 }
 
 // GetSessionState 获取特定的会话状态
-func (m *Manager) GetSessionState(platform, userID string) map[string]interface{} {
+func (m *Manager) GetSessionState(platform, userID string) *common.SessionState {
 	if m.Rdb == nil || userID == "" || platform == "" {
 		return nil
 	}
@@ -2313,9 +2341,9 @@ func (m *Manager) GetSessionState(platform, userID string) map[string]interface{
 		return nil
 	}
 
-	var state map[string]interface{}
+	var state common.SessionState
 	if err := json.Unmarshal([]byte(val), &state); err != nil {
 		return nil
 	}
-	return state
+	return &state
 }

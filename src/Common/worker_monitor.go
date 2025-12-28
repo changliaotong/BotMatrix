@@ -60,7 +60,7 @@ func (m *Manager) checkWorkerTimeouts() {
 }
 
 // Worker消息转发（带详细日志）
-func (m *Manager) forwardToWorkerWithLog(data interface{}, targetWorker *WorkerClient) error {
+func (m *Manager) forwardToWorkerWithLog(data any, targetWorker *WorkerClient) error {
 	// m.LogDebug("[Worker Forward] Attempting to send to worker %s: %v", targetWorker.ID, data)
 
 	targetWorker.Mutex.Lock()
@@ -78,7 +78,7 @@ func (m *Manager) forwardToWorkerWithLog(data interface{}, targetWorker *WorkerC
 }
 
 // 带日志的fallback函数
-func (m *Manager) fallbackToRoundRobinWithLog(data interface{}) {
+func (m *Manager) fallbackToRoundRobinWithLog(data any) {
 	m.LogDebug("[Fallback] Starting fallbackToRoundRobin with %d workers", len(m.Workers))
 
 	if len(m.Workers) == 0 {

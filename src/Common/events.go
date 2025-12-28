@@ -6,7 +6,7 @@ import (
 )
 
 // BroadcastEvent broadcasts an event to all subscribers
-func (m *Manager) BroadcastEvent(event interface{}) {
+func (m *Manager) BroadcastEvent(event any) {
 	m.Mutex.RLock()
 	defer m.Mutex.RUnlock()
 

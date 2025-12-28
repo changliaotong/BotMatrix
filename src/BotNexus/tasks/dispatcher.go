@@ -77,7 +77,7 @@ func (d *Dispatcher) Dispatch(execution Execution) {
 	if err != nil {
 		// 5. 失败处理
 		execution.RetryCount++
-		updates := map[string]interface{}{
+		updates := map[string]any{
 			"retry_count": execution.RetryCount,
 		}
 
@@ -98,7 +98,7 @@ func (d *Dispatcher) Dispatch(execution Execution) {
 	}
 }
 
-func (d *Dispatcher) updateStatusDetailed(id uint, updates map[string]interface{}, execErr error) error {
+func (d *Dispatcher) updateStatusDetailed(id uint, updates map[string]any, execErr error) error {
 	if execErr != nil {
 		result := map[string]string{
 			"error": execErr.Error(),
@@ -112,7 +112,7 @@ func (d *Dispatcher) updateStatusDetailed(id uint, updates map[string]interface{
 }
 
 func (d *Dispatcher) updateStatus(id uint, status ExecutionStatus, execErr error) error {
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status": status,
 	}
 	return d.updateStatusDetailed(id, updates, execErr)

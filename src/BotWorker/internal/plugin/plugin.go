@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"BotMatrix/common"
 	"botworker/internal/onebot"
 	"log"
 	"os"
@@ -48,9 +49,10 @@ type Robot interface {
 	GetSelfID() int64
 
 	// Session & State Management
-	GetSessionContext(platform, userID string) (map[string]interface{}, error)
-	SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error
-	GetSessionState(platform, userID string) (map[string]interface{}, error)
+	GetSessionContext(platform, userID string) (*common.SessionContext, error)
+	SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error
+	GetSessionState(platform, userID string) (*common.SessionState, error)
+	ClearSessionState(platform, userID string) error
 
 	// Task & Skill Management
 	HandleSkill(skillName string, fn func(params map[string]string) (string, error))
@@ -106,7 +108,7 @@ func (m *Manager) LoadPlugins(dir string) error {
 	return nil
 }
 
-func (m *Manager) HandleEvent(msg map[string]interface{}) {
+func (m *Manager) HandleEvent(msg map[string]any) {
 	// 将 map 转换为 onebot.Event
 	// 这里可以根据 msg 的内容构建 onebot.Event 对象
 	// 然后分发给 robot (CombinedServer) 的 handleEvent 方法
@@ -117,8 +119,8 @@ func (m *Manager) HandleEvent(msg map[string]interface{}) {
 	// 我们直接在 CombinedServer 中实现 handleEvent 逻辑，或者让 Manager 负责分发。
 
 	// 这里的 msg 是从 Redis 队列出来的原始 json map
-	// 我们需要将其传递给 CombinedServer 来处理
-	if s, ok := m.robot.(interface{ HandleQueueEvent(map[string]interface{}) }); ok {
+	// 我们 need 将其传递给 CombinedServer 来处理
+	if s, ok := m.robot.(interface{ HandleQueueEvent(map[string]any) }); ok {
 		s.HandleQueueEvent(msg)
 	}
 }

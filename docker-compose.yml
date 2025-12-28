@@ -1,218 +1,78 @@
+version: '3.8'
+
 services:
-  # 1. BotNexus: High-performance WebSocket Gateway & Proxy
-  bot-nexus:
-    build: 
-      context: ./src/BotNexus
-    container_name: btnexus
-    restart: always
+  # Redis for distributed session and pub/sub
+  redis:
+    image: redis:7-alpine
+    container_name: bm-redis
     ports:
-      - "3001:3001"  # WebSocket Gateway
-      - "5000:5000"  # Web Dashboard / API
+      - "6379:6379"
     volumes:
-      - ./src/BotNexus/data:/app/data
-      - ./stats.json:/app/stats.json
-      - /var/run/docker.sock:/var/run/docker.sock # Enable Docker Management
-    environment:
-      - TZ=Asia/Shanghai
-      - REDIS_ADDR=${REDIS_ADDR:-192.168.0.126:6379}
-      - REDIS_PWD=${REDIS_PWD:-redis_zsYik8}
+      - redis_data:/data
+    networks:
+      - bm-network
 
-  # 1.1 System Worker: Global Logic & Commands
-  system-worker:
-    build:
-      context: ./src/BotWorker
-    container_name: btsys
-    restart: always
-    depends_on:
-      - bot-nexus
+  # PostgreSQL for persistence
+  db:
+    image: postgres:15-alpine
+    container_name: bm-db
     environment:
-      - TZ=Asia/Shanghai
-      - BOT_MANAGER_URL=ws://bot-nexus:3001
-
-  # 2. TencentBot: Tencent Official QQ Bot Worker
-  tencent-bot:
-    build:
-      context: ./src/TencentBot
-    container_name: btqq
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/TencentBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-      - TENCENT_SANDBOX=true
-      # Configuration is loaded from config.json
+      POSTGRES_USER: botmatrix
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: botmatrix
     ports:
-      - "3133:3133" # Expose WebUI (Config Management), Log Viewer & File Server
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - bm-network
 
-  # 3. WxBot: WeChat Robot Worker (Python)
-  wxbot:
-    build: 
-      context: ./src/WxBot
-    container_name: btwc
-    restart: always
+  # BotNexus (The Center)
+  nexus:
+    build:
+      context: .
+      dockerfile: src/BotNexus/Dockerfile
+    container_name: bm-nexus
+    environment:
+      - BM_REDIS_ADDR=redis:6379
+      - BM_DB_DSN=host=db user=botmatrix password=password123 dbname=botmatrix port=5432 sslmode=disable
     ports:
-      - "5001:5001" # WebUI for QR Code Login
-      - "3111:3001" # WebSocket for C# Client (Direct Connection)
+      - "8000:8000"
     depends_on:
-      - bot-nexus
+      - redis
+      - db
     volumes:
-      - ./src/WxBot:/app # Map source code for hot-reloading
-      - ./src/WxBot/temp:/app/temp # Session files and QR codes
-    environment:
-      - TZ=Asia/Shanghai
-      - MANAGER_URL=ws://bot-nexus:3001
-      - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
-      - MANAGER_TOKEN=${MANAGER_TOKEN:-}
-    command: ["python", "onebot.py"]
+      - ./plugins:/app/plugins
+    networks:
+      - bm-network
 
-  # 3.1 WxBotGo: WeChat Robot Worker (Go Version)
-  wxbot-go:
-    build: 
-      context: ./src/WxBotGo
-    container_name: btwg
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/WxBotGo/storage.json:/app/storage.json # Persist login session
-    environment:
-      - TZ=Asia/Shanghai
-      - MANAGER_URL=ws://bot-nexus:3001
-      - BOT_SELF_ID=${BOT_SELF_ID:-1098299491}
-
-  # 4. DingTalkBot: DingTalk Webhook/Stream Worker
-  dingtalk-bot:
+  # BotWorker (Stateless Worker Cluster)
+  worker:
     build:
-      context: ./src/DingTalkBot
-    container_name: btdt
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/DingTalkBot/config.json:/app/config.json
+      context: .
+      dockerfile: src/BotWorker/Dockerfile
     environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-
-  # 5. FeishuBot: Feishu/Lark Enterprise Worker
-  feishu-bot:
-    build:
-      context: ./src/FeishuBot
-    container_name: btfs
-    restart: always
+      - BM_REDIS_ADDR=redis:6379
+      - BM_NEXUS_ADDR=http://nexus:8000
     depends_on:
-      - bot-nexus
+      - redis
+      - nexus
     volumes:
-      - ./src/FeishuBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
+      - worker_plugins:/app/plugins
+    networks:
+      - bm-network
+    deploy:
+      replicas: 3 # Scale out to 3 instances
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first # Zero-downtime rolling update
 
-  # 6. TelegramBot: Telegram Worker
-  telegram-bot:
-    build:
-      context: ./src/TelegramBot
-    container_name: bttg
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/TelegramBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
+networks:
+  bm-network:
+    driver: bridge
 
-  # 7. DiscordBot: Discord Worker
-  discord-bot:
-    build:
-      context: ./src/DiscordBot
-    container_name: btdc
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/DiscordBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-
-  # 8. SlackBot: Slack Enterprise Worker
-  slack-bot:
-    build:
-      context: ./src/SlackBot
-    container_name: btsl
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/SlackBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-
-  # 9. KookBot: Kook Community Worker
-  kook-bot:
-    build:
-      context: ./src/KookBot
-    container_name: btkk
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/KookBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-
-  # 10. EmailBot: Email Integration Worker
-  email-bot:
-    build:
-      context: ./src/EmailBot
-    container_name: btem
-    restart: always
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/EmailBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-
-  # 11. WeComBot: Enterprise WeChat Worker
-  wecom-bot:
-    build:
-      context: ./src/WeComBot
-    container_name: btwm
-    restart: always
-    ports:
-      - "5002:8001" # Expose callback port
-    depends_on:
-      - bot-nexus
-    volumes:
-      - ./src/WeComBot/config.json:/app/config.json
-    environment:
-      - TZ=Asia/Shanghai
-      - NEXUS_ADDR=ws://bot-nexus:3001
-
-  # 12. NapCat: Personal QQ Worker (OneBot 11)
-  # napcat:
-  #   image: napneko/napcat:latest
-  #   container_name: napcat
-  #   restart: always
-  #   ports:
-  #     - "6099:6099" # WebUI
-  #   depends_on:
-  #     - bot-manager
-  #   volumes:
-  #     - ./NapCat/config:/app/napcat/config
-  #     - ./NapCat/qq:/app/.config/QQ
-  #   environment:
-  #     - TZ=Asia/Shanghai
-  #     - ACCOUNT= # Optional: Fill in your QQ number for auto-login if previously logged in
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 1G
+volumes:
+  redis_data:
+  db_data:
+  worker_plugins:

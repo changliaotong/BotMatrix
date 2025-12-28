@@ -92,21 +92,21 @@ func (l *ConsoleLogger) Fatal() kook.Entry { return &ConsoleEntry{} }
 
 type ConsoleEntry struct{}
 
-func (e *ConsoleEntry) Bool(key string, b bool) kook.Entry             { return e }
-func (e *ConsoleEntry) Bytes(key string, val []byte) kook.Entry        { return e }
-func (e *ConsoleEntry) Caller(depth int) kook.Entry                    { return e }
-func (e *ConsoleEntry) Dur(key string, d time.Duration) kook.Entry     { return e }
-func (e *ConsoleEntry) Err(key string, err error) kook.Entry           { return e }
-func (e *ConsoleEntry) Float64(key string, f float64) kook.Entry       { return e }
-func (e *ConsoleEntry) IPAddr(key string, ip net.IP) kook.Entry        { return e }
-func (e *ConsoleEntry) Int(key string, i int) kook.Entry               { return e }
-func (e *ConsoleEntry) Int64(key string, i int64) kook.Entry           { return e }
-func (e *ConsoleEntry) Interface(key string, i interface{}) kook.Entry { return e }
-func (e *ConsoleEntry) Msg(msg string)                                 { log.Info(msg) }
-func (e *ConsoleEntry) Msgf(f string, i ...interface{})                { log.Info(fmt.Sprintf(f, i...)) }
-func (e *ConsoleEntry) Str(key string, s string) kook.Entry            { return e }
-func (e *ConsoleEntry) Strs(key string, s []string) kook.Entry         { return e }
-func (e *ConsoleEntry) Time(key string, t time.Time) kook.Entry        { return e }
+func (e *ConsoleEntry) Bool(key string, b bool) kook.Entry         { return e }
+func (e *ConsoleEntry) Bytes(key string, val []byte) kook.Entry    { return e }
+func (e *ConsoleEntry) Caller(depth int) kook.Entry                { return e }
+func (e *ConsoleEntry) Dur(key string, d time.Duration) kook.Entry { return e }
+func (e *ConsoleEntry) Err(key string, err error) kook.Entry       { return e }
+func (e *ConsoleEntry) Float64(key string, f float64) kook.Entry   { return e }
+func (e *ConsoleEntry) IPAddr(key string, ip net.IP) kook.Entry    { return e }
+func (e *ConsoleEntry) Int(key string, i int) kook.Entry           { return e }
+func (e *ConsoleEntry) Int64(key string, i int64) kook.Entry       { return e }
+func (e *ConsoleEntry) Interface(key string, i any) kook.Entry     { return e }
+func (e *ConsoleEntry) Msg(msg string)                             { log.Info(msg) }
+func (e *ConsoleEntry) Msgf(f string, i ...any)                    { log.Info(fmt.Sprintf(f, i...)) }
+func (e *ConsoleEntry) Str(key string, s string) kook.Entry        { return e }
+func (e *ConsoleEntry) Strs(key string, s []string) kook.Entry     { return e }
+func (e *ConsoleEntry) Time(key string, t time.Time) kook.Entry    { return e }
 
 // ------------------------------------
 
@@ -228,7 +228,7 @@ func handleCommon(common *kook.EventDataGeneral, author kook.User) {
 
 	log.Printf("[%s] %s", author.Username, common.Content)
 
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":   "message",
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
@@ -237,7 +237,7 @@ func handleCommon(common *kook.EventDataGeneral, author kook.User) {
 		"user_id":     common.AuthorID,
 		"message":     common.Content,
 		"raw_message": common.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  common.AuthorID,
 			"nickname": author.Username,
 		},
@@ -298,7 +298,7 @@ func connectToNexus(ctx context.Context, addr string) {
 
 			log.Println("Connected to BotNexus!")
 
-			sendToNexus(map[string]interface{}{
+			sendToNexus(map[string]any{
 				"post_type":       "meta_event",
 				"meta_event_type": "lifecycle",
 				"sub_type":        "connect",
@@ -339,7 +339,7 @@ func connectToNexus(ctx context.Context, addr string) {
 	}
 }
 
-func sendToNexus(msg interface{}) {
+func sendToNexus(msg any) {
 	connMutex.Lock()
 	defer connMutex.Unlock()
 	if nexusConn == nil {
@@ -352,9 +352,9 @@ func sendToNexus(msg interface{}) {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return
@@ -381,9 +381,9 @@ func handleNexusCommand(data []byte) {
 			deleteKookMessage(msgID, cmd.Echo)
 		}
 	case "get_login_info":
-		sendToNexus(map[string]interface{}{
+		sendToNexus(map[string]any{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"user_id":  selfID,
 				"nickname": "KookBot",
 			},
@@ -396,12 +396,12 @@ func deleteKookMessage(msgID, echo string) {
 	err := session.MessageDelete(msgID)
 	if err != nil {
 		log.Printf("Failed to delete message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	log.Printf("Deleted message %s", msgID)
-	sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
+	sendToNexus(map[string]any{"status": "ok", "echo": echo})
 }
 
 func sendKookMessage(targetID, content, echo string) {
@@ -415,14 +415,14 @@ func sendKookMessage(targetID, content, echo string) {
 
 	if err != nil {
 		log.Printf("Failed to send message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	log.Printf("Sent message to %s: %s", targetID, content)
-	sendToNexus(map[string]interface{}{
+	sendToNexus(map[string]any{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": resp.MsgID},
+		"data":   map[string]any{"message_id": resp.MsgID},
 		"echo":   echo,
 	})
 }
@@ -438,14 +438,14 @@ func sendKookDirectMessage(targetID, content, echo string) {
 
 	if err != nil {
 		log.Printf("Failed to send private message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	log.Printf("Sent private message to %s", targetID)
-	sendToNexus(map[string]interface{}{
+	sendToNexus(map[string]any{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": resp.MsgID},
+		"data":   map[string]any{"message_id": resp.MsgID},
 		"echo":   echo,
 	})
 }

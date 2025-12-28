@@ -259,9 +259,9 @@ func handleConfigUI(w http.ResponseWriter, r *http.Request) {
 
 func handleNexusCommand(data []byte) {
 	var req struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		return
@@ -269,7 +269,7 @@ func handleNexusCommand(data []byte) {
 
 	log.Printf("Received action from Nexus: %s", req.Action)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	switch req.Action {
 	case "send_msg", "send_group_msg", "send_private_msg":
 		msg, _ := req.Params["message"].(string)
@@ -283,9 +283,9 @@ func handleNexusCommand(data []byte) {
 		if targetID != "" && msg != "" {
 			_, err := dg.ChannelMessageSend(targetID, msg)
 			if err != nil {
-				resp = map[string]interface{}{"status": "failed", "retcode": 500, "msg": err.Error()}
+				resp = map[string]any{"status": "failed", "retcode": 500, "msg": err.Error()}
 			} else {
-				resp = map[string]interface{}{"status": "ok", "retcode": 0, "data": map[string]interface{}{"message_id": "discord_" + time.Now().String()}}
+				resp = map[string]any{"status": "ok", "retcode": 0, "data": map[string]any{"message_id": "discord_" + time.Now().String()}}
 			}
 		}
 	case "get_status":
@@ -327,7 +327,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	log.Printf("[%s] %s", m.Author.Username, m.Content)
 
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":   "message",
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
@@ -336,7 +336,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		"user_id":     m.Author.ID,
 		"message":     m.Content,
 		"raw_message": m.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  m.Author.ID,
 			"nickname": m.Author.Username,
 		},

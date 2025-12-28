@@ -274,7 +274,7 @@ func sendDingTalkMessage(text, echo string) {
 		apiURL += fmt.Sprintf("&timestamp=%d&sign=%s", timestamp, url.QueryEscape(signature))
 	}
 
-	msg := map[string]interface{}{
+	msg := map[string]any{
 		"msgtype": "text",
 		"text": map[string]string{
 			"content": text,
@@ -289,9 +289,9 @@ func sendDingTalkMessage(text, echo string) {
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
-	botService.SendToNexus(map[string]interface{}{
+	botService.SendToNexus(map[string]any{
 		"status": "ok",
 		"data":   result,
 		"echo":   echo,

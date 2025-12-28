@@ -31,7 +31,7 @@ func (m *Manager) AddLog(level string, message string, source ...string) {
 
 	// Broadcast to all subscribers
 	go func() {
-		msg := map[string]interface{}{
+		msg := map[string]any{
 			"post_type": "log",
 			"data":      entry,
 			"self_id":   "", // System logs have no self_id
@@ -62,19 +62,19 @@ func (m *Manager) GetLogs(limit int) []LogEntry {
 }
 
 // Helper log functions
-func (m *Manager) LogDebug(format string, args ...interface{}) {
+func (m *Manager) LogDebug(format string, args ...any) {
 	m.AddLog("DEBUG", fmt.Sprintf(format, args...))
 }
 
-func (m *Manager) LogInfo(format string, args ...interface{}) {
+func (m *Manager) LogInfo(format string, args ...any) {
 	m.AddLog("INFO", fmt.Sprintf(format, args...))
 }
 
-func (m *Manager) LogWarn(format string, args ...interface{}) {
+func (m *Manager) LogWarn(format string, args ...any) {
 	m.AddLog("WARN", fmt.Sprintf(format, args...))
 }
 
-func (m *Manager) LogError(format string, args ...interface{}) {
+func (m *Manager) LogError(format string, args ...any) {
 	m.AddLog("ERROR", fmt.Sprintf(format, args...))
 }
 

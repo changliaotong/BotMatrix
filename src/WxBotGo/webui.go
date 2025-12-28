@@ -231,7 +231,7 @@ func (w *WebUI) handleIndex(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	// 检查是否有成功或错误消息
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Config":  w.config,
 		"Success": request.URL.Query().Get("success") == "true",
 		"Error":   request.URL.Query().Get("error"),

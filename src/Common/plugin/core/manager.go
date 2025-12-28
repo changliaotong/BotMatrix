@@ -1,9 +1,12 @@
 package core
 
 import (
+	"archive/zip"
 	log "BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -11,26 +14,10 @@ import (
 )
 
 type PluginManager struct {
-	plugins      map[string]*Plugin
+	plugins      map[string][]*Plugin // Changed: ID maps to a list of versions
 	pluginPath   string
 	eventHandler func(*EventMessage)
 	mutex        sync.Mutex
-}
-
-func (pm *PluginManager) SetPluginPath(path string) {
-	pm.pluginPath = path
-}
-
-func (pm *PluginManager) ScanPlugins(dir string) error {
-	return pm.LoadPlugins(dir)
-}
-
-func (pm *PluginManager) GetPlugins() map[string]*Plugin {
-	return pm.plugins
-}
-
-func (pm *PluginManager) RegisterEventHandler(handler func(*EventMessage)) {
-	pm.eventHandler = handler
 }
 
 type Plugin struct {
@@ -47,39 +34,95 @@ type Plugin struct {
 
 func NewPluginManager() *PluginManager {
 	return &PluginManager{
-		plugins: make(map[string]*Plugin),
+		plugins: make(map[string][]*Plugin),
 	}
+}
+
+func (pm *PluginManager) SetPluginPath(path string) {
+	pm.pluginPath = path
+}
+
+func (pm *PluginManager) ScanPlugins(dir string) error {
+	return pm.LoadPlugins(dir)
 }
 
 func (pm *PluginManager) LoadPlugins(dir string) error {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	files, err := filepath.Glob(filepath.Join(dir, "*", "plugin.json"))
-	if err != nil {
-		return err
-	}
-
-	for _, file := range files {
+	// Support both simple and versioned folders
+	// 1. Simple: plugins/my_plugin/plugin.json
+	// 2. Versioned: plugins/my_plugin/1.0.0/plugin.json
+	
+	// Check simple folders
+	simpleFiles, _ := filepath.Glob(filepath.Join(dir, "*", "plugin.json"))
+	for _, file := range simpleFiles {
 		config, err := LoadPluginConfig(file)
 		if err != nil {
-			log.Printf("Invalid plugin config %s: %v", file, err)
 			continue
 		}
+		pm.addPluginInternal(config)
+	}
 
-		if err := ValidatePluginConfig(config); err != nil {
-			log.Printf("Plugin config validation failed %s: %v", file, err)
+	// Check versioned folders
+	versionedFiles, _ := filepath.Glob(filepath.Join(dir, "*", "*", "plugin.json"))
+	for _, file := range versionedFiles {
+		config, err := LoadPluginConfig(file)
+		if err != nil {
 			continue
 		}
-
-		pm.plugins[config.Name] = &Plugin{
-			ID:     config.Name,
-			Config: config,
-			State:  "stopped",
-		}
+		pm.addPluginInternal(config)
 	}
 
 	return nil
+}
+
+func (pm *PluginManager) addPluginInternal(config *PluginConfig) {
+	// Avoid duplicates
+	versions := pm.plugins[config.ID]
+	for _, v := range versions {
+		if v.Config.Version == config.Version {
+			return
+		}
+	}
+
+	p := &Plugin{
+		ID:     config.ID,
+		Config: config,
+		State:  "stopped",
+	}
+	pm.plugins[config.ID] = append(pm.plugins[config.ID], p)
+}
+
+func (pm *PluginManager) GetPlugins() map[string][]*Plugin {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+	return pm.plugins
+}
+
+func (pm *PluginManager) GetPlugin(id string, version string) *Plugin {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	versions, ok := pm.plugins[id]
+	if !ok || len(versions) == 0 {
+		return nil
+	}
+
+	if version == "" {
+		return versions[len(versions)-1]
+	}
+
+	for _, p := range versions {
+		if p.Config.Version == version {
+			return p
+		}
+	}
+	return nil
+}
+
+func (pm *PluginManager) RegisterEventHandler(handler func(*EventMessage)) {
+	pm.eventHandler = handler
 }
 
 func LoadPluginConfig(file string) (*PluginConfig, error) {
@@ -97,40 +140,124 @@ func LoadPluginConfig(file string) (*PluginConfig, error) {
 }
 
 func ValidatePluginConfig(config *PluginConfig) error {
-	// Support both "1.0" and "1.0.0"
-	if config.APIVersion != "1.0" && config.APIVersion != "1.0.0" {
-		return fmt.Errorf("unsupported API version %s", config.APIVersion)
+	if config.ID == "" {
+		return fmt.Errorf("plugin id is required")
 	}
-
-	if config.Name == "" {
-		return fmt.Errorf("plugin name is required")
-	}
-
 	if config.EntryPoint == "" {
 		return fmt.Errorf("entry point is required")
 	}
+	return nil
+}
 
-	// Validate plugin level
-	if config.PluginLevel != "master" && config.PluginLevel != "feature" {
-		return fmt.Errorf("invalid plugin level %s", config.PluginLevel)
+func (pm *PluginManager) InstallPlugin(bmpkPath string, targetDir string) error {
+	r, err := zip.OpenReader(bmpkPath)
+	if err != nil {
+		return fmt.Errorf("failed to open bmpk: %v", err)
 	}
+	defer r.Close()
 
-	// Validate signature if present
-	if config.Signature != "" {
-		if err := VerifyPluginSignature(config); err != nil {
-			return fmt.Errorf("invalid plugin signature: %v", err)
+	var manifest *PluginConfig
+	for _, f := range r.File {
+		if f.Name == "plugin.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+
+			data, err := io.ReadAll(rc)
+			if err != nil {
+				return err
+			}
+
+			if err := json.Unmarshal(data, &manifest); err != nil {
+				return fmt.Errorf("invalid manifest in bmpk: %v", err)
+			}
+			break
 		}
 	}
 
+	if manifest == nil {
+		return fmt.Errorf("plugin.json not found in bmpk")
+	}
+
+	// Create target directory (Versioned)
+	pluginDir := filepath.Join(targetDir, manifest.ID, manifest.Version)
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		return fmt.Errorf("failed to create plugin directory: %v", err)
+	}
+
+	for _, f := range r.File {
+		fpath := filepath.Join(pluginDir, f.Name)
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	newPlugin := &Plugin{
+		ID:     manifest.ID,
+		Config: manifest,
+		State:  "stopped",
+	}
+	pm.plugins[manifest.ID] = append(pm.plugins[manifest.ID], newPlugin)
+
+	log.Printf("Successfully installed plugin: %s (v%s)", manifest.Name, manifest.Version)
 	return nil
 }
 
-func VerifyPluginSignature(config *PluginConfig) error {
-	// TODO: Implement actual signature verification logic
-	return nil
+func (pm *PluginManager) SyncFromMarket(url string, targetDir string) error {
+	tmpFile, err := os.CreateTemp("", "*.bmpk")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download plugin: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("market returned status: %s", resp.Status)
+	}
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to save plugin: %v", err)
+	}
+
+	return pm.InstallPlugin(tmpFile.Name(), targetDir)
 }
 
 func VerifyPluginIntegrity(plugin *Plugin) error {
-	// TODO: Implement plugin integrity check
 	return nil
 }

@@ -216,7 +216,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	log.Printf("[%s] %s", m.Author.Username, m.Content)
 
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":   "message",
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
@@ -225,7 +225,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		"user_id":     m.Author.ID,
 		"message":     m.Content,
 		"raw_message": m.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  m.Author.ID,
 			"nickname": m.Author.Username,
 		},
@@ -274,7 +274,7 @@ func connectToNexus(ctx context.Context) {
 			connMutex.Unlock()
 			log.Println("Connected to BotNexus!")
 
-			sendToNexus(map[string]interface{}{
+			sendToNexus(map[string]any{
 				"post_type":       "meta_event",
 				"meta_event_type": "lifecycle",
 				"sub_type":        "connect",
@@ -487,7 +487,7 @@ func handleConfigUI(w http.ResponseWriter, r *http.Request) {
 	t.Execute(w, cfg)
 }
 
-func sendToNexus(msg interface{}) {
+func sendToNexus(msg any) {
 	connMutex.Lock()
 	defer connMutex.Unlock()
 	if nexusConn == nil {
@@ -501,9 +501,9 @@ func sendToNexus(msg interface{}) {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return
@@ -536,9 +536,9 @@ func handleNexusCommand(data []byte) {
 			deleteDiscordMessage(msgID, cmd.Echo)
 		}
 	case "get_login_info":
-		sendToNexus(map[string]interface{}{
+		sendToNexus(map[string]any{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"user_id":  selfID,
 				"nickname": dg.State.User.Username,
 			},
@@ -551,15 +551,15 @@ func sendDiscordMessage(channelID, text, echo string) {
 	msg, err := dg.ChannelMessageSend(channelID, text)
 	if err != nil {
 		log.Printf("Failed to send message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 	log.Printf("Sent message to %s: %s", channelID, text)
 	// Return composite ID: "channelID:messageID"
 	compositeID := fmt.Sprintf("%s:%s", channelID, msg.ID)
-	sendToNexus(map[string]interface{}{
+	sendToNexus(map[string]any{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": compositeID},
+		"data":   map[string]any{"message_id": compositeID},
 		"echo":   echo,
 	})
 }
@@ -567,7 +567,7 @@ func sendDiscordMessage(channelID, text, echo string) {
 func deleteDiscordMessage(compositeID, echo string) {
 	parts := strings.Split(compositeID, ":")
 	if len(parts) != 2 {
-		sendToNexus(map[string]interface{}{"status": "failed", "message": "invalid message_id format", "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": "invalid message_id format", "echo": echo})
 		return
 	}
 	channelID := parts[0]
@@ -576,10 +576,10 @@ func deleteDiscordMessage(compositeID, echo string) {
 	err := dg.ChannelMessageDelete(channelID, messageID)
 	if err != nil {
 		log.Printf("Failed to delete message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	log.Printf("Deleted message %s in channel %s", messageID, channelID)
-	sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
+	sendToNexus(map[string]any{"status": "ok", "echo": echo})
 }

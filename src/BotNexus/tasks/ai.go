@@ -23,19 +23,19 @@ const (
 
 // ParseRequest AI 解析请求
 type ParseRequest struct {
-	Input      string                 `json:"input"`
-	ActionType AIActionType           `json:"action_type"` // 可选，明确指定意图
-	Context    map[string]interface{} `json:"context"`     // 上下文信息
+	Input      string         `json:"input"`
+	ActionType AIActionType   `json:"action_type"` // 可选，明确指定意图
+	Context    map[string]any `json:"context"`     // 上下文信息
 }
 
 // ParseResult AI 解析结果
 type ParseResult struct {
-	DraftID  string                 `json:"draft_id"` // 新增 DraftID
-	Intent   AIActionType           `json:"intent"`
-	Summary  string                 `json:"summary"`
-	Data     map[string]interface{} `json:"data"` // 解析出的结构化数据
-	IsSafe   bool                   `json:"is_safe"`
-	Analysis string                 `json:"analysis"` // AI 的推理过程
+	DraftID  string       `json:"draft_id"` // 新增 DraftID
+	Intent   AIActionType `json:"intent"`
+	Summary  string       `json:"summary"`
+	Data     any          `json:"data"` // 解析出的结构化数据
+	IsSafe   bool         `json:"is_safe"`
+	Analysis string       `json:"analysis"` // AI 的推理过程
 }
 
 func NewAIParser() *AIParser {
@@ -106,7 +106,7 @@ func (a *AIParser) parseTaskCreation(input string) (*ParseResult, error) {
 	}
 
 	if containsOne(input, "禁言") {
-		res.Data = map[string]interface{}{
+		res.Data = map[string]any{
 			"name":           "AI 生成: 自动禁言",
 			"type":           "cron",
 			"action_type":    "mute_group",
@@ -115,7 +115,7 @@ func (a *AIParser) parseTaskCreation(input string) (*ParseResult, error) {
 		}
 		res.Analysis = "识别到'禁言'需求，建议设置为每天 23:00 执行。"
 	} else {
-		res.Data = map[string]interface{}{
+		res.Data = map[string]any{
 			"name":           "AI 生成: 消息提醒",
 			"type":           "once",
 			"action_type":    "send_message",
@@ -132,7 +132,7 @@ func (a *AIParser) parsePolicyAdjustment(input string) (*ParseResult, error) {
 		Intent:  AIActionAdjustPolicy,
 		IsSafe:  true,
 		Summary: "调整全局策略",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"strategy_name": "maintenance_mode",
 			"action":        "enable",
 			"duration":      "3600",
@@ -146,7 +146,7 @@ func (a *AIParser) parseTagManagement(input string) (*ParseResult, error) {
 		Intent:  AIActionManageTags,
 		IsSafe:  true,
 		Summary: "批量管理标签",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"target_type": "group",
 			"tag_name":    "VIP",
 			"condition":   "all_active",
@@ -161,7 +161,7 @@ func (a *AIParser) parseSkillCall(input string) (*ParseResult, error) {
 	return &ParseResult{
 		Intent:   "skill_call",
 		Summary:  "调用业务技能",
-		Data:     map[string]interface{}{"skill": "weather", "params": map[string]string{"city": "北京"}},
+		Data:     map[string]any{"skill": "weather", "params": map[string]string{"city": "北京"}},
 		Analysis: "用户请求业务功能，匹配到 Worker 报备的技能。",
 		IsSafe:   true,
 	}, nil

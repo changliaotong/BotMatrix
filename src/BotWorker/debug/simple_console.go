@@ -20,23 +20,23 @@ func NewTestRobot() *TestRobot {
 	}
 }
 
-func (r *TestRobot) OnMessage(fn func(map[string]interface{}) error) {}
-func (r *TestRobot) OnNotice(fn func(map[string]interface{}) error) {}
-func (r *TestRobot) OnRequest(fn func(map[string]interface{}) error) {}
-func (r *TestRobot) OnEvent(eventName string, fn func(map[string]interface{}) error) {}
-func (r *TestRobot) HandleAPI(action string, fn func(map[string]interface{}) (map[string]interface{}, error)) {}
-func (r *TestRobot) SendMessage(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) DeleteMessage(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) SendLike(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) SetGroupKick(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) SetGroupBan(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) GetGroupMemberList(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) GetGroupMemberInfo(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) SetGroupSpecialTitle(params map[string]interface{}) (map[string]interface{}, error) { return nil, nil }
+func (r *TestRobot) OnMessage(fn func(map[string]any) error) {}
+func (r *TestRobot) OnNotice(fn func(map[string]any) error) {}
+func (r *TestRobot) OnRequest(fn func(map[string]any) error) {}
+func (r *TestRobot) OnEvent(eventName string, fn func(map[string]any) error) {}
+func (r *TestRobot) HandleAPI(action string, fn func(map[string]any) (map[string]any, error)) {}
+func (r *TestRobot) SendMessage(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) DeleteMessage(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) SendLike(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) SetGroupKick(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) SetGroupBan(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) GetGroupMemberList(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) GetGroupMemberInfo(params map[string]any) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) SetGroupSpecialTitle(params map[string]any) (map[string]any, error) { return nil, nil }
 func (r *TestRobot) GetSelfID() int64 { return 123456 }
-func (r *TestRobot) GetSessionContext(platform, userID string) (map[string]interface{}, error) { return nil, nil }
-func (r *TestRobot) SetSessionState(platform, userID string, state map[string]interface{}, ttl int) error { return nil }
-func (r *TestRobot) GetSessionState(platform, userID string) (map[string]interface{}, error) { return nil, nil }
+func (r *TestRobot) GetSessionContext(platform, userID string) (map[string]any, error) { return nil, nil }
+func (r *TestRobot) SetSessionState(platform, userID string, state map[string]any, ttl int) error { return nil }
+func (r *TestRobot) GetSessionState(platform, userID string) (map[string]any, error) { return nil, nil }
 func (r *TestRobot) HandleSkill(skillName string, skill plugin.Skill) {
 	r.skills[skillName] = skill
 }

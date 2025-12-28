@@ -169,7 +169,7 @@ func handleMessage(ev *slackevents.MessageEvent) {
 
 	log.Printf("[%s] %s", ev.User, ev.Text)
 
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":   "message",
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
@@ -178,7 +178,7 @@ func handleMessage(ev *slackevents.MessageEvent) {
 		"user_id":     ev.User,
 		"message":     ev.Text,
 		"raw_message": ev.Text,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  ev.User,
 			"nickname": "SlackUser",
 		},
@@ -197,7 +197,7 @@ func handleMessage(ev *slackevents.MessageEvent) {
 func handleNexusCommand(data []byte) {
 	var cmd struct {
 		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
+		Params map[string]any         `json:"params"`
 		Echo   string                 `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
@@ -225,9 +225,9 @@ func handleNexusCommand(data []byte) {
 			deleteSlackMessage(msgID, cmd.Echo)
 		}
 	case "get_login_info":
-		botService.SendToNexus(map[string]interface{}{
+		botService.SendToNexus(map[string]any{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"user_id":  selfID,
 				"nickname": "SlackBot",
 			},
@@ -247,15 +247,15 @@ func sendSlackMessage(channelID, text, echo string) {
 
 	if err != nil {
 		log.Printf("Failed to send message: %v", err)
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	log.Printf("Sent message to %s", channelID)
 	compositeID := fmt.Sprintf("%s:%s", channelID, timestamp)
-	botService.SendToNexus(map[string]interface{}{
+	botService.SendToNexus(map[string]any{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": compositeID},
+		"data":   map[string]any{"message_id": compositeID},
 		"echo":   echo,
 	})
 }
@@ -266,7 +266,7 @@ func deleteSlackMessage(compositeID, echo string) {
 	}
 	parts := strings.Split(compositeID, ":")
 	if len(parts) != 2 {
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": "invalid message_id format", "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": "invalid message_id format", "echo": echo})
 		return
 	}
 	channelID := parts[0]
@@ -275,12 +275,12 @@ func deleteSlackMessage(compositeID, echo string) {
 	_, _, err := api.DeleteMessage(channelID, timestamp)
 	if err != nil {
 		log.Printf("Failed to delete message: %v", err)
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	log.Printf("Deleted message %s in channel %s", timestamp, channelID)
-	botService.SendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
+	botService.SendToNexus(map[string]any{"status": "ok", "echo": echo})
 }
 
 func handleConfig(w http.ResponseWriter, r *http.Request) {

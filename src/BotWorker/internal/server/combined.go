@@ -1,6 +1,8 @@
 package server
 
 import (
+	"BotMatrix/common"
+	"BotMatrix/common/log"
 	"botworker/internal/config"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
@@ -8,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"BotMatrix/common/log"
 	"time"
 )
 
@@ -102,25 +103,32 @@ func (s *CombinedServer) GetSelfID() int64 {
 }
 
 // Session & State Management 实现
-func (s *CombinedServer) GetSessionContext(platform, userID string) (map[string]interface{}, error) {
+func (s *CombinedServer) GetSessionContext(platform, userID string) (*common.SessionContext, error) {
 	if s.redisClient == nil {
 		return nil, fmt.Errorf("redis client not initialized")
 	}
 	return s.redisClient.GetSessionContext(platform, userID)
 }
 
-func (s *CombinedServer) SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error {
+func (s *CombinedServer) SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error {
 	if s.redisClient == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
 	return s.redisClient.SetSessionState(platform, userID, state, ttl)
 }
 
-func (s *CombinedServer) GetSessionState(platform, userID string) (map[string]interface{}, error) {
+func (s *CombinedServer) GetSessionState(platform, userID string) (*common.SessionState, error) {
 	if s.redisClient == nil {
 		return nil, fmt.Errorf("redis client not initialized")
 	}
 	return s.redisClient.GetSessionState(platform, userID)
+}
+
+func (s *CombinedServer) ClearSessionState(platform, userID string) error {
+	if s.redisClient == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+	return s.redisClient.ClearSessionState(platform, userID)
 }
 
 // HandleSkill 注册技能处理器
@@ -175,11 +183,11 @@ func (s *CombinedServer) reportCapabilities() {
 	// 等待插件加载完成
 	time.Sleep(2 * time.Second)
 
-	capabilities := []map[string]interface{}{}
+	capabilities := []map[string]any{}
 	for _, p := range s.pluginManager.GetPlugins() {
 		if cp, ok := p.(plugin.SkillCapable); ok {
 			for _, skill := range cp.GetSkills() {
-				capabilities = append(capabilities, map[string]interface{}{
+				capabilities = append(capabilities, map[string]any{
 					"name":        skill.Name,
 					"description": skill.Description,
 					"usage":       skill.Usage,
@@ -193,7 +201,7 @@ func (s *CombinedServer) reportCapabilities() {
 		return
 	}
 
-	regMsg := map[string]interface{}{
+	regMsg := map[string]any{
 		"type":         "worker_register",
 		"worker_id":    s.config.WorkerID,
 		"capabilities": capabilities,
@@ -250,14 +258,14 @@ func (s *CombinedServer) startRedisQueueListener() {
 		log.Printf("[RedisQueue] Received message from %s", queueName)
 
 		// 解析消息并分发
-		var msg map[string]interface{}
+		var msg map[string]any
 		if err := json.Unmarshal([]byte(payload), &msg); err != nil {
 			log.Printf("[RedisQueue] Failed to unmarshal message: %v", err)
 			continue
 		}
 
 // 异步处理消息，避免阻塞监听器
-	go func(queue string, m map[string]interface{}) {
+	go func(queue string, m map[string]any) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("[RedisQueue] Panic in message processor: %v", r)
@@ -268,7 +276,7 @@ func (s *CombinedServer) startRedisQueueListener() {
 }
 }
 
-func (s *CombinedServer) processQueueMessage(msg map[string]interface{}) {
+func (s *CombinedServer) processQueueMessage(msg map[string]any) {
 	// 1. 检查是否为指令 (skill_call)
 	if msgType, ok := msg["type"].(string); ok && msgType == "skill_call" {
 		if s.config.EnableSkill {
@@ -290,9 +298,9 @@ func (s *CombinedServer) processQueueMessage(msg map[string]interface{}) {
 	s.HandleQueueEvent(msg)
 }
 
-func (s *CombinedServer) handleSkillCall(msg map[string]interface{}) {
+func (s *CombinedServer) handleSkillCall(msg map[string]any) {
 	skillName, _ := msg["skill"].(string)
-	paramsMap, _ := msg["params"].(map[string]interface{})
+	paramsMap, _ := msg["params"].(map[string]any)
 	taskID := fmt.Sprint(msg["task_id"])
 	executionID := fmt.Sprint(msg["execution_id"])
 
@@ -336,7 +344,7 @@ func (s *CombinedServer) reportSkillResult(taskID, executionID, skillName, resul
 		errorMessage = err.Error()
 	}
 
-	report := map[string]interface{}{
+	report := map[string]any{
 		"type":         "skill_result",
 		"worker_id":    s.config.WorkerID,
 		"task_id":      taskID,
@@ -372,7 +380,7 @@ func (s *CombinedServer) reportSkillResult(taskID, executionID, skillName, resul
 	}
 }
 
-func (s *CombinedServer) HandleQueueEvent(msg map[string]interface{}) {
+func (s *CombinedServer) HandleQueueEvent(msg map[string]any) {
 	// 记录原始消息的一些关键信息，方便调试
 	postType, _ := msg["post_type"].(string)
 	messageType, _ := msg["message_type"].(string)

@@ -96,7 +96,7 @@ type OneBotMessage struct {
 	MessageID   string      `json:"message_id"`
 	UserID      string      `json:"user_id"`
 	GroupID     string      `json:"group_id,omitempty"`
-	Message     interface{} `json:"message"`
+	Message     any         `json:"message"`
 	RawMessage  string      `json:"raw_message"`
 	Sender      Sender      `json:"sender"`
 }
@@ -248,7 +248,7 @@ func handleMessage(ctx context.Context, event *larkim.P2MessageReceiveV1) {
 	sender := event.Event.Sender
 
 	// Extract Content (JSON string)
-	var contentMap map[string]interface{}
+	var contentMap map[string]any
 	if err := json.Unmarshal([]byte(*msg.Content), &contentMap); err != nil {
 		log.Printf("Error parsing message content: %v", err)
 		return
@@ -350,7 +350,7 @@ func connectToNexus(ctx context.Context) {
 			log.Println("Connected to BotNexus!")
 
 			// Send Lifecycle Event
-			sendToNexus(map[string]interface{}{
+			sendToNexus(map[string]any{
 				"post_type":       "meta_event",
 				"meta_event_type": "lifecycle",
 				"sub_type":        "connect",
@@ -377,7 +377,7 @@ func connectToNexus(ctx context.Context) {
 	}
 }
 
-func sendToNexus(msg interface{}) {
+func sendToNexus(msg any) {
 	connMutex.Lock()
 	defer connMutex.Unlock()
 	if nexusConn == nil {
@@ -636,9 +636,9 @@ func handleConfigUI(w http.ResponseWriter, r *http.Request) {
 
 // NexusCommand represents a command from BotNexus (OneBot Action)
 type NexusCommand struct {
-	Action string                 `json:"action"`
-	Params map[string]interface{} `json:"params"`
-	Echo   string                 `json:"echo"`
+	Action string         `json:"action"`
+	Params map[string]any `json:"params"`
+	Echo   string         `json:"echo"`
 }
 
 func handleNexusCommand(data []byte) {
@@ -669,9 +669,9 @@ func handleNexusCommand(data []byte) {
 			deleteFeishuMessage(msgID, cmd.Echo)
 		}
 	case "get_login_info":
-		sendToNexus(map[string]interface{}{
+		sendToNexus(map[string]any{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"user_id":  selfID,
 				"nickname": "FeishuBot",
 			},
@@ -690,7 +690,7 @@ func handleNexusCommand(data []byte) {
 func sendFeishuMessage(receiveID, receiveIDType, text, echo string) {
 	// Simple text vs image handling could be added here
 	// For now, assuming text
-	content := map[string]interface{}{
+	content := map[string]any{
 		"text": text,
 	}
 	contentJSON, _ := json.Marshal(content)
@@ -708,16 +708,16 @@ func sendFeishuMessage(receiveID, receiveIDType, text, echo string) {
 	resp, err := larkClient.Im.Message.Create(context.Background(), req)
 	if err != nil {
 		log.Printf("Failed to send message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	if !resp.Success() {
 		log.Printf("Feishu API Error: %d %s", resp.Code, resp.Msg)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": resp.Msg, "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": resp.Msg, "echo": echo})
 	} else {
 		log.Printf("Sent message to %s: %s", receiveID, text)
-		sendToNexus(map[string]interface{}{"status": "ok", "data": map[string]interface{}{"message_id": *resp.Data.MessageId}, "echo": echo})
+		sendToNexus(map[string]any{"status": "ok", "data": map[string]any{"message_id": *resp.Data.MessageId}, "echo": echo})
 	}
 }
 
@@ -729,16 +729,16 @@ func deleteFeishuMessage(messageID, echo string) {
 	resp, err := larkClient.Im.Message.Delete(context.Background(), req)
 	if err != nil {
 		log.Printf("Failed to delete message: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	if !resp.Success() {
 		log.Printf("Feishu API Delete Error: %d %s", resp.Code, resp.Msg)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": resp.Msg, "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": resp.Msg, "echo": echo})
 	} else {
 		log.Printf("Deleted message: %s", messageID)
-		sendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
+		sendToNexus(map[string]any{"status": "ok", "echo": echo})
 	}
 }
 
@@ -751,26 +751,26 @@ func getGroupMemberList(chatID, echo string) {
 	resp, err := larkClient.Im.ChatMembers.Get(context.Background(), req)
 	if err != nil {
 		log.Printf("Failed to get group member list: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	if !resp.Success() {
 		log.Printf("Feishu API Group Member List Error: %d %s", resp.Code, resp.Msg)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": resp.Msg, "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": resp.Msg, "echo": echo})
 		return
 	}
 
-	var members []map[string]interface{}
+	var members []map[string]any
 	for _, member := range resp.Data.Items {
-		members = append(members, map[string]interface{}{
+		members = append(members, map[string]any{
 			"user_id":  *member.MemberId,
 			"nickname": "FeishuMember", // Names need a separate lookup or GetChat
 			"role":     "member",
 		})
 	}
 
-	sendToNexus(map[string]interface{}{
+	sendToNexus(map[string]any{
 		"status": "ok",
 		"data":   members,
 		"echo":   echo,
@@ -787,25 +787,25 @@ func getGroupList(echo string) {
 	resp, err := larkClient.Im.Chat.List(context.Background(), req)
 	if err != nil {
 		log.Printf("Failed to get group list: %v", err)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	if !resp.Success() {
 		log.Printf("Feishu API Group List Error: %d %s", resp.Code, resp.Msg)
-		sendToNexus(map[string]interface{}{"status": "failed", "message": resp.Msg, "echo": echo})
+		sendToNexus(map[string]any{"status": "failed", "message": resp.Msg, "echo": echo})
 		return
 	}
 
-	var groups []map[string]interface{}
+	var groups []map[string]any
 	for _, chat := range resp.Data.Items {
-		groups = append(groups, map[string]interface{}{
+		groups = append(groups, map[string]any{
 			"group_id":   *chat.ChatId,
 			"group_name": *chat.Name,
 		})
 	}
 
-	sendToNexus(map[string]interface{}{
+	sendToNexus(map[string]any{
 		"status": "ok",
 		"data":   groups,
 		"echo":   echo,

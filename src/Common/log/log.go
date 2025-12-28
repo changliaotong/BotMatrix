@@ -130,7 +130,7 @@ func Sync() error {
 }
 
 // Printf 兼容标准库 log.Printf
-func Printf(format string, v ...interface{}) {
+func Printf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	if Logger != nil {
 		Logger.Info(msg)
@@ -140,7 +140,7 @@ func Printf(format string, v ...interface{}) {
 }
 
 // Println 兼容标准库 log.Println
-func Println(v ...interface{}) {
+func Println(v ...any) {
 	msg := fmt.Sprintln(v...)
 	if Logger != nil {
 		Logger.Info(msg)
@@ -150,7 +150,7 @@ func Println(v ...interface{}) {
 }
 
 // Fatalf 格式化并记录致命错误
-func Fatalf(format string, v ...interface{}) {
+func Fatalf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	if Logger != nil {
 		Logger.Fatal(msg)
@@ -161,7 +161,7 @@ func Fatalf(format string, v ...interface{}) {
 }
 
 // Errorf 格式化并记录错误
-func Errorf(format string, v ...interface{}) {
+func Errorf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	if Logger != nil {
 		Logger.Error(msg)

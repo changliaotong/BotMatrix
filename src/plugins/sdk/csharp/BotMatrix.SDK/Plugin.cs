@@ -63,6 +63,29 @@ namespace BotMatrix.SDK
         public string Error { get; set; }
     }
 
+    public class Session
+    {
+        private readonly Context _ctx;
+        public Session(Context ctx) => _ctx = ctx;
+
+        public void Set(string key, object value, int expireSeconds = 0)
+        {
+            _ctx.CallAction("storage.set", new Dictionary<string, object> {
+                { "key", key },
+                { "value", value },
+                { "expire", expireSeconds }
+            });
+        }
+
+        // Note: Get is currently an action request in this simplified protocol, 
+        // in a real implementation this would likely involve a gRPC call or similar
+        // for synchronous data retrieval.
+        public void Get(string key)
+        {
+            _ctx.CallAction("storage.get", new Dictionary<string, object> { { "key", key } });
+        }
+    }
+
     public class Context
     {
         public EventMessage Event { get; }
@@ -70,6 +93,8 @@ namespace BotMatrix.SDK
         public string[] Args { get; internal set; } = Array.Empty<string>();
         public Dictionary<string, string> Params { get; internal set; } = new Dictionary<string, string>();
         
+        public Session Session { get; }
+
         private readonly BotMatrixPlugin _plugin;
         private readonly object _lock = new object();
 
@@ -77,6 +102,7 @@ namespace BotMatrix.SDK
         {
             Event = @event;
             _plugin = plugin;
+            Session = new Session(this);
         }
 
         public void Reply(string text)

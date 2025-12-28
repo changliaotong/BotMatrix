@@ -18,6 +18,7 @@ type Plugin interface {
 
 type Robot interface {
 	HandleSkill(skillName string, skill Skill)
+	GetSkill(skillName string) (Skill, bool)
 }
 
 type TestRobot struct {

@@ -336,7 +336,7 @@ func (m *Manager) TrackBotDisconnection(botID string, reason string, duration ti
 }
 
 // GetConnectionStats 获取连接统计（线程安全）
-func (m *Manager) GetConnectionStats() map[string]interface{} {
+func (m *Manager) GetConnectionStats() map[string]any {
 	m.ConnectionStats.Mutex.RLock()
 	defer m.ConnectionStats.Mutex.RUnlock()
 
@@ -351,7 +351,7 @@ func (m *Manager) GetConnectionStats() map[string]interface{} {
 		workerDurations[k] = v.String()
 	}
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"total_bot_connections":       m.ConnectionStats.TotalBotConnections,
 		"total_worker_connections":    m.ConnectionStats.TotalWorkerConnections,
 		"bot_connection_durations":    botDurations,
@@ -366,14 +366,14 @@ func (m *Manager) GetConnectionStats() map[string]interface{} {
 }
 
 // GetStatsSummary 获取统计摘要
-func (m *Manager) GetStatsSummary() map[string]interface{} {
+func (m *Manager) GetStatsSummary() map[string]any {
 	m.Mutex.RLock()
 	defer m.Mutex.RUnlock()
 
 	m.ConnectionStats.Mutex.RLock()
 	defer m.ConnectionStats.Mutex.RUnlock()
 
-	summary := map[string]interface{}{
+	summary := map[string]any{
 		"active_bots":              len(m.Bots),
 		"active_workers":           len(m.Workers),
 		"total_bot_connections":    m.ConnectionStats.TotalBotConnections,

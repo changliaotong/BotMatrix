@@ -19,7 +19,7 @@ type ConnectionConfig struct {
 	WebSocketConfig WebSocketConfig `json:"websocket_config"`
 
 	// 客户端特定配置
-	ClientSpecific map[string]interface{} `json:"client_specific"`
+	ClientSpecific map[string]any `json:"client_specific"`
 }
 
 // HTTPConfig HTTP 服务配置
@@ -93,7 +93,7 @@ func DefaultConnectionConfig() *ConnectionConfigManager {
 					Host:    "0.0.0.0",
 					Path:    "/ws",
 				},
-				ClientSpecific: map[string]interface{}{
+				ClientSpecific: map[string]any{
 					"self_id": "",
 					"report_self_msg": true, // 默认上报自身消息
 				},

@@ -78,7 +78,7 @@ func (l *LogManager) Write(p []byte) (n int, err error) {
 
 	// Stream to Nexus
 	go func(m string) {
-		sendToNexus(map[string]interface{}{
+		sendToNexus(map[string]any{
 			"post_type": "log",
 			"level":     "INFO",
 			"message":   strings.TrimSpace(m),
@@ -517,7 +517,7 @@ func handleStreamEvent(df *payload.DataFrame) {
 	// DingTalk Stream events usually contain a JSON payload in the Data field
 	log.Printf("Received Stream Event: Type=%s", df.Type)
 
-	var eventData map[string]interface{}
+	var eventData map[string]any
 	if err := json.Unmarshal([]byte(df.Data), &eventData); err != nil {
 		log.Println("Error parsing event data:", err)
 		return
@@ -538,10 +538,10 @@ func handleStreamEvent(df *payload.DataFrame) {
 		//   "data": { ... message details ... }
 		// }
 
-		if data, ok := eventData["data"].(map[string]interface{}); ok {
+		if data, ok := eventData["data"].(map[string]any); ok {
 			contentStr, _ := data["content"].(string)
 			// Content is often a JSON string itself
-			var contentMap map[string]interface{}
+			var contentMap map[string]any
 			json.Unmarshal([]byte(contentStr), &contentMap)
 
 			text := ""
@@ -551,7 +551,7 @@ func handleStreamEvent(df *payload.DataFrame) {
 
 			// Sender
 			senderID := ""
-			if sender, ok := data["sender"].(map[string]interface{}); ok {
+			if sender, ok := data["sender"].(map[string]any); ok {
 				senderID, _ = sender["sender_id"].(string) // UnionID or StaffID
 			}
 
@@ -563,7 +563,7 @@ func handleStreamEvent(df *payload.DataFrame) {
 
 			log.Printf("Parsed Message: [%s] %s", senderID, text)
 
-			sendToNexus(map[string]interface{}{
+			sendToNexus(map[string]any{
 				"post_type":    "message",
 				"message_type": "group", // Default to group/chat
 				"time":         time.Now().Unix(),
@@ -574,7 +574,7 @@ func handleStreamEvent(df *payload.DataFrame) {
 				"group_id":     groupID,
 				"message":      text,
 				"raw_message":  text,
-				"sender": map[string]interface{}{
+				"sender": map[string]any{
 					"user_id":  senderID,
 					"nickname": "DingTalkUser",
 				},
@@ -584,7 +584,7 @@ func handleStreamEvent(df *payload.DataFrame) {
 	}
 
 	// Forward other events or if parsing failed
-	sendToNexus(map[string]interface{}{
+	sendToNexus(map[string]any{
 		"post_type":   "notice",
 		"notice_type": "dingtalk_event",
 		"sub_type":    eventType,
@@ -665,7 +665,7 @@ func connectNexus(ctx context.Context) {
 	}
 }
 
-func sendToNexus(data map[string]interface{}) {
+func sendToNexus(data map[string]any) {
 	nexusMu.Lock()
 	defer nexusMu.Unlock()
 
@@ -684,7 +684,7 @@ func sendToNexus(data map[string]interface{}) {
 }
 
 func handleNexusMessage(message []byte) {
-	var action map[string]interface{}
+	var action map[string]any
 	if err := json.Unmarshal(message, &action); err != nil {
 		log.Println("Invalid JSON:", err)
 		return
@@ -700,7 +700,7 @@ func handleNexusMessage(message []byte) {
 
 	switch actionName {
 	case "send_group_msg", "send_msg":
-		params, _ := action["params"].(map[string]interface{})
+		params, _ := action["params"].(map[string]any)
 		msg := getString(params, "message")
 		groupID := getString(params, "group_id")
 
@@ -722,18 +722,18 @@ func handleNexusMessage(message []byte) {
 			}
 
 			if err == nil {
-				data := map[string]interface{}{}
+				data := map[string]any{}
 				if msgID != "" {
 					data["message_id"] = msgID
 				}
-				sendToNexus(map[string]interface{}{"status": "ok", "data": data, "echo": action["echo"]})
+				sendToNexus(map[string]any{"status": "ok", "data": data, "echo": action["echo"]})
 			} else {
-				sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": action["echo"]})
+				sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": action["echo"]})
 			}
 		}
 
 	case "delete_msg":
-		params, _ := action["params"].(map[string]interface{})
+		params, _ := action["params"].(map[string]any)
 		msgID := getString(params, "message_id")
 		// DingTalk recall requires conversation ID too?
 		// "recall/group/message" needs "openConversationId" and "processQueryKey" (msgID)
@@ -753,16 +753,16 @@ func handleNexusMessage(message []byte) {
 
 			err := recallEnterpriseMessage(msgID)
 			if err == nil {
-				sendToNexus(map[string]interface{}{"status": "ok", "echo": action["echo"]})
+				sendToNexus(map[string]any{"status": "ok", "echo": action["echo"]})
 			} else {
-				sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": action["echo"]})
+				sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": action["echo"]})
 			}
 		} else {
-			sendToNexus(map[string]interface{}{"status": "failed", "message": "recall not supported or invalid id", "echo": action["echo"]})
+			sendToNexus(map[string]any{"status": "failed", "message": "recall not supported or invalid id", "echo": action["echo"]})
 		}
 
 	case "send_private_msg":
-		params, _ := action["params"].(map[string]interface{})
+		params, _ := action["params"].(map[string]any)
 		msg := getString(params, "message")
 		userID := getString(params, "user_id") // Can be mobile or DingTalk UserID
 
@@ -778,16 +778,16 @@ func handleNexusMessage(message []byte) {
 			}
 
 			if err == nil {
-				sendToNexus(map[string]interface{}{"status": "ok", "echo": action["echo"]})
+				sendToNexus(map[string]any{"status": "ok", "echo": action["echo"]})
 			} else {
-				sendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": action["echo"]})
+				sendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": action["echo"]})
 			}
 		}
 
 	case "get_login_info":
-		sendToNexus(map[string]interface{}{
+		sendToNexus(map[string]any{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"user_id":  config.SelfID,
 				"nickname": "DingTalk Bot",
 			},
@@ -797,7 +797,7 @@ func handleNexusMessage(message []byte) {
 }
 
 // Helper to get string from map safely
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
 			return s
@@ -832,7 +832,7 @@ func sendDingTalkMessage(content string) error {
 func sendDingTalkMessageWithAt(content string, atMobiles []string) error {
 	url := getWebhookURL()
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"msgtype": "text",
 		"text": map[string]string{
 			"content": content,
@@ -840,7 +840,7 @@ func sendDingTalkMessageWithAt(content string, atMobiles []string) error {
 	}
 
 	if len(atMobiles) > 0 {
-		payload["at"] = map[string]interface{}{
+		payload["at"] = map[string]any{
 			"atMobiles": atMobiles,
 		}
 	}
@@ -854,7 +854,7 @@ func sendDingTalkMessageWithAt(content string, atMobiles []string) error {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
+	var result map[string]any
 	json.Unmarshal(body, &result)
 
 	if errcode, ok := result["errcode"].(float64); ok && errcode != 0 {
@@ -915,7 +915,7 @@ func sendEnterpriseGroupMessage(conversationID, content string) (string, error) 
 	msgParam := map[string]string{"content": content}
 	msgParamBytes, _ := json.Marshal(msgParam)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"robotCode":          config.ClientID,
 		"openConversationId": conversationID,
 		"msgKey":             "sampleText",
@@ -951,7 +951,7 @@ func recallEnterpriseMessage(encodedID string) error {
 
 	url := "https://api.dingtalk.com/v1.0/robot/groupMessages/recall"
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"robotCode":          config.ClientID,
 		"openConversationId": conversationID,
 		"processQueryKey":    processQueryKey,
@@ -973,7 +973,7 @@ func sendEnterprisePrivateMessage(userID, content string) error {
 	msgParam := map[string]string{"content": content}
 	msgParamBytes, _ := json.Marshal(msgParam)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"robotCode": config.ClientID,
 		"userIds":   []string{userID},
 		"msgKey":    "sampleText",
@@ -984,7 +984,7 @@ func sendEnterprisePrivateMessage(userID, content string) error {
 	return err
 }
 
-func postToDingTalkAPI(url, token string, payload map[string]interface{}) (map[string]interface{}, error) {
+func postToDingTalkAPI(url, token string, payload map[string]any) (map[string]any, error) {
 	jsonBody, _ := json.Marshal(payload)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -1005,7 +1005,7 @@ func postToDingTalkAPI(url, token string, payload map[string]interface{}) (map[s
 		return nil, fmt.Errorf("api error status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.Unmarshal(body, &result)
 	return result, nil
 }

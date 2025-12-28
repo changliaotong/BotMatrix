@@ -9,10 +9,10 @@ import (
 
 // EventMessage 事件消息结构
 type EventMessage struct {
-	ID      string      `json:"id"`
-	Type    string      `json:"type"`
-	Name    string      `json:"name"`
-	Payload interface{} `json:"payload"`
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Payload any    `json:"payload"`
 }
 
 // Action 动作结构

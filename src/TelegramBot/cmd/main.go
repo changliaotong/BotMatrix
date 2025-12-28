@@ -132,7 +132,7 @@ func handleMessage(msg *tgbotapi.Message, selfID string) {
 
 	log.Printf("[%s] %s", msg.From.UserName, msg.Text)
 
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":    "message",
 		"message_type": "group",
 		"time":         time.Now().Unix(),
@@ -142,7 +142,7 @@ func handleMessage(msg *tgbotapi.Message, selfID string) {
 		"user_id":      fmt.Sprintf("%d", msg.From.ID),
 		"message":      msg.Text,
 		"raw_message":  msg.Text,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  fmt.Sprintf("%d", msg.From.ID),
 			"nickname": msg.From.UserName,
 		},
@@ -157,7 +157,7 @@ func handleMessage(msg *tgbotapi.Message, selfID string) {
 	botService.SendToNexus(obMsg)
 }
 
-func handleNexusCommand(action string, params map[string]interface{}) (interface{}, error) {
+func handleNexusCommand(action string, params map[string]any) (any, error) {
 	switch action {
 	case "send_msg":
 		return sendTelegramMessage(params)
@@ -168,7 +168,7 @@ func handleNexusCommand(action string, params map[string]interface{}) (interface
 	}
 }
 
-func sendTelegramMessage(params map[string]interface{}) (interface{}, error) {
+func sendTelegramMessage(params map[string]any) (any, error) {
 	if tgBot == nil {
 		return nil, fmt.Errorf("bot is not running")
 	}
@@ -199,12 +199,12 @@ func sendTelegramMessage(params map[string]interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"message_id": fmt.Sprintf("%d", sent.MessageID),
 	}, nil
 }
 
-func deleteTelegramMessage(params map[string]interface{}) (interface{}, error) {
+func deleteTelegramMessage(params map[string]any) (any, error) {
 	if tgBot == nil {
 		return nil, fmt.Errorf("bot is not running")
 	}

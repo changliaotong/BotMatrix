@@ -24,7 +24,7 @@ var Upgrader = websocket.Upgrader{
 }
 
 // ReadJSONWithNumber 从WebSocket读取JSON并使用json.Number保留大数字精度
-func ReadJSONWithNumber(conn *websocket.Conn, v interface{}) error {
+func ReadJSONWithNumber(conn *websocket.Conn, v any) error {
 	_, message, err := conn.ReadMessage()
 	if err != nil {
 		return err
@@ -32,6 +32,37 @@ func ReadJSONWithNumber(conn *websocket.Conn, v interface{}) error {
 	decoder := json.NewDecoder(bytes.NewReader(message))
 	decoder.UseNumber()
 	return decoder.Decode(v)
+}
+
+// DecodeMapToStruct decodes a map into a struct using JSON marshaling/unmarshaling
+// This is a simple alternative to mitchellh/mapstructure
+func DecodeMapToStruct(m any, v any) error {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, v)
+}
+
+// SendJSONResponse sends a standard API response
+func SendJSONResponse(w http.ResponseWriter, success bool, message string, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ApiResponse{
+		Success: success,
+		Message: message,
+		Data:    data,
+	})
+}
+
+// SendJSONResponseWithCode sends a standard API response with a custom code
+func SendJSONResponseWithCode(w http.ResponseWriter, success bool, message string, code string, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ApiResponse{
+		Success: success,
+		Message: message,
+		Code:    code,
+		Data:    data,
+	})
 }
 
 // hashPassword 对密码进行哈希处理
@@ -72,7 +103,7 @@ func (m *Manager) GenerateToken(user *User) (string, error) {
 
 // 验证JWT令牌
 func ValidateToken(tokenString string) (*UserClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -119,7 +150,7 @@ func MatchRoutePattern(pattern, value string) bool {
 }
 
 // ToString 安全转换接口到字符串
-func ToString(v interface{}) string {
+func ToString(v any) string {
 	if v == nil {
 		return ""
 	}
@@ -142,7 +173,7 @@ func ToString(v interface{}) string {
 }
 
 // ToInt64 安全转换接口到int64
-func ToInt64(v interface{}) int64 {
+func ToInt64(v any) int64 {
 	if v == nil {
 		return 0
 	}

@@ -272,6 +272,38 @@ app.Run();
 
 ---
 
+## 开发者常见问题 (FAQ)
+
+### 1. 插件可以访问网络、数据库或 Redis 吗？
+**答案是肯定的。** 由于 BotMatrix 插件是以独立进程运行的，你可以使用语言原生的所有功能：
+
+- **网络访问**：在 C# 中你可以自由使用 `HttpClient`，在 Python 中使用 `aiohttp`。
+- **数据库/Redis**：你可以直接连接你的私有数据库或 Redis。
+- **推荐做法**：
+    - 如果是简单的**状态存储**（如用户偏好、临时上下文），推荐使用 SDK 提供的 `ctx.Session` (C#) 或 `ctx.session` (Python/Go)。这样可以利用 BotMatrix 内置的分布式 Redis 存储，且无需担心多实例同步问题。
+    - 如果需要**持久化海量数据**，建议在插件中独立连接数据库。
+
+### 2. 支持热插拔和灰度升级吗？
+**完全支持。** BotMatrix 的核心设计目标就是“不停机更新”。
+
+- **热插拔**：你可以随时通过 `bm-cli pack` 生成新版本的 `.bmpk` 并放置到插件目录，Core 层会自动识别并启动新版本。
+- **热更新**：支持 `HotUpdatePlugin` 接口，可以在不停止服务的情况下，先启动新版本，待其就绪后再关闭旧版本。
+- **灰度发布 (Canary)**：
+    - 在 `plugin.json` 中配置 `canary_weight` (0-100)。
+    - Core 层会根据 `user_id` 或 `correlation_id` 进行哈希分流。
+    - 示例：配置 `canary_weight: 10`，则 10% 的用户将体验到新版本。
+
+```json
+{
+  "id": "weather_bot",
+  "version": "2.0.1",
+  "canary_weight": 10,
+  "entry_point": "dotnet WeatherBot.dll"
+}
+```
+
+---
+
 ## 目录结构
 
 - `src/plugins/sdk/plugin.go` - [Go SDK 源文件](file:///d:/projects/BotMatrix/src/plugins/sdk/plugin.go)

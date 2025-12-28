@@ -75,7 +75,7 @@ func (s *WebSocketServer) HandleAPI(action string, fn onebot.RequestHandler) {
 	s.apiHandlers[action] = fn
 }
 
-func (s *WebSocketServer) BroadcastJSON(v interface{}) error {
+func (s *WebSocketServer) BroadcastJSON(v any) error {
 	s.clientsMutex.Lock()
 	defer s.clientsMutex.Unlock()
 
@@ -271,7 +271,7 @@ func (s *WebSocketServer) GetSelfID() int64 {
 	return 123456789
 }
 
-func (s *WebSocketServer) sendAPIRequest(action string, params interface{}) (*onebot.Response, error) {
+func (s *WebSocketServer) sendAPIRequest(action string, params any) (*onebot.Response, error) {
 	// 获取第一个客户端连接
 	s.clientsMutex.Lock()
 	var conn *websocket.Conn
@@ -298,7 +298,7 @@ func (s *WebSocketServer) sendAPIRequest(action string, params interface{}) (*on
 	// 实际实现中应该处理echo来匹配请求和响应
 	return &onebot.Response{
 		Status: "ok",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"message_id": 123456,
 		},
 	}, nil

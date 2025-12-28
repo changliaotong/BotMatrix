@@ -62,9 +62,9 @@ func loadConfig() {
 	}
 }
 
-func handleAction(action map[string]interface{}) (interface{}, error) {
+func handleAction(action map[string]any) (any, error) {
 	actionType, _ := action["action"].(string)
-	params, _ := action["params"].(map[string]interface{})
+	params, _ := action["params"].(map[string]any)
 
 	mu.RLock()
 	currentWC := wc
@@ -96,7 +96,7 @@ func handleAction(action map[string]interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]interface{}{"message_id": msgID}, nil
+		return map[string]any{"message_id": msgID}, nil
 
 	case "delete_msg":
 		msgID, _ := params["message_id"].(string)
@@ -110,7 +110,7 @@ func handleAction(action map[string]interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("invalid message_id or client not initialized")
 
 	case "get_login_info":
-		return map[string]interface{}{
+		return map[string]any{
 			"user_id":  agentID,
 			"nickname": "WeCom Agent",
 		}, nil
@@ -135,7 +135,7 @@ func recallMessage(w *work.Work, msgID string) error {
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func startCallbackServer(ctx context.Context, port int) {
 func handleNexusCommand(data []byte) {
 	var cmd struct {
 		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
+		Params map[string]any         `json:"params"`
 		Echo   string                 `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
@@ -227,12 +227,12 @@ func handleNexusCommand(data []byte) {
 	}
 
 	log.Printf("Received Action: %s", cmd.Action)
-	result, err := handleAction(map[string]interface{}{
+	result, err := handleAction(map[string]any{
 		"action": cmd.Action,
 		"params": cmd.Params,
 	})
 
-	resp := map[string]interface{}{
+	resp := map[string]any{
 		"echo": cmd.Echo,
 	}
 	if err != nil {
@@ -262,7 +262,7 @@ func handleCallback(c *gin.Context) {
 		log.Printf("Received WeCom message: %s from %s", msg.Content, msg.FromUserName)
 
 		// Broadcast to Nexus
-		botService.SendToNexus(map[string]interface{}{
+		botService.SendToNexus(map[string]any{
 			"post_type":    "message",
 			"message_type": "private",
 			"user_id":      msg.FromUserName,

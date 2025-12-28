@@ -27,7 +27,7 @@ func main() {
 			Host:    "0.0.0.0",
 			Path:    "/ws",
 		},
-		ClientSpecific: map[string]interface{}{
+		ClientSpecific: map[string]any{
 			"self_id": "",
 		},
 	}
@@ -51,7 +51,7 @@ func main() {
 			Host:    "0.0.0.0",
 			Path:    "/ws",
 		},
-		ClientSpecific: map[string]interface{}{
+		ClientSpecific: map[string]any{
 			"self_id": "",
 		},
 	}

@@ -16,7 +16,7 @@ type PerformanceResult struct {
 }
 
 // 测试技能性能
-func testSkillPerformance(skill interface{}, params map[string]string, calls int) *PerformanceResult {
+func testSkillPerformance(skill any, params map[string]string, calls int) *PerformanceResult {
 	start := time.Now()
 	
 	for i := 0; i < calls; i++ {
@@ -56,11 +56,11 @@ func RunPerformanceTest() error {
 	if err != nil {
 		return fmt.Errorf("获取Init函数失败: %v", err)
 	}
-	initFunc := initSymbol.(func(robot interface{}))
+	initFunc := initSymbol.(func(robot any))
 	
 	// 创建测试机器人
 	testRobot := &TestRobot{
-		skills: make(map[string]interface{}
+		skills: make(map[string]any),
 	}
 	
 	// 初始化插件
@@ -85,10 +85,10 @@ func RunPerformanceTest() error {
 
 // TestRobot 实现了Robot接口
 type TestRobot struct {
-	skills map[string]interface{}
+	skills map[string]any
 }
 
-func (r *TestRobot) HandleSkill(skillName string, skill interface{}) {
+func (r *TestRobot) HandleSkill(skillName string, skill any) {
 	r.skills[skillName] = skill
 }
 

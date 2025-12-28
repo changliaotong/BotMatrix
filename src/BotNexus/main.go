@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/botuniverse/go-libonebot"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -100,6 +101,7 @@ type Manager struct {
 	*common.Manager
 	Core        *CorePlugin
 	TaskManager *tasks.TaskManager
+	OneBot      *libonebot.OneBot
 }
 
 // 主函数 - 整合所有功能
@@ -421,14 +423,9 @@ func (m *Manager) SkillMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 			msg := common.T(lang, "skill_system_disabled|技能系统已禁用。请在配置中设置 ENABLE_SKILL=true 以启用任务和策略功能。")
 
-			w.Header().Set("Content-Type", "application/json")
 			// 使用 200 状态码以允许前端优雅地处理“服务已关闭”的提示，而不是触发网络错误
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": msg,
-				"code":    "SKILL_DISABLED",
-			})
+			common.SendJSONResponseWithCode(w, false, msg, "SKILL_DISABLED", nil)
 			return
 		}
 		next(w, r)
@@ -489,6 +486,10 @@ func NewManager() *Manager {
 	// 初始化核心插件
 	m.Core = NewCorePlugin(m)
 
+	// 初始化 OneBot v12 实现
+	m.OneBot = libonebot.NewOneBot("BotMatrix-Nexus")
+	m.initOneBotActions()
+
 	// 技能系统 (任务系统) 默认关闭，仅在 ENABLE_SKILL 为 true 时开启
 	if common.ENABLE_SKILL {
 		clog.Info("[SKILL] 技能系统正在启动...")
@@ -517,7 +518,7 @@ func NewManager() *Manager {
 }
 
 // SendToWorker 实现 tasks.BotManager 接口，支持 Redis 和 WebSocket 双通道发送
-func (m *Manager) SendToWorker(workerID string, msg map[string]interface{}) error {
+func (m *Manager) SendToWorker(workerID string, msg common.WorkerCommand) error {
 	payload, _ := json.Marshal(msg)
 
 	// 1. 尝试通过 Redis 发送 (仅在启用技能系统时)
@@ -557,13 +558,13 @@ func (m *Manager) SendToWorker(workerID string, msg map[string]interface{}) erro
 }
 
 // HandleSkillResult 统一处理技能执行结果 (由 Redis 订阅或 WebSocket 触发)
-func (m *Manager) HandleSkillResult(rawMsg map[string]interface{}) {
-	taskIDStr := fmt.Sprint(rawMsg["task_id"])
-	executionID := fmt.Sprint(rawMsg["execution_id"])
-	statusStr := fmt.Sprint(rawMsg["status"])
-	result := fmt.Sprint(rawMsg["result"])
-	errStr := fmt.Sprint(rawMsg["error"])
-	workerID := fmt.Sprint(rawMsg["worker_id"])
+func (m *Manager) HandleSkillResult(skillResult common.SkillResult) {
+	taskIDStr := fmt.Sprint(skillResult.TaskID)
+	executionID := fmt.Sprint(skillResult.ExecutionID)
+	statusStr := skillResult.Status
+	result := skillResult.Result
+	errStr := skillResult.Error
+	workerID := skillResult.WorkerID
 
 	clog.Info("[Task] Received skill result",
 		zap.String("worker_id", workerID),
@@ -578,7 +579,7 @@ func (m *Manager) HandleSkillResult(rawMsg map[string]interface{}) {
 	}
 
 	// 更新执行状态
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status": status,
 		"result": result,
 	}
@@ -626,7 +627,7 @@ func (m *Manager) startRedisWorkerSubscription() {
 			continue
 		}
 
-		var rawMsg map[string]interface{}
+		var rawMsg map[string]any
 		if err := json.Unmarshal([]byte(msg.Payload), &rawMsg); err != nil {
 			clog.Error("[Redis] Failed to unmarshal message", zap.Error(err))
 			continue
@@ -684,13 +685,16 @@ func (m *Manager) startRedisWorkerSubscription() {
 			m.TaskManager.AI.UpdateSkills(skills)
 
 		case "skill_result":
-			m.HandleSkillResult(rawMsg)
+			var skillResult common.SkillResult
+			payloadBytes, _ := json.Marshal(rawMsg)
+			json.Unmarshal(payloadBytes, &skillResult)
+			m.HandleSkillResult(skillResult)
 		}
 	}
 }
 
 // 实现 tasks.BotManager 接口
-func (m *Manager) SendBotAction(botID string, action string, params map[string]interface{}) error {
+func (m *Manager) SendBotAction(botID string, action string, params any) error {
 	m.Mutex.RLock()
 	bot, exists := m.Bots[botID]
 	m.Mutex.RUnlock()
@@ -700,10 +704,14 @@ func (m *Manager) SendBotAction(botID string, action string, params map[string]i
 	}
 
 	echo := fmt.Sprintf("task|%d|%s", time.Now().UnixNano(), action)
-	msg := map[string]interface{}{
-		"action": action,
-		"params": params,
-		"echo":   echo,
+	msg := struct {
+		Action string `json:"action"`
+		Params any    `json:"params"`
+		Echo   string `json:"echo"`
+	}{
+		Action: action,
+		Params: params,
+		Echo:   echo,
 	}
 
 	bot.Mutex.Lock()

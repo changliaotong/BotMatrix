@@ -52,7 +52,7 @@ func (m *Manager) JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if !exists && m.DB != nil {
 			row := m.DB.QueryRow(m.PrepareQuery("SELECT id, username, password_hash, is_admin, active, session_version, created_at, updated_at FROM users WHERE username = ?"), claims.Username)
 			var u User
-			var createdAt, updatedAt interface{}
+			var createdAt, updatedAt any
 			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.Active, &u.SessionVersion, &createdAt, &updatedAt)
 			if err == nil {
 				if createdAt != nil {

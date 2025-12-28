@@ -157,7 +157,7 @@ func handleMessage(ctx context.Context, event *larkim.P2MessageReceiveV1) {
 	sender := event.Event.Sender
 
 	// Extract Content (JSON string)
-	var contentMap map[string]interface{}
+	var contentMap map[string]any
 	if err := json.Unmarshal([]byte(*msg.Content), &contentMap); err != nil {
 		log.Printf("Error parsing message content: %v", err)
 		return
@@ -206,7 +206,7 @@ func handleMessage(ctx context.Context, event *larkim.P2MessageReceiveV1) {
 	log.Printf("Received Message: [%s] %s: %s", msgType, userID, text)
 
 	// Construct OneBot Message
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":    "message",
 		"message_type": msgType,
 		"time":         time.Now().Unix(),
@@ -217,7 +217,7 @@ func handleMessage(ctx context.Context, event *larkim.P2MessageReceiveV1) {
 		"group_id":     groupID,
 		"message":      text,
 		"raw_message":  text,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  userID,
 			"nickname": "FeishuUser",
 		},
@@ -419,9 +419,9 @@ func handleConfigUI(w http.ResponseWriter, r *http.Request) {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		log.Printf("Invalid Nexus command: %v", err)
@@ -449,9 +449,9 @@ func handleNexusCommand(data []byte) {
 			deleteFeishuMessage(msgID, cmd.Echo)
 		}
 	case "get_login_info":
-		botService.SendToNexus(map[string]interface{}{
+		botService.SendToNexus(map[string]interfacee}{rface{}{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]interfacee}{rface{}{
 				"user_id":  feishuCfg.AppID,
 				"nickname": "FeishuBot",
 			},
@@ -481,19 +481,19 @@ func sendFeishuMessage(receiveID, receiveIDType, text, echo string) {
 
 	if err != nil {
 		log.Printf("Failed to send Feishu message: %v", err)
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	if !resp.Success() {
 		log.Printf("Feishu API error: %d - %s", resp.Code, resp.Msg)
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": resp.Msg, "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": resp.Msg, "echo": echo})
 		return
 	}
 
-	botService.SendToNexus(map[string]interface{}{
+	botService.SendToNexus(map[string]any{
 		"status": "ok",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"message_id": *resp.Data.MessageId,
 		},
 		"echo": echo,
@@ -511,14 +511,14 @@ func deleteFeishuMessage(messageID, echo string) {
 
 	if err != nil {
 		botService.LogManager.Error().Str("action", "delete_msg").Err(err).Str("message_id", messageID).Msg("Failed to delete Feishu message")
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	if !resp.Success() {
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": resp.Msg, "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": resp.Msg, "echo": echo})
 		return
 	}
 
-	botService.SendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
+	botService.SendToNexus(map[string]any{"status": "ok", "echo": echo})
 }

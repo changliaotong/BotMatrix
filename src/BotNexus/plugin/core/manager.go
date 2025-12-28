@@ -1,11 +1,12 @@
 package core
 
 import (
-	"archive/zip"
 	log "BotMatrix/common/log"
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,7 +14,7 @@ import (
 )
 
 type PluginManager struct {
-	plugins map[string]*Plugin
+	plugins map[string][]*Plugin // Changed: ID maps to a list of versions
 	mutex   sync.Mutex
 }
 
@@ -31,7 +32,7 @@ type Plugin struct {
 
 func NewPluginManager() *PluginManager {
 	return &PluginManager{
-		plugins: make(map[string]*Plugin),
+		plugins: make(map[string][]*Plugin),
 	}
 }
 
@@ -39,7 +40,7 @@ func (pm *PluginManager) LoadPlugins(dir string) error {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	files, err := filepath.Glob(filepath.Join(dir, "*", "plugin.json"))
+	files, err := filepath.Glob(filepath.Join(dir, "*", "*", "plugin.json")) // Support versioned folders
 	if err != nil {
 		return err
 	}
@@ -51,18 +52,51 @@ func (pm *PluginManager) LoadPlugins(dir string) error {
 			continue
 		}
 
-		if err := ValidatePluginConfig(config); err != nil {
-			log.Printf("Plugin config validation failed %s: %v", file, err)
-			continue
-		}
-
-		pm.plugins[config.ID] = &Plugin{
-			ID:     config.ID,
-			Config: config,
-			State:  "stopped",
-		}
+		pm.addPluginInternal(config)
 	}
 
+	return nil
+}
+
+func (pm *PluginManager) addPluginInternal(config *PluginConfig) {
+	p := &Plugin{
+		ID:     config.ID,
+		Config: config,
+		State:  "stopped",
+	}
+	pm.plugins[config.ID] = append(pm.plugins[config.ID], p)
+}
+
+func (pm *PluginManager) GetPlugins() []*Plugin {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	var all []*Plugin
+	for _, versions := range pm.plugins {
+		all = append(all, versions...)
+	}
+	return all
+}
+
+func (pm *PluginManager) GetPlugin(id string, version string) *Plugin {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	versions, ok := pm.plugins[id]
+	if !ok {
+		return nil
+	}
+
+	if version == "" {
+		// Default to latest version if not specified
+		return versions[len(versions)-1]
+	}
+
+	for _, p := range versions {
+		if p.Config.Version == version {
+			return p
+		}
+	}
 	return nil
 }
 
@@ -144,8 +178,8 @@ func (pm *PluginManager) InstallPlugin(bmpkPath string, targetDir string) error 
 		return fmt.Errorf("plugin.json not found in bmpk")
 	}
 
-	// 3. Create target directory
-	pluginDir := filepath.Join(targetDir, manifest.ID)
+	// 3. Create target directory (Versioned)
+	pluginDir := filepath.Join(targetDir, manifest.ID, manifest.Version)
 	if err := os.MkdirAll(pluginDir, 0755); err != nil {
 		return fmt.Errorf("failed to create plugin directory: %v", err)
 	}
@@ -188,14 +222,44 @@ func (pm *PluginManager) InstallPlugin(bmpkPath string, targetDir string) error 
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	pm.plugins[manifest.ID] = &Plugin{
+	newPlugin := &Plugin{
 		ID:     manifest.ID,
 		Config: manifest,
 		State:  "stopped",
 	}
+	pm.plugins[manifest.ID] = append(pm.plugins[manifest.ID], newPlugin)
 
 	log.Printf("Successfully installed plugin: %s (v%s)", manifest.Name, manifest.Version)
 	return nil
+}
+
+// SyncFromMarket downloads and installs a plugin from a market URL
+func (pm *PluginManager) SyncFromMarket(url string, targetDir string) error {
+	// 1. Download bmpk to temporary file
+	tmpFile, err := os.CreateTemp("", "*.bmpk")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download plugin: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("market returned status: %s", resp.Status)
+	}
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to save plugin: %v", err)
+	}
+
+	// 2. Install the downloaded bmpk
+	return pm.InstallPlugin(tmpFile.Name(), targetDir)
 }
 
 func VerifyPluginIntegrity(plugin *Plugin) error {

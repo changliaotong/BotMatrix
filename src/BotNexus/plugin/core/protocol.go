@@ -46,6 +46,7 @@ type PluginConfig struct {
 	Events      []string      `json:"events"`
 	Intents     []Intent      `json:"intents,omitempty"` // Added for AI/keyword routing
 	UI          []UIComponent `json:"ui,omitempty"`      // Added for UI extensions
+	CanaryWeight int          `json:"canary_weight,omitempty"` // 0-100, for gray upgrades
 	RunOn       []string      `json:"run_on"`
 	TimeoutMS   int           `json:"timeout_ms"`
 	MaxRestarts int           `json:"max_restarts"`

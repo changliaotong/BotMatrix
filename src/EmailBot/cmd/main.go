@@ -132,21 +132,21 @@ func stopBot() {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return
 	}
 
 	log.Printf("Received Action: %s", cmd.Action)
-	result, err := handleAction(map[string]interface{}{
+	result, err := handleAction(map[string]any{
 		"action": cmd.Action,
 		"params": cmd.Params,
 	})
 
-	resp := map[string]interface{}{
+	resp := map[string]any{
 		"echo": cmd.Echo,
 	}
 	if err != nil {
@@ -159,9 +159,9 @@ func handleNexusCommand(data []byte) {
 	botService.SendToNexus(resp)
 }
 
-func handleAction(action map[string]interface{}) (interface{}, error) {
+func handleAction(action map[string]any) (any, error) {
 	actionType, _ := action["action"].(string)
-	params, _ := action["params"].(map[string]interface{})
+	params, _ := action["params"].(map[string]any)
 
 	switch actionType {
 	case "send_private_msg":
@@ -348,7 +348,7 @@ func processMessage(msg *imap.Message, section *imap.BodySectionName) {
 	selfID := emailCfg.Username
 	botService.Mu.RUnlock()
 
-	event := map[string]interface{}{
+	event := map[string]any{
 		"post_type":    "message",
 		"message_type": "private", // Treat all emails as private messages
 		"time":         msg.Envelope.Date.Unix(),
@@ -358,7 +358,7 @@ func processMessage(msg *imap.Message, section *imap.BodySectionName) {
 		"user_id":      senderEmail,
 		"message":      content,
 		"raw_message":  content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  senderEmail,
 			"nickname": senderName,
 		},

@@ -76,13 +76,13 @@ func (s *Service) TriggerTask(userID int64, taskType string) {
 }
 
 // GetUserStats 获取用户裂变数据
-func (s *Service) GetUserStats(userID int64) (map[string]interface{}, error) {
+func (s *Service) GetUserStats(userID int64) (map[string]any, error) {
 	record, err := db.GetUserFissionRecord(s.db, userID)
 	if err != nil {
 		return nil, err
 	}
 	
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"invite_count": record.InviteCount,
 		"points":       record.Points,
 		"invite_code":  record.InviteCode,
@@ -92,6 +92,6 @@ func (s *Service) GetUserStats(userID int64) (map[string]interface{}, error) {
 }
 
 // GetLeaderboard 获取排行榜
-func (s *Service) GetLeaderboard(limit int) ([]map[string]interface{}, error) {
+func (s *Service) GetLeaderboard(limit int) ([]map[string]any, error) {
 	return db.GetFissionRank(s.db, limit)
 }

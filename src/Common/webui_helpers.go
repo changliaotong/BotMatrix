@@ -20,7 +20,7 @@ func NewConnectionWebUI(manager *ConnectionManager) *ConnectionWebUI {
 // RenderConfigPage 渲染连接配置页面
 func (w *ConnectionWebUI) RenderConfigPage(writer http.ResponseWriter, request *http.Request) {
 	connections := w.manager.GetConnections()
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Connections": connections,
 		"ClientTypes": []string{"wx", "qq", "wecom", "telegram"},
 	}

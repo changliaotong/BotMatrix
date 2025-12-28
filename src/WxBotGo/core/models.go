@@ -62,9 +62,9 @@ type ActionParams struct {
 
 // Action Response
 type OneBotResponse struct {
-	Status  string      `json:"status"` // ok, failed
-	RetCode int         `json:"retcode"`
-	Data    interface{} `json:"data"`
-	Message string      `json:"message,omitempty"`
-	Echo    interface{} `json:"echo,omitempty"`
+	Status  string `json:"status"` // ok, failed
+	RetCode int    `json:"retcode"`
+	Data    any    `json:"data"`
+	Message string `json:"message,omitempty"`
+	Echo    any    `json:"echo,omitempty"`
 }

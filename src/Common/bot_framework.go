@@ -130,15 +130,15 @@ func NewBaseBot(defaultLogPort int) *BaseBot {
 	return b
 }
 
-func (b *BaseBot) Info(format string, v ...interface{}) {
+func (b *BaseBot) Info(format string, v ...any) {
 	b.LogManager.Log("INFO", fmt.Sprintf(format, v...))
 }
 
-func (b *BaseBot) Warn(format string, v ...interface{}) {
+func (b *BaseBot) Warn(format string, v ...any) {
 	b.LogManager.Log("WARN", fmt.Sprintf(format, v...))
 }
 
-func (b *BaseBot) Error(format string, v ...interface{}) {
+func (b *BaseBot) Error(format string, v ...any) {
 	b.LogManager.Log("ERROR", fmt.Sprintf(format, v...))
 }
 
@@ -154,7 +154,7 @@ func (b *BaseBot) logPusher() {
 
 			if conn != nil {
 				// 将日志包装为 OneBot 风格的消息上报给 Nexus
-				b.SendToNexus(map[string]interface{}{
+				b.SendToNexus(map[string]any{
 					"post_type": "log",
 					"level":     entry.Level,
 					"time":      entry.Timestamp.Unix(),
@@ -296,7 +296,7 @@ func (b *BaseBot) StartNexusConnection(ctx context.Context, addr, platform, self
 				log.Println("Connected to BotNexus!")
 
 				// Send Lifecycle Event
-				b.SendToNexus(map[string]interface{}{
+				b.SendToNexus(map[string]any{
 					"post_type":       "meta_event",
 					"meta_event_type": "lifecycle",
 					"sub_type":        "connect",
@@ -324,7 +324,7 @@ func (b *BaseBot) StartNexusConnection(ctx context.Context, addr, platform, self
 	}()
 }
 
-func (b *BaseBot) SendToNexus(msg interface{}) {
+func (b *BaseBot) SendToNexus(msg any) {
 	b.ConnMu.Lock()
 	defer b.ConnMu.Unlock()
 	if b.NexusConn == nil {

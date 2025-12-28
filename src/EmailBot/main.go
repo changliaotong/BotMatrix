@@ -160,7 +160,7 @@ func connectToNexus(ctx context.Context, addr string) {
 			Info("Connected to BotNexus!")
 
 			// Send Lifecycle Event: Connect
-			sendEvent(map[string]interface{}{
+			sendEvent(map[string]any{
 				"post_type":       "meta_event",
 				"meta_event_type": "lifecycle",
 				"sub_type":        "connect",
@@ -204,12 +204,12 @@ func connectToNexus(ctx context.Context, addr string) {
 						goto next_reconnect
 					}
 				case <-ticker.C:
-					sendEvent(map[string]interface{}{
+					sendEvent(map[string]any{
 						"post_type":       "meta_event",
 						"meta_event_type": "heartbeat",
 						"self_id":         selfID,
 						"time":            time.Now().Unix(),
-						"status": map[string]interface{}{
+						"status": map[string]any{
 							"online": true,
 							"good":   true,
 						},
@@ -221,7 +221,7 @@ func connectToNexus(ctx context.Context, addr string) {
 	}
 }
 
-func sendEvent(event map[string]interface{}) {
+func sendEvent(event map[string]any) {
 	connMutex.Lock()
 	defer connMutex.Unlock()
 	if nexusConn == nil {
@@ -237,18 +237,22 @@ func sendEvent(event map[string]interface{}) {
 	}
 }
 
-func handleAction(msg []byte) {
-	var action map[string]interface{}
-	if err := json.Unmarshal(msg, &action); err != nil {
+func handleAction(data []byte) {
+	var cmd struct {
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   any            `json:"echo"`
+	}
+	if err := json.Unmarshal(data, &cmd); err != nil {
 		Error("JSON Unmarshal error", zap.Error(err))
 		return
 	}
 
-	actionType, _ := action["action"].(string)
-	params, _ := action["params"].(map[string]interface{})
-	echo, _ := action["echo"]
+	actionType := cmd.Action
+	params := cmd.Params
+	echo := cmd.Echo
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":  "ok",
 		"retcode": 0,
 		"data":    nil,
@@ -442,7 +446,7 @@ func processMessage(msg *imap.Message, section *imap.BodySectionName) {
 
 	Info("Received email", zap.String("from", senderEmail), zap.String("subject", msg.Envelope.Subject))
 
-	event := map[string]interface{}{
+	event := map[string]any{
 		"post_type":    "message",
 		"message_type": "private", // Treat all emails as private messages
 		"time":         msg.Envelope.Date.Unix(),
@@ -452,7 +456,7 @@ func processMessage(msg *imap.Message, section *imap.BodySectionName) {
 		"user_id":      senderEmail,
 		"message":      content,
 		"raw_message":  content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  senderEmail,
 			"nickname": senderName,
 		},

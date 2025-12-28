@@ -260,7 +260,7 @@ func (p *CorePlugin) RecompileRegex() {
 
 // ProcessMessage checks if a message should be allowed through the system
 // Returns: allowed (bool), reason (string), error
-func (p *CorePlugin) ProcessMessage(msg map[string]interface{}) (bool, string, error) {
+func (p *CorePlugin) ProcessMessage(msg common.InternalMessage) (bool, string, error) {
 	p.Mutex.RLock()
 	defer p.Mutex.RUnlock()
 
@@ -329,16 +329,16 @@ func (p *CorePlugin) RecordStatistics(msgType string, allowed bool) {
 }
 
 // RecordUserActivity records activity for specific users, groups, and bots
-func (p *CorePlugin) RecordUserActivity(msg map[string]interface{}) {
+func (p *CorePlugin) RecordUserActivity(msg common.InternalMessage) {
 	if p.Manager.Rdb == nil {
 		return
 	}
 	ctx := context.Background()
 	today := time.Now().Format("2006-01-02")
 
-	userID := common.ToString(msg["user_id"])
-	groupID := common.ToString(msg["group_id"])
-	botID := common.ToString(msg["self_id"])
+	userID := msg.UserID
+	groupID := msg.GroupID
+	botID := msg.SelfID
 
 	// 使用 Redis Hash 记录今日活跃度
 	if userID != "" {
@@ -356,7 +356,7 @@ func (p *CorePlugin) RecordUserActivity(msg map[string]interface{}) {
 }
 
 // RecordBlockedMessage records details of a blocked message
-func (p *CorePlugin) RecordBlockedMessage(msg map[string]interface{}, reason string) {
+func (p *CorePlugin) RecordBlockedMessage(msg common.InternalMessage, reason string) {
 	if p.Manager.Rdb == nil {
 		return
 	}
@@ -364,69 +364,87 @@ func (p *CorePlugin) RecordBlockedMessage(msg map[string]interface{}, reason str
 	today := time.Now().Format("2006-01-02")
 	key := fmt.Sprintf("core:blocked:%s", today)
 
-	data, _ := json.Marshal(map[string]interface{}{
-		"time":   time.Now().Format(time.RFC3339),
-		"reason": reason,
-		"msg":    msg,
-	})
-
-	p.Manager.Rdb.RPush(ctx, key, string(data))
-	p.Manager.Rdb.LTrim(ctx, key, -100, -1)        // Keep last 100
-	p.Manager.Rdb.Expire(ctx, key, 7*24*time.Hour) // Keep for 7 days
-}
-
-func (p *CorePlugin) identifyMessageType(msg map[string]interface{}) string {
-	// Simple logic to identify message type based on OneBot structure
-	if postType, ok := msg["post_type"].(string); ok {
-		if postType == "message" {
-			// Check if it's an admin command
-			if p.isInternalAdminCommand(msg) {
-				return "admin_command"
+	message := msg.RawMessage
+	if message == "" {
+		var sb strings.Builder
+		for _, seg := range msg.Message {
+			if seg.Type == "text" {
+				if t, ok := seg.Data["text"].(string); ok {
+					sb.WriteString(t)
+				}
 			}
-			return "user_message"
 		}
-		return "system_event"
+		message = sb.String()
 	}
-	return "user_message"
+
+	record := map[string]any{
+		"time":     time.Now().Format(time.RFC3339),
+		"bot_id":   msg.SelfID,
+		"user_id":  msg.UserID,
+		"group_id": msg.GroupID,
+		"content":  message,
+		"reason":   reason,
+		"protocol": msg.Protocol,
+	}
+
+	data, _ := json.Marshal(record)
+	p.Manager.Rdb.LPush(ctx, key, data)
+	p.Manager.Rdb.LTrim(ctx, key, 0, 99) // Keep last 100
+	p.Manager.Rdb.Expire(ctx, key, 7*24*time.Hour)
 }
 
-func (p *CorePlugin) isInternalAdminCommand(msg map[string]interface{}) bool {
+func (p *CorePlugin) identifyMessageType(msg common.InternalMessage) string {
+	// For InternalMessage, we can rely on Protocol and MessageType
+	if msg.MessageType != "" {
+		if p.isInternalAdminCommand(msg) {
+			return "admin_command"
+		}
+		return "user_message"
+	}
+	return "system_event"
+}
+
+func (p *CorePlugin) isInternalAdminCommand(msg common.InternalMessage) bool {
 	// Implementation for admin command detection
 	// Usually starts with a specific prefix like /system or /admin
-	message := ""
-	if rm, ok := msg["raw_message"].(string); ok && rm != "" {
-		message = rm
-	} else if m, ok := msg["message"].(string); ok && m != "" {
-		message = m
+	message := msg.RawMessage
+	if message == "" {
+		// If raw message is empty (v12), check text segments
+		for _, seg := range msg.Message {
+		if seg.Type == "text" {
+			if t, ok := seg.Data["text"].(string); ok {
+				message = t
+				break
+			}
+		}
+		}
 	}
 
 	return strings.HasPrefix(message, "/system") || strings.HasPrefix(message, "/nexus")
 }
 
-func (p *CorePlugin) checkPermissions(msg map[string]interface{}) (bool, string) {
-	userID := common.ToString(msg["user_id"])
-	botID := common.ToString(msg["self_id"])
-	groupID := common.ToString(msg["group_id"])
+func (p *CorePlugin) checkPermissions(msg common.InternalMessage) (bool, string) {
+	userID := msg.UserID
+	groupID := msg.GroupID
+	botID := msg.SelfID
 
-	// 1. Whitelist highest priority
-	if p.Config.FlowPriority.WhitelistHighest {
-		if p.isInList(userID, p.Config.Permissions.Whitelist.System) ||
-			p.isInList(botID, p.Config.Permissions.Whitelist.Robot) ||
-			(groupID != "" && p.isInList(groupID, p.Config.Permissions.Whitelist.Group)) {
-			return true, ""
-		}
+	// 1. Blacklist checks (Highest priority)
+	if p.isInList(userID, p.Config.Permissions.Blacklist.System) {
+		return false, "user_blacklisted"
+	}
+	if p.isInList(groupID, p.Config.Permissions.Blacklist.Group) {
+		return false, "group_blacklisted"
+	}
+	if p.isInList(botID, p.Config.Permissions.Blacklist.Robot) {
+		return false, "robot_blacklisted"
 	}
 
-	// 2. Blacklist enforcement
-	if p.Config.FlowPriority.BlacklistEnforce {
-		if p.isInList(userID, p.Config.Permissions.Blacklist.System) {
-			return false, "user_blacklisted"
-		}
-		if p.isInList(botID, p.Config.Permissions.Blacklist.Robot) {
-			return false, "bot_blacklisted"
-		}
-		if groupID != "" && p.isInList(groupID, p.Config.Permissions.Blacklist.Group) {
-			return false, "group_blacklisted"
+	// 2. Whitelist checks
+	if p.Config.FlowPriority.WhitelistHighest {
+		if p.isInList(userID, p.Config.Permissions.Whitelist.System) ||
+			p.isInList(groupID, p.Config.Permissions.Whitelist.Group) ||
+			p.isInList(botID, p.Config.Permissions.Whitelist.Robot) {
+			return true, ""
 		}
 	}
 
@@ -442,12 +460,19 @@ func (p *CorePlugin) isInList(target string, list []string) bool {
 	return false
 }
 
-func (p *CorePlugin) checkContent(msg map[string]interface{}) (bool, string) {
-	message := ""
-	if rm, ok := msg["raw_message"].(string); ok && rm != "" {
-		message = rm
-	} else if m, ok := msg["message"].(string); ok && m != "" {
-		message = m
+func (p *CorePlugin) checkContent(msg common.InternalMessage) (bool, string) {
+	message := msg.RawMessage
+	if message == "" {
+		// If raw message is empty (v12), reconstruct for content check
+		var sb strings.Builder
+		for _, seg := range msg.Message {
+			if seg.Type == "text" {
+				if t, ok := seg.Data["text"].(string); ok {
+					sb.WriteString(t)
+				}
+			}
+		}
+		message = sb.String()
 	}
 
 	if message == "" {
@@ -491,12 +516,17 @@ func (p *CorePlugin) checkContent(msg map[string]interface{}) (bool, string) {
 }
 
 // HandleAdminCommand processes system admin commands
-func (p *CorePlugin) HandleAdminCommand(msg map[string]interface{}) (string, error) {
-	message := ""
-	if rm, ok := msg["raw_message"].(string); ok && rm != "" {
-		message = rm
-	} else if m, ok := msg["message"].(string); ok && m != "" {
-		message = m
+func (p *CorePlugin) HandleAdminCommand(msg common.InternalMessage) (string, error) {
+	message := msg.RawMessage
+	if message == "" {
+		for _, seg := range msg.Message {
+			if seg.Type == "text" {
+				if t, ok := seg.Data["text"].(string); ok {
+					message = t
+					break
+				}
+			}
+		}
 	}
 
 	parts := strings.Fields(message)

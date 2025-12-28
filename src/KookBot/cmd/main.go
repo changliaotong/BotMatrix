@@ -159,7 +159,7 @@ func handleCommon(commonData *kook.EventDataGeneral, author kook.User) {
 
 	botService.LogManager.Info().Str("username", author.Username).Msg(commonData.Content)
 
-	obMsg := map[string]interface{}{
+	obMsg := map[string]any{
 		"post_type":   "message",
 		"time":        time.Now().Unix(),
 		"self_id":     selfID,
@@ -168,7 +168,7 @@ func handleCommon(commonData *kook.EventDataGeneral, author kook.User) {
 		"user_id":     commonData.AuthorID,
 		"message":     commonData.Content,
 		"raw_message": commonData.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  commonData.AuthorID,
 			"nickname": author.Username,
 		},
@@ -203,9 +203,9 @@ func kmarkdownMessageHandler(ctx *kook.KmarkdownMessageContext) {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return
@@ -232,9 +232,9 @@ func handleNexusCommand(data []byte) {
 			deleteKookMessage(msgID, cmd.Echo)
 		}
 	case "get_login_info":
-		botService.SendToNexus(map[string]interface{}{
+		botService.SendToNexus(map[string]any{
 			"status": "ok",
-			"data": map[string]interface{}{
+			"data": map[string]any{
 				"user_id":  selfID,
 				"nickname": "KookBot",
 			},
@@ -247,12 +247,12 @@ func deleteKookMessage(msgID, echo string) {
 	err := session.MessageDelete(msgID)
 	if err != nil {
 		botService.LogManager.Error().Str("message_id", msgID).Err(err).Msg("Failed to delete message")
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	botService.LogManager.Info().Str("message_id", msgID).Msg("Deleted message")
-	botService.SendToNexus(map[string]interface{}{"status": "ok", "echo": echo})
+	botService.SendToNexus(map[string]any{"status": "ok", "echo": echo})
 }
 
 func sendKookMessage(targetID, content, echo string) {
@@ -266,14 +266,14 @@ func sendKookMessage(targetID, content, echo string) {
 
 	if err != nil {
 		botService.LogManager.Error().Str("target_id", targetID).Str("content", content).Err(err).Msg("Failed to send message")
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	botService.LogManager.Info().Str("target_id", targetID).Str("content", content).Msg("Sent message")
-	botService.SendToNexus(map[string]interface{}{
+	botService.SendToNexus(map[string]any{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": resp.MsgID},
+		"data":   map[string]any{"message_id": resp.MsgID},
 		"echo":   echo,
 	})
 }
@@ -289,14 +289,14 @@ func sendKookDirectMessage(targetID, content, echo string) {
 
 	if err != nil {
 		botService.LogManager.Error().Str("target_id", targetID).Str("content", content).Err(err).Msg("Failed to send private message")
-		botService.SendToNexus(map[string]interface{}{"status": "failed", "message": err.Error(), "echo": echo})
+		botService.SendToNexus(map[string]any{"status": "failed", "message": err.Error(), "echo": echo})
 		return
 	}
 
 	botService.LogManager.Info().Str("target_id", targetID).Str("content", content).Msg("Sent private message")
-	botService.SendToNexus(map[string]interface{}{
+	botService.SendToNexus(map[string]any{
 		"status": "ok",
-		"data":   map[string]interface{}{"message_id": resp.MsgID},
+		"data":   map[string]any{"message_id": resp.MsgID},
 		"echo":   echo,
 	})
 }

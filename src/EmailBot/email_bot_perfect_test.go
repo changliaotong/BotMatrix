@@ -48,7 +48,7 @@ func TestEmailReceiving(t *testing.T) {
 				return
 			}
 
-			var event map[string]interface{}
+			var event map[string]any
 			if err := json.Unmarshal(message, &event); err != nil {
 				t.Errorf("Failed to parse lifecycle event: %v", err)
 				return
@@ -99,7 +99,7 @@ func TestEmailReceiving(t *testing.T) {
 func TestEmailSending(t *testing.T) {
 	t.Run("SendPrivateMessageAction", func(t *testing.T) {
 		// Create a mock Nexus server to send commands to the email bot
-		responseReceived := make(chan map[string]interface{}, 1)
+		responseReceived := make(chan map[string]any, 1)
 
 		mockNexus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Verify headers
@@ -130,9 +130,9 @@ func TestEmailSending(t *testing.T) {
 			}
 
 			// Send a send_private_msg command to the bot
-			action := map[string]interface{}{
+			action := map[string]any{
 				"action": "send_private_msg",
-				"params": map[string]interface{}{
+				"params": map[string]any{
 					"user_id": "recipient@example.com",
 					"message": "Subject: Test Subject\n\nTest message body",
 				},
@@ -150,8 +150,8 @@ func TestEmailSending(t *testing.T) {
 				t.Errorf("Failed to read response: %v", err)
 				return
 			}
-
-			var response map[string]interface{}
+			
+			var response map[string]any
 			if err := json.Unmarshal(message, &response); err != nil {
 				t.Errorf("Failed to parse response: %v", err)
 				return
@@ -225,7 +225,7 @@ func TestOneBotCompatibility(t *testing.T) {
 		body := "Test email body content"
 
 		// Expected OneBot message event structure
-		event := map[string]interface{}{
+		event := map[string]any{
 			"post_type":    "message",
 			"message_type": "private", // All emails are treated as private messages
 			"time":         time.Now().Unix(),
@@ -235,7 +235,7 @@ func TestOneBotCompatibility(t *testing.T) {
 			"user_id":      senderEmail,
 			"message":      "Subject: " + subject + "\n\n" + body,
 			"raw_message":  "Subject: " + subject + "\n\n" + body,
-			"sender": map[string]interface{}{
+			"sender": map[string]any{
 				"user_id":  senderEmail,
 				"nickname": "Sender Name",
 			},
@@ -265,12 +265,12 @@ func TestOneBotCompatibility(t *testing.T) {
 
 	t.Run("HeartbeatEventStructure", func(t *testing.T) {
 		// Test heartbeat event structure
-		event := map[string]interface{}{
+		event := map[string]any{
 			"post_type":       "meta_event",
 			"meta_event_type": "heartbeat",
 			"self_id":         "test@example.com",
 			"time":            time.Now().Unix(),
-			"status": map[string]interface{}{
+			"status": map[string]any{
 				"online": true,
 				"good":   true,
 			},
@@ -297,7 +297,7 @@ func TestOneBotCompatibility(t *testing.T) {
 
 	t.Run("LifecycleEventStructure", func(t *testing.T) {
 		// Test lifecycle event structure
-		event := map[string]interface{}{
+		event := map[string]any{
 			"post_type":       "meta_event",
 			"meta_event_type": "lifecycle",
 			"sub_type":        "connect",

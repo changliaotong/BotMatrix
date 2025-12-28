@@ -42,7 +42,7 @@ type SessionCache struct {
 	GroupLastMsgID   map[string]string                   `json:"group_last_msg_id"`
 	ChannelLastMsgID map[string]string                   `json:"channel_last_msg_id"`
 	LastMsgTime      map[string]int64                    `json:"last_msg_time"`
-	PendingActions   map[string][]map[string]interface{} `json:"pending_actions"`
+	PendingActions   map[string][]map[string]any `json:"pending_actions"`
 }
 
 var (
@@ -60,7 +60,7 @@ var (
 		GroupLastMsgID:   make(map[string]string),
 		ChannelLastMsgID: make(map[string]string),
 		LastMsgTime:      make(map[string]int64),
-		PendingActions:   make(map[string][]map[string]interface{}),
+		PendingActions:   make(map[string][]map[string]any),
 	}
 )
 
@@ -230,18 +230,18 @@ func (s *SessionCache) LoadDisk() {
 	json.Unmarshal(data, s)
 }
 
-func (s *SessionCache) AddPending(keyType, key string, action map[string]interface{}) {
+func (s *SessionCache) AddPending(keyType, key string, action map[string]any) {
 	s.Lock()
 	defer s.Unlock()
 	compositeKey := keyType + ":" + key
 	if s.PendingActions == nil {
-		s.PendingActions = make(map[string][]map[string]interface{})
+		s.PendingActions = make(map[string][]map[string]any)
 	}
 	s.PendingActions[compositeKey] = append(s.PendingActions[compositeKey], action)
 	go s.SaveDisk()
 }
 
-func (s *SessionCache) Save(keyType, key, msgID string) []map[string]interface{} {
+func (s *SessionCache) Save(keyType, key, msgID string) []map[string]any {
 	s.Lock()
 	defer s.Unlock()
 	switch keyType {
@@ -255,7 +255,7 @@ func (s *SessionCache) Save(keyType, key, msgID string) []map[string]interface{}
 	s.LastMsgTime[msgID] = time.Now().Unix()
 
 	compositeKey := keyType + ":" + key
-	var pending []map[string]interface{}
+	var pending []map[string]any
 	if actions, ok := s.PendingActions[compositeKey]; ok && len(actions) > 0 {
 		pending = actions
 		delete(s.PendingActions, compositeKey)
@@ -303,7 +303,7 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 	content = re.ReplaceAllString(content, "")
 	content = strings.TrimSpace(content)
 
-	eventData := map[string]interface{}{
+	eventData := map[string]any{
 		"post_type":    "message",
 		"message_type": "guild",
 		"time":         time.Now().Unix(),
@@ -315,7 +315,7 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 		"user_id":      data.Author.ID,
 		"message":      content,
 		"raw_message":  data.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id":  data.Author.ID,
 			"nickname": data.Author.Username,
 		},
@@ -344,7 +344,7 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 
 	content := strings.TrimSpace(data.Content)
 
-	eventData := map[string]interface{}{
+	eventData := map[string]any{
 		"post_type":    "message",
 		"message_type": "group",
 		"time":         time.Now().Unix(),
@@ -355,7 +355,7 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 		"user_id":      data.Author.MemberOpenID,
 		"message":      content,
 		"raw_message":  data.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id": data.Author.MemberOpenID,
 		},
 	}
@@ -377,7 +377,7 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 
 	content := strings.TrimSpace(data.Content)
 
-	eventData := map[string]interface{}{
+	eventData := map[string]any{
 		"post_type":    "message",
 		"message_type": "private",
 		"time":         time.Now().Unix(),
@@ -387,7 +387,7 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 		"user_id":      data.Author.UserOpenID,
 		"message":      content,
 		"raw_message":  data.Content,
-		"sender": map[string]interface{}{
+		"sender": map[string]any{
 			"user_id": data.Author.UserOpenID,
 		},
 	}
@@ -405,7 +405,7 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 func handleNexusCommand(data []byte) {
 	var cmd struct {
 		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
+		Params map[string]any         `json:"params"`
 		Echo   string                 `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
@@ -413,12 +413,12 @@ func handleNexusCommand(data []byte) {
 	}
 
 	log.Printf("Received Action: %s", cmd.Action)
-	result, err := handleAction(map[string]interface{}{
+	result, err := handleAction(map[string]any{
 		"action": cmd.Action,
 		"params": cmd.Params,
 	})
 
-	resp := map[string]interface{}{
+	resp := map[string]any{
 		"echo": cmd.Echo,
 	}
 	if err != nil {
@@ -432,9 +432,9 @@ func handleNexusCommand(data []byte) {
 }
 
 // Action Handling
-func handleAction(action map[string]interface{}) (interface{}, error) {
+func handleAction(action map[string]any) (any, error) {
 	act, _ := action["action"].(string)
-	params, _ := action["params"].(map[string]interface{})
+	params, _ := action["params"].(map[string]any)
 
 	switch act {
 	case "send_msg", "send_group_msg", "send_private_msg":
@@ -537,7 +537,7 @@ func handleAction(action map[string]interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]interface{}{
+		return map[string]any{
 			"user_id":  me.ID,
 			"nickname": me.Username,
 		}, nil
@@ -547,7 +547,7 @@ func handleAction(action map[string]interface{}) (interface{}, error) {
 }
 
 // Helpers
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
 			return s

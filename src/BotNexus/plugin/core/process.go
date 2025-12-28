@@ -12,13 +12,29 @@ import (
 	"BotNexus/plugin/policy"
 )
 
-func (pm *PluginManager) StartPlugin(name string) error {
+func (pm *PluginManager) StartPlugin(id string, version string) error {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	plugin, ok := pm.plugins[name]
+	versions, ok := pm.plugins[id]
 	if !ok {
-		return fmt.Errorf("plugin %s not found", name)
+		return fmt.Errorf("plugin %s not found", id)
+	}
+
+	var plugin *Plugin
+	if version == "" {
+		plugin = versions[len(versions)-1]
+	} else {
+		for _, p := range versions {
+			if p.Config.Version == version {
+				plugin = p
+				break
+			}
+		}
+	}
+
+	if plugin == nil {
+		return fmt.Errorf("plugin %s version %s not found", id, version)
 	}
 
 	if plugin.State == "running" {
@@ -58,7 +74,7 @@ func (pm *PluginManager) restartPlugin(plugin *Plugin) {
 
 	plugin.RestartCount++
 	plugin.LastRestart = time.Now()
-	pm.StartPlugin(plugin.ID)
+	pm.StartPlugin(plugin.ID, plugin.Config.Version)
 }
 
 func (pm *PluginManager) readPluginOutput(plugin *Plugin) {
@@ -146,11 +162,18 @@ func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) {
 	payload, _ := action.Payload["payload"].(map[string]any)
 
 	pm.mutex.Lock()
-	targetPlugin, exists := pm.plugins[targetID]
+	versions, exists := pm.plugins[targetID]
 	pm.mutex.Unlock()
 
-	if !exists || targetPlugin.State != "running" {
-		log.Printf("Skill call failed: target plugin %s not found or not running", targetID)
+	if !exists || len(versions) == 0 {
+		log.Printf("Skill call failed: target plugin %s not found", targetID)
+		return
+	}
+
+	// Always route to the latest version for skills for now
+	targetPlugin := versions[len(versions)-1]
+	if targetPlugin.State != "running" {
+		log.Printf("Skill call failed: target plugin %s (v%s) is not running", targetID, targetPlugin.Config.Version)
 		return
 	}
 
@@ -176,10 +199,15 @@ func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) {
 // DispatchEvent routes an incoming event to matching plugins
 func (pm *PluginManager) DispatchEvent(event *EventMessage) {
 	pm.mutex.Lock()
-	plugins := make([]*Plugin, 0, len(pm.plugins))
-	for _, p := range pm.plugins {
-		if p.State == "running" {
-			plugins = append(plugins, p)
+	// Get candidate plugins with version selection (Canary)
+	targetPlugins := make([]*Plugin, 0)
+	for id, versions := range pm.plugins {
+		if len(versions) == 0 {
+			continue
+		}
+		p := pm.selectVersion(event, versions)
+		if p != nil && p.State == "running" {
+			targetPlugins = append(targetPlugins, p)
 		}
 	}
 	pm.mutex.Unlock()
@@ -196,7 +224,7 @@ func (pm *PluginManager) DispatchEvent(event *EventMessage) {
 	}
 
 	// 2. Broadcast to plugins that explicitly subscribe to this event name
-	for _, p := range plugins {
+	for _, p := range targetPlugins {
 		shouldSend := false
 		for _, e := range p.Config.Events {
 			if e == event.Name || e == "*" {
@@ -214,6 +242,57 @@ func (pm *PluginManager) DispatchEvent(event *EventMessage) {
 	}
 }
 
+// selectVersion implements Canary routing logic
+func (pm *PluginManager) selectVersion(event *EventMessage, versions []*Plugin) *Plugin {
+	if len(versions) == 1 {
+		return versions[0]
+	}
+
+	// Find the latest version and the one before it (potential canary)
+	stable := versions[len(versions)-1]
+	var canary *Plugin
+
+	// Simple rule: if we have multiple versions, and one has CanaryWeight > 0, it's a canary
+	for _, v := range versions {
+		if v.Config.CanaryWeight > 0 {
+			canary = v
+			break
+		}
+	}
+
+	if canary == nil {
+		return stable
+	}
+
+	// Use correlation_id or user_id for sticky routing
+	seed := event.CorrelationId
+	if seed == "" {
+		if payload, ok := event.Payload.(map[string]any); ok {
+			if from, ok := payload["from"].(string); ok {
+				seed = from
+			}
+		}
+	}
+
+	if seed == "" {
+		seed = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+
+	// Simple hash-based routing
+	h := 0
+	for i := 0; i < len(seed); i++ {
+		h = 31*h + int(seed[i])
+	}
+	if h < 0 {
+		h = -h
+	}
+
+	if h%100 < canary.Config.CanaryWeight {
+		return canary
+	}
+	return stable
+}
+
 func (pm *PluginManager) routeByIntent(text string, originalEvent *EventMessage) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
@@ -224,8 +303,13 @@ func (pm *PluginManager) routeByIntent(text string, originalEvent *EventMessage)
 	}
 	var matches []match
 
-	for _, p := range pm.plugins {
-		if p.State != "running" {
+	for _, versions := range pm.plugins {
+		if len(versions) == 0 {
+			continue
+		}
+		// In intent routing, we also respect Canary
+		p := pm.selectVersion(originalEvent, versions)
+		if p == nil || p.State != "running" {
 			continue
 		}
 		for _, intent := range p.Config.Intents {
@@ -261,13 +345,25 @@ func (pm *PluginManager) routeByIntent(text string, originalEvent *EventMessage)
 	}
 }
 
-func (pm *PluginManager) StopPlugin(name string) error {
+func (pm *PluginManager) StopPlugin(id string, version string) error {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	plugin, ok := pm.plugins[name]
+	versions, ok := pm.plugins[id]
 	if !ok {
-		return fmt.Errorf("plugin %s not found", name)
+		return fmt.Errorf("plugin %s not found", id)
+	}
+
+	var plugin *Plugin
+	for _, p := range versions {
+		if version == "" || p.Config.Version == version {
+			plugin = p
+			break
+		}
+	}
+
+	if plugin == nil {
+		return fmt.Errorf("plugin %s version %s not found", id, version)
 	}
 
 	if plugin.State != "running" {
@@ -287,66 +383,47 @@ func (pm *PluginManager) StopPlugin(name string) error {
 	return nil
 }
 
-func (pm *PluginManager) RestartPlugin(name string) error {
-	if err := pm.StopPlugin(name); err != nil {
+func (pm *PluginManager) RestartPlugin(id string, version string) error {
+	if err := pm.StopPlugin(id, version); err != nil {
 		return err
 	}
-	return pm.StartPlugin(name)
+	return pm.StartPlugin(id, version)
 }
 
 func (pm *PluginManager) ListPlugins() []*Plugin {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
-	plugins := make([]*Plugin, 0, len(pm.plugins))
-	for _, plugin := range pm.plugins {
-		plugins = append(plugins, plugin)
+	var all []*Plugin
+	for _, versions := range pm.plugins {
+		all = append(all, versions...)
 	}
-	return plugins
+	return all
 }
 
-func (pm *PluginManager) HotUpdatePlugin(name string, newVersion string) error {
+func (pm *PluginManager) HotUpdatePlugin(id string, newVersion string) error {
+	// 1. Load the new version if not already loaded
+	// (Assuming the files are already in the plugin directory)
+
 	pm.mutex.Lock()
-	defer pm.mutex.Unlock()
-
-	plugin, ok := pm.plugins[name]
+	versions, ok := pm.plugins[id]
 	if !ok {
-		return fmt.Errorf("plugin %s not found", name)
+		pm.mutex.Unlock()
+		return fmt.Errorf("plugin %s not found", id)
+	}
+	pm.mutex.Unlock()
+
+	// 2. Start the new version
+	if err := pm.StartPlugin(id, newVersion); err != nil {
+		return fmt.Errorf("failed to start new version: %v", err)
 	}
 
-	// Create new plugin instance with updated version
-	newPlugin := &Plugin{
-		ID:      plugin.ID,
-		Config:  plugin.Config,
-		State:   "stopped",
-		Version: newVersion,
-	}
-
-	// Start new plugin instance
-	if err := pm.startPluginInstance(newPlugin); err != nil {
-		return err
-	}
-
-	// Health check - wait for initial response
-	if err := pm.healthCheckPlugin(newPlugin); err != nil {
-		newPlugin.Process.Kill()
-		return fmt.Errorf("health check failed: %v", err)
-	}
-
-	// Switch traffic - stop old plugin
-	if plugin.State == "running" {
-		if err := plugin.Process.Kill(); err != nil {
-			return err
+	// 3. Gracefully stop old versions (optional: keep one for canary)
+	for _, p := range versions {
+		if p.Config.Version != newVersion {
+			pm.StopPlugin(id, p.Config.Version)
 		}
-		plugin.Process.Wait()
-		plugin.State = "stopped"
-		plugin.Process = nil
-		plugin.Stdin.Close()
-		plugin.Stdout.Close()
 	}
-
-	// Replace old plugin with new one
-	pm.plugins[name] = newPlugin
 
 	return nil
 }

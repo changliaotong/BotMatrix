@@ -13,6 +13,194 @@ import (
 	"gorm.io/gorm"
 )
 
+// ==================== 统一消息标准 (Neural Nexus) ====================
+
+// MessageSegment represents a structured message segment (OneBot v12 compatible)
+type MessageSegment struct {
+	Type string `json:"type"`
+	Data any    `json:"data"`
+}
+
+// TextSegmentData represents the data for a text message segment
+type TextSegmentData struct {
+	Text string `json:"text"`
+}
+
+// ImageSegmentData represents the data for an image message segment
+type ImageSegmentData struct {
+	File string `json:"file"`
+	URL  string `json:"url,omitempty"`
+}
+
+// InternalMessage is the unified message format used within BotMatrix
+type InternalMessage struct {
+	ID          string           `json:"id"`           // Message ID
+	Time        int64            `json:"time"`         // Timestamp
+	Platform    string           `json:"platform"`     // qq, wechat, etc.
+	SelfID      string           `json:"self_id"`      // Bot ID
+	Protocol    string           `json:"protocol"`     // v11, v12, etc.
+	PostType    string           `json:"post_type"`    // message, notice, request, meta_event
+	MessageType string           `json:"message_type"` // private, group
+	SubType     string           `json:"sub_type"`     // friend, normal, etc.
+	UserID      string           `json:"user_id"`      // Sender ID
+	GroupID     string           `json:"group_id"`     // Group ID (if applicable)
+	GroupName   string           `json:"group_name"`   // Group Name (if applicable)
+	Message     []MessageSegment `json:"message"`      // Structured message
+	RawMessage  string           `json:"raw_message"`  // Original raw message string
+	SenderName  string           `json:"sender_name"`  // Sender nickname
+	SenderCard  string           `json:"sender_card"`  // Sender card/alias in group
+	UserAvatar  string           `json:"user_avatar"`  // User avatar URL
+	Echo        string           `json:"echo"`         // Echo for tracking
+	Status      string           `json:"status"`       // ok, failed
+	Retcode     int              `json:"retcode"`      // OneBot return code
+	Msg         string           `json:"msg"`          // Error message or info
+	MetaType    string           `json:"meta_type"`    // heartbeat, lifecycle
+	Extras      map[string]any   `json:"extras"`       // Additional platform-specific fields
+}
+
+// InternalAction is the unified action format used within BotMatrix
+type InternalAction struct {
+	Action   string         `json:"action"`
+	Params   map[string]any `json:"params"`
+	Echo     string         `json:"echo"`
+	SelfID   string         `json:"self_id,omitempty"`
+	Platform string         `json:"platform,omitempty"`
+
+	// Common fields to avoid map usage
+	UserID      string `json:"user_id,omitempty"`
+	GroupID     string `json:"group_id,omitempty"`
+	MessageType string `json:"message_type,omitempty"`
+	DetailType  string `json:"detail_type,omitempty"`
+	Message     any    `json:"message,omitempty"`
+}
+
+// SkillResult represents the result of a skill execution from a Worker
+type SkillResult struct {
+	TaskID      any    `json:"task_id"`
+	ExecutionID any    `json:"execution_id"`
+	Status      string `json:"status"`
+	Result      string `json:"result"`
+	Error       string `json:"error"`
+	WorkerID    string `json:"worker_id"`
+}
+
+// WorkerCommand represents a command sent from Nexus to a Worker
+type WorkerCommand struct {
+	Type        string         `json:"type"`
+	Skill       string         `json:"skill,omitempty"`
+	Params      map[string]any `json:"params,omitempty"`
+	UserID      string         `json:"user_id,omitempty"`
+	TaskID      any            `json:"task_id,omitempty"`
+	ExecutionID any            `json:"execution_id,omitempty"`
+	Timestamp   int64          `json:"timestamp,omitempty"`
+}
+
+// WorkerMessage represents any message coming from a Worker via WebSocket
+type WorkerMessage struct {
+	Type         string             `json:"type"`
+	Action       string             `json:"action"`
+	Echo         string             `json:"echo"`
+	Capabilities []WorkerCapability `json:"capabilities"`
+	Params       map[string]any     `json:"params"`
+	SelfID       string             `json:"self_id"`
+	Platform     string             `json:"platform"`
+	Reply        string             `json:"reply"`
+	Status       string             `json:"status"`
+	Result       string             `json:"result"`
+	Error        string             `json:"error"`
+	TaskID       any                `json:"task_id"`
+	ExecutionID  any                `json:"execution_id"`
+
+	// Common OneBot fields that might appear at top level in passive replies
+	GroupID     string `json:"group_id"`
+	UserID      string `json:"user_id"`
+	MessageType string `json:"message_type"`
+}
+
+// GroupInfo represents cached group information
+type GroupInfo struct {
+	GroupID   string    `json:"group_id"`
+	GroupName string    `json:"group_name"`
+	BotID     string    `json:"bot_id"`
+	IsCached  bool      `json:"is_cached"`
+	LastSeen  time.Time `json:"last_seen"`
+	Avatar    string    `json:"avatar"`
+}
+
+// SessionContext 存储会话上下文信息
+type SessionContext struct {
+	Platform  string            `json:"platform"`
+	UserID    string            `json:"user_id"`
+	LastMsg   InternalMessage   `json:"last_msg"`
+	History   []InternalMessage `json:"history"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
+// LoginInfo represents the data returned by get_login_info
+type LoginInfo struct {
+	UserID   string `json:"user_id"`
+	Nickname string `json:"nickname"`
+}
+
+// ApiResponse represents a standard API response
+type ApiResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Code    string `json:"code,omitempty"`
+	Data    any    `json:"data,omitempty"`
+}
+
+// GroupListItem represents an item in the list returned by get_group_list
+type GroupListItem struct {
+	GroupID   string `json:"group_id"`
+	GroupName string `json:"group_name"`
+}
+
+// SessionState represents a specific state of a session (e.g., waiting for input)
+type SessionState struct {
+	Step       string         `json:"step"`
+	Action     string         `json:"action"`
+	Data       map[string]any `json:"data"` // Internal data for the state
+	WaitingFor string         `json:"waiting_for"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+}
+
+// RoutingParams 用于 BroadcastRoutingEvent 的可选参数
+type RoutingParams struct {
+	SourceType  string `json:"source_type,omitempty"`
+	SourceLabel string `json:"source_label,omitempty"`
+	TargetType  string `json:"target_type,omitempty"`
+	TargetLabel string `json:"target_label,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+	UserName    string `json:"user_name,omitempty"`
+	UserAvatar  string `json:"user_avatar,omitempty"`
+	Content     string `json:"content,omitempty"`
+	Platform    string `json:"platform,omitempty"`
+	GroupID     string `json:"group_id,omitempty"`
+	GroupName   string `json:"group_name,omitempty"`
+}
+
+// FriendInfo represents cached friend information
+type FriendInfo struct {
+	UserID   string    `json:"user_id"`
+	Nickname string    `json:"nickname"`
+	BotID    string    `json:"bot_id"`
+	IsCached bool      `json:"is_cached"`
+	LastSeen time.Time `json:"last_seen"`
+	Avatar   string    `json:"avatar"`
+}
+
+// MemberInfo represents cached group member information
+type MemberInfo struct {
+	GroupID  string    `json:"group_id"`
+	UserID   string    `json:"user_id"`
+	Nickname string    `json:"nickname"`
+	Card     string    `json:"card"`
+	IsCached bool      `json:"is_cached"`
+	LastSeen time.Time `json:"last_seen"`
+}
+
 // ==================== 基础结构体 ====================
 
 // BotClient represents a connected OneBot client
@@ -24,6 +212,7 @@ type BotClient struct {
 	FriendCount   int             `json:"friend_count"`
 	Connected     time.Time       `json:"connected"`
 	Platform      string          `json:"platform"`
+	Protocol      string          `json:"protocol"` // "v11" or "v12"
 	Mutex         sync.Mutex      `json:"-"`
 	SentCount     int64           `json:"sent_count"`     // Track sent messages per bot session
 	RecvCount     int64           `json:"recv_count"`     // Track received messages per bot session
@@ -47,6 +236,7 @@ type WorkerClient struct {
 	HandledCount  int64
 	LastHeartbeat time.Time
 	Capabilities  []WorkerCapability `json:"capabilities"` // Worker 报备的能力列表
+	Protocol      string             `json:"protocol"`     // "v11" or "v12"
 
 	// RTT Tracking
 	AvgRTT     time.Duration `json:"avg_rtt"`
@@ -106,15 +296,15 @@ type LogEntry struct {
 
 // SyncState represents the initial state for subscribers
 type SyncState struct {
-	Type          string                            `json:"type"` // Always "sync_state"
-	Groups        map[string]map[string]interface{} `json:"groups"`
-	Friends       map[string]map[string]interface{} `json:"friends"`
-	Members       map[string]map[string]interface{} `json:"members"`
-	Bots          []BotClient                       `json:"bots"`
-	Workers       []WorkerInfo                      `json:"workers"`
-	TotalMessages int64                             `json:"total_messages"`
-	Uptime        string                            `json:"uptime"`
-	Version       string                            `json:"version"`
+	Type          string                `json:"type"` // Always "sync_state"
+	Groups        map[string]GroupInfo  `json:"groups"`
+	Friends       map[string]FriendInfo `json:"friends"`
+	Members       map[string]MemberInfo `json:"members"`
+	Bots          []BotClient           `json:"bots"`
+	Workers       []WorkerInfo          `json:"workers"`
+	TotalMessages int64                 `json:"total_messages"`
+	Uptime        string                `json:"uptime"`
+	Version       string                `json:"version"`
 }
 
 func NewManager() *Manager {
@@ -122,7 +312,7 @@ func NewManager() *Manager {
 		Bots:              make(map[string]*BotClient),
 		Subscribers:       make(map[*websocket.Conn]*Subscriber),
 		Workers:           make([]*WorkerClient, 0),
-		PendingRequests:   make(map[string]chan map[string]interface{}),
+		PendingRequests:   make(map[string]chan InternalMessage),
 		PendingTimestamps: make(map[string]time.Time),
 		RoutingRules:      make(map[string]string),
 		UserStats:         make(map[string]int64),
@@ -145,9 +335,9 @@ func NewManager() *Manager {
 		StatsMutex: sync.RWMutex{},
 		Mutex:      sync.RWMutex{},
 		// Bot Data Cache
-		GroupCache:  make(map[string]map[string]interface{}),
-		MemberCache: make(map[string]map[string]interface{}),
-		FriendCache: make(map[string]map[string]interface{}),
+		GroupCache:  make(map[string]GroupInfo),
+		MemberCache: make(map[string]MemberInfo),
+		FriendCache: make(map[string]FriendInfo),
 		CacheMutex:  sync.RWMutex{},
 
 		// User Management
@@ -161,10 +351,24 @@ func NewManager() *Manager {
 }
 
 type WorkerInfo struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Status   string `json:"status"`
-	LastSeen string `json:"last_seen"`
+	ID              string `json:"id"`
+	RemoteAddr      string `json:"remote_addr"`
+	Type            string `json:"type"`
+	Status          string `json:"status"`
+	Connected       string `json:"connected"`
+	LastSeen        string `json:"last_seen"`
+	HandledCount    int64  `json:"handled_count"`
+	AvgRTT          string `json:"avg_rtt"`
+	LastRTT         string `json:"last_rtt"`
+	AvgProcessTime  string `json:"avg_process_time"`
+	LastProcessTime string `json:"last_process_time"`
+	IsAlive         bool   `json:"is_alive"`
+}
+
+// WorkerUpdateEvent represents a worker status update event
+type WorkerUpdateEvent struct {
+	Type string     `json:"type"` // Always "worker_update"
+	Data WorkerInfo `json:"data"`
 }
 
 // RoutingEvent represents a message routing event for visualization
@@ -267,7 +471,7 @@ type Manager struct {
 	LogMutex    sync.RWMutex
 
 	// Pending Requests (Echo -> Channel)
-	PendingRequests   map[string]chan map[string]interface{}
+	PendingRequests   map[string]chan InternalMessage
 	PendingTimestamps map[string]time.Time // Echo -> Send Time for RTT tracking
 	PendingMutex      sync.Mutex
 
@@ -331,11 +535,11 @@ type Manager struct {
 	GORMManager *GORMManager // GORM管理器
 
 	// Message Cache (For when no workers are available)
-	MessageCache []map[string]interface{}
+	MessageCache []InternalMessage
 	CacheMutex   sync.RWMutex
-	GroupCache   map[string]map[string]interface{}
-	MemberCache  map[string]map[string]interface{}
-	FriendCache  map[string]map[string]interface{}
+	GroupCache   map[string]GroupInfo
+	MemberCache  map[string]MemberInfo
+	FriendCache  map[string]FriendInfo
 
 	// Local Idempotency Cache (reduce Redis pressure)
 	LocalIdempotency sync.Map // msgID -> time.Time

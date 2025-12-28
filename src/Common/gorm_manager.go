@@ -62,9 +62,9 @@ func (gm *GORMManager) InitGORM() error {
 // autoMigrate 自动迁移所有表结构
 func (gm *GORMManager) autoMigrate() error {
 	log.Println("🔄 GORM: Starting auto migration...")
-	
+
 	// 迁移所有表
-	tables := []interface{}{
+	tables := []any{
 		&UserGORM{},
 		&RoutingRuleGORM{},
 		&GroupCacheGORM{},
@@ -87,7 +87,7 @@ func (gm *GORMManager) autoMigrate() error {
 			log.Printf("[WARN] GORM: 迁移表失败 (将继续): %v", err)
 		}
 	}
-	
+
 	log.Println("✅ GORM: Auto migration finished (with potential warnings)")
 	return nil
 }
@@ -98,11 +98,11 @@ func (gm *GORMManager) autoMigrate() error {
 func (gm *GORMManager) GORMSaveUser(user *User) error {
 	userGORM := &UserGORM{}
 	userGORM.FromUser(user)
-	
+
 	// 检查是否已存在
 	var existing UserGORM
 	result := gm.DB.Where("username = ?", user.Username).First(&existing)
-	
+
 	if result.Error == gorm.ErrRecordNotFound {
 		// 创建新用户
 		return gm.DB.Create(userGORM).Error
@@ -119,16 +119,16 @@ func (gm *GORMManager) GORMSaveUser(user *User) error {
 func (gm *GORMManager) GORMLoadUsers() ([]*User, error) {
 	var usersGORM []UserGORM
 	result := gm.DB.Find(&usersGORM)
-	
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
+
 	users := make([]*User, len(usersGORM))
 	for i, userGORM := range usersGORM {
 		users[i] = userGORM.ToUser()
 	}
-	
+
 	return users, nil
 }
 
@@ -136,11 +136,11 @@ func (gm *GORMManager) GORMLoadUsers() ([]*User, error) {
 func (gm *GORMManager) GORMSaveRoutingRule(rule *RoutingRule) error {
 	ruleGORM := &RoutingRuleGORM{}
 	ruleGORM.FromRoutingRule(rule)
-	
+
 	// 检查是否已存在
 	var existing RoutingRuleGORM
 	result := gm.DB.Where("pattern = ?", rule.Pattern).First(&existing)
-	
+
 	if result.Error == gorm.ErrRecordNotFound {
 		// 创建新规则
 		return gm.DB.Create(ruleGORM).Error
@@ -156,16 +156,16 @@ func (gm *GORMManager) GORMSaveRoutingRule(rule *RoutingRule) error {
 func (gm *GORMManager) GORMLoadRoutingRules() ([]*RoutingRule, error) {
 	var rulesGORM []RoutingRuleGORM
 	result := gm.DB.Find(&rulesGORM)
-	
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
+
 	rules := make([]*RoutingRule, len(rulesGORM))
 	for i, ruleGORM := range rulesGORM {
 		rules[i] = ruleGORM.ToRoutingRule()
 	}
-	
+
 	return rules, nil
 }
 
@@ -173,7 +173,7 @@ func (gm *GORMManager) GORMLoadRoutingRules() ([]*RoutingRule, error) {
 func (gm *GORMManager) GORMSaveGroupCache(cache *GroupCache) error {
 	cacheGORM := &GroupCacheGORM{}
 	cacheGORM.FromGroupCache(cache)
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(cacheGORM).Error
 }
@@ -182,16 +182,16 @@ func (gm *GORMManager) GORMSaveGroupCache(cache *GroupCache) error {
 func (gm *GORMManager) GORMLoadGroupCaches() ([]*GroupCache, error) {
 	var cachesGORM []GroupCacheGORM
 	result := gm.DB.Find(&cachesGORM)
-	
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
+
 	caches := make([]*GroupCache, len(cachesGORM))
 	for i, cacheGORM := range cachesGORM {
 		caches[i] = cacheGORM.ToGroupCache()
 	}
-	
+
 	return caches, nil
 }
 
@@ -199,7 +199,7 @@ func (gm *GORMManager) GORMLoadGroupCaches() ([]*GroupCache, error) {
 func (gm *GORMManager) GORMSaveFriendCache(cache *FriendCache) error {
 	cacheGORM := &FriendCacheGORM{}
 	cacheGORM.FromFriendCache(cache)
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(cacheGORM).Error
 }
@@ -208,16 +208,16 @@ func (gm *GORMManager) GORMSaveFriendCache(cache *FriendCache) error {
 func (gm *GORMManager) GORMLoadFriendCaches() ([]*FriendCache, error) {
 	var cachesGORM []FriendCacheGORM
 	result := gm.DB.Find(&cachesGORM)
-	
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
+
 	caches := make([]*FriendCache, len(cachesGORM))
 	for i, cacheGORM := range cachesGORM {
 		caches[i] = cacheGORM.ToFriendCache()
 	}
-	
+
 	return caches, nil
 }
 
@@ -225,7 +225,7 @@ func (gm *GORMManager) GORMLoadFriendCaches() ([]*FriendCache, error) {
 func (gm *GORMManager) GORMSaveMemberCache(cache *MemberCache) error {
 	cacheGORM := &MemberCacheGORM{}
 	cacheGORM.FromMemberCache(cache)
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(cacheGORM).Error
 }
@@ -234,57 +234,57 @@ func (gm *GORMManager) GORMSaveMemberCache(cache *MemberCache) error {
 func (gm *GORMManager) GORMLoadMemberCaches() ([]*MemberCache, error) {
 	var cachesGORM []MemberCacheGORM
 	result := gm.DB.Find(&cachesGORM)
-	
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
+
 	caches := make([]*MemberCache, len(cachesGORM))
 	for i, cacheGORM := range cachesGORM {
 		caches[i] = cacheGORM.ToMemberCache()
 	}
-	
+
 	return caches, nil
 }
 
 // GORMSaveSystemStat 使用GORM保存系统统计
-func (gm *GORMManager) GORMSaveSystemStat(key string, value interface{}) error {
+func (gm *GORMManager) GORMSaveSystemStat(key string, value any) error {
 	statGORM := &SystemStatGORM{}
 	statGORM.FromSystemStat(key, value)
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(statGORM).Error
 }
 
 // GORMLoadSystemStats 使用GORM加载所有系统统计
-func (gm *GORMManager) GORMLoadSystemStats() (map[string]interface{}, error) {
+func (gm *GORMManager) GORMLoadSystemStats() (map[string]any, error) {
 	var statsGORM []SystemStatGORM
 	result := gm.DB.Find(&statsGORM)
-	
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
-	stats := make(map[string]interface{})
+
+	stats := make(map[string]any)
 	for _, statGORM := range statsGORM {
 		stats[statGORM.Key] = statGORM.Value
 	}
-	
+
 	return stats, nil
 }
 
 // GORMLoadSystemStat 使用GORM加载单个系统统计
-func (gm *GORMManager) GORMLoadSystemStat(key string) (interface{}, error) {
+func (gm *GORMManager) GORMLoadSystemStat(key string) (any, error) {
 	var statGORM SystemStatGORM
 	result := gm.DB.Where("key = ?", key).First(&statGORM)
-	
+
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, result.Error
 	}
-	
+
 	return statGORM.Value, nil
 }
 
@@ -294,7 +294,7 @@ func (gm *GORMManager) GORMSaveGroupStats(id string, count int64) error {
 		ID:    id,
 		Count: count,
 	}
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(statsGORM).Error
 }
@@ -303,14 +303,14 @@ func (gm *GORMManager) GORMSaveGroupStats(id string, count int64) error {
 func (gm *GORMManager) GORMLoadGroupStats(id string) (int64, error) {
 	var statsGORM GroupStatsGORM
 	result := gm.DB.Where("id = ?", id).First(&statsGORM)
-	
+
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return 0, nil
 		}
 		return 0, result.Error
 	}
-	
+
 	return statsGORM.Count, nil
 }
 
@@ -320,7 +320,7 @@ func (gm *GORMManager) GORMSaveUserStats(id string, count int64) error {
 		ID:    id,
 		Count: count,
 	}
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(statsGORM).Error
 }
@@ -329,14 +329,14 @@ func (gm *GORMManager) GORMSaveUserStats(id string, count int64) error {
 func (gm *GORMManager) GORMLoadUserStats(id string) (int64, error) {
 	var statsGORM UserStatsGORM
 	result := gm.DB.Where("id = ?", id).First(&statsGORM)
-	
+
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return 0, nil
 		}
 		return 0, result.Error
 	}
-	
+
 	return statsGORM.Count, nil
 }
 
@@ -347,7 +347,7 @@ func (gm *GORMManager) GORMSaveGroupStatsToday(id string, day string, count int6
 		Day:   day,
 		Count: count,
 	}
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(statsGORM).Error
 }
@@ -356,14 +356,14 @@ func (gm *GORMManager) GORMSaveGroupStatsToday(id string, day string, count int6
 func (gm *GORMManager) GORMLoadGroupStatsToday(id string, day string) (int64, error) {
 	var statsGORM GroupStatsTodayGORM
 	result := gm.DB.Where("id = ? AND day = ?", id, day).First(&statsGORM)
-	
+
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return 0, nil
 		}
 		return 0, result.Error
 	}
-	
+
 	return statsGORM.Count, nil
 }
 
@@ -374,7 +374,7 @@ func (gm *GORMManager) GORMSaveUserStatsToday(id string, day string, count int64
 		Day:   day,
 		Count: count,
 	}
-	
+
 	// 使用Upsert操作
 	return gm.DB.Save(statsGORM).Error
 }
@@ -383,14 +383,14 @@ func (gm *GORMManager) GORMSaveUserStatsToday(id string, day string, count int64
 func (gm *GORMManager) GORMLoadUserStatsToday(id string, day string) (int64, error) {
 	var statsGORM UserStatsTodayGORM
 	result := gm.DB.Where("id = ? AND day = ?", id, day).First(&statsGORM)
-	
+
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return 0, nil
 		}
 		return 0, result.Error
 	}
-	
+
 	return statsGORM.Count, nil
 }
 

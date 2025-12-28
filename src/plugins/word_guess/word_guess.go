@@ -9,10 +9,10 @@ import (
 
 // EventMessage represents an event received from the core
 type EventMessage struct {
-	ID      string      `json:"id"`
-	Type    string      `json:"type"`
-	Name    string      `json:"name"`
-	Payload interface{} `json:"payload"`
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Payload any    `json:"payload"`
 }
 
 // Action represents an action to be performed
@@ -47,7 +47,7 @@ func main() {
 		}
 
 		if msg.Type == "event" && msg.Name == "on_message" {
-			payload, ok := msg.Payload.(map[string]interface{})
+			payload, ok := msg.Payload.(map[string]any)
 			if !ok {
 				fmt.Fprintf(os.Stderr, "Invalid payload type\n")
 				continue

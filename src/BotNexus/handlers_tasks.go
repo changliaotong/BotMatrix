@@ -15,30 +15,24 @@ import (
 // HandleListTasks 获取任务列表
 func HandleListTasks(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var taskList []tasks.Task
 		m.GORMDB.Preload("Tags").Find(&taskList)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    taskList,
-		})
+		common.SendJSONResponse(w, true, "", taskList)
 	}
 }
 
 // HandleListSystemCapabilities 获取系统任务处理能力 (Actions & Interceptors)
 func HandleListSystemCapabilities(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		actions := m.TaskManager.Dispatcher.GetActions()
 		interceptors := m.TaskManager.Interceptors.GetInterceptors()
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data": map[string]interface{}{
-				"actions":      actions,
-				"interceptors": interceptors,
-			},
+		common.SendJSONResponse(w, true, "", struct {
+			Actions      []string `json:"actions"`
+			Interceptors []string `json:"interceptors"`
+		}{
+			Actions:      actions,
+			Interceptors: interceptors,
 		})
 	}
 }
@@ -46,7 +40,6 @@ func HandleListSystemCapabilities(m *Manager) http.HandlerFunc {
 // HandleCreateTask 创建任务
 func HandleCreateTask(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		var task tasks.Task
@@ -61,24 +54,17 @@ func HandleCreateTask(m *Manager) http.HandlerFunc {
 
 		if err := m.TaskManager.CreateTask(&task, isEnterprise); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "create_task_failed"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "create_task_failed"), nil)
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    task,
-		})
+		common.SendJSONResponse(w, true, "", task)
 	}
 }
 
 // HandleGetExecutions 获取执行记录
 func HandleGetExecutions(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		taskIDStr := r.URL.Query().Get("task_id")
 		taskID, _ := strconv.Atoi(taskIDStr)
 
@@ -88,17 +74,13 @@ func HandleGetExecutions(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    history,
-		})
+		common.SendJSONResponse(w, true, "", history)
 	}
 }
 
 // HandleAIParse AI 解析
 func HandleAIParse(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var req tasks.ParseRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -108,10 +90,7 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 		result, err := m.TaskManager.AI.Parse(req)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": err.Error(),
-			})
+			common.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 
@@ -131,17 +110,13 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 
 		result.DraftID = draftID
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    result,
-		})
+		common.SendJSONResponse(w, true, "", result)
 	}
 }
 
 // HandleAIConfirm AI 确认执行
 func HandleAIConfirm(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var req struct {
 			DraftID string `json:"draft_id"`
 		}
@@ -153,20 +128,14 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 		var draft tasks.AIDraft
 		if err := m.GORMDB.Where("draft_id = ? AND status = 'pending'", req.DraftID).First(&draft).Error; err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": "草稿不存在或已失效",
-			})
+			common.SendJSONResponse(w, false, "草稿不存在或已失效", nil)
 			return
 		}
 
 		if time.Now().After(draft.ExpireTime) {
 			m.GORMDB.Model(&draft).Update("status", "expired")
 			w.WriteHeader(http.StatusGone)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": "草稿已过期",
-			})
+			common.SendJSONResponse(w, false, "草稿已过期", nil)
 			return
 		}
 
@@ -193,11 +162,17 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 				err = fmt.Errorf("未找到具备该能力的 Worker: %s", skillReq.Skill)
 			} else {
 				// 构造指令发送给 Worker
-				cmd := map[string]interface{}{
-					"type":    "skill_call",
-					"skill":   skillReq.Skill,
-					"params":  skillReq.Params,
-					"user_id": draft.UserID,
+				params := make(map[string]any)
+				for k, v := range skillReq.Params {
+					params[k] = v
+				}
+
+				cmd := common.WorkerCommand{
+					Type:   "skill_call",
+					Skill:  skillReq.Skill,
+					Params: params,
+					// UserID 应该是 string，根据 UserID uint 转换
+					UserID: fmt.Sprintf("%d", draft.UserID),
 				}
 				err = m.SendToWorker(workerID, cmd)
 			}
@@ -205,26 +180,18 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": err.Error(),
-			})
+			common.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 
 		m.GORMDB.Model(&draft).Update("status", "confirmed")
-
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": "执行成功",
-		})
+		common.SendJSONResponse(w, true, "执行成功", nil)
 	}
 }
 
 // HandleTranslate 翻译接口 (目前使用 Azure 服务)
 func HandleTranslate(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var req struct {
 			Text       string `json:"text"`
 			TargetLang string `json:"target_lang"`
@@ -236,10 +203,7 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 
 		if common.AZURE_TRANSLATE_KEY == "" {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": "Azure Translate API key not configured",
-			})
+			common.SendJSONResponse(w, false, "Azure Translate API key not configured", nil)
 			return
 		}
 
@@ -274,7 +238,7 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 		azureReq, err := http.NewRequest("POST", apiURL, strings.NewReader(string(bodyBytes)))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": err.Error()})
+			common.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 
@@ -287,14 +251,14 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 		resp, err := client.Do(azureReq)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": err.Error()})
+			common.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			w.WriteHeader(resp.StatusCode)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Azure API error"})
+			common.SendJSONResponse(w, false, "Azure API error", nil)
 			return
 		}
 
@@ -306,7 +270,7 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Failed to parse response"})
+			common.SendJSONResponse(w, false, "Failed to parse response", nil)
 			return
 		}
 
@@ -315,11 +279,10 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 			translatedText = result[0].Translations[0].Text
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data": map[string]interface{}{
-				"translated_text": translatedText,
-			},
+		common.SendJSONResponse(w, true, "", struct {
+			TranslatedText string `json:"translated_text"`
+		}{
+			TranslatedText: translatedText,
 		})
 	}
 }
@@ -327,7 +290,6 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 // HandleManageTags 标签管理
 func HandleManageTags(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var req struct {
 			Action     string `json:"action"` // add, remove
 			TargetType string `json:"target_type"`
@@ -351,24 +313,22 @@ func HandleManageTags(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+		common.SendJSONResponse(w, true, "", nil)
 	}
 }
 
 // HandleGetCapabilities 获取系统能力清单 (用于 AI 提示或功能展示)
 func HandleGetCapabilities(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		manifest := m.TaskManager.AI.Manifest
 		prompt := m.TaskManager.AI.GetSystemPrompt()
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data": map[string]interface{}{
-				"manifest": manifest,
-				"prompt":   prompt,
-			},
+		common.SendJSONResponse(w, true, "", struct {
+			Manifest any    `json:"manifest"`
+			Prompt   string `json:"prompt"`
+		}{
+			Manifest: manifest,
+			Prompt:   prompt,
 		})
 	}
 }
@@ -376,20 +336,15 @@ func HandleGetCapabilities(m *Manager) http.HandlerFunc {
 // HandleListStrategies 获取策略列表
 func HandleListStrategies(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var strategies []tasks.Strategy
 		m.GORMDB.Find(&strategies)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    strategies,
-		})
+		common.SendJSONResponse(w, true, "", strategies)
 	}
 }
 
 // HandleSaveStrategy 保存策略 (新建或更新)
 func HandleSaveStrategy(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var strategy tasks.Strategy
 		if err := json.NewDecoder(r.Body).Decode(&strategy); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -402,57 +357,47 @@ func HandleSaveStrategy(m *Manager) http.HandlerFunc {
 			m.GORMDB.Create(&strategy)
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "data": strategy})
+		common.SendJSONResponse(w, true, "", strategy)
 	}
 }
 
 // HandleDeleteStrategy 删除策略
 func HandleDeleteStrategy(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		idStr := r.URL.Query().Get("id")
 		id, _ := strconv.Atoi(idStr)
 		m.GORMDB.Delete(&tasks.Strategy{}, id)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+		common.SendJSONResponse(w, true, "", nil)
 	}
 }
 
 // HandleListIdentities 获取身份列表
 func HandleListIdentities(m *Manager) http.HandlerFunc {
+	type identityResponse struct {
+		tasks.UserIdentity
+		Avatar string `json:"avatar"`
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var identities []tasks.UserIdentity
 		m.GORMDB.Find(&identities)
 
 		// 增加头像逻辑
-		respIdentities := make([]map[string]interface{}, 0, len(identities))
+		respIdentities := make([]identityResponse, 0, len(identities))
 		for _, id := range identities {
-			// 将 UserIdentity 转换为 map 并添加 avatar
-			item := map[string]interface{}{
-				"ID":          id.ID,
-				"CreatedAt":   id.CreatedAt,
-				"UpdatedAt":   id.UpdatedAt,
-				"NexusUID":    id.NexusUID,
-				"Platform":    id.Platform,
-				"PlatformUID": id.PlatformUID,
-				"Nickname":    id.Nickname,
-				"Metadata":    id.Metadata,
-				"Avatar":      GetAvatarURL(id.Platform, id.PlatformUID, false, ""),
-			}
-			respIdentities = append(respIdentities, item)
+			respIdentities = append(respIdentities, identityResponse{
+				UserIdentity: id,
+				Avatar:       GetAvatarURL(id.Platform, id.PlatformUID, false, ""),
+			})
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    respIdentities,
-		})
+		common.SendJSONResponse(w, true, "", respIdentities)
 	}
 }
 
 // HandleSaveIdentity 保存身份
 func HandleSaveIdentity(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var identity tasks.UserIdentity
 		if err := json.NewDecoder(r.Body).Decode(&identity); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -465,38 +410,32 @@ func HandleSaveIdentity(m *Manager) http.HandlerFunc {
 			m.GORMDB.Create(&identity)
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "data": identity})
+		common.SendJSONResponse(w, true, "", identity)
 	}
 }
 
 // HandleDeleteIdentity 删除身份
 func HandleDeleteIdentity(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		idStr := r.URL.Query().Get("id")
 		id, _ := strconv.Atoi(idStr)
 		m.GORMDB.Delete(&tasks.UserIdentity{}, id)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+		common.SendJSONResponse(w, true, "", nil)
 	}
 }
 
 // HandleListShadowRules 获取影子规则列表
 func HandleListShadowRules(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var rules []tasks.ShadowRule
 		m.GORMDB.Find(&rules)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    rules,
-		})
+		common.SendJSONResponse(w, true, "", rules)
 	}
 }
 
 // HandleSaveShadowRule 保存影子规则
 func HandleSaveShadowRule(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		var rule tasks.ShadowRule
 		if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -509,17 +448,16 @@ func HandleSaveShadowRule(m *Manager) http.HandlerFunc {
 			m.GORMDB.Create(&rule)
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "data": rule})
+		common.SendJSONResponse(w, true, "", rule)
 	}
 }
 
 // HandleDeleteShadowRule 删除影子规则
 func HandleDeleteShadowRule(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		idStr := r.URL.Query().Get("id")
 		id, _ := strconv.Atoi(idStr)
 		m.GORMDB.Delete(&tasks.ShadowRule{}, id)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+		common.SendJSONResponse(w, true, "", nil)
 	}
 }

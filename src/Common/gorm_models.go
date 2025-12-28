@@ -193,15 +193,15 @@ func (SystemStatGORM) TableName() string {
 }
 
 // ToSystemStat 转换为普通map格式
-func (s *SystemStatGORM) ToSystemStat() map[string]interface{} {
-	return map[string]interface{}{
+func (s *SystemStatGORM) ToSystemStat() map[string]any {
+	return map[string]any{
 		"key":   s.Key,
 		"value": s.Value,
 	}
 }
 
 // FromSystemStat 从普通map格式转换
-func (s *SystemStatGORM) FromSystemStat(key string, value interface{}) {
+func (s *SystemStatGORM) FromSystemStat(key string, value any) {
 	s.Key = key
 	s.Value = fmt.Sprintf("%v", value)
 	s.UpdatedAt = time.Now()

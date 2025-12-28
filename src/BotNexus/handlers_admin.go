@@ -72,7 +72,6 @@ func GetAvatarURL(platform string, id string, isGroup bool, providedAvatar strin
 // HandleLogin 处理登录请求
 func HandleLogin(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		var loginData struct {
@@ -83,10 +82,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
 			log.Printf(common.T("", "login_request_failed"), err)
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
@@ -97,27 +93,9 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 		m.UsersMutex.RUnlock()
 
 		if !exists {
-			row := m.DB.QueryRow(m.PrepareQuery("SELECT id, username, password_hash, is_admin, active, session_version, created_at, updated_at FROM users WHERE username = ?"), loginData.Username)
 			var u common.User
-			var createdAt, updatedAt interface{}
-			err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.IsAdmin, &u.Active, &u.SessionVersion, &createdAt, &updatedAt)
-			if err == nil {
-				if createdAt != nil {
-					switch v := createdAt.(type) {
-					case time.Time:
-						u.CreatedAt = v
-					case string:
-						u.CreatedAt, _ = time.Parse(time.RFC3339, v)
-					}
-				}
-				if updatedAt != nil {
-					switch v := updatedAt.(type) {
-					case time.Time:
-						u.UpdatedAt = v
-					case string:
-						u.UpdatedAt, _ = time.Parse(time.RFC3339, v)
-					}
-				}
+			result := m.GORMDB.Where("username = ?", loginData.Username).First(&u)
+			if result.Error == nil {
 				user = &u
 				exists = true
 
@@ -130,20 +108,14 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 		if !exists || !common.CheckPassword(loginData.Password, user.PasswordHash) {
 			log.Printf(common.T("", "invalid_username_password") + ": " + loginData.Username)
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_username_password"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_username_password"), nil)
 			return
 		}
 
 		if !user.Active {
 			log.Printf("用户未激活: %s", loginData.Username)
 			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "user_not_active"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "user_not_active"), nil)
 			return
 		}
 
@@ -151,10 +123,7 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 		if err != nil {
 			log.Printf(common.T("", "token_generation_failed")+": %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "token_generation_failed"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "token_generation_failed"), nil)
 			return
 		}
 
@@ -165,16 +134,31 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 
 		log.Printf(common.T("", "login_success"), user.Username, role)
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"token":   token,
-			"role":    role,
-			"user": map[string]interface{}{
-				"id":         user.ID,
-				"username":   user.Username,
-				"is_admin":   user.IsAdmin,
-				"role":       role,
-				"created_at": user.CreatedAt.Format(time.RFC3339),
+		common.SendJSONResponse(w, true, "", struct {
+			Token string `json:"token"`
+			Role  string `json:"role"`
+			User  struct {
+				ID        int64     `json:"id"`
+				Username  string    `json:"username"`
+				IsAdmin   bool      `json:"is_admin"`
+				Role      string    `json:"role"`
+				CreatedAt time.Time `json:"created_at"`
+			} `json:"user"`
+		}{
+			Token: token,
+			Role:  role,
+			User: struct {
+				ID        int64     `json:"id"`
+				Username  string    `json:"username"`
+				IsAdmin   bool      `json:"is_admin"`
+				Role      string    `json:"role"`
+				CreatedAt time.Time `json:"created_at"`
+			}{
+				ID:        user.ID,
+				Username:  user.Username,
+				IsAdmin:   user.IsAdmin,
+				Role:      role,
+				CreatedAt: user.CreatedAt,
 			},
 		})
 	}
@@ -183,16 +167,12 @@ func HandleLogin(m *common.Manager) http.HandlerFunc {
 // HandleGetUserInfo 获取当前登录用户信息
 func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		claims, ok := r.Context().Value(common.UserClaimsKey).(*common.UserClaims)
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "not_logged_in"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "not_logged_in"), nil)
 			return
 		}
 
@@ -202,10 +182,7 @@ func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 
 		if !exists {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "user_not_found"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "user_not_found"), nil)
 			return
 		}
 
@@ -214,15 +191,30 @@ func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 			role = "admin"
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"user": map[string]interface{}{
-				"id":         user.ID,
-				"username":   user.Username,
-				"is_admin":   user.IsAdmin,
-				"role":       role,
-				"created_at": user.CreatedAt.Format(time.RFC3339),
-				"updated_at": user.UpdatedAt.Format(time.RFC3339),
+		common.SendJSONResponse(w, true, "", struct {
+			User struct {
+				ID        int64     `json:"id"`
+				Username  string    `json:"username"`
+				IsAdmin   bool      `json:"is_admin"`
+				Role      string    `json:"role"`
+				CreatedAt time.Time `json:"created_at"`
+				UpdatedAt time.Time `json:"updated_at"`
+			} `json:"user"`
+		}{
+			User: struct {
+				ID        int64     `json:"id"`
+				Username  string    `json:"username"`
+				IsAdmin   bool      `json:"is_admin"`
+				Role      string    `json:"role"`
+				CreatedAt time.Time `json:"created_at"`
+				UpdatedAt time.Time `json:"updated_at"`
+			}{
+				ID:        user.ID,
+				Username:  user.Username,
+				IsAdmin:   user.IsAdmin,
+				Role:      role,
+				CreatedAt: user.CreatedAt,
+				UpdatedAt: user.UpdatedAt,
 			},
 		})
 	}
@@ -231,8 +223,6 @@ func HandleGetUserInfo(m *common.Manager) http.HandlerFunc {
 // HandleGetNexusStatus 获取 Nexus 运行状态
 func HandleGetNexusStatus(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
 
@@ -246,17 +236,31 @@ func HandleGetNexusStatus(m *common.Manager) http.HandlerFunc {
 		onlineBots := len(m.Bots)
 		onlineWorkers := len(m.Workers)
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":   true,
-			"running":   true,
-			"connected": onlineBots > 0 || onlineWorkers > 0,
-			"stats": map[string]interface{}{
-				"online_bots":    onlineBots,
-				"online_workers": onlineWorkers,
-				"total_bots":     botCount,
-				"total_workers":  workerCount,
+		common.SendJSONResponse(w, true, "", struct {
+			Running   bool `json:"running"`
+			Connected bool `json:"connected"`
+			Stats     struct {
+				OnlineBots    int   `json:"online_bots"`
+				OnlineWorkers int   `json:"online_workers"`
+				TotalBots     int64 `json:"total_bots"`
+				TotalWorkers  int64 `json:"total_workers"`
+			} `json:"stats"`
+			Version string `json:"version"`
+		}{
+			Running:   true,
+			Connected: onlineBots > 0 || onlineWorkers > 0,
+			Stats: struct {
+				OnlineBots    int   `json:"online_bots"`
+				OnlineWorkers int   `json:"online_workers"`
+				TotalBots     int64 `json:"total_bots"`
+				TotalWorkers  int64 `json:"total_workers"`
+			}{
+				OnlineBots:    onlineBots,
+				OnlineWorkers: onlineWorkers,
+				TotalBots:     botCount,
+				TotalWorkers:  workerCount,
 			},
-			"version": VERSION,
+			Version: VERSION,
 		})
 	}
 }
@@ -264,8 +268,6 @@ func HandleGetNexusStatus(m *common.Manager) http.HandlerFunc {
 // HandleGetStats 获取统计信息的请求
 func HandleGetStats(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
 
@@ -356,49 +358,90 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 			uptimeStr = fmt.Sprintf("%dd %dh", uptimeSec/86400, (uptimeSec%86400)/3600)
 		}
 
-		stats := map[string]interface{}{
-			"goroutines":          runtime.NumGoroutine(),
-			"uptime":              uptimeStr,
-			"memory_alloc":        mStats.Alloc,
-			"memory_total":        vm.Total,
-			"memory_used":         vm.Used,
-			"memory_free":         vm.Free,
-			"memory_used_percent": vm.UsedPercent,
-			"disk_usage":          diskUsageStr,
-			"bot_count":           onlineBots,
-			"worker_count":        onlineWorkers,
-			"bot_count_offline":   offlineBots,
-			"bot_count_total":     totalBots,
-			"active_groups_today": len(m.GroupStatsToday),
-			"active_groups":       len(m.GroupStats),
-			"active_users_today":  len(m.UserStatsToday),
-			"active_users":        len(m.UserStats),
-			"message_count":       m.TotalMessages,
-			"sent_message_count":  m.SentMessages,
-			"cpu_usage":           cpuUsage,
-			"start_time":          m.StartTime.Unix(),
-			"cpu_model":           cpuModel,
-			"cpu_cores_physical":  cpuCoresPhysical,
-			"cpu_cores_logical":   cpuCoresLogical,
-			"cpu_freq":            cpuFreq,
-			"os_platform":         hi.Platform,
-			"os_version":          hi.PlatformVersion,
-			"os_arch":             hi.KernelArch,
-			"timestamp":           time.Now().Format("2006-01-02 15:04:05"),
-			"bots_detail":         m.BotDetailedStats,
-			"cpu_trend":           cpuTrend,
-			"mem_trend":           memTrend,
-			"msg_trend":           msgTrend,
-			"sent_trend":          sentTrend,
-			"recv_trend":          recvTrend,
-			"net_sent_trend":      netSentTrend,
-			"net_recv_trend":      netRecvTrend,
-			"top_processes":       m.TopProcesses,
+		type statsResponse struct {
+			Goroutines        int         `json:"goroutines"`
+			Uptime            string      `json:"uptime"`
+			MemoryAlloc       uint64      `json:"memory_alloc"`
+			MemoryTotal       uint64      `json:"memory_total"`
+			MemoryUsed        uint64      `json:"memory_used"`
+			MemoryFree        uint64      `json:"memory_free"`
+			MemoryUsedPercent float64     `json:"memory_used_percent"`
+			DiskUsage         string      `json:"disk_usage"`
+			BotCount          int         `json:"bot_count"`
+			WorkerCount       int         `json:"worker_count"`
+			BotCountOffline   int         `json:"bot_count_offline"`
+			BotCountTotal     int         `json:"bot_count_total"`
+			ActiveGroupsToday int         `json:"active_groups_today"`
+			ActiveGroups      int         `json:"active_groups"`
+			ActiveUsersToday  int         `json:"active_users_today"`
+			ActiveUsers       int         `json:"active_users"`
+			MessageCount      int64       `json:"message_count"`
+			SentMessageCount  int64       `json:"sent_message_count"`
+			CPUUsage          float64     `json:"cpu_usage"`
+			StartTime         int64       `json:"start_time"`
+			CPUModel          string      `json:"cpu_model"`
+			CPUCoresPhysical  int         `json:"cpu_cores_physical"`
+			CPUCoresLogical   int         `json:"cpu_cores_logical"`
+			CPUFreq           float64     `json:"cpu_freq"`
+			OSPlatform        string      `json:"os_platform"`
+			OSVersion         string      `json:"os_version"`
+			OSArch            string      `json:"os_arch"`
+			Timestamp         string      `json:"timestamp"`
+			BotsDetail        any         `json:"bots_detail"`
+			CPUTrend          []float64   `json:"cpu_trend"`
+			MemTrend          []uint64    `json:"mem_trend"`
+			MsgTrend          []int64     `json:"msg_trend"`
+			SentTrend         []int64     `json:"sent_trend"`
+			RecvTrend         []int64     `json:"recv_trend"`
+			NetSentTrend      []uint64    `json:"net_sent_trend"`
+			NetRecvTrend      []uint64    `json:"net_recv_trend"`
+			TopProcesses      any         `json:"top_processes"`
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"stats":   stats,
+		stats := statsResponse{
+			Goroutines:        runtime.NumGoroutine(),
+			Uptime:            uptimeStr,
+			MemoryAlloc:       mStats.Alloc,
+			MemoryTotal:       vm.Total,
+			MemoryUsed:        vm.Used,
+			MemoryFree:        vm.Free,
+			MemoryUsedPercent: vm.UsedPercent,
+			DiskUsage:         diskUsageStr,
+			BotCount:          onlineBots,
+			WorkerCount:       onlineWorkers,
+			BotCountOffline:   offlineBots,
+			BotCountTotal:     totalBots,
+			ActiveGroupsToday: len(m.GroupStatsToday),
+			ActiveGroups:      len(m.GroupStats),
+			ActiveUsersToday:  len(m.UserStatsToday),
+			ActiveUsers:       len(m.UserStats),
+			MessageCount:      m.TotalMessages,
+			SentMessageCount:  m.SentMessages,
+			CPUUsage:          cpuUsage,
+			StartTime:         m.StartTime.Unix(),
+			CPUModel:          cpuModel,
+			CPUCoresPhysical:  cpuCoresPhysical,
+			CPUCoresLogical:   cpuCoresLogical,
+			CPUFreq:           cpuFreq,
+			OSPlatform:        hi.Platform,
+			OSVersion:         hi.PlatformVersion,
+			OSArch:            hi.KernelArch,
+			Timestamp:         time.Now().Format("2006-01-02 15:04:05"),
+			BotsDetail:        m.BotDetailedStats,
+			CPUTrend:          cpuTrend,
+			MemTrend:          memTrend,
+			MsgTrend:          msgTrend,
+			SentTrend:         sentTrend,
+			RecvTrend:         recvTrend,
+			NetSentTrend:      netSentTrend,
+			NetRecvTrend:      netRecvTrend,
+			TopProcesses:      m.TopProcesses,
+		}
+
+		common.SendJSONResponse(w, true, "", struct {
+			Stats statsResponse `json:"stats"`
+		}{
+			Stats: stats,
 		})
 	}
 }
@@ -406,8 +449,6 @@ func HandleGetStats(m *common.Manager) http.HandlerFunc {
 // HandleGetSystemStats 获取详细的系统运行统计
 func HandleGetSystemStats(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		cpuCount, _ := cpu.Counts(true)
 		if cpuCount <= 0 {
 			cpuCount = 1
@@ -426,7 +467,14 @@ func HandleGetSystemStats(m *common.Manager) http.HandlerFunc {
 		hi, _ := host.Info()
 
 		partitions, _ := disk.Partitions(true)
-		var diskUsage []map[string]interface{}
+		type DiskUsage struct {
+			Path        string  `json:"path"`
+			Total       uint64  `json:"total"`
+			Free        uint64  `json:"free"`
+			Used        uint64  `json:"used"`
+			UsedPercent float64 `json:"usedPercent"`
+		}
+		var diskUsage []DiskUsage
 		seenMounts := make(map[string]bool)
 		for _, p := range partitions {
 			if seenMounts[p.Mountpoint] {
@@ -441,39 +489,54 @@ func HandleGetSystemStats(m *common.Manager) http.HandlerFunc {
 
 			usage, err := disk.Usage(p.Mountpoint)
 			if err == nil && usage.Total > 0 {
-				diskUsage = append(diskUsage, map[string]interface{}{
-					"path":        p.Mountpoint,
-					"total":       usage.Total,
-					"free":        usage.Free,
-					"used":        usage.Used,
-					"usedPercent": usage.UsedPercent,
+				diskUsage = append(diskUsage, DiskUsage{
+					Path:        p.Mountpoint,
+					Total:       usage.Total,
+					Free:        usage.Free,
+					Used:        usage.Used,
+					UsedPercent: usage.UsedPercent,
 				})
 				seenMounts[p.Mountpoint] = true
 			}
 		}
 
 		netIO, _ := net.IOCounters(false)
-		var netUsage []map[string]interface{}
+		type NetUsage struct {
+			Name      string `json:"name"`
+			BytesSent uint64 `json:"bytesSent"`
+			BytesRecv uint64 `json:"bytesRecv"`
+		}
+		var netUsage []NetUsage
 		for _, ioCounter := range netIO {
-			netUsage = append(netUsage, map[string]interface{}{
-				"name":      ioCounter.Name,
-				"bytesSent": ioCounter.BytesSent,
-				"bytesRecv": ioCounter.BytesRecv,
+			netUsage = append(netUsage, NetUsage{
+				Name:      ioCounter.Name,
+				BytesSent: ioCounter.BytesSent,
+				BytesRecv: ioCounter.BytesRecv,
 			})
 		}
 
 		interfaces, _ := net.Interfaces()
-		var netInterfaces []map[string]interface{}
+		type NetInterface struct {
+			Name  string `json:"name"`
+			Addrs []struct {
+				Addr string `json:"addr"`
+			} `json:"addrs"`
+		}
+		var netInterfaces []NetInterface
 		for _, i := range interfaces {
-			var addrs []map[string]interface{}
+			var addrs []struct {
+				Addr string `json:"addr"`
+			}
 			for _, addr := range i.Addrs {
-				addrs = append(addrs, map[string]interface{}{
-					"addr": addr.Addr,
+				addrs = append(addrs, struct {
+					Addr string `json:"addr"`
+				}{
+					Addr: addr.Addr,
 				})
 			}
-			netInterfaces = append(netInterfaces, map[string]interface{}{
-				"name":  i.Name,
-				"addrs": addrs,
+			netInterfaces = append(netInterfaces, NetInterface{
+				Name:  i.Name,
+				Addrs: addrs,
 			})
 		}
 
@@ -481,22 +544,34 @@ func HandleGetSystemStats(m *common.Manager) http.HandlerFunc {
 		processList := m.TopProcesses
 		m.HistoryMutex.RUnlock()
 
-		stats := map[string]interface{}{
-			"cpu_usage":      cpuUsage,
-			"mem_usage":      vm.UsedPercent,
-			"mem_total":      vm.Total,
-			"mem_free":       vm.Free,
-			"disk_usage":     diskUsage,
-			"net_io":         netUsage,
-			"net_interfaces": netInterfaces,
-			"host_info":      hi,
-			"processes":      processList,
-			"timestamp":      time.Now().Unix(),
+		stats := struct {
+			CPUUsage      float64              `json:"cpu_usage"`
+			MemUsage      float64              `json:"mem_usage"`
+			MemTotal      uint64               `json:"mem_total"`
+			MemFree       uint64               `json:"mem_free"`
+			DiskUsage     []DiskUsage          `json:"disk_usage"`
+			NetIO         []NetUsage           `json:"net_io"`
+			NetInterfaces []NetInterface       `json:"net_interfaces"`
+			HostInfo      *host.InfoStat       `json:"host_info"`
+			Processes     []common.ProcessInfo `json:"processes"`
+			Timestamp     int64                `json:"timestamp"`
+		}{
+			CPUUsage:      cpuUsage,
+			MemUsage:      vm.UsedPercent,
+			MemTotal:      vm.Total,
+			MemFree:       vm.Free,
+			DiskUsage:     diskUsage,
+			NetIO:         netUsage,
+			NetInterfaces: netInterfaces,
+			HostInfo:      hi,
+			Processes:     processList,
+			Timestamp:     time.Now().Unix(),
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"stats":   stats,
+		common.SendJSONResponse(w, true, "", struct {
+			Stats any `json:"stats"`
+		}{
+			Stats: stats,
 		})
 	}
 }
@@ -504,8 +579,6 @@ func HandleGetSystemStats(m *common.Manager) http.HandlerFunc {
 // HandleGetLogs 处理获取日志的请求
 func HandleGetLogs(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		// 获取查询参数
 		query := r.URL.Query()
 		page, _ := strconv.Atoi(query.Get("page"))
@@ -590,13 +663,14 @@ func HandleGetLogs(m *common.Manager) http.HandlerFunc {
 			pagedLogs = []common.LogEntry{}
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data": map[string]interface{}{
-				"logs":    pagedLogs,
-				"total":   total,
-				"hasMore": end < total,
-			},
+		common.SendJSONResponse(w, true, "", struct {
+			Logs    []common.LogEntry `json:"logs"`
+			Total   int               `json:"total"`
+			HasMore bool              `json:"hasMore"`
+		}{
+			Logs:    pagedLogs,
+			Total:   total,
+			HasMore: end < total,
 		})
 	}
 }
@@ -604,28 +678,39 @@ func HandleGetLogs(m *common.Manager) http.HandlerFunc {
 // HandleClearLogs 处理清空日志的请求
 func HandleClearLogs(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 		m.ClearLogs()
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": common.T(lang, "logs_cleared"),
-		})
+		common.SendJSONResponse(w, true, common.T(lang, "logs_cleared"), nil)
 	}
 }
 
 // HandleGetBots 处理获取机器人列表的请求
 func HandleGetBots(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
 
 		m.StatsMutex.RLock()
 		defer m.StatsMutex.RUnlock()
 
-		bots := make([]map[string]interface{}, 0, len(m.Bots))
+		type BotInfo struct {
+			ID            string `json:"id"`
+			SelfID        string `json:"self_id"`
+			Nickname      string `json:"nickname"`
+			Avatar        string `json:"avatar"`
+			GroupCount    int    `json:"group_count"`
+			FriendCount   int    `json:"friend_count"`
+			Connected     string `json:"connected"`
+			Platform      string `json:"platform"`
+			SentCount     int64  `json:"sent_count"`
+			RecvCount     int64  `json:"recv_count"`
+			MsgCount      int64  `json:"msg_count"`
+			MsgCountToday int64  `json:"msg_count_today"`
+			RemoteAddr    string `json:"remote_addr"`
+			LastHeartbeat string `json:"last_heartbeat"`
+			IsAlive       bool   `json:"is_alive"`
+		}
+		bots := make([]BotInfo, 0, len(m.Bots))
 		for id, bot := range m.Bots {
 			remoteAddr := ""
 			if bot.Conn != nil {
@@ -635,28 +720,29 @@ func HandleGetBots(m *common.Manager) http.HandlerFunc {
 			totalMsg := m.BotStats[id]
 			todayMsg := m.BotStatsToday[id]
 
-			bots = append(bots, map[string]interface{}{
-				"id":              id,
-				"self_id":         bot.SelfID,
-				"nickname":        bot.Nickname,
-				"avatar":          GetAvatarURL(bot.Platform, bot.SelfID, false, ""),
-				"group_count":     bot.GroupCount,
-				"friend_count":    bot.FriendCount,
-				"connected":       bot.Connected.Format("2006-01-02 15:04:05"),
-				"platform":        bot.Platform,
-				"sent_count":      bot.SentCount,
-				"recv_count":      bot.RecvCount,
-				"msg_count":       totalMsg,
-				"msg_count_today": todayMsg,
-				"remote_addr":     remoteAddr,
-				"last_heartbeat":  bot.LastHeartbeat.Format("2006-01-02 15:04:05"),
-				"is_alive":        true,
+			bots = append(bots, BotInfo{
+				ID:            id,
+				SelfID:        bot.SelfID,
+				Nickname:      bot.Nickname,
+				Avatar:        GetAvatarURL(bot.Platform, bot.SelfID, false, ""),
+				GroupCount:    bot.GroupCount,
+				FriendCount:   bot.FriendCount,
+				Connected:     bot.Connected.Format("2006-01-02 15:04:05"),
+				Platform:      bot.Platform,
+				SentCount:     bot.SentCount,
+				RecvCount:     bot.RecvCount,
+				MsgCount:      totalMsg,
+				MsgCountToday: todayMsg,
+				RemoteAddr:    remoteAddr,
+				LastHeartbeat: bot.LastHeartbeat.Format("2006-01-02 15:04:05"),
+				IsAlive:       true,
 			})
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"bots":    bots,
+		common.SendJSONResponse(w, true, "", struct {
+			Bots []BotInfo `json:"bots"`
+		}{
+			Bots: bots,
 		})
 	}
 }
@@ -664,28 +750,37 @@ func HandleGetBots(m *common.Manager) http.HandlerFunc {
 // HandleGetWorkers 处理获取Worker列表的请求
 func HandleGetWorkers(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
 
-		workers := make([]map[string]interface{}, 0, len(m.Workers))
+		type WorkerInfo struct {
+			ID           string `json:"id"`
+			RemoteAddr   string `json:"remote_addr"`
+			Connected    string `json:"connected"`
+			HandledCount int64  `json:"handled_count"`
+			AvgRTT       string `json:"avg_rtt"`
+			LastRTT      string `json:"last_rtt"`
+			IsAlive      bool   `json:"is_alive"`
+			Status       string `json:"status"`
+		}
+		workers := make([]WorkerInfo, 0, len(m.Workers))
 		for _, worker := range m.Workers {
-			workers = append(workers, map[string]interface{}{
-				"id":            worker.ID,
-				"remote_addr":   worker.ID,
-				"connected":     worker.Connected.Format("2006-01-02 15:04:05"),
-				"handled_count": worker.HandledCount,
-				"avg_rtt":       worker.AvgRTT.String(),
-				"last_rtt":      worker.LastRTT.String(),
-				"is_alive":      true,
-				"status":        "Online",
+			workers = append(workers, WorkerInfo{
+				ID:           worker.ID,
+				RemoteAddr:   worker.ID,
+				Connected:    worker.Connected.Format("2006-01-02 15:04:05"),
+				HandledCount: worker.HandledCount,
+				AvgRTT:       worker.AvgRTT.String(),
+				LastRTT:      worker.LastRTT.String(),
+				IsAlive:      true,
+				Status:       "Online",
 			})
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"workers": workers,
+		common.SendJSONResponse(w, true, "", struct {
+			Workers []WorkerInfo `json:"workers"`
+		}{
+			Workers: workers,
 		})
 	}
 }
@@ -693,7 +788,6 @@ func HandleGetWorkers(m *common.Manager) http.HandlerFunc {
 // HandleDockerList 获取 Docker 容器列表
 func HandleDockerList(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		if m.DockerClient == nil {
@@ -701,10 +795,12 @@ func HandleDockerList(m *common.Manager) http.HandlerFunc {
 			if err := m.InitDockerClient(); err != nil {
 				log.Printf("Docker client initialization failed: %v", err)
 				// 不要返回 500，而是返回空列表，让前端知道 Docker 未就绪
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":     "warning",
-					"message":    common.T(lang, "docker_not_init"),
-					"containers": []interface{}{},
+				common.SendJSONResponse(w, true, common.T(lang, "docker_not_init"), struct {
+					Status     string `json:"status"`
+					Containers []any  `json:"containers"`
+				}{
+					Status:     "warning",
+					Containers: []any{},
 				})
 				return
 			}
@@ -714,25 +810,29 @@ func HandleDockerList(m *common.Manager) http.HandlerFunc {
 		if err != nil {
 			log.Printf(common.T("", "docker_list_failed"), err)
 			// 同理，返回空列表而不是 500
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":     "error",
-				"message":    err.Error(),
-				"containers": []interface{}{},
+			common.SendJSONResponse(w, false, err.Error(), struct {
+				Status     string `json:"status"`
+				Containers []any  `json:"containers"`
+			}{
+				Status:     "error",
+				Containers: []any{},
 			})
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":     "ok",
-			"containers": containers,
+		common.SendJSONResponse(w, true, "", struct {
+			Status     string            `json:"status"`
+			Containers []types.Container `json:"containers"`
+		}{
+			Status:     "ok",
+			Containers: containers,
 		})
 	}
 }
 
-// HandleDockerAction 处理 Docker 容器操作 (start/stop/restart)
+// HandleDockerAction 处理 Docker 容器操作 (start/stop/restart/delete)
 func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		var req struct {
@@ -742,10 +842,7 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
@@ -753,10 +850,7 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 			// 尝试延迟初始化
 			if err := m.InitDockerClient(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":  "error",
-					"message": common.T(lang, "docker_not_init") + ": " + err.Error(),
-				})
+				common.SendJSONResponse(w, false, common.T(lang, "docker_not_init")+": "+err.Error(), nil)
 				return
 			}
 		}
@@ -764,13 +858,13 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 		var err error
 		switch req.Action {
 		case "start":
-			err = m.DockerClient.ContainerStart(r.Context(), req.ContainerID, types.ContainerStartOptions{})
+			err = m.DockerClient.ContainerStart(r.Context(), req.ContainerID, container.StartOptions{})
 		case "stop":
 			timeout := 10
 			err = m.DockerClient.ContainerStop(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
 		case "restart":
 			timeout := 10
-			err = m.DockerClient.ContainerRestart(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
+			err = m.DockerClient.ContainerRestart(r.Context(), req.ContainerID, container.RestartOptions{Timeout: &timeout})
 		case "delete":
 			timeout := 5
 			m.DockerClient.ContainerStop(r.Context(), req.ContainerID, container.StopOptions{Timeout: &timeout})
@@ -782,10 +876,7 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 		if err != nil {
 			log.Printf(common.T("", "docker_action_failed"), req.Action, err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": err.Error(),
-			})
+			common.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 
@@ -797,9 +888,10 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 		}
 		m.BroadcastDockerEvent(req.Action, req.ContainerID, status)
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "ok",
-			"id":     req.ContainerID,
+		common.SendJSONResponse(w, true, "", struct {
+			ID string `json:"id"`
+		}{
+			ID: req.ContainerID,
 		})
 	}
 }
@@ -807,13 +899,13 @@ func HandleDockerAction(m *common.Manager) http.HandlerFunc {
 // HandleDockerAddBot 添加机器人容器
 func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		if m.DockerClient == nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "docker_not_init"),
+			common.SendJSONResponse(w, false, common.T(lang, "docker_not_init"), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
 			})
 			return
 		}
@@ -856,9 +948,10 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 			reader, err := m.DockerClient.ImagePull(ctx, imageName, types.ImagePullOptions{})
 			if err != nil {
 				log.Printf(common.T("", "docker_pull_failed"), imageName, err)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":  "error",
-					"message": fmt.Sprintf(common.T(lang, "docker_image_not_exists"), imageName, err),
+				common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "docker_image_not_exists"), imageName, err), struct {
+					Status string `json:"status"`
+				}{
+					Status: "error",
 				})
 				return
 			}
@@ -911,27 +1004,31 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 
 		resp, err := m.DockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
 		if err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": fmt.Sprintf(common.T(lang, "docker_create_container_failed"), err),
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "docker_create_container_failed"), err), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
 			})
 			return
 		}
 
 		if err := m.DockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": fmt.Sprintf(common.T(lang, "docker_start_container_failed"), err),
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "docker_start_container_failed"), err), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
 			})
 			return
 		}
 
 		m.BroadcastDockerEvent("create", resp.ID, "running")
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "ok",
-			"message": common.T(lang, "bot_deploy_success"),
-			"id":      resp.ID,
+		common.SendJSONResponse(w, true, common.T(lang, "bot_deploy_success"), struct {
+			Status string `json:"status"`
+			ID     string `json:"id"`
+		}{
+			Status: "ok",
+			ID:     resp.ID,
 		})
 	}
 }
@@ -939,13 +1036,13 @@ func HandleDockerAddBot(m *common.Manager) http.HandlerFunc {
 // HandleDockerAddWorker 添加 Worker 容器
 func HandleDockerAddWorker(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		if m.DockerClient == nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "docker_not_init"),
+			common.SendJSONResponse(w, false, common.T(lang, "docker_not_init"), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
 			})
 			return
 		}
@@ -988,9 +1085,10 @@ func HandleDockerAddWorker(m *common.Manager) http.HandlerFunc {
 			reader, err := m.DockerClient.ImagePull(ctx, imageName, types.ImagePullOptions{})
 			if err != nil {
 				log.Printf(common.T("", "docker_pull_failed"), imageName, err)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":  "error",
-					"message": fmt.Sprintf(common.T(lang, "docker_image_not_exists"), imageName, err),
+				common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "docker_image_not_exists"), imageName, err), struct {
+					Status string `json:"status"`
+				}{
+					Status: "error",
 				})
 				return
 			}
@@ -1024,27 +1122,31 @@ func HandleDockerAddWorker(m *common.Manager) http.HandlerFunc {
 
 		resp, err := m.DockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, workerName)
 		if err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": fmt.Sprintf(common.T(lang, "docker_create_container_failed"), err),
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "docker_create_container_failed"), err), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
 			})
 			return
 		}
 
 		if err := m.DockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": fmt.Sprintf(common.T(lang, "docker_start_container_failed"), err),
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "docker_start_container_failed"), err), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
 			})
 			return
 		}
 
 		m.BroadcastDockerEvent("create", resp.ID, "running")
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "ok",
-			"message": common.T(lang, "worker_deploy_success"),
-			"id":      resp.ID,
+		common.SendJSONResponse(w, true, common.T(lang, "worker_deploy_success"), struct {
+			Status string `json:"status"`
+			ID     string `json:"id"`
+		}{
+			Status: "ok",
+			ID:     resp.ID,
 		})
 	}
 }
@@ -1052,16 +1154,12 @@ func HandleDockerAddWorker(m *common.Manager) http.HandlerFunc {
 // HandleChangePassword 修改用户密码
 func HandleChangePassword(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		claims, ok := r.Context().Value(common.UserClaimsKey).(*common.UserClaims)
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "not_logged_in"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "not_logged_in"), nil)
 			return
 		}
 
@@ -1072,10 +1170,7 @@ func HandleChangePassword(m *common.Manager) http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
@@ -1085,29 +1180,20 @@ func HandleChangePassword(m *common.Manager) http.HandlerFunc {
 		user, exists := m.Users[claims.Username]
 		if !exists {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "user_not_found"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "user_not_found"), nil)
 			return
 		}
 
 		if !common.CheckPassword(data.OldPassword, user.PasswordHash) {
 			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "old_password_error"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "old_password_error"), nil)
 			return
 		}
 
 		newHash, err := common.HashPassword(data.NewPassword)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "password_encrypt_failed"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "password_encrypt_failed"), nil)
 			return
 		}
 
@@ -1118,18 +1204,13 @@ func HandleChangePassword(m *common.Manager) http.HandlerFunc {
 			log.Printf(common.T("", "password_update_db_failed"), err)
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": common.T(lang, "password_change_success"),
-		})
+		common.SendJSONResponse(w, true, common.T(lang, "password_change_success"), nil)
 	}
 }
 
 // HandleGetMessages 获取最新消息列表
 func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		limitStr := r.URL.Query().Get("limit")
 		limit := 50
 		if limitStr != "" {
@@ -1139,10 +1220,10 @@ func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 		}
 
 		if m.DB == nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success":  false,
-				"messages": []interface{}{},
-				"error":    "Database not initialized",
+			common.SendJSONResponse(w, false, "Database not initialized", struct {
+				Messages []interface{} `json:"messages"`
+			}{
+				Messages: []interface{}{},
 			})
 			return
 		}
@@ -1156,16 +1237,31 @@ func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 		rows, err := m.DB.Query(m.PrepareQuery(query), limit)
 		if err != nil {
 			log.Printf("获取最新消息失败: %v", err)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success":  false,
-				"messages": []interface{}{},
-				"error":    err.Error(),
+			common.SendJSONResponse(w, false, err.Error(), struct {
+				Messages []interface{} `json:"messages"`
+			}{
+				Messages: []interface{}{},
 			})
 			return
 		}
 		defer rows.Close()
 
-		messages := []map[string]interface{}{}
+		type MessageInfo struct {
+			ID          int    `json:"id"`
+			MessageID   string `json:"message_id"`
+			BotID       string `json:"bot_id"`
+			UserID      string `json:"user_id"`
+			UserName    string `json:"user_name"`
+			UserAvatar  string `json:"user_avatar"`
+			GroupID     string `json:"group_id"`
+			GroupName   string `json:"group_name"`
+			GroupAvatar string `json:"group_avatar"`
+			Type        string `json:"type"`
+			Content     string `json:"content"`
+			CreatedAt   string `json:"created_at"`
+		}
+
+		messages := []MessageInfo{}
 		for rows.Next() {
 			var id int
 			var messageID, botID, userID, groupID, msgType, content string
@@ -1192,10 +1288,10 @@ func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 
 			m.CacheMutex.RLock()
 			if friend, ok := m.FriendCache[userID]; ok {
-				if n, ok := friend["nickname"].(string); ok {
+				if n := friend.Nickname; n != "" {
 					userName = n
 				}
-				if a, ok := friend["avatar"].(string); ok {
+				if a := friend.Avatar; a != "" {
 					userAvatar = a
 				}
 			}
@@ -1203,12 +1299,12 @@ func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 			if userAvatar == "" && groupID != "" && groupID != "0" {
 				memberKey := groupID + "_" + userID
 				if member, ok := m.MemberCache[memberKey]; ok {
-					if a, ok := member["avatar"].(string); ok {
+					if a := member.Avatar; a != "" {
 						userAvatar = a
 					}
 					// 也可以尝试更新下昵称，如果之前没找到的话
 					if userName == userID {
-						if n, ok := member["nickname"].(string); ok {
+						if n := member.Nickname; n != "" {
 							userName = n
 						}
 					}
@@ -1216,34 +1312,35 @@ func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 			}
 
 			if group, ok := m.GroupCache[groupID]; ok {
-				if n, ok := group["group_name"].(string); ok {
+				if n := group.GroupName; n != "" {
 					groupName = n
 				}
-				if a, ok := group["avatar"].(string); ok {
+				if a := group.Avatar; a != "" {
 					groupAvatar = a
 				}
 			}
 			m.CacheMutex.RUnlock()
 
-			messages = append(messages, map[string]interface{}{
-				"id":           id,
-				"message_id":   messageID,
-				"bot_id":       botID,
-				"user_id":      userID,
-				"user_name":    userName,
-				"user_avatar":  GetAvatarURL(platform, userID, false, userAvatar),
-				"group_id":     groupID,
-				"group_name":   groupName,
-				"group_avatar": GetAvatarURL(platform, groupID, true, groupAvatar),
-				"type":         msgType,
-				"content":      content,
-				"created_at":   createdAt.Format("2006-01-02 15:04:05"),
+			messages = append(messages, MessageInfo{
+				ID:          id,
+				MessageID:   messageID,
+				BotID:       botID,
+				UserID:      userID,
+				UserName:    userName,
+				UserAvatar:  GetAvatarURL(platform, userID, false, userAvatar),
+				GroupID:     groupID,
+				GroupName:   groupName,
+				GroupAvatar: GetAvatarURL(platform, groupID, true, groupAvatar),
+				Type:        msgType,
+				Content:     content,
+				CreatedAt:   createdAt.Format("2006-01-02 15:04:05"),
 			})
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":  true,
-			"messages": messages,
+		common.SendJSONResponse(w, true, "", struct {
+			Messages []MessageInfo `json:"messages"`
+		}{
+			Messages: messages,
 		})
 	}
 }
@@ -1251,8 +1348,6 @@ func HandleGetMessages(m *common.Manager) http.HandlerFunc {
 // HandleGetContacts 获取联系人列表 (群组和好友)
 func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		var botID string
 		refresh := false
 
@@ -1270,10 +1365,7 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 			refresh = r.URL.Query().Get("refresh") == "true"
 		}
 
-		lang := r.Header.Get("Accept-Language")
-		if lang == "" {
-			lang = "zh-CN"
-		}
+		lang := common.GetLangFromRequest(r)
 
 		// 如果不强制刷新，检查缓存是否为空
 		if !refresh && botID != "" {
@@ -1281,7 +1373,7 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 			hasCache := false
 			// 检查群组缓存
 			for _, g := range m.GroupCache {
-				if common.ToString(g["bot_id"]) == botID {
+				if g.BotID == botID {
 					hasCache = true
 					break
 				}
@@ -1289,7 +1381,7 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 			// 如果群组没有，检查好友缓存
 			if !hasCache {
 				for _, f := range m.FriendCache {
-					if common.ToString(f["bot_id"]) == botID {
+					if f.BotID == botID {
 						hasCache = true
 						break
 					}
@@ -1310,61 +1402,57 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"message": common.T(lang, "bot_not_found|未找到机器人实例"),
-				})
+				common.SendJSONResponse(w, false, common.T(lang, "bot_not_found"), nil)
 				return
 			}
 
 			// 检查机器人连接状态和心跳
 			if bot.Conn == nil || time.Since(bot.LastHeartbeat) > 5*time.Minute {
 				w.WriteHeader(http.StatusServiceUnavailable)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"message": common.T(lang, "bot_disconnected|机器人已断开连接或心跳超时"),
-				})
+				common.SendJSONResponse(w, false, common.T(lang, "bot_disconnected"), nil)
 				return
 			}
 
 			echoGroups := "refresh_groups_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 			m.PendingMutex.Lock()
-			respChanGroups := make(chan map[string]interface{}, 1)
+			respChanGroups := make(chan common.InternalMessage, 1)
 			m.PendingRequests[echoGroups] = respChanGroups
 			m.PendingMutex.Unlock()
 
 			bot.Mutex.Lock()
-			err := bot.Conn.WriteJSON(map[string]interface{}{
-				"action": "get_group_list",
-				"params": map[string]interface{}{},
-				"echo":   echoGroups,
+			err := bot.Conn.WriteJSON(struct {
+				Action string `json:"action"`
+				Params any    `json:"params"`
+				Echo   string `json:"echo"`
+			}{
+				Action: "get_group_list",
+				Params: struct{}{},
+				Echo:   echoGroups,
 			})
 			bot.Mutex.Unlock()
 
 			if err != nil {
 				log.Printf("Failed to send get_group_list to bot %s: %v", botID, err)
 				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"message": common.T(lang, "bot_communication_error|与机器人通信失败"),
-				})
+				common.SendJSONResponse(w, false, common.T(lang, "bot_communication_error"), nil)
 				return
 			}
 
 			// Group fetch with its own timeout
 			select {
 			case resp := <-respChanGroups:
-				if data, ok := resp["data"].([]interface{}); ok {
+				if data, ok := resp.Extras["data"].([]any); ok {
 					m.CacheMutex.Lock()
 					for _, g := range data {
-						if group, ok := g.(map[string]interface{}); ok {
+						if group, ok := g.(map[string]any); ok {
 							gID := common.ToString(group["group_id"])
 							gName := common.ToString(group["group_name"])
 
-							m.GroupCache[gID] = map[string]interface{}{
-								"group_id":   gID,
-								"group_name": gName,
-								"bot_id":     botID,
+							m.GroupCache[gID] = common.GroupInfo{
+								GroupID:   gID,
+								GroupName: gName,
+								BotID:     botID,
+								LastSeen:  time.Now(),
 							}
 							go m.SaveGroupToDB(gID, gName, botID)
 						}
@@ -1381,15 +1469,19 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 
 			echoFriends := "refresh_friends_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 			m.PendingMutex.Lock()
-			respChanFriends := make(chan map[string]interface{}, 1)
+			respChanFriends := make(chan common.InternalMessage, 1)
 			m.PendingRequests[echoFriends] = respChanFriends
 			m.PendingMutex.Unlock()
 
 			bot.Mutex.Lock()
-			err = bot.Conn.WriteJSON(map[string]interface{}{
-				"action": "get_friend_list",
-				"params": map[string]interface{}{},
-				"echo":   echoFriends,
+			err = bot.Conn.WriteJSON(struct {
+				Action string `json:"action"`
+				Params any    `json:"params"`
+				Echo   string `json:"echo"`
+			}{
+				Action: "get_friend_list",
+				Params: struct{}{},
+				Echo:   echoFriends,
 			})
 			bot.Mutex.Unlock()
 
@@ -1397,17 +1489,18 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 				// Friend fetch with its own timeout
 				select {
 				case resp := <-respChanFriends:
-					if data, ok := resp["data"].([]interface{}); ok {
+					if data, ok := resp.Extras["data"].([]any); ok {
 						m.CacheMutex.Lock()
 						for _, f := range data {
-							if friend, ok := f.(map[string]interface{}); ok {
+							if friend, ok := f.(map[string]any); ok {
 								uID := common.ToString(friend["user_id"])
 								nickname := common.ToString(friend["nickname"])
 
-								m.FriendCache[uID] = map[string]interface{}{
-									"user_id":  uID,
-									"nickname": nickname,
-									"bot_id":   botID,
+								m.FriendCache[uID] = common.FriendInfo{
+									UserID:   uID,
+									Nickname: nickname,
+									BotID:    botID,
+									LastSeen: time.Now(),
 								}
 								go m.SaveFriendToDB(uID, nickname, botID)
 							}
@@ -1426,33 +1519,39 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 			if bot.Platform == "qq_guild" || bot.Platform == "guild" {
 				echoGuilds := "refresh_guilds_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 				m.PendingMutex.Lock()
-				respChanGuilds := make(chan map[string]interface{}, 1)
+				respChanGuilds := make(chan common.InternalMessage, 1)
 				m.PendingRequests[echoGuilds] = respChanGuilds
 				m.PendingMutex.Unlock()
 
 				bot.Mutex.Lock()
-				bot.Conn.WriteJSON(map[string]interface{}{
-					"action": "get_guild_list",
-					"params": map[string]interface{}{},
-					"echo":   echoGuilds,
+				bot.Conn.WriteJSON(struct {
+					Action string `json:"action"`
+					Params any    `json:"params"`
+					Echo   string `json:"echo"`
+				}{
+					Action: "get_guild_list",
+					Params: struct{}{},
+					Echo:   echoGuilds,
 				})
 				bot.Mutex.Unlock()
 
 				// Guild fetch with its own timeout
 				select {
 				case resp := <-respChanGuilds:
-					if data, ok := resp["data"].([]interface{}); ok {
+					if data, ok := resp.Extras["data"].([]any); ok {
 						for _, g := range data {
-							if guild, ok := g.(map[string]interface{}); ok {
+							if guild, ok := g.(map[string]any); ok {
 								gID := common.ToString(guild["guild_id"])
 								gName := common.ToString(guild["guild_name"])
 
 								m.CacheMutex.Lock()
-								m.GroupCache[gID] = map[string]interface{}{
-									"group_id":   gID,
-									"group_name": gName,
-									"bot_id":     botID,
-									"is_guild":   true,
+								m.GroupCache[gID] = common.GroupInfo{
+									GroupID:   gID,
+									GroupName: gName,
+									BotID:     botID,
+									IsCached:  true,
+									Source:    "get_guild_list",
+									LastSeen:  time.Now(),
 								}
 								m.CacheMutex.Unlock()
 								go m.SaveGroupToDB(gID, gName, botID)
@@ -1472,9 +1571,18 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 		m.CacheMutex.RLock()
 		defer m.CacheMutex.RUnlock()
 
-		contacts := make([]map[string]interface{}, 0)
+		type ContactInfo struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Nickname string `json:"nickname"`
+			Avatar   string `json:"avatar"`
+			BotID    string `json:"bot_id"`
+			Type     string `json:"type"`
+		}
+
+		contacts := make([]ContactInfo, 0)
 		for _, g := range m.GroupCache {
-			gBotID, _ := g["bot_id"].(string)
+			gBotID := g.BotID
 			if botID == "" || gBotID == botID {
 				platform := ""
 				m.Mutex.RLock()
@@ -1483,22 +1591,22 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 				}
 				m.Mutex.RUnlock()
 
-				gID := common.ToString(g["group_id"])
-				providedAvatar, _ := g["avatar"].(string)
+				gID := g.GroupID
+				providedAvatar := g.Avatar
 
-				contacts = append(contacts, map[string]interface{}{
-					"id":       gID,
-					"name":     g["group_name"],
-					"nickname": g["group_name"],
-					"avatar":   GetAvatarURL(platform, gID, true, providedAvatar),
-					"bot_id":   gBotID,
-					"type":     "group",
+				contacts = append(contacts, ContactInfo{
+					ID:       gID,
+					Name:     g.GroupName,
+					Nickname: g.GroupName,
+					Avatar:   GetAvatarURL(platform, gID, true, providedAvatar),
+					BotID:    gBotID,
+					Type:     "group",
 				})
 			}
 		}
 
 		for _, f := range m.FriendCache {
-			fBotID, _ := f["bot_id"].(string)
+			fBotID := f.BotID
 			if botID == "" || fBotID == botID {
 				platform := ""
 				m.Mutex.RLock()
@@ -1507,23 +1615,24 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 				}
 				m.Mutex.RUnlock()
 
-				uID := common.ToString(f["user_id"])
-				providedAvatar, _ := f["avatar"].(string)
+				uID := f.UserID
+				providedAvatar := f.Avatar
 
-				contacts = append(contacts, map[string]interface{}{
-					"id":       uID,
-					"name":     f["nickname"],
-					"nickname": f["nickname"],
-					"avatar":   GetAvatarURL(platform, uID, false, providedAvatar),
-					"bot_id":   fBotID,
-					"type":     "private",
+				contacts = append(contacts, ContactInfo{
+					ID:       uID,
+					Name:     f.Nickname,
+					Nickname: f.Nickname,
+					Avatar:   GetAvatarURL(platform, uID, false, providedAvatar),
+					BotID:    fBotID,
+					Type:     "private",
 				})
 			}
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":  true,
-			"contacts": contacts,
+		common.SendJSONResponse(w, true, "", struct {
+			Contacts []ContactInfo `json:"contacts"`
+		}{
+			Contacts: contacts,
 		})
 	}
 }
@@ -1531,7 +1640,6 @@ func HandleGetContacts(m *common.Manager) http.HandlerFunc {
 // HandleGetGroupMembers 获取群成员列表
 func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		botID := r.URL.Query().Get("bot_id")
@@ -1540,10 +1648,7 @@ func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 
 		if botID == "" || groupID == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "missing_parameters"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "missing_parameters"), nil)
 			return
 		}
 
@@ -1553,42 +1658,34 @@ func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "bot_not_found"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "bot_not_found"), nil)
 			return
 		}
 
 		// 检查机器人连接状态和心跳
 		if bot.Conn == nil || time.Since(bot.LastHeartbeat) > 5*time.Minute {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "bot_disconnected|机器人已断开连接或心跳超时"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "bot_disconnected"), nil)
 			return
 		}
 
 		// 1. 优先尝试从缓存读取 (如果不需要强制刷新)
 		if !refresh {
 			m.CacheMutex.RLock()
-			cachedMembers := make([]map[string]interface{}, 0)
+			cachedMembers := make([]common.MemberInfo, 0)
 			for _, member := range m.MemberCache {
-				if common.ToString(member["group_id"]) == groupID {
+				if member.GroupID == groupID {
 					// 注入头像
 					m.Mutex.RLock()
 					platform := ""
-					if botID, ok := member["bot_id"].(string); ok {
-						if b, ok := m.Bots[botID]; ok {
-							platform = b.Platform
-						}
+					if b, ok := m.Bots[member.BotID]; ok {
+						platform = b.Platform
 					}
 					m.Mutex.RUnlock()
 
-					uID := common.ToString(member["user_id"])
-					providedAvatar, _ := member["avatar"].(string)
-					member["avatar"] = GetAvatarURL(platform, uID, false, providedAvatar)
+					uID := member.UserID
+					providedAvatar := member.Avatar
+					member.Avatar = GetAvatarURL(platform, uID, false, providedAvatar)
 
 					cachedMembers = append(cachedMembers, member)
 				}
@@ -1596,10 +1693,12 @@ func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 			m.CacheMutex.RUnlock()
 
 			if len(cachedMembers) > 0 {
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": true,
-					"data":    cachedMembers,
-					"cached":  true,
+				common.SendJSONResponse(w, true, "", struct {
+					Data   []common.MemberInfo `json:"data"`
+					Cached bool                `json:"cached"`
+				}{
+					Data:   cachedMembers,
+					Cached: true,
 				})
 				return
 			}
@@ -1608,7 +1707,7 @@ func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 		// 2. 如果需要刷新或缓存中没有，则从机器人获取
 		echo := "get_members_" + groupID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
 		m.PendingMutex.Lock()
-		respChan := make(chan map[string]interface{}, 1)
+		respChan := make(chan common.InternalMessage, 1)
 		m.PendingRequests[echo] = respChan
 		m.PendingMutex.Unlock()
 
@@ -1619,35 +1718,42 @@ func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 		}()
 
 		bot.Mutex.Lock()
-		bot.Conn.WriteJSON(map[string]interface{}{
-			"action": "get_group_member_list",
-			"params": map[string]interface{}{
-				"group_id": groupID,
+		bot.Conn.WriteJSON(struct {
+			Action string `json:"action"`
+			Params any    `json:"params"`
+			Echo   string `json:"echo"`
+		}{
+			Action: "get_group_member_list",
+			Params: struct {
+				GroupID string `json:"group_id"`
+			}{
+				GroupID: groupID,
 			},
-			"echo": echo,
+			Echo: echo,
 		})
 		bot.Mutex.Unlock()
 
 		select {
 		case resp := <-respChan:
-			if data, ok := resp["data"].([]interface{}); ok {
+			if data, ok := resp.Extras["data"].([]any); ok {
 				// 更新缓存
 				m.CacheMutex.Lock()
 				for _, it := range data {
-					if member, ok := it.(map[string]interface{}); ok {
+					if member, ok := it.(map[string]any); ok {
 						uID := common.ToString(member["user_id"])
 						nickname := common.ToString(member["nickname"])
 						card := common.ToString(member["card"])
 						key := fmt.Sprintf("%s:%s", groupID, uID)
 
-						m.MemberCache[key] = map[string]interface{}{
-							"group_id":  groupID,
-							"user_id":   uID,
-							"nickname":  nickname,
-							"card":      card,
-							"bot_id":    botID, // 确保缓存中有 bot_id
-							"avatar":    GetAvatarURL(bot.Platform, uID, false, common.ToString(member["avatar"])),
-							"is_cached": true,
+						m.MemberCache[key] = common.MemberInfo{
+							GroupID:  groupID,
+							UserID:   uID,
+							Nickname: nickname,
+							Card:     card,
+							BotID:    botID, // 确保缓存中有 bot_id
+							Avatar:   GetAvatarURL(bot.Platform, uID, false, common.ToString(member["avatar"])),
+							IsCached: true,
+							LastSeen: time.Now(),
 						}
 						// 同时更新返回给前端的数据
 						member["avatar"] = GetAvatarURL(bot.Platform, uID, false, common.ToString(member["avatar"]))
@@ -1657,18 +1763,16 @@ func HandleGetGroupMembers(m *common.Manager) http.HandlerFunc {
 				}
 				m.CacheMutex.Unlock()
 
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": true,
-					"data":    data,
+				common.SendJSONResponse(w, true, "", struct {
+					Data []any `json:"data"`
+				}{
+					Data: data,
 				})
 				return
 			}
 		case <-time.After(10 * time.Second):
 			w.WriteHeader(http.StatusGatewayTimeout)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "bot_timeout"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "bot_timeout"), nil)
 			return
 		}
 	}
@@ -1746,7 +1850,6 @@ func HandleBatchSend(m *common.Manager) http.HandlerFunc {
 // HandleSendAction 处理发送 API 动作
 func HandleSendAction(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		if r.Method != http.MethodPost {
@@ -1755,17 +1858,14 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 		}
 
 		var req struct {
-			BotID  string                 `json:"bot_id"`
-			Action string                 `json:"action"`
-			Params map[string]interface{} `json:"params"`
+			BotID  string `json:"bot_id"`
+			Action string `json:"action"`
+			Params any    `json:"params"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
@@ -1775,14 +1875,17 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 		}
 
 		if req.Action == "batch_send_msg" {
-			targets, ok := req.Params["targets"].([]interface{})
-			message, _ := req.Params["message"].(string)
+			params, ok := req.Params.(map[string]any)
+			if !ok {
+				w.WriteHeader(http.StatusBadRequest)
+				common.SendJSONResponse(w, false, common.T(lang, "invalid_params"), nil)
+				return
+			}
+			targets, ok := params["targets"].([]any)
+			message, _ := params["message"].(string)
 			if !ok || message == "" {
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":  "failed",
-					"message": common.T(lang, "batch_send_params_error"),
-				})
+				common.SendJSONResponse(w, false, common.T(lang, "batch_send_params_error"), nil)
 				return
 			}
 
@@ -1791,14 +1894,14 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 				success := 0
 				failed := 0
 				for _, t := range targets {
-					target, ok := t.(map[string]interface{})
+					target, ok := t.(map[string]any)
 					if !ok {
 						continue
 					}
 
-					targetID := toString(target["id"])
-					targetBotID := toString(target["bot_id"])
-					targetType := toString(target["type"])
+					targetID := common.ToString(target["id"])
+					targetBotID := common.ToString(target["bot_id"])
+					targetType := common.ToString(target["type"])
 
 					m.Mutex.RLock()
 					bot, exists := m.Bots[targetBotID]
@@ -1810,34 +1913,53 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 					}
 
 					action := "send_group_msg"
-					params := map[string]interface{}{
-						"group_id": targetID,
-						"message":  message,
-					}
+					var actionParams any
 					if targetType == "private" {
 						action = "send_private_msg"
-						params = map[string]interface{}{
-							"user_id": targetID,
-							"message": message,
+						actionParams = struct {
+							UserID  string `json:"user_id"`
+							Message string `json:"message"`
+						}{
+							UserID:  targetID,
+							Message: message,
 						}
 					} else if targetType == "guild" {
 						action = "send_msg"
-						params = map[string]interface{}{
-							"message_type": "guild",
-							"channel_id":   targetID,
-							"message":      message,
+						type GuildParams struct {
+							MessageType string `json:"message_type"`
+							ChannelID   string `json:"channel_id"`
+							Message     string `json:"message"`
+							GuildID     string `json:"guild_id,omitempty"`
 						}
-						if gid := toString(target["guild_id"]); gid != "" {
-							params["guild_id"] = gid
+						gp := GuildParams{
+							MessageType: "guild",
+							ChannelID:   targetID,
+							Message:     message,
+						}
+						if gid := common.ToString(target["guild_id"]); gid != "" {
+							gp.GuildID = gid
+						}
+						actionParams = gp
+					} else {
+						actionParams = struct {
+							GroupID string `json:"group_id"`
+							Message string `json:"message"`
+						}{
+							GroupID: targetID,
+							Message: message,
 						}
 					}
 
 					echo := fmt.Sprintf("batch|%d|%s", time.Now().UnixNano(), action)
-					log.Printf("[API] [Batch] Sending action to bot %s: %s, params: %+v", bot.SelfID, action, params)
-					msg := map[string]interface{}{
-						"action": action,
-						"params": params,
-						"echo":   echo,
+					log.Printf("[API] [Batch] Sending action to bot %s: %s, params: %+v", bot.SelfID, action, actionParams)
+					msg := struct {
+						Action string `json:"action"`
+						Params any    `json:"params"`
+						Echo   string `json:"echo"`
+					}{
+						Action: action,
+						Params: actionParams,
+						Echo:   echo,
 					}
 
 					bot.Mutex.Lock()
@@ -1854,11 +1976,7 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 				log.Printf("[BatchSend] Completed: %d success, %d failed", success, failed)
 			}()
 
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "ok",
-				"success": true,
-				"message": common.T(lang, "batch_send_start", len(targets)),
-			})
+			common.SendJSONResponse(w, true, common.T(lang, "batch_send_start", len(targets)), nil)
 			return
 		}
 
@@ -1876,16 +1994,13 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 
 		if bot == nil {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": common.T(lang, "no_available_bot"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "no_available_bot"), nil)
 			return
 		}
 
 		echo := fmt.Sprintf("web|%d|%s", time.Now().UnixNano(), req.Action)
 
-		respChan := make(chan map[string]interface{}, 1)
+		respChan := make(chan common.InternalMessage, 1)
 		m.PendingMutex.Lock()
 		m.PendingRequests[echo] = respChan
 		m.PendingTimestamps[echo] = time.Now()
@@ -1898,10 +2013,14 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 			m.PendingMutex.Unlock()
 		}()
 
-		msg := map[string]interface{}{
-			"action": req.Action,
-			"params": req.Params,
-			"echo":   echo,
+		msg := struct {
+			Action string `json:"action"`
+			Params any    `json:"params"`
+			Echo   string `json:"echo"`
+		}{
+			Action: req.Action,
+			Params: req.Params,
+			Echo:   echo,
 		}
 
 		bot.Mutex.Lock()
@@ -1910,22 +2029,16 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": fmt.Sprintf(common.T(lang, "send_to_bot_failed"), err),
-			})
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "send_to_bot_failed"), err), nil)
 			return
 		}
 
 		select {
 		case resp := <-respChan:
-			json.NewEncoder(w).Encode(resp)
+			common.SendJSONResponse(w, true, "", resp.Extras)
 		case <-time.After(30 * time.Second):
 			w.WriteHeader(http.StatusGatewayTimeout)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "failed",
-				"message": common.T(lang, "bot_timeout"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "bot_timeout"), nil)
 		}
 	}
 }
@@ -1933,8 +2046,6 @@ func HandleSendAction(m *common.Manager) http.HandlerFunc {
 // HandleGetChatStats 获取聊天统计信息
 func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
 		m.CacheMutex.RLock()
@@ -1943,46 +2054,40 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 		groupNames := make(map[string]string)
 		groupAvatars := make(map[string]string)
 		for id, g := range m.GroupCache {
-			if name, ok := g["group_name"].(string); ok {
-				groupNames[id] = name
+			if g.GroupName != "" {
+				groupNames[id] = g.GroupName
 			}
 			platform := ""
-			if botID, ok := g["bot_id"].(string); ok {
-				if b, ok := m.Bots[botID]; ok {
-					platform = b.Platform
-				}
+			if b, ok := m.Bots[g.BotID]; ok {
+				platform = b.Platform
 			}
-			avatar, _ := g["avatar"].(string)
+			avatar := g.Avatar
 			groupAvatars[id] = GetAvatarURL(platform, id, true, avatar)
 		}
 
 		userNames := make(map[string]string)
 		userAvatars := make(map[string]string)
 		for _, u := range m.MemberCache {
-			id := common.ToString(u["user_id"])
-			if name, ok := u["nickname"].(string); ok {
-				userNames[id] = name
+			id := u.UserID
+			if u.Nickname != "" {
+				userNames[id] = u.Nickname
 			}
 			platform := ""
-			if botID, ok := u["bot_id"].(string); ok {
-				if b, ok := m.Bots[botID]; ok {
-					platform = b.Platform
-				}
+			if b, ok := m.Bots[u.BotID]; ok {
+				platform = b.Platform
 			}
-			avatar, _ := u["avatar"].(string)
+			avatar := u.Avatar
 			userAvatars[id] = GetAvatarURL(platform, id, false, avatar)
 		}
 		for id, f := range m.FriendCache {
-			if name, ok := f["nickname"].(string); ok {
-				userNames[id] = name
+			if f.Nickname != "" {
+				userNames[id] = f.Nickname
 			}
 			platform := ""
-			if botID, ok := f["bot_id"].(string); ok {
-				if b, ok := m.Bots[botID]; ok {
-					platform = b.Platform
-				}
+			if b, ok := m.Bots[f.BotID]; ok {
+				platform = b.Platform
 			}
-			avatar, _ := f["avatar"].(string)
+			avatar := f.Avatar
 			if _, exists := userAvatars[id]; !exists {
 				userAvatars[id] = GetAvatarURL(platform, id, false, avatar)
 			}
@@ -2011,20 +2116,24 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 			}
 		}
 
-		resp := map[string]interface{}{
-			"group_stats":       gs,
-			"user_stats":        us,
-			"group_stats_today": gst,
-			"user_stats_today":  ust,
-			"group_names":       groupNames,
-			"user_names":        userNames,
-			"group_avatars":     groupAvatars,
-			"user_avatars":      userAvatars,
-		}
-
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"data":    resp,
+		common.SendJSONResponse(w, true, "", struct {
+			GroupStats      map[string]int64  `json:"group_stats"`
+			UserStats       map[string]int64  `json:"user_stats"`
+			GroupStatsToday map[string]int64  `json:"group_stats_today"`
+			UserStatsToday  map[string]int64  `json:"user_stats_today"`
+			GroupNames      map[string]string `json:"group_names"`
+			UserNames       map[string]string `json:"user_names"`
+			GroupAvatars    map[string]string `json:"group_avatars"`
+			UserAvatars     map[string]string `json:"user_avatars"`
+		}{
+			GroupStats:      gs,
+			UserStats:       us,
+			GroupStatsToday: gst,
+			UserStatsToday:  ust,
+			GroupNames:      groupNames,
+			UserNames:       userNames,
+			GroupAvatars:    groupAvatars,
+			UserAvatars:     userAvatars,
 		})
 	}
 }
@@ -2032,15 +2141,14 @@ func HandleGetChatStats(m *common.Manager) http.HandlerFunc {
 // HandleGetConfig 获取配置
 func HandleGetConfig(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		log.Printf("[DEBUG] HandleGetConfig returning config: %+v", m.Config)
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"status":  "ok",
-			"config":  m.Config,
-			"path":    common.GetResolvedConfigPath(),
+		common.SendJSONResponse(w, true, "", struct {
+			Config *common.AppConfig `json:"config"`
+			Path   string            `json:"path"`
+		}{
+			Config: m.Config,
+			Path:   common.GetResolvedConfigPath(),
 		})
 	}
 }
@@ -2048,7 +2156,6 @@ func HandleGetConfig(m *common.Manager) http.HandlerFunc {
 // HandleUpdateConfig 更新配置
 func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		bodyBytes, _ := io.ReadAll(r.Body)
@@ -2059,10 +2166,7 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 		if err := json.Unmarshal(bodyBytes, &updatedConfig); err != nil {
 			log.Printf("[ERROR] HandleUpdateConfig decode error: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "config_format_error"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "config_format_error"), nil)
 			return
 		}
 
@@ -2074,20 +2178,15 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 		if err := m.SaveConfig(); err != nil {
 			log.Printf("[ERROR] HandleUpdateConfig save error: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"status":  "error",
-				"message": fmt.Sprintf(common.T(lang, "config_save_failed"), err),
-			})
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "config_save_failed"), err), nil)
 			return
 		}
 
 		log.Printf("[INFO] Config updated successfully, file path: %s", common.GetResolvedConfigPath())
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"status":  "ok",
-			"message": common.T(lang, "config_updated"),
-			"config":  m.Config,
+		common.SendJSONResponse(w, true, common.T(lang, "config_updated"), struct {
+			Config *common.AppConfig `json:"config"`
+		}{
+			Config: m.Config,
 		})
 	}
 }
@@ -2095,14 +2194,10 @@ func HandleUpdateConfig(m *common.Manager) http.HandlerFunc {
 // HandleGetRedisConfig 获取 Redis 动态配置
 func HandleGetRedisConfig(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		if m.Rdb == nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "redis_not_connected"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "redis_not_connected"), nil)
 			return
 		}
 
@@ -2117,11 +2212,14 @@ func HandleGetRedisConfig(m *common.Manager) http.HandlerFunc {
 		// 获取路由规则
 		rules, _ := m.Rdb.HGetAll(ctx, common.REDIS_KEY_DYNAMIC_RULES).Result()
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":   true,
-			"ratelimit": rateLimit,
-			"ttl":       ttl,
-			"rules":     rules,
+		common.SendJSONResponse(w, true, "", struct {
+			Ratelimit map[string]string `json:"ratelimit"`
+			TTL       map[string]string `json:"ttl"`
+			Rules     map[string]string `json:"rules"`
+		}{
+			Ratelimit: rateLimit,
+			TTL:       ttl,
+			Rules:     rules,
 		})
 	}
 }
@@ -2129,14 +2227,10 @@ func HandleGetRedisConfig(m *common.Manager) http.HandlerFunc {
 // HandleUpdateRedisConfig 更新 Redis 动态配置
 func HandleUpdateRedisConfig(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		if m.Rdb == nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "redis_not_connected"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "redis_not_connected"), nil)
 			return
 		}
 
@@ -2148,10 +2242,7 @@ func HandleUpdateRedisConfig(m *common.Manager) http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
@@ -2165,10 +2256,7 @@ func HandleUpdateRedisConfig(m *common.Manager) http.HandlerFunc {
 		case "rules":
 			key = common.REDIS_KEY_DYNAMIC_RULES
 		default:
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_config_type"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_config_type"), nil)
 			return
 		}
 
@@ -2177,24 +2265,18 @@ func HandleUpdateRedisConfig(m *common.Manager) http.HandlerFunc {
 		}
 
 		if len(data.Data) > 0 {
-			// 将 map[string]string 转换为 map[string]interface{} 以匹配 Redis HSet
-			hsetData := make(map[string]interface{})
+			// 将 map[string]string 转换为 map[string]any 以匹配 Redis HSet
+			hsetData := make(map[string]any)
 			for k, v := range data.Data {
 				hsetData[k] = v
 			}
 			if err := m.Rdb.HSet(ctx, key, hsetData).Err(); err != nil {
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"message": fmt.Sprintf(common.T(lang, "redis_update_failed"), err),
-				})
+				common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "redis_update_failed"), err), nil)
 				return
 			}
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": common.T(lang, "redis_config_updated"),
-		})
+		common.SendJSONResponse(w, true, common.T(lang, "redis_config_updated"), nil)
 	}
 }
 
@@ -2289,65 +2371,45 @@ func HandleSubscriberWebSocket(m *common.Manager) http.HandlerFunc {
 // HandleAdminListUsers 获取用户列表
 func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		log.Printf("[DEBUG] HandleAdminListUsers called")
 
-		rows, err := m.DB.Query(m.PrepareQuery("SELECT id, username, is_admin, active, created_at, updated_at FROM users"))
-		if err != nil {
-			log.Printf("[ERROR] HandleAdminListUsers DB query failed: %v", err)
+		var dbUsers []common.User
+		if err := m.GORMDB.Find(&dbUsers).Error; err != nil {
+			log.Printf("[ERROR] HandleAdminListUsers GORM query failed: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": fmt.Sprintf(common.T(lang, "db_query_failed"), err),
-			})
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "db_query_failed"), err), nil)
 			return
 		}
-		defer rows.Close()
 
-		var users []map[string]interface{}
-		for rows.Next() {
-			var id int64
-			var username string
-			var createdAt, updatedAt interface{}
-			var isAdmin, active bool
-			if err := rows.Scan(&id, &username, &isAdmin, &active, &createdAt, &updatedAt); err != nil {
-				log.Printf("[ERROR] HandleAdminListUsers scan failed: %v", err)
-				continue
-			}
+		type UserInfo struct {
+			ID        int64  `json:"id"`
+			Username  string `json:"username"`
+			IsAdmin   bool   `json:"is_admin"`
+			Active    bool   `json:"active"`
+			CreatedAt string `json:"created_at"`
+			UpdatedAt string `json:"updated_at"`
+		}
 
-			var createdAtStr, updatedAtStr string
-			if createdAt != nil {
-				if t, ok := createdAt.(time.Time); ok {
-					createdAtStr = t.Format(time.RFC3339)
-				} else if s, ok := createdAt.(string); ok {
-					createdAtStr = s
-				}
-			}
-			if updatedAt != nil {
-				if t, ok := updatedAt.(time.Time); ok {
-					updatedAtStr = t.Format(time.RFC3339)
-				} else if s, ok := updatedAt.(string); ok {
-					updatedAtStr = s
-				}
-			}
-
-			users = append(users, map[string]interface{}{
-				"id":         id,
-				"username":   username,
-				"is_admin":   isAdmin,
-				"active":     active,
-				"created_at": createdAtStr,
-				"updated_at": updatedAtStr,
+		users := make([]UserInfo, 0)
+		for _, u := range dbUsers {
+			users = append(users, UserInfo{
+				ID:        u.ID,
+				Username:  u.Username,
+				IsAdmin:   u.IsAdmin,
+				Active:    u.Active,
+				CreatedAt: u.CreatedAt.Format(time.RFC3339),
+				UpdatedAt: u.UpdatedAt.Format(time.RFC3339),
 			})
 		}
 
 		log.Printf("[DEBUG] HandleAdminListUsers found %d users", len(users))
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"users":   users,
+		common.SendJSONResponse(w, true, "", struct {
+			Users []UserInfo `json:"users"`
+		}{
+			Users: users,
 		})
 	}
 }
@@ -2355,7 +2417,6 @@ func HandleAdminListUsers(m *common.Manager) http.HandlerFunc {
 // HandleAdminManageUsers 用户管理操作 (create/delete/reset_pwd/toggle_status)
 func HandleAdminManageUsers(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		var req struct {
@@ -2367,10 +2428,7 @@ func HandleAdminManageUsers(m *common.Manager) http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
@@ -2387,10 +2445,7 @@ func HandleAdminManageUsers(m *common.Manager) http.HandlerFunc {
 			handleAdminToggleUser(m, w, lang, req.Username)
 		default:
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": fmt.Sprintf(common.T(lang, "user_management_invalid_action"), req.Action),
-			})
+			common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "user_management_invalid_action"), req.Action), nil)
 		}
 	}
 }
@@ -2398,20 +2453,14 @@ func HandleAdminManageUsers(m *common.Manager) http.HandlerFunc {
 func handleAdminCreateUser(m *common.Manager, w http.ResponseWriter, lang, username, password string, isAdmin bool) {
 	if username == "" || password == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "user_pwd_empty"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "user_pwd_empty"), nil)
 		return
 	}
 
 	hash, err := common.HashPassword(password)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "password_encrypt_failed"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "password_encrypt_failed"), nil)
 		return
 	}
 
@@ -2426,10 +2475,7 @@ func handleAdminCreateUser(m *common.Manager, w http.ResponseWriter, lang, usern
 
 	if err := m.SaveUserToDB(user); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf(common.T(lang, "user_create_failed"), err),
-		})
+		common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "user_create_failed"), err), nil)
 		return
 	}
 
@@ -2437,37 +2483,25 @@ func handleAdminCreateUser(m *common.Manager, w http.ResponseWriter, lang, usern
 	m.Users[username] = user
 	m.UsersMutex.Unlock()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": common.T(lang, "user_created"),
-	})
+	common.SendJSONResponse(w, true, common.T(lang, "user_created"), nil)
 }
 
 func handleAdminUpdateUser(m *common.Manager, w http.ResponseWriter, lang, username string, isAdmin bool) {
 	if username == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "username_empty"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "username_empty"), nil)
 		return
 	}
 
 	if username == "admin" && !isAdmin {
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "cannot_disable_default_admin"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "cannot_disable_default_admin"), nil)
 		return
 	}
 
 	if _, err := m.DB.Exec(m.PrepareQuery("UPDATE users SET is_admin = ?, updated_at = ? WHERE username = ?"), isAdmin, time.Now(), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf(common.T(lang, "user_update_failed"), err),
-		})
+		common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "user_update_failed"), err), nil)
 		return
 	}
 
@@ -2478,28 +2512,19 @@ func handleAdminUpdateUser(m *common.Manager, w http.ResponseWriter, lang, usern
 	}
 	m.UsersMutex.Unlock()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": common.T(lang, "user_info_updated"),
-	})
+	common.SendJSONResponse(w, true, common.T(lang, "user_info_updated"), nil)
 }
 
 func handleAdminDeleteUser(m *common.Manager, w http.ResponseWriter, lang, username string) {
 	if username == "admin" {
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "cannot_delete_default_admin"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "cannot_delete_default_admin"), nil)
 		return
 	}
 
 	if _, err := m.DB.Exec(m.PrepareQuery("DELETE FROM users WHERE username = ?"), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf(common.T(lang, "user_delete_failed"), err),
-		})
+		common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "user_delete_failed"), err), nil)
 		return
 	}
 
@@ -2507,38 +2532,26 @@ func handleAdminDeleteUser(m *common.Manager, w http.ResponseWriter, lang, usern
 	delete(m.Users, username)
 	m.UsersMutex.Unlock()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": common.T(lang, "user_deleted"),
-	})
+	common.SendJSONResponse(w, true, common.T(lang, "user_deleted"), nil)
 }
 
 func handleAdminResetPassword(m *common.Manager, w http.ResponseWriter, lang, username, password string) {
 	if password == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "new_password_empty"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "new_password_empty"), nil)
 		return
 	}
 
 	hash, err := common.HashPassword(password)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "password_encrypt_failed"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "password_encrypt_failed"), nil)
 		return
 	}
 
 	if _, err := m.DB.Exec(m.PrepareQuery("UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?"), hash, time.Now(), username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf(common.T(lang, "user_update_failed"), err),
-		})
+		common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "user_update_failed"), err), nil)
 		return
 	}
 
@@ -2549,19 +2562,13 @@ func handleAdminResetPassword(m *common.Manager, w http.ResponseWriter, lang, us
 	}
 	m.UsersMutex.Unlock()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": common.T(lang, "password_reset_success"),
-	})
+	common.SendJSONResponse(w, true, common.T(lang, "password_reset_success"), nil)
 }
 
 func handleAdminToggleUser(m *common.Manager, w http.ResponseWriter, lang, username string) {
 	if username == "admin" {
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": common.T(lang, "cannot_disable_default_admin"),
-		})
+		common.SendJSONResponse(w, false, common.T(lang, "cannot_disable_default_admin"), nil)
 		return
 	}
 
@@ -2578,10 +2585,7 @@ func handleAdminToggleUser(m *common.Manager, w http.ResponseWriter, lang, usern
 		err := m.DB.QueryRow(m.PrepareQuery("SELECT active FROM users WHERE username = ?"), username).Scan(&currentStatus)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "user_not_found"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "user_not_found"), nil)
 			return
 		}
 	}
@@ -2591,10 +2595,7 @@ func handleAdminToggleUser(m *common.Manager, w http.ResponseWriter, lang, usern
 	if _, err := m.DB.Exec(m.PrepareQuery("UPDATE users SET active = ?, updated_at = ? WHERE username = ?"), newStatus, time.Now(), username); err != nil {
 		log.Printf("更新用户状态失败: %v (username: %s, newStatus: %v)", err, username, newStatus)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf(common.T(lang, "user_update_failed"), err),
-		})
+		common.SendJSONResponse(w, false, fmt.Sprintf(common.T(lang, "user_update_failed"), err), nil)
 		return
 	}
 
@@ -2606,24 +2607,23 @@ func handleAdminToggleUser(m *common.Manager, w http.ResponseWriter, lang, usern
 		// but for now just letting it stay out of cache until next login/access
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": common.T(lang, "user_status_updated"),
-		"active":  newStatus,
+	common.SendJSONResponse(w, true, common.T(lang, "user_status_updated"), struct {
+		Active bool `json:"active"`
+	}{
+		Active: newStatus,
 	})
 }
 
 // HandleGetRoutingRules 获取所有路由规则
 func HandleGetRoutingRules(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		m.Mutex.RLock()
 		defer m.Mutex.RUnlock()
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"rules":   m.RoutingRules,
+		common.SendJSONResponse(w, true, "", struct {
+			Rules map[string]string `json:"rules"`
+		}{
+			Rules: m.RoutingRules,
 		})
 	}
 }
@@ -2631,7 +2631,6 @@ func HandleGetRoutingRules(m *common.Manager) http.HandlerFunc {
 // HandleSetRoutingRule 设置路由规则
 func HandleSetRoutingRule(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		var rule struct {
@@ -2641,19 +2640,13 @@ func HandleSetRoutingRule(m *common.Manager) http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "invalid_request_format"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
 		if rule.Key == "" || rule.WorkerID == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "routing_rule_invalid_params"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "routing_rule_invalid_params"), nil)
 			return
 		}
 
@@ -2668,42 +2661,33 @@ func HandleSetRoutingRule(m *common.Manager) http.HandlerFunc {
 			log.Printf(common.T(lang, "routing_rule_save_failed"), err)
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": common.T(lang, "routing_rule_set_success"),
-		})
+		common.SendJSONResponse(w, true, common.T(lang, "routing_rule_set_success"), nil)
 	}
 }
 
 // HandleDeleteRoutingRule 删除路由规则
 func HandleDeleteRoutingRule(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
 		key := r.URL.Query().Get("key")
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"message": common.T(lang, "routing_rule_key_empty"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "routing_rule_key_empty"), nil)
 			return
 		}
 
 		m.Mutex.Lock()
+		defer m.Mutex.Unlock()
+
 		if _, exists := m.RoutingRules[key]; exists {
 			delete(m.RoutingRules, key)
 			if err := m.DeleteRoutingRuleFromDB(key); err != nil {
 				log.Printf(common.T(lang, "routing_rule_delete_failed"), err)
 			}
 		}
-		m.Mutex.Unlock()
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": common.T(lang, "routing_rule_delete_success"),
-		})
+		common.SendJSONResponse(w, true, common.T(lang, "routing_rule_delete_success"), nil)
 	}
 }
 
@@ -2717,55 +2701,44 @@ func toString(v interface{}) string {
 // HandleDockerLogs 获取 Docker 容器日志
 func HandleDockerLogs(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
-		containerID := r.URL.Query().Get("container_id")
-		if containerID == "" {
-			containerID = r.URL.Query().Get("id")
-		}
+		containerID := r.URL.Query().Get("id")
 
 		if containerID == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "container_id_empty"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
 		if m.DockerClient == nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": common.T(lang, "docker_not_init"),
-			})
+			common.SendJSONResponse(w, false, common.T(lang, "docker_not_init"), nil)
 			return
 		}
 
 		options := types.ContainerLogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
-			Tail:       "200",
+			Tail:       "100",
+			Follow:     false,
 		}
 
 		reader, err := m.DockerClient.ContainerLogs(r.Context(), containerID, options)
 		if err != nil {
 			log.Printf(common.T(lang, "get_docker_logs_failed"), err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "error",
-				"message": err.Error(),
-			})
+			common.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 		defer reader.Close()
 
 		logs, _ := io.ReadAll(reader)
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "ok",
-			"logs":   string(logs),
+		common.SendJSONResponse(w, true, "", struct {
+			Logs string `json:"logs"`
+		}{
+			Logs: string(logs),
 		})
 	}
 }
@@ -2773,32 +2746,42 @@ func HandleDockerLogs(m *common.Manager) http.HandlerFunc {
 // HandleGetManual 获取管理员手册
 func HandleGetManual(m *common.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		lang := common.GetLangFromRequest(r)
 
-		manual := map[string]interface{}{
-			"title": common.T(lang, "manual_title"),
-			"sections": []map[string]interface{}{
-				{
-					"title":   common.T(lang, "manual_section_quickstart_title"),
-					"content": common.T(lang, "manual_section_quickstart_content"),
-				},
-				{
-					"title":   common.T(lang, "manual_section_docker_title"),
-					"content": common.T(lang, "manual_section_docker_content"),
-				},
-				{
-					"title":   common.T(lang, "manual_section_routing_title"),
-					"content": common.T(lang, "manual_section_routing_content"),
-				},
-				{
-					"title":   common.T(lang, "manual_section_users_title"),
-					"content": common.T(lang, "manual_section_users_content"),
-				},
-			},
-			"version": "1.0.0", // 使用硬编码版本号或从配置中获取
+		type ManualSection struct {
+			Title   string `json:"title"`
+			Content string `json:"content"`
 		}
 
-		json.NewEncoder(w).Encode(manual)
+		type ManualInfo struct {
+			Title    string          `json:"title"`
+			Sections []ManualSection `json:"sections"`
+			Version  string          `json:"version"`
+		}
+
+		manual := ManualInfo{
+			Title: common.T(lang, "manual_title"),
+			Sections: []ManualSection{
+				{
+					Title:   common.T(lang, "manual_section_quickstart_title"),
+					Content: common.T(lang, "manual_section_quickstart_content"),
+				},
+				{
+					Title:   common.T(lang, "manual_section_docker_title"),
+					Content: common.T(lang, "manual_section_docker_content"),
+				},
+				{
+					Title:   common.T(lang, "manual_section_routing_title"),
+					Content: common.T(lang, "manual_section_routing_content"),
+				},
+				{
+					Title:   common.T(lang, "manual_section_users_title"),
+					Content: common.T(lang, "manual_section_users_content"),
+				},
+			},
+			Version: "1.0.0", // 使用硬编码版本号或从配置中获取
+		}
+
+		common.SendJSONResponse(w, true, "", manual)
 	}
 }

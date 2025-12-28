@@ -65,8 +65,8 @@ type Event struct {
 	UserID        FlexibleInt64 `json:"user_id,omitempty"`
 	GroupID       FlexibleInt64 `json:"group_id,omitempty"`
 	Dice          int           `json:"dice,omitempty"`
-	Anonymous     interface{}   `json:"anonymous,omitempty"`
-	Message       interface{}   `json:"message,omitempty"`
+	Anonymous     any           `json:"anonymous,omitempty"`
+	Message       any           `json:"message,omitempty"`
 	RawMessage    string        `json:"raw_message,omitempty"`
 	Font          int           `json:"font,omitempty"`
 	Sender        Sender        `json:"sender,omitempty"`
@@ -86,9 +86,9 @@ type Event struct {
 func (e *Event) UnmarshalJSON(data []byte) error {
 	type Alias Event
 	aux := &struct {
-		UserID  interface{} `json:"user_id"`
-		GroupID interface{} `json:"group_id"`
-		SelfID  interface{} `json:"self_id"`
+		UserID  any `json:"user_id"`
+		GroupID any `json:"group_id"`
+		SelfID  any `json:"self_id"`
 		*Alias
 	}{
 		Alias: (*Alias)(e),
@@ -225,6 +225,6 @@ type File struct {
 }
 
 type MessageSegment struct {
-	Type string                 `json:"type"`
-	Data map[string]interface{} `json:"data"`
+	Type string         `json:"type"`
+	Data map[string]any `json:"data"`
 }

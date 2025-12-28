@@ -130,7 +130,7 @@ func (m *Manager) LoadMemberCachesWithGORM() ([]*MemberCache, error) {
 }
 
 // SaveSystemStatWithGORM 使用GORM保存系统统计（如果可用）
-func (m *Manager) SaveSystemStatWithGORM(key string, value interface{}) error {
+func (m *Manager) SaveSystemStatWithGORM(key string, value any) error {
 	if m.GORMManager != nil {
 		return m.GORMManager.GORMSaveSystemStat(key, value)
 	}
@@ -139,7 +139,7 @@ func (m *Manager) SaveSystemStatWithGORM(key string, value interface{}) error {
 }
 
 // LoadSystemStatsWithGORM 使用GORM加载系统统计（如果可用）
-func (m *Manager) LoadSystemStatsWithGORM() (map[string]interface{}, error) {
+func (m *Manager) LoadSystemStatsWithGORM() (map[string]any, error) {
 	if m.GORMManager != nil {
 		return m.GORMManager.GORMLoadSystemStats()
 	}
@@ -148,7 +148,7 @@ func (m *Manager) LoadSystemStatsWithGORM() (map[string]interface{}, error) {
 }
 
 // LoadSystemStatWithGORM 使用GORM加载单个系统统计（如果可用）
-func (m *Manager) LoadSystemStatWithGORM(key string) (interface{}, error) {
+func (m *Manager) LoadSystemStatWithGORM(key string) (any, error) {
 	if m.GORMManager != nil {
 		return m.GORMManager.GORMLoadSystemStat(key)
 	}

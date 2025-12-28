@@ -1,23 +1,23 @@
 package onebot
 
 type Request struct {
-	Action  string      `json:"action"`
-	Params  interface{} `json:"params,omitempty"`
-	Echo    interface{} `json:"echo,omitempty"`
-	Request interface{} `json:"request,omitempty"`
+	Action  string `json:"action"`
+	Params  any    `json:"params,omitempty"`
+	Echo    any    `json:"echo,omitempty"`
+	Request any    `json:"request,omitempty"`
 }
 
 type Response struct {
-	Status  string      `json:"status"`
-	Data    interface{} `json:"data,omitempty"`
-	Message string      `json:"message,omitempty"`
-	Echo    interface{} `json:"echo,omitempty"`
+	Status  string `json:"status"`
+	Data    any    `json:"data,omitempty"`
+	Message string `json:"message,omitempty"`
+	Echo    any    `json:"echo,omitempty"`
 }
 
 type SendMessageParams struct {
 	UserID      FlexibleInt64 `json:"user_id,omitempty"`
 	GroupID     FlexibleInt64 `json:"group_id,omitempty"`
-	Message     interface{}   `json:"message"`
+	Message     any           `json:"message"`
 	AutoEscape  bool          `json:"auto_escape,omitempty"`
 	MessageType string        `json:"message_type,omitempty"`
 	ID          FlexibleInt64 `json:"id,omitempty"`

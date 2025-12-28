@@ -1,12 +1,13 @@
 package main
 
 import (
+	"BotMatrix/common"
+	"BotMatrix/common/log"
 	"bufio"
 	"botworker/internal/onebot"
 	"botworker/internal/plugin"
 	"botworker/plugins"
 	"fmt"
-	"BotMatrix/common/log"
 	"os"
 	"strings"
 	"time"
@@ -87,19 +88,24 @@ func (r *TestRobot) GetSelfID() int64 {
 	return 123456
 }
 
-func (r *TestRobot) GetSessionContext(platform, userID string) (map[string]interface{}, error) {
+func (r *TestRobot) GetSessionContext(platform, userID string) (*common.SessionContext, error) {
 	return nil, nil
 }
 
-func (r *TestRobot) SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error {
+func (r *TestRobot) SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error {
 	return nil
 }
 
-func (r *TestRobot) GetSessionState(platform, userID string) (map[string]interface{}, error) {
+func (r *TestRobot) GetSessionState(platform, userID string) (*common.SessionState, error) {
 	return nil, nil
 }
 
-func (r *TestRobot) HandleSkill(skillName string, skill plugin.Skill) {
+func (r *TestRobot) ClearSessionState(platform, userID string) error {
+	return nil
+}
+
+// HandleSkill implements plugin.Robot
+func (r *TestRobot) HandleSkill(skillName string, skill func(params map[string]string) (string, error)) {
 	r.skills[skillName] = skill
 }
 
@@ -120,9 +126,9 @@ func main() {
 
 	// 注册插件
 	pluginManager.LoadPlugin(&plugins.EchoPlugin{})
-	pluginManager.LoadPlugin(&plugins.TimePlugin{})
-	pluginManager.LoadPlugin(&plugins.WeatherPlugin{})
-	pluginManager.LoadPlugin(&plugins.SystemInfoPlugin{})
+	pluginManager.LoadPlugin(plugins.NewTimePlugin())
+	pluginManager.LoadPlugin(plugins.NewWeatherPlugin(nil))
+	pluginManager.LoadPlugin(&plugins.WelcomePlugin{})
 
 	fmt.Println("Plugin Console")
 	fmt.Println("===================")

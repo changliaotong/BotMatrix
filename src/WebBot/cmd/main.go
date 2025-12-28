@@ -103,10 +103,10 @@ func restartBot() {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-		Echo   string                 `json:"echo"`
-		SelfID string                 `json:"self_id"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
+		SelfID string         `json:"self_id"`
 	}
 
 	if err := json.Unmarshal(data, &cmd); err != nil {
@@ -156,9 +156,9 @@ func handleWidgetWebSocket(w http.ResponseWriter, r *http.Request) {
 	users[userID] = user
 	usersMu.Unlock()
 
-	conn.WriteJSON(map[string]interface{}{
+	conn.WriteJSON(map[string]any{
 		"type": "init",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"user_id": userID,
 			"title":   app.Title,
 			"theme":   app.ThemeColor,
@@ -186,7 +186,7 @@ func handleWidgetWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		botService.SendToNexus(map[string]interface{}{
+		botService.SendToNexus(map[string]any{
 			"post_type":    "message",
 			"message_type": "private",
 			"user_id":      userID,
@@ -208,7 +208,7 @@ func sendToWebUser(userID, content, echo string) {
 		return
 	}
 
-	msg, _ := json.Marshal(map[string]interface{}{
+	msg, _ := json.Marshal(map[string]any{
 		"type":    "text",
 		"content": content,
 		"from":    "bot",

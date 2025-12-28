@@ -752,14 +752,14 @@ func GetMessagesByUserID(db *sql.DB, userID int64, limit int) ([]*Message, error
 
 // Session 定义会话状态模型
 type Session struct {
-	ID        int                    `json:"id"`
-	SessionID string                 `json:"session_id"`
-	UserID    int64                  `json:"user_id"`
-	GroupID   int64                  `json:"group_id"`
-	State     string                 `json:"state"`
-	Data      map[string]interface{} `json:"data"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	ID        int            `json:"id"`
+	SessionID string         `json:"session_id"`
+	UserID    int64          `json:"user_id"`
+	GroupID   int64          `json:"group_id"`
+	State     string         `json:"state"`
+	Data      map[string]any `json:"data"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // CreateOrUpdateSession 创建或更新会话状态
@@ -2210,7 +2210,7 @@ func RemoveGroupAdmin(db *sql.DB, groupID, userID int64) error {
 }
 
 // GetGroupAdmins 获取群管理员列表
-func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]interface{}, error) {
+func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]any, error) {
 	query := `
 	SELECT user_id, level
 	FROM group_admins
@@ -2223,14 +2223,14 @@ func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]interface{}, error)
 	}
 	defer rows.Close()
 
-	admins := []map[string]interface{}{}
+	admins := []map[string]any{}
 	for rows.Next() {
 		var userID int64
 		var level int
 		if err := rows.Scan(&userID, &level); err != nil {
 			return nil, fmt.Errorf("扫描群管理员失败: %w", err)
 		}
-		admins = append(admins, map[string]interface{}{
+		admins = append(admins, map[string]any{
 			"user_id": userID,
 			"level":   level,
 		})
@@ -2590,7 +2590,7 @@ func UnbanUser(db *sql.DB, groupID, userID int64) error {
 }
 
 // GetBannedUsersByGroup 获取群内禁言用户列表
-func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]interface{}, error) {
+func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]any, error) {
 	query := `
 	SELECT user_id, ban_end_time
 	FROM banned_users
@@ -2603,7 +2603,7 @@ func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]interface{},
 	}
 	defer rows.Close()
 
-	bannedUsers := []map[string]interface{}{}
+	bannedUsers := []map[string]any{}
 	for rows.Next() {
 		var userID int64
 		var banEndTime time.Time
@@ -2611,7 +2611,7 @@ func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]interface{},
 			return nil, fmt.Errorf("扫描禁言用户失败: %w", err)
 		}
 
-		bannedUsers = append(bannedUsers, map[string]interface{}{
+		bannedUsers = append(bannedUsers, map[string]any{
 			"user_id":      userID,
 			"ban_end_time": banEndTime,
 		})
@@ -2625,7 +2625,7 @@ func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]interface{},
 }
 
 // GetExpiredBans 获取过期的禁言记录
-func GetExpiredBans(db *sql.DB) ([]map[string]interface{}, error) {
+func GetExpiredBans(db *sql.DB) ([]map[string]any, error) {
 	query := `
 	SELECT group_id, user_id, ban_end_time
 	FROM banned_users
@@ -2638,7 +2638,7 @@ func GetExpiredBans(db *sql.DB) ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	expiredBans := []map[string]interface{}{}
+	expiredBans := []map[string]any{}
 	for rows.Next() {
 		var groupID, userID int64
 		var banEndTime time.Time
@@ -2646,7 +2646,7 @@ func GetExpiredBans(db *sql.DB) ([]map[string]interface{}, error) {
 			return nil, fmt.Errorf("扫描过期禁言记录失败: %w", err)
 		}
 
-		expiredBans = append(expiredBans, map[string]interface{}{
+		expiredBans = append(expiredBans, map[string]any{
 			"group_id":     groupID,
 			"user_id":      userID,
 			"ban_end_time": banEndTime,
@@ -3006,7 +3006,7 @@ func UpdateUserFissionRecord(db *sql.DB, userID int64, inviteIncr, rewardIncr, p
 }
 
 // GetFissionRank 获取裂变排行榜
-func GetFissionRank(db *sql.DB, limit int) ([]map[string]interface{}, error) {
+func GetFissionRank(db *sql.DB, limit int) ([]map[string]any, error) {
 	query := `
 	SELECT user_id, invite_count, points
 	FROM user_fission_records
@@ -3019,14 +3019,14 @@ func GetFissionRank(db *sql.DB, limit int) ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	rank := []map[string]interface{}{}
+	rank := []map[string]any{}
 	for rows.Next() {
 		var userID int64
 		var inviteCount, points int
 		if err := rows.Scan(&userID, &inviteCount, &points); err != nil {
 			return nil, fmt.Errorf("扫描裂变排行失败: %w", err)
 		}
-		rank = append(rank, map[string]interface{}{
+		rank = append(rank, map[string]any{
 			"user_id":      userID,
 			"invite_count": inviteCount,
 			"points":       points,

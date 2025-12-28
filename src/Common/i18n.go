@@ -62,7 +62,7 @@ func InitTranslator(localesPath string, defaultLang string) {
 // T 翻译指定的键。支持 "键名|默认文本" 格式。
 // 如果语言是中文，则优先使用默认文本。
 // 如果语言不是中文，则根据键名在语言包中查找翻译。
-func T(lang string, key string, args ...interface{}) string {
+func T(lang string, key string, args ...any) string {
 	// 解析 key，支持 "ID|默认文本" 格式
 	id := key
 	defaultText := key
@@ -146,7 +146,7 @@ func T(lang string, key string, args ...interface{}) string {
 }
 
 // GetLangFromRequest 从请求中获取语言偏好
-func GetLangFromRequest(r interface{}) string {
+func GetLangFromRequest(r any) string {
 	// 这里可以扩展，比如从 Cookie, Header 或 Query 参数中获取
 	// 目前简单实现，优先从 Header "Accept-Language" 获取
 	if req, ok := r.(*http.Request); ok {

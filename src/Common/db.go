@@ -310,7 +310,7 @@ func (m *Manager) PrepareQuery(query string) string {
 }
 
 // SaveStatToDB 保存系统统计到数据库
-func (m *Manager) SaveStatToDB(key string, value interface{}) error {
+func (m *Manager) SaveStatToDB(key string, value any) error {
 	query := `
 	INSERT INTO system_stats (key, value, updated_at)
 	VALUES (?, ?, ?)
@@ -462,11 +462,12 @@ func (m *Manager) LoadCachesFromDB() error {
 		for rows.Next() {
 			var gID, name, botID string
 			if err := rows.Scan(&gID, &name, &botID); err == nil {
-				m.GroupCache[gID] = map[string]interface{}{
-					"group_id":   gID,
-					"group_name": name,
-					"bot_id":     botID,
-					"is_cached":  true,
+				m.GroupCache[gID] = GroupInfo{
+					GroupID:   gID,
+					GroupName: name,
+					BotID:     botID,
+					IsCached:  true,
+					LastSeen:  time.Now(),
 				}
 			}
 		}
@@ -479,11 +480,12 @@ func (m *Manager) LoadCachesFromDB() error {
 		for rowsF.Next() {
 			var uID, nickname, botID string
 			if err := rowsF.Scan(&uID, &nickname, &botID); err == nil {
-				m.FriendCache[uID] = map[string]interface{}{
-					"user_id":   uID,
-					"nickname":  nickname,
-					"bot_id":     botID,
-					"is_cached":  true,
+				m.FriendCache[uID] = FriendInfo{
+					UserID:   uID,
+					Nickname: nickname,
+					BotID:    botID,
+					IsCached: true,
+					LastSeen: time.Now(),
 				}
 			}
 		}
@@ -497,12 +499,13 @@ func (m *Manager) LoadCachesFromDB() error {
 			var gID, uID, nickname, card string
 			if err := rowsM.Scan(&gID, &uID, &nickname, &card); err == nil {
 				key := fmt.Sprintf("%s:%s", gID, uID)
-				m.MemberCache[key] = map[string]interface{}{
-					"group_id":  gID,
-					"user_id":   uID,
-					"nickname":  nickname,
-					"card":      card,
-					"is_cached": true,
+				m.MemberCache[key] = MemberInfo{
+					GroupID:  gID,
+					UserID:   uID,
+					Nickname: nickname,
+					Card:     card,
+					IsCached: true,
+					LastSeen: time.Now(),
 				}
 			}
 		}
@@ -632,7 +635,7 @@ func (m *Manager) LoadUsersFromDBNoLock() error {
 
 	for rows.Next() {
 		var user User
-		var createdAt, updatedAt interface{}
+		var createdAt, updatedAt any
 		err := rows.Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &user.SessionVersion, &user.Active, &createdAt, &updatedAt)
 		if err != nil {
 			log.Printf("解析用户行失败: %v", err)
@@ -708,12 +711,12 @@ func (m *Manager) DeleteRoutingRule(pattern string) error {
 
 // Transaction 原生SQL事务包装器
 // SaveSystemStat 保存单个系统统计到数据库
-func (m *Manager) SaveSystemStat(key string, value interface{}) error {
+func (m *Manager) SaveSystemStat(key string, value any) error {
 	return m.SaveStatToDB(key, value)
 }
 
 // LoadSystemStat 从数据库加载单个系统统计
-func (m *Manager) LoadSystemStat(key string) (interface{}, error) {
+func (m *Manager) LoadSystemStat(key string) (any, error) {
 	var value string
 	err := m.DB.QueryRow(m.PrepareQuery("SELECT value FROM system_stats WHERE key = ?"), key).Scan(&value)
 	if err != nil {
@@ -723,14 +726,14 @@ func (m *Manager) LoadSystemStat(key string) (interface{}, error) {
 }
 
 // LoadSystemStatsFromDB 从数据库加载所有系统统计
-func (m *Manager) LoadSystemStatsFromDB() (map[string]interface{}, error) {
+func (m *Manager) LoadSystemStatsFromDB() (map[string]any, error) {
 	rows, err := m.DB.Query(m.PrepareQuery("SELECT key, value FROM system_stats"))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	stats := make(map[string]interface{})
+	stats := make(map[string]any)
 	for rows.Next() {
 		var key, value string
 		if err := rows.Scan(&key, &value); err == nil {
