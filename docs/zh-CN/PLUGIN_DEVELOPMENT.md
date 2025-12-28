@@ -44,9 +44,30 @@ src/plugins/your_plugin/
 }
 ```
 
-## 🚀 快速开始
+## 🛠️ 使用 SDK 开发 (推荐)
 
-### 1. Go插件示例
+虽然您可以直接处理 JSON 通信，但我们强烈建议使用官方提供的 SDK，它们封装了复杂的交互逻辑、分布式状态管理和指令路由。
+
+- **Go SDK**: 适用于高性能插件。
+- **Python SDK**: 适用于 AI 和快速原型开发。
+- **C# SDK**: 适用于企业级应用。
+
+详细使用说明请参考：**[插件 SDK 开发指南](plugins/sdk_guide.md)**。
+
+## 📦 打包与分发 (.bmpk)
+
+BotMatrix 使用 `.bmpk` (BotMatrix Package) 作为标准插件分发格式。它实际上是一个包含插件代码和 `plugin.json` 的压缩包。
+
+### 使用 bm-cli 工具
+1. **安装**: `go build -o bm-cli src/tools/bm-cli/main.go`
+2. **打包**: `./bm-cli pack ./your_plugin_dir`
+3. **安装**: 将生成的 `.bmpk` 文件上传到 BotNexus 管理后台，或放置在插件热加载目录。
+
+## 🚀 快速开始 (原生协议)
+
+如果您不想使用 SDK，可以参考以下原生协议实现：
+
+### 1. Go 示例
 ```go
 package main
 

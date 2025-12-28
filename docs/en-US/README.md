@@ -10,14 +10,17 @@ Welcome to the BotMatrix Documentation Hub. This includes detailed system archit
 ### 🚀 Quick Start & Deployment
 - **[Changelog](CHANGELOG.md)** - Project version iterations and feature changes.
 - **[System Architecture](ARCHITECTURE.md)** - Core design principles and component collaboration.
-- **[API Reference](API_REFERENCE.md)** - Detailed JSON message formats and communication protocols.
 - **[Deployment Guide](DEPLOY.md)** - How to install and run BotMatrix in different environments.
+- **[Container Best Practices](deployment/CONTAINER_BEST_PRACTICES.md)** - Deploying BotWorker and plugins in Docker/K8s.
+- **[API Reference](API_REFERENCE.md)** - Detailed JSON message formats and communication protocols.
 - **[Redis Upgrade](REDIS_UPGRADE.md)** - Instructions on Redis dependency and configuration.
 - **[WebUI Upgrade Plan](WEBUI_UPGRADE_PLAN.md)** - Roadmap for WebUI refactoring and upgrades.
 
 ### 📖 Manuals
 - **[Server Manual](SERVER_MANUAL.md)** - Detailed feature descriptions, configuration guides, and admin commands.
 - **[Plugin Manual](plugins/README.md)** - Detailed guide for all built-in plugins.
+- **[Plugin SDK Guide](plugins/sdk_guide.md)** - Develop efficient plugins with Go/Python/C# SDKs.
+- **[Plugin Market Specification (BMPK)](plugins/market_spec.md)** - Standardized plugin distribution and market protocols.
 - **[Routing Rules](ROUTING_RULES.md)** - Definition of message routing and distribution logic.
 - **[Skills & Compatibility](SKILL_SWITCH_AND_COMPATIBILITY.md)** - Bot skill management and OneBot compatibility.
 

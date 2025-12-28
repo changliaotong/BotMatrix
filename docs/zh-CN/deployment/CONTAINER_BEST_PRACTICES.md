@@ -1,5 +1,8 @@
 # BotMatrix 容器化部署与插件管理最佳实践
 
+> [简体中文](CONTAINER_BEST_PRACTICES.md) | [🌐 English](../../en-US/deployment/CONTAINER_BEST_PRACTICES.md)
+> [⬅️ 返回文档中心](../README.md) | [🏠 返回项目主页](../../../README.md)
+
 本文档旨在为开发者和运维人员提供 BotWorker 及插件系统在容器化环境（Docker/K8s）下的最佳部署实践指南。
 
 ## 1. 核心理念：Stateless Worker + Stateful Plugins

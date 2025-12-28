@@ -10,14 +10,17 @@
 ### 🚀 快速开始 & 部署
 - **[更新日志](CHANGELOG.md)** - 项目版本迭代与功能变更记录。
 - **[系统架构图](ARCHITECTURE.md)** - 了解 BotMatrix 的核心设计思想与组件协作。
-- **[API 接口参考](API_REFERENCE.md)** - 详细的 JSON 消息格式与通信协议说明。
 - **[部署指南](DEPLOY.md)** - 如何在不同环境下安装 and 运行 BotMatrix。
+- **[容器化部署最佳实践](deployment/CONTAINER_BEST_PRACTICES.md)** - 在 Docker/K8s 环境下部署 BotWorker 与插件。
+- **[API 接口参考](API_REFERENCE.md)** - 详细的 JSON 消息格式与通信协议说明。
 - **[Redis 升级说明](REDIS_UPGRADE.md)** - 关于 Redis 依赖的升级和配置说明。
 - **[WebUI 升级计划](WEBUI_UPGRADE_PLAN.md)** - Web 管理界面的重构与升级路线图。
 
 ### 📖 使用手册
 - **[服务端使用手册](SERVER_MANUAL.md)** - 详细的功能说明、配置指南和管理员指令。
 - **[插件功能手册](plugins/README.md)** - 所有内置插件的详细使用指南。
+- **[插件 SDK 开发指南](plugins/sdk_guide.md)** - 使用 Go/Python/C# SDK 开发高效插件。
+- **[插件市场规范 (BMPK)](plugins/market_spec.md)** - 标准化插件分发与分发协议。
 - **[路由规则说明](ROUTING_RULES.md)** - 消息路由和分发逻辑的详细定义。
 - **[技能开关与兼容性](SKILL_SWITCH_AND_COMPATIBILITY.md)** - 机器人技能的管理与 OneBot 协议兼容性说明。
 

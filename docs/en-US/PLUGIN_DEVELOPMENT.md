@@ -44,9 +44,30 @@ src/plugins/your_plugin/
 }
 ```
 
-## 🚀 Quick Start
+## 🛠️ Development with SDK (Recommended)
 
-### 1. Go Plugin Example
+While you can handle JSON communication directly, we strongly recommend using the official SDKs. They encapsulate complex interaction logic, distributed state management, and command routing.
+
+- **Go SDK**: For high-performance plugins.
+- **Python SDK**: For AI and rapid prototyping.
+- **C# SDK**: For enterprise applications.
+
+For detailed instructions, refer to: **[Plugin SDK Guide](plugins/sdk_guide.md)**.
+
+## 📦 Packaging & Distribution (.bmpk)
+
+BotMatrix uses `.bmpk` (BotMatrix Package) as the standard plugin distribution format. It is essentially a zip archive containing the plugin code and `plugin.json`.
+
+### Using the bm-cli Tool
+1. **Install**: `go build -o bm-cli src/tools/bm-cli/main.go`
+2. **Pack**: `./bm-cli pack ./your_plugin_dir`
+3. **Install**: Upload the generated `.bmpk` file to the BotNexus admin panel or place it in the plugin hot-load directory.
+
+## 🚀 Quick Start (Native Protocol)
+
+If you prefer not to use an SDK, refer to the following native protocol implementations:
+
+### 1. Go Example
 ```go
 package main
 
