@@ -1,9 +1,11 @@
 package core
 
 import (
+	"archive/zip"
 	log "BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -54,8 +56,8 @@ func (pm *PluginManager) LoadPlugins(dir string) error {
 			continue
 		}
 
-		pm.plugins[config.Name] = &Plugin{
-			ID:     config.Name,
+		pm.plugins[config.ID] = &Plugin{
+			ID:     config.ID,
 			Config: config,
 			State:  "stopped",
 		}
@@ -79,8 +81,8 @@ func LoadPluginConfig(file string) (*PluginConfig, error) {
 }
 
 func ValidatePluginConfig(config *PluginConfig) error {
-	if config.APIVersion != "1.0" {
-		return fmt.Errorf("unsupported API version %s", config.APIVersion)
+	if config.ID == "" {
+		return fmt.Errorf("plugin id is required")
 	}
 
 	if config.Name == "" {
@@ -89,11 +91,6 @@ func ValidatePluginConfig(config *PluginConfig) error {
 
 	if config.EntryPoint == "" {
 		return fmt.Errorf("entry point is required")
-	}
-
-	// Validate plugin level
-	if config.PluginLevel != "master" && config.PluginLevel != "feature" {
-		return fmt.Errorf("invalid plugin level %s", config.PluginLevel)
 	}
 
 	// Validate signature if present
@@ -110,6 +107,94 @@ func VerifyPluginSignature(config *PluginConfig) error {
 	// TODO: Implement actual signature verification logic
 	// This is a placeholder for future implementation
 	// Could use RSA, ECDSA, or other signature algorithms
+	return nil
+}
+
+func (pm *PluginManager) InstallPlugin(bmpkPath string, targetDir string) error {
+	// 1. Open .bmpk file (which is a zip)
+	r, err := zip.OpenReader(bmpkPath)
+	if err != nil {
+		return fmt.Errorf("failed to open bmpk: %v", err)
+	}
+	defer r.Close()
+
+	// 2. Find and read plugin.json first to get ID
+	var manifest *PluginConfig
+	for _, f := range r.File {
+		if f.Name == "plugin.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+
+			data, err := io.ReadAll(rc)
+			if err != nil {
+				return err
+			}
+
+			if err := json.Unmarshal(data, &manifest); err != nil {
+				return fmt.Errorf("invalid manifest in bmpk: %v", err)
+			}
+			break
+		}
+	}
+
+	if manifest == nil {
+		return fmt.Errorf("plugin.json not found in bmpk")
+	}
+
+	// 3. Create target directory
+	pluginDir := filepath.Join(targetDir, manifest.ID)
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		return fmt.Errorf("failed to create plugin directory: %v", err)
+	}
+
+	// 4. Extract all files
+	for _, f := range r.File {
+		fpath := filepath.Join(pluginDir, f.Name)
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// 5. Load the newly installed plugin
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	pm.plugins[manifest.ID] = &Plugin{
+		ID:     manifest.ID,
+		Config: manifest,
+		State:  "stopped",
+	}
+
+	log.Printf("Successfully installed plugin: %s (v%s)", manifest.Name, manifest.Version)
 	return nil
 }
 

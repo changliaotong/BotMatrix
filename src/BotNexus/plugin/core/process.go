@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"BotNexus/plugin/policy"
@@ -78,6 +79,12 @@ func (pm *PluginManager) readPluginOutput(plugin *Plugin) {
 
 func (pm *PluginManager) handlePluginResponse(plugin *Plugin, resp *ResponseMessage) {
 	for _, action := range resp.Actions {
+		// Special handling for cross-plugin skill calls
+		if action.Type == "call_skill" {
+			pm.routeSkillCall(plugin, action)
+			continue
+		}
+
 		if !pm.isActionAllowed(plugin, action.Type) {
 			log.Printf("plugin %s tried to execute forbidden action %s", plugin.ID, action.Type)
 			continue
@@ -88,25 +95,170 @@ func (pm *PluginManager) handlePluginResponse(plugin *Plugin, resp *ResponseMess
 }
 
 func (pm *PluginManager) isActionAllowed(plugin *Plugin, actionType string) bool {
-	// First check plugin's own allowed actions
-	for _, allowed := range plugin.Config.Actions {
-		if allowed == actionType {
-			// Then check against the appropriate policy whitelist
-			for _, runOn := range plugin.Config.RunOn {
-				switch runOn {
-				case "center":
-					if policy.CenterActionWhitelist[actionType] {
-						return true
-					}
-				case "worker":
-					if policy.WorkerActionWhitelist[actionType] {
-						return true
-					}
+	// 1. First check if the action is declared in the plugin's manifest
+	declared := false
+	for _, p := range plugin.Config.Permissions {
+		if p == actionType {
+			declared = true
+			break
+		}
+	}
+
+	if !declared {
+		return false
+	}
+
+	// 2. Then check against the system's global policy (Center or Worker)
+	// If RunOn is empty, default to worker policy for safety
+	if len(plugin.Config.RunOn) == 0 {
+		return policy.WorkerActionWhitelist[actionType]
+	}
+
+	for _, runOn := range plugin.Config.RunOn {
+		switch runOn {
+		case "center":
+			if policy.CenterActionWhitelist[actionType] {
+				return true
+			}
+		case "worker":
+			if policy.WorkerActionWhitelist[actionType] {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) {
+	targetID, ok := action.Payload["target_plugin"].(string)
+	if !ok {
+		log.Printf("Invalid skill call from %s: missing target_plugin", source.ID)
+		return
+	}
+
+	skillName, ok := action.Payload["skill_name"].(string)
+	if !ok {
+		log.Printf("Invalid skill call from %s: missing skill_name", source.ID)
+		return
+	}
+
+	payload, _ := action.Payload["payload"].(map[string]any)
+
+	pm.mutex.Lock()
+	targetPlugin, exists := pm.plugins[targetID]
+	pm.mutex.Unlock()
+
+	if !exists || targetPlugin.State != "running" {
+		log.Printf("Skill call failed: target plugin %s not found or not running", targetID)
+		return
+	}
+
+	// Inject as a new event to the target plugin
+	event := EventMessage{
+		ID:   fmt.Sprintf("skill_%d", time.Now().UnixNano()),
+		Type: "event",
+		Name: "skill_" + skillName,
+		Payload: map[string]any{
+			"caller_id": source.ID,
+			"payload":   payload,
+		},
+	}
+
+	encoder := json.NewEncoder(targetPlugin.Stdin)
+	if err := encoder.Encode(event); err != nil {
+		log.Printf("Failed to inject skill event to %s: %v", targetID, err)
+	} else {
+		log.Printf("Skill %s called: %s -> %s", skillName, source.ID, targetID)
+	}
+}
+
+// DispatchEvent routes an incoming event to matching plugins
+func (pm *PluginManager) DispatchEvent(event *EventMessage) {
+	pm.mutex.Lock()
+	plugins := make([]*Plugin, 0, len(pm.plugins))
+	for _, p := range pm.plugins {
+		if p.State == "running" {
+			plugins = append(plugins, p)
+		}
+	}
+	pm.mutex.Unlock()
+
+	// 1. Check for Intent matches first if it's a message
+	if event.Name == "on_message" {
+		payload, ok := event.Payload.(map[string]any)
+		if ok {
+			text, _ := payload["text"].(string)
+			if text != "" {
+				pm.routeByIntent(text, event)
+			}
+		}
+	}
+
+	// 2. Broadcast to plugins that explicitly subscribe to this event name
+	for _, p := range plugins {
+		shouldSend := false
+		for _, e := range p.Config.Events {
+			if e == event.Name || e == "*" {
+				shouldSend = true
+				break
+			}
+		}
+
+		if shouldSend {
+			encoder := json.NewEncoder(p.Stdin)
+			if err := encoder.Encode(event); err != nil {
+				log.Printf("Failed to send event %s to plugin %s: %v", event.Name, p.ID, err)
+			}
+		}
+	}
+}
+
+func (pm *PluginManager) routeByIntent(text string, originalEvent *EventMessage) {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	type match struct {
+		plugin *Plugin
+		intent Intent
+	}
+	var matches []match
+
+	for _, p := range pm.plugins {
+		if p.State != "running" {
+			continue
+		}
+		for _, intent := range p.Config.Intents {
+			for _, kw := range intent.Keywords {
+				if strings.Contains(strings.ToLower(text), strings.ToLower(kw)) {
+					matches = append(matches, match{p, intent})
+					break
 				}
 			}
 		}
 	}
-	return false
+
+	// Sort matches by priority (simple implementation)
+	for _, m := range matches {
+		intentEvent := EventMessage{
+			ID:            fmt.Sprintf("intent_%d", time.Now().UnixNano()),
+			Type:          "event",
+			Name:          "intent_" + m.intent.Name,
+			CorrelationID: originalEvent.ID,
+			Payload: map[string]any{
+				"original_text": text,
+				"intent_name":   m.intent.Name,
+				"source_event":  originalEvent,
+			},
+		}
+
+		encoder := json.NewEncoder(m.plugin.Stdin)
+		if err := encoder.Encode(intentEvent); err != nil {
+			log.Printf("Failed to send intent %s to plugin %s: %v", m.intent.Name, m.plugin.ID, err)
+		} else {
+			log.Printf("Intent matched: '%s' -> Plugin %s (Intent: %s)", text, m.plugin.ID, m.intent.Name)
+		}
+	}
 }
 
 func (pm *PluginManager) StopPlugin(name string) error {
@@ -200,7 +352,18 @@ func (pm *PluginManager) HotUpdatePlugin(name string, newVersion string) error {
 }
 
 func (pm *PluginManager) startPluginInstance(plugin *Plugin) error {
-	cmd := exec.Command(plugin.Config.EntryPoint)
+	parts := strings.Fields(plugin.Config.EntryPoint)
+	if len(parts) == 0 {
+		return fmt.Errorf("empty entry point for plugin %s", plugin.ID)
+	}
+
+	var cmd *exec.Cmd
+	if len(parts) == 1 {
+		cmd = exec.Command(parts[0])
+	} else {
+		cmd = exec.Command(parts[0], parts[1:]...)
+	}
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -234,7 +397,7 @@ func (pm *PluginManager) healthCheckPlugin(plugin *Plugin) error {
 		ID:   "health-check-123",
 		Type: "event",
 		Name: "on_health_check",
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"timestamp": time.Now().Unix(),
 		},
 	}
