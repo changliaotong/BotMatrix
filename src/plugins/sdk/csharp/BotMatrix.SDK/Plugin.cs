@@ -13,60 +13,68 @@ namespace BotMatrix.SDK
     public class EventMessage
     {
         [JsonPropertyName("id")]
-        public string Id { get; set; }
+        public string Id { get; set; } = string.Empty;
 
         [JsonPropertyName("type")]
-        public string Type { get; set; }
+        public string Type { get; set; } = string.Empty;
 
         [JsonPropertyName("name")]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [JsonPropertyName("correlation_id")]
-        public string CorrelationId { get; set; }
+        public string? CorrelationId { get; set; }
 
         [JsonPropertyName("payload")]
-        public Dictionary<string, object> Payload { get; set; }
+        public Dictionary<string, object> Payload { get; set; } = new Dictionary<string, object>();
     }
 
     public class Action
     {
         [JsonPropertyName("type")]
-        public string Type { get; set; }
+        public string Type { get; set; } = string.Empty;
 
         [JsonPropertyName("target")]
-        public string Target { get; set; }
+        public string? Target { get; set; }
 
         [JsonPropertyName("target_id")]
-        public string TargetId { get; set; }
+        public string? TargetId { get; set; }
 
         [JsonPropertyName("text")]
-        public string Text { get; set; }
+        public string? Text { get; set; }
 
         [JsonPropertyName("correlation_id")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string CorrelationId { get; set; }
+        public string? CorrelationId { get; set; }
+
+        [JsonPropertyName("payload")]
+        public Dictionary<string, object> Payload { get; set; } = new Dictionary<string, object>();
     }
 
     public class ResponseMessage
     {
         [JsonPropertyName("id")]
-        public string Id { get; set; }
+        public string Id { get; set; } = string.Empty;
 
         [JsonPropertyName("ok")]
         public bool Ok { get; set; }
 
         [JsonPropertyName("actions")]
-        public List<Action> Actions { get; set; }
+        public List<Action> Actions { get; set; } = new List<Action>();
 
         [JsonPropertyName("error")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string Error { get; set; }
+        public string? Error { get; set; }
     }
 
     public class Session
     {
         private readonly Context _ctx;
-        public Session(Context ctx) => _ctx = ctx;
+        private readonly BotMatrixPlugin _plugin;
+        public Session(Context ctx, BotMatrixPlugin plugin)
+        {
+            _ctx = ctx;
+            _plugin = plugin;
+        }
 
         public void Set(string key, object value, int expireSeconds = 0)
         {
@@ -77,12 +85,55 @@ namespace BotMatrix.SDK
             });
         }
 
-        // Note: Get is currently an action request in this simplified protocol, 
-        // in a real implementation this would likely involve a gRPC call or similar
-        // for synchronous data retrieval.
-        public void Get(string key)
+        public async Task SetAsync(string key, object value, int expireSeconds = 0)
         {
-            _ctx.CallAction("storage.get", new Dictionary<string, object> { { "key", key } });
+            string correlationId = $"storage_set_{Guid.NewGuid()}";
+            
+            _plugin.RegisterWaitingSession(correlationId, new TaskCompletionSource<Context>()); 
+
+            _ctx.CallAction("storage.set", new Dictionary<string, object> {
+                { "key", key },
+                { "value", value },
+                { "expire", expireSeconds },
+                { "correlation_id", correlationId }
+            });
+
+            await Task.CompletedTask;
+        }
+
+        public async Task<T> GetAsync<T>(string key)
+        {
+            string correlationId = $"storage_get_{Guid.NewGuid()}";
+            var tcs = new TaskCompletionSource<Context>();
+            _plugin.RegisterWaitingSession(correlationId, tcs);
+
+            _ctx.CallAction("storage.get", new Dictionary<string, object> {
+                { "key", key },
+                { "correlation_id", correlationId }
+            });
+
+            try
+            {
+                var ctx = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                if (ctx.Event.Payload.TryGetValue("value", out var val))
+                {
+                    if (val is JsonElement elem)
+                    {
+                        return JsonSerializer.Deserialize<T>(elem.GetRawText());
+                    }
+                    return (T)Convert.ChangeType(val, typeof(T));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[SDK] Session.GetAsync failed for {key}: {ex.Message}");
+            }
+            finally
+            {
+                _plugin.UnregisterWaitingSession(correlationId);
+            }
+
+            return default;
         }
     }
 
@@ -102,11 +153,12 @@ namespace BotMatrix.SDK
         {
             Event = @event;
             _plugin = plugin;
-            Session = new Session(this);
+            Session = new Session(this, plugin);
         }
 
         public void Reply(string text)
         {
+            Console.Error.WriteLine($"[SDK] Context.Reply called with text: {text}");
             CallAction("send_message", new Dictionary<string, object> { { "text", text } });
         }
 
@@ -180,17 +232,37 @@ namespace BotMatrix.SDK
             {
                 string from = Event.Payload.ContainsKey("from") ? Event.Payload["from"]?.ToString() : "";
                 string groupId = Event.Payload.ContainsKey("group_id") ? Event.Payload["group_id"]?.ToString() : "";
+                string platform = Event.Payload.ContainsKey("platform") ? Event.Payload["platform"]?.ToString() : "";
+                string selfId = Event.Payload.ContainsKey("self_id") ? Event.Payload["self_id"]?.ToString() : "";
 
                 var action = new Action
                 {
                     Type = actionType,
                     Target = from,
-                    TargetId = groupId
+                    TargetId = groupId,
+                    Payload = parameters ?? new Dictionary<string, object>()
                 };
 
-                if (parameters != null && parameters.ContainsKey("text"))
+                // Automatically include platform and self_id if not already present in parameters
+                if (!string.IsNullOrEmpty(platform) && !action.Payload.ContainsKey("platform"))
                 {
-                    action.Text = parameters["text"]?.ToString();
+                    action.Payload["platform"] = platform;
+                }
+                if (!string.IsNullOrEmpty(selfId) && !action.Payload.ContainsKey("self_id"))
+                {
+                    action.Payload["self_id"] = selfId;
+                }
+
+                if (parameters != null)
+                {
+                    if (parameters.ContainsKey("text"))
+                    {
+                        action.Text = parameters["text"]?.ToString();
+                    }
+                    if (parameters.ContainsKey("correlation_id"))
+                    {
+                        action.CorrelationId = parameters["correlation_id"]?.ToString();
+                    }
                 }
 
                 Actions.Add(action);
@@ -208,6 +280,7 @@ namespace BotMatrix.SDK
         private readonly BlockingCollection<ResponseMessage> _outputQueue = new BlockingCollection<ResponseMessage>();
         private readonly ConcurrentDictionary<string, TaskCompletionSource<Context>> _waitingSessions = new ConcurrentDictionary<string, TaskCompletionSource<Context>>();
         private JsonElement? _config;
+        public JsonElement? Config => _config;
 
         public BotMatrixPlugin()
         {
@@ -232,15 +305,35 @@ namespace BotMatrix.SDK
         {
             if (_config == null) return true; // Legacy mode
 
+            // 1. Check 'permissions' (Actions this plugin is allowed to call)
+            if (_config.Value.TryGetProperty("permissions", out var perms) && perms.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in perms.EnumerateArray())
+                {
+                    if (item.GetString() == action) return true;
+                }
+            }
+
+            // 2. Check 'actions' (Actions this plugin exports - usually can also call its own actions)
             if (_config.Value.TryGetProperty("actions", out var actions) && actions.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in actions.EnumerateArray())
                 {
-                    if (item.GetString() == action) return true;
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        if (item.GetString() == action) return true;
+                    }
+                    else if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        if (item.TryGetProperty("name", out var nameProp) && nameProp.GetString() == action) return true;
+                    }
                 }
-                return false;
             }
-            return true;
+
+            // Special case for built-in essential actions if not declared
+            if (action == "send_message" || action == "storage.get" || action == "storage.set") return true;
+
+            return false;
         }
 
         public void RegisterWaitingSession(string key, TaskCompletionSource<Context> tcs)
@@ -278,17 +371,35 @@ namespace BotMatrix.SDK
             On($"intent_{intentName}", handler);
         }
 
-        public void Command(string cmd, HandlerDelegate handler)
+        public void Command(string[] aliases, HandlerDelegate handler)
         {
             OnMessage(async ctx =>
             {
                 var text = ctx.Event.Payload.ContainsKey("text") ? ctx.Event.Payload["text"]?.ToString() : "";
-                if (text != null && (text.StartsWith(cmd + " ") || text == cmd))
+                if (string.IsNullOrWhiteSpace(text)) return;
+
+                // 1. 处理前缀 / (可选) 和 空格
+                // 正则说明：可选的斜杠 ^/?，后跟任意个空白字符 \s*，然后匹配别名
+                // 支持别名后紧跟数字的情况（如 c100），通过正向先行断言 (?=\d) 实现
+                foreach (var alias in aliases)
                 {
-                    ctx.Args = text.Substring(cmd.Length).Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                    await handler(ctx);
+                    var pattern = $@"^/?\s*{Regex.Escape(alias)}(\s+|(?=\d)|$)";
+                    var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
+                    
+                    if (match.Success)
+                    {
+                        var remaining = text.Substring(match.Index + match.Length).Trim();
+                        ctx.Args = remaining.Split(new[] { ' ', '\u3000' }, StringSplitOptions.RemoveEmptyEntries);
+                        await handler(ctx);
+                        return;
+                    }
                 }
             });
+        }
+
+        public void Command(string cmd, HandlerDelegate handler)
+        {
+            Command(new[] { cmd }, handler);
         }
 
         public void RegexCommand(string pattern, HandlerDelegate handler)
@@ -316,8 +427,34 @@ namespace BotMatrix.SDK
             On("skill_" + name, handler);
         }
 
+        public void OnAction(string name, HandlerDelegate handler)
+        {
+            ExportSkill(name, handler);
+        }
+
+        public async Task EmitAction(string name, Dictionary<string, object> payload)
+        {
+            if (_handlers.TryGetValue("skill_" + name, out var handler))
+            {
+                var msg = new EventMessage { Name = "skill_" + name, Payload = payload, Type = "event" };
+                await handler(new Context(msg, this));
+            }
+        }
+
+        public async Task EmitIntent(string name, Dictionary<string, object> payload)
+        {
+            if (_handlers.TryGetValue("intent_" + name, out var handler))
+            {
+                var msg = new EventMessage { Name = "intent_" + name, Payload = payload, Type = "event" };
+                await handler(new Context(msg, this));
+            }
+        }
+
         public async Task RunAsync()
         {
+            Console.OutputEncoding = new System.Text.UTF8Encoding(false); // Force UTF8 without BOM
+            Console.InputEncoding = new System.Text.UTF8Encoding(false);
+
             // Start output worker
             _ = Task.Run(() =>
             {
@@ -327,12 +464,13 @@ namespace BotMatrix.SDK
                 }
             });
 
-            using (var reader = new StreamReader(Console.OpenStandardInput()))
+            using (var reader = new StreamReader(Console.OpenStandardInput(), new System.Text.UTF8Encoding(false)))
             {
                 while (true)
                 {
                     var line = await reader.ReadLineAsync();
                     if (line == null) break;
+                    if (string.IsNullOrWhiteSpace(line)) continue; // Skip empty lines
 
                     try
                     {
