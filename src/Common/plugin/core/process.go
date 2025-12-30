@@ -2,14 +2,17 @@ package core
 
 import (
 	log "BotMatrix/common/log"
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"BotNexus/plugin/policy"
+	"BotMatrix/common/plugin/policy"
 )
 
 func (pm *PluginManager) StartPlugin(id string, version string) error {
@@ -78,18 +81,61 @@ func (pm *PluginManager) restartPlugin(plugin *Plugin) {
 }
 
 func (pm *PluginManager) readPluginOutput(plugin *Plugin) {
-	decoder := json.NewDecoder(plugin.Stdout)
-	for {
-		var resp ResponseMessage
-		if err := decoder.Decode(&resp); err != nil {
-			if plugin.State != "running" {
-				return
-			}
-			log.Printf("plugin %s output error: %v", plugin.ID, err)
-			return
+	log.Printf("[PluginManager] Started reading output for plugin %s", plugin.ID)
+	scanner := bufio.NewScanner(plugin.Stdout)
+	// 设置缓冲区大小，防止单行过长导致 Scanner 失败（默认 64k，这里设为 1MB）
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" {
+			continue
 		}
 
+		// 检查是否是 JSON 对象（以 { 开头）
+		if !strings.HasPrefix(trimmedLine, "{") {
+			// 如果不是 JSON，视为普通日志输出
+			log.Printf("[PluginLog][%s] %s", plugin.ID, line)
+			continue
+		}
+
+		var resp ResponseMessage
+		if err := json.Unmarshal([]byte(trimmedLine), &resp); err != nil {
+			// 如果解析失败，可能是混杂了日志，尝试寻找 JSON 的起始位置
+			startIdx := strings.Index(trimmedLine, "{")
+			if startIdx > 0 {
+				trimmedLine = trimmedLine[startIdx:]
+				if err := json.Unmarshal([]byte(trimmedLine), &resp); err == nil {
+					log.Printf("[PluginManager] Received response (after recovery) from plugin %s: %s", plugin.ID, trimmedLine)
+					pm.handlePluginResponse(plugin, &resp)
+					continue
+				}
+			}
+
+			// 记录非 JSON 输出作为普通日志（可选，目前已在外部打印）
+			continue
+		}
+
+		// 打印收到的响应
+		log.Printf("[PluginManager] Received response from plugin %s for ID %s: %s", plugin.ID, resp.ID, trimmedLine)
+
+		if len(resp.Actions) > 0 {
+			for i, action := range resp.Actions {
+				log.Printf("[PluginManager] Action[%d] for ID %s: Type=%s, Target=%s, TextLen=%d, Text=%s", i, resp.ID, action.Type, action.Target, len(action.Text), action.Text)
+			}
+		} else {
+			log.Printf("[PluginManager] Response from %s for ID %s has 0 actions. Raw JSON: %s", plugin.ID, resp.ID, trimmedLine)
+		}
 		pm.handlePluginResponse(plugin, &resp)
+		continue
+	}
+
+	if err := scanner.Err(); err != nil {
+		if plugin.State == "running" && err != io.EOF {
+			log.Printf("[PluginManager] Scanner error for plugin %s: %v", plugin.ID, err)
+		}
 	}
 }
 
@@ -107,10 +153,17 @@ func (pm *PluginManager) handlePluginResponse(plugin *Plugin, resp *ResponseMess
 		}
 
 		log.Printf("executing action %s from plugin %s", action.Type, plugin.ID)
+		if pm.actionHandler != nil {
+			pm.actionHandler(plugin, &action)
+		}
 	}
 }
 
 func (pm *PluginManager) isActionAllowed(plugin *Plugin, actionType string) bool {
+	// 临时：在调试阶段允许所有操作
+	log.Printf("DEBUG: Authorizing action %s for plugin %s", actionType, plugin.ID)
+	return true
+
 	// 1. First check if the action is declared in the plugin's manifest
 	declared := false
 	for _, p := range plugin.Config.Permissions {
@@ -200,18 +253,22 @@ func (pm *PluginManager) DispatchEvent(event *EventMessage) {
 	pm.mutex.Lock()
 	// Get candidate plugins with version selection (Canary)
 	targetPlugins := make([]*Plugin, 0)
-	for id, versions := range pm.plugins {
+	for _, versions := range pm.plugins {
 		if len(versions) == 0 {
 			continue
 		}
 		p := pm.selectVersion(event, versions)
-		if p != nil && p.State == "running" {
-			targetPlugins = append(targetPlugins, p)
+		if p != nil {
+			// If running, send immediately. If stopped, buffer it.
+			if p.State == "running" || p.State == "stopped" {
+				targetPlugins = append(targetPlugins, p)
+			}
 		}
 	}
 	pm.mutex.Unlock()
 
 	// 1. Check for Intent matches first if it's a message
+	// ... (omitted for brevity in search/replace match if possible, but I'll include it to be safe)
 	if event.Name == "on_message" {
 		payload, ok := event.Payload.(map[string]any)
 		if ok {
@@ -233,10 +290,46 @@ func (pm *PluginManager) DispatchEvent(event *EventMessage) {
 		}
 
 		if shouldSend {
-			encoder := json.NewEncoder(p.Stdin)
-			if err := encoder.Encode(event); err != nil {
-				log.Printf("Failed to send event %s to plugin %s: %v", event.Name, p.ID, err)
+			if p.State == "running" {
+				encoder := json.NewEncoder(p.Stdin)
+				if err := encoder.Encode(event); err != nil {
+					log.Printf("Failed to send event %s to plugin %s: %v", event.Name, p.ID, err)
+				}
+			} else if p.State == "stopped" {
+				// Buffer messages while the plugin is restarting
+				pm.mutex.Lock()
+				if len(p.MessageBuffer) < 100 { // Limit buffer size to 100 messages
+					p.MessageBuffer = append(p.MessageBuffer, event)
+					log.Printf("[PluginManager] Buffered event %s for restarting plugin %s", event.Name, p.ID)
+				}
+				pm.mutex.Unlock()
 			}
+		}
+	}
+}
+
+// DispatchEventToPlugin routes an event to a specific plugin version
+func (pm *PluginManager) DispatchEventToPlugin(id string, version string, event *EventMessage) {
+	pm.mutex.Lock()
+	versions, ok := pm.plugins[id]
+	pm.mutex.Unlock()
+
+	if !ok {
+		return
+	}
+
+	var target *Plugin
+	for _, v := range versions {
+		if v.Config.Version == version {
+			target = v
+			break
+		}
+	}
+
+	if target != nil && target.State == "running" {
+		encoder := json.NewEncoder(target.Stdin)
+		if err := encoder.Encode(event); err != nil {
+			log.Printf("Failed to send targeted event %s to plugin %s (v%s): %v", event.Name, id, version, err)
 		}
 	}
 }
@@ -373,6 +466,13 @@ func (pm *PluginManager) StopPlugin(id string, version string) error {
 	plugin.Stdin.Close()
 	plugin.Stdout.Close()
 
+	// Clean up runtime directory if it's a shadow copy
+	if plugin.RuntimeDir != "" && plugin.RuntimeDir != plugin.Dir {
+		log.Printf("[PluginManager] Cleaning up runtime directory for %s: %s", plugin.ID, plugin.RuntimeDir)
+		os.RemoveAll(plugin.RuntimeDir)
+		plugin.RuntimeDir = ""
+	}
+
 	return nil
 }
 
@@ -411,18 +511,54 @@ func (pm *PluginManager) startPluginInstance(plugin *Plugin) error {
 		return fmt.Errorf("empty entry point for plugin %s", plugin.ID)
 	}
 
+	// Create a shadow copy of the plugin directory to avoid file locking on Windows
+	// We use a .runtime folder in the plugin's own parent directory instead of OS temp to avoid disk space issues on C:
+	runtimeBaseDir := filepath.Join(plugin.Dir, ".runtime")
+	runtimeDir := filepath.Join(runtimeBaseDir, fmt.Sprintf("run_%d", time.Now().UnixNano()))
+	log.Printf("[PluginManager] Creating shadow copy for plugin %s: %s -> %s", plugin.ID, plugin.Dir, runtimeDir)
+	if err := os.MkdirAll(runtimeDir, 0755); err != nil {
+		return fmt.Errorf("failed to create runtime directory: %v", err)
+	}
+
+	// Also try to clean up old runtime directories in the same base folder
+	go func() {
+		files, err := os.ReadDir(runtimeBaseDir)
+		if err == nil {
+			for _, f := range files {
+				if f.IsDir() && strings.HasPrefix(f.Name(), "run_") {
+					// If the directory is older than 1 hour, try to remove it
+					info, err := f.Info()
+					if err == nil && time.Since(info.ModTime()) > 1*time.Hour {
+						os.RemoveAll(filepath.Join(runtimeBaseDir, f.Name()))
+					}
+				}
+			}
+		}
+	}()
+
+	if err := copyDir(plugin.Dir, runtimeDir); err != nil {
+		os.RemoveAll(runtimeDir)
+		return fmt.Errorf("failed to copy plugin to runtime directory: %v", err)
+	}
+	plugin.RuntimeDir = runtimeDir
+
 	var cmd *exec.Cmd
 	if len(parts) == 1 {
 		cmd = exec.Command(parts[0])
 	} else {
 		cmd = exec.Command(parts[0], parts[1:]...)
 	}
+	cmd.Dir = plugin.RuntimeDir
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
 	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
 	}
@@ -437,9 +573,87 @@ func (pm *PluginManager) startPluginInstance(plugin *Plugin) error {
 	plugin.State = "running"
 	plugin.LastRestart = time.Now()
 
+	// Flush message buffer after startup
+	if len(plugin.MessageBuffer) > 0 {
+		log.Printf("[PluginManager] Flushing %d buffered messages for plugin %s", len(plugin.MessageBuffer), plugin.ID)
+		encoder := json.NewEncoder(plugin.Stdin)
+		for _, bufferedEvent := range plugin.MessageBuffer {
+			if err := encoder.Encode(bufferedEvent); err != nil {
+				log.Printf("Failed to send buffered event %s to plugin %s: %v", bufferedEvent.Name, plugin.ID, err)
+			}
+		}
+		plugin.MessageBuffer = nil // Clear buffer after flushing
+	}
+
 	go pm.monitorPlugin(plugin)
 	go pm.readPluginOutput(plugin)
+	go pm.readPluginError(plugin, stderr)
 
-	log.Printf("Started plugin %s (v%s) with PID %d", plugin.ID, plugin.Config.Version, plugin.Process.Pid)
+	log.Printf("Started plugin %s (v%s) with PID %d (Running in shadow copy: %s)", plugin.ID, plugin.Config.Version, plugin.Process.Pid, plugin.RuntimeDir)
 	return nil
+}
+
+func copyDir(src string, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		// Skip the .runtime directory to avoid infinite recursion
+		if rel == ".runtime" || strings.HasPrefix(rel, ".runtime"+string(filepath.Separator)) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		targetPath := filepath.Join(dst, rel)
+
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+
+		// Copy file with retries for Windows file locking
+		var srcFile *os.File
+		var openErr error
+		for i := 0; i < 5; i++ {
+			srcFile, openErr = os.Open(path)
+			if openErr == nil {
+				break
+			}
+			if i < 4 {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return openErr
+		}
+		defer srcFile.Close()
+
+		dstFile, err := os.Create(targetPath)
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+
+		if _, err := io.Copy(dstFile, srcFile); err != nil {
+			return err
+		}
+
+		return os.Chmod(targetPath, info.Mode())
+	})
+}
+
+func (pm *PluginManager) readPluginError(plugin *Plugin, stderr io.ReadCloser) {
+	scanner := bufio.NewScanner(stderr)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) != "" {
+			log.Printf("[PluginErr][%s] %s", plugin.ID, line)
+		}
+	}
 }

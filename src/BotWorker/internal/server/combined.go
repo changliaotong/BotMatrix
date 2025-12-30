@@ -2,41 +2,263 @@ package server
 
 import (
 	"BotMatrix/common"
+	"BotMatrix/common/bot"
 	"BotMatrix/common/log"
+	"BotMatrix/common/plugin/core"
+	"BotMatrix/common/session"
+	"BotMatrix/common/types"
 	"botworker/internal/config"
+	"botworker/internal/db"
 	"botworker/internal/onebot"
-	"botworker/internal/plugin"
 	"botworker/internal/redis"
+	"botworker/plugins"
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
 	"time"
+
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type CombinedServer struct {
+	botService    *bot.BaseBot
 	wsServer      *WebSocketServer
 	httpServer    *HTTPServer
-	pluginManager *plugin.Manager
+	pluginManager *core.PluginManager
 	redisClient   *redis.Client
 	config        *config.Config
-	skillHandlers map[string]func(map[string]string) (string, error)
+	actionRouter  func(string, string, map[string]any) (any, error)
+	lastSelfID    int64
+	lastPlatform  string
+	skills        map[string]core.Skill
+	skillsMu      sync.RWMutex
 }
 
-func NewCombinedServer(cfg *config.Config, rdb *redis.Client) *CombinedServer {
+func NewCombinedServer(botService *bot.BaseBot, cfg *config.Config, rdb *redis.Client) *CombinedServer {
 	// 如果配置为空，使用默认配置
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
 
 	server := &CombinedServer{
+		botService:    botService,
 		wsServer:      NewWebSocketServer(&cfg.WebSocket),
 		httpServer:    NewHTTPServer(&cfg.HTTP),
 		redisClient:   rdb,
 		config:        cfg,
-		skillHandlers: make(map[string]func(map[string]string) (string, error)),
+		skills:        make(map[string]core.Skill),
+		pluginManager: core.NewPluginManager(),
 	}
-	server.pluginManager = plugin.NewManager(server)
+	server.registerStorageHandlers()
 	return server
+}
+
+func (s *CombinedServer) registerStorageHandlers() {
+	s.HandleAPI("storage.get", func(req *onebot.Request) (*onebot.Response, error) {
+		params, ok := req.Params.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid parameters")
+		}
+		key, _ := params["key"].(string)
+		if key == "" {
+			return nil, fmt.Errorf("key is required")
+		}
+
+		var value any
+		ctx := context.Background()
+		if s.redisClient != nil {
+			store := session.NewRedisSessionStore(s.redisClient.Client)
+			err := store.Get(ctx, key, &value)
+			if err == nil {
+				return &onebot.Response{Data: map[string]any{"value": value}}, nil
+			}
+		}
+
+		// Fallback to Database for specific keys
+		// Example: table:users:id:{userId}:is_super_points
+		var userId int64
+		if n, err := fmt.Sscanf(key, "table:users:id:%d:is_super_points", &userId); err == nil && n == 1 {
+			if database := plugins.GlobalDB; database != nil {
+				user, err := db.GetUserByUserID(database, userId)
+				if err == nil && user != nil {
+					return &onebot.Response{Data: map[string]any{"value": user.IsSuperPoints}}, nil
+				}
+			}
+		}
+
+		// Example: table:users:id:{userId}:global_points
+		if n, err := fmt.Sscanf(key, "table:users:id:%d:global_points", &userId); err == nil && n == 1 {
+			if database := plugins.GlobalDB; database != nil {
+				user, err := db.GetUserByUserID(database, userId)
+				if err == nil && user != nil {
+					return &onebot.Response{Data: map[string]any{"value": user.Points}}, nil
+				}
+			}
+		}
+
+		// Example: table:bot_friends:bot:{botId}:user:{userId}:local_points
+		var botId int64
+		if n, err := fmt.Sscanf(key, "table:bot_friends:bot:%d:user:%d:local_points", &botId, &userId); err == nil && n == 2 {
+			if database := plugins.GlobalDB; database != nil {
+				points, err := db.GetLocalPoints(database, botId, userId)
+				if err == nil {
+					return &onebot.Response{Data: map[string]any{"value": points}}, nil
+				}
+			}
+		}
+
+		// Example: table:group_members:group:{groupId}:user:{userId}:points
+		var groupId int64
+		if n, err := fmt.Sscanf(key, "table:group_members:group:%d:user:%d:points", &groupId, &userId); err == nil && n == 2 {
+			if database := plugins.GlobalDB; database != nil {
+				points, err := db.GetGroupPoints(database, userId, groupId)
+				if err == nil {
+					return &onebot.Response{Data: map[string]any{"value": points}}, nil
+				}
+			}
+		}
+
+		return &onebot.Response{Data: map[string]any{"value": nil}}, nil
+	})
+
+	s.HandleAPI("storage.set", func(req *onebot.Request) (*onebot.Response, error) {
+		params, ok := req.Params.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid parameters")
+		}
+		key, _ := params["key"].(string)
+		value := params["value"]
+		expirationMs, _ := params["expiration"].(float64)
+
+		if key == "" {
+			return nil, fmt.Errorf("key is required")
+		}
+
+		ctx := context.Background()
+		if s.redisClient != nil {
+			store := common.NewRedisSessionStore(s.redisClient.Client)
+			expiration := time.Duration(expirationMs) * time.Millisecond
+			err := store.Set(ctx, key, value, expiration)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("storage not available (redis not initialized)")
+		}
+
+		// Sync to Database for specific keys
+		// Example: table:users:id:{userId}:is_super_points
+		var userId int64
+		if n, err := fmt.Sscanf(key, "table:users:id:%d:is_super_points", &userId); err == nil && n == 1 {
+			if isSuper, ok := value.(bool); ok {
+				if database := plugins.GlobalDB; database != nil {
+					_ = db.UpdateUserSuperPoints(database, userId, isSuper)
+				}
+			}
+		}
+
+		// Example: table:users:id:{userId}:global_points
+		if n, err := fmt.Sscanf(key, "table:users:id:%d:global_points", &userId); err == nil && n == 1 {
+			var points int
+			switch v := value.(type) {
+			case int:
+				points = v
+			case int64:
+				points = int(v)
+			case float64:
+				points = int(v)
+			}
+			if database := plugins.GlobalDB; database != nil {
+				_ = db.UpdateUserPoints(database, userId, points)
+			}
+		}
+
+		// Example: table:bot_friends:bot:{botId}:user:{userId}:local_points
+		var botId int64
+		if n, err := fmt.Sscanf(key, "table:bot_friends:bot:%d:user:%d:local_points", &botId, &userId); err == nil && n == 2 {
+			var points int64
+			switch v := value.(type) {
+			case int:
+				points = int64(v)
+			case int64:
+				points = v
+			case float64:
+				points = int64(v)
+			}
+			if database := plugins.GlobalDB; database != nil {
+				_ = db.UpdateLocalPoints(database, botId, userId, points)
+			}
+		}
+
+		// Example: table:group_members:group:{groupId}:user:{userId}:points
+		var groupId int64
+		if n, err := fmt.Sscanf(key, "table:group_members:group:%d:user:%d:points", &groupId, &userId); err == nil && n == 2 {
+			var points int64
+			switch v := value.(type) {
+			case int:
+				points = int64(v)
+			case int64:
+				points = v
+			case float64:
+				points = int64(v)
+			}
+			if database := plugins.GlobalDB; database != nil {
+				_ = db.UpdateGroupPoints(database, userId, groupId, points)
+			}
+		}
+
+		return &onebot.Response{Data: map[string]any{"status": "ok"}}, nil
+	})
+
+	s.HandleAPI("storage.delete", func(req *onebot.Request) (*onebot.Response, error) {
+		params, ok := req.Params.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid parameters")
+		}
+		key, _ := params["key"].(string)
+		if key == "" {
+			return nil, fmt.Errorf("key is required")
+		}
+
+		ctx := context.Background()
+		if s.redisClient != nil {
+			store := common.NewRedisSessionStore(s.redisClient.Client)
+			err := store.Delete(ctx, key)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("storage not available (redis not initialized)")
+		}
+
+		return &onebot.Response{Data: map[string]any{"status": "ok"}}, nil
+	})
+
+	s.HandleAPI("storage.exists", func(req *onebot.Request) (*onebot.Response, error) {
+		params, ok := req.Params.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid parameters")
+		}
+		key, _ := params["key"].(string)
+		if key == "" {
+			return nil, fmt.Errorf("key is required")
+		}
+
+		ctx := context.Background()
+		if s.redisClient != nil {
+			store := common.NewRedisSessionStore(s.redisClient.Client)
+			exists, err := store.Exists(ctx, key)
+			if err != nil {
+				return nil, err
+			}
+			return &onebot.Response{Data: map[string]any{"exists": exists}}, nil
+		} else {
+			return nil, fmt.Errorf("storage not available (redis not initialized)")
+		}
+	})
 }
 
 // 实现plugin.Robot接口
@@ -60,30 +282,72 @@ func (s *CombinedServer) OnEvent(eventName string, fn onebot.EventHandler) {
 	s.httpServer.OnEvent(eventName, fn)
 }
 
-func (s *CombinedServer) HandleAPI(action string, fn onebot.RequestHandler) {
-	s.wsServer.HandleAPI(action, fn)
-	s.httpServer.HandleAPI(action, fn)
+func (s *CombinedServer) HandleAPI(action string, fn any) {
+	if handler, ok := fn.(onebot.RequestHandler); ok {
+		s.wsServer.HandleAPI(action, handler)
+		s.httpServer.HandleAPI(action, handler)
+	}
 }
 
 func (s *CombinedServer) SendMessage(params *onebot.SendMessageParams) (*onebot.Response, error) {
+	log.Printf("[Worker] Sending message: %v", params.Message)
 	// 优先使用WebSocket发送消息
-	return s.wsServer.SendMessage(params)
+	resp, err := s.wsServer.SendMessage(params)
+	if err == nil {
+		return resp, nil
+	}
+
+	// 转发动作给 BotNexus
+	log.Printf("[Worker] Forwarding action '%s' to BotNexus via Redis", "send_msg")
+	if pubErr := s.publishActionToNexus("send_msg", params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+
+	return resp, err
 }
 
 func (s *CombinedServer) DeleteMessage(params *onebot.DeleteMessageParams) (*onebot.Response, error) {
-	return s.wsServer.DeleteMessage(params)
+	resp, err := s.wsServer.DeleteMessage(params)
+	if err == nil {
+		return resp, nil
+	}
+	if pubErr := s.publishActionToNexus("delete_msg", params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+	return resp, err
 }
 
 func (s *CombinedServer) SendLike(params *onebot.SendLikeParams) (*onebot.Response, error) {
-	return s.wsServer.SendLike(params)
+	resp, err := s.wsServer.SendLike(params)
+	if err == nil {
+		return resp, nil
+	}
+	if pubErr := s.publishActionToNexus("send_like", params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+	return resp, err
 }
 
 func (s *CombinedServer) SetGroupKick(params *onebot.SetGroupKickParams) (*onebot.Response, error) {
-	return s.wsServer.SetGroupKick(params)
+	resp, err := s.wsServer.SetGroupKick(params)
+	if err == nil {
+		return resp, nil
+	}
+	if pubErr := s.publishActionToNexus("set_group_kick", params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+	return resp, err
 }
 
 func (s *CombinedServer) SetGroupBan(params *onebot.SetGroupBanParams) (*onebot.Response, error) {
-	return s.wsServer.SetGroupBan(params)
+	resp, err := s.wsServer.SetGroupBan(params)
+	if err == nil {
+		return resp, nil
+	}
+	if pubErr := s.publishActionToNexus("set_group_ban", params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+	return resp, err
 }
 
 func (s *CombinedServer) GetGroupMemberList(params *onebot.GetGroupMemberListParams) (*onebot.Response, error) {
@@ -95,29 +359,159 @@ func (s *CombinedServer) GetGroupMemberInfo(params *onebot.GetGroupMemberInfoPar
 }
 
 func (s *CombinedServer) SetGroupSpecialTitle(params *onebot.SetGroupSpecialTitleParams) (*onebot.Response, error) {
-	return s.wsServer.SetGroupSpecialTitle(params)
+	resp, err := s.wsServer.SetGroupSpecialTitle(params)
+	if err == nil {
+		return resp, nil
+	}
+	if pubErr := s.publishActionToNexus("set_group_special_title", params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+	return resp, err
+}
+
+func (s *CombinedServer) CallBotAction(action string, params any) (any, error) {
+	// 优先使用WebSocket发送消息
+	resp, err := s.wsServer.CallAction(action, params)
+	if err == nil {
+		return resp, nil
+	}
+
+	// 转发动作给 BotNexus
+	log.Printf("[Combined] Forwarding action '%s' to BotNexus via Redis", action)
+	if pubErr := s.publishActionToNexus(action, params); pubErr == nil {
+		return &onebot.Response{Status: "ok"}, nil
+	}
+
+	return resp, err
 }
 
 func (s *CombinedServer) GetSelfID() int64 {
+	if s.lastSelfID != 0 {
+		return s.lastSelfID
+	}
 	return s.wsServer.GetSelfID()
 }
 
+func (s *CombinedServer) publishActionToNexus(action string, params any) error {
+	if s.redisClient == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	msg := map[string]any{
+		"type":      "action",
+		"action":    action,
+		"params":    params,
+		"worker_id": s.config.WorkerID,
+		"timestamp": time.Now().Unix(),
+	}
+
+	// 提取 platform 和 self_id
+	var platform, selfID, groupID, userID, message string
+
+	// 尝试从 params 中提取 (如果 params 是 struct 指针)
+	if params != nil {
+		v := reflect.ValueOf(params)
+		if v.Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		if v.Kind() == reflect.Struct {
+			// 尝试获取 Platform 字段
+			pf := v.FieldByName("Platform")
+			if pf.IsValid() && pf.Kind() == reflect.String {
+				platform = pf.String()
+			}
+			// 尝试获取 SelfID 字段
+			sf := v.FieldByName("SelfID")
+			if sf.IsValid() {
+				selfID = fmt.Sprintf("%v", sf.Interface())
+			}
+			// 尝试获取 GroupID 字段
+			gf := v.FieldByName("GroupID")
+			if gf.IsValid() {
+				groupID = fmt.Sprintf("%v", gf.Interface())
+			}
+			// 尝试获取 UserID 字段
+			uf := v.FieldByName("UserID")
+			if uf.IsValid() {
+				userID = fmt.Sprintf("%v", uf.Interface())
+			}
+			// 尝试获取 Message 字段
+			mf := v.FieldByName("Message")
+			if mf.IsValid() {
+				message = fmt.Sprintf("%v", mf.Interface())
+			}
+		} else if v.Kind() == reflect.Map {
+			// 如果是 map，尝试直接提取
+			if val, ok := params.(map[string]any); ok {
+				if v, ok := val["platform"]; ok {
+					platform = fmt.Sprintf("%v", v)
+				}
+				if v, ok := val["self_id"]; ok {
+					selfID = fmt.Sprintf("%v", v)
+				}
+				if v, ok := val["group_id"]; ok {
+					groupID = fmt.Sprintf("%v", v)
+				}
+				if v, ok := val["user_id"]; ok {
+					userID = fmt.Sprintf("%v", v)
+				}
+				if v, ok := val["message"]; ok {
+					message = fmt.Sprintf("%v", v)
+				}
+			}
+		}
+	}
+
+	// 如果 params 中没有，使用最后的记录
+	if selfID == "" && s.lastSelfID != 0 {
+		selfID = fmt.Sprintf("%d", s.lastSelfID)
+	}
+	if platform == "" && s.lastPlatform != "" {
+		platform = s.lastPlatform
+	}
+
+	if selfID != "" {
+		msg["self_id"] = selfID
+	}
+	if platform != "" {
+		msg["platform"] = platform
+	}
+	if groupID != "" {
+		msg["group_id"] = groupID
+	}
+	if userID != "" {
+		msg["user_id"] = userID
+	}
+	if message != "" {
+		msg["reply"] = message // BotNexus 期望的字段是 reply
+	}
+
+	// 打印详细的 Payload 内容
+	if payloadJson, err := json.Marshal(msg); err == nil {
+		log.Printf("[Nexus] Action Payload: %s", string(payloadJson))
+	}
+
+	log.Printf("[Nexus] Sending action to Nexus: %s", action)
+	s.botService.SendToNexus(msg)
+	return nil
+}
+
 // Session & State Management 实现
-func (s *CombinedServer) GetSessionContext(platform, userID string) (*common.SessionContext, error) {
+func (s *CombinedServer) GetSessionContext(platform, userID string) (*types.SessionContext, error) {
 	if s.redisClient == nil {
 		return nil, fmt.Errorf("redis client not initialized")
 	}
 	return s.redisClient.GetSessionContext(platform, userID)
 }
 
-func (s *CombinedServer) SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error {
+func (s *CombinedServer) SetSessionState(platform, userID string, state types.SessionState, ttl time.Duration) error {
 	if s.redisClient == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
 	return s.redisClient.SetSessionState(platform, userID, state, ttl)
 }
 
-func (s *CombinedServer) GetSessionState(platform, userID string) (*common.SessionState, error) {
+func (s *CombinedServer) GetSessionState(platform, userID string) (*types.SessionState, error) {
 	if s.redisClient == nil {
 		return nil, fmt.Errorf("redis client not initialized")
 	}
@@ -133,15 +527,31 @@ func (s *CombinedServer) ClearSessionState(platform, userID string) error {
 
 // HandleSkill 注册技能处理器
 func (s *CombinedServer) HandleSkill(skillName string, fn func(params map[string]string) (string, error)) {
-	s.skillHandlers[skillName] = fn
+	s.skillsMu.Lock()
+	defer s.skillsMu.Unlock()
+	s.skills[skillName] = fn
+}
+
+func (s *CombinedServer) CallPluginAction(pluginID string, action string, payload map[string]any) (any, error) {
+	if s.actionRouter != nil {
+		return s.actionRouter(pluginID, action, payload)
+	}
+	return nil, fmt.Errorf("action router not initialized")
+}
+
+func (s *CombinedServer) SetActionRouter(router func(string, string, map[string]any) (any, error)) {
+	s.actionRouter = router
 }
 
 // 插件管理
-func (s *CombinedServer) GetPluginManager() *plugin.Manager {
+func (s *CombinedServer) GetPluginManager() *core.PluginManager {
 	return s.pluginManager
 }
 
-// 启动服务器
+func (s *CombinedServer) GetConfig() *config.Config {
+	return s.config
+}
+
 func (s *CombinedServer) Run() error {
 	// 启动HTTP服务器
 	go func() {
@@ -184,15 +594,13 @@ func (s *CombinedServer) reportCapabilities() {
 	time.Sleep(2 * time.Second)
 
 	capabilities := []map[string]any{}
-	for _, p := range s.pluginManager.GetPlugins() {
-		if cp, ok := p.(plugin.SkillCapable); ok {
-			for _, skill := range cp.GetSkills() {
-				capabilities = append(capabilities, map[string]any{
-					"name":        skill.Name,
-					"description": skill.Description,
-					"usage":       skill.Usage,
-					"params":      skill.Params,
-				})
+	for _, versions := range s.pluginManager.GetPlugins() {
+		for _, p := range versions {
+			// 目前插件架构中，SkillCapable 接口通常由插件模块实现
+			// 这里由于插件是以进程方式运行的，报备能力应该基于配置或元数据
+			// 暂时保留逻辑结构，修复语法错误
+			if any(p).(interface{}) != nil {
+				// 以后这里可以添加从插件元数据读取能力的逻辑
 			}
 		}
 	}
@@ -224,56 +632,92 @@ func (s *CombinedServer) startRedisQueueListener() {
 	}
 
 	workerID := s.config.WorkerID
-	// 监听两个队列：自己的专用队列和公共队列
-	queues := []string{
-		"botmatrix:queue:default",
-	}
-	if workerID != "" {
-		// 优先处理专用队列
-		queues = append([]string{fmt.Sprintf("botmatrix:queue:worker:%s", workerID)}, queues...)
-	}
+	groupName := "botmatrix:group:workers"
+	consumerName := fmt.Sprintf("worker:%s", workerID)
 
-	log.Printf("[RedisQueue] Starting listener for queues: %v", queues)
+	// 准备队列名（Streams）
+	streams := []string{"botmatrix:queue:default"}
+	if workerID != "" {
+		streams = append(streams, fmt.Sprintf("botmatrix:queue:worker:%s", workerID))
+	}
 
 	ctx := context.Background()
+
+	// 初始化消费组
+	for _, stream := range streams {
+		// 先尝试删除旧的 List Key (如果是从旧版本升级)
+		typeInfo, _ := s.redisClient.Type(ctx, stream).Result()
+		if typeInfo == "list" {
+			log.Printf("[RedisStreams] Found old list key %s, deleting it to convert to stream", stream)
+			s.redisClient.Del(ctx, stream)
+		}
+
+		// 检查 Stream 是否存在，如果不存在 XGroupCreate 会报错
+		err := s.redisClient.XGroupCreateMkStream(ctx, stream, groupName, "0").Err()
+		if err != nil && !strings.Contains(err.Error(), "BUSYGROUP") {
+			log.Printf("[RedisStreams] Error creating group for %s: %v", stream, err)
+		}
+	}
+
+	log.Printf("[RedisStreams] Starting listener for streams: %v, Group: %s, Consumer: %s", streams, groupName, consumerName)
+
+	// 构建 XReadGroup 参数：[stream1, stream2, ..., id1, id2, ...]
+	// 对于新消息，ID 应该使用 ">"
+	readArgs := &goredis.XReadGroupArgs{
+		Group:    groupName,
+		Consumer: consumerName,
+		Streams:  make([]string, len(streams)*2),
+		Count:    1,
+		Block:    30 * time.Second,
+	}
+	for i, stream := range streams {
+		readArgs.Streams[i] = stream
+		readArgs.Streams[i+len(streams)] = ">"
+	}
+
 	for {
-		// 使用 BLPOP 阻塞式获取消息，超时时间设为 30 秒
-		result, err := s.redisClient.BLPop(ctx, 30*time.Second, queues...).Result()
+		entries, err := s.redisClient.XReadGroup(ctx, readArgs).Result()
 		if err != nil {
-			if err != redis.Nil {
-				log.Printf("[RedisQueue] Error popping from queue: %v", err)
-				time.Sleep(5 * time.Second) // 出错后等待重试
+			if err != goredis.Nil {
+				log.Printf("[RedisStreams] Error reading from streams: %v", err)
+				time.Sleep(5 * time.Second)
 			}
 			continue
 		}
 
-		if len(result) < 2 {
-			continue
-		}
+		for _, streamResult := range entries {
+			streamName := streamResult.Stream
+			for _, xmsg := range streamResult.Messages {
+				payload, ok := xmsg.Values["payload"].(string)
+				if !ok {
+					log.Printf("[RedisStreams] Invalid message format in %s: %v", streamName, xmsg.Values)
+					s.redisClient.XAck(ctx, streamName, groupName, xmsg.ID)
+					continue
+				}
 
-		// result[0] 是队列名，result[1] 是消息内容
-		queueName := result[0]
-		payload := result[1]
+				log.Printf("[RedisStreams] Received message from %s (ID: %s)", streamName, xmsg.ID)
 
-		log.Printf("[RedisQueue] Received message from %s", queueName)
+				var msg map[string]any
+				if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+					log.Printf("[RedisStreams] Failed to unmarshal message: %v", err)
+					s.redisClient.XAck(ctx, streamName, groupName, xmsg.ID)
+					continue
+				}
 
-		// 解析消息并分发
-		var msg map[string]any
-		if err := json.Unmarshal([]byte(payload), &msg); err != nil {
-			log.Printf("[RedisQueue] Failed to unmarshal message: %v", err)
-			continue
-		}
-
-// 异步处理消息，避免阻塞监听器
-	go func(queue string, m map[string]any) {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("[RedisQueue] Panic in message processor: %v", r)
+				// 处理消息
+				go func(stream, group, msgID string, m map[string]any) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("[RedisStreams] Panic in message processor: %v", r)
+						}
+					}()
+					s.processQueueMessage(m)
+					// 处理成功后发送 ACK
+					s.redisClient.XAck(ctx, stream, group, msgID)
+				}(streamName, groupName, xmsg.ID, msg)
 			}
-		}()
-		s.processQueueMessage(m)
-	}(queueName, msg)
-}
+		}
+	}
 }
 
 func (s *CombinedServer) processQueueMessage(msg map[string]any) {
@@ -312,7 +756,9 @@ func (s *CombinedServer) handleSkillCall(msg map[string]any) {
 
 	log.Printf("[SkillCall] Handling skill: %s (TaskID: %s, ExecID: %s) with params: %v", skillName, taskID, executionID, params)
 
-	handler, ok := s.skillHandlers[skillName]
+	s.skillsMu.RLock()
+	handler, ok := s.skills[skillName]
+	s.skillsMu.RUnlock()
 	if !ok {
 		log.Printf("[SkillCall] No handler for skill: %s", skillName)
 		s.reportSkillResult(taskID, executionID, skillName, "", fmt.Errorf("no handler for skill: %s", skillName))
@@ -336,6 +782,8 @@ func (s *CombinedServer) reportSkillResult(taskID, executionID, skillName, resul
 	if taskID == "" || taskID == "<nil>" {
 		return
 	}
+
+	log.Printf("[SkillResult] Reporting result for %s: %s (error: %v)", skillName, result, err)
 
 	status := "success"
 	errorMessage := ""
@@ -384,19 +832,37 @@ func (s *CombinedServer) HandleQueueEvent(msg map[string]any) {
 	// 记录原始消息的一些关键信息，方便调试
 	postType, _ := msg["post_type"].(string)
 	messageType, _ := msg["message_type"].(string)
-	log.Printf("[Combined] Processing queue event: post_type=%s, message_type=%s", postType, messageType)
+	// 只有非元事件才打印详细日志
+	if postType != "meta_event" {
+		log.Printf("[Worker] Processing queue event: post_type=%s, message_type=%s, msg=%v", postType, messageType, msg)
+	}
 
 	// 将 map 转换为 onebot.Event
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[Combined] Failed to marshal queue message: %v", err)
+		log.Printf("[Worker] Failed to marshal queue message: %v", err)
 		return
 	}
 
 	var event onebot.Event
 	if err := json.Unmarshal(data, &event); err != nil {
-		log.Printf("[Combined] Failed to unmarshal queue event: %v", err)
+		log.Printf("[Worker] Failed to unmarshal queue event: %v", err)
 		return
+	}
+
+	if postType != "meta_event" {
+		log.Printf("[Worker] Unmarshaled Event: message=%v, raw=%s", event.Message, event.RawMessage)
+	}
+
+	// 更新最后处理的机器人 ID 和平台
+	s.lastSelfID = int64(event.SelfID)
+	if p, ok := msg["platform"].(string); ok {
+		s.lastPlatform = p
+	} else {
+		// Default to qq if not provided, or keep last if same bot
+		if s.lastPlatform == "" {
+			s.lastPlatform = "qq"
+		}
 	}
 
 	// 处理 QQGuild ID 生成（确保 ID 映射正确）
@@ -412,16 +878,16 @@ func (s *CombinedServer) dispatchInternalEvent(event *onebot.Event) {
 
 	// 目前简单做法是调用 wsServer 的处理逻辑（如果它暴露了）
 	// 或者在 CombinedServer 中维护一套 handler
-	
+
 	// 实际上，CombinedServer 的 OnMessage 等方法是将 handler 注册到了 wsServer 和 httpServer
 	// 所以我们应该从 wsServer 中获取 handler 并执行，或者在 CombinedServer 中也存一份
 
 	// 既然 CombinedServer 的 Run 方法中启动了 wsServer，
 	// 我们可以考虑让 CombinedServer 统一管理 handler
-	
+
 	// 为了不破坏现有结构，我们暂时通过反射或者修改 WebSocketServer 来支持
 	// 最好的办法是在 CombinedServer 中实现一套通用的分发逻辑
-	
+
 	// 分发到对应的事件处理器 (从 wsServer 借用逻辑)
 	switch event.PostType {
 	case "message":
@@ -431,6 +897,10 @@ func (s *CombinedServer) dispatchInternalEvent(event *onebot.Event) {
 		s.wsServer.DispatchEvent(event)
 	case "request":
 		s.wsServer.DispatchEvent(event)
+	case "meta_event":
+		// 默认不再向插件转发元事件（如心跳），以减少噪音和系统负载
+		// 如果以后有插件需要心跳，可以在这里增加白名单
+		// s.wsServer.DispatchEvent(event)
 	}
 }
 

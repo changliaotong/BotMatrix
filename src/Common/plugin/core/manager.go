@@ -1,8 +1,8 @@
 package core
 
 import (
-	"archive/zip"
 	log "BotMatrix/common/log"
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,32 +14,53 @@ import (
 )
 
 type PluginManager struct {
-	plugins      map[string][]*Plugin // Changed: ID maps to a list of versions
-	pluginPath   string
-	eventHandler func(*EventMessage)
-	mutex        sync.Mutex
+	plugins         map[string][]*Plugin // Changed: ID maps to a list of versions
+	internalPlugins map[string]PluginModule
+	pluginPath      string
+	eventHandler    func(*EventMessage)
+	actionHandler   func(*Plugin, *Action)
+	mutex           sync.Mutex
 }
 
 type Plugin struct {
-	ID           string
-	Config       *PluginConfig
-	Process      *os.Process
-	Stdin        *os.File
-	Stdout       *os.File
-	State        string
-	RestartCount int
-	LastRestart  time.Time
-	Version      string
+	ID            string
+	Config        *PluginConfig
+	Process       *os.Process
+	Stdin         *os.File
+	Stdout        *os.File
+	State         string
+	RestartCount  int
+	LastRestart   time.Time
+	Version       string
+	Dir           string          // Added: The directory where the plugin is located
+	RuntimeDir    string          // Added: The temporary directory where the plugin is running (Shadow Copy)
+	MessageBuffer []*EventMessage // Added: Buffer messages during reload
 }
 
 func NewPluginManager() *PluginManager {
 	return &PluginManager{
-		plugins: make(map[string][]*Plugin),
+		plugins:         make(map[string][]*Plugin),
+		internalPlugins: make(map[string]PluginModule),
 	}
 }
 
 func (pm *PluginManager) SetPluginPath(path string) {
 	pm.pluginPath = path
+}
+
+func (pm *PluginManager) GetPluginPath() string {
+	return pm.pluginPath
+}
+
+func (pm *PluginManager) LoadPluginModule(m PluginModule, robot Robot) error {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	if robot != nil {
+		m.Init(robot)
+	}
+	pm.internalPlugins[m.Name()] = m
+	return nil
 }
 
 func (pm *PluginManager) ScanPlugins(dir string) error {
@@ -53,7 +74,7 @@ func (pm *PluginManager) LoadPlugins(dir string) error {
 	// Support both simple and versioned folders
 	// 1. Simple: plugins/my_plugin/plugin.json
 	// 2. Versioned: plugins/my_plugin/1.0.0/plugin.json
-	
+
 	// Check simple folders
 	simpleFiles, _ := filepath.Glob(filepath.Join(dir, "*", "plugin.json"))
 	for _, file := range simpleFiles {
@@ -61,7 +82,7 @@ func (pm *PluginManager) LoadPlugins(dir string) error {
 		if err != nil {
 			continue
 		}
-		pm.addPluginInternal(config)
+		pm.addPluginInternal(config, filepath.Dir(file))
 	}
 
 	// Check versioned folders
@@ -71,17 +92,30 @@ func (pm *PluginManager) LoadPlugins(dir string) error {
 		if err != nil {
 			continue
 		}
-		pm.addPluginInternal(config)
+		pm.addPluginInternal(config, filepath.Dir(file))
 	}
 
 	return nil
 }
 
-func (pm *PluginManager) addPluginInternal(config *PluginConfig) {
-	// Avoid duplicates
+func (pm *PluginManager) addPluginInternal(config *PluginConfig, dir string) {
+	if config.ID == "" {
+		log.Errorf("[PluginManager] 插件 ID 为空，跳过加载: %s", dir)
+		return
+	}
+	// Avoid duplicates (but allow reloading the same version during development)
 	versions := pm.plugins[config.ID]
-	for _, v := range versions {
+	for i, v := range versions {
 		if v.Config.Version == config.Version {
+			if v.State == "stopped" || v.State == "crashed" {
+				// If it's not running, we can safely replace it
+				versions[i] = &Plugin{
+					ID:     config.ID,
+					Config: config,
+					State:  "stopped",
+					Dir:    dir,
+				}
+			}
 			return
 		}
 	}
@@ -90,6 +124,7 @@ func (pm *PluginManager) addPluginInternal(config *PluginConfig) {
 		ID:     config.ID,
 		Config: config,
 		State:  "stopped",
+		Dir:    dir,
 	}
 	pm.plugins[config.ID] = append(pm.plugins[config.ID], p)
 }
@@ -98,6 +133,12 @@ func (pm *PluginManager) GetPlugins() map[string][]*Plugin {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 	return pm.plugins
+}
+
+func (pm *PluginManager) GetInternalPlugins() map[string]PluginModule {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+	return pm.internalPlugins
 }
 
 func (pm *PluginManager) GetPlugin(id string, version string) *Plugin {
@@ -121,8 +162,35 @@ func (pm *PluginManager) GetPlugin(id string, version string) *Plugin {
 	return nil
 }
 
+func (pm *PluginManager) RemovePlugin(id string, version string) {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	versions, ok := pm.plugins[id]
+	if !ok {
+		return
+	}
+
+	newVersions := make([]*Plugin, 0)
+	for _, p := range versions {
+		if p.Config.Version != version {
+			newVersions = append(newVersions, p)
+		}
+	}
+
+	if len(newVersions) == 0 {
+		delete(pm.plugins, id)
+	} else {
+		pm.plugins[id] = newVersions
+	}
+}
+
 func (pm *PluginManager) RegisterEventHandler(handler func(*EventMessage)) {
 	pm.eventHandler = handler
+}
+
+func (pm *PluginManager) RegisterActionHandler(handler func(*Plugin, *Action)) {
+	pm.actionHandler = handler
 }
 
 func LoadPluginConfig(file string) (*PluginConfig, error) {
@@ -225,6 +293,7 @@ func (pm *PluginManager) InstallPlugin(bmpkPath string, targetDir string) error 
 		ID:     manifest.ID,
 		Config: manifest,
 		State:  "stopped",
+		Dir:    pluginDir,
 	}
 	pm.plugins[manifest.ID] = append(pm.plugins[manifest.ID], newPlugin)
 
