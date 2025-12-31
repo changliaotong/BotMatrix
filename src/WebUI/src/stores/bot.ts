@@ -723,4 +723,5 @@ export const useBotStore = defineStore('bot', {
         // 可以在这里更新 workers 列表状态
       }
     },
+  },
 });
