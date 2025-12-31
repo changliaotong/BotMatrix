@@ -16,7 +16,7 @@ func processEventIDs(event *onebot.Event) {
 		return
 	}
 
-	event.EnsureIDs(
+	onebot.EnsureIDs(event,
 		func(openID string) (int64, error) {
 			return db.GetUserIDByOpenID(database, openID)
 		},

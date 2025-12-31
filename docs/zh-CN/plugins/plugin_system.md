@@ -5,23 +5,23 @@ The BotMatrix Plugin System is a cross-platform, process-level plugin architectu
 
 ## Architecture
 
-### Core Components
+### 核心组件
 
-1. **Plugin Manager** (`src/BotNexus/plugin/core/manager.go`)
-   - Manages plugin lifecycle (start, stop, restart)
-   - Handles plugin discovery and configuration
-   - Implements health checks and crash recovery
+1. **插件管理器 (Plugin Manager)** (`src/Common/plugin/core/manager.go`)
+   - 管理插件生命周期（启动、停止、重启）
+   - 处理插件发现和配置
+   - 实现健康检查和崩溃恢复
 
-2. **Process Manager** (`src/BotNexus/plugin/core/process.go`)
-   - Manages plugin processes
-   - Implements inter-process communication via stdin/stdout
-   - Handles hot updates and grayscale deployment
+2. **进程管理器 (Process Manager)** (`src/Common/plugin/core/process.go`)
+   - 管理插件进程
+   - 通过 stdin/stdout 实现进程间通信
+   - 处理热更新和灰度发布
 
-3. **Protocol** (`src/BotNexus/plugin/core/protocol.go`)
+3. **Protocol** (`src/Common/plugin/core/protocol.go`)
    - Defines JSON message structures for plugin communication
    - Implements event and action protocols
 
-4. **Policy** (`src/BotNexus/plugin/policy/`)
+4. **Policy** (`src/Common/plugin/policy/`)
    - Defines action whitelists for different plugin types
    - Ensures security boundaries between plugins and core system
 

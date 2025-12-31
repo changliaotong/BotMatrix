@@ -1,31 +1,30 @@
 package main
 
 import (
+	"BotMatrix/common/bot"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
-
-	"BotMatrix/src/Common"
 
 	"github.com/gin-gonic/gin"
 	"github.com/silenceper/wechat/v2"
 	"github.com/silenceper/wechat/v2/cache"
+	offConfig "github.com/silenceper/wechat/v2/officialaccount/config"
+	"github.com/silenceper/wechat/v2/officialaccount/message"
 	"github.com/silenceper/wechat/v2/work"
 	workConfig "github.com/silenceper/wechat/v2/work/config"
-	"github.com/silenceper/wechat/v2/work/message"
+	workMessage "github.com/silenceper/wechat/v2/work/message"
 )
 
-// WeComConfig extends common.BotConfig with WeCom specific fields
+// WeComConfig extends bot.BotConfig with WeCom specific fields
 type WeComConfig struct {
-	common.BotConfig
+	bot.BotConfig
 	CorpID         string `json:"corp_id"`
 	AgentID        string `json:"agent_id"`
 	Secret         string `json:"secret"`
@@ -36,7 +35,7 @@ type WeComConfig struct {
 
 var (
 	wecomCfg   WeComConfig
-	botService *common.BaseBot
+	botService *bot.BaseBot
 	wc         *work.Work
 	botCtx     context.Context
 	botCancel  context.CancelFunc
@@ -80,13 +79,13 @@ func handleAction(action map[string]any) (any, error) {
 			return nil, fmt.Errorf("WeCom client not initialized")
 		}
 
-		req := message.SendTextRequest{
-			SendRequestCommon: &message.SendRequestCommon{
+		req := workMessage.SendTextRequest{
+			SendRequestCommon: &workMessage.SendRequestCommon{
 				ToUser:  userID,
 				MsgType: "text",
 				AgentID: agentID,
 			},
-			Text: message.TextField{
+			Text: workMessage.TextField{
 				Content: msgContent,
 			},
 		}
@@ -150,6 +149,8 @@ func restartBot() {
 	stopBot()
 
 	botService.Mu.RLock()
+	// Sync botService.Config from wecomCfg
+	botService.Config = wecomCfg.BotConfig
 	nexusAddr := botService.Config.NexusAddr
 	botService.Mu.RUnlock()
 
@@ -218,9 +219,9 @@ func startCallbackServer(ctx context.Context, port int) {
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]any         `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return
@@ -247,15 +248,19 @@ func handleNexusCommand(data []byte) {
 
 func handleCallback(c *gin.Context) {
 	mu.RLock()
-	currentWC := wc
+	// currentWC is not needed for callback handling when using officialaccount shim
 	mu.RUnlock()
 
-	if currentWC == nil {
-		c.String(http.StatusInternalServerError, "WeCom client not initialized")
-		return
+	// We use officialaccount server for WeCom callback because they are compatible in XML/Encryption
+	offCfg := &offConfig.Config{
+		AppID:          wecomCfg.CorpID,
+		AppSecret:      wecomCfg.Secret,
+		Token:          wecomCfg.Token,
+		EncodingAESKey: wecomCfg.EncodingAESKey,
+		Cache:          cache.NewMemory(),
 	}
-
-	server := currentWC.GetServer(c.Request, c.Writer)
+	off := wechat.NewWechat().GetOfficialAccount(offCfg)
+	server := off.GetServer(c.Request, c.Writer)
 
 	// Set message handler
 	server.SetMessageHandler(func(msg *message.MixMessage) *message.Reply {
@@ -284,21 +289,33 @@ func handleCallback(c *gin.Context) {
 }
 
 func main() {
-	botService = common.NewBaseBot(8083)
+	botService = bot.NewBaseBot(8083)
 	log.SetOutput(botService.LogManager)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	loadConfig()
 
-	botService.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/config-ui", http.StatusFound)
-			return
-		}
-		http.NotFound(w, r)
+	// Setup standard handlers using the new abstracted logic
+	botService.SetupStandardHandlers("WeComBot", &wecomCfg, restartBot, []bot.ConfigSection{
+		{
+			Title: "企业微信 API 配置",
+			Fields: []bot.ConfigField{
+				{Label: "Corp ID", ID: "corp_id", Type: "text", Value: wecomCfg.CorpID},
+				{Label: "Agent ID", ID: "agent_id", Type: "text", Value: wecomCfg.AgentID},
+				{Label: "Secret", ID: "secret", Type: "password", Value: wecomCfg.Secret},
+				{Label: "Token", ID: "token", Type: "text", Value: wecomCfg.Token},
+				{Label: "Encoding AES Key", ID: "encoding_aes_key", Type: "text", Value: wecomCfg.EncodingAESKey},
+				{Label: "回调监听端口", ID: "listen_port", Type: "number", Value: wecomCfg.ListenPort},
+			},
+		},
+		{
+			Title: "连接与服务配置",
+			Fields: []bot.ConfigField{
+				{Label: "BotNexus 地址", ID: "nexus_addr", Type: "text", Value: wecomCfg.NexusAddr},
+				{Label: "Web UI 端口 (LogPort)", ID: "log_port", Type: "number", Value: wecomCfg.LogPort},
+			},
+		},
 	})
-	botService.Mux.HandleFunc("/config", handleConfig)
-	botService.Mux.HandleFunc("/config-ui", handleConfigUI)
 
 	go botService.StartHTTPServer()
 
@@ -306,169 +323,4 @@ func main() {
 
 	botService.WaitExitSignal()
 	stopBot()
-}
-
-func handleConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		botService.Mu.RLock()
-		defer botService.Mu.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(wecomCfg)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var newCfg WeComConfig
-		if err := json.NewDecoder(r.Body).Decode(&newCfg); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		data, _ := json.MarshalIndent(newCfg, "", "  ")
-		if err := os.WriteFile("config.json", data, 0644); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		botService.Mu.Lock()
-		wecomCfg = newCfg
-		botService.Config = wecomCfg.BotConfig
-		botService.Mu.Unlock()
-
-		restartBot()
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Config updated and bot restarted"))
-		return
-	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-}
-
-func handleConfigUI(w http.ResponseWriter, r *http.Request) {
-	botService.Mu.RLock()
-	cfg := wecomCfg
-	botService.Mu.RUnlock()
-
-	tmpl := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>WeComBot Configuration</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; background: #f0f2f5; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { color: #1a73e8; }
-        .field { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="number"], input[type="password"] {
-            width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
-        }
-        button {
-            background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;
-        }
-        button:hover { background: #1557b0; }
-        .logs { margin-top: 20px; background: #202124; color: #f1f3f4; padding: 15px; border-radius: 4px; font-family: monospace; height: 300px; overflow-y: auto; white-space: pre-wrap; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>WeComBot Configuration</h1>
-        <form id="configForm">
-            <div class="field">
-                <label>Nexus Address:</label>
-                <input type="text" name="nexus_addr" value="{{.NexusAddr}}">
-            </div>
-            <div class="field">
-                <label>Web UI Port (LogPort):</label>
-                <input type="number" name="log_port" value="{{.LogPort}}">
-            </div>
-            <hr>
-            <div class="field">
-                <label>Corp ID:</label>
-                <input type="text" name="corp_id" value="{{.CorpID}}">
-            </div>
-            <div class="field">
-                <label>Agent ID:</label>
-                <input type="text" name="agent_id" value="{{.AgentID}}">
-            </div>
-            <div class="field">
-                <label>Secret:</label>
-                <input type="password" name="secret" value="{{.Secret}}">
-            </div>
-            <div class="field">
-                <label>Token:</label>
-                <input type="text" name="token" value="{{.Token}}">
-            </div>
-            <div class="field">
-                <label>Encoding AES Key:</label>
-                <input type="text" name="encoding_aes_key" value="{{.EncodingAESKey}}">
-            </div>
-            <div class="field">
-                <label>Callback Listen Port:</label>
-                <input type="number" name="listen_port" value="{{.ListenPort}}">
-            </div>
-            <button type="submit">Save & Restart</button>
-        </form>
-
-        <h2>Recent Logs</h2>
-        <div class="logs" id="logBox">Loading logs...</div>
-    </div>
-
-    <script>
-        document.getElementById('configForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = {
-                nexus_addr: formData.get('nexus_addr'),
-                log_port: parseInt(formData.get('log_port')),
-                corp_id: formData.get('corp_id'),
-                agent_id: formData.get('agent_id'),
-                secret: formData.get('secret'),
-                token: formData.get('token'),
-                encoding_aes_key: formData.get('encoding_aes_key'),
-                listen_port: parseInt(formData.get('listen_port'))
-            };
-
-            const resp = await fetch('/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-
-            if (resp.ok) {
-                alert('Configuration saved and bot restarting...');
-                if (data.log_port !== {{.LogPort}}) {
-                    window.location.href = 'http://' + window.location.hostname + ':' + data.log_port + '/config-ui';
-                }
-            } else {
-                alert('Error: ' + await resp.text());
-            }
-        };
-
-        async function fetchLogs() {
-            try {
-                const resp = await fetch('/logs?lines=50');
-                const text = await resp.text();
-                const logBox = document.getElementById('logBox');
-                const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 1;
-                logBox.textContent = text;
-                if (isScrolledToBottom) {
-                    logBox.scrollTop = logBox.scrollHeight;
-                }
-            } catch (e) {}
-        }
-
-        setInterval(fetchLogs, 2000);
-        fetchLogs();
-    </script>
-</body>
-</html>
-`
-	t, err := template.New("ui").Parse(tmpl)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	t.Execute(w, cfg)
 }

@@ -1,8 +1,0 @@
-{
-  "name": "games",
-  "description": "games_plugin_desc",
-  "version": "1.0.0",
-  "entry_point": "games.exe",
-  "timeout_ms": 5000,
-  "max_restarts": 3
-}

@@ -20,7 +20,15 @@ A **Go-based** Official QQ Guild/Group Robot implementation for [BotMatrix](../R
 
 ## 🛠 Configuration
 
-Create `config.json` from the sample:
+TencentBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:3133/config-ui` (default port is 3133).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
@@ -28,16 +36,8 @@ Create `config.json` from the sample:
     "token": "YOUR_BOT_TOKEN",
     "secret": "YOUR_APP_SECRET",
     "sandbox": true,
-    "self_id": "",
     "log_port": 3133,
-    "file_host": "https://www.sz84.com",
-    "media_route": "/bot-files/",
-    "websocket_addrs": [
-        {
-            "name": "Default",
-            "url": "ws://bot-nexus:3001"
-        }
-    ]
+    "nexus_addr": "ws://bot-nexus:3005"
 }
 ```
 
@@ -49,12 +49,8 @@ Create `config.json` from the sample:
 | `token`          | string    | Your Tencent bot's Token                                                   |
 | `secret`         | string    | Your Tencent bot's Secret                                                   |
 | `sandbox`        | bool      | Whether to use sandbox environment (for testing)                            |
-| `self_id`        | string    | Optional: Manually set self ID                                              |
-| `log_port`       | int       | Port for HTTP Log Viewer                                                    |
-| `file_host`      | string    | Public base URL for serving files                                           |
-| `media_route`    | string    | Internal route path for media files                                         |
-| `websocket_addrs`| array     | List of WebSocket addresses to connect to                                   |
-| `nexus_addr`     | string    | BotNexus address for backward compatibility                                 |
+| `log_port`       | int       | Port for the Web UI and Log viewer                                          |
+| `nexus_addr`     | string    | Address of the BotNexus WebSocket server                                    |
 
 ## 🚀 Deployment
 

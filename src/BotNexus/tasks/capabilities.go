@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"BotMatrix/common/ai"
 	"encoding/json"
 	"fmt"
 )
@@ -9,19 +10,46 @@ import (
 type Capability struct {
 	Name         string            `json:"name"`
 	Description  string            `json:"description"`
-	Params       map[string]string `json:"params"`  // 参数名 -> 说明
-	Example      string            `json:"example"` // 示例输入
+	Category     string            `json:"category"` // 新增：分类 (e.g., tools, entertainment, ai)
+	Params       map[string]string `json:"params"`   // 参数名 -> 说明
+	Required     []string          `json:"required"` // 新增：必填参数列表
+	Example      string            `json:"example"`  // 示例输入
 	IsEnterprise bool              `json:"is_enterprise"`
+	Regex        string            `json:"regex"` // 新增：正则触发器
+}
+
+// ToTool 将 Capability 转换为 LLM 可识别的工具定义
+func (c *Capability) ToTool() ai.Tool {
+	properties := make(map[string]any)
+	for name, desc := range c.Params {
+		properties[name] = map[string]string{
+			"type":        "string",
+			"description": desc,
+		}
+	}
+
+	return ai.Tool{
+		Type: "function",
+		Function: ai.FunctionDefinition{
+			Name:        c.Name,
+			Description: c.Description,
+			Parameters: map[string]any{
+				"type":       "object",
+				"properties": properties,
+				"required":   c.Required,
+			},
+		},
+	}
 }
 
 // SystemManifest 系统功能清单
 type SystemManifest struct {
-	Version      string                `json:"version"`
-	Intents      map[string]string     `json:"intents"`      // 意图 -> 说明
-	Actions      map[string]Capability `json:"actions"`      // 动作 -> 详情
-	Triggers     map[string]Capability `json:"triggers"`     // 触发方式 -> 详情
-	Skills       []Capability          `json:"skills"`       // 业务技能 (由 Worker 提供)
-	GlobalRules  []string              `json:"global_rules"` // 全局约束
+	Version     string                `json:"version"`
+	Intents     map[string]string     `json:"intents"`      // 意图 -> 说明
+	Actions     map[string]Capability `json:"actions"`      // 动作 -> 详情
+	Triggers    map[string]Capability `json:"triggers"`     // 触发方式 -> 详情
+	Skills      []Capability          `json:"skills"`       // 业务技能 (由 Worker 提供)
+	GlobalRules []string              `json:"global_rules"` // 全局约束
 }
 
 // GetDefaultManifest 获取系统默认功能清单
@@ -97,12 +125,34 @@ func GetDefaultManifest() *SystemManifest {
 	}
 }
 
+// GenerateTools 生成所有可用工具列表，用于 LLM Function Calling
+func (m *SystemManifest) GenerateTools() []ai.Tool {
+	var tools []ai.Tool
+
+	// 1. 添加业务技能 (Skills)
+	for _, skill := range m.Skills {
+		tools = append(tools, skill.ToTool())
+	}
+
+	// 2. 添加核心动作 (Actions)
+	for _, action := range m.Actions {
+		tools = append(tools, action.ToTool())
+	}
+
+	return tools
+}
+
 // GenerateSystemPrompt 生成给 AI 的 System Prompt
 func (m *SystemManifest) GenerateSystemPrompt() string {
 	manifestJSON, _ := json.MarshalIndent(m, "", "  ")
 
-	prompt := `你是一个 BotNexus 系统的智能调度助手。
+	prompt := `你是一个 BotNexus 系统的智能技能机器人 (Skill Bot) 调度专家。
 你的任务是理解用户的自然语言需求，并将其转化为系统可识别的结构化 JSON 指令。
+
+### 核心能力:
+1. **意图识别**: 准确判断用户是想创建任务、调整策略还是调用某个特定技能。
+2. **参数提取**: 从对话中提取技能执行所需的参数，对于缺失的必填参数，需在输出中标记。
+3. **技能路由**: 当用户需求匹配到 'skills' 清单中的项时，使用 'skill_call' 意图。
 
 ### 系统功能清单 (Capability Manifest):
 %s
@@ -110,22 +160,19 @@ func (m *SystemManifest) GenerateSystemPrompt() string {
 ### 输出规范:
 1. 必须返回合法的 JSON 格式。
 2. 包含 'intent' (意图), 'summary' (中文摘要), 'data' (结构化参数), 'analysis' (你的推理过程)。
-3. 如果用户需求不明确，请在 analysis 中指出并请求补充。
-4. 始终考虑安全边界，对于高危操作（如全群禁言）需在 summary 中明确提醒。
+3. 如果是技能调用 (skill_call)，data 必须包含 'skill_name' 和 'params'。
+4. 如果用户需求不明确或缺少必填参数，请在 analysis 中指出并请求补充。
 
-### 示例转换:
-用户: "帮我设置每天晚上11点禁言群 123"
+### 示例转换 (技能调用):
+用户: "帮我查询上海的天气"
 输出: {
-  "intent": "create_task",
-  "summary": "创建每天 23:00 自动禁言群 123 的任务",
+  "intent": "skill_call",
+  "summary": "调用天气查询技能",
   "data": {
-    "name": "夜间自动禁言",
-    "type": "cron",
-    "action_type": "mute_group",
-    "action_params": "{\"group_id\": \"123\", \"duration\": 0}",
-    "trigger_config": "{\"cron\": \"0 23 * * *\"}"
+    "skill_name": "weather_query",
+    "params": {"city": "上海"}
   },
-  "analysis": "用户要求定时禁言，识别为 create_task 意图，使用 cron 触发器。"
+  "analysis": "用户想要查询天气，匹配到 'weather_query' 技能，提取城市为上海。"
 }
 `
 	return fmt.Sprintf(prompt, string(manifestJSON))

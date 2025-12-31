@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useBotStore } from '@/stores/bot';
+import { useAuthStore } from '@/stores/auth';
 import LineChart from '@/components/charts/LineChart.vue';
 import { getPlatformIcon, getPlatformColor, isPlatformAvatar, getPlatformFromAvatar, getAvatarUrl } from '@/utils/avatar';
 import { 
@@ -22,38 +23,82 @@ import {
 
 const systemStore = useSystemStore();
 const botStore = useBotStore();
+const authStore = useAuthStore();
 
 const recentLogs = ref<any[]>([]);
 const recentMessages = ref<any[]>([]);
 const chatStats = ref<any>(null);
+const loading = ref(true);
 const currentTime = ref(new Date().toLocaleTimeString());
 let timeTimer: number | null = null;
 let refreshTimer: number | null = null;
 
-onMounted(() => {
-  // Initial fetch
-  const initFetch = async () => {
-    try {
-      await Promise.allSettled([
-        botStore.fetchStats(),
-        botStore.fetchBots(),
-        fetchLogs(),
-        fetchMessages()
-      ]);
-      
-      const cs = await botStore.fetchChatStats();
-      if (cs) chatStats.value = cs;
-    } catch (err) {
-      console.error('Initial fetch failed:', err);
+const isInitialFetching = ref(false);
+const refreshing = ref(false);
+const fetchError = ref<string | null>(null);
+
+const fetchLogs = async () => {
+  try {
+    const data = await botStore.fetchSystemLogs();
+    if (data && data.success && data.data && data.data.logs) {
+      recentLogs.value = data.data.logs.slice(0, 10);
     }
-  };
+  } catch (err) {
+    console.error('Failed to fetch logs in dashboard:', err);
+  }
+};
+
+const fetchMessages = async () => {
+  try {
+    const messages = await botStore.fetchMessages(10);
+    if (Array.isArray(messages)) {
+      recentMessages.value = messages;
+    }
+  } catch (err) {
+    console.error('Failed to fetch messages in dashboard:', err);
+  }
+};
+
+const initFetch = async () => {
+  if (!authStore.isAuthenticated) {
+    loading.value = false;
+    return;
+  }
+  if (isInitialFetching.value) return;
   
-  initFetch();
+  isInitialFetching.value = true;
+  loading.value = true;
+  fetchError.value = null;
   
-  timeTimer = window.setInterval(() => {
-    currentTime.value = new Date().toLocaleTimeString();
-  }, 1000);
-});
+  try {
+    const results = await Promise.allSettled([
+      botStore.fetchStats(),
+      botStore.fetchBots(),
+      fetchLogs(),
+      fetchMessages(),
+      botStore.fetchChatStats()
+    ]);
+    
+    // Check if critical fetches failed
+    const statsFailed = results[0].status === 'rejected';
+    const botsFailed = results[1].status === 'rejected';
+
+    if (statsFailed || botsFailed) {
+      console.error('Critical data fetch failed:', { statsFailed, botsFailed });
+      fetchError.value = 'failed_to_load_critical_data';
+    }
+
+    if (results[4].status === 'fulfilled' && results[4].value) {
+      chatStats.value = results[4].value;
+    }
+  } catch (err) {
+    console.error('Initial fetch failed:', err);
+    fetchError.value = 'failed_to_load_dashboard_data';
+  } finally {
+    loading.value = false;
+    isInitialFetching.value = false;
+  }
+};
 
 const refreshData = async () => {
   if (refreshing.value) return;
@@ -74,27 +119,18 @@ const refreshData = async () => {
   }
 };
 
-const refreshing = ref(false);
+onMounted(() => {
+  timeTimer = window.setInterval(() => {
+    currentTime.value = new Date().toLocaleTimeString();
+  }, 1000);
+});
 
-const fetchLogs = async () => {
-  try {
-    const data = await botStore.fetchSystemLogs();
-    if (data.success && data.data && data.data.logs) {
-      recentLogs.value = data.data.logs.slice(0, 10);
-    }
-  } catch (err) {
-    console.error('Failed to fetch logs in dashboard:', err);
+// Watch for auth changes to fetch data
+watch(() => authStore.isAuthenticated, (newVal) => {
+  if (newVal) {
+    initFetch();
   }
-};
-
-const fetchMessages = async () => {
-  try {
-    const messages = await botStore.fetchMessages(10);
-    recentMessages.value = messages;
-  } catch (err) {
-    console.error('Failed to fetch messages in dashboard:', err);
-  }
-};
+}, { immediate: true });
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer);
@@ -187,11 +223,14 @@ const statsCards = computed(() => [
 
 const activeGroupsData = computed(() => {
   if (!chatStats.value || !chatStats.value.group_stats_today) return [];
+  const group_names = chatStats.value.group_names || {};
+  const group_avatars = chatStats.value.group_avatars || {};
+  
   return Object.entries(chatStats.value.group_stats_today)
     .map(([id, count]) => ({
       id,
-      name: chatStats.value.group_names[id] || id,
-      avatar: getAvatarUrl(chatStats.value.group_avatars ? chatStats.value.group_avatars[id] : ''),
+      name: group_names[id] || id,
+      avatar: getAvatarUrl(group_avatars[id] || ''),
       count: count as number
     }))
     .sort((a, b) => b.count - a.count);
@@ -201,11 +240,14 @@ const activeGroups = computed(() => activeGroupsData.value.length);
 
 const dragonKingsData = computed(() => {
   if (!chatStats.value || !chatStats.value.user_stats_today) return [];
+  const user_names = chatStats.value.user_names || {};
+  const user_avatars = chatStats.value.user_avatars || {};
+
   return Object.entries(chatStats.value.user_stats_today)
     .map(([id, count]) => ({
       id,
-      name: chatStats.value.user_names[id] || id,
-      avatar: getAvatarUrl(chatStats.value.user_avatars ? chatStats.value.user_avatars[id] : ''),
+      name: user_names[id] || id,
+      avatar: getAvatarUrl(user_avatars[id] || ''),
       count: count as number
     }))
     .sort((a, b) => b.count - a.count);
@@ -218,7 +260,18 @@ const dragonKing = computed(() => {
 </script>
 
 <template>
-  <div class="p-4 sm:p-6 space-y-4 sm:space-y-8">
+  <div class="p-4 sm:p-6 space-y-4 sm:space-y-8 relative min-h-[400px]">
+    <!-- Loading Overlay -->
+    <div v-if="loading" class="absolute inset-0 z-50 flex items-center justify-center bg-[var(--bg-body)]/50 backdrop-blur-sm rounded-3xl transition-opacity duration-300">
+      <div class="flex flex-col items-center gap-4">
+        <div class="relative w-16 h-16">
+          <div class="absolute inset-0 border-4 border-[var(--matrix-color)]/20 rounded-full"></div>
+          <div class="absolute inset-0 border-4 border-t-[var(--matrix-color)] rounded-full animate-spin"></div>
+        </div>
+        <p class="text-[var(--matrix-color)] font-black text-xs uppercase tracking-[0.2em] animate-pulse">{{ t('loading') }}</p>
+      </div>
+    </div>
+
     <!-- Header -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
@@ -235,12 +288,29 @@ const dragonKing = computed(() => {
         <button 
           @click="refreshData" 
           class="flex items-center gap-2 px-6 py-2 rounded-xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-[var(--matrix-color)]/20 disabled:opacity-50"
-          :disabled="refreshing"
+          :disabled="refreshing || loading"
         >
           <RefreshCw :class="{ 'animate-spin': refreshing }" class="w-4 h-4" />
           {{ t('refresh') }}
         </button>
       </div>
+    </div>
+
+    <!-- Error State (as a banner instead of replacing the whole page) -->
+    <div v-if="fetchError && !loading" class="flex items-center justify-between p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+      <div class="flex items-center gap-3">
+        <X class="w-5 h-5 text-red-500" />
+        <div>
+          <h3 class="font-bold text-sm text-[var(--text-main)]">{{ t('load_error') }}</h3>
+          <p class="text-xs text-[var(--text-muted)]">{{ t(fetchError) }}</p>
+        </div>
+      </div>
+      <button 
+        @click="initFetch" 
+        class="px-4 py-2 rounded-xl bg-red-500 text-white font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-all"
+      >
+        {{ t('retry') }}
+      </button>
     </div>
 
     <!-- Stats Grid -->
@@ -260,22 +330,19 @@ const dragonKing = computed(() => {
           <div class="space-y-4 w-full">
             <div class="flex items-center justify-between">
               <div class="p-3 rounded-2xl inline-flex" :class="card.colorClass">
-                <component :is="iconMap[card.icon]" class="w-6 h-6" :class="card.textColor" />
+                <component :is="iconMap[card.icon]" class="w-4 h-4 sm:w-5 sm:h-5" :class="card.textColor" />
+              </div>
+              <div v-if="card.trend && card.trend.length > 0" class="flex flex-col items-end">
+                <div class="w-12 h-6 sm:w-16 sm:h-8">
+                  <LineChart :data="card.trend" :color="card.textColor.replace('text-', '')" />
+                </div>
               </div>
             </div>
             <div>
-              <p class="text-[10px] sm:text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{{ t(card.label) }}</p>
-              <div class="flex items-baseline gap-1 sm:gap-2">
-                <h2 class="text-2xl sm:text-3xl font-black text-[var(--text-main)] tracking-tight">{{ card.value }}</h2>
-                <span class="text-[8px] sm:text-[10px] font-black text-[var(--text-muted)]">{{ card.unit.startsWith('unit_') ? t(card.unit) : card.unit }}</span>
-              </div>
-              <!-- Trend Curve -->
-              <div v-if="card.trend" class="mt-2 h-12 w-full opacity-40 group-hover:opacity-100 transition-opacity">
-                <LineChart 
-                  :data="card.trend" 
-                  :color="card.textColor.includes('orange') ? '#f97316' : card.textColor.includes('pink') ? '#ec4899' : card.textColor.includes('blue') ? '#3b82f6' : '#00ff41'" 
-                  :fill="true" 
-                />
+              <p class="text-[var(--text-muted)] text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-1">{{ t(card.label) }}</p>
+              <div class="flex items-baseline gap-1">
+                <span class="text-lg sm:text-xl font-black text-[var(--text-main)] mono tracking-tighter">{{ card.value }}</span>
+                <span class="text-[8px] sm:text-[10px] text-[var(--text-muted)] font-bold uppercase">{{ card.unit.startsWith('unit_') ? t(card.unit) : card.unit }}</span>
               </div>
             </div>
           </div>
@@ -283,6 +350,7 @@ const dragonKing = computed(() => {
       </router-link>
     </div>
 
+    <!-- Charts & Lists -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
       <!-- Main Content Area -->
       <div class="lg:col-span-2 space-y-4 sm:space-y-6">

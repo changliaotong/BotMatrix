@@ -18,8 +18,8 @@ type PluginManifest struct {
 	Version     string   `json:"version"`
 	Author      string   `json:"author"`
 	Entry       string   `json:"entry"`
-	Actions     []string `json:"actions"`
-	Events      []string `json:"events"`
+	Actions     []any    `json:"actions"`
+	Events      []any    `json:"events"`
 	Intents     []any    `json:"intents"`
 }
 
@@ -171,8 +171,8 @@ func handleInit() {
 		Description: "A new BotMatrix plugin",
 		Version:     "1.0.0",
 		Author:      "Developer",
-		Actions:     []string{"send_message"},
-		Events:      []string{"on_message"},
+		Actions:     []any{"send_message"},
+		Events:      []any{"on_message"},
 		Intents:     []any{},
 	}
 

@@ -1909,8 +1909,84 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 	// Forward request to Bot
 	action.Echo = internalEcho
 
+	// 统一构造消息广播，无论机器人是在线还是离线/真实机器人
+	// 这样 WebUI 就能实时看到机器人发出的消息
+	actionName := action.Action
+	if actionName == "send_msg" || actionName == "send_group_msg" || actionName == "send_private_msg" {
+		go func() {
+			msgContent := utils.ToString(action.Message)
+			if msgContent == "" {
+				msgContent = utils.ToString(action.Params["message"])
+			}
+
+			userID := action.UserID
+			if userID == "" {
+				userID = utils.ToString(action.Params["user_id"])
+			}
+
+			groupID := action.GroupID
+			if groupID == "" {
+				groupID = utils.ToString(action.Params["group_id"])
+			}
+
+			// 模拟 OneBot v11 消息事件，用于 WebUI 显示
+			event := map[string]any{
+				"post_type":    "message",
+				"message_type": action.MessageType,
+				"sub_type":     "normal",
+				"message_id":   fmt.Sprintf("reply_%d", time.Now().UnixNano()),
+				"user_id":      targetBot.SelfID, // 发送者是机器人
+				"target_id":    userID,           // 接收者是用户
+				"group_id":     groupID,
+				"message":      msgContent,
+				"raw_message":  msgContent,
+				"message_id":   fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+				"self_id":      targetBot.SelfID,
+				"time":         time.Now().Unix(),
+				"sender": map[string]any{
+					"user_id":  targetBot.SelfID,
+					"nickname": targetBot.Nickname,
+					"role":     "bot",
+				},
+			}
+			if action.MessageType == "" {
+				if groupID != "" {
+					event["message_type"] = "group"
+				} else {
+					event["message_type"] = "private"
+				}
+			}
+			m.BroadcastEvent(event)
+		}()
+	}
+
 	targetBot.Mutex.Lock()
-	err := targetBot.Conn.WriteJSON(action)
+	var err error
+	if targetBot.Conn != nil {
+		err = targetBot.Conn.WriteJSON(action)
+	} else if targetBot.Platform == "Online" {
+		// 对于在线机器人，模拟发送成功
+		log.Printf("[OnlineBot] Worker %s reply: %s", worker.ID, action.Message)
+
+		// 模拟响应给 Worker，表示消息已成功发送
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			respChan <- types.InternalMessage{
+				SelfID: targetBot.SelfID,
+				Status: "ok",
+				Extras: map[string]any{
+					"status":  "ok",
+					"retcode": 0,
+					"data": map[string]any{
+						"message_id": fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+					},
+				},
+				Echo: internalEcho,
+			}
+		}()
+	} else {
+		err = fmt.Errorf("bot connection is closed")
+	}
 	targetBot.Mutex.Unlock()
 
 	// Broadcast outgoing routing events: Nexus -> Group -> User

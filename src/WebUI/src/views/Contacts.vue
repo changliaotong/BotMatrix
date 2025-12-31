@@ -28,8 +28,8 @@ const fetchContacts = async () => {
   loading.value = true;
   try {
     const data = await botStore.fetchContacts();
-    if (data.success) {
-      contacts.value = data.contacts;
+    if (data.success && data.data) {
+      contacts.value = data.data.contacts || [];
     }
   } finally {
     loading.value = false;

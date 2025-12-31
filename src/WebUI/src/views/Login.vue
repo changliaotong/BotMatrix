@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useSystemStore } from '@/stores/system';
-import { Bot, Lock, User, ArrowRight, Loader2 } from 'lucide-vue-next';
+import { Bot, Lock, User, ArrowRight, Loader2, Languages, Check } from 'lucide-vue-next';
+import { type Language } from '@/utils/i18n';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -16,14 +17,50 @@ const password = ref('');
 const loading = ref(false);
 const error = ref('');
 
+const showLangPicker = ref(false);
+const langPickerRef = ref<HTMLElement | null>(null);
+
+const languages: { id: Language; nameKey: string }[] = [
+  { id: 'zh-CN', nameKey: 'lang_zh_cn' },
+  { id: 'zh-TW', nameKey: 'lang_zh_tw' },
+  { id: 'en-US', nameKey: 'lang_en_us' },
+  { id: 'ja-JP', nameKey: 'lang_ja_jp' }
+];
+
+const toggleLangPicker = () => {
+  showLangPicker.value = !showLangPicker.value;
+};
+
+const selectLang = (lang: Language) => {
+  systemStore.setLang(lang);
+  showLangPicker.value = false;
+};
+
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as Node;
+  if (langPickerRef.value && !langPickerRef.value.contains(target)) {
+    showLangPicker.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleClickOutside);
+});
+
 const handleLogin = async () => {
-  if (!username.value || !password.value) return;
+  const trimmedUsername = username.value.trim();
+  const trimmedPassword = password.value.trim();
+  if (!trimmedUsername || !trimmedPassword) return;
   
   loading.value = true;
   error.value = '';
   
   try {
-    const success = await authStore.login(username.value, password.value);
+    const success = await authStore.login(trimmedUsername, trimmedPassword);
     if (success) {
       router.push('/');
     } else {
@@ -45,7 +82,41 @@ const handleLogin = async () => {
     </div>
 
     <div class="w-full max-w-md relative">
-      <div class="p-8 sm:p-12 rounded-[2.5rem] bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 shadow-2xl space-y-8">
+      <div class="p-8 sm:p-12 rounded-[2.5rem] bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 shadow-2xl space-y-8 relative">
+        <!-- i18n Selector -->
+        <div class="absolute right-6 top-6" ref="langPickerRef">
+          <button 
+            @click="toggleLangPicker"
+            class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-matrix transition-all flex items-center gap-2 group"
+          >
+            <Languages class="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <span class="text-[10px] font-bold uppercase tracking-widest hidden sm:block">{{ systemStore.currentLang }}</span>
+          </button>
+
+          <!-- Dropdown -->
+          <div 
+            v-if="showLangPicker"
+            class="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl border border-black/5 dark:border-white/5 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+          >
+            <div class="p-2">
+              <button 
+                v-for="lang in languages" 
+                :key="lang.id"
+                @click="selectLang(lang.id)"
+                class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all"
+                :class="[
+                  systemStore.currentLang === lang.id 
+                    ? 'bg-matrix/10 text-matrix' 
+                    : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-400'
+                ]"
+              >
+                {{ t(lang.nameKey) }}
+                <Check v-if="systemStore.currentLang === lang.id" class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Logo -->
         <div class="text-center space-y-4">
           <div class="inline-flex p-5 rounded-3xl bg-matrix/10 text-matrix animate-bounce-slow">

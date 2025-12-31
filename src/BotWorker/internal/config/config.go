@@ -1,6 +1,7 @@
 package config
 
 import (
+	"BotMatrix/common/bot"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 
 // Config 定义应用程序配置结构
 type Config struct {
+	bot.BotConfig
+
 	// Worker唯一标识
 	WorkerID string `json:"worker_id"`
 
@@ -40,9 +43,6 @@ type Config struct {
 
 	// AI配置
 	AI AIConfig `json:"ai"`
-
-	// Web UI 端口
-	LogPort int `json:"log_port"`
 
 	// 技能系统开关
 	EnableSkill bool `json:"enable_skill"`
@@ -80,7 +80,10 @@ type WebSocketConfig struct {
 
 // JSONConfig 用于解析JSON的中间结构
 type JSONConfig struct {
-	WorkerID string `json:"worker_id"`
+	LogPort   int    `json:"log_port"`
+	BotToken  string `json:"bot_token"`
+	NexusAddr string `json:"nexus_addr"`
+	WorkerID  string `json:"worker_id"`
 
 	HTTP struct {
 		Addr         string      `json:"addr"`
@@ -103,48 +106,16 @@ type JSONConfig struct {
 
 	Plugin struct {
 		Dir     string   `json:"dir"`
+		DevDirs []string `json:"dev_dirs"` // 新增：开发目录列表
 		Enabled []string `json:"enabled"`
 	} `json:"plugin"`
 
-	Database struct {
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		User     string `json:"user"`
-		Password string `json:"password"`
-		DBName   string `json:"dbname"`
-		SSLMode  string `json:"sslmode"`
-	} `json:"database"`
+	Database DatabaseConfig `json:"database"`
+	Redis    RedisConfig    `json:"redis"`
 
-	Redis struct {
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		Password string `json:"password"`
-		DB       int    `json:"db"`
-	} `json:"redis"`
-
-	Weather struct {
-		APIKey   string      `json:"api_key"`
-		Endpoint string      `json:"endpoint"`
-		Timeout  interface{} `json:"timeout"`
-		Mock     bool        `json:"mock"`
-	} `json:"weather"`
-
-	Translate struct {
-		APIKey   string      `json:"api_key"`
-		Endpoint string      `json:"endpoint"`
-		Timeout  interface{} `json:"timeout"`
-		Region   string      `json:"region"`
-	} `json:"translate"`
-
-	AI struct {
-		APIKey          string      `json:"api_key"`
-		Endpoint        string      `json:"endpoint"`
-		Model           string      `json:"model"`
-		Timeout         interface{} `json:"timeout"`
-		OfficialGroupID string      `json:"official_group_id"`
-	} `json:"ai"`
-
-	LogPort int `json:"log_port"`
+	Weather   WeatherConfig   `json:"weather"`
+	Translate TranslateConfig `json:"translate"`
+	AI        AIConfig        `json:"ai"`
 
 	EnableSkill bool `json:"enable_skill"`
 }
@@ -162,6 +133,9 @@ type LogConfig struct {
 type PluginConfig struct {
 	// 插件目录
 	Dir string `json:"dir"`
+
+	// 开发目录列表
+	DevDirs []string `json:"dev_dirs"`
 
 	// 启用的插件列表
 	Enabled []string `json:"enabled"`
@@ -262,7 +236,7 @@ func DefaultConfig() *Config {
 			File:  "",
 		},
 		Plugin: PluginConfig{
-			Dir:     "plugins",
+			Dir:     "plugins/worker",
 			Enabled: []string{},
 		},
 		Database: DatabaseConfig{
@@ -298,7 +272,9 @@ func DefaultConfig() *Config {
 			Timeout:         15 * time.Second,
 			OfficialGroupID: "",
 		},
-		LogPort: 8082,
+		BotConfig: bot.BotConfig{
+			LogPort: 8082,
+		},
 		EnableSkill: false, // 默认关闭技能系统
 	}
 }
@@ -348,7 +324,6 @@ func UpdateConfigFromJSON(config *Config, content []byte) (*Config, error) {
 		config.WorkerID = jsonCfg.WorkerID
 	}
 
-
 	// 更新HTTP配置
 	if jsonCfg.HTTP.Addr != "" {
 		config.HTTP.Addr = jsonCfg.HTTP.Addr
@@ -391,6 +366,9 @@ func UpdateConfigFromJSON(config *Config, content []byte) (*Config, error) {
 	}
 	if len(jsonCfg.Plugin.Enabled) > 0 {
 		config.Plugin.Enabled = jsonCfg.Plugin.Enabled
+	}
+	if len(jsonCfg.Plugin.DevDirs) > 0 {
+		config.Plugin.DevDirs = jsonCfg.Plugin.DevDirs
 	}
 
 	// 更新数据库配置
@@ -468,8 +446,15 @@ func UpdateConfigFromJSON(config *Config, content []byte) (*Config, error) {
 		config.AI.OfficialGroupID = jsonCfg.AI.OfficialGroupID
 	}
 
+	// 更新 BotConfig 字段
 	if jsonCfg.LogPort != 0 {
 		config.LogPort = jsonCfg.LogPort
+	}
+	if jsonCfg.BotToken != "" {
+		config.BotToken = jsonCfg.BotToken
+	}
+	if jsonCfg.NexusAddr != "" {
+		config.NexusAddr = jsonCfg.NexusAddr
 	}
 
 	// 更新技能开关
@@ -521,6 +506,9 @@ func LoadFromCLI() (*Config, string, error) {
 	weatherAPIKey := flag.String("weather-api-key", "", "天气API密钥")
 	weatherEndpoint := flag.String("weather-endpoint", "", "天气API端点")
 
+	// 技能系统命令行参数
+	enableSkill := flag.Bool("enable-skill", false, "是否启用技能系统")
+
 	// 解析命令行参数
 	flag.Parse()
 
@@ -531,6 +519,11 @@ func LoadFromCLI() (*Config, string, error) {
 	}
 
 	// 命令行参数优先级高于配置文件
+	if *enableSkill {
+		config.EnableSkill = true
+	} else if os.Getenv("ENABLE_SKILL") == "true" {
+		config.EnableSkill = true
+	}
 	if *httpAddr != "" {
 		config.HTTP.Addr = *httpAddr
 	}

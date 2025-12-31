@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 
-	common "BotMatrix/src/Common"
+	"BotMatrix/common/bot"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -27,7 +26,7 @@ type WebAppConfig struct {
 
 // WebConfig 整体配置
 type WebConfig struct {
-	common.BotConfig
+	bot.BotConfig
 	Apps []WebAppConfig `json:"apps"`
 }
 
@@ -41,7 +40,7 @@ type WebUser struct {
 }
 
 var (
-	botService *common.BaseBot
+	botService *bot.BaseBot
 	webCfg     WebConfig
 	appsMap    = make(map[string]WebAppConfig) // 快速查找
 	appsMu     sync.RWMutex
@@ -53,15 +52,32 @@ var (
 )
 
 func main() {
-	botService = common.NewBaseBot(3137)
+	botService = bot.NewBaseBot(3137)
 	log.SetOutput(botService.LogManager)
 
 	loadConfig()
 
+	// Setup standard handlers using the new abstracted logic
+	botService.SetupStandardHandlers("WebBot", &webCfg, restartBot, []bot.ConfigSection{
+		{
+			Title: "连接配置",
+			Fields: []bot.ConfigField{
+				{Label: "BotNexus 地址", ID: "nexus_addr", Type: "text", Value: webCfg.NexusAddr},
+				{Label: "服务端口 (LogPort)", ID: "log_port", Type: "number", Value: webCfg.LogPort},
+			},
+		},
+		{
+			Title: "安全与 TLS (WSS) 配置",
+			Fields: []bot.ConfigField{
+				{Label: "启用 TLS (HTTPS/WSS)", ID: "use_tls", Type: "checkbox", Value: webCfg.UseTLS},
+				{Label: "证书文件路径 (Cert File)", ID: "cert_file", Type: "text", Value: webCfg.CertFile},
+				{Label: "私钥文件路径 (Key File)", ID: "key_file", Type: "text", Value: webCfg.KeyFile},
+			},
+		},
+	})
+
 	botService.Mux.HandleFunc("/ws/widget", handleWidgetWebSocket)
 	botService.Mux.Handle("/widget/", http.StripPrefix("/widget/", http.FileServer(http.Dir("widget"))))
-	botService.Mux.HandleFunc("/config", handleConfig)
-	botService.Mux.HandleFunc("/config-ui", handleConfigUI)
 
 	go botService.StartHTTPServer()
 
@@ -78,6 +94,11 @@ func loadConfig() {
 		json.Unmarshal(file, &webCfg)
 	}
 
+	// Sync local config
+	botService.Mu.RLock()
+	webCfg.BotConfig = botService.Config
+	botService.Mu.RUnlock()
+
 	appsMu.Lock()
 	appsMap = make(map[string]WebAppConfig)
 	for _, app := range webCfg.Apps {
@@ -87,9 +108,11 @@ func loadConfig() {
 }
 
 func restartBot() {
-	botService.LogManager.Info().Msg("Restarting WebBot Multi-tenant Hub...")
+	botService.Info("Restarting WebBot Multi-tenant Hub...")
 
 	botService.Mu.RLock()
+	// Sync botService.Config from webCfg
+	botService.Config = webCfg.BotConfig
 	nexusAddr := botService.Config.NexusAddr
 	botService.Mu.RUnlock()
 
@@ -218,126 +241,4 @@ func sendToWebUser(userID, content, echo string) {
 	user.Mu.Lock()
 	user.Conn.WriteMessage(websocket.TextMessage, msg)
 	user.Mu.Unlock()
-}
-
-func handleConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		botService.Mu.RLock()
-		defer botService.Mu.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(webCfg)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var newConfig WebConfig
-		if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		botService.Mu.Lock()
-		webCfg = newConfig
-		botService.Config = newConfig.BotConfig
-		botService.Mu.Unlock()
-
-		data, _ := json.MarshalIndent(webCfg, "", "  ")
-		os.WriteFile("config.json", data, 0644)
-
-		loadConfig()
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Config updated"))
-		go restartBot()
-	}
-}
-
-func handleConfigUI(w http.ResponseWriter, r *http.Request) {
-	botService.Mu.RLock()
-	cfg := webCfg
-	botService.Mu.RUnlock()
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head>
-	<title>WebBot Gateway Config</title>
-	<style>
-		body { font-family: sans-serif; margin: 20px; background: #f0f2f5; }
-		.card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 800px; margin: auto; }
-		h2 { margin-top: 0; color: #1a73e8; }
-		.field { margin-bottom: 15px; }
-		label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-		input[type="text"], input[type="number"], textarea { width: 100%%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-		.checkbox-field { display: flex; align-items: center; gap: 10px; }
-		.checkbox-field input { width: auto; }
-		button { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-		button:hover { background: #1557b0; }
-		.section { border-top: 1px solid #eee; margin-top: 20px; pt: 20px; }
-	</style>
-</head>
-<body>
-	<div class="card">
-		<h2>WebBot 网关配置</h2>
-		<form id="configForm">
-			<div class="field">
-				<label>Nexus 地址</label>
-				<input type="text" name="nexus_addr" value="%s">
-			</div>
-			<div class="field">
-				<label>服务端口 (LogPort)</label>
-				<input type="number" name="log_port" value="%d">
-			</div>
-
-			<div class="section">
-				<h3>安全与 TLS (WSS)</h3>
-				<div class="field checkbox-field">
-					<input type="checkbox" name="use_tls" id="use_tls" %s>
-					<label for="use_tls">启用 TLS (HTTPS/WSS)</label>
-				</div>
-				<div class="field">
-					<label>证书文件路径 (Cert File)</label>
-					<input type="text" name="cert_file" value="%s" placeholder="path/to/cert.pem">
-				</div>
-				<div class="field">
-					<label>私钥文件路径 (Key File)</label>
-					<input type="text" name="key_file" value="%s" placeholder="path/to/key.pem">
-				</div>
-			</div>
-
-			<button type="submit">保存并重启</button>
-		</form>
-	</div>
-	<script>
-		document.getElementById('configForm').onsubmit = async (e) => {
-			e.preventDefault();
-			const formData = new FormData(e.target);
-			const config = {
-				nexus_addr: formData.get('nexus_addr'),
-				log_port: parseInt(formData.get('log_port')),
-				use_tls: formData.get('use_tls') === 'on',
-				cert_file: formData.get('cert_file'),
-				key_file: formData.get('key_file'),
-				apps: %s // 保持原有的 Apps 配置
-			};
-			const resp = await fetch('/config', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(config)
-			});
-			if (resp.ok) alert('保存成功！');
-			else alert('保存失败：' + await resp.text());
-		};
-	</script>
-</body>
-</html>
-	`, cfg.NexusAddr, cfg.LogPort, func() string {
-		if cfg.UseTLS {
-			return "checked"
-		}
-		return ""
-	}(), cfg.CertFile, cfg.KeyFile, func() string {
-		data, _ := json.Marshal(cfg.Apps)
-		return string(data)
-	}())
 }

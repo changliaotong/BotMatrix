@@ -62,7 +62,7 @@ const fetchUsers = async () => {
     ]);
     
     if (usersData.success) {
-      users.value = usersData.users;
+      users.value = usersData.data?.users || [];
     }
     if (identityData.success) {
       identities.value = identityData.data;

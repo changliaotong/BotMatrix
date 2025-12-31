@@ -73,7 +73,7 @@ const fetchWorkers = async () => {
   try {
     const data = await botStore.fetchWorkers();
     if (data.success) {
-      workers.value = data.workers || [];
+      workers.value = data.data?.workers || [];
     } else {
       error.value = data.message || 'Failed to fetch workers';
     }

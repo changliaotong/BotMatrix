@@ -39,8 +39,8 @@ const fetchContainers = async (isRefresh = false) => {
   
   try {
     const data = await botStore.fetchDockerContainers();
-    if (data.status === 'ok' || data.success) {
-      containers.value = data.containers;
+    if (data.success && data.data) {
+      containers.value = data.data.containers || [];
     }
   } finally {
     loading.value = false;

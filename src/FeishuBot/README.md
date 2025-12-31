@@ -21,7 +21,15 @@ FeishuBot supports message recall via the `delete_msg` action.
 
 ## 🛠 Configuration
 
-Create a `config.json` file in the root directory:
+FeishuBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:8086/config-ui` (default port is 8086).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
@@ -29,7 +37,8 @@ Create a `config.json` file in the root directory:
     "app_secret": "...",
     "encrypt_key": "...",
     "verification_token": "...",
-    "nexus_addr": "ws://bot-manager:3005"
+    "nexus_addr": "ws://bot-nexus:3005",
+    "log_port": 8086
 }
 ```
 
@@ -46,6 +55,15 @@ Create a `config.json` file in the root directory:
     *   Set Encrypt Key (Optional, but recommended).
     *   Add Event: `Receive Message` (v2.0).
 6.  Copy `App ID` and `App Secret` to `config.json`.
+
+| Field | Description |
+| :--- | :--- |
+| `app_id` | Your Feishu App ID. |
+| `app_secret` | Your Feishu App Secret. |
+| `encrypt_key` | Optional encrypt key for events. |
+| `verification_token` | Verification token from Feishu console. |
+| `nexus_addr` | Address of the BotNexus WebSocket server. |
+| `log_port` | Port for the Web UI and Log viewer. |
 
 ## 🚀 Deployment
 

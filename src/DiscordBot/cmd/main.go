@@ -5,16 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
+	"os"
 	"time"
 
-	common "BotMatrix/src/Common"
+	"BotMatrix/common/bot"
 
 	"github.com/bwmarrin/discordgo"
 )
 
+type DiscordConfig struct {
+	bot.BotConfig
+}
+
 var (
-	botService *common.BaseBot
+	botService *bot.BaseBot
+	discordCfg DiscordConfig
 	dg         *discordgo.Session
 	selfID     string
 	botCtx     context.Context
@@ -23,25 +28,31 @@ var (
 
 func main() {
 	// Initialize base bot with default log port
-	botService = common.NewBaseBot(3134)
+	botService = bot.NewBaseBot(3134)
 
 	// Setup logging to use the common LogManager
 	log.SetOutput(botService.LogManager)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// Load configuration
-	botService.LoadConfig("config.json")
+	loadConfig()
 
-	// Setup HTTP handlers for config and UI
-	botService.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/config-ui", http.StatusFound)
-			return
-		}
-		http.NotFound(w, r)
+	// Setup standard handlers using the new abstracted logic
+	botService.SetupStandardHandlers("DiscordBot", &discordCfg, restartBot, []bot.ConfigSection{
+		{
+			Title: "Discord API 配置",
+			Fields: []bot.ConfigField{
+				{Label: "Bot Token", ID: "bot_token", Type: "password", Value: discordCfg.BotToken},
+			},
+		},
+		{
+			Title: "连接配置",
+			Fields: []bot.ConfigField{
+				{Label: "Bot Nexus 地址", ID: "nexus_addr", Type: "text", Value: discordCfg.NexusAddr},
+				{Label: "Web UI 端口", ID: "log_port", Type: "number", Value: discordCfg.LogPort},
+			},
+		},
 	})
-	botService.Mux.HandleFunc("/config", handleConfig)
-	botService.Mux.HandleFunc("/config-ui", handleConfigUI)
 
 	// Start common HTTP services (health, logs, config)
 	go botService.StartHTTPServer()
@@ -54,12 +65,28 @@ func main() {
 	stopBot()
 }
 
+func loadConfig() {
+	botService.LoadConfig("config.json")
+
+	// Sync local config
+	botService.Mu.RLock()
+	discordCfg.BotConfig = botService.Config
+	botService.Mu.RUnlock()
+
+	// Handle environment variables if any (optional, but good for consistency)
+	if envToken := os.Getenv("DISCORD_TOKEN"); envToken != "" {
+		discordCfg.BotToken = envToken
+	}
+}
+
 func restartBot() {
 	stopBot()
 
 	botService.Mu.RLock()
-	token := botService.Config.BotToken
-	nexusAddr := botService.Config.NexusAddr
+	// Sync botService.Config from discordCfg
+	botService.Config = discordCfg.BotConfig
+	token := discordCfg.BotToken
+	nexusAddr := discordCfg.NexusAddr
 	botService.Mu.RUnlock()
 
 	if token == "" {
@@ -102,159 +129,6 @@ func stopBot() {
 		dg.Close()
 		dg = nil
 	}
-}
-
-func handleConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		botService.Mu.RLock()
-		defer botService.Mu.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(botService.Config)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var newConfig common.BotConfig
-		if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		botService.Mu.Lock()
-		botService.Config = newConfig
-		botService.Mu.Unlock()
-
-		// Save to file
-		botService.SaveConfig("config.json")
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Config updated successfully"))
-
-		// Restart bot with new config
-		go restartBot()
-		return
-	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-}
-
-func handleConfigUI(w http.ResponseWriter, r *http.Request) {
-	botService.Mu.RLock()
-	cfg := botService.Config
-	botService.Mu.RUnlock()
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DiscordBot 配置中心</title>
-    <style>
-        :root { --primary-color: #5865F2; --success-color: #28a745; --danger-color: #dc3545; --bg-color: #f4f7f6; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; display: flex; height: 100vh; }
-        .sidebar { width: 280px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 20px; font-size: 20px; font-weight: bold; border-bottom: 1px solid #34495e; }
-        .nav-item { padding: 15px 20px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px; }
-        .nav-item:hover { background: #34495e; }
-        .nav-item.active { background: var(--primary-color); }
-        .main-content { flex: 1; overflow-y: auto; padding: 30px; }
-        .card { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 25px; }
-        .section-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #2c3e50; display: flex; justify-content: space-between; align-items: center; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: 500; color: #666; }
-        input[type="text"], input[type="number"], input[type="password"] { width: 100%%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: opacity 0.2s; }
-        .btn-primary { background: var(--primary-color); color: white; }
-        .btn-danger { background: var(--danger-color); color: white; }
-        .logs-container { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; height: 500px; overflow-y: auto; font-size: 13px; line-height: 1.5; }
-        .log-line { margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px; }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <div class="sidebar-header">DiscordBot</div>
-        <div class="nav-item active" onclick="switchTab('config')">核心配置</div>
-        <div class="nav-item" onclick="switchTab('logs')">实时日志</div>
-    </div>
-    <div class="main-content">
-        <div id="config-tab">
-            <div class="card">
-                <div class="section-title">Discord API 配置</div>
-                <div class="form-group">
-                    <label>Bot Token</label>
-                    <input type="password" id="bot_token" value="%s">
-                </div>
-            </div>
-            <div class="card">
-                <div class="section-title">连接配置</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div class="form-group">
-                        <label>BotNexus 地址</label>
-                        <input type="text" id="nexus_addr" value="%s">
-                    </div>
-                    <div class="form-group">
-                        <label>Web UI 端口</label>
-                        <input type="number" id="log_port" value="%d">
-                    </div>
-                </div>
-            </div>
-            <div style="text-align: center; margin-top: 30px;">
-                <button class="btn btn-primary" style="padding: 15px 40px; font-size: 16px;" onclick="saveConfig()">保存配置并重启</button>
-            </div>
-        </div>
-        <div id="logs-tab" style="display: none;">
-            <div class="card">
-                <div class="section-title">系统日志 <button class="btn btn-danger" onclick="clearLogs()">清空显示</button></div>
-                <div id="logs" class="logs-container">正在加载日志...</div>
-            </div>
-        </div>
-    </div>
-    <script>
-        let currentTab = 'config';
-        function switchTab(tab) {
-            document.getElementById(currentTab + '-tab').style.display = 'none';
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(tab + '-tab').style.display = 'block';
-            event.currentTarget.classList.add('active');
-            currentTab = tab;
-            if (tab === 'logs') loadLogs();
-        }
-        async function saveConfig() {
-            const cfg = {
-                bot_token: document.getElementById('bot_token').value,
-                nexus_addr: document.getElementById('nexus_addr').value,
-                log_port: parseInt(document.getElementById('log_port').value)
-            };
-            const resp = await fetch('/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(cfg)
-            });
-            if (resp.ok) {
-                alert('配置已保存，机器人正在重启...');
-                setTimeout(() => window.location.reload(), 3000);
-            } else {
-                alert('保存失败');
-            }
-        }
-        async function loadLogs() {
-            if (currentTab !== 'logs') return;
-            try {
-                const resp = await fetch('/logs?lines=200');
-                const logs = await resp.json();
-                const logsDiv = document.getElementById('logs');
-                logsDiv.innerHTML = logs.map(line => `+"`"+`<div class="log-line">${line}</div>`+"`"+`).join('');
-                logsDiv.scrollTop = logsDiv.scrollHeight;
-            } catch (e) {}
-            setTimeout(loadLogs, 2000);
-        }
-        function clearLogs() { document.getElementById('logs').innerText = ''; }
-    </script>
-</body>
-</html>
-`, cfg.BotToken, cfg.NexusAddr, cfg.LogPort)
 }
 
 func handleNexusCommand(data []byte) {

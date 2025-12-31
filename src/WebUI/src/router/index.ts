@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Dashboard from '@/views/Dashboard.vue';
+import { useAuthStore } from '@/stores/auth';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -20,6 +21,11 @@ const router = createRouter({
       component: () => import('@/views/Workers.vue'),
     },
     {
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('@/views/Plugins.vue'),
+    },
+    {
       path: '/contacts',
       name: 'contacts',
       component: () => import('@/views/Contacts.vue'),
@@ -33,6 +39,11 @@ const router = createRouter({
       path: '/nexus',
       name: 'nexus',
       component: () => import('@/views/Nexus.vue'),
+    },
+    {
+      path: '/ai',
+      name: 'ai',
+      component: () => import('@/views/NexusAI.vue'),
     },
     {
       path: '/visualization',
@@ -93,14 +104,45 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore();
   const token = localStorage.getItem('wxbot_token');
-  if (to.name !== 'login' && !token) {
-    next({ name: 'login' });
-  } else if (to.name === 'login' && token) {
-    next({ name: 'dashboard' });
+  
+  console.log(`[Router] Navigating to: ${String(to.name)}, hasToken: ${!!token}, hasUser: ${!!authStore.user}`);
+
+  if (to.name !== 'login') {
+    if (!token) {
+      console.log('[Router] No token found, redirecting to login');
+      next({ name: 'login' });
+    } else {
+      // 如果没有用户信息，尝试验证 token
+      if (!authStore.user) {
+        try {
+          console.log('[Router] Token exists but no user info, checking auth...');
+          const isValid = await authStore.checkAuth();
+          console.log(`[Router] Auth check result: ${isValid}, hasToken after check: ${!!authStore.token}`);
+          
+          // 只有在明确验证失败（token被清除）的情况下才跳转登录
+          if (!isValid && !authStore.token) {
+            console.log('[Router] Auth check failed and token cleared, redirecting to login');
+            next({ name: 'login' });
+            return;
+          }
+        } catch (err) {
+          console.error('[Router] Router auth check error:', err);
+          // 网络错误等情况不强制跳转，让页面尝试加载
+        }
+      }
+      next();
+    }
   } else {
-    next();
+    // 如果已登录且访问登录页，重定向到首页
+    if (token && authStore.user) {
+      console.log('[Router] Already logged in, redirecting to dashboard');
+      next({ name: 'dashboard' });
+    } else {
+      next();
+    }
   }
 });
 

@@ -102,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { MessageSquare, RefreshCw } from 'lucide-vue-next';
 import { useBotStore } from '../stores/bot';
 import { useSystemStore } from '@/stores/system';
@@ -111,12 +111,12 @@ const systemStore = useSystemStore();
 const t = (key: string) => systemStore.t(key);
 const botStore = useBotStore();
 const loading = ref(false);
-const messages = ref<any[]>([]);
+const messages = computed(() => botStore.messages.slice().reverse());
 
 const refreshMessages = async () => {
   loading.value = true;
   try {
-    messages.value = await botStore.fetchMessages(100);
+    await botStore.fetchMessages(100);
   } finally {
     loading.value = false;
   }

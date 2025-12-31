@@ -1,14 +1,14 @@
 package redis
 
 import (
-	"BotMatrix/common"
+	"BotMatrix/common/types"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	"botworker/internal/config"
 )
@@ -50,7 +50,7 @@ func NewClient(cfg *config.RedisConfig) (*Client, error) {
 }
 
 // GetSessionContext 获取会话上下文
-func (c *Client) GetSessionContext(platform, userID string) (*common.SessionContext, error) {
+func (c *Client) GetSessionContext(platform, userID string) (*types.SessionContext, error) {
 	ctx := context.Background()
 	key := fmt.Sprintf(REDIS_KEY_SESSION_CONTEXT, platform, userID)
 
@@ -59,7 +59,7 @@ func (c *Client) GetSessionContext(platform, userID string) (*common.SessionCont
 		return nil, err
 	}
 
-	var contextData common.SessionContext
+	var contextData types.SessionContext
 	if err := json.Unmarshal([]byte(val), &contextData); err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (c *Client) GetSessionContext(platform, userID string) (*common.SessionCont
 }
 
 // SetSessionState 设置会话状态
-func (c *Client) SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error {
+func (c *Client) SetSessionState(platform, userID string, state types.SessionState, ttl time.Duration) error {
 	ctx := context.Background()
 	key := fmt.Sprintf(REDIS_KEY_SESSION_STATE, platform, userID)
 
@@ -89,7 +89,7 @@ func (c *Client) SetSessionState(platform, userID string, state common.SessionSt
 }
 
 // GetSessionState 获取会话状态
-func (c *Client) GetSessionState(platform, userID string) (*common.SessionState, error) {
+func (c *Client) GetSessionState(platform, userID string) (*types.SessionState, error) {
 	ctx := context.Background()
 	key := fmt.Sprintf(REDIS_KEY_SESSION_STATE, platform, userID)
 
@@ -98,7 +98,7 @@ func (c *Client) GetSessionState(platform, userID string) (*common.SessionState,
 		return nil, err
 	}
 
-	var state common.SessionState
+	var state types.SessionState
 	if err := json.Unmarshal([]byte(val), &state); err != nil {
 		return nil, err
 	}

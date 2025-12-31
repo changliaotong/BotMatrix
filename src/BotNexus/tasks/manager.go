@@ -30,7 +30,7 @@ func NewTaskManager(db *gorm.DB, rdb *redis.Client, botManager BotManager) *Task
 	scheduler := NewScheduler(db, dispatcher)
 	tagging := NewTaggingManager(db)
 	ai := NewAIParser()
-	interceptors := NewInterceptorManager(db)
+	interceptors := NewInterceptorManager(db, ai)
 
 	return &TaskManager{
 		DB:           db,

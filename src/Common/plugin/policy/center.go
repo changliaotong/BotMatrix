@@ -7,4 +7,8 @@ var CenterActionWhitelist = map[string]bool{
 	"restart_plugin":    true,
 	"stop_plugin":       true,
 	"list_plugins":      true,
+	"storage.get":       true,
+	"storage.set":       true,
+	"storage.delete":    true,
+	"storage.exists":    true,
 }

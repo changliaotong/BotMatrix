@@ -20,7 +20,8 @@ import {
   Route,
   UserCog,
   BookOpen,
-  Activity
+  Activity,
+  Sparkles
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
@@ -45,15 +46,18 @@ const iconMap: Record<string, any> = {
   Route,
   UserCog,
   BookOpen,
-  Activity
+  Activity,
+  Sparkles
 };
 
 // Map item IDs to routes
 const routeMap: Record<string, string> = {
   'dashboard': '/',
+  'ai': '/ai',
   'bots': '/bots',
   'messages': '/messages',
   'workers': '/workers',
+  'plugins': '/plugins',
   'contacts': '/contacts',
   'nexus': '/nexus',
   'visualization': '/visualization',
@@ -160,14 +164,14 @@ const t = (key: string) => systemStore.t(key);
                 <div class="space-y-1">
                     <template v-for="(item, itemIdx) in (group?.items || [])" :key="item?.id || itemIdx">
                         <button v-if="item" 
-                                @click="navigateTo(item.id)"
-                                :class="[
-                                    'w-full flex items-center transition-all duration-200 group relative border border-transparent',
-                                    systemStore.isSidebarCollapsed ? 'justify-center px-0 py-2.5 rounded-lg' : 'gap-3 px-3 py-2 rounded-lg',
-                                    isItemActive(item.id) 
-                                        ? 'bg-[var(--matrix-color)]/10 border-[var(--matrix-color)]/20 text-[var(--matrix-color)] shadow-sm' 
-                                        : 'text-[var(--text-muted)] hover:bg-[var(--matrix-color)]/10 hover:text-[var(--matrix-color)]'
-                                ]">
+        @click="navigateTo(item.id)"
+        :class="[
+            'w-full flex items-center transition-all duration-200 group relative border border-transparent',
+            systemStore.isSidebarCollapsed ? 'justify-center px-0 py-2.5 rounded-lg' : 'gap-3 px-3 py-2 rounded-lg',
+            isItemActive(item.id) 
+                ? 'bg-[var(--matrix-color)]/10 border-[var(--matrix-color)]/20 text-[var(--matrix-color)] shadow-sm active' 
+                : 'text-[var(--text-muted)] hover:bg-[var(--matrix-color)]/10 hover:text-[var(--matrix-color)]'
+        ]">
                             <component :is="iconMap[item.icon]" 
                                :class="[
                                    'w-5 h-5 flex-shrink-0 transition-colors',

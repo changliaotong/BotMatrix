@@ -53,14 +53,14 @@ func (s *Service) ProcessBind(inviterID, inviteeID int64, platform, code, ip, de
 	// 6. 发放基础奖励 (邀请者)
 	if config.InviteRewardPoints > 0 {
 		reason := fmt.Sprintf("成功邀请新用户: %d", inviteeID)
-		_ = db.AddPoints(s.db, inviterID, config.InviteRewardPoints, reason, "fission_invite")
+		_ = db.AddPoints(s.db, 0, inviterID, 0, int64(config.InviteRewardPoints), reason, "fission_invite")
 		_ = db.CreateFissionRewardLog(s.db, inviterID, "points", config.InviteRewardPoints, reason)
 	}
 
 	// 7. 发放基础奖励 (被邀请者)
 	if config.NewUserRewardPoints > 0 {
 		reason := fmt.Sprintf("填写邀请码奖励: %s", code)
-		_ = db.AddPoints(s.db, inviteeID, config.NewUserRewardPoints, reason, "fission_bind")
+		_ = db.AddPoints(s.db, 0, inviteeID, 0, int64(config.NewUserRewardPoints), reason, "fission_bind")
 		_ = db.CreateFissionRewardLog(s.db, inviteeID, "points", config.NewUserRewardPoints, reason)
 	}
 

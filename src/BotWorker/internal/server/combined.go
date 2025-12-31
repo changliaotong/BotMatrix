@@ -4,6 +4,7 @@ import (
 	"BotMatrix/common"
 	"BotMatrix/common/bot"
 	"BotMatrix/common/log"
+	commononebot "BotMatrix/common/onebot"
 	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/session"
 	"BotMatrix/common/types"
@@ -835,6 +836,19 @@ func (s *CombinedServer) HandleQueueEvent(msg map[string]any) {
 	// 只有非元事件才打印详细日志
 	if postType != "meta_event" {
 		log.Printf("[Worker] Processing queue event: post_type=%s, message_type=%s, msg=%v", postType, messageType, msg)
+	}
+
+	// 增加表情占位符转换逻辑 (处理旧版数据库中的占位符)
+	if postType == "message" {
+		if rawMsg, ok := msg["raw_message"].(string); ok && rawMsg != "" {
+			newMsg := commononebot.ConvertLegacyPlaceholders(rawMsg)
+			if newMsg != rawMsg {
+				log.Printf("[Worker] Converted legacy placeholders: %s -> %s", rawMsg, newMsg)
+				msg["raw_message"] = newMsg
+				// 同时更新 message 字段，确保后续处理使用转换后的内容
+				msg["message"] = newMsg
+			}
+		}
 	}
 
 	// 将 map 转换为 onebot.Event

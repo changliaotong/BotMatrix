@@ -1,8 +1,0 @@
-{
-  "name": "greetings",
-  "description": "greetings plugin",
-  "version": "1.0.0",
-  "entry_point": "greetings.exe",
-  "timeout_ms": 5000,
-  "max_restarts": 3
-}

@@ -1,9 +1,9 @@
 package server
 
 import (
+	"BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
-	"BotMatrix/common/log"
 	"net/http"
 	"sync"
 	"time"
@@ -154,7 +154,11 @@ func (s *WebSocketServer) DispatchEvent(event *onebot.Event) {
 	}
 
 	// 分发到命名事件处理器
-	if handlers, ok := s.eventHandlers[event.EventName]; ok {
+	eventName := event.EventName
+	if eventName == "" {
+		eventName = event.PostType
+	}
+	if handlers, ok := s.eventHandlers[eventName]; ok {
 		for _, handler := range handlers {
 			if err := handler(event); err != nil {
 				log.Println("事件处理错误:", err)
@@ -235,35 +239,35 @@ func (s *WebSocketServer) Stop() {
 }
 
 func (s *WebSocketServer) SendMessage(params *onebot.SendMessageParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("send_msg", params)
+	return s.CallAction("send_msg", params)
 }
 
 func (s *WebSocketServer) DeleteMessage(params *onebot.DeleteMessageParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("delete_msg", params)
+	return s.CallAction("delete_msg", params)
 }
 
 func (s *WebSocketServer) SendLike(params *onebot.SendLikeParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("send_like", params)
+	return s.CallAction("send_like", params)
 }
 
 func (s *WebSocketServer) SetGroupKick(params *onebot.SetGroupKickParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("set_group_kick", params)
+	return s.CallAction("set_group_kick", params)
 }
 
 func (s *WebSocketServer) SetGroupBan(params *onebot.SetGroupBanParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("set_group_ban", params)
+	return s.CallAction("set_group_ban", params)
 }
 
 func (s *WebSocketServer) GetGroupMemberList(params *onebot.GetGroupMemberListParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("get_group_member_list", params)
+	return s.CallAction("get_group_member_list", params)
 }
 
 func (s *WebSocketServer) GetGroupMemberInfo(params *onebot.GetGroupMemberInfoParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("get_group_member_info", params)
+	return s.CallAction("get_group_member_info", params)
 }
 
 func (s *WebSocketServer) SetGroupSpecialTitle(params *onebot.SetGroupSpecialTitleParams) (*onebot.Response, error) {
-	return s.sendAPIRequest("set_group_special_title", params)
+	return s.CallAction("set_group_special_title", params)
 }
 
 func (s *WebSocketServer) GetSelfID() int64 {
@@ -271,7 +275,7 @@ func (s *WebSocketServer) GetSelfID() int64 {
 	return 123456789
 }
 
-func (s *WebSocketServer) sendAPIRequest(action string, params any) (*onebot.Response, error) {
+func (s *WebSocketServer) CallAction(action string, params any) (*onebot.Response, error) {
 	// 获取第一个客户端连接
 	s.clientsMutex.Lock()
 	var conn *websocket.Conn

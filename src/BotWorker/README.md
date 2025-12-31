@@ -122,8 +122,6 @@ BotWorker/
 │   │   ├── event.go         # 事件数据结构
 │   │   ├── request.go       # 请求和响应数据结构
 │   │   └── robot.go         # 机器人接口定义
-│   ├── plugin/              # 插件系统
-│   │   └── plugin.go        # 插件接口和管理器
 │   ├── server/              # 服务器实现
 │   │   ├── websocket.go     # WebSocket服务器
 │   │   ├── http.go          # HTTP服务器

@@ -1,7 +1,0 @@
-websockets
-asyncio
-psutil
-matplotlib
-pillow
-requests
-numpy

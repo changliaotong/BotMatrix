@@ -49,22 +49,23 @@ const fetchRules = async () => {
       botStore.fetchWorkers()
     ]);
     
-    if (rulesData && rulesData.success) {
+    if (rulesData && rulesData.success && rulesData.data) {
       // Convert map to array if necessary
-      if (rulesData.rules && typeof rulesData.rules === 'object' && !Array.isArray(rulesData.rules)) {
-        rules.value = Object.entries(rulesData.rules).map(([key, worker_id]) => ({
+      const rulesObj = rulesData.data.rules;
+      if (rulesObj && typeof rulesObj === 'object' && !Array.isArray(rulesObj)) {
+        rules.value = Object.entries(rulesObj).map(([key, worker_id]) => ({
           key,
           worker_id
         }));
       } else {
-        rules.value = rulesData.rules || [];
+        rules.value = rulesObj || [];
       }
     } else {
       error.value = rulesData?.message || 'Failed to fetch rules';
     }
 
-    if (workersData && workersData.success) {
-      workers.value = workersData.workers || [];
+    if (workersData && workersData.success && workersData.data) {
+      workers.value = workersData.data.workers || [];
     }
   } catch (err: any) {
     console.error('Failed to fetch routing data:', err);

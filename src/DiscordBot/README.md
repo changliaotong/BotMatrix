@@ -23,12 +23,21 @@ DiscordBot supports message recall via the `delete_msg` action.
 
 ## 🛠 Configuration
 
-Create a `config.json` file in the root directory:
+DiscordBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:8084/config-ui` (default port is 8084).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
     "bot_token": "YOUR_DISCORD_BOT_TOKEN",
-    "nexus_addr": "ws://bot-manager:3005"
+    "nexus_addr": "ws://bot-nexus:3005",
+    "log_port": 8084
 }
 ```
 
@@ -40,6 +49,12 @@ Create a `config.json` file in the root directory:
 4.  **Important**: Enable **Message Content Intent** under "Privileged Gateway Intents".
 5.  Copy **Token** to `config.json`.
 6.  Invite Bot to server: `OAuth2` -> `URL Generator` -> `bot` scope -> Copy URL.
+
+| Field | Description |
+| :--- | :--- |
+| `bot_token` | Your Discord Bot Token. |
+| `nexus_addr` | Address of the BotNexus WebSocket server. |
+| `log_port` | Port for the Web UI and Log viewer. |
 
 ## 🚀 Deployment
 

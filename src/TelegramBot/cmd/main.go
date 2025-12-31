@@ -5,37 +5,43 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
-	common "BotMatrix/src/Common"
+	"BotMatrix/common/bot"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 var (
-	botService *common.BaseBot
+	botService *bot.BaseBot
 	tgBot      *tgbotapi.BotAPI
 	botCtx     context.Context
 	botCancel  context.CancelFunc
 )
 
 func main() {
-	botService = common.NewBaseBot(8087)
+	botService = bot.NewBaseBot(8087)
 	log.SetOutput(botService.LogManager)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	botService.LoadConfig("config.json")
 
-	botService.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/config-ui", http.StatusFound)
-			return
-		}
-		http.NotFound(w, r)
+	// Setup standard handlers using the new abstracted logic
+	botService.SetupStandardHandlers("TelegramBot", &botService.Config, restartBot, []bot.ConfigSection{
+		{
+			Title: "Telegram API 配置",
+			Fields: []bot.ConfigField{
+				{Label: "Bot Token", ID: "bot_token", Type: "password", Value: botService.Config.BotToken},
+			},
+		},
+		{
+			Title: "连接配置",
+			Fields: []bot.ConfigField{
+				{Label: "BotNexus 地址", ID: "nexus_addr", Type: "text", Value: botService.Config.NexusAddr},
+				{Label: "Web UI 端口", ID: "log_port", Type: "number", Value: botService.Config.LogPort},
+			},
+		},
 	})
-	botService.Mux.HandleFunc("/config", handleConfig)
-	botService.Mux.HandleFunc("/config-ui", handleConfigUI)
 
 	go botService.StartHTTPServer()
 
@@ -157,7 +163,33 @@ func handleMessage(msg *tgbotapi.Message, selfID string) {
 	botService.SendToNexus(obMsg)
 }
 
-func handleNexusCommand(action string, params map[string]any) (any, error) {
+func handleNexusCommand(data []byte) {
+	var cmd struct {
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
+	}
+	if err := json.Unmarshal(data, &cmd); err != nil {
+		return
+	}
+
+	log.Printf("Received Action: %s", cmd.Action)
+	result, err := handleAction(cmd.Action, cmd.Params)
+
+	resp := map[string]any{
+		"echo": cmd.Echo,
+	}
+	if err != nil {
+		resp["status"] = "failed"
+		resp["msg"] = err.Error()
+	} else {
+		resp["status"] = "ok"
+		resp["data"] = result
+	}
+	botService.SendToNexus(resp)
+}
+
+func handleAction(action string, params map[string]any) (any, error) {
 	switch action {
 	case "send_msg":
 		return sendTelegramMessage(params)
@@ -223,99 +255,4 @@ func deleteTelegramMessage(params map[string]any) (any, error) {
 	delMsg := tgbotapi.NewDeleteMessage(chatID, messageID)
 	_, err := tgBot.Request(delMsg)
 	return nil, err
-}
-
-func handleConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		botService.Mu.RLock()
-		defer botService.Mu.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(botService.Config)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var newConfig common.BotConfig
-		if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		botService.Mu.Lock()
-		botService.Config.BotToken = newConfig.BotToken
-		botService.Config.NexusAddr = newConfig.NexusAddr
-		botService.Mu.Unlock()
-
-		botService.SaveConfig("config.json")
-
-		go restartBot()
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Config updated and bot restarting"))
-		return
-	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-}
-
-func handleConfigUI(w http.ResponseWriter, r *http.Request) {
-	botService.Mu.RLock()
-	cfg := botService.Config
-	botService.Mu.RUnlock()
-
-	html := fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>TelegramBot 控制面板</title>
-    <style>
-        :root {
-            --primary-color: #0088cc;
-            --bg-color: #f4f7f9;
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg-color); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 100%%; max-width: 400px; }
-        h1 { margin-top: 0; color: #333; font-size: 1.5rem; text-align: center; }
-        .form-group { margin-bottom: 1.5rem; }
-        label { display: block; margin-bottom: 0.5rem; color: #666; font-size: 0.9rem; }
-        input { width: 100%%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
-        button { width: 100%%; padding: 0.75rem; background: var(--primary-color); color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
-        button:hover { opacity: 0.9; }
-        .footer { margin-top: 1.5rem; text-align: center; font-size: 0.8rem; color: #999; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h1>TelegramBot 配置</h1>
-        <div class="form-group">
-            <label>Bot Token</label>
-            <input type="password" id="botToken" value="%s" placeholder="输入 Telegram Bot Token">
-        </div>
-        <div class="form-group">
-            <label>Nexus 地址</label>
-            <input type="text" id="nexusAddr" value="%s" placeholder="例如 ws://localhost:8000/bot/ws">
-        </div>
-        <button onclick="saveConfig()">保存并重启</button>
-        <div class="footer">BotMatrix Ecosystem</div>
-    </div>
-    <script>
-        function saveConfig() {
-            const botToken = document.getElementById('botToken').value;
-            const nexusAddr = document.getElementById('nexusAddr').value;
-            fetch('/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bot_token: botToken, nexus_addr: nexusAddr })
-            }).then(res => {
-                if (res.ok) alert('配置已保存，机器人正在重启...');
-                else alert('保存失败');
-            });
-        }
-    </script>
-</body>
-</html>`, cfg.BotToken, cfg.NexusAddr)
-
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(html))
 }

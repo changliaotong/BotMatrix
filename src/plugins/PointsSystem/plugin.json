@@ -1,0 +1,51 @@
+{
+  "id": "com.botmatrix.official.bank",
+  "name": "Points System (Central Bank)",
+  "version": "1.0.0",
+  "author": "BotMatrix Official",
+  "description": "The central financial system for BotMatrix, supporting Global, Group, and Local points.",
+  "entry_point": "dotnet PointsSystem.dll",
+  "permissions": [
+    "send_message",
+    "storage.get",
+    "storage.set",
+    "storage.delete",
+    "storage.exists"
+  ],
+  "intents": [
+    {
+      "name": "check_points",
+      "keywords": ["积分", "余额", "points", "balance"],
+      "description": "Check current user points in all tiers."
+    }
+  ],
+  "actions": [
+    {
+      "name": "transfer_global",
+      "description": "Transfer global points (cross-bot, cross-group). Requires official permission."
+    },
+    {
+      "name": "transfer_group",
+      "description": "Transfer group-specific points (only valid within current group). Consumes group treasury."
+    },
+    {
+      "name": "transfer_local",
+      "description": "Transfer bot-local points (specific to current bot instance)."
+    },
+    {
+      "name": "get_balance",
+      "description": "Get balance for a specific user and tier."
+    }
+  ],
+  "config": {
+    "official_plugins": [
+      "com.botmatrix.official.bank",
+      "com.botmatrix.official.mall",
+      "com.botmatrix.official.sign"
+    ],
+    "thresholds": {
+      "today_total": 500,
+      "rolling_12m": 1000
+    }
+  }
+}

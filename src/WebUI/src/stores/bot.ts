@@ -105,15 +105,71 @@ export const useBotStore = defineStore('bot', {
       }
     },
 
+    // --- Plugin Management API ---
+    async fetchPlugins() {
+      try {
+        const { data } = await api.get('/api/admin/plugins/list');
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch plugins:', err);
+        return { success: false, message: 'Failed to fetch plugins' };
+      }
+    },
+    async pluginAction(id: string, action: string, type: string, source: string) {
+      try {
+        const { data } = await api.post('/api/admin/plugins/action', {
+          id,
+          action,
+          type,
+          source
+        });
+        return data;
+      } catch (err) {
+        console.error('Plugin action failed:', err);
+        return { success: false, message: 'Action failed' };
+      }
+    },
+    async installPlugin(file: File, target: string = 'nexus') {
+      try {
+        const formData = new FormData();
+        formData.append('plugin', file);
+        formData.append('target', target);
+        
+        const { data } = await api.post('/api/admin/plugins/install', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        return data;
+      } catch (err) {
+        console.error('Plugin installation failed:', err);
+        return { success: false, message: 'Installation failed' };
+      }
+    },
+    async deletePlugin(id: string, version: string, source: string) {
+      try {
+        const { data } = await api.post('/api/admin/plugins/delete', {
+          id,
+          version,
+          source
+        });
+        return data;
+      } catch (err) {
+        console.error('Plugin deletion failed:', err);
+        return { success: false, message: 'Deletion failed' };
+      }
+    },
+
     // --- Bot & Worker Management ---
     async fetchBots() {
       try {
         const { data } = await api.get('/api/admin/bots');
-        if (data.success) {
-          this.bots = data.bots;
+        if (data.success && data.data) {
+          this.bots = data.data.bots || [];
         }
       } catch (err) {
         console.error('Failed to fetch bots:', err);
+        throw err;
       }
     },
     async addBot(config: any) {
@@ -174,20 +230,27 @@ export const useBotStore = defineStore('bot', {
     async fetchStats() {
       try {
         const { data } = await api.get('/api/admin/stats');
-        if (data.success) {
-          this.stats = data.stats;
+        if (data.success && data.data) {
+          // Backend returns { stats: { ... } }, so we need to extract data.data.stats
+          this.stats = data.data.stats || data.data;
+        } else {
+          // Keep existing stats or set to empty object if null
+          this.stats = this.stats || {};
         }
       } catch (err) {
         console.error('Failed to fetch stats:', err);
+        this.stats = this.stats || {};
+        throw err; // Propagate error for Dashboard to handle
       }
     },
 
     async fetchMessages(limit = 50) {
       try {
         const { data } = await api.get(`/api/admin/messages?limit=${limit}`);
-        if (data.success) {
-          this.messages = data.messages;
-          return data.messages;
+        if (data.success && data.data) {
+          const msgs = data.data.messages || [];
+          this.messages = msgs;
+          return msgs;
         }
         return [];
       } catch (err) {
@@ -393,10 +456,10 @@ export const useBotStore = defineStore('bot', {
         if (data.success) {
           return data.data;
         }
-        return data;
+        return null;
       } catch (err) {
         console.error('Failed to fetch chat stats:', err);
-        return null;
+        throw err;
       }
     },
     async fetchUsers() {
@@ -605,6 +668,59 @@ export const useBotStore = defineStore('bot', {
           req.resolve(message);
         }
       }
-    }
-  },
+
+      // 处理广播事件
+      if (message.post_type === 'message') {
+        // 如果是消息事件，添加到消息列表
+        const newMessage = {
+          id: message.message_id,
+          bot_id: message.self_id,
+          self_id: message.self_id,
+          user_id: message.user_id,
+          target_id: message.target_id,
+          group_id: message.group_id,
+          message_type: message.message_type,
+          content: message.message || message.raw_message,
+          raw_message: message.raw_message,
+          sender: message.sender,
+          time: message.time,
+          created_at: new Date(message.time * 1000).toISOString()
+        };
+        
+        // 检查是否已经存在（避免重复）
+        const exists = this.messages.some(m => m.id === newMessage.id);
+        if (!exists) {
+          this.messages.push(newMessage);
+          // 保持消息数量在合理范围内
+          if (this.messages.length > 500) {
+            this.messages = this.messages.slice(-500);
+          }
+        }
+      } else if (message.type === 'skill_result') {
+        // 处理技能执行结果广播
+        console.log('Received skill result:', message.data);
+        const skillResult = message.data;
+        if (skillResult && skillResult.result) {
+          // 如果技能有结果，将其作为一条系统消息或机器人消息显示
+          const resultMessage = {
+            id: `skill_${skillResult.execution_id || Date.now()}`,
+            bot_id: skillResult.bot_id,
+            self_id: skillResult.bot_id,
+            user_id: skillResult.bot_id, // 机器人发送的结果
+            target_id: skillResult.user_id,
+            group_id: skillResult.group_id,
+            message_type: skillResult.group_id ? 'group' : 'private',
+            content: `[Skill Result] ${skillResult.result}`,
+            raw_message: skillResult.result,
+            time: Math.floor(Date.now() / 1000),
+            created_at: new Date().toISOString(),
+            is_skill_result: true
+          };
+          this.messages.push(resultMessage);
+        }
+      } else if (message.type === 'worker_update') {
+        // 处理 Worker 更新广播
+        // 可以在这里更新 workers 列表状态
+      }
+    },
 });

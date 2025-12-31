@@ -533,6 +533,7 @@ func (w *ExternalPluginWrapper) GetSkills() []core.SkillCapability {
 			Name:        intent.Name,
 			Description: w.plugin.Config.Description,
 			Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
+			Regex:       intent.Regex,
 		})
 	}
 	return skills

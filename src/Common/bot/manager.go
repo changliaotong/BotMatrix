@@ -240,6 +240,70 @@ func (m *Manager) LoadUsersFromDB() error {
 	return nil
 }
 
+// LoadBotsFromDB 从数据库加载所有 Online 平台机器人到内存
+func (m *Manager) LoadBotsFromDB() error {
+	if m.GORMDB == nil {
+		return fmt.Errorf("GORMDB is not initialized")
+	}
+
+	var dbBots []models.BotEntityGORM
+	// 我们目前只自动加载 Online 平台的机器人，其他平台的由其自身的 client 连接
+	if err := m.GORMDB.Where("platform = ?", "Online").Find(&dbBots).Error; err != nil {
+		return fmt.Errorf("failed to load bots from DB: %v", err)
+	}
+
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+
+	if m.Bots == nil {
+		m.Bots = make(map[string]*types.BotClient)
+	}
+
+	for _, b := range dbBots {
+		// 如果内存中已经存在（可能已经连接），则跳过
+		if _, exists := m.Bots[b.SelfID]; exists {
+			continue
+		}
+
+		m.Bots[b.SelfID] = &types.BotClient{
+			SelfID:    b.SelfID,
+			Nickname:  b.Nickname,
+			Platform:  b.Platform,
+			Protocol:  "v11", // 默认为 v11
+			Connected: time.Now(),
+		}
+
+		// 为 Online 机器人初始化模拟联系人
+		m.CacheMutex.Lock()
+		if m.GroupCache == nil {
+			m.GroupCache = make(map[string]types.GroupInfo)
+		}
+		if m.FriendCache == nil {
+			m.FriendCache = make(map[string]types.FriendInfo)
+		}
+
+		// 添加一个模拟群组
+		mockGroupID := "10001"
+		m.GroupCache[mockGroupID] = types.GroupInfo{
+			BotID:     b.SelfID,
+			GroupID:   mockGroupID,
+			GroupName: "模拟群聊 (Online)",
+		}
+
+		// 添加一个模拟好友
+		mockFriendID := "admin"
+		m.FriendCache[mockFriendID] = types.FriendInfo{
+			BotID:    b.SelfID,
+			UserID:   mockFriendID,
+			Nickname: "管理员 (Mock)",
+		}
+		m.CacheMutex.Unlock()
+	}
+
+	log.Printf("Loaded %d online bots from database", len(dbBots))
+	return nil
+}
+
 // TrackBotDisconnection tracks bot disconnection events
 func (m *Manager) TrackBotDisconnection(botID string, reason string, duration time.Duration) {
 	m.ConnectionStats.Mutex.Lock()

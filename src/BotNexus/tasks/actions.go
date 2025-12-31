@@ -1,17 +1,19 @@
 package tasks
 
 import (
-	"BotMatrix/common"
+	"BotMatrix/common/types"
 	"context"
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // BotManager 定义调度中心需要的机器人管理能力
 type BotManager interface {
 	SendBotAction(botID string, action string, params any) error
-	SendToWorker(workerID string, msg common.WorkerCommand) error
+	SendToWorker(workerID string, msg types.WorkerCommand) error
 	FindWorkerBySkill(skillName string) string // 返回 WorkerID
 	GetTags(targetType string, targetID string) []string
 	GetTargetsByTags(targetType string, tags []string, logic string) []string
@@ -48,7 +50,7 @@ func (d *Dispatcher) handleSkillCall(task Task, execution *Execution) error {
 		return fmt.Errorf("no worker available for skill: %s", skillName)
 	}
 
-	cmd := common.WorkerCommand{
+	cmd := types.WorkerCommand{
 		Type:        "skill_call",
 		Skill:       skillName,
 		Params:      params,
@@ -66,8 +68,11 @@ func (d *Dispatcher) sendToQueue(queue string, payload []byte) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// 使用 RPush 配合 Worker 端的 BLPop 实现 FIFO 队列
-	return d.rdb.RPush(ctx, queue, payload).Err()
+	// 使用 Redis Streams (XAdd) 代替 RPush，以匹配 Worker 的实现
+	return d.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: queue,
+		Values: map[string]interface{}{"payload": payload},
+	}).Err()
 }
 
 func (d *Dispatcher) handleSendMessage(task Task, execution *Execution) error {

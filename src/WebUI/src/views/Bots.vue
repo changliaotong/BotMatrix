@@ -81,13 +81,18 @@ const showAddModal = ref(false);
 const showLogModal = ref(false);
 const showMatrixModal = ref(false);
 const matrixLoading = ref(false);
-const matrixTab = ref('groups'); // groups, friends, batch
+const matrixTab = ref('groups'); // groups, friends, batch, actions, chat
 const matrixSearchQuery = ref('');
 const selectedBotForMatrix = ref<any>(null);
 const matrixGroups = ref<any[]>([]);
 const matrixFriends = ref<any[]>([]);
 const selectedTargets = ref<Set<string>>(new Set());
 const batchMessage = ref('');
+const onebotAction = ref('');
+const onebotParams = ref('');
+const actionResult = ref<any>(null);
+const chatMessage = ref('');
+const chatHistory = ref<any[]>([]);
 const showMemberModal = ref(false);
 const selectedGroupForMembers = ref<any>(null);
 const groupMembers = ref<any[]>([]);
@@ -98,6 +103,17 @@ const logTimer = ref<number | null>(null);
 const selectedBot = ref<any>(null);
 
 const platforms = [
+  { 
+    id: 'Online', 
+    name: 'platform_online', 
+    icon: Globe, 
+    color: 'text-green-500', 
+    image: 'botmatrix-onlinebot',
+    fields: [
+      { key: 'ONLINE_BOT_ID', label: 'bot_id', type: 'text', placeholder: 'online_bot_id_placeholder' },
+      { key: 'ONLINE_BOT_NAME', label: 'bot_nickname', type: 'text', placeholder: 'online_bot_name_placeholder' }
+    ]
+  },
   { 
     id: 'Kook', 
     name: 'platform_kook', 
@@ -308,9 +324,9 @@ const openMatrixModal = async (bot: any) => {
   
   try {
     const res = await botStore.fetchContacts(bot.id);
-    if (res.success) {
-      matrixGroups.value = res.contacts.filter((c: any) => c.type === 'group');
-      matrixFriends.value = res.contacts.filter((c: any) => c.type === 'private');
+    if (res.success && res.data) {
+      matrixGroups.value = res.data.contacts.filter((c: any) => c.type === 'group');
+      matrixFriends.value = res.data.contacts.filter((c: any) => c.type === 'private');
     }
   } catch (err) {
     console.error('Failed to fetch contacts:', err);
@@ -327,9 +343,9 @@ const syncContacts = async () => {
     // Refresh lists after a short delay to allow sync to complete
     setTimeout(async () => {
       const res = await botStore.fetchContacts(selectedBotForMatrix.value.id);
-      if (res.success) {
-        matrixGroups.value = res.contacts.filter((c: any) => c.type === 'group');
-        matrixFriends.value = res.contacts.filter((c: any) => c.type === 'private');
+      if (res.success && res.data) {
+        matrixGroups.value = res.data.contacts.filter((c: any) => c.type === 'group');
+        matrixFriends.value = res.data.contacts.filter((c: any) => c.type === 'private');
       }
       matrixLoading.value = false;
     }, 2000);
@@ -375,6 +391,75 @@ const sendBatchMessage = async () => {
     alert(t('batch_send_failed') + ': ' + err);
   } finally {
     isLoading.value = false;
+  }
+};
+
+const sendOneBotAction = async () => {
+  if (!onebotAction.value.trim() || !selectedBotForMatrix.value) return;
+
+  try {
+    isLoading.value = true;
+    actionResult.value = null;
+    
+    let params = {};
+    if (onebotParams.value.trim()) {
+      try {
+        params = JSON.parse(onebotParams.value);
+      } catch (e) {
+        alert('Invalid JSON in params');
+        return;
+      }
+    }
+
+    const res = await botStore.callBotApi(onebotAction.value, params, selectedBotForMatrix.value.id);
+    actionResult.value = res;
+    
+    if (res.status === 'ok' || res.success) {
+      // alert(t('action_success'));
+    } else {
+      alert(t('action_failed'));
+    }
+  } catch (err) {
+    alert(t('action_failed') + ': ' + err);
+    actionResult.value = { error: String(err) };
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const sendChatMessage = async () => {
+  if (!chatMessage.value.trim() || !selectedBotForMatrix.value) return;
+
+  const msgContent = chatMessage.value;
+  chatMessage.value = '';
+
+  // 添加用户消息到历史
+  chatHistory.value.push({
+    role: 'user',
+    content: msgContent,
+    time: new Date().toLocaleTimeString()
+  });
+
+  try {
+    // 模拟发送私聊消息给机器人自己（作为一种在线交互方式）
+    const res = await botStore.callBotApi('send_private_msg', {
+      user_id: 'admin',
+      message: msgContent
+    }, selectedBotForMatrix.value.id);
+
+    if (res.status === 'ok' || res.success) {
+      // 模拟机器人回复（由于是在线机器人，我们可以在这里通过后端上报逻辑触发，或者前端先模拟显示）
+      // 这里的逻辑可以根据实际后端对 Online 平台的处理来调整
+      setTimeout(() => {
+        chatHistory.value.push({
+          role: 'bot',
+          content: '收到消息: ' + msgContent,
+          time: new Date().toLocaleTimeString()
+        });
+      }, 500);
+    }
+  } catch (err) {
+    console.error('Chat failed:', err);
   }
 };
 
@@ -734,19 +819,19 @@ const filteredFriends = computed(() => {
           <div class="flex flex-col sm:flex-row gap-4 flex-shrink-0">
             <div class="flex bg-black/5 dark:bg-white/5 p-1 rounded-xl w-fit">
               <button 
-                v-for="tab in ['groups', 'friends', 'batch']" 
+                v-for="tab in ['groups', 'friends', 'batch', 'actions', 'chat']" 
                 :key="tab"
                 @click="matrixTab = tab"
                 :class="['px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all', 
                   matrixTab === tab ? 'bg-[var(--bg-card)] text-[var(--matrix-color)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]']"
               >
-                {{ t(tab === 'groups' ? 'group_list' : tab === 'friends' ? 'friend_list' : 'batch_messaging') }}
+                {{ t(tab === 'groups' ? 'group_list' : tab === 'friends' ? 'friend_list' : tab === 'batch' ? 'batch_messaging' : tab === 'actions' ? 'onebot_actions' : 'online_chat') }}
                 <span v-if="tab === 'batch' && selectedTargets.size > 0" class="ml-1 px-1.5 py-0.5 rounded-full bg-[var(--matrix-color)] text-black text-[8px]">
                   {{ selectedTargets.size }}
                 </span>
               </button>
             </div>
-            <div v-if="matrixTab !== 'batch'" class="relative flex-1">
+            <div v-if="matrixTab !== 'batch' && matrixTab !== 'actions' && matrixTab !== 'chat'" class="relative flex-1">
               <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
               <input 
                 v-model="matrixSearchQuery"
@@ -887,6 +972,83 @@ const filteredFriends = computed(() => {
                 <Send class="w-4 h-4" />
                 {{ isLoading ? t('sending') : t('send_now') }}
               </button>
+            </div>
+
+            <!-- Actions Tab -->
+            <div v-else-if="matrixTab === 'actions'" class="space-y-6">
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest ml-2">{{ t('action_name') }}</label>
+                <input 
+                  v-model="onebotAction"
+                  type="text"
+                  class="w-full px-5 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-transparent focus:border-[var(--matrix-color)] focus:ring-0 transition-all text-sm text-[var(--text-main)]"
+                  :placeholder="t('action_placeholder')"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest ml-2">{{ t('action_params') }}</label>
+                <textarea 
+                  v-model="onebotParams"
+                  rows="6"
+                  class="w-full px-5 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-transparent focus:border-[var(--matrix-color)] focus:ring-0 transition-all text-sm text-[var(--text-main)] resize-none font-mono"
+                  :placeholder="t('params_placeholder')"
+                ></textarea>
+              </div>
+
+              <div v-if="actionResult" class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)]">
+                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2">{{ t('result') }}</p>
+                <pre class="text-xs font-mono text-[var(--text-main)] overflow-x-auto">{{ JSON.stringify(actionResult, null, 2) }}</pre>
+              </div>
+
+              <button 
+                @click="sendOneBotAction"
+                :disabled="isLoading || !onebotAction.trim()"
+                class="w-full py-4 rounded-2xl bg-[var(--matrix-color)] text-black text-xs font-black uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[var(--matrix-color)]/20"
+              >
+                <Terminal class="w-4 h-4" />
+                {{ isLoading ? t('processing') : t('send_action') }}
+              </button>
+            </div>
+
+            <!-- Chat Tab -->
+            <div v-else-if="matrixTab === 'chat'" class="flex flex-col h-full space-y-4">
+              <div class="flex-1 min-h-0 bg-black/5 dark:bg-white/5 rounded-2xl p-4 overflow-y-auto custom-scrollbar space-y-4">
+                <div v-if="chatHistory.length === 0" class="h-full flex flex-col items-center justify-center text-[var(--text-muted)] opacity-50">
+                  <MessageSquare class="w-12 h-12 mb-2" />
+                  <p class="text-xs font-bold uppercase tracking-widest">{{ t('no_messages') }}</p>
+                </div>
+                <div 
+                  v-for="(msg, idx) in chatHistory" 
+                  :key="idx"
+                  :class="['flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start']"
+                >
+                  <div 
+                    :class="['max-w-[80%] p-3 rounded-2xl text-sm', 
+                      msg.role === 'user' ? 'bg-[var(--matrix-color)] text-black rounded-tr-none' : 'bg-black/10 dark:bg-white/10 text-[var(--text-main)] rounded-tl-none']"
+                  >
+                    {{ msg.content }}
+                  </div>
+                  <span class="text-[8px] text-[var(--text-muted)] mt-1 px-1">{{ msg.time }}</span>
+                </div>
+              </div>
+
+              <div class="flex gap-2">
+                <input 
+                  v-model="chatMessage"
+                  type="text"
+                  class="flex-1 px-5 py-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-transparent focus:border-[var(--matrix-color)] focus:ring-0 transition-all text-sm text-[var(--text-main)]"
+                  :placeholder="t('chat_placeholder')"
+                  @keyup.enter="sendChatMessage"
+                />
+                <button 
+                  @click="sendChatMessage"
+                  :disabled="!chatMessage.trim()"
+                  class="p-3 rounded-2xl bg-[var(--matrix-color)] text-black hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-[var(--matrix-color)]/20"
+                >
+                  <Send class="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

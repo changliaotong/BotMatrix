@@ -41,4 +41,4 @@ This plugin requires the following BotMatrix permissions:
 ## 📝 Developer Info
 - **Version**: 1.0.0
 - **SDK Version**: BotMatrix C# SDK v3.0
-- **Language**: C# (net6.0)
+- **Language**: C# (net8.0)

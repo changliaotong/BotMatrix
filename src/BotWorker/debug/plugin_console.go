@@ -1,12 +1,12 @@
 package main
 
 import (
-	"BotMatrix/common"
 	"BotMatrix/common/log"
-	"bufio"
+	"BotMatrix/common/plugin/core"
+	"BotMatrix/common/types"
 	"botworker/internal/onebot"
-	"botworker/internal/plugin"
 	"botworker/plugins"
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -14,33 +14,33 @@ import (
 )
 
 type TestRobot struct {
-	plugins []plugin.Plugin
-	skills  map[string]plugin.Skill
+	plugins []core.PluginModule
+	skills  map[string]core.Skill
 }
 
 func NewTestRobot() *TestRobot {
 	return &TestRobot{
-		skills: make(map[string]plugin.Skill),
+		skills: make(map[string]core.Skill),
 	}
 }
 
-func (r *TestRobot) OnMessage(fn onebot.EventHandler) {
+func (r *TestRobot) OnMessage(fn func(event map[string]any)) {
 	// 测试环境不实现消息监听
 }
 
-func (r *TestRobot) OnNotice(fn onebot.EventHandler) {
+func (r *TestRobot) OnNotice(fn func(event map[string]any)) {
 	// 测试环境不实现通知监听
 }
 
-func (r *TestRobot) OnRequest(fn onebot.EventHandler) {
+func (r *TestRobot) OnRequest(fn func(event map[string]any)) {
 	// 测试环境不实现请求监听
 }
 
-func (r *TestRobot) OnEvent(eventName string, fn onebot.EventHandler) {
+func (r *TestRobot) OnEvent(eventName string, fn func(event map[string]any)) {
 	// 测试环境不实现事件监听
 }
 
-func (r *TestRobot) HandleAPI(action string, fn onebot.RequestHandler) {
+func (r *TestRobot) HandleAPI(action string, fn any) {
 	// 测试环境不实现API处理
 }
 
@@ -88,15 +88,15 @@ func (r *TestRobot) GetSelfID() int64 {
 	return 123456
 }
 
-func (r *TestRobot) GetSessionContext(platform, userID string) (*common.SessionContext, error) {
+func (r *TestRobot) GetSessionContext(platform, userID string) (*types.SessionContext, error) {
 	return nil, nil
 }
 
-func (r *TestRobot) SetSessionState(platform, userID string, state common.SessionState, ttl time.Duration) error {
+func (r *TestRobot) SetSessionState(platform, userID string, state types.SessionState, ttl time.Duration) error {
 	return nil
 }
 
-func (r *TestRobot) GetSessionState(platform, userID string) (*common.SessionState, error) {
+func (r *TestRobot) GetSessionState(platform, userID string) (*types.SessionState, error) {
 	return nil, nil
 }
 
@@ -117,18 +117,26 @@ func (r *TestRobot) CallSkill(skillName string, params map[string]string) (strin
 	return skill(params)
 }
 
+func (r *TestRobot) CallPluginAction(pluginID string, action string, payload map[string]any) (any, error) {
+	// 测试环境不实现插件动作调用
+	return nil, nil
+}
+
+func (r *TestRobot) CallBotAction(action string, params any) (any, error) {
+	// 测试环境不实现机器人动作调用
+	return nil, nil
+}
+
 func main() {
 	// 初始化测试机器人
 	robot := NewTestRobot()
 
 	// 加载所有插件
-	pluginManager := plugin.NewManager(robot)
+	pm := core.NewPluginManager()
 
-	// 注册插件
-	pluginManager.LoadPlugin(&plugins.EchoPlugin{})
-	pluginManager.LoadPlugin(plugins.NewTimePlugin())
-	pluginManager.LoadPlugin(plugins.NewWeatherPlugin(nil))
-	pluginManager.LoadPlugin(&plugins.WelcomePlugin{})
+	// 加载 PointsProxy (模拟内部插件)
+	pointsProxy := &plugins.PointsProxy{}
+	pm.LoadPluginModule(pointsProxy, robot)
 
 	fmt.Println("Plugin Console")
 	fmt.Println("===================")
@@ -151,10 +159,11 @@ func main() {
 		}
 
 		if input == "list" {
-			plugins := pluginManager.GetPlugins()
-			log.Printf("Loaded plugins (%d):", len(plugins))
-			for _, p := range plugins {
-				log.Printf("  - %s: %s (v%s)", p.Name(), p.Description(), p.Version())
+			// 内部插件
+			internalPlugins := pm.GetInternalPlugins()
+			log.Printf("Loaded internal plugins (%d):", len(internalPlugins))
+			for name, p := range internalPlugins {
+				log.Printf("  - %s: %s (v%s)", name, p.Description(), p.Version())
 			}
 			continue
 		}

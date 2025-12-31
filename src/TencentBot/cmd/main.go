@@ -1,13 +1,12 @@
 package main
 
 import (
+	"BotMatrix/common/bot"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
-	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -15,18 +14,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	common "BotMatrix/src/Common"
-
 	"github.com/tencent-connect/botgo"
 	"github.com/tencent-connect/botgo/dto"
 	"github.com/tencent-connect/botgo/event"
 	"github.com/tencent-connect/botgo/openapi"
 	"github.com/tencent-connect/botgo/token"
+	"golang.org/x/oauth2"
 )
 
-// TencentConfig extends common.BotConfig with Tencent specific fields
+// TencentConfig extends bot.BotConfig with Tencent specific fields
 type TencentConfig struct {
-	common.BotConfig
+	bot.BotConfig
 	AppID      uint64 `json:"app_id"`
 	Token      string `json:"token"`
 	Secret     string `json:"secret"`
@@ -38,15 +36,15 @@ type TencentConfig struct {
 // SessionCache to store last message ID for replying
 type SessionCache struct {
 	sync.RWMutex     `json:"-"`
-	UserLastMsgID    map[string]string                   `json:"user_last_msg_id"`
-	GroupLastMsgID   map[string]string                   `json:"group_last_msg_id"`
-	ChannelLastMsgID map[string]string                   `json:"channel_last_msg_id"`
-	LastMsgTime      map[string]int64                    `json:"last_msg_time"`
+	UserLastMsgID    map[string]string           `json:"user_last_msg_id"`
+	GroupLastMsgID   map[string]string           `json:"group_last_msg_id"`
+	ChannelLastMsgID map[string]string           `json:"channel_last_msg_id"`
+	LastMsgTime      map[string]int64            `json:"last_msg_time"`
 	PendingActions   map[string][]map[string]any `json:"pending_actions"`
 }
 
 var (
-	botService     *common.BaseBot
+	botService     *bot.BaseBot
 	tencentCfg     TencentConfig
 	api            openapi.OpenAPI
 	botCtx         context.Context
@@ -65,22 +63,32 @@ var (
 )
 
 func main() {
-	botService = common.NewBaseBot(3133)
+	botService = bot.NewBaseBot(3133)
 	log.SetOutput(botService.LogManager)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	sessionCache.LoadDisk()
 	loadConfig()
 
-	botService.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/config-ui", http.StatusFound)
-			return
-		}
-		http.NotFound(w, r)
+	// Setup standard handlers using the new abstracted logic
+	botService.SetupStandardHandlers("TencentBot", &tencentCfg, restartBot, []bot.ConfigSection{
+		{
+			Title: "腾讯 API 配置",
+			Fields: []bot.ConfigField{
+				{Label: "App ID", ID: "app_id", Type: "number", Value: tencentCfg.AppID},
+				{Label: "App Token", ID: "token", Type: "password", Value: tencentCfg.Token},
+				{Label: "App Secret", ID: "secret", Type: "password", Value: tencentCfg.Secret},
+				{Label: "沙箱模式", ID: "sandbox", Type: "checkbox", Value: tencentCfg.Sandbox},
+			},
+		},
+		{
+			Title: "连接与服务配置",
+			Fields: []bot.ConfigField{
+				{Label: "BotNexus 地址", ID: "nexus_addr", Type: "text", Value: tencentCfg.NexusAddr},
+				{Label: "Web UI 端口 (LogPort)", ID: "log_port", Type: "number", Value: tencentCfg.LogPort},
+			},
+		},
 	})
-	botService.Mux.HandleFunc("/config", handleConfig)
-	botService.Mux.HandleFunc("/config-ui", handleConfigUI)
 
 	go botService.StartHTTPServer()
 
@@ -123,6 +131,11 @@ func loadConfig() {
 
 func restartBot() {
 	stopBot()
+
+	botService.Mu.RLock()
+	// Sync botService.Config from tencentCfg
+	botService.Config = tencentCfg.BotConfig
+	botService.Mu.RUnlock()
 
 	botCtx, botCancel = context.WithCancel(context.Background())
 
@@ -181,7 +194,7 @@ func stopBot() {
 	log.Println("Tencent Bot stopped")
 }
 
-func startTencentWS(ctx context.Context, botToken token.TokenSource) {
+func startTencentWS(ctx context.Context, botToken oauth2.TokenSource) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -352,11 +365,11 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 		"sub_type":     "normal",
 		"message_id":   data.ID,
 		"group_id":     data.GroupID,
-		"user_id":      data.Author.MemberOpenID,
+		"user_id":      data.Author.ID,
 		"message":      content,
 		"raw_message":  data.Content,
 		"sender": map[string]any{
-			"user_id": data.Author.MemberOpenID,
+			"user_id": data.Author.ID,
 		},
 	}
 
@@ -384,17 +397,17 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 		"self_id":      selfID,
 		"sub_type":     "friend",
 		"message_id":   data.ID,
-		"user_id":      data.Author.UserOpenID,
+		"user_id":      data.Author.ID,
 		"message":      content,
 		"raw_message":  data.Content,
 		"sender": map[string]any{
-			"user_id": data.Author.UserOpenID,
+			"user_id": data.Author.ID,
 		},
 	}
 
 	botService.SendToNexus(eventData)
 
-	pending := sessionCache.Save("user", data.Author.UserOpenID, data.ID)
+	pending := sessionCache.Save("user", data.Author.ID, data.ID)
 	for _, action := range pending {
 		handleAction(action)
 	}
@@ -404,9 +417,9 @@ func c2cMessageEventHandler(event *dto.WSPayload, data *dto.WSC2CMessageData) er
 
 func handleNexusCommand(data []byte) {
 	var cmd struct {
-		Action string                 `json:"action"`
-		Params map[string]any         `json:"params"`
-		Echo   string                 `json:"echo"`
+		Action string         `json:"action"`
+		Params map[string]any `json:"params"`
+		Echo   string         `json:"echo"`
 	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return
@@ -585,101 +598,4 @@ func uploadGroupFile(groupID string, filePath string, fileType int) (string, err
 func uploadC2CFile(userID string, filePath string, fileType int) (string, error) {
 	// Implementation simplified for now
 	return "", fmt.Errorf("uploadC2CFile not fully implemented")
-}
-
-func handleConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		botService.Mu.RLock()
-		defer botService.Mu.RUnlock()
-		json.NewEncoder(w).Encode(tencentCfg)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var newCfg TencentConfig
-		if err := json.NewDecoder(r.Body).Decode(&newCfg); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		data, _ := json.MarshalIndent(newCfg, "", "  ")
-		if err := os.WriteFile("config.json", data, 0644); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		loadConfig()
-		restartBot()
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Config updated and bot restarted"))
-		return
-	}
-}
-
-func handleConfigUI(w http.ResponseWriter, r *http.Request) {
-	botService.Mu.RLock()
-	defer botService.Mu.RUnlock()
-
-	tmpl := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tencent Bot Config</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="number"], input[type="password"] { width: 100%; padding: 8px; box-sizing: border-box; }
-        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-    </style>
-</head>
-<body>
-    <h1>Tencent Bot Configuration</h1>
-    <form id="configForm">
-        <div class="form-group">
-            <label>Nexus Address:</label>
-            <input type="text" name="nexus_addr" value="{{.NexusAddr}}">
-        </div>
-        <div class="form-group">
-            <label>App ID:</label>
-            <input type="number" name="app_id" value="{{.AppID}}">
-        </div>
-        <div class="form-group">
-            <label>Token:</label>
-            <input type="password" name="token" value="{{.Token}}">
-        </div>
-        <div class="form-group">
-            <label>Secret:</label>
-            <input type="password" name="secret" value="{{.Secret}}">
-        </div>
-        <div class="form-group">
-            <label>Sandbox Mode:</label>
-            <input type="checkbox" name="sandbox" {{if .Sandbox}}checked{{end}}>
-        </div>
-        <button type="submit">Save & Restart</button>
-    </form>
-    <script>
-        document.getElementById('configForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const config = { sandbox: e.target.sandbox.checked };
-            formData.forEach((value, key) => {
-                if (key === 'app_id') config[key] = parseInt(value);
-                else if (key !== 'sandbox') config[key] = value;
-            });
-            const resp = await fetch('/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            });
-            alert(await resp.text());
-        };
-    </script>
-</body>
-</html>
-`
-	t := template.Must(template.New("config").Parse(tmpl))
-	t.Execute(w, tencentCfg)
 }

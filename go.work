@@ -4,6 +4,7 @@ use (
 	./src/BotNexus
 	./src/BotWorker
 	./src/Common
+	./src/ConsoleBot
 	./src/DingTalkBot
 	./src/DiscordBot
 	./src/EmailBot
@@ -14,4 +15,5 @@ use (
 	./src/TencentBot
 	./src/WeComBot
 	./src/WxBotGo
+	./src/tools/bm-cli
 )

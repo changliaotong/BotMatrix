@@ -1,13 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "gkKB0OLnGeI=",
+  "dgSpecHash": "0o3P5y6C6f4=",
   "success": true,
   "projectFilePath": "D:\\projects\\BotMatrix\\src\\plugins\\SuperGroupManager\\SuperGroupManager.csproj",
-  "expectedPackageFiles": [
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.netcore.app.ref\\6.0.36\\microsoft.netcore.app.ref.6.0.36.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\6.0.36\\microsoft.windowsdesktop.app.ref.6.0.36.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\6.0.36\\microsoft.aspnetcore.app.ref.6.0.36.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\6.0.36\\microsoft.netcore.app.host.win-x64.6.0.36.nupkg.sha512"
-  ],
+  "expectedPackageFiles": [],
   "logs": []
 }

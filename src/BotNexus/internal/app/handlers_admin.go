@@ -6,6 +6,7 @@ import (
 	"BotMatrix/common/models"
 	"BotMatrix/common/types"
 	"BotMatrix/common/utils"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -1353,10 +1354,69 @@ func HandleDockerAction(m *bot.Manager) http.HandlerFunc {
 		}
 
 		if m.DockerClient == nil {
-			// 尝试延迟初始化
-			if err := m.InitDockerClient(); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				utils.SendJSONResponse(w, false, utils.T(lang, "docker_not_init")+": "+err.Error(), nil)
+			// 检查是否是 Online 平台的机器人，如果是则不需要 Docker
+			isOnlineBot := false
+			m.Mutex.RLock()
+			if bot, ok := m.Bots[req.ContainerID]; ok && bot.Platform == "Online" {
+				isOnlineBot = true
+			}
+			m.Mutex.RUnlock()
+
+			if !isOnlineBot {
+				// 尝试延迟初始化
+				if err := m.InitDockerClient(); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					utils.SendJSONResponse(w, false, utils.T(lang, "docker_not_init")+": "+err.Error(), nil)
+					return
+				}
+			}
+		}
+
+		// 处理 Online 平台机器人的动作
+		m.Mutex.RLock()
+		bot, exists := m.Bots[req.ContainerID]
+		m.Mutex.RUnlock()
+
+		if exists && bot.Platform == "Online" {
+			if req.Action == "delete" {
+				// 从内存移除
+				m.Mutex.Lock()
+				delete(m.Bots, req.ContainerID)
+				m.Mutex.Unlock()
+
+				// 从数据库移除
+				if m.GORMDB != nil {
+					if err := m.GORMDB.Where("self_id = ? AND platform = ?", req.ContainerID, "Online").Delete(&models.BotEntityGORM{}).Error; err != nil {
+						log.Printf("[Admin] Failed to delete Online Bot from DB: %v", err)
+					}
+				}
+
+				m.BroadcastDockerEvent("delete", req.ContainerID, "deleted")
+				utils.SendJSONResponse(w, true, "Online bot deleted successfully", struct {
+					ID string `json:"id"`
+				}{
+					ID: req.ContainerID,
+				})
+				return
+			} else if req.Action == "restart" || req.Action == "start" {
+				// 对于 Online 机器人，这些动作只是更新状态
+				bot.Connected = time.Now()
+				m.BroadcastDockerEvent(req.Action, req.ContainerID, "running")
+				utils.SendJSONResponse(w, true, "Online bot status updated", struct {
+					ID string `json:"id"`
+				}{
+					ID: req.ContainerID,
+				})
+				return
+			} else if req.Action == "stop" {
+				// 模拟停止
+				bot.Connected = time.Time{}
+				m.BroadcastDockerEvent("stop", req.ContainerID, "exited")
+				utils.SendJSONResponse(w, true, "Online bot stopped", struct {
+					ID string `json:"id"`
+				}{
+					ID: req.ContainerID,
+				})
 				return
 			}
 		}
@@ -1407,15 +1467,6 @@ func HandleDockerAddBot(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
 
-		if m.DockerClient == nil {
-			utils.SendJSONResponse(w, false, utils.T(lang, "docker_not_init"), struct {
-				Status string `json:"status"`
-			}{
-				Status: "error",
-			})
-			return
-		}
-
 		var req struct {
 			Platform string            `json:"platform"`
 			Image    string            `json:"image"`
@@ -1423,27 +1474,110 @@ func HandleDockerAddBot(m *bot.Manager) http.HandlerFunc {
 			Cmd      []string          `json:"cmd"`
 		}
 
-		// 尝试解析请求体，如果解析失败则使用默认值 (向后兼容)
+		// 默认值
 		imageName := "botmatrix-wxbot"
 		platform := "WeChat"
 		envVars := make(map[string]string)
 		cmd := []string{"python", "onebot.py"}
 
-		if r.ContentLength > 0 {
-			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
-				if req.Image != "" {
-					imageName = req.Image
-				}
-				if req.Platform != "" {
-					platform = req.Platform
-				}
-				if req.Env != nil {
-					envVars = req.Env
-				}
-				if req.Cmd != nil {
-					cmd = req.Cmd
+		// 尝试解析请求体
+		if r.Body != nil {
+			bodyBytes, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // 写回 Body 供后续使用（如果有）
+			if len(bodyBytes) > 0 {
+				if err := json.Unmarshal(bodyBytes, &req); err == nil {
+					if req.Image != "" {
+						imageName = req.Image
+					}
+					if req.Platform != "" {
+						platform = req.Platform
+					}
+					if req.Env != nil {
+						envVars = req.Env
+					}
+					if req.Cmd != nil {
+						cmd = req.Cmd
+					}
 				}
 			}
+		}
+
+		log.Printf("[Admin] Add Bot Request: Platform=%s, Image=%s", platform, imageName)
+
+		// 处理在线机器人 (Web 模拟) - 不需要 Docker
+		if platform == "Online" {
+			botID := envVars["ONLINE_BOT_ID"]
+			botName := envVars["ONLINE_BOT_NAME"]
+			if botID == "" {
+				botID = fmt.Sprintf("%d", time.Now().Unix())
+			}
+			if botName == "" {
+				botName = "Online Bot " + botID
+			}
+
+			m.Mutex.Lock()
+			if m.Bots == nil {
+				m.Bots = make(map[string]*types.BotClient)
+			}
+			m.Bots[botID] = &types.BotClient{
+				SelfID:    botID,
+				Nickname:  botName,
+				Platform:  "Online",
+				Protocol:  "v11",
+				Connected: time.Now(),
+			}
+			m.Mutex.Unlock()
+
+			// 初始化模拟联系人 (群组和好友)
+			m.CacheMutex.Lock()
+			if m.GroupCache == nil {
+				m.GroupCache = make(map[string]types.GroupInfo)
+			}
+			if m.FriendCache == nil {
+				m.FriendCache = make(map[string]types.FriendInfo)
+			}
+
+			// 添加一个模拟群组
+			mockGroupID := "10001"
+			m.GroupCache[mockGroupID] = types.GroupInfo{
+				BotID:     botID,
+				GroupID:   mockGroupID,
+				GroupName: "模拟群聊 (Online)",
+			}
+
+			// 添加一个模拟好友
+			mockFriendID := "admin"
+			m.FriendCache[mockFriendID] = types.FriendInfo{
+				BotID:    botID,
+				UserID:   mockFriendID,
+				Nickname: "管理员 (Mock)",
+			}
+			m.CacheMutex.Unlock()
+
+			// 持久化到数据库
+			if err := m.SaveBotToDB(botID, botName, "Online", "v11"); err != nil {
+				log.Printf("[Admin] Failed to save Online Bot to DB: %v", err)
+			}
+
+			log.Printf("[Admin] Added Online Bot: %s (%s)", botName, botID)
+			utils.SendJSONResponse(w, true, utils.T(lang, "bot_deploy_success"), struct {
+				Status string `json:"status"`
+				ID     string `json:"id"`
+			}{
+				Status: "ok",
+				ID:     botID,
+			})
+			return
+		}
+
+		// 其他平台需要 Docker
+		if m.DockerClient == nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "docker_not_init"), struct {
+				Status string `json:"status"`
+			}{
+				Status: "error",
+			})
+			return
 		}
 
 		ctx := context.Background()
@@ -1914,114 +2048,119 @@ func HandleGetContacts(m *bot.Manager) http.HandlerFunc {
 			}
 
 			// 检查机器人连接状态和心跳
-			if bot.Conn == nil || time.Since(bot.LastHeartbeat) > 5*time.Minute {
+			if bot.Platform != "Online" && (bot.Conn == nil || time.Since(bot.LastHeartbeat) > 5*time.Minute) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				utils.SendJSONResponse(w, false, utils.T(lang, "bot_disconnected"), nil)
 				return
 			}
 
-			echoGroups := "refresh_groups_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
-			m.PendingMutex.Lock()
-			respChanGroups := make(chan types.InternalMessage, 1)
-			m.PendingRequests[echoGroups] = respChanGroups
-			m.PendingMutex.Unlock()
+			// 对于 Online 机器人，直接跳过真实通信，因为它们没有真实连接
+			if bot.Platform == "Online" {
+				log.Printf("[OnlineBot] Skipping real contact refresh for Online bot: %s", botID)
+			} else {
+				echoGroups := "refresh_groups_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+				m.PendingMutex.Lock()
+				respChanGroups := make(chan types.InternalMessage, 1)
+				m.PendingRequests[echoGroups] = respChanGroups
+				m.PendingMutex.Unlock()
 
-			bot.Mutex.Lock()
-			err := bot.Conn.WriteJSON(struct {
-				Action string `json:"action"`
-				Params any    `json:"params"`
-				Echo   string `json:"echo"`
-			}{
-				Action: "get_group_list",
-				Params: struct{}{},
-				Echo:   echoGroups,
-			})
-			bot.Mutex.Unlock()
+				bot.Mutex.Lock()
+				err := bot.Conn.WriteJSON(struct {
+					Action string `json:"action"`
+					Params any    `json:"params"`
+					Echo   string `json:"echo"`
+				}{
+					Action: "get_group_list",
+					Params: struct{}{},
+					Echo:   echoGroups,
+				})
+				bot.Mutex.Unlock()
 
-			if err != nil {
-				log.Printf("Failed to send get_group_list to bot %s: %v", botID, err)
-				w.WriteHeader(http.StatusInternalServerError)
-				utils.SendJSONResponse(w, false, utils.T(lang, "bot_communication_error"), nil)
-				return
-			}
-
-			// Group fetch with its own timeout
-			select {
-			case resp := <-respChanGroups:
-				if data, ok := resp.Extras["data"].([]any); ok {
-					m.CacheMutex.Lock()
-					for _, g := range data {
-						if group, ok := g.(map[string]any); ok {
-							gID := utils.ToString(group["group_id"])
-							gName := utils.ToString(group["group_name"])
-
-							m.GroupCache[gID] = types.GroupInfo{
-								GroupID:   gID,
-								GroupName: gName,
-								BotID:     botID,
-								LastSeen:  time.Now(),
-							}
-							go m.SaveGroupToDB(gID, gName, botID)
-						}
-					}
-					m.CacheMutex.Unlock()
+				if err != nil {
+					log.Printf("Failed to send get_group_list to bot %s: %v", botID, err)
+					w.WriteHeader(http.StatusInternalServerError)
+					utils.SendJSONResponse(w, false, utils.T(lang, "bot_communication_error"), nil)
+					return
 				}
-			case <-time.After(8 * time.Second):
-				log.Printf(utils.T("", "contacts_timeout_groups"), botID)
-			}
 
-			m.PendingMutex.Lock()
-			delete(m.PendingRequests, echoGroups)
-			m.PendingMutex.Unlock()
-
-			echoFriends := "refresh_friends_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
-			m.PendingMutex.Lock()
-			respChanFriends := make(chan types.InternalMessage, 1)
-			m.PendingRequests[echoFriends] = respChanFriends
-			m.PendingMutex.Unlock()
-
-			bot.Mutex.Lock()
-			err = bot.Conn.WriteJSON(struct {
-				Action string `json:"action"`
-				Params any    `json:"params"`
-				Echo   string `json:"echo"`
-			}{
-				Action: "get_friend_list",
-				Params: struct{}{},
-				Echo:   echoFriends,
-			})
-			bot.Mutex.Unlock()
-
-			if err == nil {
-				// Friend fetch with its own timeout
+				// Group fetch with its own timeout
 				select {
-				case resp := <-respChanFriends:
+				case resp := <-respChanGroups:
 					if data, ok := resp.Extras["data"].([]any); ok {
 						m.CacheMutex.Lock()
-						for _, f := range data {
-							if friend, ok := f.(map[string]any); ok {
-								uID := utils.ToString(friend["user_id"])
-								nickname := utils.ToString(friend["nickname"])
+						for _, g := range data {
+							if group, ok := g.(map[string]any); ok {
+								gID := utils.ToString(group["group_id"])
+								gName := utils.ToString(group["group_name"])
 
-								m.FriendCache[uID] = types.FriendInfo{
-									UserID:   uID,
-									Nickname: nickname,
-									BotID:    botID,
-									LastSeen: time.Now(),
+								m.GroupCache[gID] = types.GroupInfo{
+									GroupID:   gID,
+									GroupName: gName,
+									BotID:     botID,
+									LastSeen:  time.Now(),
 								}
-								go m.SaveFriendToDB(uID, nickname, botID)
+								go m.SaveGroupToDB(gID, gName, botID)
 							}
 						}
 						m.CacheMutex.Unlock()
 					}
 				case <-time.After(8 * time.Second):
-					log.Printf(utils.T("", "contacts_timeout_friends"), botID)
+					log.Printf(utils.T("", "contacts_timeout_groups"), botID)
 				}
-			}
 
-			m.PendingMutex.Lock()
-			delete(m.PendingRequests, echoFriends)
-			m.PendingMutex.Unlock()
+				m.PendingMutex.Lock()
+				delete(m.PendingRequests, echoGroups)
+				m.PendingMutex.Unlock()
+
+				// Friend fetch
+				echoFriends := "refresh_friends_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
+				m.PendingMutex.Lock()
+				respChanFriends := make(chan types.InternalMessage, 1)
+				m.PendingRequests[echoFriends] = respChanFriends
+				m.PendingMutex.Unlock()
+
+				bot.Mutex.Lock()
+				err = bot.Conn.WriteJSON(struct {
+					Action string `json:"action"`
+					Params any    `json:"params"`
+					Echo   string `json:"echo"`
+				}{
+					Action: "get_friend_list",
+					Params: struct{}{},
+					Echo:   echoFriends,
+				})
+				bot.Mutex.Unlock()
+
+				if err == nil {
+					select {
+					case resp := <-respChanFriends:
+						if data, ok := resp.Extras["data"].([]any); ok {
+							m.CacheMutex.Lock()
+							for _, f := range data {
+								if friend, ok := f.(map[string]any); ok {
+									fID := utils.ToString(friend["user_id"])
+									fNick := utils.ToString(friend["nickname"])
+
+									m.FriendCache[fID] = types.FriendInfo{
+										UserID:   fID,
+										Nickname: fNick,
+										BotID:    botID,
+										LastSeen: time.Now(),
+									}
+									go m.SaveFriendToDB(fID, fNick, botID)
+								}
+							}
+							m.CacheMutex.Unlock()
+						}
+					case <-time.After(8 * time.Second):
+						log.Printf(utils.T("", "contacts_timeout_friends"), botID)
+					}
+				}
+
+				m.PendingMutex.Lock()
+				delete(m.PendingRequests, echoFriends)
+				m.PendingMutex.Unlock()
+			}
 
 			if bot.Platform == "qq_guild" || bot.Platform == "guild" {
 				echoGuilds := "refresh_guilds_" + botID + "_" + fmt.Sprintf("%d", time.Now().UnixNano())
@@ -2346,7 +2485,7 @@ func HandleProxyAvatar(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleBatchSend 处理批量发送消息
-func HandleBatchSend(m *bot.Manager) http.HandlerFunc {
+func HandleBatchSend(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 拦截并设置 action 为 batch_send_msg
 		// 这样可以复用 HandleSendAction 的逻辑
@@ -2356,7 +2495,7 @@ func HandleBatchSend(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleSendAction 处理发送 API 动作
-func HandleSendAction(m *bot.Manager) http.HandlerFunc {
+func HandleSendAction(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
 
@@ -2532,7 +2671,69 @@ func HandleSendAction(m *bot.Manager) http.HandlerFunc {
 		}
 
 		bot.Mutex.Lock()
-		err := bot.Conn.WriteJSON(msg)
+		var err error
+		if bot.Conn != nil {
+			err = bot.Conn.WriteJSON(msg)
+		} else if bot.Platform == "Online" {
+			// 对于在线机器人，模拟成功发送并将动作记录到日志
+			log.Printf("[OnlineBot] Action: %s, Params: %+v, Echo: %s", req.Action, req.Params, echo)
+
+			// 如果是发送消息动作，模拟一个对应的接收事件，以便 Worker 能够处理
+			if req.Action == "send_private_msg" || req.Action == "send_group_msg" || req.Action == "send_msg" {
+				params, ok := req.Params.(map[string]any)
+				if ok {
+					message := utils.ToString(params["message"])
+					userID := utils.ToString(params["user_id"])
+					groupID := utils.ToString(params["group_id"])
+
+					if userID == "" {
+						userID = "admin"
+					}
+
+					incomingMsg := types.InternalMessage{
+						ID:         fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+						Time:       time.Now().Unix(),
+						Platform:   bot.Platform,
+						SelfID:     bot.SelfID,
+						PostType:   "message",
+						RawMessage: message,
+						UserID:     userID,
+						GroupID:    groupID,
+					}
+					if groupID != "" || (req.Action == "send_msg" && params["message_type"] == "group") {
+						incomingMsg.MessageType = "group"
+					} else {
+						incomingMsg.MessageType = "private"
+					}
+
+					// 注入到消息处理流程，这样 Worker 就能收到并处理了
+					log.Printf("[OnlineBot] Injecting message to worker pipeline: %s", message)
+					go m.handleBotMessage(bot, incomingMsg)
+				}
+			}
+
+			// 模拟成功响应给 WebUI
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				m.PendingMutex.Lock()
+				if ch, ok := m.PendingRequests[echo]; ok {
+					ch <- types.InternalMessage{
+						SelfID: bot.SelfID,
+						Time:   time.Now().Unix(),
+						Extras: map[string]any{
+							"status":  "ok",
+							"retcode": 0,
+							"data": map[string]any{
+								"message_id": 12345,
+							},
+						},
+					}
+				}
+				m.PendingMutex.Unlock()
+			}()
+		} else {
+			err = fmt.Errorf("bot connection is closed")
+		}
 		bot.Mutex.Unlock()
 
 		if err != nil {

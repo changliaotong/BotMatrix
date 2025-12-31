@@ -1,8 +1,8 @@
 package tasks
 
 import (
-	"BotMatrix/common"
-	log "BotMatrix/common/log"
+	"BotMatrix/common/types"
+	"log"
 	"math/rand"
 	"strings"
 
@@ -15,8 +15,9 @@ type InterceptorContext struct {
 	SelfID   string
 	UserID   string
 	GroupID  string
-	Message  *common.InternalMessage
+	Message  *types.InternalMessage
 	DB       *gorm.DB // 允许拦截器访问数据库
+	AI       *AIParser
 }
 
 // Interceptor 拦截器接口
@@ -30,12 +31,14 @@ type Interceptor interface {
 // InterceptorManager 拦截器管理器
 type InterceptorManager struct {
 	db           *gorm.DB
+	ai           *AIParser
 	interceptors []Interceptor
 }
 
-func NewInterceptorManager(db *gorm.DB) *InterceptorManager {
+func NewInterceptorManager(db *gorm.DB, ai *AIParser) *InterceptorManager {
 	im := &InterceptorManager{
 		db:           db,
+		ai:           ai,
 		interceptors: make([]Interceptor, 0),
 	}
 	// 注册默认拦截器
@@ -58,8 +61,27 @@ func (im *InterceptorManager) GetInterceptors() []string {
 	return names
 }
 
+func (im *InterceptorManager) GetStrategies() []Strategy {
+	var strategies []Strategy
+	im.db.Find(&strategies)
+	return strategies
+}
+
+func (im *InterceptorManager) GetStrategy(name string) (*Strategy, error) {
+	var strategy Strategy
+	if err := im.db.Where("name = ?", name).First(&strategy).Error; err != nil {
+		return nil, err
+	}
+	return &strategy, nil
+}
+
+func (im *InterceptorManager) DeleteStrategy(name string) {
+	im.db.Where("name = ?", name).Delete(&Strategy{})
+}
+
 func (im *InterceptorManager) ProcessBeforeDispatch(ctx *InterceptorContext) bool {
 	ctx.DB = im.db
+	ctx.AI = im.ai
 	for _, i := range im.interceptors {
 		continueFlow, err := i.BeforeDispatch(ctx)
 		if err != nil {
@@ -137,8 +159,20 @@ func (s *SemanticRoutingInterceptor) BeforeDispatch(ctx *InterceptorContext) (bo
 		return true, nil
 	}
 
-	// 这里应该调用 AI 接口进行意图识别
-	// 模拟识别：如果是问题，打上 question 标签
+	// 1. 优先尝试正则匹配 (Fast-Track)
+	if ctx.AI != nil {
+		if skill, matched := ctx.AI.MatchSkillByRegex(msg); matched {
+			if ctx.Message.Extras == nil {
+				ctx.Message.Extras = make(map[string]any)
+			}
+			// 命中正则，设置意图提示，后续路由将优先使用此提示
+			ctx.Message.Extras["intent_hint"] = "skill:" + skill.Name
+			log.Printf("[Interceptor] Regex match: skill=%s", skill.Name)
+			return true, nil // 继续流转，由路由阶段处理
+		}
+	}
+
+	// 2. 调用 AI 接口进行意图识别 (模拟)
 	if strings.Contains(msg, "?") || strings.Contains(msg, "？") || strings.HasPrefix(msg, "为什么") {
 		if ctx.Message.Extras == nil {
 			ctx.Message.Extras = make(map[string]any)

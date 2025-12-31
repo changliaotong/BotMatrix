@@ -5,39 +5,39 @@
 
 Welcome to the BotMatrix Documentation Hub. This includes detailed system architecture, development guides, deployment processes, and feature descriptions.
 
-## 🗺️ Navigation
+## 🗺️ Documentation Navigation
 
-### 🚀 Quick Start & Deployment
-- **[Changelog](CHANGELOG.md)** - Project version iterations and feature changes.
-- **[System Architecture](ARCHITECTURE.md)** - Core design principles and component collaboration.
-- **[Deployment Guide](DEPLOY.md)** - How to install and run BotMatrix in different environments.
-- **[Container Best Practices](deployment/CONTAINER_BEST_PRACTICES.md)** - Deploying BotWorker and plugins in Docker/K8s.
-- **[API Reference](API_REFERENCE.md)** - Detailed JSON message formats and communication protocols.
-- **[Redis Upgrade](REDIS_UPGRADE.md)** - Instructions on Redis dependency and configuration.
-- **[WebUI Upgrade Plan](WEBUI_UPGRADE_PLAN.md)** - Roadmap for WebUI refactoring and upgrades.
+### 🚀 Getting Started & Deployment
+- **[Changelog](CHANGELOG.md)** - Project version iterations and change logs.
+- **[Architecture](core/ARCHITECTURE.md)** - Understand the core design and component collaboration.
+- **[Deployment Guide](core/DEPLOY.md)** - How to install and run BotMatrix in different environments.
+- **[Container Best Practices](deployment/CONTAINER_BEST_PRACTICES.md)** - Deploying BotWorker and plugins with Docker/K8s.
+- **[API Reference](core/API_REFERENCE.md)** - Detailed JSON message formats and communication protocols.
+- **[Redis Upgrade](legacy/REDIS_UPGRADE.md)** - Notes on Redis dependency upgrades and configuration.
+- **[WebUI Upgrade Plan](legacy/WEBUI_UPGRADE_PLAN.md)** - Roadmap for Web interface refactoring.
 
 ### 📖 Manuals
-- **[Server Manual](SERVER_MANUAL.md)** - Detailed feature descriptions, configuration guides, and admin commands.
-- **[Plugin Manual](plugins/README.md)** - Detailed guide for all built-in plugins.
-- **[Plugin SDK Guide](plugins/sdk_guide.md)** - Develop efficient plugins with Go/Python/C# SDKs.
-- **[Plugin Market Specification (BMPK)](plugins/market_spec.md)** - Standardized plugin distribution and market protocols.
-- **[Routing Rules](ROUTING_RULES.md)** - Definition of message routing and distribution logic.
-- **[Skills & Compatibility](SKILL_SWITCH_AND_COMPATIBILITY.md)** - Bot skill management and OneBot compatibility.
+- **[Server Manual](core/SERVER_MANUAL.md)** - Detailed features, configuration, and admin commands.
+- **[Plugin Manual](plugins/README.md)** - Usage guides for all built-in plugins.
+- **[Plugin SDK Guide](plugins/sdk_guide.md)** - Develop efficient plugins with Go/Python/C# SDK.
+- **[Market Specification (BMPK)](plugins/market_spec.md)** - Standardized plugin distribution protocol.
+- **[Routing Rules](core/ROUTING_RULES.md)** - Detailed definition of message routing and distribution.
+- **[Skill Switch & Compatibility](core/SKILL_SWITCH_AND_COMPATIBILITY.md)** - Bot skill management and OneBot compatibility.
 
-### 🛠️ Core Systems
-- **[Conflict & Improvement Plan](CONFLICT_PLAN.md)** - Records known conflicts and future optimization directions.
-- **[Component Documentation](components/README.md)** - Technical details for adapters and core components.
-- **[Miniprogram Admin](MINIPROGRAM.md)** - Documentation for the mobile miniprogram management platform.
-- **[Fission System](FISSION_SYSTEM.md)** - Implementation of automated group invitations and user growth.
-- **[Marriage System](BABY_AND_MARRIAGE_SYSTEM.md)** - Logic for interactive marriage and baby systems.
-- **[Core Plugins](CORE_PLUGIN.md)** - Features and configuration of built-in core plugins.
-- **[QQ Guild Smart Send](QQ_GUILD_SMART_SEND.md)** - Optimized message sending for QQ Guilds.
+### 🛠️ Core System Details
+- **[Conflict & Improvement Plan](legacy/CONFLICT_PLAN.md)** - Known conflicts and future document optimizations.
+- **[Component Documentation](components/README.md)** - Technical details of adapters and core components.
+- **[MiniProgram Backend](core/MINIPROGRAM.md)** - Description of the mobile management platform.
+- **[Fission System](plugins/FISSION_SYSTEM.md)** - Implementation of automated group growth.
+- **[Baby & Marriage System](plugins/BABY_AND_MARRIAGE_SYSTEM.md)** - Logic for interactive fun features.
+- **[Core Plugin](plugins/CORE_PLUGIN.md)** - Features and configuration of built-in core plugins.
+- **[QQ Guild Smart Send](plugins/QQ_GUILD_SMART_SEND.md)** - Optimized message sending for QQ Guilds.
 
 ### 💻 Developer Guide
-- **[Development & Planning Hub](development/README.md)** - Plugin development, protocol compatibility, and system planning.
-- **[Plugin Development](PLUGIN_DEVELOPMENT.md)** - How to write custom plugins for BotMatrix.
-- **[OneBot Compatibility](ONEBOT_COMPATIBILITY.md)** - Details on protocol implementation coverage.
-- **[Website Plan](WEBSITE_PLAN.md)** - Planning for the official documentation website.
+- **[Dev & Planning Hub](development/README.md)** - Plugin development, protocol compatibility, and planning.
+- **[Plugin Development](plugins/PLUGIN_DEVELOPMENT.md)** - How to write custom plugins for BotMatrix.
+- **[OneBot Compatibility](core/ONEBOT_COMPATIBILITY.md)** - Protocol implementation details and coverage.
+- **[Website Plan](legacy/WEBSITE_PLAN.md)** - Construction plan for the official documentation site.
 
 ---
 
