@@ -3,6 +3,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.8.0 (2025-12-31)
+*   **🗄️ Database Standardization**:
+    - **Uniform Naming**: Standardized all database table and column names to `snake_case` across the entire project for PostgreSQL compatibility and consistency.
+    - **GORM Model Alignment**: Updated all GORM models with explicit `column` tags and standardized timestamp fields (`created_at`, `updated_at`, `deleted_at`).
+    - **Enhanced Member Data**: Added `role` field to group member models and cache to accurately track permissions (owner/admin/member).
+*   **🛠️ Codebase Synchronization**:
+    - **BotNexus Handlers**: Updated message handlers to extract and persist group member roles from platform events during message processing.
+    - **BotWorker DB Layer**: Fixed raw SQL queries in `db.go` and removed non-standard quoted identifiers, ensuring seamless integration with standardized schemas.
+    - **Facade Aliases**: Synchronized GORM model aliases in `Common/facade.go` to provide a unified entry point for database models across packages.
+*   **📚 Documentation**:
+    - **Database Schema**: Created a comprehensive `database_schema.md` documenting all tables, columns, and their roles within the system.
+
 ## v1.7.1 (2025-12-28)
 *   **🖼️ Avatar Standardization**:
     - **Real Avatar Integration**: Fully integrated official QQ group and user avatars, utilizing a backend proxy to bypass CORS and Referer restrictions.
