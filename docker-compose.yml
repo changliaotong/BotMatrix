@@ -181,10 +181,10 @@ services:
       - TZ=Asia/Shanghai
       - NEXUS_ADDR=ws://bot-nexus:3001
 
-  # 11. WeComBot: Enterprise WeChat Worker
-  wecom-bot:
+  # 11. WeWorkBot: Enterprise WeChat Worker
+  wework-bot:
     build:
-      context: ./src/WeComBot
+      context: ./src/WeWorkBot
     container_name: btwm
     restart: always
     ports:
@@ -192,7 +192,7 @@ services:
     depends_on:
       - bot-nexus
     volumes:
-      - ./src/WeComBot/config.json:/app/config.json
+      - ./src/WeWorkBot/config.json:/app/config.json
     environment:
       - TZ=Asia/Shanghai
       - NEXUS_ADDR=ws://bot-nexus:3001

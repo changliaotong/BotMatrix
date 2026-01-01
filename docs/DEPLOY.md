@@ -137,9 +137,9 @@ BotMatrix uses a modular architecture. You only need to configure and enable the
     }
     ```
 
-### 🏢 WeComBot (Enterprise WeChat)
+### 🏢 WeWorkBot (Enterprise WeChat)
 *   **Type**: Go / Callback & API
-*   **Config**: `WeComBot/config.json`
+*   **Config**: `WeWorkBot/config.json`
     ```json
     {
       "corp_id": "wx...",

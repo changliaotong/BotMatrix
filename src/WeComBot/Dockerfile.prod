@@ -1,8 +1,0 @@
-FROM alpine:latest
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-RUN apk add --no-cache tzdata ca-certificates
-WORKDIR /app
-COPY wecom-bot ./
-RUN chmod +x wecom-bot
-COPY config.sample.json ./config.json
-CMD ["./wecom-bot"]

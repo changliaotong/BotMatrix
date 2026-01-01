@@ -51,7 +51,7 @@ def pack_project():
         "src/SlackBot/**",
         "src/TelegramBot/**",
         "src/TencentBot/**",
-        "src/WeComBot/**",
+        "src/WeWorkBot/**",
         "src/WxBot/**",
         "src/WxBotGo/**",
         

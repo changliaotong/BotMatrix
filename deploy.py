@@ -20,7 +20,7 @@ def ensure_configs():
     bot_dirs = [
         "src/DingTalkBot", "src/DiscordBot", "src/EmailBot", "src/FeishuBot", 
         "src/KookBot", "src/SlackBot", "src/TelegramBot", "src/TencentBot", 
-        "src/WeComBot", "src/WxBot"
+        "src/WeWorkBot", "src/WxBot"
     ]
     
     print("Checking config files...")
@@ -159,7 +159,7 @@ def main():
             "SlackBot": {"path": "src/SlackBot", "bin": "slack-bot"},
             "KookBot": {"path": "src/KookBot", "bin": "kook-bot"},
             "EmailBot": {"path": "src/EmailBot", "bin": "email-bot"},
-            "WeComBot": {"path": "src/WeComBot", "bin": "wecom-bot"},
+            "WeWorkBot": {"path": "src/WeWorkBot", "bin": "wework-bot"},
         }
 
         env = os.environ.copy()
@@ -252,7 +252,7 @@ def main():
         elif TARGET == 'system-worker':
             docker_cmd = "sudo docker-compose restart system-worker"
         elif TARGET == 'no-wx':
-             services_to_restart = "bot-manager system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wecom-bot"
+             services_to_restart = "bot-manager system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wework-bot"
              docker_cmd = f"sudo docker-compose restart {services_to_restart}"
         else:
             docker_cmd = "sudo docker-compose up -d --remove-orphans && sudo docker-compose restart wxbot"
@@ -282,8 +282,8 @@ def main():
             else:
                 docker_cmd = f"{cleanup_cmd} && sudo docker-compose up -d --build --force-recreate --no-deps system-worker"
         elif TARGET == 'no-wx':
-            services_to_up = "bot-manager system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wecom-bot"
-            containers_to_clean = "botmatrix-manager botmatrix-system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wecom-bot"
+            services_to_up = "bot-manager system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wework-bot"
+            containers_to_clean = "botmatrix-manager botmatrix-system-worker tencent-bot dingtalk-bot feishu-bot telegram-bot discord-bot slack-bot kook-bot email-bot wework-bot"
             cleanup_cmd = f"sudo docker rm -f {containers_to_clean} || true"
             
             if NO_SOURCE:
@@ -300,7 +300,7 @@ def main():
                     "sudo docker build -f src/SlackBot/Dockerfile.prod -t botmatrix-slack-bot src/SlackBot/",
                     "sudo docker build -f src/KookBot/Dockerfile.prod -t botmatrix-kook-bot src/KookBot/",
                     "sudo docker build -f src/EmailBot/Dockerfile.prod -t botmatrix-email-bot src/EmailBot/",
-                    "sudo docker build -f src/WeComBot/Dockerfile.prod -t botmatrix-wecom-bot src/WeComBot/"
+                    "sudo docker build -f src/WeWorkBot/Dockerfile.prod -t botmatrix-wework-bot src/WeWorkBot/"
                 ]
                 docker_cmd = f"{cleanup_cmd} && {' && '.join(build_cmds)} && sudo docker-compose up -d --force-recreate {services_to_up}"
             elif DOCKER_FIX_MODE:
@@ -322,7 +322,7 @@ def main():
                      "sudo docker build -f src/SlackBot/Dockerfile.prod -t botmatrix-slack-bot src/SlackBot/",
                      "sudo docker build -f src/KookBot/Dockerfile.prod -t botmatrix-kook-bot src/KookBot/",
                      "sudo docker build -f src/EmailBot/Dockerfile.prod -t botmatrix-email-bot src/EmailBot/",
-                     "sudo docker build -f src/WeComBot/Dockerfile.prod -t botmatrix-wecom-bot src/WeComBot/"
+                     "sudo docker build -f src/WeWorkBot/Dockerfile.prod -t botmatrix-wework-bot src/WeWorkBot/"
                  ]
                  docker_cmd = f"sudo docker-compose down --remove-orphans && {' && '.join(build_cmds)} && sudo docker-compose up -d --force-recreate"
             elif DOCKER_FIX_MODE:
