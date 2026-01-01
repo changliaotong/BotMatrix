@@ -1,0 +1,8 @@
+FROM alpine:latest
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk add --no-cache tzdata ca-certificates
+WORKDIR /app
+COPY wework-bot ./
+RUN chmod +x wework-bot
+COPY config.sample.json ./config.json
+CMD ["./wework-bot"]
