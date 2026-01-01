@@ -6,7 +6,17 @@ A **Go-based** Official QQ Guild/Group Robot implementation for [BotMatrix](../R
 
 *   **Official API**: Compliant with Tencent's requirements for QQ Guilds and Groups.
 *   **OneBot 11 Compliance**: Bridges official events to OneBot standard.
-*   **Burn After Reading**: **New!** Supports message recall.
+*   **Comprehensive Event Handling**: Supports 8 types of events including messages, guild events, member events, and more.
+*   **Message Management**:
+    *   Send messages to QQ Guilds, Groups, and Private chats
+    *   Support for various media types: text, images, videos, audio, and files
+    *   **Burn After Reading**: Supports message recall using `RetractMessage` API
+*   **Channel Management**:
+    *   Create, update, and delete channels
+    *   Get channel lists and channel details
+*   **Member Management**:
+    *   Get guild member lists and profiles
+    *   Manage member roles
 *   **WebSocket Communication**: Real-time bidirectional communication with BotNexus.
 *   **Keep-Alive Mechanism**: Maintains persistent connection with Tencent's API.
 *   **Docker Support**: Easy deployment using Docker containers.
@@ -17,6 +27,54 @@ A **Go-based** Official QQ Guild/Group Robot implementation for [BotMatrix](../R
 *   **Requirement**:
     *   For Group messages, requires the `group_id` context (handled internally via ID mappings or `channel_id` if available).
     *   Returns valid `message_id` for recall operations.
+
+### 📋 Supported OneBot API
+
+#### Message Operations
+- `send_msg`: Send messages to guilds, groups, or private chats
+- `send_group_msg`: Send group messages
+- `send_private_msg`: Send private messages
+- `send_guild_channel_msg`: Send guild channel messages
+- `delete_msg`: Recall messages
+- `get_message`: Get message details
+
+#### Channel Operations
+- `create_guild_channel`: Create a new channel
+- `update_guild_channel`: Update channel information
+- `delete_guild_channel`: Delete a channel
+- `get_guild_channel_list`: Get channel list
+
+#### Guild Operations
+- `get_guild_list`: Get guild list
+- `get_guild_meta`: Get guild details
+
+#### Member Operations
+- `get_guild_member_list`: Get guild member list
+- `get_guild_member_profile`: Get guild member profile
+- `get_guild_member_info`: Get guild member information
+
+#### Role Operations
+- `get_guild_roles`: Get guild roles
+- `create_guild_role`: Create a new role
+- `update_guild_role`: Update role information
+- `delete_guild_role`: Delete a role
+
+#### System Operations
+- `get_login_info`: Get bot login information
+- `get_group_list`: Get group list (mapped from guilds)
+- `get_version_info`: Get version information
+- `get_logs`: Get bot logs
+
+### 🎯 Event Types Supported
+
+- Channel @ messages
+- Direct messages
+- Guild events
+- Guild member events
+- Channel events
+- Message reaction events
+- QQ Group @ messages
+- QQ C2C (private) messages
 
 ## 🛠 Configuration
 

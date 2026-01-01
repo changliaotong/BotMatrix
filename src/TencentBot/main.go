@@ -2282,7 +2282,7 @@ func atMessageEventHandler(event *dto.WSPayload, data *dto.WSATMessageData) erro
 		},
 		"time":     time.Now().Unix(),
 		"self_id":  selfID,
-		"platform": "qqguild", // 添加平台标识
+		"platform": "qqguild", // 官方平台机器人标识
 	}
 
 	log.Printf("转换为OneBot v11格式: %+v", obEvent)
@@ -2467,7 +2467,7 @@ func groupATMessageEventHandler(event *dto.WSPayload, data *dto.WSGroupATMessage
 		},
 		"time":     time.Now().Unix(),
 		"self_id":  selfID,
-		"platform": "qqguild", // 修正为统一的平台标识
+		"platform": "qqguild", // 官方平台机器人标识
 	}
 
 	log.Printf("转换为OneBot v11格式: %+v", obEvent)
