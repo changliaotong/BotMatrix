@@ -22,7 +22,7 @@ WeWorkBot fully supports the **Burn After Reading** feature.
 
 ## 🛠 Configuration
 
-WeComBot supports two ways to configure:
+WeWorkBot supports two ways to configure:
 
 1.  **Web UI (Recommended)**:
     *   Start the bot.
