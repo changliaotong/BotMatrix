@@ -80,10 +80,30 @@ type UsageInfo struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
+// EmbeddingRequest 向量请求
+type EmbeddingRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
+// EmbeddingResponse 向量响应
+type EmbeddingResponse struct {
+	Data  []EmbeddingData `json:"data"`
+	Model string          `json:"model"`
+	Usage UsageInfo       `json:"usage"`
+}
+
+// EmbeddingData 向量数据
+type EmbeddingData struct {
+	Embedding []float32 `json:"embedding"`
+	Index     int       `json:"index"`
+}
+
 // Client AI 客户端接口
 type Client interface {
 	Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	ChatStream(ctx context.Context, req ChatRequest) (<-chan ChatStreamResponse, error)
+	CreateEmbedding(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error)
 }
 
 // ChatStreamResponse 流式响应增量

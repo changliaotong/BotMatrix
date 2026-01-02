@@ -155,3 +155,39 @@ func (a *OpenAIAdapter) ChatStream(ctx context.Context, req ChatRequest) (<-chan
 
 	return ch, nil
 }
+
+func (a *OpenAIAdapter) CreateEmbedding(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error) {
+	if a.APIKey == "" {
+		return nil, fmt.Errorf("API Key is empty, please check your provider configuration")
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.BaseURL+"/embeddings", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	resp, err := a.HTTP.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("AI API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result EmbeddingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

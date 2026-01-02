@@ -2,17 +2,20 @@ package tasks
 
 import (
 	"BotMatrix/common/ai"
+	log "BotMatrix/common/log"
 	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 // AIService 定义任务系统需要的 AI 能力接口
 type AIService interface {
 	Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
+	CreateEmbedding(ctx context.Context, modelID uint, input []string) (*ai.EmbeddingResponse, error)
 }
 
 // AIParser AI 解析器
@@ -68,7 +71,9 @@ const (
 	AIActionAdjustPolicy AIActionType = "adjust_policy"
 	AIActionManageTags   AIActionType = "manage_tags"
 	AIActionSystemQuery  AIActionType = "system_query"
-	AIActionSkillCall    AIActionType = "skill_call" // 新增：技能调用
+	AIActionSkillCall    AIActionType = "skill_call"  // 新增：技能调用
+	AIActionCancelTask   AIActionType = "cancel_task" // 新增：取消任务
+	AIActionBatch        AIActionType = "batch_task"  // 新增：批量/多重任务并行
 )
 
 // ParseRequest AI 解析请求
@@ -79,16 +84,54 @@ type ParseRequest struct {
 }
 
 // MatchSkillByLLM 使用 LLM 进行语义匹配和参数提取
-func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID uint) (*ParseResult, error) {
+func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID uint, parseCtx map[string]any) (*ParseResult, error) {
 	if a.aiService == nil {
 		return nil, fmt.Errorf("ai service not set")
+	}
+
+	// 1. 如果有知识库，先进行检索增强 (RAG)
+	ragContext := ""
+	if a.Manifest != nil && a.Manifest.KnowledgeBase != nil {
+		chunks, err := a.Manifest.KnowledgeBase.Search(ctx, input, 3)
+		if err == nil && len(chunks) > 0 {
+			ragContext = "\n\n### 参考文档 (RAG):\n"
+			for i, chunk := range chunks {
+				ragContext += fmt.Sprintf("[%d] 来源: %s\n%s\n", i+1, chunk.Source, chunk.Content)
+			}
+			log.Printf("[AI-Task] RAG retrieved %d chunks for query: %s", len(chunks), input)
+		}
+	}
+
+	systemPrompt := a.Manifest.GenerateSystemPrompt()
+	if ragContext != "" {
+		systemPrompt += ragContext
+	}
+	if parseCtx != nil {
+		contextInfo := "\n\n当前运行环境信息："
+		if gid, ok := parseCtx["effective_group_id"].(string); ok && gid != "" {
+			contextInfo += fmt.Sprintf("\n- 目标群组 ID: %s (如果用户未指定群组，请默认使用此 ID)", gid)
+		}
+		if isPrivate, ok := parseCtx["is_private"].(bool); ok {
+			chatType := "群聊"
+			if isPrivate {
+				chatType = "私聊"
+			}
+			contextInfo += fmt.Sprintf("\n- 当前对话类型: %s", chatType)
+		}
+		if role, ok := parseCtx["user_role"].(string); ok && role != "" {
+			contextInfo += fmt.Sprintf("\n- 当前用户角色: %s", role)
+		}
+		if botID, ok := parseCtx["bot_id"].(string); ok && botID != "" {
+			contextInfo += fmt.Sprintf("\n- 当前机器人 ID: %s", botID)
+		}
+		systemPrompt += contextInfo
 	}
 
 	tools := a.Manifest.GenerateTools()
 	messages := []ai.Message{
 		{
 			Role:    ai.RoleSystem,
-			Content: a.Manifest.GenerateSystemPrompt(),
+			Content: systemPrompt,
 		},
 		{
 			Role:    ai.RoleUser,
@@ -110,33 +153,107 @@ func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID ui
 		Analysis: choice.Message.Content,
 	}
 
+	// 1. 优先尝试解析 ToolCalls (Function Calling 模式)
 	if len(choice.Message.ToolCalls) > 0 {
-		toolCall := choice.Message.ToolCalls[0]
-		result.Intent = AIActionSkillCall
-		result.Summary = fmt.Sprintf("调用技能: %s", toolCall.Function.Name)
+		log.Printf("[AI-Task] LLM returned %d tool calls", len(choice.Message.ToolCalls))
 
-		var args map[string]any
-		json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
-		result.Data = map[string]any{
-			"skill": toolCall.Function.Name,
-			"args":  args,
+		// 如果有多个工具调用，递归处理或循环处理
+		for i, toolCall := range choice.Message.ToolCalls {
+			functionName := toolCall.Function.Name
+			subResult := &ParseResult{
+				Summary: fmt.Sprintf("动作 %d: %s", i+1, functionName),
+			}
+
+			// 根据函数名映射意图
+			switch functionName {
+			case "create_task":
+				subResult.Intent = AIActionCreateTask
+			case "adjust_policy":
+				subResult.Intent = AIActionAdjustPolicy
+			case "manage_tags":
+				subResult.Intent = AIActionManageTags
+			case "cancel_task":
+				subResult.Intent = AIActionCancelTask
+			case "system_query":
+				subResult.Intent = AIActionSystemQuery
+			default:
+				subResult.Intent = AIActionSkillCall
+			}
+
+			var params map[string]any
+			json.Unmarshal([]byte(toolCall.Function.Arguments), &params)
+
+			if subResult.Intent == AIActionSkillCall {
+				subResult.Data = map[string]any{
+					"skill":  functionName,
+					"params": params,
+				}
+			} else {
+				subResult.Data = params
+			}
+			subResult.IsSafe = true
+
+			if i == 0 {
+				// 第一个作为主结果
+				result.Intent = subResult.Intent
+				result.Summary = subResult.Summary
+				result.Data = subResult.Data
+				result.IsSafe = subResult.IsSafe
+			} else {
+				// 后续作为子动作
+				result.SubActions = append(result.SubActions, subResult)
+			}
 		}
-	} else {
-		result.Intent = AIActionSystemQuery
-		result.Summary = choice.Message.Content
+
+		if len(result.SubActions) > 0 {
+			result.Summary = fmt.Sprintf("多重任务指令 (%d 个动作)", len(result.SubActions)+1)
+		}
+
+		return result, nil
 	}
+
+	// 2. 尝试从 Content 中解析 JSON (Structured Output 模式)
+	content := choice.Message.Content
+	// 简单清洗 content，防止 AI 返回包含 Markdown 代码块
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+
+	var structured struct {
+		Intent   AIActionType   `json:"intent"`
+		Summary  string         `json:"summary"`
+		Data     map[string]any `json:"data"`
+		Analysis string         `json:"analysis"`
+		IsSafe   bool           `json:"is_safe"`
+	}
+
+	if err := json.Unmarshal([]byte(content), &structured); err == nil && structured.Intent != "" {
+		result.Intent = structured.Intent
+		result.Summary = structured.Summary
+		result.Data = structured.Data
+		result.Analysis = structured.Analysis
+		result.IsSafe = structured.IsSafe
+		return result, nil
+	}
+
+	// 3. 如果都不是，则作为一般查询处理
+	result.Intent = AIActionSystemQuery
+	result.Summary = choice.Message.Content
+	result.IsSafe = true
 
 	return result, nil
 }
 
 // ParseResult AI 解析结果
 type ParseResult struct {
-	DraftID  string       `json:"draft_id"` // 新增 DraftID
-	Intent   AIActionType `json:"intent"`
-	Summary  string       `json:"summary"`
-	Data     any          `json:"data"` // 解析出的结构化数据
-	IsSafe   bool         `json:"is_safe"`
-	Analysis string       `json:"analysis"` // AI 的推理过程
+	DraftID    string         `json:"draft_id"` // 新增 DraftID
+	Intent     AIActionType   `json:"intent"`
+	Summary    string         `json:"summary"`
+	Data       any            `json:"data"`        // 解析出的结构化数据
+	IsSafe     bool           `json:"is_safe"`     // 是否安全（低风险）
+	Analysis   string         `json:"analysis"`    // AI 的推理过程
+	SubActions []*ParseResult `json:"sub_actions"` // 新增：支持多任务并行
 }
 
 func NewAIParser() *AIParser {
@@ -174,22 +291,38 @@ func (a *AIParser) UpdateSkills(skills []Capability) {
 func (a *AIParser) Parse(req ParseRequest) (*ParseResult, error) {
 	input := req.Input
 
-	// 1. 意图识别 (模拟)
+	// 如果设置了 AI 服务，优先使用 LLM 进行深度解析
+	if a.aiService != nil {
+		modelID := uint(1) // 默认使用 ID 为 1 的模型，实际应从配置获取
+		if val, ok := req.Context["model_id"].(float64); ok {
+			modelID = uint(val)
+		} else if val, ok := req.Context["model_id"].(int); ok {
+			modelID = uint(val)
+		}
+
+		result, err := a.MatchSkillByLLM(context.Background(), input, modelID, req.Context)
+		if err == nil && result.Intent != AIActionSystemQuery {
+			return result, nil
+		}
+		// 如果 LLM 解析失败或识别为一般查询，则尝试正则和模拟解析作为兜底
+	}
+
+	// 1. 意图识别 (模拟/正则兜底)
 	intent := req.ActionType
 	if intent == "" {
 		intent = a.recognizeIntent(input)
 	}
 
-	// 2. 根据意图进行结构化解析 (模拟)
+	// 2. 根据意图进行结构化解析
 	switch intent {
 	case AIActionCreateTask:
-		return a.parseTaskCreation(input)
+		return a.parseTaskCreation(req)
 	case AIActionAdjustPolicy:
-		return a.parsePolicyAdjustment(input)
+		return a.parsePolicyAdjustment(req)
 	case AIActionManageTags:
-		return a.parseTagManagement(input)
-	case "skill_call":
-		return a.parseSkillCall(input)
+		return a.parseTagManagement(req)
+	case AIActionSkillCall:
+		return a.parseSkillCall(req)
 	default:
 		return &ParseResult{
 			Intent:   AIActionSystemQuery,
@@ -201,7 +334,7 @@ func (a *AIParser) Parse(req ParseRequest) (*ParseResult, error) {
 }
 
 func (a *AIParser) recognizeIntent(input string) AIActionType {
-	if containsOne(input, "提醒", "定时", "每天", "任务") {
+	if containsOne(input, "提醒", "定时", "每天", "任务", "禁言", "踢人") {
 		return AIActionCreateTask
 	}
 	if containsOne(input, "维护", "模式", "限制", "策略", "开关") {
@@ -219,7 +352,8 @@ func (a *AIParser) recognizeIntent(input string) AIActionType {
 	return AIActionSystemQuery
 }
 
-func (a *AIParser) parseSkillCall(input string) (*ParseResult, error) {
+func (a *AIParser) parseSkillCall(req ParseRequest) (*ParseResult, error) {
+	input := req.Input
 	// 模拟 AI 提取技能参数
 	var matchedSkill *Capability
 	for _, skill := range a.Manifest.Skills {
@@ -250,37 +384,75 @@ func (a *AIParser) parseSkillCall(input string) (*ParseResult, error) {
 	}, nil
 }
 
-func (a *AIParser) parseTaskCreation(input string) (*ParseResult, error) {
-	// 模拟解析逻辑
+func (a *AIParser) parseTaskCreation(req ParseRequest) (*ParseResult, error) {
+	input := req.Input
+	botID, _ := req.Context["bot_id"].(string)
+	groupID, _ := req.Context["group_id"].(string)
+
+	// 基础回退逻辑：尝试通过正则提取关键信息
 	res := &ParseResult{
 		Intent:  AIActionCreateTask,
 		IsSafe:  true,
 		Summary: "创建自动化任务",
 	}
 
+	// 提取群号 (假设群号是 5-12 位数字)
+	groupReg := regexp.MustCompile(`(?:群|group)\s*(\d{5,12})`)
+	if match := groupReg.FindStringSubmatch(input); len(match) > 1 {
+		groupID = match[1]
+	}
+
 	if containsOne(input, "禁言") {
-		res.Data = map[string]any{
-			"name":           "AI 生成: 自动禁言",
-			"type":           "cron",
-			"action_type":    "mute_group",
-			"action_params":  `{"duration": 0}`,
-			"trigger_config": `{"cron": "0 23 * * *"}`,
+		if containsOne(input, "随机") || containsOne(input, "套餐") {
+			isSmart := containsOne(input, "智能", "最近", "活跃")
+			res.Data = map[string]any{
+				"name":           "AI 生成: 随机禁言套餐",
+				"type":           "once",
+				"action_type":    "mute_random",
+				"action_params":  fmt.Sprintf(`{"bot_id": "%s", "group_id": "%s", "duration": 60, "count": 1, "smart": %v}`, botID, groupID, isSmart),
+				"trigger_config": fmt.Sprintf(`{"time": "%s"}`, time.Now().Add(10*time.Second).Format(time.RFC3339)),
+			}
+			res.Analysis = "识别到您想要发起“随机禁言套餐”。我为您编排了一个 10 秒后执行的任务：从当前群成员中随机抽取 1 人，禁言 60 秒。此操作仅限群主或管理员确认执行。"
+			if isSmart {
+				res.Analysis += " 已启用智能模式，将优先从最近发言的活跃成员中抽取。"
+			}
+		} else {
+			duration := 0
+			if strings.Contains(input, "分钟") {
+				duration = 60
+			}
+			res.Data = map[string]any{
+				"name":           "AI 生成: 自动禁言",
+				"type":           "cron",
+				"action_type":    "mute_group",
+				"action_params":  fmt.Sprintf(`{"bot_id": "%s", "group_id": "%s", "duration": %d}`, botID, groupID, duration),
+				"trigger_config": `{"cron": "0 23 * * *"}`,
+			}
+			res.Analysis = "识别到'禁言'需求，已尝试提取群号，默认设置为每天 23:00 执行。"
 		}
-		res.Analysis = "识别到'禁言'需求，建议设置为每天 23:00 执行。"
+	} else if containsOne(input, "踢", "移除") {
+		res.Data = map[string]any{
+			"name":           "AI 生成: 移除成员",
+			"type":           "once",
+			"action_type":    "kick_member",
+			"action_params":  fmt.Sprintf(`{"bot_id": "%s", "group_id": "%s", "user_id": ""}`, botID, groupID),
+			"trigger_config": `{"time": "2026-01-01T00:00:00Z"}`,
+		}
+		res.Analysis = "识别到'移除成员'需求，请补充目标用户 ID。"
 	} else {
 		res.Data = map[string]any{
 			"name":           "AI 生成: 消息提醒",
 			"type":           "once",
 			"action_type":    "send_message",
-			"action_params":  `{"message": "AI 提醒内容"}`,
-			"trigger_config": `{"time": "2025-12-24T00:00:00Z"}`,
+			"action_params":  fmt.Sprintf(`{"bot_id": "%s", "group_id": "%s", "message": "提醒内容"}`, botID, groupID),
+			"trigger_config": `{"time": "2026-01-01T00:00:00Z"}`,
 		}
-		res.Analysis = "识别到'消息提醒'需求，默认设置了一次性任务。"
+		res.Analysis = "识别到'消息提醒'需求，默认设置了一次性任务，请确认内容和时间。"
 	}
 	return res, nil
 }
 
-func (a *AIParser) parsePolicyAdjustment(input string) (*ParseResult, error) {
+func (a *AIParser) parsePolicyAdjustment(req ParseRequest) (*ParseResult, error) {
 	return &ParseResult{
 		Intent:  AIActionAdjustPolicy,
 		IsSafe:  true,
@@ -294,7 +466,7 @@ func (a *AIParser) parsePolicyAdjustment(input string) (*ParseResult, error) {
 	}, nil
 }
 
-func (a *AIParser) parseTagManagement(input string) (*ParseResult, error) {
+func (a *AIParser) parseTagManagement(req ParseRequest) (*ParseResult, error) {
 	return &ParseResult{
 		Intent:  AIActionManageTags,
 		IsSafe:  true,
