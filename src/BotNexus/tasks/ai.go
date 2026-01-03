@@ -15,6 +15,7 @@ import (
 // AIService 定义任务系统需要的 AI 能力接口
 type AIService interface {
 	Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
+	ChatAgent(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
 	CreateEmbedding(ctx context.Context, modelID uint, input any) (*ai.EmbeddingResponse, error)
 }
 

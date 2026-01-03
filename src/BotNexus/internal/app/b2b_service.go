@@ -18,10 +18,25 @@ import (
 
 // B2BServiceImpl 实现 B2BService 接口
 type B2BServiceImpl struct {
-	db      *gorm.DB
-	manager *Manager
-	client  *http.Client
+	db       *gorm.DB
+	manager  *Manager
+	client   *http.Client
+	circuits map[uint]*circuitState
+	mu       sync.RWMutex
 }
+
+type circuitState struct {
+	failureCount int
+	lastFailure  time.Time
+	status       string // "closed", "open", "half-open"
+}
+
+const (
+	MaxFailures     = 5
+	CircuitOpenTime = 30 * time.Second
+	MaxRetries      = 3
+	RetryWaitTime   = 1 * time.Second
+)
 
 type HandshakeRequest struct {
 	SourceEntCode string `json:"source_ent_code"`
@@ -43,7 +58,63 @@ func NewB2BService(db *gorm.DB, m *Manager) *B2BServiceImpl {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		circuits: make(map[uint]*circuitState),
 	}
+}
+
+func (s *B2BServiceImpl) checkCircuit(targetEntID uint) error {
+	s.mu.RLock()
+	state, ok := s.circuits[targetEntID]
+	s.mu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	if state.status == "open" {
+		if time.Since(state.lastFailure) > CircuitOpenTime {
+			// 尝试进入半开状态
+			s.mu.Lock()
+			state.status = "half-open"
+			s.mu.Unlock()
+			return nil
+		}
+		return fmt.Errorf("circuit breaker is open for target enterprise %d", targetEntID)
+	}
+
+	return nil
+}
+
+func (s *B2BServiceImpl) recordFailure(targetEntID uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.circuits[targetEntID]
+	if !ok {
+		state = &circuitState{status: "closed"}
+		s.circuits[targetEntID] = state
+	}
+
+	state.failureCount++
+	state.lastFailure = time.Now()
+
+	if state.failureCount >= MaxFailures {
+		state.status = "open"
+		clog.Warn("[B2B] Circuit breaker opened", zap.Uint("target_ent_id", targetEntID))
+	}
+}
+
+func (s *B2BServiceImpl) recordSuccess(targetEntID uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.circuits[targetEntID]
+	if !ok {
+		return
+	}
+
+	state.failureCount = 0
+	state.status = "closed"
 }
 
 // Connect 建立企业间 B2B 连接
@@ -247,20 +318,59 @@ func (s *B2BServiceImpl) SendCrossEnterpriseMessage(fromEmployeeID, toEmployeeID
 	return nil
 }
 
+func (s *B2BServiceImpl) checkSkillSharing(sourceEntID, targetEntID uint, skillName string) error {
+	// 基础技能 (如消息发送) 默认允许
+	if skillName == "im_send_message" {
+		return nil
+	}
+
+	var sharing models.B2BSkillSharingGORM
+	// SourceEntID 是提供方 (targetEntID), TargetEntID 是使用方 (sourceEntID)
+	err := s.db.Where("source_ent_id = ? AND target_ent_id = ? AND skill_name = ?",
+		targetEntID, sourceEntID, skillName).First(&sharing).Error
+
+	if err == gorm.ErrRecordNotFound {
+		return fmt.Errorf("skill '%s' is not shared between these enterprises", skillName)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check skill sharing: %w", err)
+	}
+
+	if !sharing.IsActive {
+		return fmt.Errorf("skill '%s' sharing is currently inactive", skillName)
+	}
+
+	if sharing.Status != "approved" {
+		return fmt.Errorf("skill '%s' sharing is in status '%s' (not approved)", skillName, sharing.Status)
+	}
+
+	return nil
+}
+
 func (s *B2BServiceImpl) CallRemoteTool(sourceEntID, targetEntID uint, toolName string, arguments map[string]any) (any, error) {
-	// 1. 获取目标企业的公共 MCP 端点
+	// 1. 熔断检查
+	if err := s.checkCircuit(targetEntID); err != nil {
+		return nil, err
+	}
+
+	// 2. 技能授权检查
+	if err := s.checkSkillSharing(sourceEntID, targetEntID, toolName); err != nil {
+		return nil, fmt.Errorf("b2b skill authorization failed: %w", err)
+	}
+
+	// 3. 获取目标企业的公共 MCP 端点
 	var apiServer models.MCPServerGORM
 	if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", targetEntID, "global", "active").First(&apiServer).Error; err != nil {
 		return nil, fmt.Errorf("target enterprise has no public MCP endpoint: %w", err)
 	}
 
-	// 2. 构造远程调用 URL
+	// 3. 构造远程调用 URL
 	callURL := apiServer.Endpoint
 	if !strings.Contains(callURL, "/api/mcp/v1/tools/call") {
 		callURL = strings.TrimSuffix(callURL, "/") + "/api/mcp/v1/tools/call"
 	}
 
-	// 3. 准备请求体
+	// 4. 准备请求体
 	reqBody := map[string]any{
 		"server_id": "mesh_bridge",
 		"tool_name": toolName,
@@ -268,40 +378,70 @@ func (s *B2BServiceImpl) CallRemoteTool(sourceEntID, targetEntID uint, toolName 
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 
-	// 4. 生成认证 Token
-	token, err := s.generateB2BToken(sourceEntID, targetEntID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. 发起 HTTP 请求
-	req, _ := http.NewRequest("POST", callURL, bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to remote peer: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var errRes struct {
-			Message string `json:"message"`
+	// 5. 重试逻辑
+	var lastErr error
+	for i := 0; i < MaxRetries; i++ {
+		// 5.1 生成认证 Token
+		token, err := s.generateB2BToken(sourceEntID, targetEntID)
+		if err != nil {
+			return nil, err
 		}
-		json.NewDecoder(resp.Body).Decode(&errRes)
-		return nil, fmt.Errorf("remote error (status %d): %s", resp.StatusCode, errRes.Message)
+
+		// 5.2 发起 HTTP 请求
+		req, _ := http.NewRequest("POST", callURL, bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to connect to remote peer: %w", err)
+			clog.Warn("[B2B] Request failed, retrying...", zap.Int("attempt", i+1), zap.Error(err))
+			time.Sleep(RetryWaitTime * time.Duration(i+1)) // 指数退避
+			continue
+		}
+
+		// 5.3 处理响应
+		if resp.StatusCode != http.StatusOK {
+			var errRes struct {
+				Message string `json:"message"`
+			}
+			json.NewDecoder(resp.Body).Decode(&errRes)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("remote error (status %d): %s", resp.StatusCode, errRes.Message)
+
+			// 如果是 5xx 错误，尝试重试
+			if resp.StatusCode >= 500 {
+				clog.Warn("[B2B] Remote server error, retrying...", zap.Int("attempt", i+1), zap.Int("status", resp.StatusCode))
+				time.Sleep(RetryWaitTime * time.Duration(i+1))
+				continue
+			}
+
+			// 4xx 错误通常不需要重试
+			s.recordFailure(targetEntID)
+			return nil, lastErr
+		}
+
+		var result struct {
+			Success bool `json:"success"`
+			Data    any  `json:"data"`
+		}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if decodeErr != nil {
+			lastErr = fmt.Errorf("failed to decode remote response: %w", decodeErr)
+			s.recordFailure(targetEntID)
+			return nil, lastErr
+		}
+
+		// 成功
+		s.recordSuccess(targetEntID)
+		return result.Data, nil
 	}
 
-	var result struct {
-		Success bool `json:"success"`
-		Data    any  `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode remote response: %w", err)
-	}
-
-	return result.Data, nil
+	// 达到最大重试次数
+	s.recordFailure(targetEntID)
+	return nil, fmt.Errorf("failed after %d retries: %v", MaxRetries, lastErr)
 }
 
 // VerifyIdentity 验证企业身份
@@ -489,4 +629,80 @@ func (s *B2BServiceImpl) generateB2BToken(sourceID, targetID uint) (string, erro
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(signingKey)
+}
+
+// RequestSkillSharing 申请技能共享
+func (s *B2BServiceImpl) RequestSkillSharing(sourceEntID, targetEntID uint, skillName string) error {
+	// 检查是否已经存在申请
+	var existing models.B2BSkillSharingGORM
+	err := s.db.Where("source_ent_id = ? AND target_ent_id = ? AND skill_name = ?",
+		targetEntID, sourceEntID, skillName).First(&existing).Error
+
+	if err == nil {
+		if existing.Status == "approved" {
+			return fmt.Errorf("skill '%s' is already shared and approved", skillName)
+		}
+		// 如果是 rejected 或 pending，更新状态为 pending 重新申请
+		existing.Status = "pending"
+		return s.db.Save(&existing).Error
+	}
+
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	// 创建新的共享申请
+	sharing := models.B2BSkillSharingGORM{
+		SourceEntID: targetEntID, // 提供方
+		TargetEntID: sourceEntID, // 使用方
+		SkillName:   skillName,
+		Status:      "pending",
+		IsActive:    true,
+	}
+
+	return s.db.Create(&sharing).Error
+}
+
+// ApproveSkillSharing 审批技能共享
+func (s *B2BServiceImpl) ApproveSkillSharing(sharingID uint, status string) error {
+	var sharing models.B2BSkillSharingGORM
+	if err := s.db.First(&sharing, sharingID).Error; err != nil {
+		return err
+	}
+
+	// 验证状态合法性
+	validStatus := map[string]bool{"approved": true, "rejected": true, "blocked": true, "pending": true}
+	if !validStatus[status] {
+		return fmt.Errorf("invalid status: %s", status)
+	}
+
+	sharing.Status = status
+	if status == "approved" {
+		sharing.IsActive = true
+	}
+
+	return s.db.Save(&sharing).Error
+}
+
+// ListSkillSharings 列出技能共享列表
+func (s *B2BServiceImpl) ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharingGORM, error) {
+	var sharings []models.B2BSkillSharingGORM
+	db := s.db
+
+	if role == "provider" {
+		// 作为提供方 (SourceEntID)
+		db = db.Where("source_ent_id = ?", entID)
+	} else if role == "consumer" {
+		// 作为使用方 (TargetEntID)
+		db = db.Where("target_ent_id = ?", entID)
+	} else {
+		// 全部
+		db = db.Where("source_ent_id = ? OR target_ent_id = ?", entID, entID)
+	}
+
+	if err := db.Find(&sharings).Error; err != nil {
+		return nil, err
+	}
+
+	return sharings, nil
 }

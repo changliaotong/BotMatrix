@@ -2,6 +2,7 @@ package app
 
 import (
 	"BotMatrix/common/models"
+
 	"gorm.io/gorm"
 )
 
@@ -50,7 +51,49 @@ func (s *EmployeeServiceImpl) UpdateOnlineStatus(botID string, status string) er
 }
 
 func (s *EmployeeServiceImpl) ConsumeSalary(botID string, tokens int64) error {
-	return s.db.Model(&models.DigitalEmployeeGORM{}).
+	// 基础逻辑：累加消耗的 Token
+	err := s.db.Model(&models.DigitalEmployeeGORM{}).
 		Where("bot_id = ?", botID).
 		UpdateColumn("salary_token", gorm.Expr("salary_token + ?", tokens)).Error
+
+	if err != nil {
+		return err
+	}
+
+	// 进阶逻辑：记录流水日志（可选，用于后续审计和报表）
+	// TODO: 实现 AIUsageLog 与 DigitalEmployee 的关联记录
+
+	return nil
+}
+
+// CheckSalaryLimit 检查员工是否超过预算限制
+func (s *EmployeeServiceImpl) CheckSalaryLimit(botID string) (bool, error) {
+	var employee models.DigitalEmployeeGORM
+	if err := s.db.Where("bot_id = ?", botID).First(&employee).Error; err != nil {
+		return false, err
+	}
+
+	if employee.SalaryLimit > 0 && employee.SalaryToken > employee.SalaryLimit {
+		return false, nil // 超过限制
+	}
+
+	return true, nil
+}
+
+func (s *EmployeeServiceImpl) UpdateSalary(botID string, salaryToken *int64, salaryLimit *int64) error {
+	updates := make(map[string]interface{})
+	if salaryToken != nil {
+		updates["salary_token"] = *salaryToken
+	}
+	if salaryLimit != nil {
+		updates["salary_limit"] = *salaryLimit
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return s.db.Model(&models.DigitalEmployeeGORM{}).
+		Where("bot_id = ?", botID).
+		Updates(updates).Error
 }

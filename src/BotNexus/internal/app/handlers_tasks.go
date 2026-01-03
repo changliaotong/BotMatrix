@@ -15,6 +15,13 @@ import (
 )
 
 // HandleListTasks 获取任务列表
+// @Summary 获取任务列表
+// @Description 获取所有已定义的自动化任务列表
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} tasks.Task "任务列表"
+// @Router /api/admin/tasks [get]
 func HandleListTasks(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var taskList []tasks.Task
@@ -24,6 +31,13 @@ func HandleListTasks(m *Manager) http.HandlerFunc {
 }
 
 // HandleListSystemCapabilities 获取系统任务处理能力 (Actions & Interceptors)
+// @Summary 获取系统能力
+// @Description 获取系统支持的所有动作 (Actions) 和拦截器 (Interceptors)
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object "系统能力列表"
+// @Router /api/admin/tasks/capabilities [get]
 func HandleListSystemCapabilities(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		actions := m.TaskManager.Dispatcher.GetActions()
@@ -40,6 +54,15 @@ func HandleListSystemCapabilities(m *Manager) http.HandlerFunc {
 }
 
 // HandleCreateTask 创建任务
+// @Summary 创建自动化任务
+// @Description 创建一个新的自动化任务，支持定时、周期或触发式执行
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body tasks.Task true "任务定义"
+// @Success 200 {object} tasks.Task "创建成功的任务"
+// @Router /api/admin/tasks [post]
 func HandleCreateTask(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -65,6 +88,14 @@ func HandleCreateTask(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetExecutions 获取执行记录
+// @Summary 获取执行记录
+// @Description 获取指定任务的最近执行历史记录
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Param task_id query int true "任务 ID"
+// @Success 200 {array} tasks.Execution "执行记录列表"
+// @Router /api/admin/tasks/executions [get]
 func HandleGetExecutions(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		taskIDStr := r.URL.Query().Get("task_id")
@@ -81,6 +112,15 @@ func HandleGetExecutions(m *Manager) http.HandlerFunc {
 }
 
 // HandleAIParse AI 解析
+// @Summary AI 意图解析
+// @Description 使用 AI 解析用户自然语言指令，识别意图并生成任务草稿
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body tasks.ParseRequest true "解析请求"
+// @Success 200 {object} tasks.ParseResult "解析结果"
+// @Router /api/admin/tasks/ai-parse [post]
 func HandleAIParse(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req tasks.ParseRequest
@@ -190,6 +230,15 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 }
 
 // HandleAIConfirm AI 确认执行
+// @Summary AI 执行确认
+// @Description 确认并执行之前由 AI 生成的任务草稿
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "确认请求"
+// @Success 200 {object} utils.JSONResponse "执行成功"
+// @Router /api/admin/tasks/ai-confirm [post]
 func HandleAIConfirm(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -247,6 +296,15 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 }
 
 // HandleTranslate 翻译接口 (目前使用 Azure 服务)
+// @Summary 文本翻译
+// @Description 使用 Azure Translate 服务进行多语言文本翻译
+// @Tags Tools
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "翻译请求"
+// @Success 200 {object} object "翻译结果"
+// @Router /api/admin/tools/translate [post]
 func HandleTranslate(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -334,6 +392,15 @@ func HandleTranslate(m *Manager) http.HandlerFunc {
 }
 
 // HandleManageTags 标签管理
+// @Summary 管理标签
+// @Description 为指定资源（任务、用户等）添加或移除标签
+// @Tags Tools
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "标签操作请求"
+// @Success 200 {object} utils.JSONResponse "操作成功"
+// @Router /api/admin/tools/tags [post]
 func HandleManageTags(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -364,6 +431,13 @@ func HandleManageTags(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetCapabilities 获取系统能力清单 (用于 AI 提示或功能展示)
+// @Summary 获取系统能力清单
+// @Description 获取系统支持的 Manifest 配置和系统 Prompt 模板
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object "系统能力数据"
+// @Router /api/admin/tasks/manifest [get]
 func HandleGetCapabilities(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		manifest := m.TaskManager.AI.Manifest
@@ -380,6 +454,13 @@ func HandleGetCapabilities(m *Manager) http.HandlerFunc {
 }
 
 // HandleListStrategies 获取策略列表
+// @Summary 获取策略列表
+// @Description 获取系统定义的所有任务执行拦截策略列表
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} tasks.Strategy "策略列表"
+// @Router /api/admin/tasks/strategies [get]
 func HandleListStrategies(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		strategies := m.TaskManager.Interceptors.GetStrategies()
@@ -388,6 +469,14 @@ func HandleListStrategies(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetStrategy 获取策略详情
+// @Summary 获取策略详情
+// @Description 根据名称获取特定拦截策略的详细配置
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Param name query string true "策略名称"
+// @Success 200 {object} tasks.Strategy "策略详情"
+// @Router /api/admin/tasks/strategies/detail [get]
 func HandleGetStrategy(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
@@ -402,6 +491,15 @@ func HandleGetStrategy(m *Manager) http.HandlerFunc {
 }
 
 // HandleSaveStrategy 保存策略
+// @Summary 保存策略配置
+// @Description 新增或更新任务执行拦截策略
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body tasks.Strategy true "策略配置"
+// @Success 200 {object} utils.JSONResponse "保存成功"
+// @Router /api/admin/tasks/strategies [post]
 func HandleSaveStrategy(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var strategy tasks.Strategy

@@ -283,6 +283,31 @@ class BotNexusService extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateEmployeeSalary(String botId, {int? salaryToken, int? salaryLimit}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_apiBaseUrl/admin/employees/status'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (_token.isNotEmpty) 'Authorization': 'Bearer $_token',
+        },
+        body: jsonEncode({
+          'bot_id': botId,
+          if (salaryToken != null) 'salary_token': salaryToken,
+          if (salaryLimit != null) 'salary_limit': salaryLimit,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error updating employee salary: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, dynamic>> getWorkers() async {
     try {
       final response = await http.get(

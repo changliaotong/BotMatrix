@@ -5,8 +5,10 @@ import (
 	"BotMatrix/common/models"
 	"BotMatrix/common/types"
 	"BotMatrix/common/utils"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,6 +21,13 @@ import (
 // --- AI Providers ---
 
 // HandleListAIProviders 获取提供商列表
+// @Summary 获取 AI 提供商列表
+// @Description 获取所有已配置的 AI 模型提供商（如 OpenAI, Anthropic 等），API Key 会被脱敏
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "提供商列表"
+// @Router /api/admin/ai/providers [get]
 func HandleListAIProviders(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var providers []models.AIProviderGORM
@@ -37,6 +46,15 @@ func HandleListAIProviders(m *Manager) http.HandlerFunc {
 }
 
 // HandleSaveAIProvider 保存提供商 (新增或修改)
+// @Summary 保存 AI 提供商
+// @Description 新增或更新 AI 提供商配置。如果 API Key 为 "********" 则保持原值。
+// @Tags AI Management
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body models.AIProviderGORM true "提供商信息"
+// @Success 200 {object} utils.JSONResponse "保存成功"
+// @Router /api/admin/ai/providers [post]
 func HandleSaveAIProvider(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var provider models.AIProviderGORM
@@ -70,6 +88,14 @@ func HandleSaveAIProvider(m *Manager) http.HandlerFunc {
 }
 
 // HandleDeleteAIProvider 删除提供商
+// @Summary 删除 AI 提供商
+// @Description 根据 ID 删除指定的 AI 提供商配置
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "提供商 ID"
+// @Success 200 {object} utils.JSONResponse "删除成功"
+// @Router /api/admin/ai/providers/{id} [delete]
 func HandleDeleteAIProvider(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/api/admin/ai/providers/")
@@ -90,6 +116,13 @@ func HandleDeleteAIProvider(m *Manager) http.HandlerFunc {
 // --- AI Models ---
 
 // HandleListAIModels 获取模型列表
+// @Summary 获取 AI 模型列表
+// @Description 获取所有已配置的 AI 模型，包含其关联的提供商信息
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "模型列表"
+// @Router /api/admin/ai/models [get]
 func HandleListAIModels(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var modelsList []models.AIModelGORM
@@ -102,6 +135,15 @@ func HandleListAIModels(m *Manager) http.HandlerFunc {
 }
 
 // HandleSaveAIModel 保存模型
+// @Summary 保存 AI 模型
+// @Description 新增或更新 AI 模型配置
+// @Tags AI Management
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body models.AIModelGORM true "模型信息"
+// @Success 200 {object} utils.JSONResponse "保存成功"
+// @Router /api/admin/ai/models [post]
 func HandleSaveAIModel(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var model models.AIModelGORM
@@ -126,6 +168,14 @@ func HandleSaveAIModel(m *Manager) http.HandlerFunc {
 }
 
 // HandleDeleteAIModel 删除模型
+// @Summary 删除 AI 模型
+// @Description 根据 ID 删除指定的 AI 模型配置
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模型 ID"
+// @Success 200 {object} utils.JSONResponse "删除成功"
+// @Router /api/admin/ai/models/{id} [delete]
 func HandleDeleteAIModel(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/api/admin/ai/models/")
@@ -146,6 +196,13 @@ func HandleDeleteAIModel(m *Manager) http.HandlerFunc {
 // --- AI Agents ---
 
 // HandleListAIAgents 获取智能体列表 (精简版)
+// @Summary 获取智能体列表
+// @Description 获取可用的 AI 智能体列表。非管理员仅能看到公开的和自己创建的。
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "智能体列表"
+// @Router /api/ai/agents [get]
 func HandleListAIAgents(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("[DEBUG] HandleListAIAgents called")
@@ -188,6 +245,14 @@ func HandleListAIAgents(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetAIAgent 获取单个智能体详情
+// @Summary 获取智能体详情
+// @Description 根据 ID 获取 AI 智能体的详细配置，包含关联的模型信息
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "智能体 ID"
+// @Success 200 {object} utils.JSONResponse "智能体详情"
+// @Router /api/ai/agents/{id} [get]
 func HandleGetAIAgent(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 自动从路径末尾获取 ID，兼容 /api/ai/agents/ 和 /api/admin/ai/agents/
@@ -243,6 +308,15 @@ func HandleGetAIAgent(m *Manager) http.HandlerFunc {
 }
 
 // HandleSaveAIAgent 保存智能体
+// @Summary 保存智能体
+// @Description 新增或更新 AI 智能体配置
+// @Tags AI Management
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body models.AIAgentGORM true "智能体信息"
+// @Success 200 {object} utils.JSONResponse "保存成功"
+// @Router /api/admin/ai/agents [post]
 func HandleSaveAIAgent(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var agent models.AIAgentGORM
@@ -289,6 +363,14 @@ func HandleSaveAIAgent(m *Manager) http.HandlerFunc {
 }
 
 // HandleDeleteAIAgent 删除智能体
+// @Summary 删除智能体
+// @Description 根据 ID 删除指定的 AI 智能体配置
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "智能体 ID"
+// @Success 200 {object} utils.JSONResponse "删除成功"
+// @Router /api/admin/ai/agents/{id} [delete]
 func HandleDeleteAIAgent(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/api/admin/ai/agents/")
@@ -307,6 +389,13 @@ func HandleDeleteAIAgent(m *Manager) http.HandlerFunc {
 }
 
 // HandleListAIUsageLogs 获取 AI 使用日志
+// @Summary 获取 AI 使用日志
+// @Description 获取最近的 AI 调用日志，用于审计和统计
+// @Tags AI Management
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "日志列表"
+// @Router /api/admin/ai/logs [get]
 func HandleListAIUsageLogs(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var logs []models.AIUsageLogGORM
@@ -322,6 +411,15 @@ func HandleListAIUsageLogs(m *Manager) http.HandlerFunc {
 // --- AI Trial (SSE) ---
 
 // HandleAIChatStream 处理网页端流式试用
+// @Summary AI 试用对话 (流式)
+// @Description 在管理后台直接与指定的 AI 智能体对话，支持 SSE 流式返回
+// @Tags AI Trial
+// @Accept json
+// @Produce text/event-stream
+// @Security BearerAuth
+// @Param body body object true "对话请求"
+// @Success 200 {string} string "SSE Stream"
+// @Router /api/ai/chat/stream [post]
 func HandleAIChatStream(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[DEBUG] HandleAIChatStream called, Method: %s, Path: %s\n", r.Method, r.URL.Path)
@@ -664,6 +762,16 @@ func HandleAIChatStream(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetAIChatHistory 获取智能体对话历史
+// @Summary 获取对话历史
+// @Description 获取指定会话的聊天历史记录，支持分页
+// @Tags AI Trial
+// @Produce json
+// @Security BearerAuth
+// @Param session_id query string true "会话 ID"
+// @Param limit query int false "获取条数，默认 20"
+// @Param before_id query int false "获取该 ID 之前的消息"
+// @Success 200 {array} models.AIChatMessageGORM "消息列表"
+// @Router /api/ai/chat/history [get]
 func HandleGetAIChatHistory(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sessionID := r.URL.Query().Get("session_id")
@@ -734,6 +842,13 @@ func HandleGetAIChatHistory(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetRecentSessions 获取用户最近的 AI 对话会话
+// @Summary 获取最近会话
+// @Description 获取当前登录用户最近的 AI 对话会话列表
+// @Tags AI Trial
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} models.AISessionGORM "会话列表"
+// @Router /api/ai/chat/sessions [get]
 func HandleGetRecentSessions(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, _ := r.Context().Value(types.UserClaimsKey).(*types.UserClaims)
@@ -756,5 +871,153 @@ func HandleGetRecentSessions(m *Manager) http.HandlerFunc {
 		}
 
 		utils.SendJSONResponse(w, true, "", sessions)
+	}
+}
+
+// --- Cognitive Memory Autonomous Learning ---
+
+// HandleBotLearnURL 从 URL 自动学习并存入记忆
+// @Summary 从 URL 自动学习
+// @Description 提供一个 URL，让数字员工抓取并分析其中的知识，存入其认知记忆
+// @Tags AI Management
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body map[string]string true "学习请求 (bot_id, url, category)"
+// @Success 200 {object} utils.JSONResponse "学习任务已提交"
+// @Router /api/ai/memory/learn/url [post]
+func HandleBotLearnURL(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			BotID    string `json:"bot_id"`
+			URL      string `json:"url"`
+			Category string `json:"category"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, "请求格式错误", nil)
+			return
+		}
+
+		if req.BotID == "" || req.URL == "" {
+			utils.SendJSONResponse(w, false, "bot_id 和 url 不能为空", nil)
+			return
+		}
+
+		if m.CognitiveMemoryService == nil {
+			utils.SendJSONResponse(w, false, "认知记忆服务未初始化", nil)
+			return
+		}
+
+		// 异步执行，防止阻塞前端
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			err := m.CognitiveMemoryService.LearnFromURL(ctx, req.BotID, req.URL, req.Category)
+			if err != nil {
+				fmt.Printf("[Memory] LearnFromURL failed: %v\n", err)
+			}
+		}()
+
+		utils.SendJSONResponse(w, true, "抓取学习任务已异步提交，请稍后在记忆库中查看结果", nil)
+	}
+}
+
+// HandleBotLearnFile 从上传的文件学习并存入记忆
+// @Summary 从文件学习
+// @Description 上传 PDF/Excel/Docx 等文件，让数字员工分析其中的知识，存入其认知记忆
+// @Tags AI Management
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param bot_id formData string true "机器人 ID"
+// @Param category formData string false "知识分类"
+// @Param file formData file true "知识文件"
+// @Success 200 {object} utils.JSONResponse "学习任务已提交"
+// @Router /api/ai/memory/learn/file [post]
+func HandleBotLearnFile(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 解析 multipart/form-data
+		err := r.ParseMultipartForm(32 << 20) // 32MB max
+		if err != nil {
+			utils.SendJSONResponse(w, false, "解析表单失败: "+err.Error(), nil)
+			return
+		}
+
+		botID := r.FormValue("bot_id")
+		category := r.FormValue("category")
+		if botID == "" {
+			utils.SendJSONResponse(w, false, "bot_id 不能为空", nil)
+			return
+		}
+
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			utils.SendJSONResponse(w, false, "读取文件失败: "+err.Error(), nil)
+			return
+		}
+		defer file.Close()
+
+		content, err := io.ReadAll(file)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "读取文件内容失败: "+err.Error(), nil)
+			return
+		}
+
+		if m.CognitiveMemoryService == nil {
+			utils.SendJSONResponse(w, false, "认知记忆服务未初始化", nil)
+			return
+		}
+
+		// 异步执行
+		filename := header.Filename
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			err := m.CognitiveMemoryService.LearnFromContent(ctx, botID, content, filename, category)
+			if err != nil {
+				fmt.Printf("[Memory] LearnFromContent failed: %v\n", err)
+			}
+		}()
+
+		utils.SendJSONResponse(w, true, "文件分析学习任务已异步提交", nil)
+	}
+}
+
+// HandleBotConsolidateMemories 手动触发记忆固化
+// @Summary 触发记忆固化
+// @Description 手动触发对指定机器人/用户的记忆进行总结与去重
+// @Tags AI Management
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body map[string]string true "固化请求 (bot_id, user_id)"
+// @Success 200 {object} utils.JSONResponse "固化任务已提交"
+// @Router /api/ai/memory/consolidate [post]
+func HandleBotConsolidateMemories(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			BotID  string `json:"bot_id"`
+			UserID string `json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, "请求格式错误", nil)
+			return
+		}
+
+		if m.CognitiveMemoryService == nil {
+			utils.SendJSONResponse(w, false, "认知记忆服务未初始化", nil)
+			return
+		}
+
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			err := m.CognitiveMemoryService.ConsolidateMemories(ctx, req.UserID, req.BotID, m.AIIntegrationService)
+			if err != nil {
+				fmt.Printf("[Memory] ConsolidateMemories failed: %v\n", err)
+			}
+		}()
+
+		utils.SendJSONResponse(w, true, "记忆固化任务已异步提交", nil)
 	}
 }

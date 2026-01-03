@@ -406,6 +406,7 @@ type DigitalEmployeeGORM struct {
 	Status            string    `gorm:"size:20;default:'active';column:status" json:"status"`                // 状态: active(在职), training(培训中), retired(离职)
 	OnlineStatus      string    `gorm:"size:20;default:'offline';column:online_status" json:"online_status"` // online, offline, busy
 	SalaryToken       int64     `gorm:"default:0;column:salary_token" json:"salary_token"`                   // 累计消耗 Token (作为薪资统计)
+	SalaryLimit       int64     `gorm:"default:1000000;column:salary_limit" json:"salary_limit"`             // Token 预算限制
 	KpiScore          float64   `gorm:"default:100;column:kpi_score" json:"kpi_score"`                       // KPI 评分 (基于满意度打分)
 	ExternalCommLevel int       `gorm:"default:0;column:external_comm_level" json:"external_comm_level"`     // 外部通信等级: 0(禁止), 1(仅限白名单企业), 2(公开)
 	CreatedAt         time.Time `gorm:"column:created_at" json:"created_at"`
@@ -441,6 +442,23 @@ type B2BConnectionGORM struct {
 	Config       string    `gorm:"type:text;column:config" json:"config"`                            // 连接特定配置
 	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+// B2BSkillSharingGORM B2B 技能共享授权表
+type B2BSkillSharingGORM struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	SourceEntID uint      `gorm:"index;column:source_ent_id" json:"source_ent_id"`       // 提供技能的企业
+	TargetEntID uint      `gorm:"index;column:target_ent_id" json:"target_ent_id"`       // 使用技能的企业
+	SkillName   string    `gorm:"size:100;column:skill_name" json:"skill_name"`          // 共享的技能名称
+	AliasName   string    `gorm:"size:100;column:alias_name" json:"alias_name"`          // 在目标企业的别名 (可选)
+	Status      string    `gorm:"size:20;default:'pending';column:status" json:"status"` // pending, approved, rejected, blocked
+	IsActive    bool      `gorm:"default:true;column:is_active" json:"is_active"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (B2BSkillSharingGORM) TableName() string {
+	return "b2b_skill_sharings"
 }
 
 // TableName 设置表名
@@ -538,4 +556,21 @@ type BotSkillPermissionGORM struct {
 
 func (BotSkillPermissionGORM) TableName() string {
 	return "bot_skill_permissions"
+}
+
+// AIAgentTraceGORM AI Agent 执行追踪日志
+type AIAgentTraceGORM struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	SessionID string    `gorm:"index;size:64;column:session_id" json:"session_id"`
+	BotID     string    `gorm:"index;size:64;column:bot_id" json:"bot_id"`
+	Step      int       `gorm:"column:step" json:"step"`
+	Type      string    `gorm:"size:32;column:type" json:"type"` // reasoning, tool_call, tool_result, llm_response
+	Content   string    `gorm:"type:text;column:content" json:"content"`
+	Metadata  string    `gorm:"type:text;column:metadata" json:"metadata"` // JSON 格式的额外信息
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+// TableName 设置表名
+func (AIAgentTraceGORM) TableName() string {
+	return "ai_agent_traces"
 }

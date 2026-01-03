@@ -10,6 +10,9 @@ class BotInfo {
   final int sentCount;
   final int recvCount;
   final String avatarUrl;
+  final double kpiScore;
+  final int salaryToken;
+  final int salaryLimit;
 
   BotInfo({
     required this.id,
@@ -23,6 +26,9 @@ class BotInfo {
     required this.sentCount,
     required this.recvCount,
     required this.avatarUrl,
+    this.kpiScore = 0.0,
+    this.salaryToken = 0,
+    this.salaryLimit = 0,
   });
 
   factory BotInfo.fromJson(Map<String, dynamic> json) {
@@ -38,6 +44,9 @@ class BotInfo {
       sentCount: json['sent_count'] ?? 0,
       recvCount: json['recv_count'] ?? 0,
       avatarUrl: json['avatar_url'] ?? '',
+      kpiScore: (json['kpi_score'] ?? 0.0).toDouble(),
+      salaryToken: json['salary_token'] ?? 0,
+      salaryLimit: json['salary_limit'] ?? 0,
     );
   }
 }

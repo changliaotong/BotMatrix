@@ -11,7 +11,12 @@ import (
 )
 
 // HandleMCPSSE 处理 MCP SSE 连接
-// GET /api/mcp/v1/sse
+// @Summary MCP SSE 传输
+// @Description 建立符合 MCP 规范的 SSE 连接，用于双向异步通信
+// @Tags MCP
+// @Produce text/event-stream
+// @Success 200 {string} string "SSE Event Stream"
+// @Router /api/mcp/v1/sse [get]
 func HandleMCPSSE(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 设置 SSE 响应头
@@ -52,7 +57,12 @@ func HandleMCPSSE(m *Manager) http.HandlerFunc {
 }
 
 // HandleMCPListTools 处理 MCP tools/list 请求
-// GET /api/mcp/v1/tools
+// @Summary 列出 MCP 工具
+// @Description 获取当前节点暴露的所有 MCP 工具列表
+// @Tags MCP
+// @Produce json
+// @Success 200 {object} ai.MCPListToolsResponse "工具列表"
+// @Router /api/mcp/v1/tools [get]
 func HandleMCPListTools(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := NewInternalSkillMCPHost(m)
@@ -71,7 +81,14 @@ func HandleMCPListTools(m *Manager) http.HandlerFunc {
 }
 
 // HandleMCPCallTool 处理 MCP tools/call 请求
-// POST /api/mcp/v1/tools/call
+// @Summary 调用 MCP 工具
+// @Description 调用指定的 MCP 工具并返回执行结果，支持隐私数据脱敏
+// @Tags MCP
+// @Accept json
+// @Produce json
+// @Param body body ai.MCPCallToolRequest true "调用请求"
+// @Success 200 {object} ai.MCPCallToolResponse "调用结果"
+// @Router /api/mcp/v1/tools/call [post]
 func HandleMCPCallTool(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ai.MCPCallToolRequest

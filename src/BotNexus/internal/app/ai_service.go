@@ -23,6 +23,7 @@ type AIServiceImpl struct {
 	clientsByConfig map[string]ai.Client
 	mu              sync.RWMutex
 	privacyFilter   *ai.PrivacyFilter
+	contextManager  *ai.ContextManager
 	mcpManager      *MCPManager
 	skillManager    *SkillManager
 	memoryService   CognitiveMemoryService
@@ -37,6 +38,7 @@ func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
 		manager:         m,
 		clientsByConfig: make(map[string]ai.Client),
 		privacyFilter:   ai.NewPrivacyFilter(),
+		contextManager:  ai.NewContextManager(8192), // 默认支持 8k token 上下文
 		mcpManager:      mcp,
 		skillManager:    NewSkillManager(db, m, mcp),
 		memoryService:   NewCognitiveMemoryService(db),
@@ -188,6 +190,11 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 		}
 	}
 
+	// 5. 上下文管理 (Context Pruning)
+	if s.contextManager != nil {
+		messages = s.contextManager.PruneMessages(messages)
+	}
+
 	var model models.AIModelGORM
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
@@ -273,6 +280,89 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 	}
 
 	return resp, err
+}
+
+// ChatAgent 提供自主 Agent 循环能力，自动处理工具调用并返回最终结果
+func (s *AIServiceImpl) ChatAgent(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
+	const maxIterations = 10
+	currentMessages := messages
+
+	// 提取元数据用于工具调用
+	botID, _ := ctx.Value("botID").(string)
+	userIDNum, _ := ctx.Value("userIDNum").(uint)
+	orgIDNum, _ := ctx.Value("orgIDNum").(uint)
+
+	if botID == "" {
+		botID = "default_bot"
+	}
+
+	var finalResp *ai.ChatResponse
+	sessionID := fmt.Sprintf("agent_%d", time.Now().UnixNano())
+
+	for i := 0; i < maxIterations; i++ {
+		clog.Info("[Agent] Iteration", zap.Int("step", i+1), zap.String("session", sessionID))
+
+		// 调用基础 Chat
+		resp, err := s.Chat(ctx, modelID, currentMessages, tools)
+		if err != nil {
+			return nil, err
+		}
+		finalResp = resp
+
+		if len(resp.Choices) == 0 {
+			break
+		}
+
+		choice := resp.Choices[0]
+
+		// 记录 LLM 响应
+		contentStr, _ := choice.Message.Content.(string)
+		s.saveTrace(sessionID, botID, i, "llm_response", contentStr, "")
+
+		// 如果不需要调用工具，或者模型已经给出了最终答案
+		if choice.FinishReason != "tool_calls" && len(choice.Message.ToolCalls) == 0 {
+			break
+		}
+
+		// 将 Assistant 的消息添加到历史记录中
+		currentMessages = append(currentMessages, choice.Message)
+
+		// 处理工具调用
+		hasError := false
+		for _, tc := range choice.Message.ToolCalls {
+			clog.Info("[Agent] Executing tool", zap.String("name", tc.Function.Name))
+			s.saveTrace(sessionID, botID, i, "tool_call", tc.Function.Name, tc.Function.Arguments)
+
+			result, err := s.ExecuteTool(ctx, botID, userIDNum, orgIDNum, tc)
+			resultStr := ""
+			if err != nil {
+				clog.Error("[Agent] Tool execution failed", zap.Error(err))
+				resultStr = fmt.Sprintf("Error: %v", err)
+				hasError = true
+			} else {
+				b, _ := json.Marshal(result)
+				resultStr = string(b)
+			}
+
+			// 记录工具结果
+			s.saveTrace(sessionID, botID, i, "tool_result", tc.Function.Name, resultStr)
+
+			// 将工具结果添加到历史记录中
+			currentMessages = append(currentMessages, ai.Message{
+				Role:       ai.RoleTool,
+				Content:    resultStr,
+				ToolCallID: tc.ID,
+				Name:       tc.Function.Name,
+			})
+		}
+
+		// 如果发生了错误，可能需要让模型处理错误或者停止循环
+		if hasError && i > 3 {
+			break
+		}
+	}
+
+	return finalResp, nil
 }
 
 // ExecuteTool 执行工具调用，支持普通 Skill 和 MCP Tool
@@ -423,6 +513,26 @@ func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input
 	}
 
 	return resp, nil
+}
+
+// saveTrace 记录 AI Agent 的执行追踪日志
+func (s *AIServiceImpl) saveTrace(sessionID, botID string, step int, traceType, content, metadata string) {
+	trace := models.AIAgentTraceGORM{
+		SessionID: sessionID,
+		BotID:     botID,
+		Step:      step,
+		Type:      traceType,
+		Content:   content,
+		Metadata:  metadata,
+		CreatedAt: time.Now(),
+	}
+
+	// 异步保存，不阻塞主流程
+	go func() {
+		if err := s.db.Create(&trace).Error; err != nil {
+			clog.Error("failed to save agent trace", zap.Error(err), zap.String("session", sessionID))
+		}
+	}()
 }
 
 func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error) {

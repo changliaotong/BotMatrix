@@ -18,6 +18,7 @@ type SkillManager struct {
 	db         *gorm.DB
 	manager    *Manager
 	mcpManager *MCPManager
+	b2bService B2BService
 }
 
 func NewSkillManager(db *gorm.DB, manager *Manager, mcpManager *MCPManager) *SkillManager {
@@ -26,6 +27,10 @@ func NewSkillManager(db *gorm.DB, manager *Manager, mcpManager *MCPManager) *Ski
 		manager:    manager,
 		mcpManager: mcpManager,
 	}
+}
+
+func (sm *SkillManager) SetB2BService(b2b B2BService) {
+	sm.b2bService = b2b
 }
 
 // GetAvailableSkillsForBot 获取特定机器人可用的所有技能描述（用于 AI Tool 定义）
@@ -68,6 +73,26 @@ func (sm *SkillManager) GetAvailableSkillsForBot(ctx context.Context, botID stri
 				if allowed {
 					tools = append(tools, mt)
 				}
+			}
+		}
+	}
+
+	// 3. 获取 B2B 共享技能
+	if orgID > 0 {
+		var sharedSkills []models.B2BSkillSharingGORM
+		err := sm.db.WithContext(ctx).Where("target_ent_id = ? AND is_active = ?", orgID, true).Find(&sharedSkills).Error
+		if err == nil {
+			for _, ss := range sharedSkills {
+				// 构造 B2B 技能标识: b2b__entID__skillName
+				b2bSkillName := fmt.Sprintf("b2b__%d__%s", ss.SourceEntID, ss.SkillName)
+				tools = append(tools, ai.Tool{
+					Type: "function",
+					Function: ai.FunctionDefinition{
+						Name:        b2bSkillName,
+						Description: fmt.Sprintf("[B2B 共享技能] %s", ss.SkillName),
+						Parameters:  map[string]any{"type": "object"}, // 远程技能参数动态，暂定 object
+					},
+				})
 			}
 		}
 	}
@@ -150,8 +175,20 @@ func (sm *SkillManager) ExecuteSkill(ctx context.Context, botID string, userID u
 	}
 
 	// 如果是 MCP 工具 (包含 __ 分隔符)
-	if strings.Contains(name, "__") {
+	if strings.HasPrefix(name, "mcp__") || strings.Contains(name, "__") && !strings.HasPrefix(name, "b2b__") {
 		return sm.mcpManager.CallTool(ctx, name, args)
+	}
+
+	// 如果是 B2B 共享技能 (标识为 b2b__entID__skillName)
+	if strings.HasPrefix(name, "b2b__") {
+		parts := strings.Split(name, "__")
+		if len(parts) >= 3 && sm.b2bService != nil {
+			var sourceEntID uint
+			fmt.Sscanf(parts[1], "%d", &sourceEntID)
+			realSkillName := strings.Join(parts[2:], "__")
+			return sm.b2bService.CallRemoteTool(orgID, sourceEntID, realSkillName, args)
+		}
+		return nil, fmt.Errorf("invalid b2b skill format or b2b service not available")
 	}
 
 	// 如果是传统 Worker 插件技能

@@ -13,5 +13,10 @@
     "start": "启动",
     "settings": "设置",
     "language": "语言",
-    "switchLanguage": "切换语言"
+    "switchLanguage": "切换语言",
+    "kpi": "绩效",
+    "salary": "消耗",
+    "limit": "预算",
+    "recharge": "重置",
+    "allocate": "分配"
 }
