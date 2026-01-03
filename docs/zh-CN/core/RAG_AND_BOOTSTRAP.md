@@ -8,7 +8,9 @@
 - **向量数据库**: PostgreSQL + [pgvector](https://github.com/pgvector/pgvector)
   - 理由：利用现有 PostgreSQL 基础设施，减少运维复杂度。
   - 支持 `L2 distance (<->)` 和 `Cosine distance (<=>)` 搜索。
-- **向量化模型**: OpenAI `text-embedding-3-small` (1536 维)
+- **向量化模型**: 推荐使用开源模型 [BGE-M3](https://huggingface.co/BAAI/bge-m3) (1024 维)
+  - 部署方式：通过 [Ollama](https://ollama.com/) 本地运行 `ollama run bge-m3`。
+  - 理由：BGE-M3 在中英文语义对齐和长文本处理上表现卓越，且支持本地部署，无需担心隐私和成本。
 - **数据流**:
   1. **Indexer**: 扫描 `DOCS.md` 及代码注释，进行 Markdown 分片。
   2. **Storage**: 存储分片内容及其向量。

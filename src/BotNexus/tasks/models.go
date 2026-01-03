@@ -98,9 +98,11 @@ type AIDraft struct {
 	DeletedAt  gorm.DeletedAt `gorm:"index;column:deleted_at" json:"deleted_at"`
 	DraftID    string         `gorm:"size:100;uniqueIndex;not null;column:draft_id" json:"draft_id"`
 	UserID     uint           `gorm:"index;column:user_id" json:"user_id"`
+	GroupID    string         `gorm:"size:100;column:group_id" json:"group_id"`              // 执行上下文：群号
+	UserRole   string         `gorm:"size:50;column:user_role" json:"user_role"`             // 执行上下文：角色
 	Intent     string         `gorm:"size:50;column:intent" json:"intent"`
 	Data       string         `gorm:"type:text;column:data" json:"data"`                     // 序列化的结构化数据
-	Status     string         `gorm:"size:20;default:'pending';column:status" json:"status"` // pending, confirmed, expired
+	Status     string         `gorm:"size:20;default:'pending';column:status" json:"status"` // pending, confirmed, expired, rejected
 	ExpireTime time.Time      `gorm:"index;column:expire_time" json:"expire_time"`
 }
 

@@ -95,6 +95,9 @@ func loadConfigFromEnv() {
 	if val := os.Getenv("PG_HOST"); val != "" {
 		GlobalConfig.PGHost = val
 	}
+	if val := os.Getenv("AI_EMBEDDING_MODEL"); val != "" {
+		GlobalConfig.AIEmbeddingModel = val
+	}
 	// ... add other env vars as needed
 }
 

@@ -141,15 +141,17 @@ func (pm *PluginManager) readPluginOutput(plugin *Plugin) {
 
 func (pm *PluginManager) handlePluginResponse(plugin *Plugin, resp *ResponseMessage) {
 	for _, action := range resp.Actions {
-		// Special handling for cross-plugin skill calls
-		if action.Type == "call_skill" {
-			pm.routeSkillCall(plugin, action)
-			continue
-		}
-
 		if !pm.isActionAllowed(plugin, action.Type) {
 			log.Printf("plugin %s tried to execute forbidden action %s", plugin.ID, action.Type)
 			continue
+		}
+
+		// Special handling for cross-plugin skill calls
+		if action.Type == "call_skill" {
+			if pm.routeSkillCall(plugin, action) {
+				continue
+			}
+			// If not a process-to-process call, let it fall through to the system action handler
 		}
 
 		log.Printf("executing action %s from plugin %s", action.Type, plugin.ID)
@@ -160,24 +162,22 @@ func (pm *PluginManager) handlePluginResponse(plugin *Plugin, resp *ResponseMess
 }
 
 func (pm *PluginManager) isActionAllowed(plugin *Plugin, actionType string) bool {
-	// 临时：在调试阶段允许所有操作
-	log.Printf("DEBUG: Authorizing action %s for plugin %s", actionType, plugin.ID)
-	return true
-
 	// 1. First check if the action is declared in the plugin's manifest
 	declared := false
 	for _, p := range plugin.Config.Permissions {
-		if p == actionType {
+		if p == actionType || p == "*" {
 			declared = true
 			break
 		}
 	}
 
 	if !declared {
+		log.Printf("[PluginManager] Security: Plugin %s tried to execute undeclared action %s", plugin.ID, actionType)
 		return false
 	}
 
 	// 2. Then check against the system's global policy (Center or Worker)
+	// If RunOn is empty, assume it's a Worker plugin for safety
 	if len(plugin.Config.RunOn) == 0 {
 		return policy.WorkerActionWhitelist[actionType]
 	}
@@ -195,20 +195,21 @@ func (pm *PluginManager) isActionAllowed(plugin *Plugin, actionType string) bool
 		}
 	}
 
+	log.Printf("[PluginManager] Security: Action %s is not in global whitelist for plugin %s", actionType, plugin.ID)
 	return false
 }
 
-func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) {
+func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) bool {
 	targetID, ok := action.Payload["target_plugin"].(string)
 	if !ok {
 		log.Printf("Invalid skill call from %s: missing target_plugin", source.ID)
-		return
+		return false
 	}
 
 	skillName, ok := action.Payload["skill_name"].(string)
 	if !ok {
 		log.Printf("Invalid skill call from %s: missing skill_name", source.ID)
-		return
+		return false
 	}
 
 	payload, _ := action.Payload["payload"].(map[string]any)
@@ -218,15 +219,15 @@ func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) {
 	pm.mutex.Unlock()
 
 	if !exists || len(versions) == 0 {
-		log.Printf("Skill call failed: target plugin %s not found", targetID)
-		return
+		// Not a process plugin, might be an internal plugin
+		return false
 	}
 
 	// Always route to the latest version for skills for now
 	targetPlugin := versions[len(versions)-1]
 	if targetPlugin.State != "running" {
 		log.Printf("Skill call failed: target plugin %s (v%s) is not running", targetID, targetPlugin.Config.Version)
-		return
+		return true // It IS a process plugin, but it's not running
 	}
 
 	// Inject as a new event to the target plugin
@@ -244,8 +245,9 @@ func (pm *PluginManager) routeSkillCall(source *Plugin, action Action) {
 	if err := encoder.Encode(event); err != nil {
 		log.Printf("Failed to inject skill event to %s: %v", targetID, err)
 	} else {
-		log.Printf("Skill %s called: %s -> %s", skillName, source.ID, targetID)
+		log.Printf("Skill %s called (process-to-process): %s -> %s", skillName, source.ID, targetID)
 	}
+	return true
 }
 
 // DispatchEvent routes an incoming event to matching plugins

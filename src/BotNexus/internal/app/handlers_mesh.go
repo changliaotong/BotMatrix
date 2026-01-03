@@ -17,17 +17,14 @@ func HandleMeshDiscover(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		// 1. 本地搜索
-		localServers, err := m.B2BService.DiscoverEndpoints(query)
+		// 执行联邦搜索 (包含本地和远程已连接的企业)
+		allServers, err := m.B2BService.DiscoverMeshEndpoints(query)
 		if err != nil {
-			utils.SendJSONResponse(w, false, "Local discovery failed: "+err.Error(), nil)
+			utils.SendJSONResponse(w, false, "Mesh discovery failed: "+err.Error(), nil)
 			return
 		}
 
-		// 2. 联邦搜索 (TODO: 向已连接...)
-		// 这里先实现一个本地聚合逻辑
-
-		utils.SendJSONResponse(w, true, "Discovery successful", localServers)
+		utils.SendJSONResponse(w, true, "Discovery successful", allServers)
 	}
 }
 

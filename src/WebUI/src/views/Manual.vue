@@ -111,7 +111,7 @@ const categories = computed(() => [
           <HelpCircle class="w-8 h-8 mb-4" />
           <h3 class="font-black text-sm uppercase tracking-tight">{{ t('need_help') }}</h3>
           <p class="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">{{ t('join_community_desc') }}</p>
-          <button class="w-full mt-4 py-3 rounded-xl bg-black text-white text-[10px] font-black uppercase tracking-widest hover:bg-black/80 transition-all flex items-center justify-center gap-2">
+          <button class="w-full mt-4 py-3 rounded-xl bg-black text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest hover:bg-black/80 transition-all flex items-center justify-center gap-2">
             <MessageSquare class="w-3 h-3" />
             {{ t('join_discord') }}
           </button>

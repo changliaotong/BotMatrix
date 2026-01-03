@@ -19,6 +19,22 @@ type BotCallback interface {
 	OnQrCode(url string)
 }
 
+// IDMapping 用于存储微信临时ID到持久化ID的映射
+type IDMapping struct {
+	WeChatID     string `json:"wechat_id"`     // 微信临时ID
+	PersistentID string `json:"persistent_id"` // 持久化ID
+	Nickname     string `json:"nickname"`      // 用户/群组昵称
+	Type         string `json:"type"`          // 类型：user/group
+	CreatedAt    int64  `json:"created_at"`    // 创建时间
+	UpdatedAt    int64  `json:"updated_at"`    // 更新时间
+}
+
+// IDMapStore 用于管理ID映射的持久化存储
+type IDMapStore struct {
+	Mappings map[string]IDMapping `json:"mappings"` // wechat_id -> mapping
+}
+
+// WxBot 微信机器人核心结构体
 type WxBot struct {
 	ManagerURL    string
 	SelfID        string
@@ -29,6 +45,14 @@ type WxBot struct {
 	mySelf  *openwechat.Self
 	bot     *openwechat.Bot
 
+	// 消息映射表，用于保存消息ID到SentMessage的映射，支持撤回功能
+	msgMap   map[string]*openwechat.SentMessage
+	msgMutex sync.Mutex
+
+	// ID映射表，用于实现ID固化
+	idMap   map[string]IDMapping // wechat_id -> mapping
+	idMutex sync.Mutex
+
 	callback BotCallback
 }
 
@@ -36,13 +60,13 @@ func NewWxBot(managerUrl, selfId string, cb BotCallback) *WxBot {
 	if managerUrl == "" {
 		managerUrl = "ws://localhost:3001"
 	}
-	if selfId == "" {
-		selfId = "1098299491"
-	}
+	// 不再硬编码默认selfid，完全由配置文件或调用者决定
 	return &WxBot{
 		ManagerURL:    managerUrl,
 		SelfID:        selfId,
 		ReportSelfMsg: true, // 默认上报自身消息
+		msgMap:        make(map[string]*openwechat.SentMessage),
+		idMap:         make(map[string]IDMapping),
 		callback:      cb,
 	}
 }
@@ -55,10 +79,137 @@ func (b *WxBot) Log(format string, v ...interface{}) {
 	}
 }
 
+// loadIDMap 从文件加载ID映射表
+func (b *WxBot) loadIDMap() {
+	filePath := "id_mapping.json"
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		b.Log("[ID Mapping] No existing ID mapping file, will create new one")
+		return
+	}
+
+	// 读取文件内容
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		b.Log("[ID Mapping] Failed to read ID mapping file: %v", err)
+		return
+	}
+
+	// 解析JSON
+	var store IDMapStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		b.Log("[ID Mapping] Failed to parse ID mapping file: %v", err)
+		return
+	}
+
+	// 更新到内存
+	b.idMutex.Lock()
+	b.idMap = store.Mappings
+	b.idMutex.Unlock()
+	b.Log("[ID Mapping] Loaded %d ID mappings from file", len(store.Mappings))
+}
+
+// saveIDMap 将ID映射表保存到文件
+func (b *WxBot) saveIDMap() {
+	b.idMutex.Lock()
+	defer b.idMutex.Unlock()
+
+	store := IDMapStore{
+		Mappings: b.idMap,
+	}
+
+	// 序列化JSON
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		b.Log("[ID Mapping] Failed to marshal ID mappings: %v", err)
+		return
+	}
+
+	// 写入文件
+	if err := os.WriteFile("id_mapping.json", data, 0644); err != nil {
+		b.Log("[ID Mapping] Failed to write ID mapping file: %v", err)
+		return
+	}
+
+	b.Log("[ID Mapping] Saved %d ID mappings to file", len(b.idMap))
+}
+
+// getPersistentID 获取持久化ID，如果不存在则创建新的
+func (b *WxBot) getPersistentID(wechatID, nickname, idType string) string {
+	b.idMutex.Lock()
+	defer b.idMutex.Unlock()
+
+	// 检查是否已有映射
+	if mapping, exists := b.idMap[wechatID]; exists {
+		// 更新昵称和时间
+		mapping.Nickname = nickname
+		mapping.UpdatedAt = time.Now().Unix()
+		b.idMap[wechatID] = mapping
+		return mapping.PersistentID
+	}
+
+	// 创建新的映射
+	now := time.Now().Unix()
+	// 使用昵称+时间戳生成相对唯一的持久化ID
+	persistentID := fmt.Sprintf("%s_%s_%d", idType, nickname, now)
+	// 如果昵称为空，使用wechatID的前8位
+	if nickname == "" {
+		persistentID = fmt.Sprintf("%s_%s", idType, wechatID[:8])
+	}
+
+	mapping := IDMapping{
+		WeChatID:     wechatID,
+		PersistentID: persistentID,
+		Nickname:     nickname,
+		Type:         idType,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	b.idMap[wechatID] = mapping
+	return persistentID
+}
+
+// batchUpdateIDMap 批量更新ID映射表
+func (b *WxBot) batchUpdateIDMap() {
+	b.Log("[ID Mapping] Starting batch update...")
+
+	// 更新好友映射
+	friends, err := b.mySelf.Friends()
+	if err == nil {
+		for _, friend := range friends {
+			b.getPersistentID(friend.UserName, friend.NickName, "user")
+		}
+		b.Log("[ID Mapping] Updated friend mappings")
+	}
+
+	// 更新群组映射
+	groups, err := b.mySelf.Groups()
+	if err == nil {
+		for _, group := range groups {
+			b.getPersistentID(group.UserName, group.NickName, "group")
+			// 更新群成员映射
+			members, err := group.Members()
+			if err == nil {
+				for _, member := range members {
+					b.getPersistentID(member.UserName, member.NickName, "user")
+				}
+			}
+		}
+		b.Log("[ID Mapping] Updated group and member mappings")
+	}
+
+	// 保存到文件
+	b.saveIDMap()
+	b.Log("[ID Mapping] Batch update completed")
+}
+
 func (b *WxBot) Start() {
 	b.Log("[WxBotGo] Starting... Target Manager: %s, SelfID: %s", b.ManagerURL, b.SelfID)
 
-	b.bot = openwechat.DefaultBot(openwechat.Desktop)
+	// 使用普通网页模式，不修改协议头，避免账号被封
+	b.Log("[WxBotGo] 使用普通网页模式，不修改协议头")
+	b.bot = openwechat.DefaultBot(openwechat.Normal) // 使用Normal模式，不修改协议头
 
 	b.bot.MessageHandler = func(msg *openwechat.Message) {
 		if msg.IsText() {
@@ -112,6 +263,10 @@ func (b *WxBot) Start() {
 	b.mySelf.Friends()
 	b.mySelf.Groups()
 	b.Log("[WxBotGo] Contacts loaded.")
+
+	// ID映射表管理
+	b.loadIDMap()
+	b.batchUpdateIDMap()
 
 	go b.connectToNexus()
 
@@ -290,25 +445,29 @@ func (b *WxBot) ConvertToOneBotEvent(msg *openwechat.Message) OneBotEvent {
 
 			groupSender, err := msg.SenderInGroup()
 			if err == nil {
-				event.UserID = groupSender.UserName
+				// 获取群成员的持久化ID
+				event.UserID = b.getPersistentID(groupSender.UserName, groupSender.NickName, "user")
 				event.Sender = &Sender{
-					UserID:   groupSender.UserName,
+					UserID:   event.UserID,
 					Nickname: groupSender.NickName,
 				}
 			} else {
-				event.UserID = sender.UserName
-				event.Sender = &Sender{UserID: sender.UserName, Nickname: sender.NickName}
+				// 获取发送者的持久化ID
+				event.UserID = b.getPersistentID(sender.UserName, sender.NickName, "user")
+				event.Sender = &Sender{UserID: event.UserID, Nickname: sender.NickName}
 			}
 
 			group := sender
-			event.GroupID = group.UserName
+			// 获取群组的持久化ID
+			event.GroupID = b.getPersistentID(group.UserName, group.NickName, "group")
 
 		} else {
 			event.MessageType = "private"
 			event.SubType = "friend"
-			event.UserID = sender.UserName
+			// 获取好友的持久化ID
+			event.UserID = b.getPersistentID(sender.UserName, sender.NickName, "user")
 			event.Sender = &Sender{
-				UserID:   sender.UserName,
+				UserID:   event.UserID,
 				Nickname: sender.NickName,
 			}
 		}
@@ -342,6 +501,7 @@ func (b *WxBot) ConvertToOneBotEvent(msg *openwechat.Message) OneBotEvent {
 		event.RawMessage = "[不支持的消息类型]"
 	}
 
+	// 消息ID使用微信原始ID，不进行固化
 	event.MessageID = msg.MsgId
 	return event
 }
@@ -350,6 +510,41 @@ func (b *WxBot) ConvertToOneBotEvent(msg *openwechat.Message) OneBotEvent {
 func (b *WxBot) HandleWeChatMsg(msg *openwechat.Message) {
 	// 如果是自身消息且未开启上报，则忽略
 	if msg.IsSendBySelf() && !b.ReportSelfMsg {
+		return
+	}
+
+	// 处理群系统消息
+	if msg.IsSystem() && msg.IsSendByGroup() {
+		// 群成员加入事件 - 基于openwechat库的IsJoinGroup()方法，这是可靠的
+		if msg.IsJoinGroup() {
+			// 构造群成员增加通知事件
+			noticeEvent := OneBotEvent{
+				PostType:    "notice",
+				NoticeType:  "group_member_increase",
+				MessageType: "group",
+				GroupID:     b.getPersistentID(msg.FromUserName, "", "group"), // 获取群组的持久化ID
+				UserID:      "",                                               // 系统消息无法直接获取用户ID，需要业务系统解析
+				RawMessage:  msg.Content,
+			}
+			// 发送通知事件
+			b.sendEvent(noticeEvent)
+			return
+		}
+	}
+
+	// 处理拍一拍事件
+	if msg.IsTickled() {
+		// 构造拍一拍通知事件
+		noticeEvent := OneBotEvent{
+			PostType:    "notice",
+			NoticeType:  "group_poke",
+			MessageType: "group",
+			GroupID:     b.getPersistentID(msg.FromUserName, "", "group"), // 获取群组的持久化ID
+			UserID:      "",                                               // 系统消息无法直接获取用户ID，需要解析
+			RawMessage:  msg.Content,
+		}
+		// 发送通知事件
+		b.sendEvent(noticeEvent)
 		return
 	}
 
@@ -516,10 +711,59 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			break
 		}
 		// Try to kick user from group
-		// Note: openwechat library does not support this operation
-		resp.Status = "failed"
-		resp.RetCode = 100
-		resp.Message = "Unsupported action: set_group_kick (openwechat library does not support this operation)"
+		// Find the group
+		groups, err := b.mySelf.Groups()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Failed to get groups: " + err.Error()
+			break
+		}
+		var targetGroup *openwechat.Group
+		for _, g := range groups {
+			if g.UserName == params.GroupID {
+				targetGroup = g
+				break
+			}
+		}
+		if targetGroup == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Group not found: " + params.GroupID
+			break
+		}
+		// Get group members
+		members, err := targetGroup.Members()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Failed to get group members: " + err.Error()
+			break
+		}
+		// Find the member to kick
+		var memberToKick *openwechat.User
+		for _, m := range members {
+			if m.UserName == params.UserID {
+				memberToKick = m
+				break
+			}
+		}
+		if memberToKick == nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Member not found in group: " + params.UserID
+			break
+		}
+		// Kick the member
+		if err := b.mySelf.RemoveMemberFromGroup(targetGroup, openwechat.Members{memberToKick}); err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Failed to kick member: " + err.Error()
+			break
+		}
+		resp.Data = map[string]interface{}{
+			"result": true,
+		}
 	case "set_group_ban":
 		// Check if group ID and user ID are valid
 		if params.GroupID == "" || params.UserID == "" {
@@ -688,10 +932,37 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			break
 		}
 		// Try to delete message
-		// Note: openwechat library does not support deleting messages by ID
-		resp.Status = "failed"
-		resp.RetCode = 100
-		resp.Message = "Unsupported action: delete_msg (openwechat library does not support deleting messages by ID)"
+		b.msgMutex.Lock()
+		sentMsg, ok := b.msgMap[params.MessageID]
+		b.msgMutex.Unlock()
+		if !ok {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Message not found: " + params.MessageID
+			break
+		}
+		// 检查消息是否可以撤回
+		if !sentMsg.CanRevoke() {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Message cannot be revoked (only messages within 2 minutes can be revoked)"
+			break
+		}
+		// 调用openwechat库的Revoke方法撤回消息
+		err = sentMsg.Revoke()
+		if err != nil {
+			resp.Status = "failed"
+			resp.RetCode = -1
+			resp.Message = "Failed to revoke message: " + err.Error()
+			break
+		}
+		// 撤回成功后从映射表中删除
+		b.msgMutex.Lock()
+		delete(b.msgMap, params.MessageID)
+		b.msgMutex.Unlock()
+		resp.Data = map[string]interface{}{
+			"result": true,
+		}
 	default:
 		resp.Status = "failed"
 		resp.RetCode = 100
@@ -749,7 +1020,7 @@ func (b *WxBot) SendMessage(params *SendMessageParams) (*OneBotResponse, error) 
 	}
 
 	// Send message to target
-	err := b.sendText(targetID, message)
+	msgID, sentMsg, err := b.sendText(targetID, message)
 	if err != nil {
 		return &OneBotResponse{
 			Status:  "failed",
@@ -758,21 +1029,34 @@ func (b *WxBot) SendMessage(params *SendMessageParams) (*OneBotResponse, error) 
 		}, err
 	}
 
+	// 保存消息ID和对应的SentMessage到映射表
+	b.msgMutex.Lock()
+	b.msgMap[msgID] = sentMsg
+	b.msgMutex.Unlock()
+
 	return &OneBotResponse{
 		Status: "ok",
+<<<<<<< HEAD
+		Data: map[string]interface{}{
+			"message_id": msgID, // 返回真实的消息ID
+=======
 		Data: map[string]any{
 			"message_id": "1", // WeChat doesn't return message ID, so we use a placeholder
+>>>>>>> e5150c2482302cbf3c41db97a64afb3fe5c878df
 		},
 	}, nil
 }
 
-func (b *WxBot) sendText(targetID string, text string) error {
+func (b *WxBot) sendText(targetID string, text string) (string, *openwechat.SentMessage, error) {
 	friends, err := b.mySelf.Friends()
 	if err == nil {
 		for _, f := range friends {
 			if f.UserName == targetID {
-				_, err = f.SendText(text)
-				return err
+				sentMsg, err := f.SendText(text)
+				if err != nil {
+					return "", nil, err
+				}
+				return sentMsg.MsgId, sentMsg, nil
 			}
 		}
 	}
@@ -781,8 +1065,11 @@ func (b *WxBot) sendText(targetID string, text string) error {
 	if err == nil {
 		for _, g := range groups {
 			if g.UserName == targetID {
-				_, err = g.SendText(text)
-				return err
+				sentMsg, err := g.SendText(text)
+				if err != nil {
+					return "", nil, err
+				}
+				return sentMsg.MsgId, sentMsg, nil
 			}
 		}
 	}
@@ -794,22 +1081,31 @@ func (b *WxBot) sendText(targetID string, text string) error {
 			if c.UserName == targetID {
 				// 检查是否为公众号
 				if mp, ok := c.AsMP(); ok {
-					_, err = mp.SendText(text)
-					return err
+					sentMsg, err := mp.SendText(text)
+					if err != nil {
+						return "", nil, err
+					}
+					return sentMsg.MsgId, sentMsg, nil
 				}
 				// 检查是否为好友
 				if friend, ok := c.AsFriend(); ok {
-					_, err = friend.SendText(text)
-					return err
+					sentMsg, err := friend.SendText(text)
+					if err != nil {
+						return "", nil, err
+					}
+					return sentMsg.MsgId, sentMsg, nil
 				}
 				// 检查是否为群
 				if group, ok := c.AsGroup(); ok {
-					_, err = group.SendText(text)
-					return err
+					sentMsg, err := group.SendText(text)
+					if err != nil {
+						return "", nil, err
+					}
+					return sentMsg.MsgId, sentMsg, nil
 				}
 			}
 		}
 	}
 
-	return fmt.Errorf("target not found: %s", targetID)
+	return "", nil, fmt.Errorf("target not found: %s", targetID)
 }

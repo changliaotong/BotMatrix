@@ -118,6 +118,7 @@ type B2BService interface {
 	VerifyB2BToken(tokenString string) (*models.EnterpriseGORM, error)
 	RegisterEndpoint(entID uint, name, endpointType, url string) error
 	DiscoverEndpoints(query string) ([]models.MCPServerGORM, error)
+	DiscoverMeshEndpoints(query string) ([]models.MCPServerGORM, error)
 }
 
 // AIIntegrationService 定义 AI 调度与管理接口
@@ -151,6 +152,7 @@ type Manager struct {
 	AIIntegrationService   AIIntegrationService
 	DigitalEmployeeService DigitalEmployeeService
 	Rdb                    *redis.Client
+	pendingSkillRes        sync.Map // map[string]chan any
 }
 
 // Run 启动 BotNexus
@@ -767,10 +769,65 @@ func (m *Manager) SendToWorker(workerID string, msg types.WorkerCommand) error {
 	return fmt.Errorf("no target worker specified and Redis is unavailable")
 }
 
+// SyncSkillCall 同步调用一个技能并等待结果
+func (m *Manager) SyncSkillCall(ctx context.Context, skillName string, params map[string]any) (any, error) {
+	// 1. 寻找具备该能力的 Worker
+	var workerID string
+	m.Mutex.RLock()
+	for _, w := range m.Workers {
+		for _, cap := range w.Capabilities {
+			if cap.Name == skillName {
+				workerID = w.ID
+				break
+			}
+		}
+		if workerID != "" {
+			break
+		}
+	}
+	m.Mutex.RUnlock()
+
+	if workerID == "" {
+		return nil, fmt.Errorf("no worker available for skill: %s", skillName)
+	}
+
+	// 2. 生成唯一的 Correlation ID
+	correlationID := fmt.Sprintf("sync_%d_%d", time.Now().UnixNano(), time.Now().UnixNano()%1000)
+
+	// 3. 准备接收结果的 Channel
+	resChan := make(chan any, 1)
+	m.pendingSkillRes.Store(correlationID, resChan)
+	defer m.pendingSkillRes.Delete(correlationID)
+
+	// 4. 发送指令
+	cmd := types.WorkerCommand{
+		Type:          "skill_call",
+		Skill:         skillName,
+		Params:        params,
+		CorrelationID: correlationID,
+		Timestamp:     time.Now().Unix(),
+	}
+
+	if err := m.SendToWorker(workerID, cmd); err != nil {
+		return nil, fmt.Errorf("failed to send skill call: %w", err)
+	}
+
+	// 5. 等待结果或超时
+	select {
+	case res := <-resChan:
+		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(30 * time.Second):
+		return nil, fmt.Errorf("skill call timeout")
+	}
+}
+
 // HandleSkillResult 统一处理技能执行结果 (由 Redis 订阅或 WebSocket 触发)
 func (m *Manager) HandleSkillResult(skillResult types.SkillResult) {
 	taskIDStr := fmt.Sprint(skillResult.TaskID)
 	executionID := fmt.Sprint(skillResult.ExecutionID)
+	correlationID := skillResult.CorrelationID
 	statusStr := skillResult.Status
 	result := skillResult.Result
 	errStr := skillResult.Error
@@ -780,7 +837,23 @@ func (m *Manager) HandleSkillResult(skillResult types.SkillResult) {
 		zap.String("worker_id", workerID),
 		zap.String("task_id", taskIDStr),
 		zap.String("execution_id", executionID),
+		zap.String("correlation_id", correlationID),
 		zap.String("status", statusStr))
+
+	// 1. 检查是否有正在等待同步结果的请求
+	if correlationID != "" {
+		if resChanVal, ok := m.pendingSkillRes.Load(correlationID); ok {
+			if resChan, ok := resChanVal.(chan any); ok {
+				if errStr != "" {
+					resChan <- fmt.Errorf(errStr)
+				} else {
+					resChan <- result
+				}
+				// 既然已经发送给同步等待者，是否还需要继续执行异步更新数据库逻辑？
+				// 通常还是需要的，因为同步调用可能只是 AI 链路的一部分，任务系统仍需记录。
+			}
+		}
+	}
 
 	// 转换状态
 	status := tasks.ExecSuccess

@@ -9,23 +9,25 @@ import (
 
 // SkillResult represents the result of a skill execution from a Worker
 type SkillResult struct {
-	TaskID      any    `json:"task_id"`
-	ExecutionID any    `json:"execution_id"`
-	Status      string `json:"status"`
-	Result      string `json:"result"`
-	Error       string `json:"error"`
-	WorkerID    string `json:"worker_id"`
+	TaskID        any    `json:"task_id"`
+	ExecutionID   any    `json:"execution_id"`
+	CorrelationID string `json:"correlation_id,omitempty"`
+	Status        string `json:"status"`
+	Result        string `json:"result"`
+	Error         string `json:"error"`
+	WorkerID      string `json:"worker_id"`
 }
 
 // WorkerCommand represents a command sent from Nexus to a Worker
 type WorkerCommand struct {
-	Type        string         `json:"type"`
-	Skill       string         `json:"skill,omitempty"`
-	Params      map[string]any `json:"params,omitempty"`
-	UserID      string         `json:"user_id,omitempty"`
-	TaskID      any            `json:"task_id,omitempty"`
-	ExecutionID any            `json:"execution_id,omitempty"`
-	Timestamp   int64          `json:"timestamp,omitempty"`
+	Type          string         `json:"type"`
+	Skill         string         `json:"skill,omitempty"`
+	Params        map[string]any `json:"params,omitempty"`
+	UserID        string         `json:"user_id,omitempty"`
+	TaskID        any            `json:"task_id,omitempty"`
+	ExecutionID   any            `json:"execution_id,omitempty"`
+	CorrelationID string         `json:"correlation_id,omitempty"`
+	Timestamp     int64          `json:"timestamp,omitempty"`
 }
 
 // WorkerMessage represents any message coming from a Worker via WebSocket

@@ -52,15 +52,33 @@ type Context struct {
 	Actions []Action
 	Args    []string          // For command arguments
 	Params  map[string]string // For named parameters
+	Result  string            // For string-based message propagation
 	plugin  *Plugin
 	mu      sync.Mutex
 }
 
-// Reply adds a send_message action to the response
+// Reply adds a send_message action to the response (immediate construction)
 func (c *Context) Reply(text string) {
 	c.CallAction("send_message", map[string]any{
 		"text": text,
 	})
+}
+
+// SendText is an alias for Reply for consistency
+func (c *Context) SendText(text string) {
+	c.Reply(text)
+}
+
+// SendImage sends an image message
+func (c *Context) SendImage(url string) {
+	c.CallAction("send_image", map[string]any{
+		"url": url,
+	})
+}
+
+// AddAction adds a custom action
+func (c *Context) AddAction(actionType string, payload map[string]any) {
+	c.CallAction(actionType, payload)
 }
 
 // Ask sends a prompt and waits for the user's next message
@@ -100,34 +118,60 @@ func (c *Context) Ask(prompt string, timeout time.Duration) (*Context, error) {
 	}
 }
 
-// ReplyImage sends an image message
-func (c *Context) ReplyImage(url string) {
-	c.CallAction("send_image", map[string]any{
-		"url": url,
+// CallSkill calls a skill exported by another plugin
+func (c *Context) CallSkill(pluginID, skillName string, payload map[string]any) (*Context, error) {
+	correlationID := fmt.Sprintf("skill_%s_%d", skillName, time.Now().UnixNano())
+
+	c.mu.Lock()
+	skillPayload := map[string]any{
+		"plugin_id":      pluginID,
+		"skill":          skillName,
+		"correlation_id": correlationID,
+	}
+	for k, v := range payload {
+		skillPayload[k] = v
+	}
+
+	c.Actions = append(c.Actions, Action{
+		Type:    "call_skill",
+		Payload: skillPayload,
 	})
+	c.mu.Unlock()
+
+	ch := make(chan *Context, 1)
+	c.plugin.mu.Lock()
+	if c.plugin.waitingSessions == nil {
+		c.plugin.waitingSessions = make(map[string]chan *Context)
+	}
+	c.plugin.waitingSessions[correlationID] = ch
+	c.plugin.mu.Unlock()
+
+	defer func() {
+		c.plugin.mu.Lock()
+		delete(c.plugin.waitingSessions, correlationID)
+		c.plugin.mu.Unlock()
+	}()
+
+	select {
+	case result := <-ch:
+		return result, nil
+	case <-time.After(10 * time.Second):
+		return nil, context.DeadlineExceeded
+	}
 }
 
 // Delete deletes a message by ID
-func (c *Context) Delete(messageID string) {
+func (c *Context) Delete(messageId string) {
 	c.CallAction("delete_message", map[string]any{
-		"message_id": messageID,
+		"message_id": messageId,
 	})
 }
 
 // Kick removes a user from a group
-func (c *Context) Kick(groupID, userID string) {
+func (c *Context) Kick(groupId, userId string) {
 	c.CallAction("kick_user", map[string]any{
-		"group_id": groupID,
-		"user_id":  userID,
-	})
-}
-
-// CallSkill allows a plugin to invoke a skill exported by another plugin.
-func (c *Context) CallSkill(targetID string, skillName string, payload map[string]any) {
-	c.CallAction("call_skill", map[string]any{
-		"target_plugin": targetID,
-		"skill_name":    skillName,
-		"payload":       payload,
+		"group_id": groupId,
+		"user_id":  userId,
 	})
 }
 
@@ -209,6 +253,13 @@ func (p *Plugin) HasPermission(action string) bool {
 	if p.config == nil {
 		return true // Legacy mode
 	}
+
+	// Essential built-in actions are always allowed
+	switch action {
+	case "send_message", "send_image", "storage.get", "storage.set":
+		return true
+	}
+
 	actions, ok := p.config["actions"].([]any)
 	if !ok {
 		return true
@@ -380,6 +431,10 @@ func (p *Plugin) handleEvent(msg *EventMessage, outputChan chan<- ResponseMessag
 		fmt.Fprintf(os.Stderr, "[SDK] Handler error for %s: %v\n", msg.Name, err)
 		outputChan <- ResponseMessage{ID: msg.ID, OK: false, Error: err.Error()}
 	} else {
+		// Auto-convert string result to send_message action
+		if ctx.Result != "" {
+			ctx.Reply(ctx.Result)
+		}
 		outputChan <- ResponseMessage{ID: msg.ID, OK: true, Actions: ctx.Actions}
 	}
 }

@@ -146,7 +146,7 @@ const languages: { id: Language; nameKey: string }[] = [
                   
                   <!-- Icon Overlay -->
                   <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div class="p-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-xl transform transition-transform group-hover:rotate-12">
+                    <div class="p-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[var(--sidebar-text)] shadow-xl transform transition-transform group-hover:rotate-12">
                       <component :is="mode.icon" class="w-6 h-6" />
                     </div>
                   </div>

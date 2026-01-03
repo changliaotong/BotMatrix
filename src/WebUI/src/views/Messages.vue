@@ -48,7 +48,15 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-[var(--border-color)]">
-            <tr v-if="messages.length === 0" class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+            <tr v-if="!authStore.isAdmin" class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <td colspan="5" class="px-6 py-20 text-center">
+                <div class="flex flex-col items-center justify-center gap-4 text-[var(--text-muted)] opacity-30">
+                  <Activity class="w-12 h-12" />
+                  <span class="text-[10px] font-black uppercase tracking-widest">{{ t('admin_required') }}</span>
+                </div>
+              </td>
+            </tr>
+            <tr v-else-if="messages.length === 0" class="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
               <td colspan="5" class="px-6 py-20 text-center">
                 <div v-if="loading" class="flex flex-col items-center justify-center gap-4 text-[var(--matrix-color)]/50">
                   <RefreshCw class="w-8 h-8 animate-spin" />
@@ -103,17 +111,20 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { MessageSquare, RefreshCw } from 'lucide-vue-next';
+import { MessageSquare, RefreshCw, Activity } from 'lucide-vue-next';
 import { useBotStore } from '../stores/bot';
 import { useSystemStore } from '@/stores/system';
+import { useAuthStore } from '@/stores/auth';
 
 const systemStore = useSystemStore();
+const authStore = useAuthStore();
 const t = (key: string) => systemStore.t(key);
 const botStore = useBotStore();
 const loading = ref(false);
 const messages = computed(() => botStore.messages.slice().reverse());
 
 const refreshMessages = async () => {
+  if (!authStore.isAdmin) return;
   loading.value = true;
   try {
     await botStore.fetchMessages(100);

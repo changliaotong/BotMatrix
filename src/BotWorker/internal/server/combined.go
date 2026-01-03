@@ -287,6 +287,33 @@ func (s *CombinedServer) HandleAPI(action string, fn any) {
 	if handler, ok := fn.(onebot.RequestHandler); ok {
 		s.wsServer.HandleAPI(action, handler)
 		s.httpServer.HandleAPI(action, handler)
+	} else if handler, ok := fn.(onebot.EventHandler); ok {
+		// 如果是事件处理器，根据 action 名称注册
+		switch action {
+		case "on_message":
+			s.OnMessage(handler)
+		case "on_notice":
+			s.OnNotice(handler)
+		case "on_request":
+			s.OnRequest(handler)
+		default:
+			s.OnEvent(action, handler)
+		}
+	} else if handler, ok := fn.(func(map[string]any)); ok {
+		// 兼容 map[string]any 类型的处理器
+		wrappedHandler := func(e *onebot.Event) error {
+			payload := map[string]any{
+				"from":     e.UserID.String(),
+				"group_id": e.GroupID.String(),
+				"user_id":  e.UserID.String(),
+				"text":     e.RawMessage,
+				"platform": e.Platform,
+				"self_id":  fmt.Sprintf("%v", e.SelfID),
+			}
+			handler(payload)
+			return nil
+		}
+		s.HandleAPI(action, wrappedHandler)
 	}
 }
 
@@ -533,6 +560,19 @@ func (s *CombinedServer) HandleSkill(skillName string, fn func(params map[string
 	s.skills[skillName] = fn
 }
 
+// InvokeSkill 调用已注册的技能
+func (s *CombinedServer) InvokeSkill(skillName string, params map[string]string) (string, error) {
+	s.skillsMu.RLock()
+	fn, ok := s.skills[skillName]
+	s.skillsMu.RUnlock()
+
+	if !ok {
+		return "", fmt.Errorf("skill %s not found", skillName)
+	}
+
+	return fn(params)
+}
+
 func (s *CombinedServer) CallPluginAction(pluginID string, action string, payload map[string]any) (any, error) {
 	if s.actionRouter != nil {
 		return s.actionRouter(pluginID, action, payload)
@@ -595,13 +635,17 @@ func (s *CombinedServer) reportCapabilities() {
 	time.Sleep(2 * time.Second)
 
 	capabilities := []map[string]any{}
-	for _, versions := range s.pluginManager.GetPlugins() {
-		for _, p := range versions {
-			// 目前插件架构中，SkillCapable 接口通常由插件模块实现
-			// 这里由于插件是以进程方式运行的，报备能力应该基于配置或元数据
-			// 暂时保留逻辑结构，修复语法错误
-			if any(p).(interface{}) != nil {
-				// 以后这里可以添加从插件元数据读取能力的逻辑
+	// Collect skills from internal plugins (including ExternalPluginWrappers)
+	for _, m := range s.pluginManager.GetInternalPlugins() {
+		if sc, ok := m.(core.SkillCapable); ok {
+			for _, skill := range sc.GetSkills() {
+				capabilities = append(capabilities, map[string]any{
+					"name":        skill.Name,
+					"description": skill.Description,
+					"usage":       skill.Usage,
+					"regex":       skill.Regex,
+					"plugin_id":   m.Name(), // For wrappers, Name() returns plugin ID
+				})
 			}
 		}
 	}

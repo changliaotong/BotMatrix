@@ -87,18 +87,18 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
-			log.Printf(utils.T("", "login_request_failed"), err)
+			log.Printf("%s: %v", utils.T("", "login_request_failed"), err)
 			w.WriteHeader(http.StatusBadRequest)
 			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
-		log.Printf(utils.T("", "login_attempt"), loginData.Username, r.RemoteAddr)
+		log.Printf("%s: %s, %s", utils.T("", "login_attempt"), loginData.Username, r.RemoteAddr)
 
 		user, exists := m.GetOrLoadUser(loginData.Username)
 
 		if !exists || !utils.CheckPassword(loginData.Password, user.PasswordHash) {
-			log.Printf(utils.T("", "invalid_username_password|用户名或密码错误") + ": " + loginData.Username)
+			log.Printf("%s: %s", utils.T("", "invalid_username_password|用户名或密码错误"), loginData.Username)
 			w.WriteHeader(http.StatusUnauthorized)
 			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_username_password|用户名或密码错误"), nil)
 			return
@@ -329,6 +329,7 @@ func HandleGetStats(m *bot.Manager) http.HandlerFunc {
 		recvTrend := append([]int64{}, m.RecvTrend...)
 		netSentTrend := append([]uint64{}, m.NetSentTrend...)
 		netRecvTrend := append([]uint64{}, m.NetRecvTrend...)
+		topProcesses := append([]types.ProcInfo{}, m.TopProcesses...)
 		m.HistoryMutex.RUnlock()
 
 		// 如果当前 CPU 使用率为 0，尝试从趋势中获取最新值
@@ -425,7 +426,7 @@ func HandleGetStats(m *bot.Manager) http.HandlerFunc {
 			RecvTrend:         recvTrend,
 			NetSentTrend:      netSentTrend,
 			NetRecvTrend:      netRecvTrend,
-			TopProcesses:      m.TopProcesses,
+			TopProcesses:      topProcesses,
 		}
 
 		utils.SendJSONResponse(w, true, "", struct {
@@ -2672,23 +2673,21 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 
 		bot.Mutex.Lock()
 		var err error
-		if bot.Conn != nil {
-			err = bot.Conn.WriteJSON(msg)
-		} else if bot.Platform == "Online" {
-			// 对于在线机器人，模拟成功发送并将动作记录到日志
-			log.Printf("[OnlineBot] Action: %s, Params: %+v, Echo: %s", req.Action, req.Params, echo)
 
-			// 如果是发送消息动作，模拟一个对应的接收事件，以便 Worker 能够处理
-			if req.Action == "send_private_msg" || req.Action == "send_group_msg" || req.Action == "send_msg" {
+		// --- 优化：后台测试聊天绕过机器人通道，直接调用大模型 ---
+		// 检查是否是数字员工，如果是，且是发送消息动作，直接由 AI 回复
+		if m.DigitalEmployeeService != nil && m.AIIntegrationService != nil &&
+			(req.Action == "send_private_msg" || req.Action == "send_group_msg" || req.Action == "send_msg") {
+			employee, _ := m.DigitalEmployeeService.GetEmployeeByBotID(bot.SelfID)
+			if employee != nil {
 				params, ok := req.Params.(map[string]any)
 				if ok {
 					message := utils.ToString(params["message"])
 					userID := utils.ToString(params["user_id"])
-					groupID := utils.ToString(params["group_id"])
-
 					if userID == "" {
 						userID = "admin"
 					}
+					groupID := utils.ToString(params["group_id"])
 
 					incomingMsg := types.InternalMessage{
 						ID:         fmt.Sprintf("msg_%d", time.Now().UnixNano()),
@@ -2700,17 +2699,45 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 						UserID:     userID,
 						GroupID:    groupID,
 					}
-					if groupID != "" || (req.Action == "send_msg" && params["message_type"] == "group") {
+					if groupID != "" {
 						incomingMsg.MessageType = "group"
 					} else {
 						incomingMsg.MessageType = "private"
 					}
 
-					// 注入到消息处理流程，这样 Worker 就能收到并处理了
-					log.Printf("[OnlineBot] Injecting message to worker pipeline: %s", message)
-					go m.handleBotMessage(bot, incomingMsg)
+					log.Printf("[Admin] Digital Employee %s detected in inject, bypassing channel for direct AI response", bot.SelfID)
+
+					response, err := m.AIIntegrationService.ChatWithEmployee(employee, incomingMsg)
+					if err == nil && response != "" {
+						bot.Mutex.Unlock() // 提前释放锁
+						go func() {
+							m.PendingMutex.Lock()
+							if ch, ok := m.PendingRequests[echo]; ok {
+								ch <- types.InternalMessage{
+									SelfID: bot.SelfID,
+									Time:   time.Now().Unix(),
+									Extras: map[string]any{
+										"status":  "ok",
+										"retcode": 0,
+										"data": map[string]any{
+											"message_id": 12345,
+											"reply":      response,
+										},
+									},
+								}
+							}
+							m.PendingMutex.Unlock()
+						}()
+						return
+					}
+					log.Printf("[Admin] AI response failed or empty, falling back to normal flow: %v", err)
 				}
 			}
+		}
+
+		if bot.Conn != nil {
+			err = bot.Conn.WriteJSON(msg)
+		} else if bot.Platform == "Online" {
 
 			// 模拟成功响应给 WebUI
 			go func() {

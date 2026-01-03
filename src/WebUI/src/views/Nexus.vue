@@ -100,7 +100,7 @@ onUnmounted(() => {
         <p class="text-xs font-bold uppercase tracking-widest">{{ t('error') }}</p>
         <p class="text-sm font-black">{{ error }}</p>
       </div>
-      <button @click="fetchNexus" class="px-3 py-1 rounded-lg bg-red-500 text-white text-[10px] font-black uppercase tracking-widest">
+      <button @click="fetchNexus" class="px-3 py-1 rounded-lg bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
         {{ t('retry') }}
       </button>
     </div>
@@ -153,14 +153,14 @@ onUnmounted(() => {
               <Shield class="w-5 h-5" />
               <span class="text-xs font-bold uppercase">{{ t('ssl_wss') }}</span>
             </div>
-            <span class="text-[10px] font-black bg-black text-white px-2 py-0.5 rounded-md">{{ t('encrypted') }}</span>
+            <span class="text-[10px] font-black bg-black text-[var(--sidebar-text)] px-2 py-0.5 rounded-md">{{ t('encrypted') }}</span>
           </div>
           <div class="flex items-center justify-between p-3 rounded-2xl bg-black/10 border border-black/10">
             <div class="flex items-center gap-3">
               <Zap class="w-5 h-5" />
               <span class="text-xs font-bold uppercase">{{ t('turbo_relay') }}</span>
             </div>
-            <span class="text-[10px] font-black bg-black text-white px-2 py-0.5 rounded-md">{{ t('enabled_caps') }}</span>
+            <span class="text-[10px] font-black bg-black text-[var(--sidebar-text)] px-2 py-0.5 rounded-md">{{ t('enabled_caps') }}</span>
           </div>
         </div>
         <p class="text-[10px] font-bold opacity-60 uppercase tracking-widest leading-relaxed">

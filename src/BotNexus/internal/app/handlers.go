@@ -79,7 +79,7 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 	if m.Bots == nil {
 		m.Bots = make(map[string]*types.BotClient)
 	}
-	botKey := fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID)
+	botKey := bot.SelfID
 	m.Bots[botKey] = bot
 	m.Mutex.Unlock()
 
@@ -532,6 +532,27 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 			m.UpdateContext(bot.Platform, userID, msg)
 		}
 
+		// --- 任务系统 AI 意图识别 (Chat-to-Task) ---
+		if m.TaskManager != nil && postType == "message" && userID != bot.SelfID {
+			// 只有满足触发条件（唤醒词或关键词）才进入 AI 流程
+			isAITrigger := strings.HasPrefix(strings.ToUpper(msg.RawMessage), "AI") ||
+				strings.HasPrefix(msg.RawMessage, "#确认") ||
+				strings.HasPrefix(msg.RawMessage, "确认") ||
+				utils.ContainsOne(msg.RawMessage, "任务", "定时", "禁言套餐")
+
+			log.Printf("[AI-Task] Checking trigger for: '%s', isTrigger: %v", msg.RawMessage, isAITrigger)
+
+			if isAITrigger {
+				ctx := context.Background()
+				err := m.TaskManager.ProcessChatMessage(ctx, bot.SelfID, groupID, userID, msg.RawMessage)
+				if err == nil {
+					return // 拦截成功，不再分发
+				}
+				log.Printf("[AI-Task] ProcessChatMessage error: %v", err)
+			}
+		}
+		// ------------------------------------------
+
 		// 拦截器检查：在分发给 Worker 之前进行全局控制
 		if m.TaskManager != nil {
 			interceptorCtx := &tasks.InterceptorContext{
@@ -558,10 +579,36 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 		m.handleBotMessageEvent(bot, msg)
 	}
 
-	// Forward to Worker for processing
 	// 5.5 Broadcast to subscribers (Web UI Monitor)
 	m.BroadcastEvent(msg.ToV11Map())
 
+	// --- 智能体 (Digital Employee) 处理逻辑 ---
+	// 如果该 Bot 被定义为“数字员工”，则尝试进行 AI 响应
+	if m.DigitalEmployeeService != nil && m.AIIntegrationService != nil && postType == "message" && userID != bot.SelfID {
+		employee, err := m.DigitalEmployeeService.GetEmployeeByBotID(bot.SelfID)
+		if err == nil && employee != nil {
+			log.Printf("[Agent] Bot %s is a Digital Employee: %s (%s)", bot.SelfID, employee.Name, employee.Title)
+
+			// 只有文本消息才触发 AI
+			if msg.RawMessage != "" {
+				// 调用 AI 进行数字员工响应 (带上下文历史)
+				response, err := m.AIIntegrationService.ChatWithEmployee(employee, msg)
+				if err == nil && response != "" {
+					log.Printf("[Agent] AI Response for Bot %s: %s", bot.SelfID, response)
+					// 发送回复
+					m.sendBotMessage(bot, msg, response)
+
+					// 数字员工回复后，通常不需要再分发给 Worker 处理通用逻辑
+					return
+				} else if err != nil {
+					log.Printf("[Agent] AI Chat failed: %v", err)
+				}
+			}
+		}
+	}
+	// ------------------------------------------
+
+	// Forward to Worker for processing
 	// 打印转发详情，方便排查频繁转发的消息
 	log.Printf("[Forwarding] Bot: %s, PostType: %v, MessageType: %v, GroupID: %v, UserID: %v",
 		bot.SelfID, msg.PostType, msg.MessageType, msg.GroupID, msg.UserID)
@@ -934,9 +981,46 @@ func (m *Manager) sendBotMessage(bot *types.BotClient, originalMsg types.Interna
 	}
 
 	bot.Mutex.Lock()
-	err := bot.Conn.WriteJSON(action)
-	bot.Mutex.Unlock()
+	defer bot.Mutex.Unlock()
 
+	// 如果是 Online 平台或者连接断开，我们通过广播事件来让 WebUI 收到消息
+	if bot.Conn == nil || bot.Platform == "Online" {
+		// 构造一个响应消息
+		resp := types.InternalMessage{
+			ID:          fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			Time:        time.Now().Unix(),
+			Platform:    bot.Platform,
+			SelfID:      bot.SelfID,
+			PostType:    "message_sent",
+			MessageType: originalMsg.MessageType,
+			RawMessage:  text,
+			UserID:      originalMsg.UserID,
+			GroupID:     originalMsg.GroupID,
+			SenderName:  "AI Assistant",
+		}
+
+		// 广播给 Web UI Monitor
+		m.BroadcastEvent(resp.ToV11Map())
+
+		// 同时通过 RoutingEvent 记录
+		params := &types.RoutingParams{
+			UserID:   originalMsg.UserID,
+			Content:  text,
+			Platform: bot.Platform,
+			UserName: "AI Assistant",
+		}
+		if originalMsg.GroupID != "" {
+			params.GroupID = originalMsg.GroupID
+			m.BroadcastRoutingEvent(bot.SelfID, originalMsg.GroupID, "bot_to_group", "message", params)
+		} else {
+			m.BroadcastRoutingEvent(bot.SelfID, originalMsg.UserID, "bot_to_user", "message", params)
+		}
+
+		log.Printf("[Bot] Message sent via Broadcast for Bot %s (Online/NoConn)", bot.SelfID)
+		return
+	}
+
+	err := bot.Conn.WriteJSON(action)
 	if err != nil {
 		log.Printf("[Bot] Failed to send message to Bot %s: %v", bot.SelfID, err)
 	}
@@ -1934,7 +2018,6 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 				"post_type":    "message",
 				"message_type": action.MessageType,
 				"sub_type":     "normal",
-				"message_id":   fmt.Sprintf("reply_%d", time.Now().UnixNano()),
 				"user_id":      targetBot.SelfID, // 发送者是机器人
 				"target_id":    userID,           // 接收者是用户
 				"group_id":     groupID,
@@ -2124,7 +2207,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 	m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "request", params)
 
 	// Update sending statistics (if it is a send message type operation)
-	actionName := action.Action
+	actionName = action.Action
 	if actionName == "send_msg" || actionName == "send_private_msg" || actionName == "send_group_msg" || actionName == "send_guild_channel_msg" {
 		if !isSystemAction(action) {
 			m.UpdateBotSentStats(targetBot.SelfID)

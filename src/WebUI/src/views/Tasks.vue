@@ -376,7 +376,7 @@ const getStatusStyle = (status: string) => {
               </button>
               <button 
                 @click="handleToggleTask(task)"
-                :class="task.status === 'paused' ? 'bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500 hover:text-white' : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-white'"
+                :class="task.status === 'paused' ? 'bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500 hover:text-[var(--sidebar-text)]' : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-[var(--sidebar-text)]'"
                 class="p-2 rounded-xl border transition-all"
               >
                 <Play v-if="task.status === 'paused'" class="w-4 h-4" />
@@ -384,7 +384,7 @@ const getStatusStyle = (status: string) => {
               </button>
               <button 
                 @click="handleDeleteTask(task.id)"
-                class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
               >
                 <Trash2 class="w-4 h-4" />
               </button>

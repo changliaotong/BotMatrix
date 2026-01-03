@@ -5,7 +5,9 @@ import (
 	"BotMatrix/common/models"
 	"BotMatrix/common/types"
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +20,8 @@ type AIServiceImpl struct {
 	clientsByConfig map[string]ai.Client
 	mu              sync.RWMutex
 	privacyFilter   *ai.PrivacyFilter
+	mcpManager      *MCPManager
+	memoryService   CognitiveMemoryService
 }
 
 func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
@@ -26,6 +30,8 @@ func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
 		manager:         m,
 		clientsByConfig: make(map[string]ai.Client),
 		privacyFilter:   ai.NewPrivacyFilter(),
+		mcpManager:      NewMCPManager(db, m),
+		memoryService:   NewCognitiveMemoryService(db),
 	}
 }
 
@@ -75,6 +81,46 @@ func (s *AIServiceImpl) getClient(provider *models.AIProviderGORM, model *models
 }
 
 func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
+	// 1. 认知记忆注入 (Memory Injection)
+	if s.memoryService != nil {
+		// TODO: 从上下文提取真实的 userID 和 botID
+		userID := "default_user"
+		botID := "default_bot"
+
+		// 提取最后一条用户消息作为检索 query
+		query := ""
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == "user" {
+				if q, ok := messages[i].Content.(string); ok {
+					query = q
+					break
+				}
+			}
+		}
+
+		memories, _ := s.memoryService.GetRelevantMemories(ctx, userID, botID, query)
+		if len(memories) > 0 {
+			memoryContext := "你拥有以下关于用户的认知记忆：\n"
+			for _, m := range memories {
+				memoryContext += fmt.Sprintf("- [%s] %s\n", m.Category, m.Content)
+			}
+			// 插入到第一条消息，引导 AI 行为
+			messages = append([]ai.Message{{
+				Role:    "system",
+				Content: memoryContext,
+			}}, messages...)
+		}
+	}
+
+	// 2. 获取 MCP 工具并合并
+	if s.mcpManager != nil {
+		// TODO: 从上下文获取真实 UserID 和 OrgID
+		mcpTools, _ := s.mcpManager.GetToolsForContext(ctx, 0, 0)
+		if len(mcpTools) > 0 {
+			tools = append(tools, mcpTools...)
+		}
+	}
+
 	var model models.AIModelGORM
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
@@ -162,6 +208,27 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 	return resp, err
 }
 
+// ExecuteTool 执行工具调用，支持普通 Skill 和 MCP Tool
+func (s *AIServiceImpl) ExecuteTool(ctx context.Context, toolCall ai.ToolCall) (any, error) {
+	name := toolCall.Function.Name
+	var args map[string]any
+	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %v", err)
+	}
+
+	// 1. 检查是否为 MCP Tool (包含 __ 分隔符)
+	if strings.Contains(name, "__") {
+		return s.mcpManager.CallTool(ctx, name, args)
+	}
+
+	// 2. 否则视为普通插件 Skill
+	if s.manager != nil {
+		return s.manager.SyncSkillCall(ctx, name, args)
+	}
+
+	return nil, fmt.Errorf("standard skill execution failed: manager not initialized")
+}
+
 // maskMessages 对消息列表进行脱敏
 func (s *AIServiceImpl) maskMessages(messages []ai.Message, ctx *ai.MaskContext) []ai.Message {
 	if s.privacyFilter == nil {
@@ -210,8 +277,16 @@ func (s *AIServiceImpl) unmaskContent(content any, ctx *ai.MaskContext) any {
 		return content
 	}
 }
-
 func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (<-chan ai.ChatStreamResponse, error) {
+	// 获取 MCP 工具并合并
+	if s.mcpManager != nil {
+		// TODO: 从上下文获取真实 UserID 和 OrgID
+		mcpTools, _ := s.mcpManager.GetToolsForContext(ctx, 0, 0)
+		if len(mcpTools) > 0 {
+			tools = append(tools, mcpTools...)
+		}
+	}
+
 	var model models.AIModelGORM
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
@@ -327,7 +402,8 @@ func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error
 			toolCall := choice.Message.ToolCalls[0]
 			return fmt.Sprintf("Skill Hit: %s with args %s", toolCall.Function.Name, toolCall.Function.Arguments), nil
 		}
-		return choice.Message.Content, nil
+		content, _ := choice.Message.Content.(string)
+		return content, nil
 	}
 
 	return "No response from AI", nil
@@ -400,7 +476,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	}
 
 	if len(resp.Choices) > 0 {
-		content := resp.Choices[0].Message.Content
+		content, _ := resp.Choices[0].Message.Content.(string)
 
 		// 6. 异步保存消息到历史
 		go func() {

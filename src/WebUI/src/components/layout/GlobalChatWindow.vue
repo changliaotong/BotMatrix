@@ -107,7 +107,7 @@
             ></textarea>
             <button 
               @click="sendMessage" 
-              class="p-3 rounded-xl bg-[var(--matrix-color)] text-black hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-[var(--matrix-color)]/20"
+              class="p-3 rounded-xl bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-[var(--matrix-color)]/20"
               :disabled="!inputMessage.trim() || !selectedContactId || sending"
             >
               <Send v-if="!sending" class="w-4 h-4" />
@@ -121,14 +121,14 @@
     <!-- Floating Button -->
     <button 
       @click="toggleChat" 
-      class="w-14 h-14 rounded-2xl bg-[var(--matrix-color)] text-black shadow-2xl shadow-[var(--matrix-color)]/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all group relative overflow-hidden"
+      class="w-14 h-14 rounded-2xl bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] shadow-2xl shadow-[var(--matrix-color)]/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all group relative overflow-hidden"
     >
       <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
       <MessageSquare v-if="!isOpen" class="w-6 h-6 relative z-10" />
       <X v-else class="w-6 h-6 relative z-10" />
 
       <!-- Unread Badge -->
-      <div v-if="unreadCount > 0 && !isOpen" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-[var(--bg-card)] z-20 animate-bounce">
+      <div v-if="unreadCount > 0 && !isOpen" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black rounded-full flex items-center justify-center border-2 border-[var(--bg-card)] z-20 animate-bounce">
         {{ unreadCount > 99 ? '99+' : unreadCount }}
       </div>
     </button>

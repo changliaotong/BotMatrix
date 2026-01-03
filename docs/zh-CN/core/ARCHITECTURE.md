@@ -1,7 +1,7 @@
-# BotMatrix 系统架构
+# 🏗️ BotMatrix 系统架构概览
 
 > [🌐 English](../en-US/ARCHITECTURE.md) | [简体中文](ARCHITECTURE.md)
-> [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
+> [⬅️ 返回文档中心](../README.md) | [🏠 返回项目主页](../../README.md)
 
 BotMatrix 是一个采用分布式、解耦设计的机器人矩阵管理系统。它通过核心的消息分发中心与多个执行节点协作，实现了高并发和高可扩展性。
 

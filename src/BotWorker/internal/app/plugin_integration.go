@@ -197,6 +197,12 @@ func (pb *PluginBridge) LoadInternalPlugins() error {
 	if err := pb.pluginManager.LoadPluginModule(pointsProxy, pb.server); err != nil {
 		return fmt.Errorf("加载 PointsProxy 失败: %v", err)
 	}
+
+	// 加载 PluginBuilder
+	builder := plugins.NewBuilderPlugin(pb.pluginManager.GetPluginPath())
+	if err := pb.pluginManager.LoadPluginModule(builder, pb.server); err != nil {
+		return fmt.Errorf("加载 PluginBuilder 失败: %v", err)
+	}
 	return nil
 }
 
@@ -228,6 +234,24 @@ func (pb *PluginBridge) LoadExternalPlugins() error {
 
 	// 注册全局动作路由，允许 Go 插件调用外部插件
 	pb.server.SetActionRouter(func(pluginID string, action string, payload map[string]any) (any, error) {
+		// 1. 首先检查是否是内部插件且目标是一个已注册的技能
+		if pluginID != "" {
+			internalPlugins := pb.pluginManager.GetInternalPlugins()
+			if _, ok := internalPlugins[pluginID]; ok {
+				// 如果是内部插件，尝试作为技能调用
+				params := make(map[string]string)
+				for k, v := range payload {
+					params[k] = fmt.Sprintf("%v", v)
+				}
+				result, err := pb.server.InvokeSkill(action, params)
+				if err == nil {
+					return result, nil
+				}
+				// 如果技能未找到，继续尝试作为外部插件动作分发（可能是包装器）
+			}
+		}
+
+		// 2. 分发给外部进程插件
 		coreEvent := &core.EventMessage{
 			ID:      fmt.Sprintf("action_%d", core.NextID()),
 			Type:    "request",
@@ -246,6 +270,46 @@ func (pb *PluginBridge) LoadExternalPlugins() error {
 	// 注册全局动作处理 (处理插件发出的动作，如发送消息)
 	pb.pluginManager.RegisterActionHandler(func(p *core.Plugin, a *core.Action) {
 		log.Printf("[PluginAction] Received action from plugin %s: %+v", p.ID, a)
+
+		// 处理跨插件技能调用 (当 routeSkillCall 返回 false 时落到这里)
+		if a.Type == "call_skill" {
+			go func() {
+				skillName, _ := a.Payload["skill_name"].(string)
+				payload, _ := a.Payload["payload"].(map[string]any)
+
+				// 转换 payload 为 map[string]string 以适配 InvokeSkill
+				params := make(map[string]string)
+				for k, v := range payload {
+					params[k] = fmt.Sprintf("%v", v)
+				}
+
+				result, err := pb.server.InvokeSkill(skillName, params)
+
+				// 发送响应回插件
+				correlationID := a.CorrelationID
+				if correlationID == "" {
+					correlationID, _ = a.Payload["correlation_id"].(string)
+				}
+
+				if correlationID != "" {
+					resp := &core.EventMessage{
+						ID:            fmt.Sprintf("resp_%d", core.NextID()),
+						Type:          "event",
+						Name:          "skill_response",
+						CorrelationId: correlationID,
+						Payload: map[string]any{
+							"result": result,
+							"error":  "",
+						},
+					}
+					if err != nil {
+						resp.Payload.(map[string]any)["error"] = err.Error()
+					}
+					pb.pluginManager.DispatchEventToPlugin(p.ID, p.Config.Version, resp)
+				}
+			}()
+			return
+		}
 
 		// 处理存储操作 (内部逻辑)
 		if a.Type == "storage.get" || a.Type == "storage.set" || a.Type == "storage.delete" || a.Type == "storage.exists" {

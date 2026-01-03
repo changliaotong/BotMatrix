@@ -114,7 +114,7 @@ const contextOptions = [
   { label: '10 条', value: 10 },
   { label: '20 条', value: 20 }
 ];
-const hasMoreHistory = ref<Record<number, boolean>>({});
+const hasMoreHistory = ref<Record<string, boolean>>({});
 const scrollContainer = ref<HTMLElement | null>(null);
 
 const scrollToBottom = () => {
@@ -133,7 +133,7 @@ const fetchHistory = async (id: string | number, isSession: boolean = false, bef
     let messages: AIChatMessage[] = [];
     
     if (isSession) {
-      const res = await aiApi.getChatHistory(id as string);
+      const res = await aiApi.getChatHistory(id as string, beforeId);
       const data = res.data;
       if (data.success) {
         messages = data.data || [];
@@ -152,14 +152,31 @@ const fetchHistory = async (id: string | number, isSession: boolean = false, bef
     }
 
     if (beforeId) {
-      // Prepend history
-      chatHistories.value[historyKey] = [...messages, ...chatHistories.value[historyKey]];
+      // Prepend history and deduplicate
+      const existingIds = new Set(chatHistories.value[historyKey].map((m: any) => m.id));
+      const newMessages = messages.filter((m: any) => !existingIds.has(m.id));
+      
+      if (newMessages.length > 0) {
+        chatHistories.value[historyKey] = [...newMessages, ...chatHistories.value[historyKey]];
+      } else if (messages.length > 0) {
+        // If we got messages but they are all duplicates, we should still try to find older ones
+        // but to avoid infinite loop, if we get exactly what we asked for and it's all duplicates,
+        // it might mean something is wrong. However, usually the backend's before_id should prevent this.
+        // For safety, if we get 0 new messages, we stop trying for this session/agent until refresh.
+        hasMoreHistory.value[historyKey] = false;
+      }
     } else {
       // Initial load
       chatHistories.value[historyKey] = messages;
     }
 
-    hasMoreHistory.value[historyKey] = messages.length === 20;
+    // Update hasMoreHistory based on whether we reached the limit
+    if (messages.length < 20) {
+      hasMoreHistory.value[historyKey] = false;
+    } else if (!beforeId) {
+      // If initial load and we got exactly 20, assume there might be more
+      hasMoreHistory.value[historyKey] = true;
+    }
 
     // Handle scroll position when prepending
     if (beforeId && scrollContainer.value) {
@@ -181,13 +198,16 @@ const handleScroll = async () => {
   if (!scrollContainer.value || isLoadingHistory.value) return;
 
   const historyKey = currentSessionId.value || (selectedAgent.value ? `agent_${selectedAgent.value.id}` : null);
-  if (!historyKey) return;
+  if (!historyKey || !hasMoreHistory.value[historyKey]) return;
 
   const container = scrollContainer.value;
-  if (container.scrollTop === 0 && hasMoreHistory.value[historyKey]) {
+  // Trigger when near top (threshold 50px)
+  if (container.scrollTop <= 50) {
     const currentMessages = chatHistories.value[historyKey] || [];
     if (currentMessages.length > 0) {
-      const firstMsgId = (currentMessages[0] as any).id;
+      const firstMsg = currentMessages.find((m: any) => m.id);
+      const firstMsgId = firstMsg ? (firstMsg as any).id : null;
+      
       if (firstMsgId) {
         if (currentSessionId.value) {
           await fetchHistory(currentSessionId.value, true, firstMsgId);
@@ -1411,7 +1431,7 @@ const filteredSessions = computed(() => {
           :class="[
             'px-6 py-2 rounded-xl text-sm font-semibold transition-all duration-300 relative overflow-hidden',
             activeTab === tab 
-              ? 'bg-[var(--matrix-color)] text-white shadow-lg shadow-[var(--matrix-color)]/25' 
+              ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] shadow-lg shadow-[var(--matrix-color)]/25' 
               : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--matrix-color)]/5'
           ]"
         >
@@ -1423,7 +1443,7 @@ const filteredSessions = computed(() => {
         <button 
           v-if="activeTab === 'agents'"
           @click="openAddAgent"
-          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--matrix-color)] hover:opacity-90 text-white rounded-xl transition-all text-sm font-bold shadow-lg shadow-[var(--matrix-color)]/20 active:scale-95"
+          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--matrix-color)] hover:opacity-90 text-[var(--sidebar-text-active)] rounded-xl transition-all text-sm font-bold shadow-lg shadow-[var(--matrix-color)]/20 active:scale-95"
         >
           <Plus class="w-4 h-4" />
           {{ t('ai_create_new') }}
@@ -1431,7 +1451,7 @@ const filteredSessions = computed(() => {
         <button 
           v-if="activeTab === 'models'"
           @click="openAddModel"
-          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--matrix-color)] hover:opacity-90 text-white rounded-xl transition-all text-sm font-bold shadow-lg shadow-[var(--matrix-color)]/20 active:scale-95"
+          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--matrix-color)] hover:opacity-90 text-[var(--sidebar-text-active)] rounded-xl transition-all text-sm font-bold shadow-lg shadow-[var(--matrix-color)]/20 active:scale-95"
         >
           <Plus class="w-4 h-4" />
           {{ t('ai_register') }}
@@ -1439,7 +1459,7 @@ const filteredSessions = computed(() => {
         <button 
           v-if="activeTab === 'providers'"
           @click="openAddProvider"
-          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--matrix-color)] hover:opacity-90 text-white rounded-xl transition-all text-sm font-bold shadow-lg shadow-[var(--matrix-color)]/20 active:scale-95"
+          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--matrix-color)] hover:opacity-90 text-[var(--sidebar-text-active)] rounded-xl transition-all text-sm font-bold shadow-lg shadow-[var(--matrix-color)]/20 active:scale-95"
         >
           <Plus class="w-4 h-4" />
           {{ t('ai_register') }}
@@ -1493,8 +1513,8 @@ const filteredSessions = computed(() => {
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2 truncate">
                   <span class="font-bold text-sm text-[var(--text-main)] truncate">{{ agent.name }}</span>
-                  <span v-if="agent.call_count > 0" class="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black bg-[var(--matrix-color)] text-white uppercase tracking-tighter">
-                    {{ agent.call_count > 100 ? 'HOT' : 'POP' }}
+                  <span v-if="agent.call_count > 0" class="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] uppercase tracking-tighter">
+                    {{ agent.call_count }}
                   </span>
                 </div>
                 <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1593,7 +1613,7 @@ const filteredSessions = computed(() => {
                     @click="chatStyle = 'wechat'"
                     :class="[
                       'px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all',
-                      chatStyle === 'wechat' ? 'bg-[var(--matrix-color)] text-white shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                      chatStyle === 'wechat' ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     ]"
                   >
                     WECHAT
@@ -1602,7 +1622,7 @@ const filteredSessions = computed(() => {
                     @click="chatStyle = 'default'"
                     :class="[
                       'px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all',
-                      chatStyle === 'default' ? 'bg-[var(--matrix-color)] text-white shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                      chatStyle === 'default' ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] shadow-lg' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     ]"
                   >
                     MATRIX
@@ -1620,7 +1640,7 @@ const filteredSessions = computed(() => {
                     </option>
                   </select>
                   <!-- Tooltip/Hint -->
-                  <div class="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black/80 text-white text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed font-medium">
+                  <div class="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black/80 text-[var(--sidebar-text)] text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed font-medium">
                     {{ t('ai_context_hint') || '上下文越长，消耗的算力资源越多，响应可能变慢。' }}
                   </div>
                 </div>
@@ -1646,7 +1666,7 @@ const filteredSessions = computed(() => {
                 <button 
                   v-if="currentSessionId"
                   @click="startNewChat(selectedAgent, true)" 
-                  class="text-xs font-bold text-[var(--matrix-color)] hover:text-white flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--matrix-color)]/10 hover:bg-[var(--matrix-color)] border border-[var(--matrix-color)]/20 transition-all active:scale-95 shadow-lg shadow-[var(--matrix-color)]/5"
+                  class="text-xs font-bold text-[var(--matrix-color)] hover:text-[var(--sidebar-text-active)] flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--matrix-color)]/10 hover:bg-[var(--matrix-color)] border border-[var(--matrix-color)]/20 transition-all active:scale-95 shadow-lg shadow-[var(--matrix-color)]/5"
                 >
                   <Plus class="w-4 h-4" />
                   {{ t('ai_new_chat') }}
@@ -1691,7 +1711,7 @@ const filteredSessions = computed(() => {
                   'w-10 h-10 flex items-center justify-center flex-shrink-0 transition-all duration-300',
                   chatStyle === 'wechat' ? 'rounded-md shadow-none' : 'rounded-2xl shadow-lg border',
                   (msg.role || (msg as any).Role) === 'user' 
-                    ? (chatStyle === 'wechat' ? 'bg-[var(--wechat-user-bubble)] text-[#000]/60' : 'bg-[var(--matrix-color)] border-[var(--matrix-color)]/20 text-white shadow-[var(--matrix-color)]/20')
+                    ? (chatStyle === 'wechat' ? 'bg-[var(--wechat-user-bubble)] text-[#000]/60' : 'bg-[var(--matrix-color)] border-[var(--matrix-color)]/20 text-[var(--sidebar-text-active)] shadow-[var(--matrix-color)]/20')
                     : (chatStyle === 'wechat' ? 'bg-[var(--wechat-bot-bubble)] text-[#000]/60' : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--matrix-color)] shadow-black/5')
                 ]">
                   <User v-if="(msg.role || (msg as any).Role) === 'user'" class="w-5 h-5" />
@@ -1709,7 +1729,7 @@ const filteredSessions = computed(() => {
                             ? 'bg-[var(--wechat-user-bubble)] text-[var(--wechat-text)] rounded-lg rounded-tr-none shadow-sm' 
                             : 'bg-[var(--wechat-bot-bubble)] text-[var(--wechat-text)] rounded-lg rounded-tl-none shadow-sm')
                         : ((msg.role || (msg as any).Role) === 'user' 
-                            ? 'bg-[var(--matrix-color)] text-white border border-[var(--matrix-color)]/20 rounded-3xl rounded-tr-none shadow-lg' 
+                            ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] border border-[var(--matrix-color)]/20 rounded-3xl rounded-tr-none shadow-lg' 
                             : 'bg-[var(--bg-card)] text-[var(--text-main)] border border-[var(--border-color)] rounded-3xl rounded-tl-none shadow-lg')
                     ]">
                       <!-- WeChat Style Arrow -->
@@ -1799,7 +1819,7 @@ const filteredSessions = computed(() => {
                   :class="[
                     'absolute right-3 bottom-3 p-2.5 rounded-xl transition-all active:scale-90',
                     userInput.trim() && !isGenerating 
-                      ? 'bg-[var(--matrix-color)] text-white shadow-lg shadow-[var(--matrix-color)]/30' 
+                      ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] shadow-lg shadow-[var(--matrix-color)]/30' 
                       : 'bg-[var(--bg-body)] text-[var(--text-muted)]/20 cursor-not-allowed border border-[var(--border-color)]'
                   ]"
                 >
@@ -1821,10 +1841,10 @@ const filteredSessions = computed(() => {
               <h2 class="text-3xl font-black text-[var(--text-main)] tracking-tight uppercase italic leading-none">{{ t('ai_nexus') }}</h2>
               <p class="text-[var(--text-muted)] text-sm max-w-sm mx-auto leading-relaxed font-bold tracking-widest uppercase opacity-40">{{ t('ai_task_desc') }}</p>
             </div>
-            <button v-if="activeTab === 'agents'" @click="openAddAgent" class="px-10 py-4 bg-[var(--matrix-color)] text-white border border-[var(--matrix-color)]/20 rounded-2xl transition-all text-sm font-black uppercase tracking-widest shadow-xl shadow-[var(--matrix-color)]/20 hover:scale-105 active:scale-95">
+            <button v-if="activeTab === 'agents'" @click="openAddAgent" class="px-10 py-4 bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] border border-[var(--matrix-color)]/20 rounded-2xl transition-all text-sm font-black uppercase tracking-widest shadow-xl shadow-[var(--matrix-color)]/20 hover:scale-105 active:scale-95">
               {{ t('ai_create_new') }}
             </button>
-            <button v-else-if="activeTab === 'sessions'" @click="activeTab = 'agents'" class="px-10 py-4 bg-[var(--matrix-color)] text-white border border-[var(--matrix-color)]/20 rounded-2xl transition-all text-sm font-black uppercase tracking-widest shadow-xl shadow-[var(--matrix-color)]/20 hover:scale-105 active:scale-95">
+            <button v-else-if="activeTab === 'sessions'" @click="activeTab = 'agents'" class="px-10 py-4 bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] border border-[var(--matrix-color)]/20 rounded-2xl transition-all text-sm font-black uppercase tracking-widest shadow-xl shadow-[var(--matrix-color)]/20 hover:scale-105 active:scale-95">
               {{ t('ai_new_chat') }}
             </button>
           </div>
@@ -1976,7 +1996,7 @@ const filteredSessions = computed(() => {
         <div class="p-8 space-y-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
           <!-- Error Alert -->
           <div v-if="errorMessage" class="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center gap-3 animate-shake">
-            <div class="p-1.5 bg-red-500 rounded-lg text-white">
+            <div class="p-1.5 bg-red-500 rounded-lg text-[var(--sidebar-text)]">
               <X class="w-4 h-4" />
             </div>
             <span class="font-bold">{{ errorMessage }}</span>
@@ -2072,7 +2092,7 @@ const filteredSessions = computed(() => {
 
         <div class="px-8 py-6 border-t border-[var(--border-color)] bg-[var(--bg-header)] flex justify-end gap-4">
           <button @click="showAgentModal = false" class="px-8 py-3 rounded-2xl text-sm font-bold text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-body)]/50 transition-all border border-transparent hover:border-[var(--border-color)]">{{ t('ai_cancel') }}</button>
-          <button @click="saveAgent" class="px-8 py-3 bg-[var(--matrix-color)] hover:opacity-90 text-white rounded-2xl text-sm font-bold shadow-xl shadow-[var(--matrix-color)]/20 transition-all active:scale-95">{{ t('ai_save') }}</button>
+          <button @click="saveAgent" class="px-8 py-3 bg-[var(--matrix-color)] hover:opacity-90 text-[var(--sidebar-text-active)] rounded-2xl text-sm font-bold shadow-xl shadow-[var(--matrix-color)]/20 transition-all active:scale-95">{{ t('ai_save') }}</button>
         </div>
       </div>
     </div>
@@ -2114,7 +2134,7 @@ const filteredSessions = computed(() => {
         </div>
         <div class="px-8 py-6 border-t border-[var(--border-color)] bg-[var(--bg-header)] flex justify-end gap-4">
           <button @click="showModelModal = false" class="px-6 py-2 rounded-xl text-sm font-bold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all">{{ t('ai_cancel') }}</button>
-          <button @click="saveModel" class="px-8 py-3 bg-[var(--matrix-color)] hover:opacity-90 text-white rounded-2xl text-sm font-bold shadow-xl shadow-[var(--matrix-color)]/20 transition-all active:scale-95">{{ t('ai_register') }}</button>
+          <button @click="saveModel" class="px-8 py-3 bg-[var(--matrix-color)] hover:opacity-90 text-[var(--sidebar-text-active)] rounded-2xl text-sm font-bold shadow-xl shadow-[var(--matrix-color)]/20 transition-all active:scale-95">{{ t('ai_register') }}</button>
         </div>
       </div>
     </div>
@@ -2159,7 +2179,7 @@ const filteredSessions = computed(() => {
         </div>
         <div class="px-8 py-6 border-t border-[var(--border-color)] bg-[var(--bg-header)] flex justify-end gap-4">
           <button @click="showProviderModal = false" class="px-6 py-2 rounded-xl text-sm font-bold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all">{{ t('ai_cancel') }}</button>
-          <button @click="saveProvider" class="px-8 py-3 bg-[var(--matrix-color)] hover:opacity-90 text-white rounded-2xl text-sm font-bold shadow-xl shadow-[var(--matrix-color)]/20 transition-all active:scale-95">{{ t('ai_register') }}</button>
+          <button @click="saveProvider" class="px-8 py-3 bg-[var(--matrix-color)] hover:opacity-90 text-[var(--sidebar-text-active)] rounded-2xl text-sm font-bold shadow-xl shadow-[var(--matrix-color)]/20 transition-all active:scale-95">{{ t('ai_register') }}</button>
         </div>
       </div>
     </div>

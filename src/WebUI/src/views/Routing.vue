@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useBotStore } from '@/stores/bot';
+import { useAuthStore } from '@/stores/auth';
 import { 
   Route, 
   Plus, 
@@ -11,11 +12,13 @@ import {
   Search,
   AlertCircle,
   CheckCircle2,
-  X
+  X,
+  Shield
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
 const botStore = useBotStore();
+const authStore = useAuthStore();
 const t = (key: string) => systemStore.t(key);
 
 const rules = ref<any[]>([]);
@@ -41,6 +44,10 @@ const filteredRules = computed(() => {
 });
 
 const fetchRules = async () => {
+  if (!authStore.isAdmin) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   error.value = null;
   try {
@@ -125,8 +132,13 @@ onMounted(fetchRules);
 
 <template>
   <div class="p-6 space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div v-if="!authStore.isAdmin" class="min-h-[60vh] flex flex-col items-center justify-center space-y-4 opacity-30">
+      <Shield class="w-16 h-16 text-[var(--text-main)]" />
+      <p class="text-xs font-black uppercase tracking-[0.2em] text-[var(--text-main)]">{{ t('admin_required') }}</p>
+    </div>
+    <template v-else>
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-black text-[var(--text-main)] tracking-tight">{{ t('routing') }}</h1>
         <p class="text-sm font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('routing_desc') }}</p>
@@ -184,13 +196,13 @@ onMounted(fetchRules);
             <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button 
                 @click="handleEditRule(rule)"
-                class="p-2 rounded-xl bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-black transition-all"
+                class="p-2 rounded-xl bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-[var(--sidebar-text-active)] transition-all"
               >
                 <Plus class="w-4 h-4 rotate-45 group-hover:rotate-0 transition-transform" />
               </button>
               <button 
                 @click="handleDeleteRule(rule.key)"
-                class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
               >
                 <Trash2 class="w-4 h-4" />
               </button>
@@ -321,6 +333,6 @@ onMounted(fetchRules);
           </form>
         </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>

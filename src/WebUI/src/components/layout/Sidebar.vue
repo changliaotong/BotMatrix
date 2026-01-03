@@ -139,17 +139,17 @@ const t = (key: string) => systemStore.t(key);
             <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)] flex items-center justify-center shadow-lg shadow-[var(--matrix-color)]/20 flex-shrink-0">
                 <Cpu class="w-5 h-5 text-black" />
             </div>
-            <span v-show="!systemStore.isSidebarCollapsed" class="font-bold tracking-tight text-[var(--text-main)] whitespace-nowrap">{{ t('botmatrix') }}</span>
+            <span v-show="!systemStore.isSidebarCollapsed" class="font-bold tracking-tight text-[var(--sidebar-text)] whitespace-nowrap">{{ t('botmatrix') }}</span>
         </div>
         <!-- Collapse Toggle (Desktop) -->
         <button v-show="!systemStore.isSidebarCollapsed"
                 @click="systemStore.toggleSidebar()" 
-                class="hidden lg:flex p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-muted)] transition-colors flex-shrink-0">
+                class="hidden lg:flex p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--sidebar-text-muted)] transition-colors flex-shrink-0">
             <PanelLeftClose class="w-4 h-4" />
         </button>
         <!-- Close Toggle (Mobile) -->
         <button @click="systemStore.showMobileMenu = false" 
-                class="lg:hidden p-2 text-[var(--text-muted)] hover:text-[var(--matrix-color)]">
+                class="lg:hidden p-2 text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)]">
             <PanelLeftClose class="w-5 h-5" />
         </button>
     </div>
@@ -158,7 +158,7 @@ const t = (key: string) => systemStore.t(key);
     <nav class="flex-1 overflow-y-auto py-2 px-3 space-y-2 custom-scrollbar">
         <template v-for="(group, idx) in systemStore.menuGroups" :key="group?.id || idx">
             <div v-if="group">
-                <div v-show="!systemStore.isSidebarCollapsed" class="px-3 mt-4 mb-1 text-[9px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] opacity-80">
+                <div v-show="!systemStore.isSidebarCollapsed" class="px-3 mt-4 mb-1 text-[9px] font-black uppercase tracking-[0.2em] text-[var(--sidebar-text-muted)] opacity-80">
                     {{ t(group.titleKey) }}
                 </div>
                 <div class="space-y-1">
@@ -169,18 +169,18 @@ const t = (key: string) => systemStore.t(key);
             'w-full flex items-center transition-all duration-200 group relative border border-transparent',
             systemStore.isSidebarCollapsed ? 'justify-center px-0 py-2.5 rounded-lg' : 'gap-3 px-3 py-2 rounded-lg',
             isItemActive(item.id) 
-                ? 'bg-[var(--matrix-color)]/10 border-[var(--matrix-color)]/20 text-[var(--matrix-color)] shadow-sm active' 
-                : 'text-[var(--text-muted)] hover:bg-[var(--matrix-color)]/10 hover:text-[var(--matrix-color)]'
+                ? 'bg-[var(--matrix-color)] border-[var(--matrix-color)] text-[var(--sidebar-text-active)] shadow-lg active scale-[1.02]' 
+                : 'text-[var(--sidebar-text-muted)] hover:bg-[var(--matrix-color)]/10 hover:text-[var(--sidebar-text)]'
         ]">
                             <component :is="iconMap[item.icon]" 
                                :class="[
                                    'w-5 h-5 flex-shrink-0 transition-colors',
-                                   isItemActive(item.id) ? 'text-[var(--matrix-color)]' : 'text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]'
+                                   isItemActive(item.id) ? 'text-[var(--sidebar-text-active)]' : 'text-[var(--sidebar-text-muted)] group-hover:text-[var(--sidebar-text)]'
                                ]" />
                             <span v-show="!systemStore.isSidebarCollapsed" 
                                   :class="[
                                       'text-sm font-medium transition-colors',
-                                      isItemActive(item.id) ? 'text-[var(--matrix-color)]' : 'text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]'
+                                      isItemActive(item.id) ? 'text-[var(--sidebar-text-active)]' : 'text-[var(--sidebar-text-muted)] group-hover:text-[var(--sidebar-text)]'
                                   ]">{{ t(item.titleKey) }}</span>
                             
                             <!-- Active Indicator -->
@@ -202,8 +202,8 @@ const t = (key: string) => systemStore.t(key);
                 <User v-else class="w-4 h-4" />
             </div>
             <div v-show="!systemStore.isSidebarCollapsed" class="flex-1 min-w-0">
-                <div class="text-sm font-semibold truncate text-[var(--text-main)]">{{ authStore.user?.username || 'ADMIN' }}</div>
-                <div class="text-xs text-[var(--text-muted)] truncate uppercase tracking-wider">{{ t(authStore.user?.role === 'admin' ? 'admin' : 'user') }}</div>
+                <div class="text-sm font-semibold truncate text-[var(--sidebar-text)]">{{ authStore.user?.username || 'ADMIN' }}</div>
+                <div class="text-xs text-[var(--sidebar-text-muted)] truncate uppercase tracking-wider">{{ t(authStore.user?.role === 'admin' ? 'admin' : 'user') }}</div>
             </div>
         </div>
     </div>
@@ -218,15 +218,15 @@ const t = (key: string) => systemStore.t(key);
   color: var(--matrix-color);
 }
 .bg-matrix\/10 {
-  background-color: rgba(0, 255, 65, 0.1);
+  background-color: color-mix(in srgb, var(--matrix-color) 10%, transparent);
 }
 .bg-matrix\/20 {
-  background-color: rgba(0, 255, 65, 0.2);
+  background-color: color-mix(in srgb, var(--matrix-color) 20%, transparent);
 }
 .border-matrix\/20 {
-  border-color: rgba(0, 255, 65, 0.2);
+  border-color: color-mix(in srgb, var(--matrix-color) 20%, transparent);
 }
 .shadow-matrix\/20 {
-  shadow-color: rgba(0, 255, 65, 0.2);
+  shadow-color: color-mix(in srgb, var(--matrix-color) 20%, transparent);
 }
 </style>

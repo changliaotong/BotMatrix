@@ -96,9 +96,9 @@ onUnmounted(() => {
 
 const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
-    case 'online': return 'text-green-500 bg-green-500/10 border-green-500/20';
-    case 'busy': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
-    default: return 'text-red-500 bg-red-500/10 border-red-500/20';
+    case 'online': return 'text-[var(--status-online)] bg-[var(--status-online)]/10 border-[var(--status-online)]/20';
+    case 'busy': return 'text-[var(--status-busy)] bg-[var(--status-busy)]/10 border-[var(--status-busy)]/20';
+    default: return 'text-[var(--status-offline)] bg-[var(--status-offline)]/10 border-[var(--status-offline)]/20';
   }
 };
 
@@ -158,7 +158,7 @@ const getWorkerName = (worker: any) => {
         <p class="text-xs font-bold uppercase tracking-widest">{{ t('error') }}</p>
         <p class="text-sm font-black">{{ error }}</p>
       </div>
-      <button @click="fetchWorkers" class="px-3 py-1 rounded-lg bg-red-500 text-white text-[10px] font-black uppercase tracking-widest">
+      <button @click="fetchWorkers" class="px-3 py-1 rounded-lg bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
         {{ t('retry') }}
       </button>
     </div>

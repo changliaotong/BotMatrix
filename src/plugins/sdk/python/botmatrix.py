@@ -20,6 +20,7 @@ class Context:
         self.actions: List[Dict[str, Any]] = []
         self.args: List[str] = [] # For command arguments
         self.params: Dict[str, str] = {} # For regex named groups
+        self.result: Optional[str] = None # For string-based message propagation
 
     @property
     def sender(self) -> str:
@@ -34,10 +35,24 @@ class Context:
         return self.event.get("payload", {}).get("text", "")
 
     def reply(self, text: str):
+        """Send a message (immediate action construction)"""
         self.call_action("send_message", text=text)
 
-    def reply_image(self, url: str):
+    def send_text(self, text: str):
+        """Alias for reply for consistency"""
+        self.reply(text)
+
+    def send_image(self, url: str):
+        """Send an image"""
         self.call_action("send_image", url=url)
+
+    def add_action(self, action_type: str, **kwargs):
+        """Add a custom action"""
+        self.call_action(action_type, **kwargs)
+
+    def reply_image(self, url: str):
+        """Deprecated: Use send_image instead"""
+        self.send_image(url)
 
     async def ask(self, prompt: str, timeout: float = 30.0) -> Optional['Context']:
         """
@@ -114,6 +129,12 @@ class BotMatrixPlugin:
 
     def has_permission(self, action: str) -> bool:
         if not self.config: return True # Legacy mode
+        
+        # Essential built-in actions are always allowed
+        essential_actions = {"send_message", "send_image", "storage.get", "storage.set"}
+        if action in essential_actions:
+            return True
+            
         allowed_actions = self.config.get("actions", [])
         return action in allowed_actions
 
@@ -195,6 +216,11 @@ class BotMatrixPlugin:
         ctx = Context(msg, self)
         try:
             await final_handler(ctx)
+            
+            # Auto-convert string result to send_message action
+            if ctx.result:
+                ctx.reply(ctx.result)
+                
             await self._send_response(event_id, True, ctx.actions, "")
         except Exception as e:
             logger.error(f"Handler error for {event_name}: {e}", exc_info=True)

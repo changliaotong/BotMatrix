@@ -51,11 +51,12 @@ onMounted(() => {
 
     draw() {
       this.updateCount++;
+      const isDark = systemStore.mode === 'dark';
       
-      // Draw head (white/glowing)
+      // Draw head
       const headChar = chars[Math.floor(Math.random() * chars.length)];
       ctx!.font = `bold ${fontSize}px monospace`;
-      ctx!.fillStyle = '#ffffff';
+      ctx!.fillStyle = isDark ? '#ffffff' : '#064e3b'; // White in dark, Dark Emerald in light
       ctx!.fillText(headChar, this.x, this.y * fontSize);
 
       // Draw tail
@@ -66,9 +67,15 @@ onMounted(() => {
         const opacity = 1 - (i / this.length);
         const char = chars[Math.floor(Math.random() * chars.length)];
         
-        // Varying green intensity
-        const green = Math.floor(255 * opacity);
-        ctx!.fillStyle = `rgb(0, ${green}, 0)`;
+        // Varying green intensity based on theme
+        if (isDark) {
+          const green = Math.floor(255 * opacity);
+          ctx!.fillStyle = `rgba(0, ${green}, 0, ${opacity})`;
+        } else {
+          // In light mode, use emerald colors with varying opacity
+          // #10b981 (emerald-500)
+          ctx!.fillStyle = `rgba(16, 185, 129, ${opacity * 0.6})`;
+        }
         ctx!.fillText(char, this.x, charY);
       }
 
@@ -86,8 +93,9 @@ onMounted(() => {
   }
 
   const render = () => {
-    // Clear with extreme persistence (low alpha fill)
-    ctx!.fillStyle = 'rgba(0, 0, 0, 0.12)';
+    // Use theme-aware background color with low alpha for persistence
+    const isDark = systemStore.mode === 'dark';
+    ctx!.fillStyle = isDark ? 'rgba(0, 0, 0, 0.12)' : 'rgba(240, 253, 244, 0.12)'; // Match matrix light bg
     ctx!.fillRect(0, 0, canvas.width, canvas.height);
 
     drops.forEach(drop => drop.draw());
@@ -118,7 +126,7 @@ onMounted(() => {
   height: 100%;
   pointer-events: none;
   z-index: -1;
-  background: #000;
+  background: var(--bg-body);
   opacity: 0.8; /* Higher density visual */
 }
 </style>

@@ -232,7 +232,7 @@ const formatBytes = (bytes: number) => {
           <h3 class="font-black uppercase tracking-widest text-sm">{{ t('system_control') }}</h3>
           <p class="text-xs font-bold opacity-70">{{ t('system_control_desc') }}</p>
           <div class="grid grid-cols-2 gap-3">
-            <button class="px-4 py-3 rounded-2xl bg-black text-white text-xs font-black hover:opacity-80 transition-opacity">{{ t('restart') }}</button>
+            <button class="px-4 py-3 rounded-2xl bg-black text-[var(--sidebar-text)] text-xs font-black hover:opacity-80 transition-opacity">{{ t('restart') }}</button>
             <button class="px-4 py-3 rounded-2xl bg-black/20 text-black text-xs font-black hover:bg-black/30 transition-colors">{{ t('dump') }}</button>
           </div>
         </div>

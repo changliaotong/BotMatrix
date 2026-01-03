@@ -331,7 +331,7 @@ const getTypeColor = (type: string) => {
         <p class="text-xs font-bold uppercase tracking-widest">错误</p>
         <p class="text-sm font-black">{{ error }}</p>
       </div>
-      <button @click="fetchPlugins" class="px-3 py-1 rounded-lg bg-red-500 text-white text-[10px] font-black uppercase tracking-widest">
+      <button @click="fetchPlugins" class="px-3 py-1 rounded-lg bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
         重试
       </button>
     </div>

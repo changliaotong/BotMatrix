@@ -18,6 +18,9 @@ type AppConfig struct {
 	PGDBName   string `json:"pg_dbname"`
 	PGSSLMode  string `json:"pg_sslmode"`
 
+	// AI Configuration
+	AIEmbeddingModel string `json:"ai_embedding_model"`
+
 	// Feature Flags
 	EnableSkill bool   `json:"enable_skill"`
 	LogLevel    string `json:"log_level"`

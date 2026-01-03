@@ -224,7 +224,11 @@ onMounted(async () => {
 });
 
 const getStatusColor = (connected: boolean) => {
-  return connected ? 'bg-matrix' : 'bg-gray-400';
+  return connected ? 'bg-[var(--status-online)]' : 'bg-[var(--status-offline)]';
+};
+
+const getStatusTextColor = (connected: boolean) => {
+  return connected ? 'text-[var(--status-online)]' : 'text-[var(--status-offline)]';
 };
 
 const getPlatformIcon = (platform: string) => {
@@ -450,10 +454,12 @@ const sendChatMessage = async () => {
     if (res.status === 'ok' || res.success) {
       // 模拟机器人回复（由于是在线机器人，我们可以在这里通过后端上报逻辑触发，或者前端先模拟显示）
       // 这里的逻辑可以根据实际后端对 Online 平台的处理来调整
+      const reply = (res.data && res.data.reply) || (res.reply) || null;
+      
       setTimeout(() => {
         chatHistory.value.push({
           role: 'bot',
-          content: '收到消息: ' + msgContent,
+          content: reply || '收到消息: ' + msgContent,
           time: new Date().toLocaleTimeString()
         });
       }, 500);
@@ -1130,13 +1136,13 @@ const filteredFriends = computed(() => {
   background-color: var(--matrix-color);
 }
 .bg-matrix\/10 {
-  background-color: rgba(0, 255, 65, 0.1);
+  background-color: color-mix(in srgb, var(--matrix-color) 10%, transparent);
 }
 .border-matrix {
   border-color: var(--matrix-color);
 }
 .shadow-matrix\/20 {
-  box-shadow: 0 10px 15px -3px rgba(0, 255, 65, 0.2);
+  box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--matrix-color) 20%, transparent);
 }
 .ring-matrix {
   --tw-ring-color: var(--matrix-color);

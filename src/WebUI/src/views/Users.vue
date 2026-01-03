@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useBotStore } from '@/stores/bot';
+import { useAuthStore } from '@/stores/auth';
 import { 
   Users, 
   Plus, 
@@ -27,6 +28,7 @@ import {
 
 const systemStore = useSystemStore();
 const botStore = useBotStore();
+const authStore = useAuthStore();
 const t = (key: string) => systemStore.t(key);
 
 const users = ref<any[]>([]);
@@ -54,6 +56,10 @@ const newIdentity = ref({
 });
 
 const fetchUsers = async () => {
+  if (!authStore.isAdmin) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   try {
     const [usersData, identityData] = await Promise.all([
@@ -156,8 +162,13 @@ onMounted(fetchUsers);
 
 <template>
   <div class="p-6 space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div v-if="!authStore.isAdmin" class="min-h-[60vh] flex flex-col items-center justify-center space-y-4 opacity-30">
+      <Shield class="w-16 h-16 text-[var(--text-main)]" />
+      <p class="text-xs font-black uppercase tracking-[0.2em] text-[var(--text-main)]">{{ t('admin_required') }}</p>
+    </div>
+    <template v-else>
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-black text-[var(--text-main)] tracking-tight">{{ t('users') }}</h1>
         <p class="text-sm font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('users_desc') }}</p>
@@ -271,7 +282,7 @@ onMounted(fetchUsers);
             </button>
             <button 
               @click="handleDeleteUser(user.id)"
-              class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+              class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
             >
               <Trash2 class="w-4 h-4" />
             </button>
@@ -296,7 +307,7 @@ onMounted(fetchUsers);
         </div>
         <button 
           @click="resetIdentityForm(); showIdentityModal = true"
-          class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
+          class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
         >
           <Plus class="w-4 h-4" />
           {{ t('map_identity') }}
@@ -333,7 +344,7 @@ onMounted(fetchUsers);
             <button @click="handleEditIdentity(id)" class="p-2 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-all">
               <Edit2 class="w-4 h-4" />
             </button>
-            <button @click="handleDeleteIdentity(id.ID)" class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all">
+            <button @click="handleDeleteIdentity(id.ID)" class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all">
               <Trash2 class="w-4 h-4" />
             </button>
           </div>
@@ -480,5 +491,6 @@ onMounted(fetchUsers);
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>

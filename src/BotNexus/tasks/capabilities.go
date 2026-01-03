@@ -45,6 +45,35 @@ func (c *Capability) ToTool() ai.Tool {
 	}
 }
 
+// GenerateSkillGuide 生成技能的操作指南 (用于 RAG 索引)
+func (c *Capability) GenerateSkillGuide() string {
+	guide := fmt.Sprintf("## 技能名称: %s\n", c.Name)
+	guide += fmt.Sprintf("描述: %s\n", c.Description)
+	if c.Category != "" {
+		guide += fmt.Sprintf("分类: %s\n", c.Category)
+	}
+	if len(c.Params) > 0 {
+		guide += "\n参数说明:\n"
+		for name, desc := range c.Params {
+			req := ""
+			for _, r := range c.Required {
+				if r == name {
+					req = " (必填)"
+					break
+				}
+			}
+			guide += fmt.Sprintf("- %s: %s%s\n", name, desc, req)
+		}
+	}
+	if c.Example != "" {
+		guide += fmt.Sprintf("\n使用示例: %s\n", c.Example)
+	}
+	if c.RiskLevel != "" {
+		guide += fmt.Sprintf("风险等级: %s\n", c.RiskLevel)
+	}
+	return guide
+}
+
 // BotIdentity 机器人身份定义 (自举核心)
 type BotIdentity struct {
 	Name        string            `json:"name"`        // 机器人名称
@@ -61,9 +90,17 @@ type DocChunk struct {
 	Source  string `json:"source"`
 }
 
+// SearchFilter 搜索过滤条件
+type SearchFilter struct {
+	OwnerType string // system, user, group, bot
+	OwnerID   string // ID
+	BotID     string // 机器人号码 (用于自动共享该机器人名下的知识)
+	Status    string // active, paused
+}
+
 // KnowledgeBase 知识库接口
 type KnowledgeBase interface {
-	Search(ctx context.Context, query string, limit int) ([]DocChunk, error)
+	Search(ctx context.Context, query string, limit int, filter *SearchFilter) ([]DocChunk, error)
 }
 
 // SystemManifest 系统功能清单

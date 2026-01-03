@@ -123,7 +123,7 @@ const handleLogin = async () => {
             <Bot class="w-10 h-10" />
           </div>
           <div class="space-y-1">
-            <h1 class="text-3xl font-black dark:text-white tracking-tighter uppercase italic">{{ t('botmatrix').substring(0, 3) }}<span class="text-matrix">{{ t('botmatrix').substring(3) }}</span></h1>
+            <h1 class="text-3xl font-black text-[var(--text-main)] tracking-tighter uppercase italic">{{ t('botmatrix').substring(0, 3) }}<span class="text-matrix">{{ t('botmatrix').substring(3) }}</span></h1>
             <p class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">{{ t('system_desc') }}</p>
           </div>
         </div>
@@ -139,7 +139,7 @@ const handleLogin = async () => {
                 v-model="username"
                 type="text" 
                 :placeholder="t('username')" 
-                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all dark:text-white font-bold placeholder:text-gray-400"
+                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all text-[var(--text-main)] font-bold placeholder:text-gray-400"
               />
             </div>
             <div class="relative group">
@@ -150,7 +150,7 @@ const handleLogin = async () => {
                 v-model="password"
                 type="password" 
                 :placeholder="t('password')" 
-                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all dark:text-white font-bold placeholder:text-gray-400"
+                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all text-[var(--text-main)] font-bold placeholder:text-gray-400"
               />
             </div>
           </div>

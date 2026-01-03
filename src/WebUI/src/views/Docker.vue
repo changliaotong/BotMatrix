@@ -263,7 +263,7 @@ onUnmounted(() => {
               <button 
                 v-if="!container.status.includes('Up')"
                 @click="handleAction(container.id, 'start')"
-                class="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500 hover:text-white transition-all"
+                class="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500 hover:text-[var(--sidebar-text)] transition-all"
                 :title="t('start')"
               >
                 <Play class="w-4 h-4" />
@@ -271,7 +271,7 @@ onUnmounted(() => {
               <button 
                 v-else
                 @click="handleAction(container.id, 'stop')"
-                class="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-white transition-all"
+                class="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-[var(--sidebar-text)] transition-all"
                 :title="t('stop')"
               >
                 <Square class="w-4 h-4" />
@@ -279,7 +279,7 @@ onUnmounted(() => {
               
               <button 
                 @click="handleAction(container.id, 'restart')"
-                class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500 hover:text-white transition-all"
+                class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500 hover:text-[var(--sidebar-text)] transition-all"
                 :title="t('restart')"
               >
                 <RotateCcw class="w-4 h-4" />
@@ -295,7 +295,7 @@ onUnmounted(() => {
 
               <button 
                 @click="handleAction(container.id, 'delete')"
-                class="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                class="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
                 :title="t('delete')"
               >
                 <Trash2 class="w-4 h-4" />
@@ -348,7 +348,7 @@ onUnmounted(() => {
       <div class="p-6 sm:p-8 border-t border-[var(--border-color)] flex justify-end gap-4 bg-black/5 dark:bg-white/5">
         <button 
           @click="showLogs(selectedContainerId)"
-          class="px-8 py-3 rounded-2xl bg-[var(--matrix-color)] text-white text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[var(--matrix-color)]/20"
+          class="px-8 py-3 rounded-2xl bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[var(--matrix-color)]/20"
         >
           {{ t('refresh_logs') }}
         </button>

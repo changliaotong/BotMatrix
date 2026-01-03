@@ -1,11 +1,16 @@
-# 全球智能体网络 (Global Agent Mesh) 顶层设计
+# 🕸️ 全球技能机器人网络 (Global Agent Mesh)
 
-基于 MCP (Model Context Protocol) 的 BotMatrix 3.0 愿景：构建一个去中心化、安全、可扩展的全球智能体协作网络。
+> [⬅️ 返回文档中心](../README.md) | [🏠 返回项目主页](../../README.md)
 
 ## 1. 核心理念：智能体即服务 (Agent as a Service)
-在传统的架构中，智能体是孤立的。在 Global Agent Mesh 中，每一个 BotMatrix 实例不仅是一个操作终端，更是一个标准的 **MCP Server**。
-- **互联互通**：不同的 BotMatrix 实例可以通过 MCP 协议互相挂载对方的工具和知识库。
-- **能力共享**：如果你开发了一个强大的“法律咨询”机器人，你可以通过 MCP 接口将其能力授权给另一个组织，而无需共享代码。
+
+在 Global Agent Mesh 中，每一个 BotMatrix 节点都是一个标准的 **MCP Host/Server**。
+- **互联互通**：不同企业的技能机器人可以通过 MCP 协议安全地共享工具、知识库和业务逻辑。
+- **能力解耦**：开发者只需关注技能实现，Mesh 负责发现、授权与通信。
+
+> **核心术语映射**：
+> - **Mesh** = 技能机器人的朋友圈/协作网
+> - **B2B Call** = 跨企业的技能调用
 
 ### 1.1 核心驱动力
 Global Agent Mesh 的实现依赖于 **Model Context Protocol (MCP)** 的标准化能力，以及对传统 **IM 适配器** 的“双栈”化改造。
@@ -19,11 +24,12 @@ Global Agent Mesh 的实现依赖于 **Model Context Protocol (MCP)** 的标准�
 - **跨域授权**：使用 JWT 或 OAuth2 进行 MCP 调用鉴权，确保 A 组织的机器人调用 B 组织的工具时经过显式授权。
 
 ### 2.2 动态发现机制 (Discovery)
-- **点对点挂载**：通过交换 MCP Endpoint 和 APIKey 直接建立连接。
-- **公共注册中心 (Optional Hub)**：可选的公共索引，用于发现公开的 MCP 服务（如天气、金融数据、公共知识库）。
+- **联邦搜索 (Federal Search)**: **[已实现]** 支持在本地及所有已连接的远程节点中实时并发搜索可用的 MCP 服务。
+- **点对点挂载**: 通过交换 MCP Endpoint 和 APIKey 直接建立连接。
 
 ### 2.3 任务接力 (Task Relay)
-- **多级调度**：当本地机器人无法处理某个意图时，它可以通过 MCP 调用远程机器人的 `ExecuteAction` 工具，实现跨地域、跨平台的任务接力。
+- **跨域调用 (B2B Call)**: **[已实现]** 当本地机器人无法处理某个意图时，它可以通过安全协议直接调用远程节点的 MCP 工具。
+- **多级调度**: 实现跨地域、跨平台的任务接力，形成全球范围的智能协作。
 
 ## 3. 典型应用场景
 
@@ -42,5 +48,5 @@ Global Agent Mesh 的实现依赖于 **Model Context Protocol (MCP)** 的标准�
 ## 5. 演进路线图
 1. **Phase 1 (已完成)**：实现 MCP 协议基础架构，支持 Webhook 和内部技能桥接。
 2. **Phase 2 (已完成)**：实现基于数据库的 MCP 服务器动态注册与权限隔离，支持 SSE 实时通信协议。
-3. **Phase 3 (进行中)**：实现基于 B2B 联邦身份 (JWT) 的安全跨域 MCP 调用，集成隐私堡垒 (Privacy Bastion) 自动脱敏机制。
-4. **Phase 4 (未来)**：发布 BotMatrix Hub 原型，支持动态服务发现与全球智能体自动组网。
+3. **Phase 3 (已完成)**：实现基于 B2B 联邦身份 (JWT) 的安全跨域 MCP 调用，集成联邦搜索 (Federal Search) 与隐私堡垒。
+4. **Phase 4 (未来)**：实现语义向量检索增强的认知记忆，发布 BotMatrix Hub 原型支持动态服务发现与自动组网。

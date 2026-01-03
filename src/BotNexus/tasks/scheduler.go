@@ -121,7 +121,7 @@ func (s *Scheduler) triggerTask(task Task) {
 		}
 
 		// 计算下一次执行时间
-		nextRun := s.calculateNextRun(task)
+		nextRun := s.CalculateNextRun(task)
 		updates := map[string]any{
 			"last_run_time": time.Now(),
 			"next_run_time": nextRun,
@@ -145,9 +145,20 @@ func (s *Scheduler) triggerTask(task Task) {
 	}
 }
 
-func (s *Scheduler) calculateNextRun(task Task) *time.Time {
+func (s *Scheduler) CalculateNextRun(task Task) *time.Time {
 	switch task.Type {
 	case "once":
+		// 如果是 once 类型，尝试解析 TriggerConfig 中的 time
+		var config struct {
+			Time string `json:"time"`
+		}
+		if err := json.Unmarshal([]byte(task.TriggerConfig), &config); err == nil && config.Time != "" {
+			if t, err := time.Parse(time.RFC3339, config.Time); err == nil {
+				if t.After(time.Now()) {
+					return &t
+				}
+			}
+		}
 		return nil
 	case "cron":
 		var config struct {

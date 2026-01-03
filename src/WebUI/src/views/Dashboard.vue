@@ -38,6 +38,10 @@ const refreshing = ref(false);
 const fetchError = ref<string | null>(null);
 
 const fetchLogs = async () => {
+  if (!authStore.isAdmin) {
+    console.log('Skipping logs fetch for non-admin user');
+    return;
+  }
   try {
     const data = await botStore.fetchSystemLogs();
     if (data && data.success && data.data && data.data.logs) {
@@ -49,6 +53,10 @@ const fetchLogs = async () => {
 };
 
 const fetchMessages = async () => {
+  if (!authStore.isAdmin) {
+    console.log('Skipping messages fetch for non-admin user');
+    return;
+  }
   try {
     const messages = await botStore.fetchMessages(10);
     if (Array.isArray(messages)) {
@@ -71,13 +79,19 @@ const initFetch = async () => {
   fetchError.value = null;
   
   try {
-    const results = await Promise.allSettled([
-      botStore.fetchStats(),
-      botStore.fetchBots(),
-      fetchLogs(),
-      fetchMessages(),
-      botStore.fetchChatStats()
-    ]);
+      const promises: Promise<any>[] = [
+        botStore.fetchStats(),
+        botStore.fetchBots(),
+        botStore.fetchChatStats()
+      ];
+
+      // 只有管理员才获取系统日志和消息
+      if (authStore.isAdmin) {
+        promises.push(fetchLogs());
+        promises.push(fetchMessages());
+      }
+
+      const results = await Promise.allSettled(promises);
     
     // Check if critical fetches failed
     const statsFailed = results[0].status === 'rejected';
@@ -155,71 +169,89 @@ const t = (key: string) => systemStore.t(key);
 const showActiveGroupsModal = ref(false);
 const showDragonKingModal = ref(false);
 
-const statsCards = computed(() => [
-  { 
-    id: 'bots',
-    label: 'total_bots', 
-    value: botStore.stats.bot_count || '0', 
-    icon: 'Bot', 
-    colorClass: 'bg-blue-500/10', 
-    textColor: 'text-blue-500', 
-    unit: 'unit_active',
-    routeName: 'bots'
-  },
-  { 
-    id: 'workers',
-    label: 'active_workers', 
-    value: botStore.stats.worker_count || '0', 
-    icon: 'Users', 
-    colorClass: 'bg-purple-500/10', 
-    textColor: 'text-purple-500', 
-    unit: 'unit_active',
-    routeName: 'workers'
-  },
-  { 
-    id: 'cpu',
-    label: 'cpu_usage', 
-    value: (botStore.stats.cpu_usage || 0).toFixed(1) + '%', 
-    icon: 'Cpu', 
-    colorClass: 'bg-orange-500/10', 
-    textColor: 'text-orange-500', 
-    unit: 'unit_live',
-    trend: botStore.stats.cpu_trend || [],
-    routeName: 'monitor'
-  },
-  { 
-    id: 'memory',
-    label: 'memory_usage', 
-    value: (botStore.stats.memory_used_percent || 0).toFixed(1) + '%', 
-    icon: 'Database', 
-    colorClass: 'bg-blue-500/10', 
-    textColor: 'text-blue-500', 
-    unit: 'unit_live',
-    trend: botStore.stats.mem_trend || [],
-    routeName: 'monitor'
-  },
-  { 
-    id: 'throughput',
-    label: 'throughput', 
-    value: botStore.stats.message_count || '0', 
-    icon: 'Activity', 
-    colorClass: 'bg-pink-500/10', 
-    textColor: 'text-pink-500', 
-    unit: 'unit_msg',
-    trend: botStore.stats.msg_trend || [],
-    routeName: 'monitor'
-  },
-  { 
-    id: 'time',
-    label: 'current_time', 
-    value: currentTime.value, 
-    icon: 'Clock', 
-    colorClass: 'bg-green-500/10', 
-    textColor: 'text-green-500', 
-    unit: '',
-    routeName: 'monitor'
-  },
-]);
+const statsCards = computed(() => {
+  const colorMap: Record<string, string> = {
+    'text-blue-500': '#3b82f6',
+    'text-purple-500': '#a855f7',
+    'text-orange-500': '#f97316',
+    'text-pink-500': '#ec4899',
+    'text-green-500': '#22c55e',
+    'text-cyan-500': '#06b6d4',
+    'text-emerald-500': '#10b981'
+  };
+
+  return [
+    { 
+      id: 'bots',
+      label: 'total_bots', 
+      value: botStore.stats.bot_count || '0', 
+      icon: 'Bot', 
+      colorClass: 'bg-blue-500/10', 
+      textColor: 'text-blue-500', 
+      chartColor: colorMap['text-blue-500'],
+      unit: 'unit_active',
+      routeName: 'bots'
+    },
+    { 
+      id: 'workers',
+      label: 'active_workers', 
+      value: botStore.stats.worker_count || '0', 
+      icon: 'Users', 
+      colorClass: 'bg-purple-500/10', 
+      textColor: 'text-purple-500', 
+      chartColor: colorMap['text-purple-500'],
+      unit: 'unit_active',
+      routeName: 'workers'
+    },
+    { 
+      id: 'cpu',
+      label: 'cpu_usage', 
+      value: (botStore.stats.cpu_usage || 0).toFixed(1) + '%', 
+      icon: 'Cpu', 
+      colorClass: 'bg-orange-500/10', 
+      textColor: 'text-orange-500', 
+      chartColor: colorMap['text-orange-500'],
+      unit: 'unit_live',
+      trend: botStore.stats.cpu_trend || [],
+      routeName: 'monitor'
+    },
+    { 
+      id: 'memory',
+      label: 'memory_usage', 
+      value: (botStore.stats.memory_used_percent || 0).toFixed(1) + '%', 
+      icon: 'Database', 
+      colorClass: 'bg-blue-500/10', 
+      textColor: 'text-blue-500', 
+      chartColor: colorMap['text-blue-500'],
+      unit: 'unit_live',
+      trend: botStore.stats.mem_trend || [],
+      routeName: 'monitor'
+    },
+    { 
+      id: 'throughput',
+      label: 'throughput', 
+      value: botStore.stats.message_count || '0', 
+      icon: 'Activity', 
+      colorClass: 'bg-pink-500/10', 
+      textColor: 'text-pink-500', 
+      chartColor: colorMap['text-pink-500'],
+      unit: 'unit_msg',
+      trend: botStore.stats.msg_trend || [],
+      routeName: 'monitor'
+    },
+    { 
+      id: 'time',
+      label: 'current_time', 
+      value: currentTime.value, 
+      icon: 'Clock', 
+      colorClass: 'bg-green-500/10', 
+      textColor: 'text-green-500', 
+      chartColor: colorMap['text-green-500'],
+      unit: '',
+      routeName: 'monitor'
+    },
+  ];
+});
 
 const activeGroupsData = computed(() => {
   if (!chatStats.value || !chatStats.value.group_stats_today) return [];
@@ -307,7 +339,7 @@ const dragonKing = computed(() => {
       </div>
       <button 
         @click="initFetch" 
-        class="px-4 py-2 rounded-xl bg-red-500 text-white font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-all"
+        class="px-4 py-2 rounded-xl bg-red-500 text-[var(--sidebar-text)] font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-all"
       >
         {{ t('retry') }}
       </button>
@@ -334,7 +366,7 @@ const dragonKing = computed(() => {
               </div>
               <div v-if="card.trend && card.trend.length > 0" class="flex flex-col items-end">
                 <div class="w-12 h-6 sm:w-16 sm:h-8">
-                  <LineChart :data="card.trend" :color="card.textColor.replace('text-', '')" />
+                  <LineChart :data="card.trend" :color="card.chartColor" />
                 </div>
               </div>
             </div>
@@ -351,9 +383,9 @@ const dragonKing = computed(() => {
     </div>
 
     <!-- Charts & Lists -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-      <!-- Main Content Area -->
-      <div class="lg:col-span-2 space-y-4 sm:space-y-6">
+    <div v-if="authStore.isAdmin" class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <!-- System Activity Section -->
+      <div v-if="authStore.isAdmin" class="lg:col-span-2 space-y-4 sm:space-y-6">
         <!-- Active Groups Today -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div 
@@ -470,8 +502,9 @@ const dragonKing = computed(() => {
           </div>
         </div>
 
-        <!-- Detail Modals -->
-        <Teleport to="body">
+      <!-- Detail Modals -->
+      <Teleport to="body">
+        <template v-if="authStore.isAdmin">
           <!-- Active Groups Modal -->
           <div v-if="showActiveGroupsModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm" @click="showActiveGroupsModal = false">
             <div class="w-full max-w-lg bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200" @click.stop>
@@ -579,9 +612,10 @@ const dragonKing = computed(() => {
               </div>
             </div>
           </div>
-        </Teleport>
+        </template>
+      </Teleport>
 
-        <!-- Message Chart -->
+      <!-- Message Chart -->
         <div class="p-4 sm:p-8 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-4 sm:space-y-6">
           <div class="flex items-center justify-between">
             <h3 class="text-base sm:text-lg font-bold flex items-center gap-3">
@@ -593,7 +627,7 @@ const dragonKing = computed(() => {
             </div>
           </div>
           <div class="h-48 sm:h-64 w-full">
-            <LineChart :data="botStore.stats.msg_trend" />
+            <LineChart :data="botStore.stats.msg_trend" color="#10b981" />
           </div>
         </div>
 
@@ -607,11 +641,16 @@ const dragonKing = computed(() => {
           </div>
           
           <div class="space-y-3">
-            <div v-if="recentMessages.length === 0" class="py-12 flex flex-col items-center justify-center text-[var(--text-muted)] space-y-2 opacity-50">
+            <div v-if="!authStore.isAdmin" class="py-12 flex flex-col items-center justify-center text-[var(--text-muted)] space-y-2 opacity-50">
+              <Activity class="w-8 h-8" />
+              <p class="text-xs font-bold mono uppercase tracking-widest">{{ t('admin_required') }}</p>
+            </div>
+            <div v-else-if="recentMessages.length === 0" class="py-12 flex flex-col items-center justify-center text-[var(--text-muted)] space-y-2 opacity-50">
               <MessageSquare class="w-8 h-8" />
               <p class="text-xs font-bold mono uppercase tracking-widest">{{ t('no_messages') }}</p>
             </div>
             <div 
+              v-else
               v-for="msg in recentMessages" 
               :key="msg.id"
               class="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-transparent hover:border-[var(--border-color)] transition-all group"
@@ -660,11 +699,16 @@ const dragonKing = computed(() => {
           </div>
           
           <div class="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2">
-            <div v-if="recentLogs.length === 0" class="h-full flex flex-col items-center justify-center text-[var(--text-muted)] space-y-2 opacity-50">
+            <div v-if="!authStore.isAdmin" class="h-full flex flex-col items-center justify-center text-[var(--text-muted)] space-y-2 opacity-50">
+              <Activity class="w-8 h-8" />
+              <p class="text-xs font-bold mono uppercase tracking-widest">{{ t('admin_required') }}</p>
+            </div>
+            <div v-else-if="recentLogs.length === 0" class="h-full flex flex-col items-center justify-center text-[var(--text-muted)] space-y-2 opacity-50">
               <Database class="w-8 h-8" />
               <p class="text-xs font-bold mono uppercase tracking-widest">{{ t('status_loading') }}...</p>
             </div>
             <div 
+              v-else
               v-for="(log, idx) in recentLogs" 
               :key="idx"
               class="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-transparent hover:border-[var(--border-color)] transition-all group"
@@ -681,48 +725,46 @@ const dragonKing = computed(() => {
         </div>
 
         <!-- Top Processes -->
-        <div class="p-4 sm:p-8 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] flex flex-col">
-          <div class="flex items-center justify-between mb-4 sm:mb-6">
-            <h3 class="text-base sm:text-lg font-bold flex items-center gap-3">
-              <Activity class="w-5 h-5 text-orange-500" /> {{ t('top_processes') }}
+        <div class="p-4 sm:p-8 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] flex flex-col shadow-sm">
+          <div class="flex items-center justify-between mb-4 sm:mb-6 border-b border-[var(--border-color)] pb-4">
+            <h3 class="text-base sm:text-lg font-black flex items-center gap-3 text-[var(--text-main)] uppercase tracking-tight">
+              <Activity class="w-5 h-5 text-[var(--matrix-color)]" /> {{ t('top_processes') }}
             </h3>
-            <div class="p-2 rounded-xl bg-orange-500/10 text-orange-500">
-              <Cpu class="w-4 h-4" />
+            <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] text-[10px] font-black uppercase tracking-widest">
+              <Cpu class="w-3 h-3" />
+              SYSTEM_TOP
             </div>
           </div>
 
-          <div class="space-y-3">
-            <div v-if="!botStore.stats.top_processes || botStore.stats.top_processes.length === 0" class="py-8 text-center text-[var(--text-muted)]">
-              <p class="text-xs font-bold uppercase tracking-widest">{{ t('no_data') }}</p>
+          <div class="space-y-4">
+            <div v-if="!botStore.stats.top_processes || botStore.stats.top_processes.length === 0" class="py-12 text-center">
+              <Terminal class="w-12 h-12 mx-auto mb-4 text-[var(--text-muted)] opacity-20" />
+              <p class="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{{ t('no_data') }}</p>
             </div>
             <div 
-              v-for="proc in botStore.stats.top_processes" 
+              v-for="(proc, idx) in botStore.stats.top_processes" 
               :key="proc.pid"
-              class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-transparent hover:border-[var(--border-color)] transition-all group"
+              class="group relative"
             >
-              <div class="flex items-center justify-between">
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="text-[10px] font-mono text-[var(--text-muted)]">#{{ proc.pid }}</span>
-                    <p class="text-xs font-bold text-[var(--text-main)] truncate">{{ proc.name }}</p>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-1">
-                      <div class="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                      <span class="text-[10px] font-bold text-[var(--text-muted)]">CPU: {{ proc.cpu.toFixed(1) }}%</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                      <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                      <span class="text-[10px] font-bold text-[var(--text-muted)]">MEM: {{ (proc.memory / 1024 / 1024).toFixed(1) }} MB</span>
-                    </div>
-                  </div>
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-3">
+                  <span class="text-[10px] font-black mono text-[var(--matrix-color)] opacity-50">{{ (idx + 1).toString().padStart(2, '0') }}</span>
+                  <p class="text-xs font-black text-[var(--text-main)] truncate max-w-[120px]">{{ proc.name }}</p>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/5 text-[var(--text-muted)] mono font-bold">PID:{{ proc.pid }}</span>
                 </div>
-                <div class="w-12 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                  <div 
-                    class="h-full bg-orange-500 transition-all duration-500" 
-                    :style="{ width: Math.min(proc.cpu, 100) + '%' }"
-                  ></div>
+                <div class="text-right">
+                  <span class="text-xs font-black text-[var(--matrix-color)] mono">{{ proc.cpu.toFixed(1) }}%</span>
                 </div>
+              </div>
+              <div class="w-full h-1.5 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden border border-[var(--border-color)]">
+                <div 
+                  class="h-full bg-[var(--matrix-color)] transition-all duration-1000 ease-out" 
+                  :style="{ width: Math.min(proc.cpu, 100) + '%' }"
+                ></div>
+              </div>
+              <div class="flex justify-between mt-1 px-1">
+                 <span class="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-tighter">Usage</span>
+                 <span class="text-[8px] font-bold text-[var(--text-muted)] mono">{{ (proc.memory / 1024 / 1024).toFixed(1) }} MB</span>
               </div>
             </div>
           </div>

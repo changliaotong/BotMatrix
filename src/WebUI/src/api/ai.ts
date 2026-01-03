@@ -97,8 +97,8 @@ export const aiApi = {
   /**
    * 获取会话历史记录
    */
-  getChatHistory: (sessionId: string) => 
-    api.get<AIChatMessage[]>(`/api/ai/chat/history?session_id=${sessionId}`),
+  getChatHistory: (sessionId: string, beforeId?: number, limit: number = 20) => 
+    api.get<AIChatMessage[]>(`/api/ai/chat/history?session_id=${sessionId}${beforeId ? `&before_id=${beforeId}` : ''}&limit=${limit}`),
 
   /**
    * AI log analysis interface (reserved)

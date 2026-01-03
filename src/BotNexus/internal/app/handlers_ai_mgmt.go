@@ -414,12 +414,13 @@ func HandleAIChatStream(m *Manager) http.HandlerFunc {
 		var lastUserContent string
 		if len(req.Messages) > 0 {
 			userMsg := req.Messages[len(req.Messages)-1]
-			lastUserContent = userMsg.Content
+			contentStr, _ := userMsg.Content.(string)
+			lastUserContent = contentStr
 			if err := m.GORMDB.Create(&models.AIChatMessageGORM{
 				SessionID: sessionID,
 				UserID:    userID,
 				Role:      string(ai.RoleUser),
-				Content:   userMsg.Content,
+				Content:   contentStr,
 			}).Error; err != nil {
 				fmt.Printf("[DEBUG] Failed to save user message: %v\n", err)
 			} else {
@@ -428,7 +429,7 @@ func HandleAIChatStream(m *Manager) http.HandlerFunc {
 
 			// 如果是第一条消息，自动生成主题
 			if session.Topic == "" {
-				topic := userMsg.Content
+				topic := contentStr
 				if len(topic) > 50 {
 					topic = topic[:47] + "..."
 				}
@@ -517,7 +518,8 @@ func HandleAIChatStream(m *Manager) http.HandlerFunc {
 		for i := len(historyMessages) - 1; i >= 0; i-- {
 			msg := historyMessages[i]
 			// 估算当前消息 Token: 字符数 * 1.5 (对中文更友好)
-			msgTokens := int(float64(len([]rune(msg.Content))) * 1.5)
+			contentStr, _ := msg.Content.(string)
+			msgTokens := int(float64(len([]rune(contentStr))) * 1.5)
 
 			if totalTokens+msgTokens > tokenLimit {
 				fmt.Printf("[DEBUG] Context limit reached, discarding older messages. Current tokens: %d, Next msg tokens: %d, Limit: %d\n", totalTokens, msgTokens, tokenLimit)

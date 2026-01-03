@@ -140,9 +140,11 @@ type AIModelGORM struct {
 	ID           uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
 	ProviderID   uint           `gorm:"index;column:provider_id" json:"provider_id"`
 	Provider     AIProviderGORM `gorm:"foreignKey:ProviderID" json:"provider"`
-	ModelID      string         `gorm:"size:100;not null;column:model_id" json:"model_id"` // 实际 API 调用的模型 ID (如 gpt-4)
-	ModelName    string         `gorm:"size:100;column:model_name" json:"model_name"`      // 展示名称 (如 GPT-4 Turbo)
-	Capabilities string         `gorm:"size:255;column:capabilities" json:"capabilities"`  // JSON array: ["chat", "vision"]
+	ModelID      string         `gorm:"size:100;not null;column:model_name" json:"model_id"` // 实际 API 调用的模型 ID (如 gpt-4)
+	ModelName    string         `gorm:"size:100;column:display_name" json:"model_name"`      // 展示名称 (如 GPT-4 Turbo)
+	Capabilities string         `gorm:"size:255;column:capabilities" json:"capabilities"`    // JSON array: ["chat", "vision"]
+	BaseURL      string         `gorm:"size:255;column:base_url" json:"base_url"`            // 模型级别 BaseURL 覆盖
+	APIKey       string         `gorm:"size:500;column:api_key" json:"api_key"`              // 模型级别 APIKey 覆盖
 	ContextSize  int            `gorm:"default:4096;column:context_size" json:"context_size"`
 	IsDefault    bool           `gorm:"default:false;column:is_default" json:"is_default"`
 	CreatedAt    time.Time      `gorm:"column:created_at" json:"created_at"`
@@ -189,34 +191,58 @@ func (AIKnowledgeBaseGORM) TableName() string {
 
 // AIUsageLogGORM AI 使用日志
 type AIUsageLogGORM struct {
-	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	UserID          uint   `gorm:"index;column:user_id" json:"user_id"`
-	AgentID         uint   `gorm:"index;column:agent_id" json:"agent_id"` // 关联智能体 ID
-	ModelName       string `gorm:"size:100;column:model_name" json:"model_name"`
-	ProviderType    string `gorm:"size:50;column:provider_type" json:"provider_type"`
-	InputTokens     int    `gorm:"column:input_tokens" json:"input_tokens"`
-	OutputTokens    int    `gorm:"column:output_tokens" json:"output_tokens"`
-	DurationMS      int    `gorm:"column:duration_ms" json:"duration_ms"`
-	Status          string `gorm:"size:20;column:status" json:"status"` // success, failed
-	ErrorMessage    string `gorm:"type:text;column:error_message" json:"error_message"`
-	RevenueDeducted int    `gorm:"default:0;column:revenue_deducted" json:"revenue_deducted"` // 产生的手续费/收益扣除 (算力)
-
-	// 迁移自 MSSQL AgentLog 的额外字段
-	Guid      string    `gorm:"type:text;column:guid" json:"guid"`
-	GroupID   string    `gorm:"type:text;column:group_id" json:"group_id"`
-	GroupName string    `gorm:"type:text;column:group_name" json:"group_name"`
-	UserName  string    `gorm:"type:text;column:user_name" json:"user_name"`
-	MsgID     string    `gorm:"type:text;column:msg_id" json:"msg_id"`
-	Question  string    `gorm:"type:text;column:question" json:"question"`
-	Answer    string    `gorm:"type:text;column:answer" json:"answer"`
-	Messages  string    `gorm:"type:text;column:messages" json:"messages"`
-	Credit    float64   `gorm:"type:decimal(10,4);default:0;column:credit" json:"credit"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	ID           uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	UserID       uint      `gorm:"index;column:user_id" json:"user_id"`
+	AgentID      uint      `gorm:"index;column:agent_id" json:"agent_id"` // 关联智能体 ID
+	ModelName    string    `gorm:"size:100;column:model_name" json:"model_name"`
+	ProviderType string    `gorm:"size:50;column:provider_type" json:"provider_type"`
+	InputTokens  int       `gorm:"column:input_tokens" json:"input_tokens"`
+	OutputTokens int       `gorm:"column:output_tokens" json:"output_tokens"`
+	TotalTokens  int       `gorm:"column:total_tokens" json:"total_tokens"`
+	DurationMS   int       `gorm:"column:duration_ms" json:"duration_ms"`
+	Status       string    `gorm:"size:20;column:status" json:"status"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 // TableName 设置表名
 func (AIUsageLogGORM) TableName() string {
 	return "ai_usage_logs"
+}
+
+// CognitiveMemoryGORM 认知记忆表
+type CognitiveMemoryGORM struct {
+	ID         uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	UserID     string    `gorm:"index;size:64;column:user_id" json:"user_id"`
+	BotID      string    `gorm:"index;size:64;column:bot_id" json:"bot_id"`
+	Category   string    `gorm:"size:32;column:category" json:"category"` // profile, preference, event, fact
+	Content    string    `gorm:"type:text;column:content" json:"content"` // 记忆内容
+	Importance int       `gorm:"default:1;column:importance" json:"importance"`
+	LastSeen   time.Time `gorm:"column:last_seen" json:"last_seen"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+// TableName 设置表名
+func (CognitiveMemoryGORM) TableName() string {
+	return "cognitive_memories"
+}
+
+// MCPServerGORM MCP 服务器配置模型
+type MCPServerGORM struct {
+	ID        uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	Name      string         `gorm:"size:100;not null;column:name" json:"name"`
+	Type      string         `gorm:"size:20;not null;column:type" json:"type"` // http, sse, webhook, internal
+	Endpoint  string         `gorm:"size:500;not null;column:endpoint" json:"endpoint"`
+	APIKey    string         `gorm:"size:500;column:api_key" json:"api_key"`
+	Scope     string         `gorm:"size:20;default:'user';column:scope" json:"scope"` // global, org, user
+	OwnerID   uint           `gorm:"index;column:owner_id" json:"owner_id"`            // 所属用户或组织 ID
+	Status    string         `gorm:"size:20;default:'active';column:status" json:"status"`
+	CreatedAt time.Time      `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"column:updated_at" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index;column:deleted_at" json:"-"`
+}
+
+func (MCPServerGORM) TableName() string {
+	return "mcp_servers"
 }
 
 // AISkillGORM 技能定义
@@ -308,6 +334,22 @@ func (GroupBotRoleGORM) TableName() string {
 	return "group_bot_roles"
 }
 
+// MCPToolGORM MCP 工具缓存模型
+type MCPToolGORM struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	ServerID    uint      `gorm:"index;column:server_id" json:"server_id"`
+	Name        string    `gorm:"size:100;not null;column:name" json:"name"`
+	Description string    `gorm:"type:text;column:description" json:"description"`
+	InputSchema string    `gorm:"type:text;column:input_schema" json:"input_schema"` // JSON Schema
+	IsActive    bool      `gorm:"default:true;column:is_active" json:"is_active"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (MCPToolGORM) TableName() string {
+	return "mcp_tools"
+}
+
 // EnterpriseGORM 企业/组织模型
 type EnterpriseGORM struct {
 	ID          uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
@@ -357,6 +399,7 @@ type DigitalEmployeeGORM struct {
 	Title             string    `gorm:"size:100;column:title" json:"title"`                              // 职位 (如: 高级售后工程师)
 	Department        string    `gorm:"size:100;column:department" json:"department"`                    // 部门 (如: 技术部)
 	Bio               string    `gorm:"type:text;column:bio" json:"bio"`                                 // 个人简介/人设定义
+	AgentID           uint      `gorm:"index;column:agent_id" json:"agent_id"`                           // 关联的 AI 智能体 ID
 	Skills            string    `gorm:"type:text;column:skills" json:"skills"`                           // 技能列表 (JSON: ["complaint_handling", "log_analysis"])
 	OnboardingAt      time.Time `gorm:"column:onboarding_at" json:"onboarding_at"`                       // 入职时间
 	Status            string    `gorm:"size:20;default:'active';column:status" json:"status"`            // 状态: active(在职), training(培训中), retired(离职)

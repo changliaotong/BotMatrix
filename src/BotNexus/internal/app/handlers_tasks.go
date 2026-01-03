@@ -1,17 +1,17 @@
 package app
 
 import (
+	"BotMatrix/common/config"
+	"BotMatrix/common/log"
+	"BotMatrix/common/types"
+	"BotMatrix/common/utils"
+	"BotNexus/tasks"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"BotMatrix/common/config"
-	"BotMatrix/common/types"
-	"BotMatrix/common/utils"
-	"BotNexus/tasks"
 )
 
 // HandleListTasks 获取任务列表
@@ -89,11 +89,82 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 			return
 		}
 
+		// 提取执行上下文信息
+		groupID, _ := req.Context["group_id"].(string)
+		platformUID, _ := req.Context["user_id"].(string)
+		botID, _ := req.Context["bot_id"].(string)
+
+		// 获取用户角色 (从缓存或 BotManager)
+		userRole := "member"
+		if groupID != "" && platformUID != "" {
+			members, err := m.GetGroupMembers(botID, groupID)
+			if err == nil {
+				for _, mem := range members {
+					if mem.UserID == platformUID {
+						userRole = mem.Role
+						break
+					}
+				}
+			}
+		}
+
+		// 频率限制检查 (防止 AI 刷屏)
+		// 优先从策略配置中读取限制，否则使用默认值 (20次/小时)
+		limit := 20
+		window := time.Hour
+		var rateLimitCfg struct {
+			Limit  int `json:"limit"`
+			Window int `json:"window_seconds"`
+		}
+		if m.TaskManager.GetStrategyConfig("ai_rate_limit", &rateLimitCfg) {
+			limit = rateLimitCfg.Limit
+			if rateLimitCfg.Window > 0 {
+				window = time.Duration(rateLimitCfg.Window) * time.Second
+			}
+		}
+
+		if groupID != "" {
+			allowed, err := m.TaskManager.CheckRateLimit(r.Context(), "group:"+groupID, limit, window)
+			if err != nil {
+				log.Printf("[AIParse] Rate limit check failed: %v", err)
+			} else if !allowed {
+				utils.SendJSONResponse(w, false, fmt.Sprintf("频率限制：该群在指定时间内 AI 任务生成已达上限 (%d次)", limit), nil)
+				return
+			}
+		}
+
 		result, err := m.TaskManager.AI.Parse(req)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
+		}
+
+		// 权限检查
+		if result.Intent == tasks.AIActionCreateTask {
+			// 从 Data 中提取 action_type
+			var taskData struct {
+				ActionType string `json:"action_type"`
+			}
+			json.Unmarshal([]byte(fmt.Sprintf("%v", result.Data)), &taskData) // 这里 Data 可能是 map，需要处理
+
+			// 兼容处理：如果 result.Data 是 map[string]any
+			if dataMap, ok := result.Data.(map[string]any); ok {
+				if at, ok := dataMap["action_type"].(string); ok {
+					taskData.ActionType = at
+				}
+			}
+
+			policyCtx := tasks.UserContext{
+				UserID:  platformUID,
+				GroupID: groupID,
+				Role:    userRole,
+			}
+			policy := tasks.CheckCapabilityPolicy(m.TaskManager.AI.Manifest, taskData.ActionType, policyCtx)
+			if !policy.Allowed {
+				utils.SendJSONResponse(w, false, policy.Reason, nil)
+				return
+			}
 		}
 
 		// 将解析结果存入草稿箱
@@ -104,6 +175,8 @@ func HandleAIParse(m *Manager) http.HandlerFunc {
 		draft := tasks.AIDraft{
 			DraftID:    draftID,
 			UserID:     uint(claims.UserID),
+			GroupID:    groupID,
+			UserRole:   userRole,
 			Intent:     string(result.Intent),
 			Data:       string(dataJSON),
 			ExpireTime: time.Now().Add(15 * time.Minute), // 15分钟有效
@@ -141,44 +214,26 @@ func HandleAIConfirm(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		// 根据意图执行具体动作
-		var err error
-		switch draft.Intent {
-		case string(tasks.AIActionCreateTask):
-			var task tasks.Task
-			json.Unmarshal([]byte(draft.Data), &task)
-			task.CreatorID = draft.UserID
-			err = m.TaskManager.CreateTask(&task, true) // 默认 AI 创建的按企业版权限处理或根据用户权限
-		case string(tasks.AIActionAdjustPolicy):
-			// 策略调整逻辑...
-		case string(tasks.AIActionManageTags):
-			// 标签管理逻辑...
-		case "skill_call":
-			var skillReq struct {
-				Skill  string            `json:"skill"`
-				Params map[string]string `json:"params"`
-			}
-			json.Unmarshal([]byte(draft.Data), &skillReq)
-			workerID := m.FindWorkerBySkill(skillReq.Skill)
-			if workerID == "" {
-				err = fmt.Errorf("未找到具备该能力的 Worker: %s", skillReq.Skill)
-			} else {
-				// 构造指令发送给 Worker
-				params := make(map[string]any)
-				for k, v := range skillReq.Params {
-					params[k] = v
-				}
+		// 再次进行权限检查 (防止角色变更)
+		if draft.Intent == string(tasks.AIActionCreateTask) {
+			var dataMap map[string]any
+			json.Unmarshal([]byte(draft.Data), &dataMap)
+			actionType, _ := dataMap["action_type"].(string)
 
-				cmd := types.WorkerCommand{
-					Type:   "skill_call",
-					Skill:  skillReq.Skill,
-					Params: params,
-					// UserID 应该是 string，根据 UserID uint 转换
-					UserID: fmt.Sprintf("%d", draft.UserID),
-				}
-				err = m.SendToWorker(workerID, cmd)
+			policyCtx := tasks.UserContext{
+				UserID:  strconv.Itoa(int(draft.UserID)), // 这里可能需要更准确的映射，先用 UserID 占位
+				GroupID: draft.GroupID,
+				Role:    draft.UserRole,
+			}
+			policy := tasks.CheckCapabilityPolicy(m.TaskManager.AI.Manifest, actionType, policyCtx)
+			if !policy.Allowed {
+				utils.SendJSONResponse(w, false, "执行前权限校验失败: "+policy.Reason, nil)
+				return
 			}
 		}
+
+		// 使用统一的执行逻辑
+		err := m.executeAIDraft(&draft)
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

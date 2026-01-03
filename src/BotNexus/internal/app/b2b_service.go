@@ -1,16 +1,18 @@
 package app
 
 import (
-	"BotMatrix/common/ai"
 	clog "BotMatrix/common/log"
 	"BotMatrix/common/models"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -75,98 +77,79 @@ func (s *B2BServiceImpl) SendCrossEnterpriseMessage(fromEmployeeID, toEmployeeID
 		return fmt.Errorf("no active B2B connection between enterprises: %w", err)
 	}
 
-	// 4. 生成跨域认证 Token (JWT)
-	token, err := s.generateB2BToken(fromEmp.EnterpriseID, toEmp.EnterpriseID)
-	if err != nil {
-		return fmt.Errorf("failed to generate B2B token: %w", err)
+	// 4. 调用远程企业的 im_send_message 工具 (假设目标企业暴露了此 MCP 工具)
+	// 在 Global Agent Mesh 中，数字员工的通信被抽象为 MCP 工具调用
+	args := map[string]any{
+		"platform":  "mesh", // 特殊平台标识
+		"target_id": toEmployeeID,
+		"content":   msg,
+		"from_id":   fromEmployeeID,
 	}
 
-	clog.Info(fmt.Sprintf("[B2B] Sending message from %s to %s | Token: %s...", fromEmployeeID, toEmployeeID, token[:10]))
+	_, err := s.CallRemoteTool(fromEmp.EnterpriseID, toEmp.EnterpriseID, "im_send_message", args)
+	if err != nil {
+		return fmt.Errorf("failed to send cross-enterprise message via mesh: %w", err)
+	}
 
-	// 5. 模拟发送 (在实际分布式架构中，这里会调用远程 BotMatrix 的 API)
-	// TODO: 调用远程 MCP Endpoint
-
+	clog.Info(fmt.Sprintf("[B2B] Message sent from %s to %s via Mesh", fromEmployeeID, toEmployeeID))
 	return nil
 }
 
-// CallRemoteTool 调用远程企业的 MCP 工具
-func (s *B2BServiceImpl) CallRemoteTool(fromEntID uint, targetEntID uint, toolName string, arguments map[string]any) (any, error) {
-	// 1. 获取目标企业信息
-	var targetEnt models.EnterpriseGORM
-	if err := s.db.First(&targetEnt, targetEntID).Error; err != nil {
-		return nil, fmt.Errorf("target enterprise not found: %w", err)
+func (s *B2BServiceImpl) CallRemoteTool(sourceEntID, targetEntID uint, toolName string, arguments map[string]any) (any, error) {
+	// 1. 获取目标企业的公共 MCP 端点
+	var apiServer models.MCPServerGORM
+	if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", targetEntID, "global", "active").First(&apiServer).Error; err != nil {
+		return nil, fmt.Errorf("target enterprise has no public MCP endpoint: %w", err)
 	}
 
-	// 2. 检查 B2B 连接
-	var conn models.B2BConnectionGORM
-	if err := s.db.Where("source_ent_id = ? AND target_ent_id = ? AND status = ?", fromEntID, targetEntID, "active").First(&conn).Error; err != nil {
-		return nil, fmt.Errorf("no active B2B connection: %w", err)
+	// 2. 构造远程调用 URL
+	callURL := apiServer.Endpoint
+	if !strings.Contains(callURL, "/api/mcp/v1/tools/call") {
+		callURL = strings.TrimSuffix(callURL, "/") + "/api/mcp/v1/tools/call"
 	}
 
-	// 3. 寻找目标端点 (假设目标企业有一个名为 'main' 的公开端点)
-	var server models.MCPServerGORM
-	if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", targetEntID, "global", "active").First(&server).Error; err != nil {
-		return nil, fmt.Errorf("no public MCP endpoint found for enterprise %d", targetEntID)
-	}
-
-	// 4. 生成 JWT
-	token, err := s.generateB2BToken(fromEntID, targetEntID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate B2B token: %w", err)
-	}
-
-	// 5. 构造请求 (假设端点是 SSE, 我们直接调用其 /tools/call)
-	// 在实际 mesh 中，端点 URL 可能需要拼接
-	callURL := server.Endpoint
-	if !bytes.Contains([]byte(callURL), []byte("/tools/call")) {
-		// 简单的 URL 拼接逻辑，实际应更健壮
-		if bytes.HasSuffix([]byte(callURL), []byte("/")) {
-			callURL += "tools/call"
-		} else {
-			callURL += "/tools/call"
-		}
-	}
-
-	reqBody := ai.MCPCallToolRequest{
-		Name:      toolName,
-		Arguments: arguments,
+	// 3. 准备请求体
+	reqBody := map[string]any{
+		"server_id": "mesh_bridge",
+		"tool_name": toolName,
+		"arguments": arguments,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequest("POST", callURL, bytes.NewBuffer(jsonBody))
+	// 4. 生成认证 Token
+	token, err := s.generateB2BToken(sourceEntID, targetEntID)
 	if err != nil {
 		return nil, err
 	}
 
+	// 5. 发起 HTTP 请求
+	req, _ := http.NewRequest("POST", callURL, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	clog.Info(fmt.Sprintf("[Mesh] Calling remote tool %s at %s", toolName, callURL))
-
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("remote call failed: %w", err)
+		return nil, fmt.Errorf("failed to connect to remote peer: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("remote call returned status %d", resp.StatusCode)
-	}
-
-	var mcpResp ai.MCPCallToolResponse
-	if err := json.NewDecoder(resp.Body).Decode(&mcpResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if mcpResp.IsError {
-		errorMsg := "Unknown error"
-		if len(mcpResp.Content) > 0 {
-			errorMsg = mcpResp.Content[0].Text
+		var errRes struct {
+			Message string `json:"message"`
 		}
-		return nil, fmt.Errorf("remote tool error: %s", errorMsg)
+		json.NewDecoder(resp.Body).Decode(&errRes)
+		return nil, fmt.Errorf("remote error (status %d): %s", resp.StatusCode, errRes.Message)
 	}
 
-	return mcpResp, nil
+	var result struct {
+		Success bool `json:"success"`
+		Data    any  `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode remote response: %w", err)
+	}
+
+	return result.Data, nil
 }
 
 // VerifyIdentity 验证企业身份
@@ -248,6 +231,87 @@ func (s *B2BServiceImpl) DiscoverEndpoints(query string) ([]models.MCPServerGORM
 		return nil, err
 	}
 	return servers, nil
+}
+
+// DiscoverMeshEndpoints 在全网（Mesh）范围内发现端点
+func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServerGORM, error) {
+	// 1. 获取本地端点
+	localServers, err := s.DiscoverEndpoints(query)
+	if err != nil {
+		clog.Error("[Mesh] Local discovery failed", zap.Error(err))
+	}
+
+	allServers := localServers
+
+	// 2. 获取所有活跃的 B2B 连接
+	var connections []models.B2BConnectionGORM
+	if err := s.db.Where("status = ?", "active").Find(&connections).Error; err != nil {
+		return allServers, nil // 如果获取连接失败，仅返回本地结果
+	}
+
+	// 3. 并发向已连接的企业发起搜索请求
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for _, conn := range connections {
+		wg.Add(1)
+		go func(c models.B2BConnectionGORM) {
+			defer wg.Done()
+
+			// 获取目标企业信息以得到其 API 端点（这里简化逻辑：假设目标企业也有一个公开的 MCP 端点作为 API 入口）
+			var targetEnt models.EnterpriseGORM
+			if err := s.db.First(&targetEnt, c.TargetEntID).Error; err != nil {
+				return
+			}
+
+			// 查找目标企业的 API 端点 (类型为 'mesh' 或 'mcp')
+			var apiServer models.MCPServerGORM
+			if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", c.TargetEntID, "global", "active").First(&apiServer).Error; err != nil {
+				return
+			}
+
+			// 构造联邦搜索请求 URL (GET /api/mesh/discover?q=...)
+			// 注意：这里调用的是对方的 Mesh Discover 接口
+			discoverURL := apiServer.Endpoint
+			if !strings.Contains(discoverURL, "/api/mesh/discover") {
+				// 简单的 URL 拼接
+				discoverURL = strings.TrimSuffix(discoverURL, "/") + "/api/mesh/discover"
+			}
+			discoverURL += "?q=" + query
+
+			// 生成认证 Token
+			token, _ := s.generateB2BToken(c.SourceEntID, c.TargetEntID)
+
+			req, _ := http.NewRequest("GET", discoverURL, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+
+			resp, err := s.client.Do(req)
+			if err != nil {
+				clog.Warn(fmt.Sprintf("[Mesh] Failed to query remote peer %d: %v", c.TargetEntID, err))
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				var result struct {
+					Success bool                   `json:"success"`
+					Data    []models.MCPServerGORM `json:"data"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.Success {
+					mu.Lock()
+					// 避免重复并标记来源
+					for _, srv := range result.Data {
+						srv.Description = fmt.Sprintf("[Remote:%s] %s", targetEnt.Name, srv.Description)
+						allServers = append(allServers, srv)
+					}
+					mu.Unlock()
+				}
+			}
+		}(conn)
+	}
+
+	wg.Wait()
+	return allServers, nil
 }
 
 // generateB2BToken 生成基于 JWT 的跨域令牌

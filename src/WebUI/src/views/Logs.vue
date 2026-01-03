@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useBotStore } from '@/stores/bot';
 import { useSystemStore } from '@/stores/system';
+import { useAuthStore } from '@/stores/auth';
 import { 
   Search, 
   Filter, 
@@ -12,11 +13,13 @@ import {
   AlertCircle,
   Info,
   AlertTriangle,
-  Terminal
+  Terminal,
+  Activity
 } from 'lucide-vue-next';
 
 const botStore = useBotStore();
 const systemStore = useSystemStore();
+const authStore = useAuthStore();
 const t = (key: string) => systemStore.t(key);
 
 const logs = ref<any[]>([]);
@@ -30,7 +33,7 @@ const filterLevel = ref('all');
 const searchQuery = ref('');
 
 const fetchLogs = async () => {
-  if (loading.value) return;
+  if (loading.value || !authStore.isAdmin) return;
   loading.value = true;
   try {
     const params: any = {};
@@ -205,7 +208,11 @@ const getLevelIcon = (level: string) => {
     <!-- Logs Table -->
     <div class="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[2rem] overflow-hidden shadow-sm flex flex-col h-[calc(100vh-380px)] sm:h-[calc(100vh-320px)] transition-colors duration-300">
       <div class="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
-        <div v-if="logs.length > 0" class="space-y-2">
+        <div v-if="!authStore.isAdmin" class="h-full flex flex-col items-center justify-center space-y-4 opacity-30">
+          <Activity class="w-12 h-12 text-[var(--text-main)]" />
+          <p class="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-main)]">{{ t('admin_required') }}</p>
+        </div>
+        <div v-else-if="logs.length > 0" class="space-y-2">
           <div v-for="(log, index) in logs" :key="index" class="group flex items-start gap-4 p-3 rounded-2xl hover:bg-[var(--matrix-color)]/5 transition-all">
             <div :class="['mt-1 p-1.5 rounded-lg shrink-0', getLevelColor(log.level)]">
               <component :is="getLevelIcon(log.level)" class="w-3 h-3" />

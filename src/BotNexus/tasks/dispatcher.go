@@ -1,9 +1,9 @@
 package tasks
 
 import (
+	log "BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
-	log "BotMatrix/common/log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -42,6 +42,25 @@ func (d *Dispatcher) GetActions() []string {
 		actions = append(actions, name)
 	}
 	return actions
+}
+
+// ExecuteAction 直接执行一个动作，主要用于 MCP 等桥接场景
+func (d *Dispatcher) ExecuteAction(actionType string, params map[string]any) error {
+	handler, ok := d.actions[actionType]
+	if !ok {
+		return fmt.Errorf("unknown action type: %s", actionType)
+	}
+
+	paramBytes, _ := json.Marshal(params)
+	task := Task{
+		ActionType:   actionType,
+		ActionParams: string(paramBytes),
+	}
+	execution := &Execution{
+		Status: ExecRunning,
+	}
+
+	return handler(task, execution)
 }
 
 func (d *Dispatcher) Dispatch(execution Execution) {

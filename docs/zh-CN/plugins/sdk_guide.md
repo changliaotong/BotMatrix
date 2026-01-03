@@ -88,10 +88,21 @@ go build -o bm-cli src/tools/bm-cli/main.go
 插件 A 可以调用插件 B 导出的 Skill。这是通过 Core 层的 IPC 机制实现的。
 
 ### 导出能力 (Plugin B)
+- **C# (强类型)**:
+  ```csharp
+  p.ExportSkill<TransferRequest, bool>("transfer", async (ctx, req) => {
+      // 业务逻辑...
+      return true; 
+  });
+  ```
 - **Go**: `p.ExportSkill("check_stock", handler)`
 - **Python**: `@app.export_skill("check_stock")`
 
 ### 调用能力 (Plugin A)
+- **C# (异步强类型)**:
+  ```csharp
+  var result = await ctx.CallSkillAsync<bool>("plugin_b_id", "transfer", new { amount = 100 });
+  ```
 - **Go**: `ctx.CallSkill("plugin_b_id", "check_stock", payload)`
 - **Python**: `await ctx.call_skill("plugin_b_id", "check_stock", payload)`
 
@@ -176,8 +187,10 @@ ctx.Session.Get("last_query", &lastTime)
 | :--- | :--- |
 | `ctx.Reply(text)` | 快速回复文本消息给发送者/群组。 |
 | `ctx.Ask(prompt, timeout)` | **核心**：发送提示语并阻塞等待该用户的下一条回复。 |
+| `ctx.UserId` / `ctx.GroupId` | **C# 新增**: 快速获取发送者和群组 ID。 |
+| `ctx.CallSkillAsync<T>` | **C# 新增**: 异步调用其他插件的 Skill 并获取强类型结果。 |
 | `ctx.Args` | 指令后面的参数数组（按空格拆分）。 |
 | `ctx.CorrelationId` | 当前会话的唯一标识，用于分布式追踪。 |
 
 ---
-*最后更新: 2025-12-28*
+*最后更新: 2026-01-01*

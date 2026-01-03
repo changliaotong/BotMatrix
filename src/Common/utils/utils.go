@@ -165,3 +165,13 @@ func ToInt64(v any) int64 {
 		return 0
 	}
 }
+
+// ContainsOne checks if string s contains any of the keywords
+func ContainsOne(s string, keywords ...string) bool {
+	for _, k := range keywords {
+	if strings.Contains(s, k) {
+			return true
+		}
+	}
+	return false
+}

@@ -80,6 +80,11 @@ type AdminCommands struct {
 	PermissionRequired bool     `json:"permission_required"`
 }
 
+type KBCommands struct {
+	Enabled              bool `json:"enabled"`
+	EnableChatManagement bool `json:"enable_chat_management"`
+}
+
 type FlowPriority struct {
 	WhitelistHighest    bool `json:"whitelist_highest"`
 	BlacklistEnforce    bool `json:"blacklist_enforce"`

@@ -262,7 +262,7 @@ const getTaskStatusStyle = (status: string) => {
                 </button>
                 <button 
                   @click="handleDeleteTask(task.id)"
-                  class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                  class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
                 >
                   <Trash2 class="w-4 h-4" />
                 </button>

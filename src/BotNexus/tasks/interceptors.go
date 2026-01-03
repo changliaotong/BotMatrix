@@ -159,7 +159,30 @@ func (s *SemanticRoutingInterceptor) BeforeDispatch(ctx *InterceptorContext) (bo
 		return true, nil
 	}
 
-	// 1. 优先尝试正则匹配 (Fast-Track)
+	// 1. 检查是否为数字员工 (Digital Employee)
+	if ctx.Message.PostType == "message" && ctx.SelfID != "" {
+		// 直接通过 DB 检查是否是数字员工，避免依赖注入
+		var count int64
+		ctx.DB.Table("digital_employees").Where("bot_id = ?", ctx.SelfID).Count(&count)
+		if count > 0 {
+			if ctx.Message.Extras == nil {
+				ctx.Message.Extras = make(map[string]any)
+			}
+			// 标记为数字员工，以便后续逻辑识别
+			ctx.Message.Extras["is_digital_employee"] = true
+			
+			// 简单的意图识别：如果是问身份，设置提示
+			if strings.Contains(msg, "你是谁") || strings.Contains(msg, "介绍") || strings.Contains(msg, "是谁") {
+				ctx.Message.Extras["intent_hint"] = "agent_info"
+				log.Printf("[Interceptor] Digital Employee %s detected, intent: agent_info", ctx.SelfID)
+			} else {
+				// 通用聊天意图
+				ctx.Message.Extras["intent_hint"] = "chat"
+			}
+		}
+	}
+
+	// 2. 优先尝试正则匹配 (Fast-Track)
 	if ctx.AI != nil {
 		if skill, matched := ctx.AI.MatchSkillByRegex(msg); matched {
 			if ctx.Message.Extras == nil {
