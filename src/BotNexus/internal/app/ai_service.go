@@ -2,8 +2,10 @@ package app
 
 import (
 	"BotMatrix/common/ai"
+	clog "BotMatrix/common/log"
 	"BotMatrix/common/models"
 	"BotMatrix/common/types"
+	"BotNexus/internal/rag"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +27,7 @@ type AIServiceImpl struct {
 	skillManager    *SkillManager
 	memoryService   CognitiveMemoryService
 	employeeService DigitalEmployeeService
+	b2bService      B2BService
 }
 
 func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
@@ -37,6 +41,19 @@ func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
 		skillManager:    NewSkillManager(db, m, mcp),
 		memoryService:   NewCognitiveMemoryService(db),
 		employeeService: NewEmployeeService(db),
+	}
+}
+
+func (s *AIServiceImpl) SetB2BService(b2b B2BService) {
+	s.b2bService = b2b
+	if s.skillManager != nil {
+		s.skillManager.SetB2BService(b2b)
+	}
+}
+
+func (s *AIServiceImpl) SetKnowledgeBase(kb *rag.PostgresKnowledgeBase) {
+	if s.mcpManager != nil {
+		s.mcpManager.SetKnowledgeBase(kb)
 	}
 }
 
@@ -524,7 +541,17 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 		}
 	}
 
-	// 5. 调用 AI
+	// 5. 调用 AI 前检查薪资预算
+	if s.employeeService != nil {
+		ok, err := s.employeeService.CheckSalaryLimit(employee.BotID)
+		if err != nil {
+			clog.Error("[AI] Failed to check salary limit", zap.Error(err))
+		} else if !ok {
+			return "对不起，我的今日预算已耗尽，请联系管理员增加额度。", nil
+		}
+	}
+
+	// 6. 调用 AI
 	chatCtx := context.WithValue(context.Background(), "botID", employee.BotID)
 	chatCtx = context.WithValue(chatCtx, "userID", fmt.Sprintf("%v", msg.UserID))
 	// 如果能从 employee 或 msg 获取 OrgID, 也可以传进去
@@ -561,9 +588,19 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 				s.employeeService.ConsumeSalary(employee.BotID, int64(resp.Usage.TotalTokens))
 			}
 
-			// 7. 认知记忆自动提取
+			// 7. 认知记忆自动提取 (异步执行，不影响主流程)
 			userIDStr := fmt.Sprintf("%v", msg.UserID)
-			s.ExtractAndSaveMemories(context.Background(), userIDStr, employee.BotID, messages[len(messages)-2:])
+			go s.ExtractAndSaveMemories(context.Background(), userIDStr, employee.BotID, messages[len(messages)-2:])
+
+			// 8. AI 自动 KPI 评分
+			go s.EvaluateAndRecordKpi(context.Background(), employee, msg.RawMessage, content)
+
+			// 9. 数字员工自动学习 (异步执行)
+			go s.AutoLearnFromConversation(context.Background(), employee, messages[len(messages)-2:])
+
+			// 10. 定期固化记忆 (每 20 条消息触发一次，或者根据记忆数量触发)
+			// 这里简单演示：如果记忆数量超过一定阈值就触发
+			go s.MaybeConsolidateMemories(context.Background(), userIDStr, employee.BotID)
 		}()
 
 		return content, nil
@@ -636,13 +673,205 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 			fact = strings.TrimSpace(line[idx+1:])
 		}
 
-		memory := &models.CognitiveMemoryGORM{
-			UserID:     userID,
-			BotID:      botID,
-			Category:   category,
-			Content:    fact,
-			Importance: 1,
+		// --- 去重逻辑 ---
+		// 检索该用户下该机器人是否已有相似记忆
+		existing, _ := s.memoryService.SearchMemories(ctx, botID, fact, category)
+		var memory *models.CognitiveMemoryGORM
+
+		if len(existing) > 0 {
+			// 找到相似记忆，更新最后出现时间
+			memory = &existing[0]
+			memory.LastSeen = time.Now()
+			// 如果新事实更长，则更新内容
+			if len(fact) > len(memory.Content) {
+				memory.Content = fact
+			}
+		} else {
+			// 创建新记忆
+			memory = &models.CognitiveMemoryGORM{
+				UserID:     userID,
+				BotID:      botID,
+				Category:   category,
+				Content:    fact,
+				Importance: 1,
+				LastSeen:   time.Now(),
+			}
 		}
+
 		s.memoryService.SaveMemory(ctx, memory)
 	}
+}
+
+// AutoLearnFromConversation 从对话中自动学习新知识或技能
+func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee *models.DigitalEmployeeGORM, messages []ai.Message) {
+	if s.manager == nil || s.manager.TaskManager == nil || s.manager.TaskManager.AI.Manifest.KnowledgeBase == nil {
+		return
+	}
+
+	kb, ok := s.manager.TaskManager.AI.Manifest.KnowledgeBase.(*rag.PostgresKnowledgeBase)
+	if !ok {
+		return
+	}
+
+	// 1. 构造提取 Prompt
+	prompt := `你是一个知识提取专家。请分析以下对话，提取出其中包含的“通用知识”、“业务规则”、“技术步骤”或“操作技巧”。
+这些信息应该是数字员工将来可以用来回答其他用户问题或执行任务的。
+
+规则：
+1. 只提取具有普遍价值的新信息，不要提取关于特定用户的私有记忆（如姓名、喜好）。
+2. 格式为：[类别] 知识内容。
+3. 如果没有发现有价值的新知识，请回复 'NONE'。
+4. 类别可以是：业务知识、操作规程、技术细节、常见问题。
+
+对话内容：
+`
+	for _, m := range messages {
+		prompt += fmt.Sprintf("%s: %v\n", m.Role, m.Content)
+	}
+
+	// 2. 获取默认模型
+	var model models.AIModelGORM
+	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+		if err := s.db.First(&model).Error; err != nil {
+			return
+		}
+	}
+
+	// 3. 调用 AI 提取
+	provider, _ := s.GetProvider(model.ProviderID)
+	client, _ := s.getClient(provider, &model)
+	if client == nil {
+		return
+	}
+
+	req := ai.ChatRequest{
+		Model: model.ModelID,
+		Messages: []ai.Message{
+			{Role: ai.RoleSystem, Content: prompt},
+		},
+	}
+
+	resp, err := client.Chat(ctx, req)
+	if err != nil || resp == nil || len(resp.Choices) == 0 {
+		return
+	}
+
+	content, ok := resp.Choices[0].Message.Content.(string)
+	if !ok || strings.TrimSpace(content) == "" || strings.ToUpper(strings.TrimSpace(content)) == "NONE" {
+		return
+	}
+
+	// 4. 使用 Indexer 入库
+	indexer := rag.NewIndexer(kb, s, model.ID)
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.ToUpper(line) == "NONE" {
+			continue
+		}
+
+		// 解析类别和内容
+		category := "learned_knowledge"
+		fact := line
+		if strings.HasPrefix(line, "[") && strings.Contains(line, "]") {
+			idx := strings.Index(line, "]")
+			category = line[1:idx]
+			fact = strings.TrimSpace(line[idx+1:])
+		}
+
+		// 索引内容
+		title := fmt.Sprintf("自动学习: %s", category)
+		source := fmt.Sprintf("auto_learn://%s/%d", employee.BotID, time.Now().UnixNano())
+
+		// 授权给该数字员工所在的组织
+		err := indexer.IndexContent(ctx, title, source, []byte(fact), "learned", "system", "bot", employee.BotID)
+		if err != nil {
+			clog.Error("[AutoLearn] Failed to index learned content", zap.Error(err))
+		} else {
+			clog.Info("[AutoLearn] New knowledge learned", zap.String("botID", employee.BotID), zap.String("category", category))
+		}
+	}
+}
+
+// EvaluateAndRecordKpi AI 自动对回复质量进行打分
+func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *models.DigitalEmployeeGORM, userMsg, aiResp string) {
+	if s.employeeService == nil {
+		return
+	}
+
+	prompt := fmt.Sprintf(`你是一个专业的质量检查员。请根据以下对话，对数字员工的回复进行评分。
+数字员工角色：%s (%s)
+用户输入：%s
+员工回复：%s
+
+评分标准 (0-100分)：
+1. 专业度：回复是否符合角色设定和专业背景。
+2. 准确性：信息是否准确。
+3. 礼貌度：语气是否得体。
+4. 效率：是否直接解决了用户的问题。
+
+请仅回复一个 0-100 之间的数字，不要有任何其他文字。`, employee.Name, employee.Title, userMsg, aiResp)
+
+	// 获取默认模型
+	var model models.AIModelGORM
+	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+		if err := s.db.First(&model).Error; err != nil {
+			return
+		}
+	}
+
+	provider, _ := s.GetProvider(model.ProviderID)
+	client, _ := s.getClient(provider, &model)
+	if client == nil {
+		return
+	}
+
+	req := ai.ChatRequest{
+		Model: model.ModelID,
+		Messages: []ai.Message{
+			{Role: ai.RoleSystem, Content: prompt},
+		},
+	}
+
+	resp, err := client.Chat(ctx, req)
+	if err != nil || resp == nil || len(resp.Choices) == 0 {
+		return
+	}
+
+	content, _ := resp.Choices[0].Message.Content.(string)
+	content = strings.TrimSpace(content)
+
+	// 解析分数
+	var score float64
+	fmt.Sscanf(content, "%f", &score)
+
+	if score > 0 {
+		// 限制分数范围
+		if score > 100 {
+			score = 100
+		}
+		s.employeeService.RecordKpi(employee.ID, "ai_auto_eval", score)
+		clog.Info("[KPI] AI Auto Scored", zap.Uint("employeeID", employee.ID), zap.Float64("score", score))
+	}
+}
+
+// MaybeConsolidateMemories 检查并决定是否需要固化记忆
+func (s *AIServiceImpl) MaybeConsolidateMemories(ctx context.Context, userID string, botID string) {
+	if s.memoryService == nil {
+		return
+	}
+
+	// 简单的触发逻辑：获取该用户记忆总数
+	var count int64
+	s.db.Model(&models.CognitiveMemoryGORM{}).Where("user_id = ? AND bot_id = ?", userID, botID).Count(&count)
+
+	// 如果记忆超过 20 条，尝试固化
+	if count >= 20 {
+		go s.memoryService.ConsolidateMemories(ctx, userID, botID, s)
+	}
+}
+
+// ConsolidateUserMemories 固化并优化用户记忆 (已迁移到 CognitiveMemoryService)
+func (s *AIServiceImpl) ConsolidateUserMemories(ctx context.Context, userID string, botID string) {
+	s.memoryService.ConsolidateMemories(ctx, userID, botID, s)
 }

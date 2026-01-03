@@ -3,6 +3,7 @@ package app
 import (
 	"BotMatrix/common/ai"
 	"BotMatrix/common/models"
+	"BotNexus/internal/rag"
 	"context"
 	"fmt"
 	"strings"
@@ -57,6 +58,20 @@ func NewMCPManager(db *gorm.DB, m *Manager) *MCPManager {
 		Scope: ai.ScopeGlobal,
 	}, NewSearchMCPHost(m))
 
+	// 注册本地知识库工具 (初始时不带 KB，后续通过 SetKnowledgeBase 注入)
+	mgr.RegisterServer(ai.MCPServerInfo{
+		ID:    "knowledge",
+		Name:  "Knowledge Base",
+		Scope: ai.ScopeGlobal,
+	}, NewKnowledgeMCPHost(m, nil))
+
+	// 注册长期记忆工具
+	mgr.RegisterServer(ai.MCPServerInfo{
+		ID:    "memory",
+		Name:  "Agent Memory",
+		Scope: ai.ScopeGlobal,
+	}, NewMemoryMCPHost(m))
+
 	// 注册 IM 桥接工具 (适配器模式并行)
 	mgr.RegisterServer(ai.MCPServerInfo{
 		ID:    "im_bridge",
@@ -67,6 +82,18 @@ func NewMCPManager(db *gorm.DB, m *Manager) *MCPManager {
 	// 加载数据库配置
 	mgr.LoadFromDB()
 	return mgr
+}
+
+// SetKnowledgeBase 注入向量知识库实现
+func (m *MCPManager) SetKnowledgeBase(kb *rag.PostgresKnowledgeBase) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if s, ok := m.servers["knowledge"]; ok {
+		if host, ok := s.host.(*KnowledgeMCPHost); ok {
+			host.kb = kb
+		}
+	}
 }
 
 // LoadFromDB 从数据库加载启用的 MCP 服务器

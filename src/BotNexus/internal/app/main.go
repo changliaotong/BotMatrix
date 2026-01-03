@@ -1,4 +1,12 @@
 // BotNexus - 统一构建入口文件
+// @title BotNexus API
+// @version 1.0
+// @description BotNexus 管理后台 API 接口文档
+// @host localhost:8080
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 package app
 
 import (
@@ -120,6 +128,9 @@ type B2BService interface {
 	RegisterEndpoint(entID uint, name, endpointType, url string) error
 	DiscoverEndpoints(query string) ([]models.MCPServerGORM, error)
 	DiscoverMeshEndpoints(query string) ([]models.MCPServerGORM, error)
+	RequestSkillSharing(sourceEntID, targetEntID uint, skillName string) error
+	ApproveSkillSharing(sharingID uint, status string) error
+	ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharingGORM, error)
 }
 
 // AIIntegrationService 定义 AI 调度与管理接口
@@ -142,6 +153,8 @@ type DigitalEmployeeService interface {
 	RecordKpi(employeeID uint, metric string, score float64) error
 	UpdateOnlineStatus(botID string, status string) error
 	ConsumeSalary(botID string, tokens int64) error
+	CheckSalaryLimit(botID string) (bool, error)
+	UpdateSalary(botID string, salaryToken *int64, salaryLimit *int64) error
 }
 
 // Manager 是 BotNexus 本地的包装结构，允许在其上定义方法
@@ -155,6 +168,7 @@ type Manager struct {
 	B2BService             B2BService
 	AIIntegrationService   AIIntegrationService
 	DigitalEmployeeService DigitalEmployeeService
+	CognitiveMemoryService CognitiveMemoryService
 	Rdb                    *redis.Client
 	pendingSkillRes        sync.Map // map[string]chan any
 }
@@ -429,6 +443,9 @@ func Run() {
 	mux.HandleFunc("/api/mesh/connect", manager.AdminMiddleware(HandleMeshConnect(manager)))
 	mux.HandleFunc("/api/mesh/call", manager.AdminMiddleware(HandleMeshCall(manager)))
 	mux.HandleFunc("/api/b2b/handshake", HandleB2BHandshake(manager))
+	mux.HandleFunc("/api/b2b/skills/request", manager.JWTMiddleware(HandleB2BRequestSkill(manager)))
+	mux.HandleFunc("/api/b2b/skills/approve", manager.AdminMiddleware(HandleB2BApproveSkill(manager)))
+	mux.HandleFunc("/api/b2b/skills/list", manager.JWTMiddleware(HandleB2BListSkills(manager)))
 
 	mux.HandleFunc("/api/admin/debug/fix-data", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// 将所有 agent 的 model_id 设置为 1 (假设 ID 1 的模型存在)
@@ -508,6 +525,27 @@ func Run() {
 		}
 	}))
 	mux.HandleFunc("/api/admin/employees/kpi", manager.AdminMiddleware(HandleRecordEmployeeKpi(manager)))
+	mux.HandleFunc("/api/admin/employees/status", manager.AdminMiddleware(HandleUpdateEmployeeStatus(manager)))
+
+	// --- B2B 技能与连接管理 ---
+	mux.HandleFunc("/api/admin/b2b/skills", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleListB2BSkills(manager)(w, r)
+		case http.MethodPost:
+			HandleSaveB2BSkill(manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/b2b/skills/", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			HandleDeleteB2BSkill(manager)(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/b2b/connections", manager.AdminMiddleware(HandleListB2BConnections(manager)))
 
 	// --- 认知记忆管理接口 ---
 	mux.HandleFunc("/api/admin/memories", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -526,6 +564,11 @@ func Run() {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
+
+	// --- 认知记忆自主学习与管理 ---
+	mux.HandleFunc("/api/ai/memory/learn/url", manager.JWTMiddleware(HandleBotLearnURL(manager)))
+	mux.HandleFunc("/api/ai/memory/learn/file", manager.JWTMiddleware(HandleBotLearnFile(manager)))
+	mux.HandleFunc("/api/ai/memory/consolidate", manager.JWTMiddleware(HandleBotConsolidateMemories(manager)))
 
 	// AI 试用接口 (流式)
 	mux.HandleFunc("/api/admin/ai/chat/stream", manager.AdminMiddleware(HandleAIChatStream(manager)))
@@ -688,9 +731,19 @@ func NewManager() *Manager {
 	m.PlatformAdapters = make(map[string]PlatformAdapter)
 
 	if m.GORMDB != nil {
-		m.AIIntegrationService = NewAIService(m.GORMDB, m)
+		aiSvc := NewAIService(m.GORMDB, m)
+		m.AIIntegrationService = aiSvc
 		m.DigitalEmployeeService = NewEmployeeService(m.GORMDB)
-		m.B2BService = NewB2BService(m.GORMDB, m)
+		m.CognitiveMemoryService = NewCognitiveMemoryService(m.GORMDB)
+		b2bSvc := NewB2BService(m.GORMDB, m)
+		m.B2BService = b2bSvc
+
+		// 设置 B2B 服务关联
+		if aiSvcImpl, ok := aiSvc.(*AIServiceImpl); ok {
+			aiSvcImpl.SetB2BService(b2bSvc)
+			// 同步 memoryService 实例
+			aiSvcImpl.memoryService = m.CognitiveMemoryService
+		}
 	}
 
 	// 初始化 OneBot v12 实现
@@ -741,6 +794,12 @@ func NewManager() *Manager {
 
 					if err := kb.Setup(); err == nil {
 						m.TaskManager.AI.Manifest.KnowledgeBase = kb
+
+						// 注入到 MCP 管理器，供知识库工具使用
+						if aiSvc, ok := m.AIIntegrationService.(*AIServiceImpl); ok {
+							aiSvc.SetKnowledgeBase(kb)
+						}
+
 						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ModelID))
 
 						// 自动同步系统文档
