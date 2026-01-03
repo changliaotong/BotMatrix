@@ -25,7 +25,8 @@
 
 ### 提供的工具
 - `store_memory`: 存储重要信息，支持设置分类和重要程度。
-- `search_memory`: 基于语义搜索历史记忆。
+- `search_memory`: 基于语义搜索历史记忆，返回包含 ID 的记忆列表。
+- `forget_memory`: 根据记忆 ID 删除特定的长期记忆，实现“遗忘”功能。
 
 ## 📚 知识库集成 (Knowledge MCP)
 

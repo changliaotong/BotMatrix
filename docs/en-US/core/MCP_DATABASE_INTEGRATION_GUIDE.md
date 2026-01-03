@@ -25,7 +25,8 @@ The `MemoryMCPHost` is now fully connected to the PostgreSQL-based long-term mem
 
 ### Tools Provided
 - `store_memory`: Store important information with category and importance level.
-- `search_memory`: Semantically search through historical memories.
+- `search_memory`: Semantically search through historical memories, returning a list with memory IDs.
+- `forget_memory`: Remove a specific long-term memory using its ID, enabling the "forgetting" capability.
 
 ## 📚 Knowledge Base Integration (Knowledge MCP)
 

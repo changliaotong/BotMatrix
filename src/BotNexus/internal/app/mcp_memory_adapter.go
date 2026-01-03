@@ -48,7 +48,7 @@ func (h *MemoryMCPHost) ListTools(ctx context.Context, serverID string) ([]ai.MC
 		},
 		{
 			Name:        "search_memory",
-			Description: "Search through long-term memory using semantic similarity or keywords.",
+			Description: "Search through long-term memory using semantic similarity or keywords. Returns memory IDs for potential management.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -58,6 +58,20 @@ func (h *MemoryMCPHost) ListTools(ctx context.Context, serverID string) ([]ai.MC
 					},
 				},
 				"required": []string{"query"},
+			},
+		},
+		{
+			Name:        "forget_memory",
+			Description: "Remove a specific piece of information from long-term memory using its memory ID.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"memory_id": map[string]any{
+						"type":        "integer",
+						"description": "The unique ID of the memory to forget.",
+					},
+				},
+				"required": []string{"memory_id"},
 			},
 		},
 	}, nil
@@ -124,11 +138,27 @@ func (h *MemoryMCPHost) CallTool(ctx context.Context, serverID string, toolName 
 
 		var results []string
 		for _, m := range memories {
-			results = append(results, fmt.Sprintf("[%s] %s (Importance: %d)", m.Category, m.Content, m.Importance))
+			results = append(results, fmt.Sprintf("[ID: %d] [%s] %s (Importance: %d)", m.ID, m.Category, m.Content, m.Importance))
 		}
 
 		return ai.MCPCallToolResponse{
 			Content: []ai.MCPContent{{Type: "text", Text: "Found relevant memories:\n" + fmt.Sprintf("- %s", strings.Join(results, "\n- "))}},
+		}, nil
+
+	case "forget_memory":
+		memoryIDFloat, ok := arguments["memory_id"].(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid memory_id: must be an integer")
+		}
+		memoryID := uint(memoryIDFloat)
+
+		err := h.manager.CognitiveMemoryService.ForgetMemory(ctx, memoryID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to forget memory: %v", err)
+		}
+
+		return ai.MCPCallToolResponse{
+			Content: []ai.MCPContent{{Type: "text", Text: fmt.Sprintf("Memory ID %d has been removed from long-term memory.", memoryID)}},
 		}, nil
 
 	default:
