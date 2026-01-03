@@ -49,12 +49,23 @@ func (sm *SkillManager) GetAvailableSkillsForBot(ctx context.Context, botID stri
 					continue
 				}
 
+				properties := make(map[string]any)
+				for name, desc := range cap.Params {
+					properties[name] = map[string]string{
+						"type":        "string",
+						"description": desc,
+					}
+				}
+
 				tools = append(tools, ai.Tool{
 					Type: "function",
 					Function: ai.FunctionDefinition{
 						Name:        cap.Name,
 						Description: cap.Description,
-						Parameters:  cap.Parameters,
+						Parameters: map[string]any{
+							"type":       "object",
+							"properties": properties,
+						},
 					},
 				})
 				seenSkills[cap.Name] = true

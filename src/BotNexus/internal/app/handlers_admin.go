@@ -2921,7 +2921,7 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 
 					log.Printf("[Admin] Digital Employee %s detected in inject, bypassing channel for direct AI response", bot.SelfID)
 
-					response, err := m.AIIntegrationService.ChatWithEmployee(employee, incomingMsg)
+					response, err := m.AIIntegrationService.ChatWithEmployee(employee, incomingMsg, employee.EnterpriseID)
 					if err == nil && response != "" {
 						bot.Mutex.Unlock() // 提前释放锁
 						go func() {

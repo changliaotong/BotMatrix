@@ -93,3 +93,11 @@ func (h *IMBridgeMCPHost) ListResources(ctx context.Context, serverID string) ([
 func (h *IMBridgeMCPHost) ReadResource(ctx context.Context, serverID string, uri string) (any, error) {
 	return nil, fmt.Errorf("resource not supported")
 }
+
+func (h *IMBridgeMCPHost) ListPrompts(ctx context.Context, serverID string) ([]ai.MCPPrompt, error) {
+	return nil, nil
+}
+
+func (h *IMBridgeMCPHost) GetPrompt(ctx context.Context, serverID string, promptName string, arguments map[string]any) (string, error) {
+	return "", fmt.Errorf("prompt not supported")
+}

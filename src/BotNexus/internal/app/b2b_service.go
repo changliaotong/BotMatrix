@@ -252,6 +252,91 @@ func (s *B2BServiceImpl) HandleHandshake(req HandshakeRequest) (*HandshakeRespon
 	}, nil
 }
 
+// SearchLocalKnowledge 执行本地知识库搜索
+func (s *B2BServiceImpl) SearchLocalKnowledge(query string, limit int, filter *tasks.SearchFilter) ([]tasks.DocChunk, error) {
+	if s.manager.MCPManager == nil {
+		return nil, fmt.Errorf("MCP manager not initialized")
+	}
+
+	kb := s.manager.MCPManager.GetKnowledgeBase()
+	if kb == nil {
+		return nil, fmt.Errorf("knowledge base not initialized")
+	}
+
+	return kb.Search(context.Background(), query, limit, filter)
+}
+
+// SearchMeshKnowledge 在全网（Mesh）范围内搜索知识
+func (s *B2BServiceImpl) SearchMeshKnowledge(query string, limit int, filter *tasks.SearchFilter) ([]tasks.DocChunk, error) {
+	// 1. 获取本地结果
+	localResults, err := s.SearchLocalKnowledge(query, limit, filter)
+	if err != nil {
+		clog.Warn("[Mesh] Local knowledge search failed", zap.Error(err))
+	}
+
+	allResults := localResults
+
+	// 2. 获取所有活跃的 B2B 连接
+	var connections []models.B2BConnectionGORM
+	if err := s.db.Where("status = ?", "active").Find(&connections).Error; err != nil {
+		return allResults, nil
+	}
+
+	// 3. 并发向已连接的企业发起搜索请求
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for _, conn := range connections {
+		wg.Add(1)
+		go func(c models.B2BConnectionGORM) {
+			defer wg.Done()
+
+			// 调用远程企业的 search_knowledge 工具
+			args := map[string]any{
+				"query": query,
+				"limit": limit,
+			}
+
+			// 转换 filter 为 map 传递 (如果 remote 支持的话，这里暂时只传 query/limit)
+			// 注意：远程调用通过 CallRemoteTool 路由
+			resp, err := s.CallRemoteTool(c.SourceEntID, c.TargetEntID, "search_knowledge", args)
+			if err != nil {
+				clog.Warn(fmt.Sprintf("[Mesh] Failed to query remote knowledge from ent %d: %v", c.TargetEntID, err))
+				return
+			}
+
+			// 解析响应
+			// CallRemoteTool 返回的是 Data 部分，对于 MCP 调用响应是 MCPCallToolResponse
+			// 实际上我们需要解析出 DocChunks。
+			// 这里假设远程返回的是标准化的 DocChunks 列表或 MCP 文本响应
+			// 简化处理：从 MCP 响应中提取文本内容并封装为 DocChunk
+			if mcpResp, ok := resp.(map[string]any); ok {
+				if content, ok := mcpResp["content"].([]any); ok && len(content) > 0 {
+					if first, ok := content[0].(map[string]any); ok {
+						if text, ok := first["text"].(string); ok {
+							// 获取目标企业信息以标记来源
+							var targetEnt models.EnterpriseGORM
+							s.db.First(&targetEnt, c.TargetEntID)
+
+							mu.Lock()
+							allResults = append(allResults, tasks.DocChunk{
+								ID:      fmt.Sprintf("mesh_%d_%s", c.TargetEntID, utils.GenerateRandomToken(4)),
+								Content: text,
+								Source:  fmt.Sprintf("Mesh:%s", targetEnt.Name),
+								Score:   0.8, // 跨网搜索暂定默认分值
+							})
+							mu.Unlock()
+						}
+					}
+				}
+			}
+		}(conn)
+	}
+
+	wg.Wait()
+	return allResults, nil
+}
+
 func (s *B2BServiceImpl) signData(privateKeyStr, data string) (string, error) {
 	// 简化版：这里使用 HMAC-SHA256 模拟，实际应使用 RSA/ED25519
 	// 考虑到 PrivateKey 可能只是一个字符串，先简单实现

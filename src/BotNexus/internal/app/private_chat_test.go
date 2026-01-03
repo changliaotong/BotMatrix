@@ -94,6 +94,10 @@ func (m *MockAIServiceForPrivateChat) ChatStream(ctx context.Context, modelID ui
 	return nil, nil
 }
 
+func (m *MockAIServiceForPrivateChat) ChatAgent(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
+	return m.Chat(ctx, modelID, messages, tools)
+}
+
 // MockExecutor 模拟执行器
 type MockExecutor struct {
 	LastExecutedDraft *tasks.AIDraft

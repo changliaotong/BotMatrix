@@ -85,9 +85,10 @@ type BotIdentity struct {
 
 // DocChunk 文档片段
 type DocChunk struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
-	Source  string `json:"source"`
+	ID      string  `json:"id"`
+	Content string  `json:"content"`
+	Source  string  `json:"source"`
+	Score   float64 `json:"score"` // 新增：相似度评分
 }
 
 // SearchFilter 搜索过滤条件

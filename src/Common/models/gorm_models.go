@@ -191,17 +191,18 @@ func (AIKnowledgeBaseGORM) TableName() string {
 
 // AIUsageLogGORM AI 使用日志
 type AIUsageLogGORM struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	UserID       uint      `gorm:"index;column:user_id" json:"user_id"`
-	AgentID      uint      `gorm:"index;column:agent_id" json:"agent_id"` // 关联智能体 ID
-	ModelName    string    `gorm:"size:100;column:model_name" json:"model_name"`
-	ProviderType string    `gorm:"size:50;column:provider_type" json:"provider_type"`
-	InputTokens  int       `gorm:"column:input_tokens" json:"input_tokens"`
-	OutputTokens int       `gorm:"column:output_tokens" json:"output_tokens"`
-	TotalTokens  int       `gorm:"column:total_tokens" json:"total_tokens"`
-	DurationMS   int       `gorm:"column:duration_ms" json:"duration_ms"`
-	Status       string    `gorm:"size:20;column:status" json:"status"`
-	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+	ID              uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	UserID          uint      `gorm:"index;column:user_id" json:"user_id"`
+	AgentID         uint      `gorm:"index;column:agent_id" json:"agent_id"` // 关联智能体 ID
+	ModelName       string    `gorm:"size:100;column:model_name" json:"model_name"`
+	ProviderType    string    `gorm:"size:50;column:provider_type" json:"provider_type"`
+	InputTokens     int       `gorm:"column:input_tokens" json:"input_tokens"`
+	OutputTokens    int       `gorm:"column:output_tokens" json:"output_tokens"`
+	TotalTokens     int       `gorm:"column:total_tokens" json:"total_tokens"`
+	DurationMS      int       `gorm:"column:duration_ms" json:"duration_ms"`
+	Status          string    `gorm:"size:20;column:status" json:"status"`
+	RevenueDeducted int       `gorm:"default:0;column:revenue_deducted" json:"revenue_deducted"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 // TableName 设置表名
@@ -217,6 +218,7 @@ type CognitiveMemoryGORM struct {
 	Category   string    `gorm:"size:32;column:category" json:"category"` // profile, preference, event, fact
 	Content    string    `gorm:"type:text;column:content" json:"content"` // 记忆内容
 	Importance int       `gorm:"default:1;column:importance" json:"importance"`
+	Metadata   string    `gorm:"type:text;column:metadata" json:"metadata"`   // 额外元数据 (JSON)
 	Embedding  string    `gorm:"type:vector(1536);column:embedding" json:"-"` // 向量存储 (支持 pgvector)
 	LastSeen   time.Time `gorm:"column:last_seen" json:"last_seen"`
 	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
@@ -229,17 +231,18 @@ func (CognitiveMemoryGORM) TableName() string {
 
 // MCPServerGORM MCP 服务器配置模型
 type MCPServerGORM struct {
-	ID        uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	Name      string         `gorm:"size:100;not null;column:name" json:"name"`
-	Type      string         `gorm:"size:20;not null;column:type" json:"type"` // http, sse, webhook, internal
-	Endpoint  string         `gorm:"size:500;not null;column:endpoint" json:"endpoint"`
-	APIKey    string         `gorm:"size:500;column:api_key" json:"api_key"`
-	Scope     string         `gorm:"size:20;default:'user';column:scope" json:"scope"` // global, org, user
-	OwnerID   uint           `gorm:"index;column:owner_id" json:"owner_id"`            // 所属用户或组织 ID
-	Status    string         `gorm:"size:20;default:'active';column:status" json:"status"`
-	CreatedAt time.Time      `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"column:updated_at" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index;column:deleted_at" json:"-"`
+	ID          uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	Name        string         `gorm:"size:100;not null;column:name" json:"name"`
+	Description string         `gorm:"type:text;column:description" json:"description"`
+	Type        string         `gorm:"size:20;not null;column:type" json:"type"` // http, sse, webhook, internal
+	Endpoint    string         `gorm:"size:500;not null;column:endpoint" json:"endpoint"`
+	APIKey      string         `gorm:"size:500;column:api_key" json:"api_key"`
+	Scope       string         `gorm:"size:20;default:'user';column:scope" json:"scope"` // global, org, user
+	OwnerID     uint           `gorm:"index;column:owner_id" json:"owner_id"`            // 所属用户或组织 ID
+	Status      string         `gorm:"size:20;default:'active';column:status" json:"status"`
+	CreatedAt   time.Time      `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"column:updated_at" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index;column:deleted_at" json:"-"`
 }
 
 func (MCPServerGORM) TableName() string {
@@ -392,30 +395,55 @@ func (PlatformAccountGORM) TableName() string {
 
 // DigitalEmployeeGORM 数字员工模型 (Bot 的高级拟人化抽象)
 type DigitalEmployeeGORM struct {
-	ID                uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	EnterpriseID      uint      `gorm:"index;column:enterprise_id" json:"enterprise_id"`                     // 所属企业
-	BotID             string    `gorm:"uniqueIndex;size:64;column:bot_id" json:"bot_id"`                     // 关联的底层机器人
-	EmployeeID        string    `gorm:"uniqueIndex;size:64;column:employee_id" json:"employee_id"`           // 工号
-	Name              string    `gorm:"size:100;not null;column:name" json:"name"`                           // 姓名 (如: 张三)
-	Title             string    `gorm:"size:100;column:title" json:"title"`                                  // 职位 (如: 高级售后工程师)
-	Department        string    `gorm:"size:100;column:department" json:"department"`                        // 部门 (如: 技术部)
-	Bio               string    `gorm:"type:text;column:bio" json:"bio"`                                     // 个人简介/人设定义
-	AgentID           uint      `gorm:"index;column:agent_id" json:"agent_id"`                               // 关联的 AI 智能体 ID
-	Skills            string    `gorm:"type:text;column:skills" json:"skills"`                               // 技能列表 (JSON: ["complaint_handling", "log_analysis"])
-	OnboardingAt      time.Time `gorm:"column:onboarding_at" json:"onboarding_at"`                           // 入职时间
-	Status            string    `gorm:"size:20;default:'active';column:status" json:"status"`                // 状态: active(在职), training(培训中), retired(离职)
-	OnlineStatus      string    `gorm:"size:20;default:'offline';column:online_status" json:"online_status"` // online, offline, busy
-	SalaryToken       int64     `gorm:"default:0;column:salary_token" json:"salary_token"`                   // 累计消耗 Token (作为薪资统计)
-	SalaryLimit       int64     `gorm:"default:1000000;column:salary_limit" json:"salary_limit"`             // Token 预算限制
-	KpiScore          float64   `gorm:"default:100;column:kpi_score" json:"kpi_score"`                       // KPI 评分 (基于满意度打分)
-	ExternalCommLevel int       `gorm:"default:0;column:external_comm_level" json:"external_comm_level"`     // 外部通信等级: 0(禁止), 1(仅限白名单企业), 2(公开)
-	CreatedAt         time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt         time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID                uint        `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	EnterpriseID      uint        `gorm:"index;column:enterprise_id" json:"enterprise_id"`                     // 所属企业
+	BotID             string      `gorm:"uniqueIndex;size:64;column:bot_id" json:"bot_id"`                     // 关联的底层机器人
+	EmployeeID        string      `gorm:"uniqueIndex;size:64;column:employee_id" json:"employee_id"`           // 工号
+	RoleTemplateID    uint        `gorm:"index;column:role_template_id" json:"role_template_id"`               // 关联岗位模板 ID
+	Name              string      `gorm:"size:100;not null;column:name" json:"name"`                           // 姓名 (如: 张三)
+	Title             string      `gorm:"size:100;column:title" json:"title"`                                  // 职位 (如: 高级售后工程师)
+	Level             string      `gorm:"size:50;column:level" json:"level"`                                   // 职级 (如: P3, M2)
+	Department        string      `gorm:"size:100;column:department" json:"department"`                        // 部门 (如: 技术部)
+	SupervisorID      uint        `gorm:"index;column:supervisor_id" json:"supervisor_id"`                     // 直属上级员工 ID
+	Bio               string      `gorm:"type:text;column:bio" json:"bio"`                                     // 个人简介/人设定义
+	AgentID           uint        `gorm:"index;column:agent_id" json:"agent_id"`                               // 关联的 AI 智能体 ID
+	Agent             AIAgentGORM `gorm:"foreignKey:AgentID" json:"agent"`                                     // 关联的 AI 智能体详情
+	Skills            string      `gorm:"type:text;column:skills" json:"skills"`                               // 技能列表 (JSON: ["complaint_handling", "log_analysis"])
+	Permissions       string      `gorm:"type:text;column:permissions" json:"permissions"`                     // 核心权限配置 (JSON)
+	SecurityPolicy    string      `gorm:"type:text;column:security_policy" json:"security_policy"`             // 安全与脱敏策略 (JSON)
+	OnboardingAt      time.Time   `gorm:"column:onboarding_at" json:"onboarding_at"`                           // 入职时间
+	Status            string      `gorm:"size:20;default:'active';column:status" json:"status"`                // 状态: active(在职), training(培训中), retired(离职)
+	OnlineStatus      string      `gorm:"size:20;default:'offline';column:online_status" json:"online_status"` // online, offline, busy
+	SalaryToken       int64       `gorm:"default:0;column:salary_token" json:"salary_token"`                   // 累计消耗 Token (作为薪资统计)
+	SalaryLimit       int64       `gorm:"default:1000000;column:salary_limit" json:"salary_limit"`             // Token 预算限制
+	KpiScore          float64     `gorm:"default:100;column:kpi_score" json:"kpi_score"`                       // KPI 评分 (基于满意度打分)
+	ExternalCommLevel int         `gorm:"default:0;column:external_comm_level" json:"external_comm_level"`     // 外部通信等级: 0(禁止), 1(仅限白名单企业), 2(公开)
+	CreatedAt         time.Time   `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt         time.Time   `gorm:"column:updated_at" json:"updated_at"`
 }
 
 // TableName 设置表名
 func (DigitalEmployeeGORM) TableName() string {
 	return "digital_employees"
+}
+
+// DigitalRoleTemplateGORM 岗位标准模板
+type DigitalRoleTemplateGORM struct {
+	ID            uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	Name          string         `gorm:"size:100;uniqueIndex;not null;column:name" json:"name"` // 模板名称: 行政助理, 技术支持等
+	Description   string         `gorm:"type:text;column:description" json:"description"`
+	DefaultBio    string         `gorm:"type:text;column:default_bio" json:"default_bio"`
+	DefaultSkills string         `gorm:"type:text;column:default_skills" json:"default_skills"` // JSON array
+	BasePrompt    string         `gorm:"type:text;column:base_prompt" json:"base_prompt"`       // 岗位基础 Prompt
+	SuggestedKPI  string         `gorm:"type:text;column:suggested_kpi" json:"suggested_kpi"`   // 建议的 KPI 指标 (JSON)
+	CreatedAt     time.Time      `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt     time.Time      `gorm:"column:updated_at" json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index;column:deleted_at" json:"-"`
+}
+
+// TableName 设置表名
+func (DigitalRoleTemplateGORM) TableName() string {
+	return "digital_role_templates"
 }
 
 // EnterpriseMemberGORM 企业成员表
@@ -468,7 +496,7 @@ type DigitalEmployeeDispatchGORM struct {
 	SourceEntID uint      `gorm:"index;column:source_ent_id" json:"source_ent_id"`       // 所属企业
 	TargetEntID uint      `gorm:"index;column:target_ent_id" json:"target_ent_id"`       // 接收企业
 	Status      string    `gorm:"size:20;default:'pending';column:status" json:"status"` // pending, approved, rejected, recalled
-	Permissions string    `gorm:"type:text;column:permissions" json:"permissions"`      // 授予的权限列表 (JSON: ["chat", "skill_call"])
+	Permissions string    `gorm:"type:text;column:permissions" json:"permissions"`       // 授予的权限列表 (JSON: ["chat", "skill_call"])
 	DispatchAt  time.Time `gorm:"column:dispatch_at" json:"dispatch_at"`
 	ExpireAt    time.Time `gorm:"column:expire_at" json:"expire_at"` // 有效期 (可选)
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
@@ -492,6 +520,52 @@ type DigitalEmployeeKpiGORM struct {
 	Score      float64   `gorm:"column:score" json:"score"`
 	Detail     string    `gorm:"type:text;column:detail" json:"detail"` // 考核详情 (关联的消息 ID 或评价内容)
 	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+// DigitalEmployeeTodoGORM 数字员工待办事项
+type DigitalEmployeeTodoGORM struct {
+	ID          uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	EmployeeID  uint           `gorm:"index;column:employee_id" json:"employee_id"` // 所属员工 ID
+	Title       string         `gorm:"size:255;not null;column:title" json:"title"` // 待办事项标题
+	Description string         `gorm:"type:text;column:description" json:"description"`
+	Priority    string         `gorm:"size:20;default:'medium';column:priority" json:"priority"` // low, medium, high
+	Status      string         `gorm:"size:20;default:'pending';column:status" json:"status"`    // pending, in_progress, completed, cancelled
+	DueDate     *time.Time     `gorm:"column:due_date" json:"due_date"`                          // 截止日期
+	CompletedAt *time.Time     `gorm:"column:completed_at" json:"completed_at"`                  // 完成时间
+	CreatedAt   time.Time      `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"column:updated_at" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index;column:deleted_at" json:"-"`
+}
+
+func (DigitalEmployeeTodoGORM) TableName() string {
+	return "digital_employee_todos"
+}
+
+// DigitalEmployeeTaskGORM 数字员工任务全生命周期管理
+type DigitalEmployeeTaskGORM struct {
+	ID           uint           `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	ExecutionID  string         `gorm:"size:100;uniqueIndex;column:execution_id" json:"execution_id"` // 全局唯一执行 ID
+	ParentTaskID uint           `gorm:"index;column:parent_task_id" json:"parent_task_id"`            // 父任务 ID (用于子任务拆解)
+	CreatorID    string         `gorm:"size:64;column:creator_id" json:"creator_id"`                  // 创建者 (可以是 UserID 或 EmployeeID)
+	AssigneeID   uint           `gorm:"index;column:assignee_id" json:"assignee_id"`                  // 负责人 (数字员工 ID)
+	Title        string         `gorm:"size:255;not null;column:title" json:"title"`
+	Description  string         `gorm:"type:text;column:description" json:"description"`
+	Priority     string         `gorm:"size:20;default:'medium';column:priority" json:"priority"`
+	Status       string         `gorm:"size:20;default:'pending';column:status" json:"status"` // pending, planning, executing, validating, completed, failed
+	Progress     int            `gorm:"default:0;column:progress" json:"progress"`             // 0-100
+	PlanRaw      string         `gorm:"type:text;column:plan_raw" json:"plan_raw"`             // AI 生成的任务计划 (JSON)
+	ResultRaw    string         `gorm:"type:text;column:result_raw" json:"result_raw"`         // 最终执行结果 (JSON)
+	ErrorMsg     string         `gorm:"type:text;column:error_msg" json:"error_msg"`           // 错误信息
+	StartTime    *time.Time     `gorm:"column:start_time" json:"start_time"`
+	EndTime      *time.Time     `gorm:"column:end_time" json:"end_time"`
+	Deadline     *time.Time     `gorm:"column:deadline" json:"deadline"`
+	CreatedAt    time.Time      `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"column:updated_at" json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index;column:deleted_at" json:"-"`
+}
+
+func (DigitalEmployeeTaskGORM) TableName() string {
+	return "digital_employee_tasks"
 }
 
 // TableName 设置表名
@@ -578,14 +652,16 @@ func (BotSkillPermissionGORM) TableName() string {
 
 // AIAgentTraceGORM AI Agent 执行追踪日志
 type AIAgentTraceGORM struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	SessionID string    `gorm:"index;size:64;column:session_id" json:"session_id"`
-	BotID     string    `gorm:"index;size:64;column:bot_id" json:"bot_id"`
-	Step      int       `gorm:"column:step" json:"step"`
-	Type      string    `gorm:"size:32;column:type" json:"type"` // reasoning, tool_call, tool_result, llm_response
-	Content   string    `gorm:"type:text;column:content" json:"content"`
-	Metadata  string    `gorm:"type:text;column:metadata" json:"metadata"` // JSON 格式的额外信息
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	ID          uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	SessionID   string    `gorm:"index;size:64;column:session_id" json:"session_id"`
+	ExecutionID string    `gorm:"index;size:100;column:execution_id" json:"execution_id"` // 关联的任务执行 ID
+	TaskID      uint      `gorm:"index;column:task_id" json:"task_id"`                    // 关联的任务 ID
+	BotID       string    `gorm:"index;size:64;column:bot_id" json:"bot_id"`
+	Step        int       `gorm:"column:step" json:"step"`
+	Type        string    `gorm:"size:32;column:type" json:"type"` // reasoning, tool_call, tool_result, llm_response
+	Content     string    `gorm:"type:text;column:content" json:"content"`
+	Metadata    string    `gorm:"type:text;column:metadata" json:"metadata"` // JSON 格式的额外信息
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 // TableName 设置表名

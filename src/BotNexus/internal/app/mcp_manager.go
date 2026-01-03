@@ -79,6 +79,13 @@ func NewMCPManager(db *gorm.DB, m *Manager) *MCPManager {
 		Scope: ai.ScopeGlobal,
 	}, NewIMBridgeMCPHost(m))
 
+	// 注册多智能体协作工具
+	mgr.RegisterServer(ai.MCPServerInfo{
+		ID:    "collaboration",
+		Name:  "Agent Collaboration",
+		Scope: ai.ScopeGlobal,
+	}, NewAgentCollaborationMCPHost(m))
+
 	// 加载数据库配置
 	mgr.LoadFromDB()
 	return mgr
@@ -94,6 +101,19 @@ func (m *MCPManager) SetKnowledgeBase(kb *rag.PostgresKnowledgeBase) {
 			host.kb = kb
 		}
 	}
+}
+
+// GetKnowledgeBase 获取注入的向量知识库实现
+func (m *MCPManager) GetKnowledgeBase() *rag.PostgresKnowledgeBase {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if s, ok := m.servers["knowledge"]; ok {
+		if host, ok := s.host.(*KnowledgeMCPHost); ok {
+			return host.kb
+		}
+	}
+	return nil
 }
 
 // LoadFromDB 从数据库加载启用的 MCP 服务器
@@ -226,12 +246,12 @@ func (m *MCPManager) CallTool(ctx context.Context, fullName string, args map[str
 		if mcpResp, ok := result.(ai.MCPCallToolResponse); ok {
 			for i := range mcpResp.Content {
 				if mcpResp.Content[i].Type == "text" {
-					mcpResp.Content[i].Text = m.PrivacyFilter.Restore(mcpResp.Content[i].Text, pCtx)
+					mcpResp.Content[i].Text = m.PrivacyFilter.Unmask(mcpResp.Content[i].Text, pCtx)
 				}
 			}
 			result = mcpResp
 		} else if strRes, ok := result.(string); ok {
-			result = m.PrivacyFilter.Restore(strRes, pCtx)
+			result = m.PrivacyFilter.Unmask(strRes, pCtx)
 		}
 		// 可以根据需要添加更多类型的处理 (如 map[string]any)
 	}

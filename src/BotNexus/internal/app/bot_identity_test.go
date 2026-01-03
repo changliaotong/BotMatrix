@@ -83,6 +83,10 @@ func (m *MockAIServiceForIdentity) CreateEmbedding(ctx context.Context, modelID 
 	return nil, nil
 }
 
+func (m *MockAIServiceForIdentity) ChatAgent(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
+	return m.Chat(ctx, modelID, messages, tools)
+}
+
 func TestBotIdentityInjection(t *testing.T) {
 	manifest := tasks.GetDefaultManifest()
 	mockAI := &MockAIServiceForIdentity{}

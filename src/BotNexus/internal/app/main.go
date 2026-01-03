@@ -128,6 +128,8 @@ type B2BService interface {
 	RegisterEndpoint(entID uint, name, endpointType, url string) error
 	DiscoverEndpoints(query string) ([]models.MCPServerGORM, error)
 	DiscoverMeshEndpoints(query string) ([]models.MCPServerGORM, error)
+	SearchLocalKnowledge(query string, limit int, filter *tasks.SearchFilter) ([]tasks.DocChunk, error)
+	SearchMeshKnowledge(query string, limit int, filter *tasks.SearchFilter) ([]tasks.DocChunk, error)
 	RequestSkillSharing(sourceEntID, targetEntID uint, skillName string) error
 	ApproveSkillSharing(sharingID uint, status string) error
 	ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharingGORM, error)
@@ -149,6 +151,7 @@ type AIIntegrationService interface {
 
 	// 对话接口
 	Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
+	ChatAgent(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
 	ChatStream(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (<-chan ai.ChatStreamResponse, error)
 	CreateEmbedding(ctx context.Context, modelID uint, input any) (*ai.EmbeddingResponse, error)
 	ExecuteTool(ctx context.Context, botID string, userID uint, orgID uint, toolCall ai.ToolCall) (any, error)
@@ -179,6 +182,21 @@ type Manager struct {
 	CognitiveMemoryService CognitiveMemoryService
 	Rdb                    *redis.Client
 	pendingSkillRes        sync.Map // map[string]chan any
+	MCPManager             *MCPManager
+}
+
+// NewInternalMessage 构造一个统一的内部消息
+func (m *Manager) NewInternalMessage(platform, protocol, botID, userID, content string) types.InternalMessage {
+	return types.InternalMessage{
+		ID:         fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		Time:       time.Now().Unix(),
+		Platform:   platform,
+		Protocol:   protocol,
+		SelfID:     botID,
+		UserID:     userID,
+		RawMessage: content,
+		Extras:     make(map[string]any),
+	}
 }
 
 // Run 启动 BotNexus
@@ -753,11 +771,9 @@ func NewManager() *Manager {
 		m.B2BService = b2bSvc
 
 		// 设置 B2B 服务关联
-		if aiSvcImpl, ok := aiSvc.(*AIServiceImpl); ok {
-			aiSvcImpl.SetB2BService(b2bSvc)
-			// 同步 memoryService 实例
-			aiSvcImpl.memoryService = m.CognitiveMemoryService
-		}
+		aiSvc.SetB2BService(b2bSvc)
+		// 同步 memoryService 实例
+		aiSvc.memoryService = m.CognitiveMemoryService
 	}
 
 	// 初始化 OneBot v12 实现
@@ -962,7 +978,7 @@ func (m *Manager) HandleSkillResult(skillResult types.SkillResult) {
 		if resChanVal, ok := m.pendingSkillRes.Load(correlationID); ok {
 			if resChan, ok := resChanVal.(chan any); ok {
 				if errStr != "" {
-					resChan <- fmt.Errorf(errStr)
+					resChan <- fmt.Errorf("%s", errStr)
 				} else {
 					resChan <- result
 				}

@@ -602,7 +602,7 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 			// 只有文本消息才触发 AI
 			if msg.RawMessage != "" {
 				// 调用 AI 进行数字员工响应 (带上下文历史)
-				response, err := m.AIIntegrationService.ChatWithEmployee(employee, msg)
+				response, err := m.AIIntegrationService.ChatWithEmployee(employee, msg, employee.EnterpriseID)
 				if err == nil && response != "" {
 					log.Printf("[Agent] AI Response for Bot %s: %s", bot.SelfID, response)
 					// 发送回复

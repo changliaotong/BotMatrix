@@ -6,6 +6,7 @@ import (
 	"BotMatrix/common/models"
 	"BotMatrix/common/types"
 	"BotNexus/internal/rag"
+	"BotNexus/tasks"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -681,19 +682,38 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	}
 
 	// 6. 调用 AI
-	sessionID := fmt.Sprintf("chat:%s:user:%s:%d", employee.BotID, msg.UserID, time.Now().Unix())
+	newSessionID := fmt.Sprintf("chat:%s:user:%s:%d", employee.BotID, msg.UserID, time.Now().Unix())
 	chatCtx := context.WithValue(context.Background(), "botID", employee.BotID)
 	chatCtx = context.WithValue(chatCtx, "userID", fmt.Sprintf("%v", msg.UserID))
 	chatCtx = context.WithValue(chatCtx, "orgIDNum", targetOrgID) // 传入目标企业 ID
-	chatCtx = context.WithValue(chatCtx, "sessionID", sessionID)
+	chatCtx = context.WithValue(chatCtx, "sessionID", newSessionID)
 	chatCtx = context.WithValue(chatCtx, "step", 0)
+
+	// 链路追踪：关联父 SessionID
+	parentSessionID, _ := msg.Extras["parentSessionID"].(string)
+	if parentSessionID != "" {
+		chatCtx = context.WithValue(chatCtx, "parentSessionID", parentSessionID)
+		s.SaveTrace(newSessionID, employee.BotID, 0, "collaboration_link", fmt.Sprintf("Parent Session: %s", parentSessionID), "")
+	}
+
+	// 任务追踪：关联 ExecutionID
+	executionID, _ := msg.Extras["executionID"].(string)
+	if executionID != "" {
+		chatCtx = context.WithValue(chatCtx, "executionID", executionID)
+		s.SaveTrace(newSessionID, employee.BotID, 0, "task_link", fmt.Sprintf("Execution ID: %s", executionID), "")
+
+		// 在系统提示词中注入任务信息，让 AI 意识到自己正在执行一个委派任务
+		taskInfo := fmt.Sprintf("\n\n注意：你当前正在执行一个被委派的任务（ID: %s）。完成任务后，请务必使用 `task_report` 工具汇报进度或结果。", executionID)
+		messages[0].Content = messages[0].Content.(string) + taskInfo
+	}
 
 	if employee.EnterpriseID != targetOrgID {
 		chatCtx = context.WithValue(chatCtx, "isDispatched", true)
 		chatCtx = context.WithValue(chatCtx, "sourceOrgID", employee.EnterpriseID)
 	}
 
-	resp, err := s.Chat(chatCtx, modelID, messages, nil)
+	// 使用 ChatAgent 以便支持工具调用
+	resp, err := s.ChatAgent(chatCtx, modelID, messages, nil)
 	if err != nil {
 		s.SaveTrace(sessionID, employee.BotID, 0, "error", err.Error(), "")
 		return "", err
@@ -701,7 +721,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 
 	if len(resp.Choices) > 0 {
 		content, _ := resp.Choices[0].Message.Content.(string)
-		s.SaveTrace(sessionID, employee.BotID, 0, "llm_response", content, "")
+		// ChatAgent 内部已经记录了最终响应的 trace，这里不需要重复记录
 
 		// 6. 异步保存消息到历史并更新薪资消耗
 		go func() {
@@ -728,13 +748,19 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 
 			// 7. 认知记忆自动提取 (异步执行，不影响主流程)
 			userIDStr := fmt.Sprintf("%v", msg.UserID)
-			go s.ExtractAndSaveMemories(context.Background(), userIDStr, employee.BotID, messages[len(messages)-2:])
+			sideCtx := context.WithValue(context.Background(), "sessionID", newSessionID)
+			sideCtx = context.WithValue(sideCtx, "botID", employee.BotID)
+			sideCtx = context.WithValue(sideCtx, "orgIDNum", targetOrgID)
+			// 为后台任务设置独立超时
+			sideCtx, _ = context.WithTimeout(sideCtx, 30*time.Second)
+
+			go s.ExtractAndSaveMemories(sideCtx, userIDStr, employee.BotID, messages[len(messages)-2:])
 
 			// 8. AI 自动 KPI 评分
-			go s.EvaluateAndRecordKpi(context.Background(), employee, msg.RawMessage, content)
+			go s.EvaluateAndRecordKpi(sideCtx, employee, msg.RawMessage, content)
 
 			// 9. 数字员工自动学习 (异步执行)
-			go s.AutoLearnFromConversation(context.Background(), employee, messages[len(messages)-2:])
+			go s.AutoLearnFromConversation(sideCtx, employee, messages[len(messages)-2:])
 
 			// 10. 定期固化记忆 (每 20 条消息触发一次，或者根据记忆数量触发)
 			// 这里简单演示：如果记忆数量超过一定阈值就触发
@@ -753,6 +779,8 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 		return
 	}
 
+	sessionID, _ := ctx.Value("sessionID").(string)
+
 	// 构造提取 Prompt
 	prompt := "你是一个记忆提取专家。请从以下对话中提取出关于用户的、具有长期价值的事实或偏好（如：姓名、生日、职业、喜好、厌恶、重要经历等）。\n"
 	prompt += "规则：\n1. 只提取新出现的、有价值的信息。\n2. 格式为：[类别] 事实内容。\n3. 如果没有发现新信息，请回复 'NONE'。\n4. 不要提取对话过程，只提取事实。\n\n对话内容：\n"
@@ -765,12 +793,12 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 	var model models.AIModelGORM
 	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
 		if err := s.db.First(&model).Error; err != nil {
+			clog.Error("[Memory] No default model found for extraction")
 			return
 		}
 	}
 
-	// 调用 AI 进行提取 (直接调用 Chat 内部逻辑，避免死循环)
-	// 这里使用一个简化的 Chat 调用
+	// 调用 AI 进行提取
 	provider, _ := s.GetProvider(model.ProviderID)
 	client, _ := s.getClient(provider, &model)
 	if client == nil {
@@ -786,19 +814,27 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 
 	resp, err := client.Chat(ctx, req)
 	if err != nil || resp == nil || len(resp.Choices) == 0 {
+		if err != nil {
+			clog.Error("[Memory] AI extraction failed", zap.Error(err))
+		}
 		return
 	}
 
 	content, _ := resp.Choices[0].Message.Content.(string)
-	if strings.TrimSpace(content) == "" || strings.ToUpper(content) == "NONE" {
+	if strings.TrimSpace(content) == "" || strings.ToUpper(strings.TrimSpace(content)) == "NONE" {
 		return
+	}
+
+	// 记录追踪
+	if sessionID != "" {
+		s.SaveTrace(sessionID, botID, 99, "memory_extracted", content, "")
 	}
 
 	// 解析并保存
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || line == "NONE" {
+		if line == "" || strings.ToUpper(line) == "NONE" {
 			continue
 		}
 
@@ -811,20 +847,46 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 			fact = strings.TrimSpace(line[idx+1:])
 		}
 
-		// --- 去重逻辑 ---
+		// --- 去重与冲突解决逻辑 ---
 		// 检索该用户下该机器人是否已有相似记忆
 		existing, _ := s.memoryService.SearchMemories(ctx, botID, fact, category)
 		var memory *models.CognitiveMemoryGORM
 
 		if len(existing) > 0 {
-			// 找到相似记忆，更新最后出现时间
-			memory = &existing[0]
-			memory.LastSeen = time.Now()
-			// 如果新事实更长，则更新内容
-			if len(fact) > len(memory.Content) {
-				memory.Content = fact
+			// 找到相似记忆
+			topMatch := existing[0]
+			// 假设 SearchMemories 返回的第一个是最相似的，我们可以根据业务逻辑判断是否合并
+			// 这里简单判断：如果内容非常相似，则合并
+			if strings.Contains(topMatch.Content, fact) || strings.Contains(fact, topMatch.Content) {
+				memory = &topMatch
+				memory.LastSeen = time.Now()
+				memory.Importance++ // 再次提到，增加重要性
+				if len(fact) > len(memory.Content) {
+					memory.Content = fact
+				}
+			} else {
+				// 冲突解决：让 AI 决定是否合并或作为新记忆
+				mergePrompt := fmt.Sprintf("请判断以下两个关于用户的记忆是否描述同一件事。如果是，请合并它们；如果不是，请回复 'NEW'。\n现有记忆：%s\n新提炼记忆：%s\n请直接输出合并后的内容或 'NEW'。", topMatch.Content, fact)
+				mergeResp, err := client.Chat(ctx, ai.ChatRequest{
+					Model: model.ModelID,
+					Messages: []ai.Message{
+						{Role: ai.RoleSystem, Content: mergePrompt},
+					},
+				})
+				if err == nil && len(mergeResp.Choices) > 0 {
+					mergeResult, _ := mergeResp.Choices[0].Message.Content.(string)
+					mergeResult = strings.TrimSpace(mergeResult)
+					if mergeResult != "NEW" && mergeResult != "" {
+						memory = &topMatch
+						memory.Content = mergeResult
+						memory.LastSeen = time.Now()
+						memory.Importance++
+					}
+				}
 			}
-		} else {
+		}
+
+		if memory == nil {
 			// 创建新记忆
 			memory = &models.CognitiveMemoryGORM{
 				UserID:     userID,
@@ -836,7 +898,9 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 			}
 		}
 
-		s.memoryService.SaveMemory(ctx, memory)
+		if err := s.memoryService.SaveMemory(ctx, memory); err != nil {
+			clog.Error("[Memory] Failed to save memory", zap.Error(err))
+		}
 	}
 }
 
@@ -846,20 +910,23 @@ func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee 
 		return
 	}
 
+	sessionID, _ := ctx.Value("sessionID").(string)
+
 	kb, ok := s.manager.TaskManager.AI.Manifest.KnowledgeBase.(*rag.PostgresKnowledgeBase)
 	if !ok {
 		return
 	}
 
 	// 1. 构造提取 Prompt
-	prompt := `你是一个知识提取专家。请分析以下对话，提取出其中包含的“通用知识”、“业务规则”、“技术步骤”或“操作技巧”。
-这些信息应该是数字员工将来可以用来回答其他用户问题或执行任务的。
+	prompt := `你是一个知识提取与管理专家。请分析以下对话，提取出其中包含的“通用知识”、“业务规则”、“技术步骤”或“操作技巧”。
 
 规则：
 1. 只提取具有普遍价值的新信息，不要提取关于特定用户的私有记忆（如姓名、喜好）。
-2. 格式为：[类别] 知识内容。
-3. 如果没有发现有价值的新知识，请回复 'NONE'。
-4. 类别可以是：业务知识、操作规程、技术细节、常见问题。
+2. 请直接输出 JSON 数组格式，每个元素包含：
+   - category: 类别 (业务知识/操作规程/技术细节/常见问题)
+   - content: 知识内容的详细描述
+   - summary: 一句话摘要
+3. 如果没有发现有价值的新知识，请回复 '[]'。
 
 对话内容：
 `
@@ -895,38 +962,81 @@ func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee 
 	}
 
 	content, ok := resp.Choices[0].Message.Content.(string)
-	if !ok || strings.TrimSpace(content) == "" || strings.ToUpper(strings.TrimSpace(content)) == "NONE" {
+	if !ok || strings.TrimSpace(content) == "" || strings.TrimSpace(content) == "[]" {
 		return
+	}
+
+	// 记录追踪
+	if sessionID != "" {
+		s.SaveTrace(sessionID, employee.BotID, 99, "auto_learned_raw", content, "")
+	}
+
+	// 解析 JSON (增加鲁棒性)
+	jsonStr := content
+	if idx := strings.Index(jsonStr, "["); idx != -1 {
+		if lastIdx := strings.LastIndex(jsonStr, "]"); lastIdx != -1 && lastIdx > idx {
+			jsonStr = jsonStr[idx : lastIdx+1]
+		}
+	}
+
+	var learnedItems []struct {
+		Category string `json:"category"`
+		Content  string `json:"content"`
+		Summary  string `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &learnedItems); err != nil {
+		clog.Warn("[AutoLearn] Failed to unmarshal JSON, fallback to manual parsing", zap.Error(err))
+		// 简单的手动解析逻辑 (如果 JSON 失败)
+		if strings.Contains(content, "content:") {
+			// 这里可以添加更复杂的手动解析逻辑，暂时先跳过
+		}
 	}
 
 	// 4. 使用 Indexer 入库
 	indexer := rag.NewIndexer(kb, s, model.ID)
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.ToUpper(line) == "NONE" {
-			continue
-		}
+	for _, item := range learnedItems {
+		category := item.Category
+		fact := item.Content
 
-		// 解析类别和内容
-		category := "learned_knowledge"
-		fact := line
-		if strings.HasPrefix(line, "[") && strings.Contains(line, "]") {
-			idx := strings.Index(line, "]")
-			category = line[1:idx]
-			fact = strings.TrimSpace(line[idx+1:])
+		// --- 冲突检测与合并逻辑 ---
+		// 搜索是否已有相似知识
+		existingChunks, err := kb.Search(ctx, fact, 1, &tasks.SearchFilter{
+			BotID: employee.BotID,
+		})
+
+		if err == nil && len(existingChunks) > 0 {
+			topMatch := existingChunks[0]
+			if topMatch.Score > 0.95 {
+				// 极高相似度：跳过，避免重复
+				continue
+			} else if topMatch.Score > 0.6 {
+				// 中等相似度：尝试合并知识
+				mergePrompt := fmt.Sprintf("请合并以下两条相关的知识点，生成一个更全面、准确的版本。\n知识点1：%s\n知识点2：%s\n请直接输出合并后的内容，不要有其他解释。", topMatch.Content, fact)
+				mergeResp, err := client.Chat(ctx, ai.ChatRequest{
+					Model: model.ModelID,
+					Messages: []ai.Message{
+						{Role: ai.RoleSystem, Content: mergePrompt},
+					},
+				})
+				if err == nil && len(mergeResp.Choices) > 0 {
+					mergedContent, _ := mergeResp.Choices[0].Message.Content.(string)
+					fact = mergedContent
+					clog.Info("[AutoLearn] Merged knowledge", zap.String("botID", employee.BotID))
+				}
+			}
 		}
 
 		// 索引内容
-		title := fmt.Sprintf("自动学习: %s", category)
+		title := item.Summary
+		if title == "" {
+			title = fmt.Sprintf("自动学习: %s", category)
+		}
 		source := fmt.Sprintf("auto_learn://%s/%d", employee.BotID, time.Now().UnixNano())
 
 		// 授权给该数字员工所在的组织
-		err := indexer.IndexContent(ctx, title, source, []byte(fact), "learned", "system", "bot", employee.BotID)
+		err = indexer.IndexContent(ctx, title, source, []byte(fact), "learned", "system", "bot", employee.BotID)
 		if err != nil {
 			clog.Error("[AutoLearn] Failed to index learned content", zap.Error(err))
-		} else {
-			clog.Info("[AutoLearn] New knowledge learned", zap.String("botID", employee.BotID), zap.String("category", category))
 		}
 	}
 }
@@ -936,6 +1046,8 @@ func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *mode
 	if s.employeeService == nil {
 		return
 	}
+
+	sessionID, _ := ctx.Value("sessionID").(string)
 
 	prompt := fmt.Sprintf(`你是一个专业的质量检查员。请根据以下对话，对数字员工的回复进行评分。
 数字员工角色：%s (%s)
@@ -990,6 +1102,11 @@ func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *mode
 		}
 		s.employeeService.RecordKpi(employee.ID, "ai_auto_eval", score)
 		clog.Info("[KPI] AI Auto Scored", zap.Uint("employeeID", employee.ID), zap.Float64("score", score))
+
+		// 记录追踪
+		if sessionID != "" {
+			s.SaveTrace(sessionID, employee.BotID, 99, "kpi_score", fmt.Sprintf("%.1f", score), "")
+		}
 	}
 }
 

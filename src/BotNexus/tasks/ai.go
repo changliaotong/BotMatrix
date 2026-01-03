@@ -31,6 +31,10 @@ func (a *AIParser) SetAIService(svc AIService) {
 	a.aiService = svc
 }
 
+func (a *AIParser) GetAIService() AIService {
+	return a.aiService
+}
+
 // MatchSkillByRegex 检查输入是否匹配任何已报备技能的正则表达式
 func (a *AIParser) MatchSkillByRegex(input string) (*Capability, bool) {
 	if a.Manifest == nil || len(a.Manifest.Skills) == 0 {

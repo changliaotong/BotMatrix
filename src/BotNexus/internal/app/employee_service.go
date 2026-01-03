@@ -217,7 +217,13 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 		return fmt.Errorf("AI optimization failed: %v", err)
 	}
 
-	newPrompt := strings.TrimSpace(resp.Content)
+	newPrompt := ""
+	if len(resp.Choices) > 0 {
+		if content, ok := resp.Choices[0].Message.Content.(string); ok {
+			newPrompt = strings.TrimSpace(content)
+		}
+	}
+
 	if newPrompt == "" || newPrompt == employee.Agent.SystemPrompt {
 		return nil // 无变化或生成失败
 	}
