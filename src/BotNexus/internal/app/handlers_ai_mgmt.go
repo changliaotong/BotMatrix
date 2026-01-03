@@ -306,6 +306,19 @@ func HandleDeleteAIAgent(m *Manager) http.HandlerFunc {
 	}
 }
 
+// HandleListAIUsageLogs 获取 AI 使用日志
+func HandleListAIUsageLogs(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var logs []models.AIUsageLogGORM
+		// 默认返回最近 50 条记录
+		if err := m.GORMDB.Order("id DESC").Limit(50).Find(&logs).Error; err != nil {
+			utils.SendJSONResponse(w, false, "获取日志失败: "+err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", logs)
+	}
+}
+
 // --- AI Trial (SSE) ---
 
 // HandleAIChatStream 处理网页端流式试用

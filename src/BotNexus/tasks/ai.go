@@ -15,7 +15,7 @@ import (
 // AIService 定义任务系统需要的 AI 能力接口
 type AIService interface {
 	Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
-	CreateEmbedding(ctx context.Context, modelID uint, input []string) (*ai.EmbeddingResponse, error)
+	CreateEmbedding(ctx context.Context, modelID uint, input any) (*ai.EmbeddingResponse, error)
 }
 
 // AIParser AI 解析器
@@ -92,7 +92,23 @@ func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID ui
 	// 1. 如果有知识库，先进行检索增强 (RAG)
 	ragContext := ""
 	if a.Manifest != nil && a.Manifest.KnowledgeBase != nil {
-		chunks, err := a.Manifest.KnowledgeBase.Search(ctx, input, 3)
+		// 构造搜索过滤器
+		filter := &SearchFilter{Status: "active"}
+		if parseCtx != nil {
+			if bid, ok := parseCtx["bot_id"].(string); ok {
+				filter.BotID = bid
+			}
+			// 优先匹配群组知识，其次是用户个人知识
+			if gid, ok := parseCtx["effective_group_id"].(string); ok && gid != "" {
+				filter.OwnerType = "group"
+				filter.OwnerID = gid
+			} else if uid, ok := parseCtx["user_id"].(string); ok && uid != "" {
+				filter.OwnerType = "user"
+				filter.OwnerID = uid
+			}
+		}
+
+		chunks, err := a.Manifest.KnowledgeBase.Search(ctx, input, 3, filter)
 		if err == nil && len(chunks) > 0 {
 			ragContext = "\n\n### 参考文档 (RAG):\n"
 			for i, chunk := range chunks {
@@ -104,7 +120,11 @@ func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID ui
 
 	systemPrompt := a.Manifest.GenerateSystemPrompt()
 	if ragContext != "" {
-		systemPrompt += ragContext
+		systemPrompt += "\n\n" +
+			"### 知识库参考资料 (RAG)\n" +
+			"以下是与用户请求相关的参考文档片段，请结合这些信息来理解系统功能、回答用户疑问或提取参数。\n" +
+			"如果参考资料中包含操作指南，请优先遵循指南中的步骤。\n" +
+			ragContext
 	}
 	if parseCtx != nil {
 		contextInfo := "\n\n当前运行环境信息："
@@ -149,8 +169,19 @@ func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID ui
 	}
 
 	choice := resp.Choices[0]
+	analysis := ""
+	if s, ok := choice.Message.Content.(string); ok {
+		analysis = s
+	} else if parts, ok := choice.Message.Content.([]ai.ContentPart); ok {
+		for _, p := range parts {
+			if p.Type == "text" {
+				analysis += p.Text
+			}
+		}
+	}
+
 	result := &ParseResult{
-		Analysis: choice.Message.Content,
+		Analysis: analysis,
 	}
 
 	// 1. 优先尝试解析 ToolCalls (Function Calling 模式)
@@ -213,7 +244,7 @@ func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID ui
 	}
 
 	// 2. 尝试从 Content 中解析 JSON (Structured Output 模式)
-	content := choice.Message.Content
+	content := analysis
 	// 简单清洗 content，防止 AI 返回包含 Markdown 代码块
 	content = strings.TrimPrefix(content, "```json")
 	content = strings.TrimPrefix(content, "```")
@@ -239,7 +270,7 @@ func (a *AIParser) MatchSkillByLLM(ctx context.Context, input string, modelID ui
 
 	// 3. 如果都不是，则作为一般查询处理
 	result.Intent = AIActionSystemQuery
-	result.Summary = choice.Message.Content
+	result.Summary = analysis
 	result.IsSafe = true
 
 	return result, nil

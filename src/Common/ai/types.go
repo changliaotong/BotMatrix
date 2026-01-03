@@ -17,10 +17,23 @@ const (
 // Message 对话消息
 type Message struct {
 	Role       Role       `json:"role"`
-	Content    string     `json:"content"`
+	Content    any        `json:"content"`              // 改为 any 以支持 string 或 []ContentPart
 	Name       string     `json:"name,omitempty"`         // 用于 Tool 角色
 	ToolCallID string     `json:"tool_call_id,omitempty"` // 用于 Tool 角色
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // 用于 Assistant 角色发起调用
+}
+
+// ContentPart 消息内容部分 (多模态)
+type ContentPart struct {
+	Type     string         `json:"type"`                // "text" 或 "image_url"
+	Text     string         `json:"text,omitempty"`      // 当 Type 为 "text" 时使用
+	ImageURL *ImageURLValue `json:"image_url,omitempty"` // 当 Type 为 "image_url" 时使用
+}
+
+// ImageURLValue 图像 URL 详情
+type ImageURLValue struct {
+	URL    string `json:"url"`              // 可以是 http 链接或 base64 (data:image/jpeg;base64,...)
+	Detail string `json:"detail,omitempty"` // "low", "high", "auto"
 }
 
 // ToolCall 具体的工具调用请求
@@ -82,8 +95,8 @@ type UsageInfo struct {
 
 // EmbeddingRequest 向量请求
 type EmbeddingRequest struct {
-	Model string   `json:"model"`
-	Input []string `json:"input"`
+	Model string `json:"model"`
+	Input any    `json:"input"` // 改为 any 以支持 []string 或多模态 []map[string]any
 }
 
 // EmbeddingResponse 向量响应

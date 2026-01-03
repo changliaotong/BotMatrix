@@ -22,6 +22,10 @@
 ### 1.3 AI 技能引擎 (AI Skill Engine)
 系统采用 AI 原生架构，将所有机器人交互视为技能执行：
 - **多租户 AI 配置**：支持系统级与用户级 AI 提供商配置（`AIProvider`），用户可配置私有 API Key。
+- **隐私保护 (Privacy Bastion)**：集成 PII 脱敏技术，在调用云端模型前自动替换敏感信息，并在返回后还原。
+- **RAG 2.0 (Agentic RAG)**：支持意图补全（Query Refinement）与自省（Self-Reflection），提高检索精度。
+- **GraphRAG**：基于实体-关系的知识图谱检索，支持跨文档关系挖掘。
+- **多模态解析**：支持 PDF 内嵌图片提取、独立图片 OCR 及 Excel 结构化数据索引。
 - **调度优先级**：执行 AI 任务时，系统遵循 `用户私有配置 > 系统公共配置` 的调度逻辑。
 - **技能生命周期**：包含技能定义（`AISkill`）、提示词管理、语料标注（`AITrainingData`）与 RAG 知识库挂载。
 
@@ -40,6 +44,9 @@
 - **`ai_skills`**: 机器人技能定义，包含 `Prompt` 模板与分类。
 - **`ai_prompt_templates`**: 场景化提示词模板，支持版本管理。
 - **`ai_knowledge_bases`**: RAG 知识库配置。
+- **`knowledge_docs`**: 知识库文档分段存储。
+- **`knowledge_entities`**: GraphRAG 实体定义。
+- **`knowledge_relations`**: GraphRAG 关系定义。
 - **`ai_training_data`**: 标注数据与训练语料，支持 Few-shot 学习。
 - **`ai_usage_logs`**: AI Token 消耗审计与成本控制日志。
 
@@ -59,10 +66,17 @@
 - **架构变更**：引入 `user_savings_metadata` 表，解决了利息结算时间戳追踪问题。
 - **安全性提升**：所有储蓄操作均在事务中执行，并强制执行 `FOR UPDATE` 行级锁以防止并发冲突。
 
-### 3.3 代码质量与修复
+### 3.3 RAG 2.0 与隐私保护升级 (2026-01-03)
+- **PII 脱敏**：在 `Common/ai` 引入 `PrivacyFilter`，实现 PII 信息的自动掩码与还原。
+- **GraphRAG 落地**：实现了实体与关系的自动提取与向量检索，极大增强了复杂问题的回答能力。
+- **多模态增强**：集成了 PDF 图片提取 (pdfcpu) 与图片 OCR (AI Vision)，支持独立图片 (.jpg/.png) 的索引。
+- **私人助理模式**：规划并落地了“数字分身”助理模式，支持个人私有知识库与隐私堡垒。
+
+### 3.4 代码质量与修复
 - **编译修复**：解决了 `WithdrawPointsFromSavings` 缺少 `botUin` 参数的问题。
+- **SQL 优化**：修复了 SQLite 模式下 GraphRAG 表不存在的问题，改用共享缓存模式。
 - **清理冗余**：移除了 `db.go` 中多个函数内声明但未使用的 `targetTable` 变量。
 - **初始化增强**：在 `InitDatabase` 中增加了自动创建储蓄系统相关表的逻辑。
 
 ---
-*最后更新日期：2025-12-29*
+*最后更新日期：2026-01-03*

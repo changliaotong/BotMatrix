@@ -13,17 +13,19 @@ import (
 )
 
 type AIServiceImpl struct {
-	db      *gorm.DB
-	manager *Manager
-	clients map[uint]ai.Client
-	mu      sync.RWMutex
+	db              *gorm.DB
+	manager         *Manager
+	clientsByConfig map[string]ai.Client
+	mu              sync.RWMutex
+	privacyFilter   *ai.PrivacyFilter
 }
 
 func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
 	return &AIServiceImpl{
-		db:      db,
-		manager: m,
-		clients: make(map[uint]ai.Client),
+		db:              db,
+		manager:         m,
+		clientsByConfig: make(map[string]ai.Client),
+		privacyFilter:   ai.NewPrivacyFilter(),
 	}
 }
 
@@ -35,24 +37,38 @@ func (s *AIServiceImpl) GetProvider(id uint) (*models.AIProviderGORM, error) {
 	return &provider, nil
 }
 
-func (s *AIServiceImpl) getClient(providerID uint) (ai.Client, error) {
+func (s *AIServiceImpl) getClient(provider *models.AIProviderGORM, model *models.AIModelGORM) (ai.Client, error) {
+	baseURL := provider.BaseURL
+	apiKey := provider.APIKey
+
+	// 模型级别覆盖
+	if model != nil {
+		if model.BaseURL != "" {
+			baseURL = model.BaseURL
+		}
+		if model.APIKey != "" {
+			apiKey = model.APIKey
+		}
+	}
+
+	// 使用 URL + Key 的哈希作为缓存键
+	cacheKey := fmt.Sprintf("%s|%s", baseURL, apiKey)
+
 	s.mu.RLock()
-	client, ok := s.clients[providerID]
+	client, ok := s.clientsByConfig[cacheKey]
 	s.mu.RUnlock()
 	if ok {
 		return client, nil
 	}
 
-	provider, err := s.GetProvider(providerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 目前只实现了 OpenAI 兼容适配器，大部分主流模型（DeepSeek, Ollama, Azure）都支持
-	newClient := ai.NewOpenAIAdapter(provider.BaseURL, provider.APIKey)
+	// 目前只实现了 OpenAI 兼容适配器
+	newClient := ai.NewOpenAIAdapter(baseURL, apiKey)
 
 	s.mu.Lock()
-	s.clients[providerID] = newClient
+	if s.clientsByConfig == nil {
+		s.clientsByConfig = make(map[string]ai.Client)
+	}
+	s.clientsByConfig[cacheKey] = newClient
 	s.mu.Unlock()
 
 	return newClient, nil
@@ -64,22 +80,37 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 		return nil, err
 	}
 
-	client, err := s.getClient(model.ProviderID)
+	provider, err := s.GetProvider(model.ProviderID)
 	if err != nil {
 		return nil, err
 	}
 
+	client, err := s.getClient(provider, &model)
+	if err != nil {
+		return nil, err
+	}
+
+	// 隐私脱敏处理 (PII Masking)
+	maskCtx := ai.NewMaskContext()
+	maskedMessages := s.maskMessages(messages, maskCtx)
+
 	req := ai.ChatRequest{
 		Model:    model.ModelID,
-		Messages: messages,
+		Messages: maskedMessages,
 		Tools:    tools,
 	}
 
 	// 打印 LLM 调用详情
 	fmt.Printf("\n--- [LLM CALL START] ---\n")
 	fmt.Printf("Model: %s (%s)\n", model.ModelName, model.ModelID)
-	for i, msg := range messages {
-		fmt.Printf("Message #%d [%s]: %s\n", i, msg.Role, msg.Content)
+	for i, msg := range maskedMessages {
+		contentStr := ""
+		if s, ok := msg.Content.(string); ok {
+			contentStr = s
+		} else {
+			contentStr = "[Multi-modal Content]"
+		}
+		fmt.Printf("[%d] %s: %s\n", i, msg.Role, contentStr)
 	}
 	if len(tools) > 0 {
 		fmt.Printf("Tools Available: %d\n", len(tools))
@@ -92,9 +123,15 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 	if err != nil {
 		fmt.Printf("LLM Error: %v\n", err)
 	} else if resp != nil && len(resp.Choices) > 0 {
+		// 还原响应中的敏感信息 (Unmasking)
+		for i := range resp.Choices {
+			resp.Choices[i].Message.Content = s.unmaskContent(resp.Choices[i].Message.Content, maskCtx)
+		}
+
 		choice := resp.Choices[0]
-		if choice.Message.Content != "" {
-			fmt.Printf("Response: %s\n", choice.Message.Content)
+		contentStr, _ := choice.Message.Content.(string)
+		if contentStr != "" {
+			fmt.Printf("Response: %s\n", contentStr)
 		}
 		for _, tc := range choice.Message.ToolCalls {
 			fmt.Printf("Tool Call: %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
@@ -125,20 +162,78 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 	return resp, err
 }
 
+// maskMessages 对消息列表进行脱敏
+func (s *AIServiceImpl) maskMessages(messages []ai.Message, ctx *ai.MaskContext) []ai.Message {
+	if s.privacyFilter == nil {
+		return messages
+	}
+
+	masked := make([]ai.Message, len(messages))
+	for i, msg := range messages {
+		masked[i] = msg
+		switch v := msg.Content.(type) {
+		case string:
+			masked[i].Content = s.privacyFilter.Mask(v, ctx)
+		case []ai.ContentPart:
+			newParts := make([]ai.ContentPart, len(v))
+			for j, part := range v {
+				newParts[j] = part
+				if part.Type == "text" {
+					newParts[j].Text = s.privacyFilter.Mask(part.Text, ctx)
+				}
+			}
+			masked[i].Content = newParts
+		}
+	}
+	return masked
+}
+
+// unmaskContent 还原内容中的敏感信息
+func (s *AIServiceImpl) unmaskContent(content any, ctx *ai.MaskContext) any {
+	if s.privacyFilter == nil {
+		return content
+	}
+
+	switch v := content.(type) {
+	case string:
+		return s.privacyFilter.Unmask(v, ctx)
+	case []ai.ContentPart:
+		newParts := make([]ai.ContentPart, len(v))
+		for i, part := range v {
+			newParts[i] = part
+			if part.Type == "text" {
+				newParts[i].Text = s.privacyFilter.Unmask(part.Text, ctx)
+			}
+		}
+		return newParts
+	default:
+		return content
+	}
+}
+
 func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (<-chan ai.ChatStreamResponse, error) {
 	var model models.AIModelGORM
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
 	}
 
-	client, err := s.getClient(model.ProviderID)
+	provider, err := s.GetProvider(model.ProviderID)
 	if err != nil {
 		return nil, err
 	}
 
+	client, err := s.getClient(provider, &model)
+	if err != nil {
+		return nil, err
+	}
+
+	// 隐私脱敏处理 (PII Masking)
+	maskCtx := ai.NewMaskContext()
+	maskedMessages := s.maskMessages(messages, maskCtx)
+
 	req := ai.ChatRequest{
 		Model:    model.ModelID,
-		Messages: messages,
+		Messages: maskedMessages,
 		Tools:    tools,
 		Stream:   true,
 	}
@@ -146,21 +241,26 @@ func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages [
 	// 打印 LLM 流式调用详情
 	fmt.Printf("\n--- [LLM STREAM START] ---\n")
 	fmt.Printf("Model: %s (%s)\n", model.ModelName, model.ModelID)
-	for i, msg := range messages {
-		fmt.Printf("Message #%d [%s]: %s\n", i, msg.Role, msg.Content)
+	for i, msg := range maskedMessages {
+		fmt.Printf("Message #%d [%s]: %v\n", i, msg.Role, msg.Content)
 	}
 	fmt.Printf("--- [STREAMING...] ---\n\n")
 
 	return client.ChatStream(ctx, req)
 }
 
-func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input []string) (*ai.EmbeddingResponse, error) {
+func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input any) (*ai.EmbeddingResponse, error) {
 	var model models.AIModelGORM
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
 	}
 
-	client, err := s.getClient(model.ProviderID)
+	provider, err := s.GetProvider(model.ProviderID)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := s.getClient(provider, &model)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +270,12 @@ func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input
 		Input: input,
 	}
 
-	return client.CreateEmbedding(ctx, req)
+	resp, err := client.CreateEmbedding(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error) {

@@ -1,14 +1,22 @@
 package app
 
 import (
+	clog "BotMatrix/common/log"
 	"BotMatrix/common/types"
+	"BotNexus/internal/rag"
+	"BotNexus/tasks"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // CorePluginConfig represents the configuration for the system-level core plugin
@@ -21,6 +29,7 @@ type CorePluginConfig struct {
 	URLFilter          URLFilter          `json:"url_filter"`
 	Statistics         Statistics         `json:"statistics"`
 	AdminCommands      AdminCommands      `json:"admin_commands"`
+	KBCommands         KBCommands         `json:"kb_commands"`
 	FlowPriority       FlowPriority       `json:"flow_priority"`
 	Scalability        Scalability        `json:"scalability"`
 	Monitoring         Monitoring         `json:"monitoring"`
@@ -304,7 +313,119 @@ func (p *CorePlugin) ProcessMessage(msg types.InternalMessage) (bool, string, er
 		go p.RecordUserActivity(msg)
 	}
 
+	// 7. Handle KB commands if identified
+	if msgType == "kb_command" {
+		response, err := p.HandleKBCommand(msg)
+		if err != nil {
+			return false, "kb_command_error", err
+		}
+		return false, response, nil // Intercepted with response
+	}
+
+	// 8. Handle file uploads for RAG indexing
+	if p.isFileUpload(msg) {
+		response, err := p.HandleFileUpload(msg)
+		if err != nil {
+			return true, "", nil // Let it pass if handling fails, or block? For now let it pass
+		}
+		if response != "" {
+			return false, response, nil
+		}
+	}
+
 	return true, "", nil
+}
+
+func (p *CorePlugin) isFileUpload(msg types.InternalMessage) bool {
+	for _, seg := range msg.Message {
+		if seg.Type == "file" || seg.Type == "image" { // Some platforms send docs as images or specific file types
+			return true
+		}
+	}
+	return false
+}
+
+func (p *CorePlugin) HandleFileUpload(msg types.InternalMessage) (string, error) {
+	// RAG check
+	if p.Manager.TaskManager == nil || p.Manager.TaskManager.AI == nil || p.Manager.TaskManager.AI.Manifest.KnowledgeBase == nil {
+		return "", nil
+	}
+	kb, ok := p.Manager.TaskManager.AI.Manifest.KnowledgeBase.(*rag.PostgresKnowledgeBase)
+	if !ok {
+		return "", nil
+	}
+
+	var lastResponse string
+
+	for _, seg := range msg.Message {
+		if seg.Type == "file" || seg.Type == "image" {
+			data, ok := seg.Data.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			fileURL, _ := data["url"].(string)
+			fileName, _ := data["name"].(string)
+			if fileName == "" && seg.Type == "image" {
+				fileName = fmt.Sprintf("image_%d.jpg", time.Now().Unix())
+			}
+			if fileURL == "" {
+				continue
+			}
+
+			// Determine scope and planning
+			targetType := "user"
+			targetID := msg.UserID
+			scopeName := "个人私有"
+
+			if msg.MessageType == "group" {
+				targetType = "group"
+				targetID = msg.GroupID
+				scopeName = fmt.Sprintf("群组 [%s]", msg.GroupName)
+			}
+
+			// Asynchronous processing to avoid blocking message flow
+			go func(name, url, tType, tID, sName, uploaderID string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+
+				clog.Info("[RAG] 正在处理上传文件", zap.String("name", name), zap.String("scope", sName))
+
+				// 1. Download file content
+				resp, err := http.Get(url)
+				if err != nil {
+					clog.Error("[RAG] 下载文件失败", zap.String("url", url), zap.Error(err))
+					return
+				}
+				defer resp.Body.Close()
+
+				content, err := io.ReadAll(resp.Body)
+				if err != nil {
+					clog.Error("[RAG] 读取文件内容失败", zap.Error(err))
+					return
+				}
+
+				// 2. Index content using rag.Indexer
+				// We use AI service from Manager if available
+				var aiSvc tasks.AIService
+				if p.Manager.AIIntegrationService != nil {
+					aiSvc = p.Manager.AIIntegrationService
+				}
+
+				indexer := rag.NewIndexer(kb, aiSvc, 0) // 0 表示使用默认模型
+
+				if err := indexer.IndexContent(ctx, name, url, content, "upload", uploaderID, tType, tID); err != nil {
+					clog.Error("[RAG] 索引文件内容失败", zap.String("file", name), zap.Error(err))
+				} else {
+					clog.Info("[RAG] 文件索引成功", zap.String("file", name))
+				}
+			}(fileName, fileURL, targetType, targetID, scopeName, msg.UserID)
+
+			lastResponse = fmt.Sprintf("📥 已收到文件 [%s]，正在为您存入%s知识库...", fileName, scopeName)
+		}
+	}
+
+	return lastResponse, nil
 }
 
 // RecordStatistics records message statistics to Redis with multiple dimensions
@@ -403,17 +524,22 @@ func (p *CorePlugin) identifyMessageType(msg types.InternalMessage) string {
 		if p.isInternalAdminCommand(msg) {
 			return "admin_command"
 		}
+		if p.isKBCommand(msg) {
+			return "kb_command"
+		}
 		return "user_message"
 	}
 	return "system_event"
 }
 
-func (p *CorePlugin) isInternalAdminCommand(msg types.InternalMessage) bool {
-	// Implementation for admin command detection
-	// Usually starts with a specific prefix like /system or /admin
+func (p *CorePlugin) isKBCommand(msg types.InternalMessage) bool {
+	message := p.extractTextMessage(msg)
+	return strings.HasPrefix(message, "/kb")
+}
+
+func (p *CorePlugin) extractTextMessage(msg types.InternalMessage) string {
 	message := msg.RawMessage
 	if message == "" {
-		// If raw message is empty (v12), check text segments
 		for _, seg := range msg.Message {
 			if seg.Type == "text" {
 				if data, ok := seg.Data.(map[string]any); ok {
@@ -428,7 +554,11 @@ func (p *CorePlugin) isInternalAdminCommand(msg types.InternalMessage) bool {
 			}
 		}
 	}
+	return message
+}
 
+func (p *CorePlugin) isInternalAdminCommand(msg types.InternalMessage) bool {
+	message := p.extractTextMessage(msg)
 	return strings.HasPrefix(message, "/system") || strings.HasPrefix(message, "/nexus")
 }
 
@@ -669,5 +799,113 @@ func (p *CorePlugin) HandleAdminCommand(msg types.InternalMessage) (string, erro
 		return "🔄 配置已从 Redis 重新加载", nil
 	default:
 		return "❓ 未知指令。可用指令: open, close, status, whitelist, blacklist, reload", nil
+	}
+}
+
+// HandleKBCommand processes knowledge base management commands
+func (p *CorePlugin) HandleKBCommand(msg types.InternalMessage) (string, error) {
+	if !p.Config.KBCommands.Enabled {
+		return "❌ 知识库管理功能未开启", nil
+	}
+
+	message := p.extractTextMessage(msg)
+	parts := strings.Fields(message)
+	if len(parts) < 2 {
+		return "📚 知识库管理指令帮助:\n- /kb list : 查看我的文档\n- /kb del <ID> : 删除指定文档\n- /kb status : 知识库运行状态", nil
+	}
+
+	cmd := parts[1]
+	args := parts[2:]
+
+	// 权限检查
+	isAdmin := p.isInList(msg.UserID, p.Config.Permissions.Whitelist.System)
+
+	// 获取 RAG 组件
+	if p.Manager.TaskManager == nil || p.Manager.TaskManager.AI == nil || p.Manager.TaskManager.AI.Manifest.KnowledgeBase == nil {
+		return "❌ RAG 系统未初始化", nil
+	}
+	kb, ok := p.Manager.TaskManager.AI.Manifest.KnowledgeBase.(*rag.PostgresKnowledgeBase)
+	if !ok {
+		return "❌ 知识库引擎不支持当前操作", nil
+	}
+
+	switch cmd {
+	case "list":
+		// 根据场景判断展示范围
+		var docs []rag.KnowledgeDoc
+		var err error
+		var scope string
+
+		if msg.MessageType == "group" {
+			docs, err = kb.GetUserDocs(context.Background(), "group", msg.GroupID)
+			scope = fmt.Sprintf("群组 [%s]", msg.GroupName)
+		} else {
+			docs, err = kb.GetUserDocs(context.Background(), "user", msg.UserID)
+			scope = "个人"
+		}
+
+		if err != nil {
+			return fmt.Sprintf("❌ 获取文档列表失败: %v", err), nil
+		}
+
+		if len(docs) == 0 {
+			return fmt.Sprintf("📭 %s知识库暂无文档", scope), nil
+		}
+
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("📂 %s知识库文档列表:\n", scope))
+		for _, doc := range docs {
+			status := "🟢"
+			if doc.Status != "active" {
+				status = "🟡"
+			}
+			sb.WriteString(fmt.Sprintf("%s ID:%d | %s\n", status, doc.ID, doc.Title))
+		}
+		return sb.String(), nil
+
+	case "del":
+		if len(args) < 1 {
+			return "用法: /kb del <ID>", nil
+		}
+		docID, _ := strconv.ParseUint(args[0], 10, 32)
+		if docID == 0 {
+			return "❌ 无效的文档 ID", nil
+		}
+
+		// 检查所有权
+		if !isAdmin && !kb.IsDocOwner(context.Background(), uint(docID), msg.UserID) {
+			return "❌ 您没有权限删除此文档 (仅所有者或管理员可操作)", nil
+		}
+
+		if err := kb.DeleteDoc(context.Background(), uint(docID)); err != nil {
+			return fmt.Sprintf("❌ 删除失败: %v", err), nil
+		}
+		return fmt.Sprintf("✅ 已成功删除文档 ID:%d", docID), nil
+
+	case "status":
+		stats := "🤖 RAG 知识库状态:\n"
+		stats += fmt.Sprintf("- 存储引擎: PostgreSQL + pgvector\n")
+		stats += fmt.Sprintf("- 当前机器人: %s\n", msg.SelfID)
+
+		// 统计总数 (需要管理员权限查看更多)
+		if isAdmin {
+			// 这里可以添加更详细的统计
+		}
+		return stats, nil
+
+	case "add":
+		// /kb add 命令通常配合文件上传。
+		// 在这里我们给出引导提示。
+		return "📝 添加文档说明:\n请直接在聊天中发送文件 (PDF/Docx/TXT/MD/Code)，Nexus 会根据您的身份自动归类并索引。", nil
+
+	case "sync":
+		if !isAdmin {
+			return "❌ 只有管理员可以手动触发系统文档同步", nil
+		}
+		go p.Manager.SyncSystemKnowledge()
+		return "🔄 已在后台启动系统文档同步任务...", nil
+
+	default:
+		return "❓ 未知知识库指令。可用指令: list, del, status, add, sync", nil
 	}
 }

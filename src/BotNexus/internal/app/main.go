@@ -10,6 +10,7 @@ import (
 	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/types"
 	"BotMatrix/common/utils"
+	"BotNexus/internal/rag"
 	"BotNexus/tasks"
 	"context"
 	"encoding/json"
@@ -119,11 +120,13 @@ type B2BService interface {
 type AIIntegrationService interface {
 	// 基础调度
 	DispatchIntent(msg types.InternalMessage) (string, error)
+	ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage) (string, error)
 	GetProvider(id uint) (*models.AIProviderGORM, error)
 
 	// 对话接口
 	Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
 	ChatStream(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (<-chan ai.ChatStreamResponse, error)
+	CreateEmbedding(ctx context.Context, modelID uint, input any) (*ai.EmbeddingResponse, error)
 }
 
 // DigitalEmployeeService 定义数字员工管理接口
@@ -650,8 +653,42 @@ func NewManager() *Manager {
 
 			// 初始化任务管理器 (仅在 GORMDB 成功初始化后)
 			m.TaskManager = tasks.NewTaskManager(m.GORMDB, m.Rdb, m)
+			m.TaskManager.Executor = m // 设置执行器，用于处理群聊 AI 草稿确认
 			if m.AIIntegrationService != nil {
 				m.TaskManager.AI.SetAIService(m.AIIntegrationService)
+
+				// 初始化 RAG 知识库 (PostgreSQL + pgvector)
+				// 优先从配置中获取模型 ID，如果没有则尝试查找包含 embedding 关键字的模型
+				var embedModel models.AIModelGORM
+				var findErr error
+				if config.GlobalConfig.AIEmbeddingModel != "" {
+					findErr = m.GORMDB.Where("model_id = ?", config.GlobalConfig.AIEmbeddingModel).First(&embedModel).Error
+				} else {
+					findErr = m.GORMDB.Where("model_id LIKE ?", "%embedding%").First(&embedModel).Error
+				}
+
+				if findErr == nil {
+					// 获取默认对话模型用于 RAG 2.0 (Query Refinement / Self-Reflection)
+					var chatModel models.AIModelGORM
+					m.GORMDB.Where("is_default = ?", true).First(&chatModel)
+					if chatModel.ID == 0 {
+						chatModel = embedModel // 兜底
+					}
+
+					es := rag.NewTaskAIEmbeddingService(m.AIIntegrationService, embedModel.ID, embedModel.ModelID)
+					kb := rag.NewPostgresKnowledgeBase(m.GORMDB, es, m.AIIntegrationService, chatModel.ID)
+					if err := kb.Setup(); err == nil {
+						m.TaskManager.AI.Manifest.KnowledgeBase = kb
+						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ModelID))
+
+						// 自动同步系统文档
+						go m.SyncSystemKnowledge()
+					} else {
+						clog.Warn("[RAG] 知识库初始化失败", zap.Error(err))
+					}
+				} else {
+					clog.Warn("[RAG] 未找到可用的向量模型，RAG 功能将受限")
+				}
 			}
 			m.TaskManager.Start()
 
@@ -773,6 +810,48 @@ func (m *Manager) HandleSkillResult(skillResult types.SkillResult) {
 		"type": "skill_result",
 		"data": skillResult,
 	})
+}
+
+// SyncSystemKnowledge 将系统文档和设计文档同步到 RAG 知识库
+func (m *Manager) SyncSystemKnowledge() {
+	if m.TaskManager == nil || m.TaskManager.AI == nil || m.TaskManager.AI.Manifest.KnowledgeBase == nil {
+		return
+	}
+
+	kb, ok := m.TaskManager.AI.Manifest.KnowledgeBase.(*rag.PostgresKnowledgeBase)
+	if !ok {
+		clog.Warn("[RAG] 知识库类型不匹配，跳过系统文档同步")
+		return
+	}
+
+	indexer := rag.NewIndexer(kb, m.AIIntegrationService, 0) // 0 表示使用默认模型
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	clog.Info("[RAG] 开始同步系统设计文档...")
+
+	// 1. 同步核心设计文档 (刚生成的 RAG 方案)
+	designDocPath := filepath.Join("..", "..", "docs", "zh-CN", "core", "RAG_USER_DOCS_PLAN.md")
+	if _, err := os.Stat(designDocPath); err == nil {
+		if err := indexer.IndexFile(ctx, designDocPath, "design"); err != nil {
+			clog.Error("[RAG] 索引设计文档失败", zap.String("path", designDocPath), zap.Error(err))
+		} else {
+			clog.Info("[RAG] 已成功索引设计文档", zap.String("path", designDocPath))
+		}
+	}
+
+	// 2. 同步项目通用文档目录
+	docsDir := filepath.Join("..", "..", "docs", "zh-CN")
+	if _, err := os.Stat(docsDir); err == nil {
+		extensions := []string{".md"}
+		if err := indexer.IndexDirectory(ctx, docsDir, "system", extensions); err != nil {
+			clog.Error("[RAG] 索引系统文档目录失败", zap.String("dir", docsDir), zap.Error(err))
+		} else {
+			clog.Info("[RAG] 系统文档目录同步完成", zap.String("dir", docsDir))
+		}
+	}
+
+	clog.Info("[RAG] 系统知识同步任务已完成")
 }
 
 func (m *Manager) startRedisWorkerSubscription() {
@@ -997,6 +1076,12 @@ func (m *Manager) SendBotAction(botID string, action string, params any) error {
 
 	bot.Mutex.Lock()
 	defer bot.Mutex.Unlock()
+
+	clog.Info("[BotAction] Sending action to bot",
+		zap.String("bot_id", botID),
+		zap.String("action", action),
+		zap.String("echo", echo))
+
 	return bot.Conn.WriteJSON(msg)
 }
 
