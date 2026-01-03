@@ -23,6 +23,19 @@ type B2BServiceImpl struct {
 	client  *http.Client
 }
 
+type HandshakeRequest struct {
+	SourceEntCode string `json:"source_ent_code"`
+	Challenge     string `json:"challenge"`
+	Signature     string `json:"signature"`
+}
+
+type HandshakeResponse struct {
+	Success    bool   `json:"success"`
+	TargetCode string `json:"target_code"`
+	Acceptance string `json:"acceptance"`
+	Signature  string `json:"signature"`
+}
+
 func NewB2BService(db *gorm.DB, m *Manager) *B2BServiceImpl {
 	return &B2BServiceImpl{
 		db:      db,
@@ -40,21 +53,160 @@ func (s *B2BServiceImpl) Connect(sourceEntCode, targetEntCode string) error {
 		return fmt.Errorf("source enterprise not found: %w", err)
 	}
 
-	// 在实际场景中，这里应该通过网络请求向 targetEnt 发起握手请求
-	// 目前简化为直接在本地数据库创建连接记录 (假设是单机模拟或通过共享库)
+	// 1. 获取目标企业的公共 MCP 端点作为握手入口
 	var targetEnt models.EnterpriseGORM
 	if err := s.db.Where("code = ?", targetEntCode).First(&targetEnt).Error; err != nil {
 		return fmt.Errorf("target enterprise not found: %w", err)
 	}
 
-	conn := models.B2BConnectionGORM{
-		SourceEntID:  sourceEnt.ID,
-		TargetEntID:  targetEnt.ID,
-		Status:       "active",
-		AuthProtocol: "jwt",
+	var apiServer models.MCPServerGORM
+	if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", targetEnt.ID, "global", "active").First(&apiServer).Error; err != nil {
+		return fmt.Errorf("target enterprise has no public MCP endpoint for handshake: %w", err)
 	}
 
-	return s.db.Create(&conn).Error
+	// 2. 构造握手请求
+	handshakeURL := strings.TrimSuffix(apiServer.Endpoint, "/") + "/api/b2b/handshake"
+	challenge := fmt.Sprintf("handshake_%d", time.Now().UnixNano())
+
+	// 使用私钥签名 challenge
+	signature, err := s.signData(sourceEnt.PrivateKey, challenge)
+	if err != nil {
+		return fmt.Errorf("failed to sign handshake challenge: %w", err)
+	}
+
+	reqBody := HandshakeRequest{
+		SourceEntCode: sourceEntCode,
+		Challenge:     challenge,
+		Signature:     signature,
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	// 3. 发起握手 HTTP 请求
+	req, _ := http.NewRequest("POST", handshakeURL, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send handshake request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("handshake failed with status: %d", resp.StatusCode)
+	}
+
+	var res HandshakeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return fmt.Errorf("failed to decode handshake response: %w", err)
+	}
+
+	if !res.Success {
+		return fmt.Errorf("handshake rejected by target")
+	}
+
+	// 4. 验证目标企业的响应签名
+	if err := s.verifyData(targetEnt.PublicKey, res.Acceptance, res.Signature); err != nil {
+		return fmt.Errorf("failed to verify target handshake signature: %w", err)
+	}
+
+	// 5. 创建或更新连接记录
+	var conn models.B2BConnectionGORM
+	err = s.db.Where("source_ent_id = ? AND target_ent_id = ?", sourceEnt.ID, targetEnt.ID).First(&conn).Error
+	if err == gorm.ErrRecordNotFound {
+		conn = models.B2BConnectionGORM{
+			SourceEntID:  sourceEnt.ID,
+			TargetEntID:  targetEnt.ID,
+			Status:       "active",
+			AuthProtocol: "jwt",
+		}
+		return s.db.Create(&conn).Error
+	} else if err == nil {
+		conn.Status = "active"
+		return s.db.Save(&conn).Error
+	}
+
+	return err
+}
+
+// HandleHandshake 处理来自外部企业的握手请求
+func (s *B2BServiceImpl) HandleHandshake(req HandshakeRequest) (*HandshakeResponse, error) {
+	// 1. 获取来源企业信息
+	var sourceEnt models.EnterpriseGORM
+	if err := s.db.Where("code = ?", req.SourceEntCode).First(&sourceEnt).Error; err != nil {
+		return nil, fmt.Errorf("source enterprise not found: %w", err)
+	}
+
+	// 2. 验证签名
+	if err := s.verifyData(sourceEnt.PublicKey, req.Challenge, req.Signature); err != nil {
+		return nil, fmt.Errorf("invalid handshake signature: %w", err)
+	}
+
+	// 3. 获取本地企业信息 (假设当前服务属于某个企业，这里需要动态获取或配置)
+	// 简化逻辑：这里假设我们要连接的是目标企业本身
+	// 在多租户环境下，可能需要从 URL 或 Host 中判断是哪个企业在接收握手
+	var localEnt models.EnterpriseGORM
+	// 临时方案：获取 ID 为 1 的企业作为本地企业 (通常是系统默认企业)
+	if err := s.db.First(&localEnt, 1).Error; err != nil {
+		return nil, fmt.Errorf("local enterprise not found: %w", err)
+	}
+
+	// 4. 创建反向连接记录 (建立双向信任)
+	var conn models.B2BConnectionGORM
+	err := s.db.Where("source_ent_id = ? AND target_ent_id = ?", localEnt.ID, sourceEnt.ID).First(&conn).Error
+	if err == gorm.ErrRecordNotFound {
+		conn = models.B2BConnectionGORM{
+			SourceEntID:  localEnt.ID,
+			TargetEntID:  sourceEnt.ID,
+			Status:       "active",
+			AuthProtocol: "jwt",
+		}
+		s.db.Create(&conn)
+	} else if err == nil {
+		conn.Status = "active"
+		s.db.Save(&conn)
+	}
+
+	// 5. 构造响应
+	acceptance := "accepted_" + req.Challenge
+	signature, err := s.signData(localEnt.PrivateKey, acceptance)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign handshake response: %w", err)
+	}
+
+	return &HandshakeResponse{
+		Success:    true,
+		TargetCode: localEnt.Code,
+		Acceptance: acceptance,
+		Signature:  signature,
+	}, nil
+}
+
+func (s *B2BServiceImpl) signData(privateKeyStr, data string) (string, error) {
+	// 简化版：这里使用 HMAC-SHA256 模拟，实际应使用 RSA/ED25519
+	// 考虑到 PrivateKey 可能只是一个字符串，先简单实现
+	claims := jwt.MapClaims{
+		"data": data,
+		"exp":  time.Now().Add(time.Minute * 5).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(privateKeyStr))
+}
+
+func (s *B2BServiceImpl) verifyData(publicKeyStr, data, signature string) error {
+	token, err := jwt.Parse(signature, func(token *jwt.Token) (interface{}, error) {
+		return []byte(publicKeyStr), nil
+	})
+
+	if err != nil || !token.Valid {
+		return fmt.Errorf("invalid signature")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims["data"] != data {
+		return fmt.Errorf("data mismatch in signature")
+	}
+
+	return nil
 }
 
 // SendCrossEnterpriseMessage 发送跨企业数字员工消息

@@ -112,6 +112,7 @@ type PlatformAdapter interface {
 // B2BService 定义企业间数字员工通信接口
 type B2BService interface {
 	Connect(sourceEntCode, targetEntCode string) error
+	HandleHandshake(req HandshakeRequest) (*HandshakeResponse, error)
 	SendCrossEnterpriseMessage(fromEmployeeID, toEmployeeID string, msg string) error
 	CallRemoteTool(fromEntID uint, targetEntID uint, toolName string, arguments map[string]any) (any, error)
 	VerifyIdentity(entCode string, signature string) bool
@@ -132,12 +133,15 @@ type AIIntegrationService interface {
 	Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error)
 	ChatStream(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (<-chan ai.ChatStreamResponse, error)
 	CreateEmbedding(ctx context.Context, modelID uint, input any) (*ai.EmbeddingResponse, error)
+	ExecuteTool(ctx context.Context, botID string, userID uint, orgID uint, toolCall ai.ToolCall) (any, error)
 }
 
 // DigitalEmployeeService 定义数字员工管理接口
 type DigitalEmployeeService interface {
 	GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error)
 	RecordKpi(employeeID uint, metric string, score float64) error
+	UpdateOnlineStatus(botID string, status string) error
+	ConsumeSalary(botID string, tokens int64) error
 }
 
 // Manager 是 BotNexus 本地的包装结构，允许在其上定义方法
@@ -424,6 +428,7 @@ func Run() {
 	mux.HandleFunc("/api/mesh/register", manager.AdminMiddleware(HandleMeshRegister(manager)))
 	mux.HandleFunc("/api/mesh/connect", manager.AdminMiddleware(HandleMeshConnect(manager)))
 	mux.HandleFunc("/api/mesh/call", manager.AdminMiddleware(HandleMeshCall(manager)))
+	mux.HandleFunc("/api/b2b/handshake", HandleB2BHandshake(manager))
 
 	mux.HandleFunc("/api/admin/debug/fix-data", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// 将所有 agent 的 model_id 设置为 1 (假设 ID 1 的模型存在)
@@ -486,6 +491,37 @@ func Run() {
 			HandleGetAIAgent(manager)(w, r)
 		case http.MethodDelete:
 			HandleDeleteAIAgent(manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// --- 数字员工管理接口 ---
+	mux.HandleFunc("/api/admin/employees", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleListEmployees(manager)(w, r)
+		case http.MethodPost:
+			HandleSaveEmployee(manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/employees/kpi", manager.AdminMiddleware(HandleRecordEmployeeKpi(manager)))
+
+	// --- 认知记忆管理接口 ---
+	mux.HandleFunc("/api/admin/memories", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleListMemories(manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/memories/", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodDelete:
+			HandleDeleteMemory(manager)(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -695,6 +731,14 @@ func NewManager() *Manager {
 
 					es := rag.NewTaskAIEmbeddingService(m.AIIntegrationService, embedModel.ID, embedModel.ModelID)
 					kb := rag.NewPostgresKnowledgeBase(m.GORMDB, es, m.AIIntegrationService, chatModel.ID)
+
+					// 将向量服务注入认知记忆系统
+					if aiSvc, ok := m.AIIntegrationService.(*AIServiceImpl); ok {
+						if aiSvc.memoryService != nil {
+							aiSvc.memoryService.SetEmbeddingService(es)
+						}
+					}
+
 					if err := kb.Setup(); err == nil {
 						m.TaskManager.AI.Manifest.KnowledgeBase = kb
 						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ModelID))

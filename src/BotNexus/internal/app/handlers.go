@@ -83,6 +83,11 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 	m.Bots[botKey] = bot
 	m.Mutex.Unlock()
 
+	// Update online status to online
+	if m.DigitalEmployeeService != nil {
+		go m.DigitalEmployeeService.UpdateOnlineStatus(bot.SelfID, "online")
+	}
+
 	// Update connection stats
 	m.ConnectionStats.Mutex.Lock()
 	m.ConnectionStats.TotalBotConnections++
@@ -236,6 +241,11 @@ func (m *Manager) handleBotConnection(bot *types.BotClient) {
 		// Cleanup work when connection is closed
 		m.removeBot(bot.SelfID)
 		bot.Conn.Close()
+
+		// Update online status to offline
+		if m.DigitalEmployeeService != nil {
+			go m.DigitalEmployeeService.UpdateOnlineStatus(bot.SelfID, "offline")
+		}
 
 		// Record disconnection
 		duration := time.Since(bot.Connected)

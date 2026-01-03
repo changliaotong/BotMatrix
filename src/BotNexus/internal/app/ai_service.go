@@ -21,17 +21,22 @@ type AIServiceImpl struct {
 	mu              sync.RWMutex
 	privacyFilter   *ai.PrivacyFilter
 	mcpManager      *MCPManager
+	skillManager    *SkillManager
 	memoryService   CognitiveMemoryService
+	employeeService DigitalEmployeeService
 }
 
 func NewAIService(db *gorm.DB, m *Manager) *AIServiceImpl {
+	mcp := NewMCPManager(db, m)
 	return &AIServiceImpl{
 		db:              db,
 		manager:         m,
 		clientsByConfig: make(map[string]ai.Client),
 		privacyFilter:   ai.NewPrivacyFilter(),
-		mcpManager:      NewMCPManager(db, m),
+		mcpManager:      mcp,
+		skillManager:    NewSkillManager(db, m, mcp),
 		memoryService:   NewCognitiveMemoryService(db),
+		employeeService: NewEmployeeService(db),
 	}
 }
 
@@ -81,11 +86,18 @@ func (s *AIServiceImpl) getClient(provider *models.AIProviderGORM, model *models
 }
 
 func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
-	// 1. 认知记忆注入 (Memory Injection)
+	// 2. 认知记忆注入 (Memory Injection)
 	if s.memoryService != nil {
-		// TODO: 从上下文提取真实的 userID 和 botID
-		userID := "default_user"
-		botID := "default_bot"
+		// 尝试从上下文提取真实的 userID 和 botID
+		userID, _ := ctx.Value("userID").(string)
+		botID, _ := ctx.Value("botID").(string)
+
+		if userID == "" {
+			userID = "default_user"
+		}
+		if botID == "" {
+			botID = "default_bot"
+		}
 
 		// 提取最后一条用户消息作为检索 query
 		query := ""
@@ -112,12 +124,50 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 		}
 	}
 
-	// 2. 获取 MCP 工具并合并
-	if s.mcpManager != nil {
-		// TODO: 从上下文获取真实 UserID 和 OrgID
-		mcpTools, _ := s.mcpManager.GetToolsForContext(ctx, 0, 0)
-		if len(mcpTools) > 0 {
-			tools = append(tools, mcpTools...)
+	// 3. 知识库检索 (RAG)
+	if s.manager != nil && s.manager.TaskManager != nil && s.manager.TaskManager.AI.Manifest.KnowledgeBase != nil {
+		// 从上下文或 Agent 配置中获取 KnowledgeBase 过滤条件
+		// 暂时使用全局搜索，后续可以根据 botID 绑定特定知识库
+		query := ""
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == "user" {
+				if q, ok := messages[i].Content.(string); ok {
+					query = q
+					break
+				}
+			}
+		}
+
+		if query != "" {
+			kb := s.manager.TaskManager.AI.Manifest.KnowledgeBase
+			// 这里的 filter 可以根据业务需求定制
+			chunks, err := kb.Search(ctx, query, 3, nil)
+			if err == nil && len(chunks) > 0 {
+				kbContext := "参考知识库内容：\n"
+				for _, chunk := range chunks {
+					kbContext += fmt.Sprintf("- %s\n", chunk.Content)
+				}
+				// 插入到消息列表中
+				messages = append([]ai.Message{{
+					Role:    "system",
+					Content: kbContext,
+				}}, messages...)
+			}
+		}
+	}
+
+	// 4. 获取技能与工具并合并
+	if s.skillManager != nil {
+		botID, _ := ctx.Value("botID").(string)
+		userIDNum, _ := ctx.Value("userIDNum").(uint)
+		orgIDNum, _ := ctx.Value("orgIDNum").(uint)
+
+		if botID == "" {
+			botID = "default_bot"
+		}
+		extraTools, _ := s.skillManager.GetAvailableSkillsForBot(ctx, botID, userIDNum, orgIDNum)
+		if len(extraTools) > 0 {
+			tools = append(tools, extraTools...)
 		}
 	}
 
@@ -209,19 +259,23 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 }
 
 // ExecuteTool 执行工具调用，支持普通 Skill 和 MCP Tool
-func (s *AIServiceImpl) ExecuteTool(ctx context.Context, toolCall ai.ToolCall) (any, error) {
+func (s *AIServiceImpl) ExecuteTool(ctx context.Context, botID string, userID uint, orgID uint, toolCall ai.ToolCall) (any, error) {
+	if s.skillManager != nil {
+		return s.skillManager.ExecuteSkill(ctx, botID, userID, orgID, toolCall)
+	}
+
+	// 回退逻辑 (如果 skillManager 未初始化)
 	name := toolCall.Function.Name
 	var args map[string]any
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %v", err)
 	}
 
-	// 1. 检查是否为 MCP Tool (包含 __ 分隔符)
 	if strings.Contains(name, "__") {
+		// MCP Tool 同样需要基础的权限验证 (简化版)
 		return s.mcpManager.CallTool(ctx, name, args)
 	}
 
-	// 2. 否则视为普通插件 Skill
 	if s.manager != nil {
 		return s.manager.SyncSkillCall(ctx, name, args)
 	}
@@ -278,12 +332,13 @@ func (s *AIServiceImpl) unmaskContent(content any, ctx *ai.MaskContext) any {
 	}
 }
 func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (<-chan ai.ChatStreamResponse, error) {
-	// 获取 MCP 工具并合并
-	if s.mcpManager != nil {
+	// 获取技能与工具并合并
+	if s.skillManager != nil {
 		// TODO: 从上下文获取真实 UserID 和 OrgID
-		mcpTools, _ := s.mcpManager.GetToolsForContext(ctx, 0, 0)
-		if len(mcpTools) > 0 {
-			tools = append(tools, mcpTools...)
+		botID := "default_bot"
+		extraTools, _ := s.skillManager.GetAvailableSkillsForBot(ctx, botID, 0, 0)
+		if len(extraTools) > 0 {
+			tools = append(tools, extraTools...)
 		}
 	}
 
@@ -470,7 +525,12 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	}
 
 	// 5. 调用 AI
-	resp, err := s.Chat(context.Background(), modelID, messages, nil)
+	chatCtx := context.WithValue(context.Background(), "botID", employee.BotID)
+	chatCtx = context.WithValue(chatCtx, "userID", fmt.Sprintf("%v", msg.UserID))
+	// 如果能从 employee 或 msg 获取 OrgID, 也可以传进去
+	// chatCtx = context.WithValue(chatCtx, "orgIDNum", employee.OrgID)
+
+	resp, err := s.Chat(chatCtx, modelID, messages, nil)
 	if err != nil {
 		return "", err
 	}
@@ -478,7 +538,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	if len(resp.Choices) > 0 {
 		content, _ := resp.Choices[0].Message.Content.(string)
 
-		// 6. 异步保存消息到历史
+		// 6. 异步保存消息到历史并更新薪资消耗
 		go func() {
 			// 保存用户消息
 			s.db.Create(&models.AIChatMessageGORM{
@@ -495,10 +555,94 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 				Content:    content,
 				UsageToken: resp.Usage.TotalTokens,
 			})
+
+			// 更新数字员工的薪资消耗 (Token 统计)
+			if s.employeeService != nil {
+				s.employeeService.ConsumeSalary(employee.BotID, int64(resp.Usage.TotalTokens))
+			}
+
+			// 7. 认知记忆自动提取
+			userIDStr := fmt.Sprintf("%v", msg.UserID)
+			s.ExtractAndSaveMemories(context.Background(), userIDStr, employee.BotID, messages[len(messages)-2:])
 		}()
 
 		return content, nil
 	}
 
 	return "", fmt.Errorf("no response from ai")
+}
+
+// ExtractAndSaveMemories 从对话中提取并保存新的记忆
+func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID string, botID string, messages []ai.Message) {
+	if s.memoryService == nil || len(messages) < 2 {
+		return
+	}
+
+	// 构造提取 Prompt
+	prompt := "你是一个记忆提取专家。请从以下对话中提取出关于用户的、具有长期价值的事实或偏好（如：姓名、生日、职业、喜好、厌恶、重要经历等）。\n"
+	prompt += "规则：\n1. 只提取新出现的、有价值的信息。\n2. 格式为：[类别] 事实内容。\n3. 如果没有发现新信息，请回复 'NONE'。\n4. 不要提取对话过程，只提取事实。\n\n对话内容：\n"
+
+	for _, m := range messages {
+		prompt += fmt.Sprintf("%s: %v\n", m.Role, m.Content)
+	}
+
+	// 获取默认模型
+	var model models.AIModelGORM
+	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+		if err := s.db.First(&model).Error; err != nil {
+			return
+		}
+	}
+
+	// 调用 AI 进行提取 (直接调用 Chat 内部逻辑，避免死循环)
+	// 这里使用一个简化的 Chat 调用
+	provider, _ := s.GetProvider(model.ProviderID)
+	client, _ := s.getClient(provider, &model)
+	if client == nil {
+		return
+	}
+
+	req := ai.ChatRequest{
+		Model: model.ModelID,
+		Messages: []ai.Message{
+			{Role: ai.RoleSystem, Content: prompt},
+		},
+	}
+
+	resp, err := client.Chat(ctx, req)
+	if err != nil || resp == nil || len(resp.Choices) == 0 {
+		return
+	}
+
+	content, _ := resp.Choices[0].Message.Content.(string)
+	if strings.TrimSpace(content) == "" || strings.ToUpper(content) == "NONE" {
+		return
+	}
+
+	// 解析并保存
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || line == "NONE" {
+			continue
+		}
+
+		// 尝试解析 [类别] 内容
+		category := "general"
+		fact := line
+		if strings.HasPrefix(line, "[") && strings.Contains(line, "]") {
+			idx := strings.Index(line, "]")
+			category = line[1:idx]
+			fact = strings.TrimSpace(line[idx+1:])
+		}
+
+		memory := &models.CognitiveMemoryGORM{
+			UserID:     userID,
+			BotID:      botID,
+			Category:   category,
+			Content:    fact,
+			Importance: 1,
+		}
+		s.memoryService.SaveMemory(ctx, memory)
+	}
 }

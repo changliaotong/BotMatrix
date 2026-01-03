@@ -27,5 +27,30 @@ func (s *EmployeeServiceImpl) RecordKpi(employeeID uint, metric string, score fl
 		MetricName: metric,
 		Score:      score,
 	}
-	return s.db.Create(&log).Error
+	if err := s.db.Create(&log).Error; err != nil {
+		return err
+	}
+
+	// 同时更新员工的平均 KPI 分数 (简化逻辑：取平均值)
+	var avgScore float64
+	s.db.Model(&models.DigitalEmployeeKpiGORM{}).
+		Where("employee_id = ?", employeeID).
+		Select("AVG(score)").
+		Scan(&avgScore)
+
+	return s.db.Model(&models.DigitalEmployeeGORM{}).
+		Where("id = ?", employeeID).
+		Update("kpi_score", avgScore).Error
+}
+
+func (s *EmployeeServiceImpl) UpdateOnlineStatus(botID string, status string) error {
+	return s.db.Model(&models.DigitalEmployeeGORM{}).
+		Where("bot_id = ?", botID).
+		Update("online_status", status).Error
+}
+
+func (s *EmployeeServiceImpl) ConsumeSalary(botID string, tokens int64) error {
+	return s.db.Model(&models.DigitalEmployeeGORM{}).
+		Where("bot_id = ?", botID).
+		UpdateColumn("salary_token", gorm.Expr("salary_token + ?", tokens)).Error
 }

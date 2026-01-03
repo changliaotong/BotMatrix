@@ -88,6 +88,32 @@ func HandleMeshConnect(m *Manager) http.HandlerFunc {
 	}
 }
 
+// HandleB2BHandshake 处理来自外部企业的握手请求
+// POST /api/b2b/handshake
+func HandleB2BHandshake(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req HandshakeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, "Invalid request body", nil)
+			return
+		}
+
+		if m.B2BService == nil {
+			utils.SendJSONResponse(w, false, "B2B Service not initialized", nil)
+			return
+		}
+
+		resp, err := m.B2BService.HandleHandshake(req)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Handshake failed: "+err.Error(), nil)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
 // HandleMeshCall 处理跨域工具调用代理
 // POST /api/mesh/call
 func HandleMeshCall(m *Manager) http.HandlerFunc {

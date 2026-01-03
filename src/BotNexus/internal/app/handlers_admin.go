@@ -3518,3 +3518,112 @@ func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 		utils.SendJSONResponse(w, true, "", manual)
 	}
 }
+
+// HandleListEmployees 获取数字员工列表
+func HandleListEmployees(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var employees []models.DigitalEmployeeGORM
+		if err := m.GORMDB.Find(&employees).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", employees)
+	}
+}
+
+// HandleSaveEmployee 保存/更新数字员工信息
+func HandleSaveEmployee(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var employee models.DigitalEmployeeGORM
+		if err := json.NewDecoder(r.Body).Decode(&employee); err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		var err error
+		if employee.ID > 0 {
+			err = m.GORMDB.Save(&employee).Error
+		} else {
+			err = m.GORMDB.Create(&employee).Error
+		}
+
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "Saved digital employee", employee)
+	}
+}
+
+// HandleRecordEmployeeKpi 手动记录 KPI (如评价)
+func HandleRecordEmployeeKpi(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			EmployeeID uint    `json:"employee_id"`
+			Metric     string  `json:"metric"`
+			Score      float64 `json:"score"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		if m.DigitalEmployeeService == nil {
+			utils.SendJSONResponse(w, false, "Employee service not initialized", nil)
+			return
+		}
+
+		err := m.DigitalEmployeeService.RecordKpi(req.EmployeeID, req.Metric, req.Score)
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "KPI recorded successfully", nil)
+	}
+}
+
+// HandleListMemories 获取记忆列表
+func HandleListMemories(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		botID := r.URL.Query().Get("bot_id")
+		userID := r.URL.Query().Get("user_id")
+		query := r.URL.Query().Get("q")
+
+		var memories []models.CognitiveMemoryGORM
+		db := m.GORMDB.Model(&models.CognitiveMemoryGORM{})
+
+		if botID != "" {
+			db = db.Where("bot_id = ?", botID)
+		}
+		if userID != "" {
+			db = db.Where("user_id = ?", userID)
+		}
+		if query != "" {
+			db = db.Where("content LIKE ?", "%"+query+"%")
+		}
+
+		if err := db.Order("last_seen DESC").Find(&memories).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", memories)
+	}
+}
+
+// HandleDeleteMemory 删除特定记忆
+func HandleDeleteMemory(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/admin/memories/")
+		if idStr == "" {
+			utils.SendJSONResponse(w, false, "Missing memory ID", nil)
+			return
+		}
+
+		if err := m.GORMDB.Delete(&models.CognitiveMemoryGORM{}, idStr).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "Memory deleted", nil)
+	}
+}
