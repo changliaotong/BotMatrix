@@ -41,9 +41,15 @@
 ### 3.1 架构层次
 1.  **接入层 (Access Layer)**：BotMatrix 作为一个 **Universal MCP Host**，支持 **STDIO**, **HTTP** 和 **SSE (Server-Sent Events)** 通信协议，连接全球范围内的公共 MCP Server。
 2.  **核心层 (Kernel Layer)**：BotNexus 负责权限调度。通过我们在 [mcp_manager.go](file:///D:/projects/BotMatrix/src/BotNexus/internal/app/mcp_manager.go) 中实现的 `Scope` 机制与 **Privacy Bastion (隐私堡垒)** 集成，实现数据的安全交换。
-3.  **桥接层 (Bridge Layer)**：将 BotMatrix 现有的插件系统（Skill Center）自动打包为 **Internal MCP Server**，实现能力的“自产自销”并对外输出。
+3.  **桥接层 (Bridge Layer)**：将 BotMatrix 现有的插件系统（Skill Center）自动打包为 **Internal MCP Server**，实现能力的“自产自销”并对外输出。同时通过 **Dual-Stack (双栈)** 架构，将现有的 IM 适配器能力直接暴露为 MCP 工具。
 
-### 3.2 宏大愿景：Global Agent Mesh (全球智能体网络)
+### 3.2 并行运行模式：双栈 (Dual-Stack) 架构
+为了确保系统的平滑演进，BotMatrix 采用了 **“适配器模式 + MCP 模式”** 的并行架构：
+- **适配器模式 (Legacy/Standard)**：继续保持对 OneBot, Discord 等原生协议的高效处理，用于实时消息推送和基础路由。
+- **MCP 模式 (Modern/Context-Aware)**：将这些适配器封装为 MCP 工具（见 [mcp_im_bridge.go](file:///D:/projects/BotMatrix/src/BotNexus/internal/app/mcp_im_bridge.go)），允许 AI 模型在对话过程中“按需调用”通信能力。
+- **协同逻辑**：当用户发送消息时，适配器模式负责接收并触发 AI 思考；当 AI 需要跨平台发送回复或主动发起任务时，它通过 MCP 模式调用对应的 IM 桥接工具。
+
+### 3.3 宏大愿景：Global Agent Mesh (全球智能体网络)
 通过 MCP 与 **B2B 联邦认证**，BotMatrix 将实现从“孤岛机器人”到“协作网络”的跃迁：
 - **跨平台协同**：你的 BotMatrix 机器人可以调用 Claude Desktop 里的工具，反之亦然。
 - **安全能力输出**：通过 JWT 令牌与脱敏还原机制，在保护企业私有数据的前提下，向合作伙伴输出特定的 AI 工具能力。

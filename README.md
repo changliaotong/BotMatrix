@@ -35,8 +35,9 @@ BotMatrix 是一个 **AI 原生 (AI-Native)** 的分布式跨平台机器人技�
 ### 📚 文档中心
 
 - **[简体中文文档中心](docs/zh-CN/README.md)**
-  - [系统架构图](docs/zh-CN/core/ARCHITECTURE.md)
-  - [API 接口参考](docs/zh-CN/core/API_REFERENCE.md)
+  - **[系统架构图](docs/zh-CN/core/ARCHITECTURE.md)**: 了解系统的分层设计与组件关系。
+  - **[理念深度解析：Mesh、MCP 与适配器](docs/zh-CN/core/AGENT_MESH_AND_MCP_RELATIONSHIP.md)**: **[必读]** 深入理解我们如何重新定义 AI 时代的机器人架构。
+  - **[API 接口参考](docs/zh-CN/core/API_REFERENCE.md)**: 开发与集成的详细规范。
   - [部署指南](docs/zh-CN/core/DEPLOY.md)
   - [AI 助手指南](docs/zh-CN/development/AI_GUIDE.md)
   - [插件开发手册](docs/zh-CN/plugins/PLUGIN_DEVELOPMENT.md)

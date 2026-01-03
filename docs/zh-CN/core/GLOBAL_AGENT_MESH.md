@@ -7,7 +7,12 @@
 - **互联互通**：不同的 BotMatrix 实例可以通过 MCP 协议互相挂载对方的工具和知识库。
 - **能力共享**：如果你开发了一个强大的“法律咨询”机器人，你可以通过 MCP 接口将其能力授权给另一个组织，而无需共享代码。
 
-## 2. 架构组件
+### 1.1 核心驱动力
+Global Agent Mesh 的实现依赖于 **Model Context Protocol (MCP)** 的标准化能力，以及对传统 **IM 适配器** 的“双栈”化改造。
+
+> **延伸阅读**：[深度解析：Global Agent Mesh、MCP 与 IM 适配器的共生关系](docs/zh-CN/core/AGENT_MESH_AND_MCP_RELATIONSHIP.md)
+
+## 2. 核心支柱 (Core Pillars)
 
 ### 2.1 联邦身份认证 (Federated Identity)
 - **组织 ID (OrgID)**：基于公钥基础设施 (PKI) 的全球唯一标识。

@@ -57,6 +57,13 @@ func NewMCPManager(db *gorm.DB, m *Manager) *MCPManager {
 		Scope: ai.ScopeGlobal,
 	}, NewSearchMCPHost(m))
 
+	// 注册 IM 桥接工具 (适配器模式并行)
+	mgr.RegisterServer(ai.MCPServerInfo{
+		ID:    "im_bridge",
+		Name:  "IM Adapter Bridge",
+		Scope: ai.ScopeGlobal,
+	}, NewIMBridgeMCPHost(m))
+
 	// 加载数据库配置
 	mgr.LoadFromDB()
 	return mgr
