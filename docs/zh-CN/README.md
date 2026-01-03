@@ -35,6 +35,7 @@
 - **[Overmind](components/Overmind.md)**: 监控与管理后台，提供可视化配置。
 
 ### 💻 4. 开发者与运维 (DevOps)
+- **[2026-01-03 开发进展](development/PROGRESS_2026_01_03.md)** - **[最新]** 数字员工闭环系统技术实现详情。
 - **[插件/技能开发手册](plugins/PLUGIN_DEVELOPMENT.md)** - 如何编写原生 Go 插件。
 - **[MCP Server 开发指南](core/DOMESTIC_MCP_GUIDE.md)** - 编写标准化 AI 工具的最佳实践。
 - **[API 接口参考](core/API_REFERENCE.md)** - 详细的 JSON 通信协议规范。

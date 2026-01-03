@@ -46,9 +46,29 @@
 - **人工干预 (Human-in-the-loop)**: 当数字员工遇到无法解决的难题（意图识别度低）时，自动向 App 推送求助通知，管理者可实时接管对话。
 - **技能市场**: 在手机上为数字员工购买、订阅或升级最新的 AI 技能插件。
 
-## 6. 数据模型设计
-- **`enterprises`**: 定义企业边界、B2B 通信密钥及全局策略。
-- **`digital_employees`**: 存储员工档案、职位、所属企业及累积成本。
-- **`digital_employee_kpis`**: 存储量化的绩效指标与评分记录。
-- **`platform_accounts`**: 存储该企业下属的公众号、抖音等平台账号配置。
-- **`b2b_connections`**: 存储企业间已建立的互信连接与通信协议。
+## 6. 技术实现细节 (Technical Implementation)
+
+### 6.1 认知记忆引擎 (Cognitive Memory)
+- **自动事实提取 (Fact Extraction)**: 系统在对话结束时会自动通过 AI 提取关键事实（如用户偏好、身份信息等）。
+- **向量检索增强 (RAG)**: 结合 pgvector 插件，实现毫秒级的语义记忆检索。
+- **上下文自动注入**: 在 `Chat` 流程中自动注入相关的记忆片段，确保对话的连贯性。
+
+### 6.2 绩效与薪资系统 (KPI & Salary)
+- **虚拟薪资 (Salary/Token)**: 将 AI 消耗的 Token 实时转换为虚拟薪资成本，支持 `salary_token` 字段的原子累加。
+- **KPI 自动聚合**: 支持多维度 KPI 指标记录，系统会自动计算并更新员工的平均 KPI 分数。
+- **在线状态追踪**: 与 WebSocket 挂钩，实时更新员工的 `online_status`（online/offline/busy）。
+
+### 6.3 技能与权限 (Skills & Permissions)
+- **MCP 集成**: 支持跨企业的 MCP 工具调用，权限校验涵盖 Bot、User 和 Org 三个维度。
+- **精细化授权**: `SkillManager` 提供 `CheckPermission` 接口，支持对核心技能和第三方插件的细粒度控制。
+
+### 6.4 企业间协作 (B2B Enterprise Mesh)
+- **双向 JWT 握手**: 企业间建立连接时需经过双向签名校验，确保通信安全。
+- **连接自动化**: 握手成功后自动建立 `B2BConnection` 记录，开启跨企业工具调用权限。
+
+## 7. 数据模型设计
+- **`digital_employees`**: 存储员工档案、职位、所属企业、累积成本及**实时在线状态**。
+- **`cognitive_memories`**: 存储提取出的事实片段及其向量表示 (`embedding`)。
+- **`digital_employee_kpis`**: 存储量化的绩效指标与评分记录，支持 AVG 聚合。
+- **`b2b_connections`**: 存储企业间已建立的互信连接、握手状态及通信协议。
+- **`bot_skill_permissions`**: 存储机器人与技能/工具之间的显式授权关系。
