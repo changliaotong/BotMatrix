@@ -13,8 +13,10 @@ BotNexus 是整个系统的“大脑”和“路由器”。
     - 维护与客户端（如 WxBot, QQBot）的 WebSocket 连接。
     - 接收原始消息事件 (Events)。
     - **AI 意图识别**: 初步解析用户意图，决定是调用传统插件还是 AI 技能。
-    - **AI 隐私堡垒 (Privacy Bastion)**: 对外发消息进行 PII 脱敏处理。
-    - **技能路由**: 根据意图分发至对应的 AI 模型或执行节点。
+    - **Global Agent Mesh (核心)**: 作为 Mesh 网络的枢纽，处理跨域发现、联邦身份验证与 B2B 协作逻辑。
+    - **MCP Host**: 深度集成 Model Context Protocol，管理并调度本地与远程的 MCP Server 工具集。
+    - **AI 隐私堡垒 (Privacy Bastion)**: 对全链路（包括 Mesh 协作）外发消息进行 PII 脱敏与还原处理。
+    - **技能路由**: 根据意图分发至对应的 AI 模型、执行节点或 Mesh 合作伙伴。
     - 管理 Worker 节点的注册与心跳。
     - 提供 Web 管理后台 (WebUI)。
 - **技术栈**: Go, Gin, WebSocket, Redis (Pub/Sub).
@@ -24,13 +26,21 @@ BotWorker 是实际处理业务逻辑的“四肢”。
 - **职责**:
     - 监听 Redis 任务队列。
     - **AI 推理执行**: 调用 LLM 接口，执行提示词模板填充与结果解析。
+    - **MCP 工具执行**: 承载具体的 MCP Tool 调用逻辑，支持与外部工具链的深度交互。
     - **RAG 2.0 (Agentic RAG)**: 结合向量数据库进行知识库检索，支持自我反思与意图补全。
     - **GraphRAG**: 利用知识图谱进行跨文档关系推理。
     - 运行插件 (Plugins)。
     - 将处理结果返回给 BotNexus 或直接发送。
 - **技术栈**: Go, Python, .NET (多语言支持)。
 
-### 3. Redis (中间件)
+### 3. MCP Server (能力提供方)
+MCP Server 是系统的“功能插件”标准。
+- **职责**:
+    - 暴露标准化的 Resources, Tools 和 Prompts。
+    - 与 BotNexus 通过 SSE 或 STDIO 进行通信。
+    - 允许第三方开发者以任何语言编写功能，并无缝接入 BotMatrix 生态。
+
+### 4. Redis (中间件)
 Redis 在系统中扮演着至关重要的角色，作为核心通信总线。
 - **职责**:
     - **消息分发**: 使用 Pub/Sub 机制实现 Nexus 与 Worker 之间的实时通信。

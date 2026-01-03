@@ -93,12 +93,43 @@ Web 管理后台使用的 RESTful API。
     }
 ]
 ```
-
 ### 3. 头像代理 (GET /api/proxy/avatar?url=...)
 - **描述**: 代理外部头像图片，解决跨域 (CORS) 和 Referer 限制问题。
 - **参数**: `url` - 原始头像图片的编码 URL。
 
-### 4. 更新路由规则 (POST /api/routing/update)
+---
+
+## 🕸️ Global Agent Mesh & MCP API
+
+BotMatrix 扩展了用于跨域协作与工具集成的 API。
+
+### 1. Mesh 发现 (GET /api/mesh/discover)
+- **描述**: 在联邦网络中发现可用的服务或数字员工。
+- **参数**: `q` (可选) - 搜索关键词。
+- **认证**: 需要 JWT 令牌。
+
+### 2. MCP SSE 端点 (GET /api/mcp/sse)
+- **描述**: 符合 Model Context Protocol 规范的 SSE 通信端点。
+- **认证**: 支持标准 JWT 或 B2B 联邦身份令牌。
+- **功能**: 支持工具发现、资源读取与函数调用通知。
+
+### 3. B2B 跨域调用 (POST /api/mesh/call)
+- **描述**: 代理跨企业、跨域的智能体能力调用。
+- **请求体**:
+```json
+{
+    "target_ent_id": 1001,
+    "tool_name": "internal_skills/check_inventory",
+    "arguments": {
+        "item_id": "SKU-001"
+    }
+}
+```
+- **认证**: 必须携带包含企业私钥签名的 B2B 令牌。
+
+---
+
+## 🏗️ 开发者注意事项4. 更新路由规则 (POST /api/routing/update)
 - **描述**: 动态修改消息路由规则。
 
 ---
