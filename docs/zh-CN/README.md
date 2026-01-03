@@ -12,6 +12,7 @@
 ### 🚀 1. 快速开始 (Getting Started)
 - **[用户入门指南](USER_GUIDE.md)** - **[新手必读]** 用最简单的语言了解 BotMatrix 能为你做什么。
 - **[项目愿景与使命](VISION.md)** - 了解我们为什么构建 BotMatrix 以及我们的终极目标。
+- **[未来蓝图：Agent OS](core/FUTURE_ROADMAP.md)** - 探索 BotMatrix 的长远发展规划。
 - **[系统架构图](core/ARCHITECTURE.md)** - 宏观视角看系统的分层设计与组件关系。
 - **[部署指南](core/DEPLOY.md)** - 快速在本地或服务器环境启动系统。
 - **[更新日志](CHANGELOG.md)** - 追踪我们的每一次进化与功能迭代。
