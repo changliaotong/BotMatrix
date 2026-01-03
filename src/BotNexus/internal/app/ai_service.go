@@ -104,49 +104,47 @@ func (s *AIServiceImpl) getClient(provider *models.AIProviderGORM, model *models
 	return newClient, nil
 }
 
-func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
+func (s *AIServiceImpl) prepareChat(ctx context.Context, messages []ai.Message, tools []ai.Tool) ([]ai.Message, []ai.Tool, *ai.MaskContext) {
+	sessionID, _ := ctx.Value("sessionID").(string)
+	botID, _ := ctx.Value("botID").(string)
+	step, _ := ctx.Value("step").(int)
+
 	// 2. 认知记忆注入 (Memory Injection)
 	if s.memoryService != nil {
-		// 尝试从上下文提取真实的 userID 和 botID
 		userID, _ := ctx.Value("userID").(string)
-		botID, _ := ctx.Value("botID").(string)
 
-		if userID == "" {
-			userID = "default_user"
-		}
-		if botID == "" {
-			botID = "default_bot"
-		}
-
-		// 提取最后一条用户消息作为检索 query
-		query := ""
-		for i := len(messages) - 1; i >= 0; i-- {
-			if messages[i].Role == "user" {
-				if q, ok := messages[i].Content.(string); ok {
-					query = q
-					break
+		if userID != "" && botID != "" {
+			query := ""
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "user" {
+					if q, ok := messages[i].Content.(string); ok {
+						query = q
+						break
+					}
 				}
 			}
-		}
 
-		memories, _ := s.memoryService.GetRelevantMemories(ctx, userID, botID, query)
-		if len(memories) > 0 {
-			memoryContext := "你拥有以下关于用户的认知记忆：\n"
-			for _, m := range memories {
-				memoryContext += fmt.Sprintf("- [%s] %s\n", m.Category, m.Content)
+			memories, _ := s.memoryService.GetRelevantMemories(ctx, userID, botID, query)
+			if len(memories) > 0 {
+				memoryContext := "你拥有以下关于用户的认知记忆：\n"
+				for _, m := range memories {
+					memoryContext += fmt.Sprintf("- [%s] %s\n", m.Category, m.Content)
+				}
+				messages = append([]ai.Message{{
+					Role:    "system",
+					Content: memoryContext,
+				}}, messages...)
+
+				// 记录追踪
+				if sessionID != "" {
+					s.SaveTrace(sessionID, botID, step, "memory_retrieval", fmt.Sprintf("Retrieved %d memories", len(memories)), "")
+				}
 			}
-			// 插入到第一条消息，引导 AI 行为
-			messages = append([]ai.Message{{
-				Role:    "system",
-				Content: memoryContext,
-			}}, messages...)
 		}
 	}
 
 	// 3. 知识库检索 (RAG)
 	if s.manager != nil && s.manager.TaskManager != nil && s.manager.TaskManager.AI.Manifest.KnowledgeBase != nil {
-		// 从上下文或 Agent 配置中获取 KnowledgeBase 过滤条件
-		// 暂时使用全局搜索，后续可以根据 botID 绑定特定知识库
 		query := ""
 		for i := len(messages) - 1; i >= 0; i-- {
 			if messages[i].Role == "user" {
@@ -159,34 +157,43 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 
 		if query != "" {
 			kb := s.manager.TaskManager.AI.Manifest.KnowledgeBase
-			// 这里的 filter 可以根据业务需求定制
 			chunks, err := kb.Search(ctx, query, 3, nil)
 			if err == nil && len(chunks) > 0 {
 				kbContext := "参考知识库内容：\n"
 				for _, chunk := range chunks {
 					kbContext += fmt.Sprintf("- %s\n", chunk.Content)
 				}
-				// 插入到消息列表中
 				messages = append([]ai.Message{{
 					Role:    "system",
 					Content: kbContext,
 				}}, messages...)
+
+				// 记录追踪
+				if sessionID != "" {
+					s.SaveTrace(sessionID, botID, step, "knowledge_retrieval", fmt.Sprintf("Retrieved %d chunks from KB", len(chunks)), "")
+				}
 			}
 		}
 	}
 
 	// 4. 获取技能与工具并合并
 	if s.skillManager != nil {
-		botID, _ := ctx.Value("botID").(string)
 		userIDNum, _ := ctx.Value("userIDNum").(uint)
 		orgIDNum, _ := ctx.Value("orgIDNum").(uint)
 
-		if botID == "" {
-			botID = "default_bot"
-		}
-		extraTools, _ := s.skillManager.GetAvailableSkillsForBot(ctx, botID, userIDNum, orgIDNum)
-		if len(extraTools) > 0 {
-			tools = append(tools, extraTools...)
+		if botID != "" {
+			extraTools, _ := s.skillManager.GetAvailableSkillsForBot(ctx, botID, userIDNum, orgIDNum)
+			if len(extraTools) > 0 {
+				tools = append(tools, extraTools...)
+				// 记录追踪
+				if sessionID != "" {
+					skillNames := make([]string, len(extraTools))
+					for i, t := range extraTools {
+						skillNames[i] = t.Function.Name
+					}
+					s.SaveTrace(sessionID, botID, step, "skill_injection", strings.Join(skillNames, ", "), "")
+				}
+			}
 		}
 	}
 
@@ -194,6 +201,16 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 	if s.contextManager != nil {
 		messages = s.contextManager.PruneMessages(messages)
 	}
+
+	// 隐私脱敏处理 (PII Masking)
+	maskCtx := ai.NewMaskContext()
+	maskedMessages := s.maskMessages(messages, maskCtx)
+
+	return maskedMessages, tools, maskCtx
+}
+
+func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Message, tools []ai.Tool) (*ai.ChatResponse, error) {
+	maskedMessages, finalTools, maskCtx := s.prepareChat(ctx, messages, tools)
 
 	var model models.AIModelGORM
 	if err := s.db.First(&model, modelID).Error; err != nil {
@@ -210,65 +227,36 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 		return nil, err
 	}
 
-	// 隐私脱敏处理 (PII Masking)
-	maskCtx := ai.NewMaskContext()
-	maskedMessages := s.maskMessages(messages, maskCtx)
-
 	req := ai.ChatRequest{
 		Model:    model.ModelID,
 		Messages: maskedMessages,
-		Tools:    tools,
+		Tools:    finalTools,
 	}
 
-	// 打印 LLM 调用详情
-	fmt.Printf("\n--- [LLM CALL START] ---\n")
-	fmt.Printf("Model: %s (%s)\n", model.ModelName, model.ModelID)
-	for i, msg := range maskedMessages {
-		contentStr := ""
-		if s, ok := msg.Content.(string); ok {
-			contentStr = s
-		} else {
-			contentStr = "[Multi-modal Content]"
-		}
-		fmt.Printf("[%d] %s: %s\n", i, msg.Role, contentStr)
-	}
-	if len(tools) > 0 {
-		fmt.Printf("Tools Available: %d\n", len(tools))
-	}
+	// 设置超时 (默认 60s)
+	chatCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 
 	startTime := time.Now()
-	resp, err := client.Chat(ctx, req)
+	resp, err := client.Chat(chatCtx, req)
 	duration := time.Since(startTime)
 
 	if err != nil {
-		fmt.Printf("LLM Error: %v\n", err)
-	} else if resp != nil && len(resp.Choices) > 0 {
-		// 还原响应中的敏感信息 (Unmasking)
+		clog.Error("[AI] Chat failed", zap.Error(err), zap.Uint("model_id", modelID))
+		return nil, err
+	}
+
+	if resp != nil && len(resp.Choices) > 0 {
 		for i := range resp.Choices {
 			resp.Choices[i].Message.Content = s.unmaskContent(resp.Choices[i].Message.Content, maskCtx)
 		}
 
-		choice := resp.Choices[0]
-		contentStr, _ := choice.Message.Content.(string)
-		if contentStr != "" {
-			fmt.Printf("Response: %s\n", contentStr)
-		}
-		for _, tc := range choice.Message.ToolCalls {
-			fmt.Printf("Tool Call: %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
-		}
-		fmt.Printf("Tokens: Input=%d, Output=%d, Total=%d\n",
-			resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens)
-	}
-	fmt.Printf("Duration: %v\n", duration)
-	fmt.Printf("--- [LLM CALL END] ---\n\n")
-
-	if err == nil && resp != nil {
 		// 异步记录使用日志
 		go func() {
 			usage := models.AIUsageLogGORM{
-				UserID:       0, // TODO: 从 context 或参数中传递真正的 UserID
+				UserID:       0, // TODO: 从 context 获取
 				ModelName:    model.ModelName,
-				ProviderType: "openai", // 暂时硬编码，可从 provider 字段获取
+				ProviderType: "openai",
 				InputTokens:  resp.Usage.PromptTokens,
 				OutputTokens: resp.Usage.CompletionTokens,
 				DurationMS:   int(duration.Milliseconds()),
@@ -279,7 +267,7 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []ai.Me
 		}()
 	}
 
-	return resp, err
+	return resp, nil
 }
 
 // ChatAgent 提供自主 Agent 循环能力，自动处理工具调用并返回最终结果
@@ -291,20 +279,29 @@ func (s *AIServiceImpl) ChatAgent(ctx context.Context, modelID uint, messages []
 	botID, _ := ctx.Value("botID").(string)
 	userIDNum, _ := ctx.Value("userIDNum").(uint)
 	orgIDNum, _ := ctx.Value("orgIDNum").(uint)
+	sessionID, _ := ctx.Value("sessionID").(string)
 
 	if botID == "" {
 		botID = "default_bot"
 	}
 
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("agent_%d", time.Now().UnixNano())
+	}
+
 	var finalResp *ai.ChatResponse
-	sessionID := fmt.Sprintf("agent_%d", time.Now().UnixNano())
 
 	for i := 0; i < maxIterations; i++ {
 		clog.Info("[Agent] Iteration", zap.Int("step", i+1), zap.String("session", sessionID))
 
+		// 更新 context 中的 step
+		agentCtx := context.WithValue(ctx, "sessionID", sessionID)
+		agentCtx = context.WithValue(agentCtx, "step", i)
+
 		// 调用基础 Chat
-		resp, err := s.Chat(ctx, modelID, currentMessages, tools)
+		resp, err := s.Chat(agentCtx, modelID, currentMessages, tools)
 		if err != nil {
+			s.SaveTrace(sessionID, botID, i, "error", err.Error(), "")
 			return nil, err
 		}
 		finalResp = resp
@@ -317,7 +314,13 @@ func (s *AIServiceImpl) ChatAgent(ctx context.Context, modelID uint, messages []
 
 		// 记录 LLM 响应
 		contentStr, _ := choice.Message.Content.(string)
-		s.saveTrace(sessionID, botID, i, "llm_response", contentStr, "")
+		if contentStr != "" {
+			s.SaveTrace(sessionID, botID, i, "llm_response", contentStr, "")
+		}
+
+		// 记录推理过程 (如果有)
+		// 某些模型可能会在 message 结构中包含 reasoning 或 thought
+		// 这里暂且作为占位符，如果 ai.Message 结构扩展了，可以在这里提取
 
 		// 如果不需要调用工具，或者模型已经给出了最终答案
 		if choice.FinishReason != "tool_calls" && len(choice.Message.ToolCalls) == 0 {
@@ -331,21 +334,22 @@ func (s *AIServiceImpl) ChatAgent(ctx context.Context, modelID uint, messages []
 		hasError := false
 		for _, tc := range choice.Message.ToolCalls {
 			clog.Info("[Agent] Executing tool", zap.String("name", tc.Function.Name))
-			s.saveTrace(sessionID, botID, i, "tool_call", tc.Function.Name, tc.Function.Arguments)
+			s.SaveTrace(sessionID, botID, i, "tool_call", tc.Function.Name, tc.Function.Arguments)
 
-			result, err := s.ExecuteTool(ctx, botID, userIDNum, orgIDNum, tc)
+			result, err := s.ExecuteTool(agentCtx, botID, userIDNum, orgIDNum, tc)
 			resultStr := ""
 			if err != nil {
 				clog.Error("[Agent] Tool execution failed", zap.Error(err))
 				resultStr = fmt.Sprintf("Error: %v", err)
 				hasError = true
+				s.SaveTrace(sessionID, botID, i, "error", fmt.Sprintf("Tool %s failed: %v", tc.Function.Name, err), "")
 			} else {
 				b, _ := json.Marshal(result)
 				resultStr = string(b)
 			}
 
 			// 记录工具结果
-			s.saveTrace(sessionID, botID, i, "tool_result", tc.Function.Name, resultStr)
+			s.SaveTrace(sessionID, botID, i, "tool_result", tc.Function.Name, resultStr)
 
 			// 将工具结果添加到历史记录中
 			currentMessages = append(currentMessages, ai.Message{
@@ -515,8 +519,8 @@ func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input
 	return resp, nil
 }
 
-// saveTrace 记录 AI Agent 的执行追踪日志
-func (s *AIServiceImpl) saveTrace(sessionID, botID string, step int, traceType, content, metadata string) {
+// SaveTrace 记录 AI Agent 的执行追踪日志
+func (s *AIServiceImpl) SaveTrace(sessionID, botID string, step int, traceType, content, metadata string) {
 	trace := models.AIAgentTraceGORM{
 		SessionID: sessionID,
 		BotID:     botID,
@@ -591,8 +595,23 @@ func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error
 	return "No response from AI", nil
 }
 
-func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage) (string, error) {
-	// 1. 获取会话 ID
+func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage, targetOrgID uint) (string, error) {
+	// 1. 验证访问权限 (本地或外派)
+	if employee.EnterpriseID != targetOrgID {
+		if s.b2bService != nil {
+			allowed, err := s.b2bService.CheckDispatchPermission(employee.ID, targetOrgID, "chat")
+			if err != nil {
+				return "", fmt.Errorf("failed to check dispatch permission: %w", err)
+			}
+			if !allowed {
+				return "对不起，我没有权限为您提供服务 (未被外派或权限不足)。", nil
+			}
+		} else {
+			return "对不起，跨企业协作服务未开启。", nil
+		}
+	}
+
+	// 2. 获取会话 ID
 	sessionID := fmt.Sprintf("bot:%s:user:%s", employee.BotID, msg.UserID)
 	if msg.GroupID != "" {
 		sessionID = fmt.Sprintf("bot:%s:group:%s", employee.BotID, msg.GroupID)
@@ -662,18 +681,27 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	}
 
 	// 6. 调用 AI
+	sessionID := fmt.Sprintf("chat:%s:user:%s:%d", employee.BotID, msg.UserID, time.Now().Unix())
 	chatCtx := context.WithValue(context.Background(), "botID", employee.BotID)
 	chatCtx = context.WithValue(chatCtx, "userID", fmt.Sprintf("%v", msg.UserID))
-	// 如果能从 employee 或 msg 获取 OrgID, 也可以传进去
-	// chatCtx = context.WithValue(chatCtx, "orgIDNum", employee.OrgID)
+	chatCtx = context.WithValue(chatCtx, "orgIDNum", targetOrgID) // 传入目标企业 ID
+	chatCtx = context.WithValue(chatCtx, "sessionID", sessionID)
+	chatCtx = context.WithValue(chatCtx, "step", 0)
+
+	if employee.EnterpriseID != targetOrgID {
+		chatCtx = context.WithValue(chatCtx, "isDispatched", true)
+		chatCtx = context.WithValue(chatCtx, "sourceOrgID", employee.EnterpriseID)
+	}
 
 	resp, err := s.Chat(chatCtx, modelID, messages, nil)
 	if err != nil {
+		s.SaveTrace(sessionID, employee.BotID, 0, "error", err.Error(), "")
 		return "", err
 	}
 
 	if len(resp.Choices) > 0 {
 		content, _ := resp.Choices[0].Message.Content.(string)
+		s.SaveTrace(sessionID, employee.BotID, 0, "llm_response", content, "")
 
 		// 6. 异步保存消息到历史并更新薪资消耗
 		go func() {

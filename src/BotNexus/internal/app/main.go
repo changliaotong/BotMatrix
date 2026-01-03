@@ -131,13 +131,20 @@ type B2BService interface {
 	RequestSkillSharing(sourceEntID, targetEntID uint, skillName string) error
 	ApproveSkillSharing(sharingID uint, status string) error
 	ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharingGORM, error)
+
+	// 数字员工外派接口
+	DispatchEmployee(employeeID uint, sourceEntID, targetEntID uint, permissions []string) error
+	ApproveDispatch(dispatchID uint, status string) error
+	ListDispatchedEmployees(entID uint, role string) ([]models.DigitalEmployeeDispatchGORM, error)
+	GetDispatchedEmployeeDetail(dispatchID uint) (*models.DigitalEmployeeGORM, error)
+	CheckDispatchPermission(employeeID uint, targetEntID uint, permission string) (bool, error)
 }
 
 // AIIntegrationService 定义 AI 调度与管理接口
 type AIIntegrationService interface {
 	// 基础调度
 	DispatchIntent(msg types.InternalMessage) (string, error)
-	ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage) (string, error)
+	ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage, targetOrgID uint) (string, error)
 	GetProvider(id uint) (*models.AIProviderGORM, error)
 
 	// 对话接口
@@ -447,6 +454,9 @@ func Run() {
 	mux.HandleFunc("/api/b2b/skills/request", manager.JWTMiddleware(HandleB2BRequestSkill(manager)))
 	mux.HandleFunc("/api/b2b/skills/approve", manager.AdminMiddleware(HandleB2BApproveSkill(manager)))
 	mux.HandleFunc("/api/b2b/skills/list", manager.JWTMiddleware(HandleB2BListSkills(manager)))
+	mux.HandleFunc("/api/b2b/dispatch", manager.JWTMiddleware(HandleB2BDispatchEmployee(manager)))
+	mux.HandleFunc("/api/b2b/dispatch/approve", manager.AdminMiddleware(HandleB2BApproveDispatch(manager)))
+	mux.HandleFunc("/api/b2b/dispatch/list", manager.JWTMiddleware(HandleB2BListDispatches(manager)))
 
 	mux.HandleFunc("/api/admin/debug/fix-data", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// 将所有 agent 的 model_id 设置为 1 (假设 ID 1 的模型存在)

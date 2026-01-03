@@ -461,6 +461,24 @@ func (B2BSkillSharingGORM) TableName() string {
 	return "b2b_skill_sharings"
 }
 
+// DigitalEmployeeDispatchGORM 数字员工外派授权表
+type DigitalEmployeeDispatchGORM struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	EmployeeID  uint      `gorm:"index;column:employee_id" json:"employee_id"`           // 外派的员工 ID
+	SourceEntID uint      `gorm:"index;column:source_ent_id" json:"source_ent_id"`       // 所属企业
+	TargetEntID uint      `gorm:"index;column:target_ent_id" json:"target_ent_id"`       // 接收企业
+	Status      string    `gorm:"size:20;default:'pending';column:status" json:"status"` // pending, approved, rejected, recalled
+	Permissions string    `gorm:"type:text;column:permissions" json:"permissions"`      // 授予的权限列表 (JSON: ["chat", "skill_call"])
+	DispatchAt  time.Time `gorm:"column:dispatch_at" json:"dispatch_at"`
+	ExpireAt    time.Time `gorm:"column:expire_at" json:"expire_at"` // 有效期 (可选)
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (DigitalEmployeeDispatchGORM) TableName() string {
+	return "digital_employee_dispatches"
+}
+
 // TableName 设置表名
 func (B2BConnectionGORM) TableName() string {
 	return "b2b_connections"

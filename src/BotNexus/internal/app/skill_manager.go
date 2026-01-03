@@ -95,6 +95,29 @@ func (sm *SkillManager) GetAvailableSkillsForBot(ctx context.Context, botID stri
 				})
 			}
 		}
+
+		// 4. 处理外派员工：允许访问其所属企业的部分受限技能 (如果已通过 B2B 共享)
+		isDispatched, _ := ctx.Value("isDispatched").(bool)
+		sourceOrgID, _ := ctx.Value("sourceOrgID").(uint)
+		if isDispatched && sourceOrgID > 0 {
+			// 此时 orgID 是接收企业，sourceOrgID 是输出企业
+			// 外派员工自动获得其所属企业已共享给接收企业的技能 (无需 b2b__ 前缀，直接调用)
+			var sourceSharedSkills []models.B2BSkillSharingGORM
+			sm.db.WithContext(ctx).Where("source_ent_id = ? AND target_ent_id = ? AND is_active = ? AND status = ?",
+				sourceOrgID, orgID, true, "approved").Find(&sourceSharedSkills)
+
+			for _, ss := range sourceSharedSkills {
+				// 对于外派员工，我们允许它直接看到并使用这些技能
+				tools = append(tools, ai.Tool{
+					Type: "function",
+					Function: ai.FunctionDefinition{
+						Name:        ss.SkillName,
+						Description: fmt.Sprintf("[外派员工专享技能] %s", ss.SkillName),
+						Parameters:  map[string]any{"type": "object"},
+					},
+				})
+			}
+		}
 	}
 
 	return tools, nil
@@ -189,6 +212,20 @@ func (sm *SkillManager) ExecuteSkill(ctx context.Context, botID string, userID u
 			return sm.b2bService.CallRemoteTool(orgID, sourceEntID, realSkillName, args)
 		}
 		return nil, fmt.Errorf("invalid b2b skill format or b2b service not available")
+	}
+
+	// 处理外派员工直接调用所属企业技能的情况
+	isDispatched, _ := ctx.Value("isDispatched").(bool)
+	sourceOrgID, _ := ctx.Value("sourceOrgID").(uint)
+	if isDispatched && sourceOrgID > 0 && sm.b2bService != nil {
+		// 检查这是否是一个来自源企业的共享技能
+		var sharing models.B2BSkillSharingGORM
+		err := sm.db.WithContext(ctx).Where("source_ent_id = ? AND target_ent_id = ? AND skill_name = ? AND status = ?",
+			sourceOrgID, orgID, name, "approved").First(&sharing).Error
+		if err == nil {
+			// 路由到远程调用
+			return sm.b2bService.CallRemoteTool(orgID, sourceOrgID, name, args)
+		}
 	}
 
 	// 如果是传统 Worker 插件技能

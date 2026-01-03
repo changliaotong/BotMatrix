@@ -332,7 +332,24 @@ func (a *AIParser) Parse(req ParseRequest) (*ParseResult, error) {
 			modelID = uint(val)
 		}
 
-		result, err := a.MatchSkillByLLM(context.Background(), input, modelID, req.Context)
+		// 将 Context 中的 session_id 和 step 注入到 context.Context
+		ctx := context.Background()
+		if sid, ok := req.Context["session_id"].(string); ok {
+			ctx = context.WithValue(ctx, "sessionID", sid)
+		}
+		if step, ok := req.Context["step"].(int); ok {
+			ctx = context.WithValue(ctx, "step", step)
+		}
+		// 注入 botID 以便 saveTrace 使用
+		if bid, ok := req.Context["bot_id"].(string); ok {
+			ctx = context.WithValue(ctx, "botID", bid)
+		}
+		// 注入 userID 以便 prepareChat 使用
+		if uid, ok := req.Context["user_id"].(string); ok {
+			ctx = context.WithValue(ctx, "userID", uid)
+		}
+
+		result, err := a.MatchSkillByLLM(ctx, input, modelID, req.Context)
 		if err == nil && result.Intent != AIActionSystemQuery {
 			return result, nil
 		}

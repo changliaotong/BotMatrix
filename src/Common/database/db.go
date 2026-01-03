@@ -56,6 +56,11 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		&models.EnterpriseMemberGORM{},
 		&models.PlatformAccountGORM{},
 		&models.B2BConnectionGORM{},
+		&models.B2BSkillSharingGORM{},
+		&models.DigitalEmployeeDispatchGORM{},
+		&models.CognitiveMemoryGORM{},
+		&models.AIAgentTraceGORM{},
+		&models.BotSkillPermissionGORM{},
 		&models.MCPServerGORM{},
 		&models.MCPToolGORM{},
 	); err != nil {

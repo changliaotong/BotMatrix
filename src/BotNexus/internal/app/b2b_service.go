@@ -706,3 +706,116 @@ func (s *B2BServiceImpl) ListSkillSharings(entID uint, role string) ([]models.B2
 
 	return sharings, nil
 }
+
+// DispatchEmployee 外派数字员工
+func (s *B2BServiceImpl) DispatchEmployee(employeeID uint, sourceEntID, targetEntID uint, permissions []string) error {
+	// 1. 验证员工归属
+	var employee models.DigitalEmployeeGORM
+	if err := s.db.First(&employee, employeeID).Error; err != nil {
+		return err
+	}
+	if employee.EnterpriseID != sourceEntID {
+		return fmt.Errorf("employee does not belong to the source enterprise")
+	}
+
+	// 2. 检查是否已外派
+	var existing models.DigitalEmployeeDispatchGORM
+	err := s.db.Where("employee_id = ? AND target_ent_id = ?", employeeID, targetEntID).First(&existing).Error
+	if err == nil {
+		if existing.Status == "approved" {
+			return fmt.Errorf("employee is already dispatched and approved")
+		}
+		existing.Status = "pending"
+		permJSON, _ := json.Marshal(permissions)
+		existing.Permissions = string(permJSON)
+		existing.DispatchAt = time.Now()
+		return s.db.Save(&existing).Error
+	}
+
+	// 3. 创建外派记录
+	permJSON, _ := json.Marshal(permissions)
+	dispatch := models.DigitalEmployeeDispatchGORM{
+		EmployeeID:  employeeID,
+		SourceEntID: sourceEntID,
+		TargetEntID: targetEntID,
+		Status:      "pending",
+		Permissions: string(permJSON),
+		DispatchAt:  time.Now(),
+	}
+
+	return s.db.Create(&dispatch).Error
+}
+
+// ApproveDispatch 审批外派申请
+func (s *B2BServiceImpl) ApproveDispatch(dispatchID uint, status string) error {
+	var dispatch models.DigitalEmployeeDispatchGORM
+	if err := s.db.First(&dispatch, dispatchID).Error; err != nil {
+		return err
+	}
+
+	dispatch.Status = status
+	return s.db.Save(&dispatch).Error
+}
+
+// ListDispatchedEmployees 列出外派员工记录
+func (s *B2BServiceImpl) ListDispatchedEmployees(entID uint, role string) ([]models.DigitalEmployeeDispatchGORM, error) {
+	var dispatches []models.DigitalEmployeeDispatchGORM
+	db := s.db
+
+	if role == "source" {
+		db = db.Where("source_ent_id = ?", entID)
+	} else if role == "target" {
+		db = db.Where("target_ent_id = ?", entID)
+	} else {
+		db = db.Where("source_ent_id = ? OR target_ent_id = ?", entID, entID)
+	}
+
+	if err := db.Find(&dispatches).Error; err != nil {
+		return nil, err
+	}
+	return dispatches, nil
+}
+
+// GetDispatchedEmployeeDetail 获取外派员工详情 (跨域获取)
+func (s *B2BServiceImpl) GetDispatchedEmployeeDetail(dispatchID uint) (*models.DigitalEmployeeGORM, error) {
+	var dispatch models.DigitalEmployeeDispatchGORM
+	if err := s.db.First(&dispatch, dispatchID).Error; err != nil {
+		return nil, err
+	}
+
+	if dispatch.Status != "approved" {
+		return nil, fmt.Errorf("dispatch not approved")
+	}
+
+	var employee models.DigitalEmployeeGORM
+	if err := s.db.Preload("Agent").First(&employee, dispatch.EmployeeID).Error; err != nil {
+		return nil, err
+	}
+
+	return &employee, nil
+}
+
+// CheckDispatchPermission 检查外派权限
+func (s *B2BServiceImpl) CheckDispatchPermission(employeeID uint, targetEntID uint, permission string) (bool, error) {
+	var dispatch models.DigitalEmployeeDispatchGORM
+	err := s.db.Where("employee_id = ? AND target_ent_id = ? AND status = ?", employeeID, targetEntID, "approved").First(&dispatch).Error
+	if err == gorm.ErrRecordNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	var perms []string
+	if err := json.Unmarshal([]byte(dispatch.Permissions), &perms); err != nil {
+		return false, err
+	}
+
+	for _, p := range perms {
+		if p == "*" || p == permission {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}

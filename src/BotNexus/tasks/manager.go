@@ -291,6 +291,7 @@ func (tm *TaskManager) ProcessChatMessage(ctx context.Context, botID, groupID, u
 	}
 
 	// 4. 调用 AI 解析
+	sessionID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 	req := ParseRequest{
 		Input: content,
 		Context: map[string]any{
@@ -300,16 +301,26 @@ func (tm *TaskManager) ProcessChatMessage(ctx context.Context, botID, groupID, u
 			"user_id":            userID,
 			"user_role":          userRole,
 			"is_private":         isPrivate,
+			"session_id":         sessionID,
+			"step":               0,
 		},
 	}
 
-	log.Printf("[AI-Task] Calling AI.Parse for content: %s (Context: %+v)", content, req.Context)
+	log.Printf("[AI-Task] Calling AI.Parse for content: %s (Session: %s)", content, sessionID)
 	result, err := tm.AI.Parse(req)
 	if err != nil {
 		log.Printf("[AI-Task] AI.Parse error: %v", err)
+		// 如果有 AIService 接口支持 saveTrace，可以在这里记录
 		return err
 	}
 	log.Printf("[AI-Task] AI.Parse result: intent=%s, summary=%s", result.Intent, result.Summary)
+
+	// 记录解析结果追踪
+	if svc, ok := tm.AI.GetAIService().(interface {
+		SaveTrace(sessionID, botID string, step int, traceType, content, metadata string)
+	}); ok {
+		svc.SaveTrace(sessionID, botID, 0, "intent_parse", string(result.Intent), result.Summary)
+	}
 
 	// 5. 如果是系统查询，直接回复 Analysis
 	if result.Intent == AIActionSystemQuery {

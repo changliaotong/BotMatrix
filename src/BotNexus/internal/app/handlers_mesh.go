@@ -255,30 +255,20 @@ func HandleB2BApproveSkill(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		utils.SendJSONResponse(w, true, "Skill sharing status updated", nil)
+		utils.SendJSONResponse(w, true, "Skill sharing approved", nil)
 	}
 }
 
-// HandleB2BListSkills 获取技能共享列表
-// @Summary 获取 B2B 技能共享列表
-// @Description 获取本企业相关的所有技能共享记录 (作为提供方或使用方)
-// @Tags B2B
-// @Accept json
-// @Produce json
-// @Param role query string false "角色: provider (提供方) 或 consumer (使用方)"
-// @Success 200 {object} utils.JSONResponse "记录列表"
-// @Router /api/b2b/skills/list [get]
+// HandleB2BListSkills 列出共享技能
 func HandleB2BListSkills(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		entID := uint(1) // 简化：从 ctx 获取
 		role := r.URL.Query().Get("role")
 
 		if m.B2BService == nil {
 			utils.SendJSONResponse(w, false, "B2B Service not initialized", nil)
 			return
 		}
-
-		// 获取当前调用者的企业 ID
-		entID := uint(1)
 
 		sharings, err := m.B2BService.ListSkillSharings(entID, role)
 		if err != nil {
@@ -287,5 +277,86 @@ func HandleB2BListSkills(m *Manager) http.HandlerFunc {
 		}
 
 		utils.SendJSONResponse(w, true, "Success", sharings)
+	}
+}
+
+// HandleB2BDispatchEmployee 处理员工外派申请
+func HandleB2BDispatchEmployee(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			EmployeeID  uint     `json:"employee_id"`
+			TargetEntID uint     `json:"target_ent_id"`
+			Permissions []string `json:"permissions"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, "Invalid request body", nil)
+			return
+		}
+
+		if m.B2BService == nil {
+			utils.SendJSONResponse(w, false, "B2B Service not initialized", nil)
+			return
+		}
+
+		// 获取当前调用者的企业 ID
+		sourceEntID := uint(1) // 简化：从 ctx 获取
+
+		err := m.B2BService.DispatchEmployee(req.EmployeeID, sourceEntID, req.TargetEntID, req.Permissions)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Dispatch request failed: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "Employee dispatch request sent", nil)
+	}
+}
+
+// HandleB2BApproveDispatch 处理外派审批
+func HandleB2BApproveDispatch(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			DispatchID uint   `json:"dispatch_id"`
+			Status     string `json:"status"` // approved, rejected
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, "Invalid request body", nil)
+			return
+		}
+
+		if m.B2BService == nil {
+			utils.SendJSONResponse(w, false, "B2B Service not initialized", nil)
+			return
+		}
+
+		err := m.B2BService.ApproveDispatch(req.DispatchID, req.Status)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Approval failed: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "Dispatch request "+req.Status, nil)
+	}
+}
+
+// HandleB2BListDispatches 列出外派记录
+func HandleB2BListDispatches(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		entID := uint(1) // 简化：从 ctx 获取
+		role := r.URL.Query().Get("role")
+
+		if m.B2BService == nil {
+			utils.SendJSONResponse(w, false, "B2B Service not initialized", nil)
+			return
+		}
+
+		dispatches, err := m.B2BService.ListDispatchedEmployees(entID, role)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Failed to list dispatches: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "Success", dispatches)
 	}
 }
