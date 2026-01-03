@@ -155,6 +155,7 @@ type DigitalEmployeeService interface {
 	ConsumeSalary(botID string, tokens int64) error
 	CheckSalaryLimit(botID string) (bool, error)
 	UpdateSalary(botID string, salaryToken *int64, salaryLimit *int64) error
+	AutoEvolve(employeeID uint) error
 }
 
 // Manager 是 BotNexus 本地的包装结构，允许在其上定义方法
@@ -734,6 +735,9 @@ func NewManager() *Manager {
 		aiSvc := NewAIService(m.GORMDB, m)
 		m.AIIntegrationService = aiSvc
 		m.DigitalEmployeeService = NewEmployeeService(m.GORMDB)
+		if empSvc, ok := m.DigitalEmployeeService.(*EmployeeServiceImpl); ok {
+			empSvc.SetAIService(aiSvc)
+		}
 		m.CognitiveMemoryService = NewCognitiveMemoryService(m.GORMDB)
 		b2bSvc := NewB2BService(m.GORMDB, m)
 		m.B2BService = b2bSvc
