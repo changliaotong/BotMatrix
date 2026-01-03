@@ -56,6 +56,8 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		&models.EnterpriseMemberGORM{},
 		&models.PlatformAccountGORM{},
 		&models.B2BConnectionGORM{},
+		&models.MCPServerGORM{},
+		&models.MCPToolGORM{},
 	); err != nil {
 		log.Printf("GORM AutoMigrate failed (first attempt): %v", err)
 		// Try again without certain constraints if they fail

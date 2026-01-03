@@ -113,7 +113,11 @@ type PlatformAdapter interface {
 type B2BService interface {
 	Connect(sourceEntCode, targetEntCode string) error
 	SendCrossEnterpriseMessage(fromEmployeeID, toEmployeeID string, msg string) error
+	CallRemoteTool(fromEntID uint, targetEntID uint, toolName string, arguments map[string]any) (any, error)
 	VerifyIdentity(entCode string, signature string) bool
+	VerifyB2BToken(tokenString string) (*models.EnterpriseGORM, error)
+	RegisterEndpoint(entID uint, name, endpointType, url string) error
+	DiscoverEndpoints(query string) ([]models.MCPServerGORM, error)
 }
 
 // AIIntegrationService 定义 AI 调度与管理接口
@@ -408,6 +412,17 @@ func Run() {
 	mux.HandleFunc("/api/ai/chat/history", manager.JWTMiddleware(HandleGetAIChatHistory(manager)))
 	mux.HandleFunc("/api/ai/sessions", manager.JWTMiddleware(HandleGetRecentSessions(manager)))
 
+	// --- MCP Server 接口 (Global Agent Mesh 核心) ---
+	mux.HandleFunc("/api/mcp/v1/sse", HandleMCPSSE(manager))
+	mux.HandleFunc("/api/mcp/v1/tools", manager.B2BMiddleware(HandleMCPListTools(manager)))
+	mux.HandleFunc("/api/mcp/v1/tools/call", manager.B2BMiddleware(HandleMCPCallTool(manager)))
+
+	// --- Global Agent Mesh 发现与连接接口 ---
+	mux.HandleFunc("/api/mesh/discover", manager.JWTMiddleware(HandleMeshDiscover(manager)))
+	mux.HandleFunc("/api/mesh/register", manager.AdminMiddleware(HandleMeshRegister(manager)))
+	mux.HandleFunc("/api/mesh/connect", manager.AdminMiddleware(HandleMeshConnect(manager)))
+	mux.HandleFunc("/api/mesh/call", manager.AdminMiddleware(HandleMeshCall(manager)))
+
 	mux.HandleFunc("/api/admin/debug/fix-data", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// 将所有 agent 的 model_id 设置为 1 (假设 ID 1 的模型存在)
 		if err := manager.GORMDB.Model(&models.AIAgentGORM{}).Where("model_id = ?", 0).Update("model_id", 1).Error; err != nil {
@@ -637,6 +652,7 @@ func NewManager() *Manager {
 	if m.GORMDB != nil {
 		m.AIIntegrationService = NewAIService(m.GORMDB, m)
 		m.DigitalEmployeeService = NewEmployeeService(m.GORMDB)
+		m.B2BService = NewB2BService(m.GORMDB, m)
 	}
 
 	// 初始化 OneBot v12 实现
