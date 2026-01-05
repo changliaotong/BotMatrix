@@ -8,4 +8,4 @@ require (
 	github.com/gorilla/websocket v1.5.3
 )
 
-replace BotMatrix/common => ../../common
+replace BotMatrix/common => ../Common

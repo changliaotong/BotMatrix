@@ -1,5 +1,5 @@
 {
-  "server_starting": "Starting BotNexus service... Version: %s",
+  "server_starting": "Starting BotWorker service... Version: %s",
   "core_engine_starting": "[Core] WebSocket forwarding engine started on port %s",
   "core_engine_failed": "[Core] Start failed: %v",
   "admin_starting": "[Admin] Admin backend started on port %s",

@@ -2,7 +2,7 @@ package tasks
 
 import (
 	"encoding/json"
-	"log"
+	log "BotMatrix/common/log"
 	"sync"
 	"time"
 
@@ -122,7 +122,7 @@ func (s *Scheduler) triggerTask(task Task) {
 
 		// 计算下一次执行时间
 		nextRun := s.calculateNextRun(task)
-		updates := map[string]interface{}{
+		updates := map[string]any{
 			"last_run_time": time.Now(),
 			"next_run_time": nextRun,
 		}

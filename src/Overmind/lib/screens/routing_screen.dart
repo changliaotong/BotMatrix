@@ -147,7 +147,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                 // 路由键选择
                 if (!isCustomKey) ...[
                   DropdownButtonFormField<String>(
-                    value: selectedKey,
+                    initialValue: selectedKey,
                     decoration: const InputDecoration(
                       labelText: '选择Bot/群',
                       border: OutlineInputBorder(),
@@ -192,7 +192,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                 
                 // Worker选择
                 DropdownButtonFormField<String>(
-                  value: selectedWorker,
+                  initialValue: selectedWorker,
                   decoration: const InputDecoration(
                     labelText: '选择目标Worker',
                     border: OutlineInputBorder(),
@@ -435,7 +435,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
       builder: (context) => AlertDialog(
         title: Text('编辑规则: $key'),
         content: DropdownButtonFormField<String>(
-          value: selectedWorker,
+          initialValue: selectedWorker,
           decoration: const InputDecoration(
             labelText: '选择目标Worker',
             border: OutlineInputBorder(),

@@ -1,16 +1,19 @@
 package tasks
 
 import (
+	"BotMatrix/common/types"
 	"context"
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // BotManager 定义调度中心需要的机器人管理能力
 type BotManager interface {
-	SendBotAction(botID string, action string, params map[string]interface{}) error
-	SendToWorker(workerID string, msg map[string]interface{}) error
+	SendBotAction(botID string, action string, params any) error
+	SendToWorker(workerID string, msg types.WorkerCommand) error
 	FindWorkerBySkill(skillName string) string // 返回 WorkerID
 	GetTags(targetType string, targetID string) []string
 	GetTargetsByTags(targetType string, tags []string, logic string) []string
@@ -24,7 +27,7 @@ func (d *Dispatcher) registerDefaultActions() {
 }
 
 func (d *Dispatcher) handleSkillCall(task Task, execution *Execution) error {
-	var params map[string]interface{}
+	var params map[string]any
 	if err := json.Unmarshal([]byte(task.ActionParams), &params); err != nil {
 		return fmt.Errorf("invalid action params: %v", err)
 	}
@@ -46,17 +49,17 @@ func (d *Dispatcher) handleSkillCall(task Task, execution *Execution) error {
 	if workerID == "" {
 		return fmt.Errorf("no worker available for skill: %s", skillName)
 	}
-	
-	msg := map[string]interface{}{
-		"type":         "skill_call",
-		"skill":        skillName,
-		"params":       params,
-		"task_id":      task.ID,
-		"execution_id": execution.ExecutionID,
-		"timestamp":    time.Now().Unix(),
+
+	cmd := types.WorkerCommand{
+		Type:        "skill_call",
+		Skill:       skillName,
+		Params:      params,
+		TaskID:      task.ID,
+		ExecutionID: execution.ExecutionID,
+		Timestamp:   time.Now().Unix(),
 	}
 
-	return bm.SendToWorker(workerID, msg)
+	return bm.SendToWorker(workerID, cmd)
 }
 
 func (d *Dispatcher) sendToQueue(queue string, payload []byte) error {
@@ -65,8 +68,11 @@ func (d *Dispatcher) sendToQueue(queue string, payload []byte) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// 使用 RPush 配合 Worker 端的 BLPop 实现 FIFO 队列
-	return d.rdb.RPush(ctx, queue, payload).Err()
+	// 使用 Redis Streams (XAdd) 代替 RPush，以匹配 Worker 的实现
+	return d.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: queue,
+		Values: map[string]interface{}{"payload": payload},
+	}).Err()
 }
 
 func (d *Dispatcher) handleSendMessage(task Task, execution *Execution) error {
@@ -83,9 +89,8 @@ func (d *Dispatcher) handleSendMessage(task Task, execution *Execution) error {
 	}
 
 	action := "send_group_msg"
-	actionParams := map[string]interface{}{
-		"message": params.Message,
-	}
+	actionParams := make(map[string]any)
+	actionParams["message"] = params.Message
 
 	if params.GroupID != "" {
 		actionParams["group_id"] = params.GroupID
@@ -114,17 +119,24 @@ func (d *Dispatcher) handleMuteGroup(task Task, execution *Execution) error {
 
 	bm := d.manager.(BotManager)
 	if params.UserID != "" {
-		return bm.SendBotAction(params.BotID, "set_group_ban", map[string]interface{}{
-			"group_id": params.GroupID,
-			"user_id":  params.UserID,
-			"duration": params.Duration,
+		return bm.SendBotAction(params.BotID, "set_group_ban", struct {
+			GroupID  string `json:"group_id"`
+			UserID   string `json:"user_id"`
+			Duration uint32 `json:"duration"`
+		}{
+			GroupID:  params.GroupID,
+			UserID:   params.UserID,
+			Duration: params.Duration,
 		})
 	}
 
 	// 全员禁言
-	return bm.SendBotAction(params.BotID, "set_group_whole_ban", map[string]interface{}{
-		"group_id": params.GroupID,
-		"enable":   true,
+	return bm.SendBotAction(params.BotID, "set_group_whole_ban", struct {
+		GroupID string `json:"group_id"`
+		Enable  bool   `json:"enable"`
+	}{
+		GroupID: params.GroupID,
+		Enable:  true,
 	})
 }
 
@@ -141,20 +153,27 @@ func (d *Dispatcher) handleUnmuteGroup(task Task, execution *Execution) error {
 
 	bm := d.manager.(BotManager)
 	if params.UserID != "" {
-		return bm.SendBotAction(params.BotID, "set_group_ban", map[string]interface{}{
-			"group_id": params.GroupID,
-			"user_id":  params.UserID,
-			"duration": 0,
+		return bm.SendBotAction(params.BotID, "set_group_ban", struct {
+			GroupID  string `json:"group_id"`
+			UserID   string `json:"user_id"`
+			Duration uint32 `json:"duration"`
+		}{
+			GroupID:  params.GroupID,
+			UserID:   params.UserID,
+			Duration: 0,
 		})
 	}
 
-	return bm.SendBotAction(params.BotID, "set_group_whole_ban", map[string]interface{}{
-		"group_id": params.GroupID,
-		"enable":   false,
+	return bm.SendBotAction(params.BotID, "set_group_whole_ban", struct {
+		GroupID string `json:"group_id"`
+		Enable  bool   `json:"enable"`
+	}{
+		GroupID: params.GroupID,
+		Enable:  false,
 	})
 }
 
 // toString 辅助函数
-func toString(v interface{}) string {
+func toString(v any) string {
 	return fmt.Sprintf("%v", v)
 }

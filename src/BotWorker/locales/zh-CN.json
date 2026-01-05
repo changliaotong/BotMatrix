@@ -1,5 +1,5 @@
 {
-  "server_starting": "启动 BotNexus 服务... 版本号: %s",
+  "server_starting": "启动 BotWorker 服务... 版本号: %s",
   "core_engine_starting": "[Core] WebSocket 转发引擎启动在端口 %s",
   "core_engine_failed": "[Core] 启动失败: %v",
   "admin_starting": "[Admin] 管理后台启动在端口 %s",

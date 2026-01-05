@@ -33,15 +33,24 @@ DingTalkBot supports the **Burn After Reading** feature orchestrated by BotNexus
 
 ## 🛠 Configuration
 
-Create a `config.json` file in the root directory:
+DingTalkBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:8089/config-ui` (default port is 8089).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
-    "nexus_addr": "ws://bot-manager:3005",
+    "nexus_addr": "ws://bot-nexus:3005",
     "access_token": "YOUR_WEBHOOK_ACCESS_TOKEN",
     "secret": "YOUR_WEBHOOK_SECRET",
     "client_id": "YOUR_APP_KEY",
-    "client_secret": "YOUR_APP_SECRET"
+    "client_secret": "YOUR_APP_SECRET",
+    "log_port": 8089
 }
 ```
 
@@ -50,10 +59,11 @@ Create a `config.json` file in the root directory:
 | Field | Description | Mode |
 | :--- | :--- | :--- |
 | `nexus_addr` | Address of the BotNexus WebSocket server. | **Required** |
-| `access_token` | Token from the Webhook URL (e.g., `.../send?access_token=THIS_PART`). | **Webhook** |
-| `secret` | "Secure Settings" -> "Sign" (SEC...) in DingTalk Robot settings. | **Webhook** |
+| `access_token` | Token from the Webhook URL. | **Webhook** |
+| `secret` | "Sign" (SEC...) in Robot settings. | **Webhook** |
 | `client_id` | AppKey of your Enterprise Internal Robot. | **Stream (Required for Recall)** |
 | `client_secret` | AppSecret of your Enterprise Internal Robot. | **Stream (Required for Recall)** |
+| `log_port` | Port for the Web UI and Log viewer. | **Required** |
 
 > **Tip**: 
 > *   For **Send Only**, just configure `access_token` (and optional `secret`).

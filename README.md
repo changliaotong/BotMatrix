@@ -1,177 +1,87 @@
 # BotMatrix
 
-## 🎯 项目概述
+[🌐 English](#english) | [简体中文](#简体中文)
 
-BotMatrix是一个跨平台、分布式的机器人矩阵系统，支持多语言插件扩展。
+---
 
-### 核心特性
-- **分布式架构**：支持多节点部署
-- **跨平台**：Windows、Linux、macOS
-- **多语言插件**：Go、Python、C#等
-- **高可用**：自动故障转移
-- **可扩展**：插件化架构
+## 简体中文
 
-## 📦 系统组件
+BotMatrix 是一个 **AI 原生 (AI-Native)** 的分布式跨平台机器人技能平台。它不仅整合了不同平台的机器人（如微信、QQ、钉钉、Discord 等），更通过深度集成大语言模型 (LLM)，将传统机器人进化为具备感知、思考与执行能力的智能体 (Agent)。
 
-### 1. BotNexus Core
-- 系统总控中心
-- 插件管理
-- 任务调度
-- 监控统计
+### 🌟 核心特性
 
-### 2. BotWorker
-- 任务执行节点
-- 插件运行环境
-- 消息处理
-- 负载均衡
+- **AI 原生架构**: 全面接入 DeepSeek, OpenAI, Ollama 等主流模型，支持用户配置私有 Token。
+- **技能中心 (Skill Center)**: 像应用商店一样管理机器人能力，支持一键订阅、热插拔与权限隔离。
+- **训练中心 (Training Center)**: 内置语料标注、提示词 (Prompt) IDE 与自动化微调 (Fine-tuning) 工作流。
+- **分布式执行**: 采用 **BotNexus** (枢纽) 与 **BotWorker** (执行节点) 分离的设计，支持多机部署与大规模并发。
+- **多平台适配**: 统一适配微信、QQ、钉钉、飞书、公众号、抖音、Discord、Telegram、Slack 等主流平台。
+- **数字员工 (Digital Employee)**: 引入工号、职位、KPI 考评体系，将机器人升级为具备企业属性的虚拟雇员。
+- **B2B 协作**: 支持不同企业数字员工之间的自然语言业务对接，建立安全可靠的跨企业通信协议。
+- **管理 App**: 提供专属移动 App，随时随地管理数字员工，支持实时人工干预与技能分发。
+- **实时控制台 (WebUI)**: 提供全局弹出式聊天窗口，支持实时消息监控、技能结果反馈与未读提醒。
+- **Online 机器人仿真**: 支持模拟机器人连接，无需外部 Docker 容器即可测试技能逻辑与消息路由。
 
-## 🚀 快速开始
+### 🏗️ 系统组件
 
-### 1. 环境要求
-- Go 1.18+
-- .NET 6.0+
-- Python 3.8+
-- PostgreSQL 12+
+1. **[BotNexus](docs/zh-CN/components/BotNexus.md)**: 系统“大脑”，负责连接管理、消息路由、AI 意图识别及技能分发。
+2. **[BotWorker](docs/zh-CN/components/BotWorker.md)**: 执行节点，承载具体的插件运行环境与 AI 推理/任务处理逻辑。
+3. **[AI 引擎](docs/zh-CN/core/AI_INTEGRATION_PLAN.md)**: 统一的模型调度中心，支持多模型负载均衡、RAG 知识库与长期记忆。
+4. **[Overmind](docs/zh-CN/components/Overmind.md)**: 监控与管理后台，提供可视化技能训练、配置管理及统计分析。
+4. **[SystemWorker](docs/zh-CN/components/SystemWorker.md)**: 专门负责系统级维护任务与高优先级作业。
 
-### 2. 安装依赖
-```bash
-go mod download
-pip install -r requirements.txt
-dotnet restore
-```
+### 📚 文档中心
 
-### 3. 配置数据库
-```bash
-# 创建数据库
-createdb botmatrix
+- **[简体中文文档中心](docs/zh-CN/README.md)**
+  - [系统架构图](docs/zh-CN/core/ARCHITECTURE.md)
+  - [API 接口参考](docs/zh-CN/core/API_REFERENCE.md)
+  - [部署指南](docs/zh-CN/core/DEPLOY.md)
+  - [AI 助手指南](docs/zh-CN/development/AI_GUIDE.md)
+  - [插件开发手册](docs/zh-CN/plugins/PLUGIN_DEVELOPMENT.md)
+  - [国际化 (I18N) 开发指南](docs/zh-CN/development/I18N_GUIDE.md)
 
-# 初始化数据库
-go run src/migrate/main.go
-```
+### 🚀 快速开始
 
-### 4. 启动系统
-```bash
-# 启动BotNexus Core
-go run src/BotNexus/main.go
+请参考 **[部署指南](docs/zh-CN/core/DEPLOY.md)** 完成环境配置与系统启动。
 
-# 启动BotWorker
-go run src/BotWorker/main.go
-```
+---
 
-## 📦 插件系统
+## English
 
-### 1. 插件开发
-- 支持Go、Python、C#等多种语言
-- 基于标准输入输出的JSON通信
-- 完善的插件生命周期管理
+BotMatrix is an **AI-Native** distributed cross-platform bot skill platform. It not only integrates bots from various platforms (such as WeChat, QQ, DingTalk, Discord, etc.) but also evolves traditional bots into intelligent Agents with perception, reasoning, and execution capabilities through deep integration with Large Language Models (LLMs).
 
-### 2. 插件市场
-- 官方插件仓库
-- 第三方插件支持
-- 插件签名验证
+### 🌟 Key Features
 
-### 3. 示例插件
-```bash
-# 回声插件
-go run src/plugins/echo/echo.go
+- **AI-Native Architecture**: Full support for DeepSeek, OpenAI, Ollama, and other major models, allowing users to configure private tokens.
+- **Skill Center**: Manage bot capabilities like an app store, supporting one-click subscription, hot-plugging, and permission isolation.
+- **Training Center**: Built-in corpus annotation, Prompt IDE, and automated fine-tuning workflows.
+- **Distributed Execution**: Separation of **BotNexus** (Hub) and **BotWorker** (Execution Node), supporting multi-machine deployment and large-scale concurrency.
+- **Multi-Platform Support**: Unified adapters for WeChat, QQ, DingTalk, Feishu, Discord, Telegram, Slack, and more.
+- **Multi-Language Plugin System**: Support for writing AI-capable plugins in Go, Python, C#, and other languages.
+- **Enterprise Control**: Includes RBAC permission management, audit logs, sensitive word filtering, and unified cross-platform identity mapping (NexusUID).
+- **Real-time Console (WebUI)**: Features a global pop-up chat window for real-time message monitoring, skill results, and unread notifications.
+- **Online Bot Simulation**: Supports simulated bot connections for testing skill logic and message routing without external Docker containers.
 
-# 签到插件
-go run src/plugins/sign_in/sign_in.go
-```
+### 🏗️ System Components
 
-## 🧪 测试
+1. **[BotNexus](docs/en-US/components/BotNexus.md)**: The "Brain" of the system, responsible for connection management, message routing, AI intent recognition, and skill distribution.
+2. **[BotWorker](docs/en-US/components/BotWorker.md)**: Execution nodes that host specific plugin environments and AI inference/task processing logic.
+3. **[AI Engine](docs/zh-CN/core/AI_INTEGRATION_PLAN.md)**: Unified model scheduling center, supporting multi-model load balancing, RAG knowledge bases, and long-term memory.
+4. **[Overmind](docs/en-US/components/Overmind.md)**: Monitoring and management backend, providing visual skill training, configuration management, and statistical analysis.
+4. **[SystemWorker](docs/en-US/components/SystemWorker.md)**: Dedicated to system-level maintenance tasks and high-priority jobs.
 
-### 1. 单元测试
-```bash
-go test ./...
-python -m pytest
-dotnet test
-```
+### 📚 Documentation Hub
 
-### 2. 集成测试
-```bash
-go run src/test/main.go
-```
+- **[English Documentation Hub](docs/en-US/README.md)**
+  - [System Architecture](docs/en-US/core/ARCHITECTURE.md)
+  - [API Reference](docs/en-US/core/API_REFERENCE.md)
+  - [Deployment Guide](docs/en-US/core/DEPLOY.md)
+  - [AI Assistant Guide](docs/en-US/development/AI_GUIDE.md)
+  - [Plugin Development](docs/en-US/plugins/PLUGIN_DEVELOPMENT.md)
+  - [I18N Development Guide](docs/en-US/development/I18N_GUIDE.md)
 
-### 3. 性能测试
-```bash
-go run src/benchmark/main.go
-```
+### 🚀 Quick Start
 
-## 📦 部署
-
-### 1. Docker部署
-```bash
-docker-compose up -d
-```
-
-### 2. Kubernetes部署
-```bash
-kubectl apply -f kubernetes/
-```
-
-### 3. 裸机部署
-```bash
-# 编译
-make build
-
-# 部署
-sudo make install
-```
-
-## 📚 文档
-
-### 官方文档
-- [插件开发文档](PLUGIN_DEVELOPMENT.md)
-- [API文档](API.md)
-- [部署指南](DEPLOYMENT.md)
-
-### 示例代码
-- [插件示例](src/plugins/)
-- [API示例](examples/)
-- [配置示例](config/)
-
-## 🤝 贡献
-
-### 贡献指南
-- [贡献指南](CONTRIBUTING.md)
-- [代码规范](CODE_OF_CONDUCT.md)
-- [开发流程](DEVELOPMENT.md)
-
-### 社区
-- [GitHub Issues](https://github.com/BotMatrix/BotMatrix/issues)
-- [Discord](https://discord.gg/botmatrix)
-- [Twitter](https://twitter.com/botmatrix)
-
-## 📄 许可证
-
-### MIT License
-```
-Copyright (c) 2024 BotMatrix Team
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## 📞 联系方式
-
-### 团队
-- **GitHub**: [@BotMatrix](https://github.com/BotMatrix)
+Please refer to the **[Deployment Guide](docs/en-US/core/DEPLOY.md)** for environment configuration and system startup.
 
 ---
 

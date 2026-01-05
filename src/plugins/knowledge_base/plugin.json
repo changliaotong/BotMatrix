@@ -1,8 +1,0 @@
-{
-  "name": "knowledge_base",
-  "description": "knowledge_base plugin",
-  "version": "1.0.0",
-  "entry_point": "knowledge_base.exe",
-  "timeout_ms": 5000,
-  "max_restarts": 3
-}

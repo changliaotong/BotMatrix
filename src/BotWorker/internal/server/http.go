@@ -1,9 +1,9 @@
 package server
 
 import (
+	"BotMatrix/common/log"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"botworker/internal/config"
@@ -80,7 +80,7 @@ func (s *HTTPServer) handleEvent(w http.ResponseWriter, r *http.Request) {
 	// 返回成功响应
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status": "ok",
 	})
 }
@@ -191,7 +191,7 @@ func (s *HTTPServer) Stop() {
 func (s *HTTPServer) SendMessage(params *onebot.SendMessageParams) (*onebot.Response, error) {
 	return &onebot.Response{
 		Status: "ok",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"message_id": 123456,
 		},
 	}, nil
@@ -200,7 +200,7 @@ func (s *HTTPServer) SendMessage(params *onebot.SendMessageParams) (*onebot.Resp
 func (s *HTTPServer) DeleteMessage(params *onebot.DeleteMessageParams) (*onebot.Response, error) {
 	return &onebot.Response{
 		Status: "ok",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"message_id": params.MessageID,
 		},
 	}, nil

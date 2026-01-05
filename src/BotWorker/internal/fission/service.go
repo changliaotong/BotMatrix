@@ -53,14 +53,14 @@ func (s *Service) ProcessBind(inviterID, inviteeID int64, platform, code, ip, de
 	// 6. 发放基础奖励 (邀请者)
 	if config.InviteRewardPoints > 0 {
 		reason := fmt.Sprintf("成功邀请新用户: %d", inviteeID)
-		_ = db.AddPoints(s.db, inviterID, config.InviteRewardPoints, reason, "fission_invite")
+		_ = db.AddPoints(s.db, 0, inviterID, 0, int64(config.InviteRewardPoints), reason, "fission_invite")
 		_ = db.CreateFissionRewardLog(s.db, inviterID, "points", config.InviteRewardPoints, reason)
 	}
 
 	// 7. 发放基础奖励 (被邀请者)
 	if config.NewUserRewardPoints > 0 {
 		reason := fmt.Sprintf("填写邀请码奖励: %s", code)
-		_ = db.AddPoints(s.db, inviteeID, config.NewUserRewardPoints, reason, "fission_bind")
+		_ = db.AddPoints(s.db, 0, inviteeID, 0, int64(config.NewUserRewardPoints), reason, "fission_bind")
 		_ = db.CreateFissionRewardLog(s.db, inviteeID, "points", config.NewUserRewardPoints, reason)
 	}
 
@@ -76,13 +76,13 @@ func (s *Service) TriggerTask(userID int64, taskType string) {
 }
 
 // GetUserStats 获取用户裂变数据
-func (s *Service) GetUserStats(userID int64) (map[string]interface{}, error) {
+func (s *Service) GetUserStats(userID int64) (map[string]any, error) {
 	record, err := db.GetUserFissionRecord(s.db, userID)
 	if err != nil {
 		return nil, err
 	}
 	
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"invite_count": record.InviteCount,
 		"points":       record.Points,
 		"invite_code":  record.InviteCode,
@@ -92,6 +92,6 @@ func (s *Service) GetUserStats(userID int64) (map[string]interface{}, error) {
 }
 
 // GetLeaderboard 获取排行榜
-func (s *Service) GetLeaderboard(limit int) ([]map[string]interface{}, error) {
+func (s *Service) GetLeaderboard(limit int) ([]map[string]any, error) {
 	return db.GetFissionRank(s.db, limit)
 }

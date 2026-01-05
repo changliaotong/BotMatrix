@@ -1,13 +1,14 @@
 package redis
 
 import (
+	"BotMatrix/common/types"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	"botworker/internal/config"
 )
@@ -49,7 +50,7 @@ func NewClient(cfg *config.RedisConfig) (*Client, error) {
 }
 
 // GetSessionContext 获取会话上下文
-func (c *Client) GetSessionContext(platform, userID string) (map[string]interface{}, error) {
+func (c *Client) GetSessionContext(platform, userID string) (*types.SessionContext, error) {
 	ctx := context.Background()
 	key := fmt.Sprintf(REDIS_KEY_SESSION_CONTEXT, platform, userID)
 
@@ -58,15 +59,15 @@ func (c *Client) GetSessionContext(platform, userID string) (map[string]interfac
 		return nil, err
 	}
 
-	var contextData map[string]interface{}
+	var contextData types.SessionContext
 	if err := json.Unmarshal([]byte(val), &contextData); err != nil {
 		return nil, err
 	}
-	return contextData, nil
+	return &contextData, nil
 }
 
 // SetSessionState 设置会话状态
-func (c *Client) SetSessionState(platform, userID string, state map[string]interface{}, ttl time.Duration) error {
+func (c *Client) SetSessionState(platform, userID string, state types.SessionState, ttl time.Duration) error {
 	ctx := context.Background()
 	key := fmt.Sprintf(REDIS_KEY_SESSION_STATE, platform, userID)
 
@@ -88,7 +89,7 @@ func (c *Client) SetSessionState(platform, userID string, state map[string]inter
 }
 
 // GetSessionState 获取会话状态
-func (c *Client) GetSessionState(platform, userID string) (map[string]interface{}, error) {
+func (c *Client) GetSessionState(platform, userID string) (*types.SessionState, error) {
 	ctx := context.Background()
 	key := fmt.Sprintf(REDIS_KEY_SESSION_STATE, platform, userID)
 
@@ -97,9 +98,16 @@ func (c *Client) GetSessionState(platform, userID string) (map[string]interface{
 		return nil, err
 	}
 
-	var state map[string]interface{}
+	var state types.SessionState
 	if err := json.Unmarshal([]byte(val), &state); err != nil {
 		return nil, err
 	}
-	return state, nil
+	return &state, nil
+}
+
+// ClearSessionState 清除会话状态
+func (c *Client) ClearSessionState(platform, userID string) error {
+	ctx := context.Background()
+	key := fmt.Sprintf(REDIS_KEY_SESSION_STATE, platform, userID)
+	return c.Del(ctx, key).Err()
 }

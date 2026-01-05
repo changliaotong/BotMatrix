@@ -14,6 +14,7 @@
   "invalid_request_format": "Invalid request format",
   "login_attempt": "[INFO] Login attempt - Username: %s, Client IP: %s",
   "invalid_username_password": "Invalid username or password",
+  "user_not_active": "User account is not active",
   "token_generation_failed": "Token generation failed",
   "login_success": "[INFO] Login successful - User: %s, Role: %s",
   "not_logged_in": "Not logged in",

@@ -22,23 +22,39 @@ WeWorkBot fully supports the **Burn After Reading** feature.
 
 ## 🛠 Configuration
 
-Create a `config.json` file in the root directory:
+WeComBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:8083/config-ui` (default port is 8083).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
-    "nexus_addr": "ws://bot-manager:3005",
+    "nexus_addr": "ws://bot-nexus:3005",
+    "log_port": 8083,
     "corp_id": "YOUR_CORP_ID",
-    "agent_id": 1000001,
-    "secret": "YOUR_APP_SECRET"
+    "agent_id": "1000001",
+    "secret": "YOUR_APP_SECRET",
+    "token": "YOUR_TOKEN",
+    "encoding_aes_key": "YOUR_AES_KEY",
+    "listen_port": 8084
 }
 ```
 
 | Field | Description |
 | :--- | :--- |
 | `nexus_addr` | Address of the BotNexus WebSocket server. |
+| `log_port` | Port for the Web UI and Log viewer. |
 | `corp_id` | Your Enterprise CorpID. |
 | `agent_id` | The AgentID of your Internal App. |
 | `secret` | The Secret of your Internal App. |
+| `token` | Token for callback verification. |
+| `encoding_aes_key` | EncodingAESKey for callback encryption. |
+| `listen_port` | Local port to listen for WeCom callbacks. |
 
 ## 🚀 Deployment
 

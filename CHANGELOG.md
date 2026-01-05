@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.8.0 (2025-12-31)
+*   **🗄️ Database Standardization | 数据库标准化**:
+    - **Uniform Naming**: Standardized all database table and column names to `snake_case` across the entire project for PostgreSQL compatibility and consistency.
+    - **GORM Model Alignment**: Updated all GORM models with explicit `column` tags and standardized timestamp fields (`created_at`, `updated_at`, `deleted_at`).
+    - **Enhanced Member Data**: Added `role` field to group member models and cache to accurately track permissions (owner/admin/member).
+*   **🛠️ Codebase Synchronization | 代码同步**:
+    - **BotNexus Handlers**: Updated message handlers to extract and persist group member roles from platform events during message processing.
+    - **BotWorker DB Layer**: Fixed raw SQL queries in `db.go` and removed non-standard quoted identifiers, ensuring seamless integration with standardized schemas.
+    - **Facade Aliases**: Synchronized GORM model aliases in `Common/facade.go` to provide a unified entry point for database models across packages.
+*   **📚 Documentation | 文档更新**:
+    - **Database Schema**: Created a comprehensive `database_schema.md` documenting all tables, columns, and their roles within the system.
+
+## v1.7.1 (2025-12-28)
+*   **🖼️ Avatar Standardization | 头像标准化**:
+    - **Real Avatar Integration**: Fully integrated official QQ group and user avatars, utilizing a backend proxy to bypass CORS and Referer restrictions.
+    - **Smart Platform Logo Fallback**: Automatically displays platform logos for non-QQ protocols when the user ID exceeds 980000000000.
+    - **Global Consistency**: Standardized avatar display across all modules, including Bot List, Contacts, Group Members, Message Logs, and Identity Mapping.
+    - **Backend Proxy Support**: Introduced a new `/api/proxy/avatar` endpoint to ensure reliable loading of external avatar images within the WebUI.
+
+## v1.7.0 (2025-12-27)
+*   **🧠 AI Task Orchestrator | AI 任务调度中心**:
+    - **Natural Language Parsing**: Users can now describe automation tasks in plain Chinese/English (e.g., "Mute group every night at 11 PM").
+    - **Structured Task Generation**: AI automatically generates cron-based tasks with correct actions and parameters.
+    - **Draft & Confirmation Flow**: Introduced a multi-step workflow where AI proposes a task and the user confirms before deployment.
+*   **🛡️ Advanced Routing & Security | 高级路由与安全**:
+    - **Strategy Management**: Added a new "Strategies" module for defining complex routing policies and reusable logic blocks.
+    - **Shadow Rules**: Implemented non-intrusive message monitoring and redirection rules for auditing and testing.
+*   **👤 Identity Mapping System | 身份映射系统**:
+    - **Cross-Platform Identity**: Users from different platforms (QQ, WeChat, Discord) can now be mapped to a single "System Identity".
+    - **Centralized Permission Management**: Permissions and stats are now tracked against the unified identity rather than fragmented platform IDs.
+*   **🛠️ WebUI Modernization | 界面现代化**:
+    - **Vue 3 & Pinia Architecture**: Refactored the core dashboard to use Vue 3 Composition API and Pinia for ultra-responsive state management.
+    - **System Capabilities Discovery**: Frontend now dynamically discovers backend actions, interceptors, and skills via a new capabilities API.
+*   **📊 Real-time System Monitoring | 实时系统监控**:
+    - **Enhanced Docker Integration**: Added live CPU/Memory usage tracking for bot containers directly in the dashboard.
+    - **Nexus Status Dashboard**: Real-time visualization of global connection stats, including total bots, workers, and system uptime.
+
 ## v1.6.0 (2025-12-25)
 *   **🌌 3D Visualization Overhaul**:
     *   **Enhanced Labels**: Increased node label font size for better visibility at a distance.

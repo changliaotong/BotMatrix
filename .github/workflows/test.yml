@@ -1,0 +1,53 @@
+name: Go Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # 如果你使用自托管运行器，将上面改为: runs-on: self-hosted
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: botmatrix_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        cache: true # 开启缓存以加快速度
+
+    - name: Install dependencies
+      run: |
+        go env -w GOPROXY=https://goproxy.cn,direct
+        go mod download
+
+    - name: Run Unit Tests
+      run: |
+        # 暂时禁用 GOWORK 以避免模块冲突，直到工作区完全配置好
+        export GOWORK=off
+        go test -v ./src/Common/...
+
+    - name: Run BotWorker Integration Tests
+      env:
+        DB_URL: postgres://postgres:password@localhost:5432/botmatrix_test?sslmode=disable
+      run: |
+        export GOWORK=off
+        go test -v ./src/BotWorker/integration_test.go

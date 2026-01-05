@@ -58,6 +58,16 @@ venv/
 .venv/
 node_modules/
 
-# C# Artifacts
+# C# Artifacts (Global)
 obj/
 bin/
+.runtime/
+
+# C# Projects and SDK (Public)
+!src/plugins/sdk/csharp/
+!*.csproj
+!*.sln
+
+# Private C# Plugins (Add your private plugin folders here)
+src/plugins/SuperGroupManager/
+# src/plugins/YourOtherPrivatePlugin/

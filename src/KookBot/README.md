@@ -15,14 +15,29 @@ A **Go-based** Kook (formerly Kaiheila) Robot implementation for [BotMatrix](../
 
 ## 🛠 Configuration
 
-Create `config.json`:
+KookBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:8088/config-ui` (default port is 8088).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
-    "nexus_addr": "ws://bot-manager:3005",
-    "token": "YOUR_BOT_TOKEN"
+    "nexus_addr": "ws://bot-nexus:3005",
+    "token": "YOUR_BOT_TOKEN",
+    "log_port": 8088
 }
 ```
+
+| Field | Description |
+| :--- | :--- |
+| `nexus_addr` | Address of the BotNexus WebSocket server. |
+| `token` | Your Kook Bot Token. |
+| `log_port` | Port for the Web UI and Log viewer. |
 
 ## 🚀 Deployment
 

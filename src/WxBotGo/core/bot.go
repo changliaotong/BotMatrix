@@ -297,7 +297,7 @@ func (b *WxBot) connectToNexus() {
 		}
 
 		// Send Identify Packet
-		identify := map[string]interface{}{
+		identify := map[string]any{
 			"type":            "meta_event",
 			"meta_event_type": "lifecycle",
 			"sub_type":        "connect",
@@ -318,11 +318,11 @@ func (b *WxBot) connectToNexus() {
 		}
 
 		// Parse configuration
-		var config map[string]interface{}
+		var config map[string]any
 		if err := json.Unmarshal(configMsg, &config); err == nil {
 			b.Log("[WebSocket] Received configuration from BotNexus")
 			// Apply configuration
-			if features, ok := config["features"].(map[string]interface{}); ok {
+			if features, ok := config["features"].(map[string]any); ok {
 				if reportSelfMsg, ok := features["report_self_msg"].(bool); ok {
 					b.ReportSelfMsg = reportSelfMsg
 				}
@@ -346,12 +346,12 @@ func (b *WxBot) connectToNexus() {
 						b.wsMutex.Unlock()
 						return
 					}
-					heartbeat := map[string]interface{}{
+					heartbeat := map[string]any{
 						"type":            "meta_event",
 						"meta_event_type": "heartbeat",
 						"time":            time.Now().Unix(),
 						"self_id":         b.SelfID,
-						"status": map[string]interface{}{
+						"status": map[string]any{
 							"online": true,
 							"good":   true,
 						},
@@ -371,11 +371,11 @@ func (b *WxBot) connectToNexus() {
 			}
 
 			// Check if it's a configuration update
-			var configUpdate map[string]interface{}
+			var configUpdate map[string]any
 			if err := json.Unmarshal(message, &configUpdate); err == nil {
 				if _, ok := configUpdate["features"]; ok {
 					// Apply configuration update
-					if features, ok := configUpdate["features"].(map[string]interface{}); ok {
+					if features, ok := configUpdate["features"].(map[string]any); ok {
 						if reportSelfMsg, ok := features["report_self_msg"].(bool); ok {
 							b.ReportSelfMsg = reportSelfMsg
 							b.Log("[Configuration] Updated report_self_msg to %v", reportSelfMsg)
@@ -560,7 +560,7 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 	resp := OneBotResponse{
 		Status: "ok",
 		Echo:   action.Echo,
-		Data:   map[string]interface{}{},
+		Data:   map[string]any{},
 	}
 
 	// Parse action parameters
@@ -612,13 +612,13 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 		_, err = b.SendMessage(msgParams)
 	case "get_login_info":
 		user, _ := b.bot.GetCurrentUser()
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"user_id":  user.UserName,
 			"nickname": user.NickName,
 		}
 	case "get_self_info":
 		user, _ := b.bot.GetCurrentUser()
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"user_id":     user.UserName,
 			"nickname":    user.NickName,
 			"user_remark": user.RemarkName,
@@ -631,16 +631,16 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			resp.Message = err.Error()
 			break
 		}
-		var friendList []map[string]interface{}
+		var friendList []map[string]any
 		for _, f := range friends {
-			friend := map[string]interface{}{
+			friend := map[string]any{
 				"user_id":  f.UserName,
 				"nickname": f.NickName,
 				"remark":   f.RemarkName,
 			}
 			friendList = append(friendList, friend)
 		}
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"data": friendList,
 		}
 	case "get_group_list":
@@ -651,15 +651,15 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			resp.Message = err.Error()
 			break
 		}
-		var groupList []map[string]interface{}
+		var groupList []map[string]any
 		for _, g := range groups {
-			group := map[string]interface{}{
+			group := map[string]any{
 				"group_id":   g.UserName,
 				"group_name": g.NickName,
 			}
 			groupList = append(groupList, group)
 		}
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"data": groupList,
 		}
 	case "get_group_member_list":
@@ -690,16 +690,16 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			resp.Message = err.Error()
 			break
 		}
-		var memberList []map[string]interface{}
+		var memberList []map[string]any
 		for _, m := range members {
-			member := map[string]interface{}{
+			member := map[string]any{
 				"user_id":  m.UserName,
 				"nickname": m.NickName,
 				"card":     m.DisplayName,
 			}
 			memberList = append(memberList, member)
 		}
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"data": memberList,
 		}
 	case "set_group_kick":
@@ -806,18 +806,18 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			resp.Message = err.Error()
 			break
 		}
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"result": true,
 		}
 	case "get_version_info":
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"app_name":         "WxBotGo",
 			"app_version":      "1.0.2",
 			"protocol_version": "11",
 			"onebot_version":   "11",
 		}
 	case "get_status":
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"online": true,
 			"good":   true,
 		}
@@ -871,7 +871,7 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			break
 		}
 		members, _ := group.Members()
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"group_id":     group.UserName,
 			"group_name":   group.NickName,
 			"member_count": len(members),
@@ -917,7 +917,7 @@ func (b *WxBot) HandleAction(action OneBotAction) {
 			resp.Message = "Member not found: " + params.UserID
 			break
 		}
-		resp.Data = map[string]interface{}{
+		resp.Data = map[string]any{
 			"user_id":  member.UserName,
 			"nickname": member.NickName,
 			"card":     member.DisplayName,
@@ -1036,8 +1036,8 @@ func (b *WxBot) SendMessage(params *SendMessageParams) (*OneBotResponse, error) 
 
 	return &OneBotResponse{
 		Status: "ok",
-		Data: map[string]interface{}{
-			"message_id": msgID, // 返回真实的消息ID
+		Data: map[string]any{
+			"message_id": "1", // WeChat doesn't return message ID, so we use a placeholder
 		},
 	}, nil
 }

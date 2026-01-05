@@ -23,12 +23,21 @@ TelegramBot supports message recall via the `delete_msg` action.
 
 ## 🛠 Configuration
 
-Create a `config.json` file in the root directory:
+TelegramBot supports two ways to configure:
+
+1.  **Web UI (Recommended)**:
+    *   Start the bot.
+    *   Access `http://localhost:8085/config-ui` (default port is 8085).
+    *   Fill in the fields and click "Save & Restart".
+
+2.  **Manual JSON**:
+    Create a `config.json` file in the root directory:
 
 ```json
 {
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "nexus_addr": "ws://bot-manager:3005"
+    "nexus_addr": "ws://bot-nexus:3005",
+    "log_port": 8085
 }
 ```
 
@@ -38,6 +47,12 @@ Create a `config.json` file in the root directory:
 2.  Send `/newbot`.
 3.  Follow instructions to get your **Bot Token**.
 4.  Paste it into `config.json`.
+
+| Field | Description |
+| :--- | :--- |
+| `bot_token` | Your Telegram Bot Token. |
+| `nexus_addr` | Address of the BotNexus WebSocket server. |
+| `log_port` | Port for the Web UI and Log viewer. |
 
 ## 🚀 Deployment
 

@@ -1,0 +1,1 @@
+ D:\\projects\\botmatrix\\Overmind\\lib\\l10n\\app_localizations_en.dart D:\\projects\\botmatrix\\Overmind\\lib\\l10n\\app_localizations_zh.dart D:\\projects\\botmatrix\\Overmind\\lib\\l10n\\app_localizations.dart:  D:\\projects\\botmatrix\\Overmind\\l10n.yaml D:\\projects\\botmatrix\\Overmind\\lib\\l10n\\app_en.arb D:\\projects\\botmatrix\\Overmind\\lib\\l10n\\app_zh.arb

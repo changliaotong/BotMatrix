@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"BotMatrix/common/types"
 	"log"
 	"math/rand"
 	"strings"
@@ -14,8 +15,9 @@ type InterceptorContext struct {
 	SelfID   string
 	UserID   string
 	GroupID  string
-	Event    map[string]interface{}
+	Message  *types.InternalMessage
 	DB       *gorm.DB // 允许拦截器访问数据库
+	AI       *AIParser
 }
 
 // Interceptor 拦截器接口
@@ -29,12 +31,14 @@ type Interceptor interface {
 // InterceptorManager 拦截器管理器
 type InterceptorManager struct {
 	db           *gorm.DB
+	ai           *AIParser
 	interceptors []Interceptor
 }
 
-func NewInterceptorManager(db *gorm.DB) *InterceptorManager {
+func NewInterceptorManager(db *gorm.DB, ai *AIParser) *InterceptorManager {
 	im := &InterceptorManager{
 		db:           db,
+		ai:           ai,
 		interceptors: make([]Interceptor, 0),
 	}
 	// 注册默认拦截器
@@ -49,8 +53,35 @@ func (im *InterceptorManager) Add(i Interceptor) {
 	im.interceptors = append(im.interceptors, i)
 }
 
+func (im *InterceptorManager) GetInterceptors() []string {
+	names := make([]string, len(im.interceptors))
+	for i, interceptor := range im.interceptors {
+		names[i] = interceptor.Name()
+	}
+	return names
+}
+
+func (im *InterceptorManager) GetStrategies() []Strategy {
+	var strategies []Strategy
+	im.db.Find(&strategies)
+	return strategies
+}
+
+func (im *InterceptorManager) GetStrategy(name string) (*Strategy, error) {
+	var strategy Strategy
+	if err := im.db.Where("name = ?", name).First(&strategy).Error; err != nil {
+		return nil, err
+	}
+	return &strategy, nil
+}
+
+func (im *InterceptorManager) DeleteStrategy(name string) {
+	im.db.Where("name = ?", name).Delete(&Strategy{})
+}
+
 func (im *InterceptorManager) ProcessBeforeDispatch(ctx *InterceptorContext) bool {
 	ctx.DB = im.db
+	ctx.AI = im.ai
 	for _, i := range im.interceptors {
 		continueFlow, err := i.BeforeDispatch(ctx)
 		if err != nil {
@@ -103,7 +134,10 @@ func (i *IdentityInterceptor) BeforeDispatch(ctx *InterceptorContext) (bool, err
 	err := ctx.DB.Where("platform = ? AND platform_uid = ?", ctx.Platform, ctx.UserID).First(&identity).Error
 	if err == nil {
 		// 注入统一身份 ID
-		ctx.Event["nexus_uid"] = identity.NexusUID
+		if ctx.Message.Extras == nil {
+			ctx.Message.Extras = make(map[string]any)
+		}
+		ctx.Message.Extras["nexus_uid"] = identity.NexusUID
 		log.Printf("[Interceptor] Identity mapped: %s:%s -> %s", ctx.Platform, ctx.UserID, identity.NexusUID)
 	} else if err == gorm.ErrRecordNotFound {
 		// 自动创建新身份 (可选)
@@ -120,15 +154,30 @@ type SemanticRoutingInterceptor struct{}
 func (s *SemanticRoutingInterceptor) Name() string { return "SemanticRouting" }
 func (s *SemanticRoutingInterceptor) BeforeDispatch(ctx *InterceptorContext) (bool, error) {
 	// 仅对文本消息进行语义识别
-	msg, ok := ctx.Event["message"].(string)
-	if !ok || msg == "" {
+	msg := ctx.Message.RawMessage
+	if msg == "" {
 		return true, nil
 	}
 
-	// 这里应该调用 AI 接口进行意图识别
-	// 模拟识别：如果是问题，打上 question 标签
+	// 1. 优先尝试正则匹配 (Fast-Track)
+	if ctx.AI != nil {
+		if skill, matched := ctx.AI.MatchSkillByRegex(msg); matched {
+			if ctx.Message.Extras == nil {
+				ctx.Message.Extras = make(map[string]any)
+			}
+			// 命中正则，设置意图提示，后续路由将优先使用此提示
+			ctx.Message.Extras["intent_hint"] = "skill:" + skill.Name
+			log.Printf("[Interceptor] Regex match: skill=%s", skill.Name)
+			return true, nil // 继续流转，由路由阶段处理
+		}
+	}
+
+	// 2. 调用 AI 接口进行意图识别 (模拟)
 	if strings.Contains(msg, "?") || strings.Contains(msg, "？") || strings.HasPrefix(msg, "为什么") {
-		ctx.Event["intent_hint"] = "knowledge_base"
+		if ctx.Message.Extras == nil {
+			ctx.Message.Extras = make(map[string]any)
+		}
+		ctx.Message.Extras["intent_hint"] = "knowledge_base"
 		log.Printf("[Interceptor] Intent detected: knowledge_base")
 	}
 
@@ -150,12 +199,14 @@ func (s *ShadowInterceptor) BeforeDispatch(ctx *InterceptorContext) (bool, error
 		if strings.Contains(ctx.SelfID, rule.MatchPattern) || rule.MatchPattern == "*" {
 			// 流量随机采样
 			if rand.Intn(100) < rule.TrafficPercent {
-				ctx.Event["shadow_worker_id"] = rule.TargetWorkerID
+				if ctx.Message.Extras == nil {
+					ctx.Message.Extras = make(map[string]any)
+				}
+				ctx.Message.Extras["shadow_worker_id"] = rule.TargetWorkerID
 				log.Printf("[Interceptor] Shadow mode active: forwarding shadow copy to %s", rule.TargetWorkerID)
 			}
 		}
 	}
-
 	return true, nil
 }
 

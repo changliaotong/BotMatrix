@@ -1,7 +1,7 @@
 package tasks
 
 import (
-	"log"
+	log "BotMatrix/common/log"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -30,7 +30,7 @@ func NewTaskManager(db *gorm.DB, rdb *redis.Client, botManager BotManager) *Task
 	scheduler := NewScheduler(db, dispatcher)
 	tagging := NewTaggingManager(db)
 	ai := NewAIParser()
-	interceptors := NewInterceptorManager(db)
+	interceptors := NewInterceptorManager(db, ai)
 
 	return &TaskManager{
 		DB:           db,
@@ -72,7 +72,7 @@ func (tm *TaskManager) CreateTask(task *Task, isEnterprise bool) error {
 }
 
 // CheckAndTriggerConditions 检查并触发条件任务
-func (tm *TaskManager) CheckAndTriggerConditions(eventType string, context map[string]interface{}) {
+func (tm *TaskManager) CheckAndTriggerConditions(eventType string, context map[string]any) {
 	var tasks []Task
 	// 查找对应类型的条件任务
 	err := tm.DB.Where("status = ? AND type = ?", TaskPending, "condition").Find(&tasks).Error
@@ -88,7 +88,7 @@ func (tm *TaskManager) CheckAndTriggerConditions(eventType string, context map[s
 	}
 }
 
-func (tm *TaskManager) matchCondition(task Task, eventType string, context map[string]interface{}) bool {
+func (tm *TaskManager) matchCondition(task Task, eventType string, context map[string]any) bool {
 	// 简化实现：检查 TriggerConfig 中的条件
 	// 示例: {"event": "message", "keyword": "help"}
 	return false // 实际应实现更复杂的逻辑

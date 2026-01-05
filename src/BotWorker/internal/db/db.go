@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"botworker/internal/config"
@@ -36,38 +37,25 @@ func NewDBConnection(cfg *config.DatabaseConfig) (*sql.DB, error) {
 	return db, nil
 }
 
+const (
+	TableUser        = "users"
+	TableGroup       = "groups"
+	TableGroupMember = "group_members"
+	TableQuestion    = "questions"
+	TableAnswer      = "answers"
+	TableBlackList   = "black_list"
+	TableWhiteList   = "white_list"
+	TableGreyList    = "grey_list"
+	TableVIP         = "vips"
+	TableCredit      = "credits"
+	TableSavings     = "user_savings_metadata"
+	TableFriend      = "friends"
+	TableConsumption = "user_consumptions"
+	TableAgent       = "agents"
+)
+
 // InitDatabase 初始化数据库，创建必要的表
 func InitDatabase(db *sql.DB) error {
-	// 创建用户表（将积分字段直接存储在用户表中）
-	userTableSQL := `
-	CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		user_id BIGINT NOT NULL UNIQUE,
-		target_user_id BIGINT,
-		nickname VARCHAR(255),
-		avatar VARCHAR(255),
-		gender VARCHAR(10),
-		points INTEGER NOT NULL DEFAULT 0,
-		savings_points INTEGER NOT NULL DEFAULT 0,
-		savings_last_interest_at TIMESTAMP,
-		frozen_points INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);
-	`
-
-	// 创建群组表
-	groupTableSQL := `
-	CREATE TABLE IF NOT EXISTS groups (
-		id SERIAL PRIMARY KEY,
-		group_id BIGINT NOT NULL UNIQUE,
-		target_group_id BIGINT,
-		name VARCHAR(255),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);
-	`
-
 	// 创建消息记录表
 	messageTableSQL := `
 	CREATE TABLE IF NOT EXISTS messages (
@@ -119,27 +107,6 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
-	sensitiveWordsTableSQL := `
-	CREATE TABLE IF NOT EXISTS sensitive_words (
-		id SERIAL PRIMARY KEY,
-		word VARCHAR(255) NOT NULL UNIQUE,
-		level INTEGER NOT NULL DEFAULT 1,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);
-	`
-
-	// 创建禁言记录表
-	bannedUsersTableSQL := `
-	CREATE TABLE IF NOT EXISTS banned_users (
-		id SERIAL PRIMARY KEY,
-		group_id BIGINT NOT NULL,
-		user_id BIGINT NOT NULL,
-		ban_end_time TIMESTAMP NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(group_id, user_id)
-	);
-	`
-
 	// 创建审核日志表
 	auditLogsTableSQL := `
 	CREATE TABLE IF NOT EXISTS audit_logs (
@@ -163,16 +130,6 @@ func InitDatabase(db *sql.DB) error {
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(group_id, feature_id)
-	);
-	`
-
-	groupWhitelistTableSQL := `
-	CREATE TABLE IF NOT EXISTS group_whitelist (
-		id SERIAL PRIMARY KEY,
-		group_id BIGINT NOT NULL,
-		user_id BIGINT NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(group_id, user_id)
 	);
 	`
 
@@ -204,37 +161,6 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
-	questionsTableSQL := `
-	CREATE TABLE IF NOT EXISTS questions (
-		id SERIAL PRIMARY KEY,
-		group_id BIGINT NOT NULL,
-		question_raw TEXT NOT NULL,
-		question_normalized TEXT NOT NULL,
-		status VARCHAR(50) NOT NULL DEFAULT 'approved',
-		created_by BIGINT,
-		source_group_id BIGINT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		usage_count INTEGER NOT NULL DEFAULT 0,
-		UNIQUE (question_normalized)
-	);
-	`
-
-	answersTableSQL := `
-	CREATE TABLE IF NOT EXISTS answers (
-		id SERIAL PRIMARY KEY,
-		question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-		answer TEXT NOT NULL,
-		status VARCHAR(50) NOT NULL DEFAULT 'approved',
-		created_by BIGINT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		usage_count INTEGER NOT NULL DEFAULT 0,
-		short_interval_usage_count INTEGER NOT NULL DEFAULT 0,
-		last_used_at TIMESTAMP
-	);
-	`
-
 	groupAISettingsTableSQL := `
 	CREATE TABLE IF NOT EXISTS group_ai_settings (
 		id SERIAL PRIMARY KEY,
@@ -245,6 +171,59 @@ func InitDatabase(db *sql.DB) error {
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	`
+
+	// sz84 黑名单表
+	sz84BlackListTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		bot_uin BIGINT,
+		group_id BIGINT,
+		black_id BIGINT,
+		black_info TEXT,
+		insert_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (bot_uin, group_id, black_id)
+	);
+	`, TableBlackList)
+
+	// sz84 警告表
+	sz84WarnTableSQL := `
+	CREATE TABLE IF NOT EXISTS sz84_warn (
+		id SERIAL PRIMARY KEY,
+		bot_uin BIGINT NOT NULL,
+		group_id BIGINT NOT NULL,
+		user_id BIGINT NOT NULL,
+		warn_info TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+
+	// sz84 灰名单表
+	sz84GreyListTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		bot_uin BIGINT,
+		group_id BIGINT,
+		black_id BIGINT,
+		black_info TEXT,
+		insert_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (bot_uin, group_id, black_id)
+	);
+	`, TableGreyList)
+
+	// sz84 VIP 表
+	sz84VIPTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		group_id BIGINT PRIMARY KEY,
+		group_name TEXT,
+		first_pay DECIMAL(18, 2),
+		start_date TIMESTAMP,
+		end_date TIMESTAMP,
+		vip_info TEXT,
+		user_id BIGINT,
+		income_day DECIMAL(18, 2),
+		is_year_vip BOOLEAN,
+		insert_by INTEGER,
+		insert_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`, TableVIP)
 
 	// 裂变系统表
 	fissionConfigsTableSQL := `
@@ -320,9 +299,35 @@ func InitDatabase(db *sql.DB) error {
 	);
 	`
 
-	if _, err := db.Exec(userTableSQL); err != nil {
-		return fmt.Errorf("创建用户表失败: %w", err)
-	}
+	userSavingsMetadataTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		user_id BIGINT PRIMARY KEY,
+		last_interest_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`, TableSavings)
+
+	friendTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		bot_uin BIGINT,
+		user_id BIGINT,
+		credit BIGINT DEFAULT 0,
+		insert_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (bot_uin, user_id)
+	);
+	`, TableFriend)
+
+	userConsumptionTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		user_id BIGINT,
+		bot_uin BIGINT,
+		amount BIGINT DEFAULT 0,
+		consume_date DATE DEFAULT CURRENT_DATE,
+		insert_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, bot_uin, consume_date)
+	);
+	`, TableConsumption)
 
 	if _, err := db.Exec(fissionConfigsTableSQL); err != nil {
 		return fmt.Errorf("创建裂变配置表失败: %w", err)
@@ -344,44 +349,16 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("创建裂变奖励日志表失败: %w", err)
 	}
 
-	// 尝试更改列类型（如果已存在）
-	_, _ = db.Exec(`ALTER TABLE users ALTER COLUMN user_id TYPE BIGINT USING user_id::BIGINT`)
-	_, _ = db.Exec(`ALTER TABLE users ALTER COLUMN target_user_id TYPE BIGINT USING target_user_id::BIGINT`)
-
-	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS target_user_id BIGINT`); err != nil {
-		return fmt.Errorf("为用户表添加 TargetUserID 字段失败: %w", err)
+	if _, err := db.Exec(userSavingsMetadataTableSQL); err != nil {
+		return fmt.Errorf("创建用户储蓄元数据表失败: %w", err)
 	}
 
-	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS user_openid VARCHAR(255)`); err != nil {
-		return fmt.Errorf("为用户表添加 UserOpenID 字段失败: %w", err)
+	if _, err := db.Exec(friendTableSQL); err != nil {
+		return fmt.Errorf("创建好友积分表失败: %w", err)
 	}
 
-	if _, err := db.Exec(groupTableSQL); err != nil {
-		return fmt.Errorf("创建群组表失败: %w", err)
-	}
-
-	// 尝试更改列类型（如果已存在）
-	_, _ = db.Exec(`ALTER TABLE groups ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`)
-	_, _ = db.Exec(`ALTER TABLE groups ALTER COLUMN target_group_id TYPE BIGINT USING target_group_id::BIGINT`)
-
-	if _, err := db.Exec(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS target_group_id BIGINT`); err != nil {
-		return fmt.Errorf("为群组表添加 TargetGroupID 字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS group_openid VARCHAR(255)`); err != nil {
-		return fmt.Errorf("为群组表添加 GroupOpenID 字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS savings_points INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("为用户表添加存积分字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS savings_last_interest_at TIMESTAMP`); err != nil {
-		return fmt.Errorf("为用户表添加存积分利息时间字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS frozen_points INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("为用户表添加冻结积分字段失败: %w", err)
+	if _, err := db.Exec(userConsumptionTableSQL); err != nil {
+		return fmt.Errorf("创建用户消费记录表失败: %w", err)
 	}
 
 	if _, err := db.Exec(messageTableSQL); err != nil {
@@ -408,18 +385,6 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("为群规表添加语音配置字段失败: %w", err)
 	}
 
-	if _, err := db.Exec(sensitiveWordsTableSQL); err != nil {
-		return fmt.Errorf("创建敏感词表失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE sensitive_words ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1`); err != nil {
-		return fmt.Errorf("为敏感词表添加级别字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(bannedUsersTableSQL); err != nil {
-		return fmt.Errorf("创建禁言记录表失败: %w", err)
-	}
-
 	if _, err := db.Exec(auditLogsTableSQL); err != nil {
 		return fmt.Errorf("创建审核日志表失败: %w", err)
 	}
@@ -436,34 +401,55 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("创建群功能开关表失败: %w", err)
 	}
 
-	if _, err := db.Exec(groupWhitelistTableSQL); err != nil {
-		return fmt.Errorf("创建群白名单表失败: %w", err)
-	}
-
-	if _, err := db.Exec(questionsTableSQL); err != nil {
-		return fmt.Errorf("创建问题表失败: %w", err)
-	}
-
-	if _, err := db.Exec(answersTableSQL); err != nil {
-		return fmt.Errorf("创建答案表失败: %w", err)
-	}
-
 	if _, err := db.Exec(groupAISettingsTableSQL); err != nil {
 		return fmt.Errorf("创建群AI设置表失败: %w", err)
 	}
 
+	if _, err := db.Exec(sz84BlackListTableSQL); err != nil {
+		return fmt.Errorf("创建 sz84 黑名单表失败: %w", err)
+	}
+
+	if _, err := db.Exec(sz84WarnTableSQL); err != nil {
+		return fmt.Errorf("创建 sz84 警告表失败: %w", err)
+	}
+
+	if _, err := db.Exec(sz84GreyListTableSQL); err != nil {
+		return fmt.Errorf("创建 sz84 灰名单表失败: %w", err)
+	}
+
+	if _, err := db.Exec(sz84VIPTableSQL); err != nil {
+		return fmt.Errorf("创建 sz84 VIP 表失败: %w", err)
+	}
+
 	// 统一更改所有表中的 user_id 和 group_id 为 BIGINT
-	tables := []string{"messages", "sessions", "group_rules", "banned_users", "audit_logs", "group_features", "group_whitelist", "pets", "points_logs", "questions"}
+	tables := []string{"messages", "sessions", "group_rules", "audit_logs", "group_features", "pets", "points_logs"}
 	for _, table := range tables {
 		_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN user_id TYPE BIGINT USING user_id::BIGINT`, table))
 		_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`, table))
 	}
+
+	// 补充 User 表字段
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS is_ai BOOLEAN DEFAULT TRUE`, TableUser))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS agent_id BIGINT DEFAULT 0`, TableUser))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS tokens BIGINT DEFAULT 0`, TableUser))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS day_tokens BIGINT DEFAULT 0`, TableUser))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS system_prompt TEXT`, TableUser))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS last_sign_in TIMESTAMP`, TableUser))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS sign_in_days INTEGER DEFAULT 0`, TableUser))
+
+	// 补充 Group 表字段
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS is_ai BOOLEAN DEFAULT TRUE`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS is_owner_pay BOOLEAN DEFAULT FALSE`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS robot_owner BIGINT DEFAULT 0`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS context_count INTEGER DEFAULT 3`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS system_prompt TEXT`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS is_mult_ai BOOLEAN DEFAULT FALSE`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS is_voice_reply BOOLEAN DEFAULT FALSE`, TableGroup))
+	_, _ = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS voice_id TEXT`, TableGroup))
+
 	_, _ = db.Exec(`ALTER TABLE audit_logs ALTER COLUMN admin_id TYPE BIGINT USING admin_id::BIGINT`)
 	_, _ = db.Exec(`ALTER TABLE audit_logs ALTER COLUMN target_user_id TYPE BIGINT USING target_user_id::BIGINT`)
 	_, _ = db.Exec(`ALTER TABLE audit_logs ALTER COLUMN target_group_id TYPE BIGINT USING target_group_id::BIGINT`)
-	_, _ = db.Exec(`ALTER TABLE questions ALTER COLUMN created_by TYPE BIGINT USING created_by::BIGINT`)
-	_, _ = db.Exec(`ALTER TABLE questions ALTER COLUMN source_group_id TYPE BIGINT USING source_group_id::BIGINT`)
-	_, _ = db.Exec(`ALTER TABLE answers ALTER COLUMN created_by TYPE BIGINT USING created_by::BIGINT`)
 	_, _ = db.Exec(`ALTER TABLE group_ai_settings ALTER COLUMN group_id TYPE BIGINT USING group_id::BIGINT`)
 
 	// 兼容旧表结构，补充缺失的分类字段
@@ -471,33 +457,77 @@ func InitDatabase(db *sql.DB) error {
 		return fmt.Errorf("为积分记录表添加分类字段失败: %w", err)
 	}
 
-	if _, err := db.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("为问题表添加使用次数字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE answers ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("为答案表添加使用次数字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE answers ADD COLUMN IF NOT EXISTS short_interval_usage_count INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("为答案表添加短间隔使用次数字段失败: %w", err)
-	}
-
-	if _, err := db.Exec(`ALTER TABLE answers ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP`); err != nil {
-		return fmt.Errorf("为答案表添加最后使用时间字段失败: %w", err)
-	}
-
 	if _, err := db.Exec(`ALTER TABLE group_ai_settings ADD COLUMN IF NOT EXISTS last_answer_id INTEGER`); err != nil {
 		return fmt.Errorf("为群AI设置表添加最后答案ID字段失败: %w", err)
+	}
+
+	// sz84 进群确认表
+	sz84ConfirmTableSQL := `
+	CREATE TABLE IF NOT EXISTS sz84_member_confirm (
+		id SERIAL PRIMARY KEY,
+		group_id BIGINT NOT NULL,
+		user_id BIGINT NOT NULL,
+		code VARCHAR(20) NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(group_id, user_id)
+	);
+	`
+
+	// sz84 智能体表
+	sz84AgentTableSQL := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		id SERIAL PRIMARY KEY,
+		guid UUID DEFAULT gen_random_uuid(),
+		name TEXT NOT NULL,
+		prompt TEXT,
+		model TEXT,
+		temperature DOUBLE PRECISION DEFAULT 0.7,
+		max_tokens INTEGER DEFAULT 2000,
+		top_p DOUBLE PRECISION DEFAULT 1.0,
+		frequency_penalty DOUBLE PRECISION DEFAULT 0.0,
+		presence_penalty DOUBLE PRECISION DEFAULT 0.0,
+		stop TEXT,
+		private INTEGER DEFAULT 0,
+		owner_id BIGINT DEFAULT 0,
+		insert_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`, TableAgent)
+
+	if _, err := db.Exec(sz84ConfirmTableSQL); err != nil {
+		return fmt.Errorf("创建 sz84 进群确认表失败: %w", err)
+	}
+
+	if _, err := db.Exec(sz84AgentTableSQL); err != nil {
+		return fmt.Errorf("创建 sz84 智能体表失败: %w", err)
 	}
 
 	return nil
 }
 
+// Agent 定义智能体模型
+type Agent struct {
+	Id               int64     `json:"id"`
+	Guid             string    `json:"guid"`
+	Name             string    `json:"name"`
+	Prompt           string    `json:"prompt"`
+	Model            string    `json:"model"`
+	Temperature      float64   `json:"temperature"`
+	MaxTokens        int       `json:"max_tokens"`
+	TopP             float64   `json:"top_p"`
+	FrequencyPenalty float64   `json:"frequency_penalty"`
+	PresencePenalty  float64   `json:"presence_penalty"`
+	Stop             string    `json:"stop"`
+	Private          int       `json:"private"`
+	OwnerId          int64     `json:"owner_id"`
+	InsertDate       time.Time `json:"insert_date"`
+	UpdateDate       time.Time `json:"update_date"`
+}
+
 // GetMaxUserIDPlusOne 获取用户表中最大的 UserID + 1，如果为空则返回 980000000000
 func GetMaxUserIDPlusOne(db *sql.DB) (int64, error) {
 	var maxID sql.NullInt64
-	query := `SELECT MAX(user_id) FROM users`
+	query := fmt.Sprintf(`SELECT MAX(id) FROM %s`, TableUser)
 	err := db.QueryRow(query).Scan(&maxID)
 	if err != nil {
 		return 980000000000, nil
@@ -514,7 +544,7 @@ func GetMaxUserIDPlusOne(db *sql.DB) (int64, error) {
 // GetMaxGroupIDPlusOne 获取群组表中最大的 GroupID + 1，如果为空则返回 990000000000
 func GetMaxGroupIDPlusOne(db *sql.DB) (int64, error) {
 	var maxID sql.NullInt64
-	query := `SELECT MAX(group_id) FROM groups`
+	query := fmt.Sprintf(`SELECT MAX(oid) FROM %s`, TableGroup)
 	err := db.QueryRow(query).Scan(&maxID)
 	if err != nil {
 		return 990000000000, nil
@@ -531,7 +561,7 @@ func GetMaxGroupIDPlusOne(db *sql.DB) (int64, error) {
 // GetUserIDByTargetID 根据 TargetUserID 获取 UserID (int64)
 func GetUserIDByTargetID(db *sql.DB, targetID int64) (int64, error) {
 	var userID int64
-	query := `SELECT user_id FROM users WHERE target_user_id = $1`
+	query := fmt.Sprintf(`SELECT id FROM %s WHERE target_user_id = $1`, TableUser)
 	err := db.QueryRow(query, targetID).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -542,7 +572,7 @@ func GetUserIDByTargetID(db *sql.DB, targetID int64) (int64, error) {
 // GetGroupIDByTargetID 根据 TargetGroupID 获取 GroupID (int64)
 func GetGroupIDByTargetID(db *sql.DB, targetID int64) (int64, error) {
 	var groupID int64
-	query := `SELECT group_id FROM groups WHERE target_group_id = $1`
+	query := fmt.Sprintf(`SELECT oid FROM %s WHERE target_group = $1`, TableGroup)
 	err := db.QueryRow(query, targetID).Scan(&groupID)
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -553,7 +583,7 @@ func GetGroupIDByTargetID(db *sql.DB, targetID int64) (int64, error) {
 // GetUserIDByOpenID 根据 UserOpenID 获取 UserID (int64)
 func GetUserIDByOpenID(db *sql.DB, openID string) (int64, error) {
 	var userID int64
-	query := `SELECT user_id FROM users WHERE user_openid = $1`
+	query := fmt.Sprintf(`SELECT id FROM %s WHERE user_openid = $1`, TableUser)
 	err := db.QueryRow(query, openID).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -564,7 +594,7 @@ func GetUserIDByOpenID(db *sql.DB, openID string) (int64, error) {
 // GetGroupIDByOpenID 根据 GroupOpenID 获取 GroupID (int64)
 func GetGroupIDByOpenID(db *sql.DB, openID string) (int64, error) {
 	var groupID int64
-	query := `SELECT group_id FROM groups WHERE group_openid = $1`
+	query := fmt.Sprintf(`SELECT oid FROM %s WHERE group_openid = $1`, TableGroup)
 	err := db.QueryRow(query, openID).Scan(&groupID)
 	if err == sql.ErrNoRows {
 		return 0, nil
@@ -574,65 +604,248 @@ func GetGroupIDByOpenID(db *sql.DB, openID string) (int64, error) {
 
 // CreateUserWithTargetID 创建带有 TargetUserID 和 UserOpenID 的用户
 func CreateUserWithTargetID(db *sql.DB, userID int64, targetID int64, openID string, nickname, avatar string) error {
-	query := `
-	INSERT INTO users (user_id, target_user_id, user_openid, nickname, avatar, updated_at)
-	VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-	ON CONFLICT (user_id) DO UPDATE
-	SET target_user_id = $2, user_openid = $3, nickname = $4, avatar = $5, updated_at = CURRENT_TIMESTAMP
-	`
-	_, err := db.Exec(query, userID, targetID, openID, nickname, avatar)
+	query := fmt.Sprintf(`
+	INSERT INTO %s (id, target_user_id, user_openid, name)
+	VALUES ($1, $2, $3, $4)
+	ON CONFLICT (id) DO UPDATE
+	SET target_user_id = $2, user_openid = $3, name = $4
+	`, TableUser)
+	_, err := db.Exec(query, userID, targetID, openID, nickname)
 	return err
+}
+
+// UpdateUserSuperPoints 更新用户超级积分状态
+func UpdateUserSuperPoints(db *sql.DB, userID int64, isSuperPoints bool) error {
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET is_super = $2, upgrade_date = CURRENT_TIMESTAMP
+	WHERE id = $1
+	`, TableUser)
+	result, err := db.Exec(query, userID, isSuperPoints)
+	if err != nil {
+		return fmt.Errorf("更新用户超级积分状态失败: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("获取影响行数失败: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("用户不存在: %d", userID)
+	}
+
+	return nil
+}
+
+// UpdateUserPoints 更新用户通用积分
+func UpdateUserPoints(db *sql.DB, userID int64, points int) error {
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET credit = $2
+	WHERE id = $1
+	`, TableUser)
+	result, err := db.Exec(query, userID, points)
+	if err != nil {
+		return fmt.Errorf("更新用户积分失败: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("获取影响行数失败: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("用户不存在: %d", userID)
+	}
+
+	return nil
 }
 
 // CreateGroupWithTargetID 创建带有 TargetGroupID 和 GroupOpenID 的群组
 func CreateGroupWithTargetID(db *sql.DB, groupID int64, targetID int64, openID string, name string) error {
-	query := `
-	INSERT INTO groups (group_id, target_group_id, group_openid, name, updated_at)
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("Oid", "TargetGroup", "GroupOpenid", "GroupName", "LastDate")
 	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-	ON CONFLICT (group_id) DO UPDATE
-	SET target_group_id = $2, group_openid = $3, name = $4, updated_at = CURRENT_TIMESTAMP
-	`
+	ON CONFLICT ("Oid") DO UPDATE
+	SET "TargetGroup" = $2, "GroupOpenid" = $3, "GroupName" = $4, "LastDate" = CURRENT_TIMESTAMP
+	`, TableGroup)
 	_, err := db.Exec(query, groupID, targetID, openID, name)
 	return err
 }
 
+// SetGroupValue 设置群组字段值
+func SetGroupValue(db *sql.DB, groupID int64, fieldName string, value interface{}) error {
+	query := fmt.Sprintf(`UPDATE %s SET "%s" = $2, "LastDate" = CURRENT_TIMESTAMP WHERE "Oid" = $1`, TableGroup, fieldName)
+	_, err := db.Exec(query, groupID, value)
+	return err
+}
+
+// GetGroupValue 获取群组字段值
+func GetGroupValue(db *sql.DB, groupID int64, fieldName string) (string, error) {
+	var val string
+	query := fmt.Sprintf(`SELECT COALESCE("%s", '') FROM %s WHERE "Oid" = $1`, fieldName, TableGroup)
+	err := db.QueryRow(query, groupID).Scan(&val)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return val, err
+}
+
 // User 定义用户模型
 type User struct {
-	ID            int       `json:"id"`
+	ID            int64     `json:"id"`
 	UserID        int64     `json:"user_id"`
 	TargetUserID  int64     `json:"target_user_id"`
 	UserOpenID    string    `json:"user_openid"`
 	Nickname      string    `json:"nickname"`
-	Avatar        string    `json:"avatar"`
-	Gender        string    `json:"gender"`
-	Points        int       `json:"points"`
-	SavingsPoints int       `json:"savings_points"`
-	FrozenPoints  int       `json:"frozen_points"`
+	IsSuperPoints bool      `json:"is_super_points"`
+	Points        int64     `json:"points"`
+	SavingsPoints int64     `json:"savings_points"`
+	FrozenPoints  int64     `json:"frozen_points"`
+	IsAI          bool      `json:"is_ai"`
+	AgentId       int64     `json:"agent_id"`
+	Tokens        int64     `json:"tokens"`
+	DayTokens     int64     `json:"day_tokens"`
+	SystemPrompt  string    `json:"system_prompt"`
+	LastSignIn    time.Time `json:"last_sign_in"`
+	SignInDays    int       `json:"sign_in_days"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // Group 定义群组模型
 type Group struct {
-	ID            int       `json:"id"`
-	GroupID       int64     `json:"group_id"`
-	TargetGroupID int64     `json:"target_group_id"`
-	GroupOpenID   string    `json:"group_openid"`
-	Name          string    `json:"name"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID              int64     `json:"id"`
+	GroupID         int64     `json:"group_id"`
+	TargetGroupID   int64     `json:"target_group_id"`
+	GroupOpenID     string    `json:"group_openid"`
+	Name            string    `json:"name"`
+	RecallKeyword   string    `json:"recall_keyword"`
+	WarnKeyword     string    `json:"warn_keyword"`
+	MuteKeyword     string    `json:"mute_keyword"`
+	KickKeyword     string    `json:"kick_keyword"`
+	BlackKeyword    string    `json:"black_keyword"`
+	WhiteKeyword    string    `json:"white_keyword"`
+	IsPowerOn       bool      `json:"is_power_on"`
+	IsWelcomeHint   bool      `json:"is_welcome_hint"`
+	WelcomeMessage  string    `json:"welcome_message"`
+	IsMuteEnter     bool      `json:"is_mute_enter"`
+	MuteEnterCount  uint32    `json:"mute_enter_count"`
+	IsConfirmNew    bool      `json:"is_confirm_new"`
+	IsRequirePrefix bool      `json:"is_require_prefix"`
+	IsAI            bool      `json:"is_ai"`
+	IsOwnerPay      bool      `json:"is_owner_pay"`
+	RobotOwner      int64     `json:"robot_owner"`
+	ContextCount    int       `json:"context_count"`
+	SystemPrompt    string    `json:"system_prompt"`
+	IsMultAI        bool      `json:"is_mult_ai"`
+	IsVoiceReply    bool      `json:"is_voice_reply"`
+	VoiceId         string    `json:"voice_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// GetGroupByGroupID 根据群组ID获取群组信息
+func GetGroupByGroupID(db *sql.DB, groupID int64) (*Group, error) {
+	query := fmt.Sprintf(`
+	SELECT "Oid", "Oid", "TargetGroup", "GroupOpenid", "GroupName", 
+	       COALESCE("RecallKeyword", ''), COALESCE("WarnKeyword", ''), COALESCE("MuteKeyword", ''), 
+	       COALESCE("KickKeyword", ''), COALESCE("BlackKeyword", ''), COALESCE("WhiteKeyword", ''),
+	       COALESCE("IsPowerOn", true), COALESCE("IsWelcomeHint", false), COALESCE("WelcomeMessage", ''),
+	       COALESCE("IsMuteEnter", false), COALESCE("MuteEnterCount", 0), COALESCE("IsConfirmNew", false),
+	       COALESCE("IsRequirePrefix", false),
+	       "InsertDate", "LastDate"
+	FROM %s
+	WHERE "Oid" = $1
+	`, TableGroup)
+
+	g := &Group{}
+	err := db.QueryRow(query, groupID).Scan(
+		&g.ID, &g.GroupID, &g.TargetGroupID, &g.GroupOpenID, &g.Name,
+		&g.RecallKeyword, &g.WarnKeyword, &g.MuteKeyword,
+		&g.KickKeyword, &g.BlackKeyword, &g.WhiteKeyword,
+		&g.IsPowerOn, &g.IsWelcomeHint, &g.WelcomeMessage,
+		&g.IsMuteEnter, &g.MuteEnterCount, &g.IsConfirmNew,
+		&g.IsRequirePrefix,
+		&g.CreatedAt, &g.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取群组失败: %w", err)
+	}
+
+	return g, nil
+}
+
+// GroupMember 定义群成员模型
+type GroupMember struct {
+	UserID    int64     `json:"user_id"`
+	GroupID   int64     `json:"group_id"`
+	IsShutup  bool      `json:"is_shutup"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetGroupMember 获取群成员信息
+func GetGroupMember(db *sql.DB, userID int64, groupID int64) (*GroupMember, error) {
+	query := fmt.Sprintf(`
+	SELECT "UserId", "GroupId", "IsShutup", "InsertDate"
+	FROM %s
+	WHERE "UserId" = $1 AND "GroupId" = $2
+	`, TableGroupMember)
+
+	gm := &GroupMember{}
+	err := db.QueryRow(query, userID, groupID).Scan(
+		&gm.UserID, &gm.GroupID, &gm.IsShutup, &gm.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取群成员失败: %w", err)
+	}
+
+	return gm, nil
+}
+
+// CreateGroupMember 创建群成员
+func CreateGroupMember(db *sql.DB, userID int64, groupID int64) error {
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "IsShutup", "InsertDate")
+	VALUES ($1, $2, false, CURRENT_TIMESTAMP)
+	ON CONFLICT ("UserId", "GroupId") DO NOTHING
+	`, TableGroupMember)
+
+	_, err := db.Exec(query, userID, groupID)
+	return err
+}
+
+// UpdateGroupMemberShutup 更新群成员禁言状态
+func UpdateGroupMemberShutup(db *sql.DB, userID int64, groupID int64, isShutup bool) error {
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET "IsShutup" = $3
+	WHERE "UserId" = $1 AND "GroupId" = $2
+	`, TableGroupMember)
+
+	_, err := db.Exec(query, userID, groupID, isShutup)
+	return err
 }
 
 // CreateUser 创建新用户
 func CreateUser(db *sql.DB, user *User) error {
-	query := `
-	INSERT INTO users (user_id, user_openid, nickname, avatar, gender, points, savings_points, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-	ON CONFLICT (user_id) DO UPDATE
-	SET user_openid = $2, nickname = $3, avatar = $4, gender = $5, points = $6, savings_points = $7, updated_at = CURRENT_TIMESTAMP
-	`
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("Id", "UserOpenid", "Name", "IsSuper", "Credit", "SaveCredit")
+	VALUES ($1, $2, $3, $4, $5, $6)
+	ON CONFLICT ("Id") DO UPDATE
+	SET "UserOpenid" = $2, "Name" = $3, "IsSuper" = $4, "Credit" = $5, "SaveCredit" = $6
+	`, TableUser)
 
-	_, err := db.Exec(query, user.UserID, user.UserOpenID, user.Nickname, user.Avatar, user.Gender, user.Points, user.SavingsPoints)
+	_, err := db.Exec(query, user.UserID, user.UserOpenID, user.Nickname, user.IsSuperPoints, user.Points, user.SavingsPoints)
 	if err != nil {
 		return fmt.Errorf("创建用户失败: %w", err)
 	}
@@ -642,15 +855,15 @@ func CreateUser(db *sql.DB, user *User) error {
 
 // GetUserByUserID 根据用户ID获取用户信息
 func GetUserByUserID(db *sql.DB, userID int64) (*User, error) {
-	query := `
-	SELECT id, user_id, user_openid, nickname, avatar, gender, points, savings_points, frozen_points, created_at, updated_at
-	FROM users
-	WHERE user_id = $1
-	`
+	query := fmt.Sprintf(`
+	SELECT "Id", "Id", "UserOpenid", "Name", "IsSuper", "Credit", "SaveCredit", "FreezeCredit", "InsertDate", "UpgradeDate"
+	FROM %s
+	WHERE "Id" = $1
+	`, TableUser)
 
 	user := &User{}
 	err := db.QueryRow(query, userID).Scan(
-		&user.ID, &user.UserID, &user.UserOpenID, &user.Nickname, &user.Avatar, &user.Gender, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.UserID, &user.UserOpenID, &user.Nickname, &user.IsSuperPoints, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -665,13 +878,13 @@ func GetUserByUserID(db *sql.DB, userID int64) (*User, error) {
 
 // UpdateUser 更新用户信息
 func UpdateUser(db *sql.DB, user *User) error {
-	query := `
-	UPDATE users
-	SET nickname = $2, avatar = $3, gender = $4, updated_at = CURRENT_TIMESTAMP
-	WHERE user_id = $1
-	`
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET "Name" = $2, "IsSuper" = $3, "Credit" = $4, "SaveCredit" = $5
+	WHERE "Id" = $1
+	`, TableUser)
 
-	result, err := db.Exec(query, user.UserID, user.Nickname, user.Avatar, user.Gender)
+	result, err := db.Exec(query, user.UserID, user.Nickname, user.IsSuperPoints, user.Points, user.SavingsPoints)
 	if err != nil {
 		return fmt.Errorf("更新用户失败: %w", err)
 	}
@@ -752,14 +965,14 @@ func GetMessagesByUserID(db *sql.DB, userID int64, limit int) ([]*Message, error
 
 // Session 定义会话状态模型
 type Session struct {
-	ID        int                    `json:"id"`
-	SessionID string                 `json:"session_id"`
-	UserID    int64                  `json:"user_id"`
-	GroupID   int64                  `json:"group_id"`
-	State     string                 `json:"state"`
-	Data      map[string]interface{} `json:"data"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	ID        int            `json:"id"`
+	SessionID string         `json:"session_id"`
+	UserID    int64          `json:"user_id"`
+	GroupID   int64          `json:"group_id"`
+	State     string         `json:"state"`
+	Data      map[string]any `json:"data"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // CreateOrUpdateSession 创建或更新会话状态
@@ -787,14 +1000,14 @@ func CreateOrUpdateSession(db *sql.DB, session *Session) error {
 
 // CreateUserTx 在事务中创建新用户
 func CreateUserTx(tx *sql.Tx, user *User) error {
-	query := `
-	INSERT INTO users (user_id, nickname, avatar, gender, updated_at)
-	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-	ON CONFLICT (user_id) DO UPDATE
-	SET nickname = $2, avatar = $3, gender = $4, updated_at = CURRENT_TIMESTAMP
-	`
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("Id", "UserOpenid", "Name", "IsSuper", "Credit", "SaveCredit")
+	VALUES ($1, $2, $3, $4, $5, $6)
+	ON CONFLICT ("Id") DO UPDATE
+	SET "UserOpenid" = $2, "Name" = $3, "IsSuper" = $4, "Credit" = $5, "SaveCredit" = $6
+	`, TableUser)
 
-	_, err := tx.Exec(query, user.UserID, user.Nickname, user.Avatar, user.Gender)
+	_, err := tx.Exec(query, user.UserID, user.UserOpenID, user.Nickname, user.IsSuperPoints, user.Points, user.SavingsPoints)
 	if err != nil {
 		return fmt.Errorf("创建用户失败: %w", err)
 	}
@@ -883,11 +1096,11 @@ func DeleteSession(db *sql.DB, sessionID string) error {
 
 // GetAllUsers 获取所有用户
 func GetAllUsers(db *sql.DB) ([]*User, error) {
-	query := `
-	SELECT id, user_id, nickname, avatar, gender, points, savings_points, frozen_points, created_at, updated_at
-	FROM users
-	ORDER BY created_at DESC
-	`
+	query := fmt.Sprintf(`
+	SELECT "Id", "Id", "UserOpenid", "Name", '', '', "IsSuper", "Credit", "SaveCredit", "FreezeCredit", "InsertDate", "UpgradeDate"
+	FROM %s
+	ORDER BY "InsertDate" DESC
+	`, TableUser)
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -898,8 +1111,9 @@ func GetAllUsers(db *sql.DB) ([]*User, error) {
 	users := []*User{}
 	for rows.Next() {
 		user := &User{}
+		var avatar, gender string
 		err := rows.Scan(
-			&user.ID, &user.UserID, &user.Nickname, &user.Avatar, &user.Gender, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
+			&user.ID, &user.UserID, &user.UserOpenID, &user.Nickname, &avatar, &gender, &user.IsSuperPoints, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("扫描用户失败: %w", err)
@@ -918,7 +1132,7 @@ func GetAllUsers(db *sql.DB) ([]*User, error) {
 func GetUsersWithPagination(db *sql.DB, page, pageSize int) ([]*User, int, error) {
 	// 获取总记录数
 	var total int
-	countQuery := `SELECT COUNT(*) FROM users`
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM %s`, TableUser)
 	if err := db.QueryRow(countQuery).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("获取用户总数失败: %w", err)
 	}
@@ -927,12 +1141,12 @@ func GetUsersWithPagination(db *sql.DB, page, pageSize int) ([]*User, int, error
 	offset := (page - 1) * pageSize
 
 	// 获取分页数据
-	query := `
-	SELECT id, user_id, nickname, avatar, gender, points, savings_points, frozen_points, created_at, updated_at
-	FROM users
-	ORDER BY created_at DESC
+	query := fmt.Sprintf(`
+	SELECT "Id", "Id", "UserOpenid", "Name", '', '', "IsSuper", "Credit", "SaveCredit", "FreezeCredit", "InsertDate", "UpgradeDate"
+	FROM %s
+	ORDER BY "InsertDate" DESC
 	LIMIT $1 OFFSET $2
-	`
+	`, TableUser)
 
 	rows, err := db.Query(query, pageSize, offset)
 	if err != nil {
@@ -943,8 +1157,9 @@ func GetUsersWithPagination(db *sql.DB, page, pageSize int) ([]*User, int, error
 	users := []*User{}
 	for rows.Next() {
 		user := &User{}
+		var avatar, gender string
 		err := rows.Scan(
-			&user.ID, &user.UserID, &user.Nickname, &user.Avatar, &user.Gender, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
+			&user.ID, &user.UserID, &user.UserOpenID, &user.Nickname, &avatar, &gender, &user.IsSuperPoints, &user.Points, &user.SavingsPoints, &user.FrozenPoints, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("扫描用户失败: %w", err)
@@ -961,10 +1176,10 @@ func GetUsersWithPagination(db *sql.DB, page, pageSize int) ([]*User, int, error
 
 // DeleteUser 删除用户
 func DeleteUser(db *sql.DB, userID int64) error {
-	query := `
-	DELETE FROM users
-	WHERE user_id = $1
-	`
+	query := fmt.Sprintf(`
+	DELETE FROM %s
+	WHERE "Id" = $1
+	`, TableUser)
 
 	_, err := db.Exec(query, userID)
 	if err != nil {
@@ -1371,11 +1586,11 @@ func GetQuestionByGroupAndNormalized(dbConn *sql.DB, groupID int64, normalized s
 		return nil, nil
 	}
 
-	query := `
-	SELECT id, group_id, question_raw, question_normalized, status, created_by, source_group_id, created_at, updated_at
-	FROM questions
-	WHERE question_normalized = $1
-	`
+	query := fmt.Sprintf(`
+	SELECT "Id", "GroupId", "Question", "Question", 'approved', "UserId", 0, "InsertDate", "InsertDate"
+	FROM %s
+	WHERE "Question" = $1
+	`, TableQuestion)
 
 	q := &Question{}
 	err := dbConn.QueryRow(query, normalized).Scan(
@@ -1408,19 +1623,13 @@ func CreateQuestion(dbConn *sql.DB, q *Question) (*Question, error) {
 		q.Status = "approved"
 	}
 
-	query := `
-	INSERT INTO questions (group_id, question_raw, question_normalized, status, created_by, source_group_id, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	ON CONFLICT (question_normalized) DO UPDATE
-	SET question_raw = EXCLUDED.question_raw,
-	    status = EXCLUDED.status,
-	    created_by = EXCLUDED.created_by,
-	    source_group_id = EXCLUDED.source_group_id,
-	    updated_at = CURRENT_TIMESTAMP
-	RETURNING id, group_id, question_raw, question_normalized, status, created_by, source_group_id, created_at, updated_at
-	`
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("GroupId", "Question", "UserId", "InsertDate")
+	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+	RETURNING "Id", "GroupId", "Question", "Question", 'approved', "UserId", 0, "InsertDate", "InsertDate"
+	`, TableQuestion)
 
-	row := dbConn.QueryRow(query, q.GroupID, q.QuestionRaw, q.QuestionNormalized, q.Status, q.CreatedBy, q.SourceGroupID)
+	row := dbConn.QueryRow(query, q.GroupID, q.QuestionRaw, q.CreatedBy)
 
 	var result Question
 	if err := row.Scan(
@@ -1449,13 +1658,13 @@ func AddAnswer(dbConn *sql.DB, a *Answer) (*Answer, error) {
 		a.Status = "approved"
 	}
 
-	query := `
-	INSERT INTO answers (question_id, answer, status, created_by, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	RETURNING id, question_id, answer, status, created_by, created_at, updated_at
-	`
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("QuestionId", "Answer", "InsertDate", "UpdateDate", "UsedTimes")
+	VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+	RETURNING "Id", "QuestionId", "Answer", 'approved', 0, "InsertDate", "UpdateDate"
+	`, TableAnswer)
 
-	row := dbConn.QueryRow(query, a.QuestionID, a.Answer, a.Status, a.CreatedBy)
+	row := dbConn.QueryRow(query, a.QuestionID, a.Answer)
 
 	var result Answer
 	if err := row.Scan(
@@ -1478,12 +1687,12 @@ func GetApprovedAnswersByQuestionID(dbConn *sql.DB, questionID int) ([]*Answer, 
 		return nil, nil
 	}
 
-	query := `
-	SELECT id, question_id, answer, status, created_by, created_at, updated_at
-	FROM answers
-	WHERE question_id = $1 AND status = 'approved'
-	ORDER BY id ASC
-	`
+	query := fmt.Sprintf(`
+	SELECT "Id", "QuestionId", "Answer", 'approved', 0, "InsertDate", "UpdateDate"
+	FROM %s
+	WHERE "QuestionId" = $1
+	ORDER BY "Id" ASC
+	`, TableAnswer)
 
 	rows, err := dbConn.Query(query, questionID)
 	if err != nil {
@@ -1535,20 +1744,7 @@ func GetRandomApprovedAnswer(dbConn *sql.DB, questionID int) (*Answer, error) {
 }
 
 func IncrementQuestionUsage(dbConn *sql.DB, questionID int) error {
-	if dbConn == nil || questionID == 0 {
-		return nil
-	}
-
-	query := `
-	UPDATE questions
-	SET usage_count = usage_count + 1
-	WHERE id = $1
-	`
-
-	if _, err := dbConn.Exec(query, questionID); err != nil {
-		return fmt.Errorf("更新问题使用次数失败: %w", err)
-	}
-
+	// sz84_robot 中 Question 表没有引用计数字段，此处不做操作
 	return nil
 }
 
@@ -1557,12 +1753,12 @@ func IncrementAnswerUsage(dbConn *sql.DB, answerID int) error {
 		return nil
 	}
 
-	query := `
-	UPDATE answers
-	SET usage_count = usage_count + 1,
-	    last_used_at = NOW()
-	WHERE id = $1
-	`
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET "UsedTimes" = "UsedTimes" + 1,
+	    "UpdateDate" = NOW()
+	WHERE "Id" = $1
+	`, TableAnswer)
 
 	if _, err := dbConn.Exec(query, answerID); err != nil {
 		return fmt.Errorf("更新答案使用次数失败: %w", err)
@@ -1572,23 +1768,84 @@ func IncrementAnswerUsage(dbConn *sql.DB, answerID int) error {
 }
 
 func IncrementAnswerShortIntervalUsageIfRecent(dbConn *sql.DB, answerID int) error {
-	if dbConn == nil || answerID == 0 {
-		return nil
-	}
-
-	query := `
-	UPDATE answers
-	SET short_interval_usage_count = short_interval_usage_count + 1
-	WHERE id = $1
-	  AND last_used_at IS NOT NULL
-	  AND last_used_at >= NOW() - INTERVAL '5 minutes'
-	`
-
-	if _, err := dbConn.Exec(query, answerID); err != nil {
-		return fmt.Errorf("更新答案短间隔使用次数失败: %w", err)
-	}
-
+	// sz84_robot 中 Answer 表没有短间隔使用计数字段，此处不做操作
 	return nil
+}
+
+// BlackList 定义黑名单模型
+type BlackList struct {
+	ID         int64     `json:"id"`
+	GroupID    int64     `json:"group_id"`
+	GroupName  string    `json:"group_name"`
+	BlackID    int64     `json:"black_id"`
+	IsBlack    bool      `json:"is_black"`
+	InsertDate time.Time `json:"insert_date"`
+	StartDate  time.Time `json:"start_date"`
+	EndDate    time.Time `json:"end_date"`
+	BlackInfo  string    `json:"black_info"`
+	UserID     int64     `json:"user_id"`
+	UserName   string    `json:"user_name"`
+	BotUin     int64     `json:"bot_uin"`
+	BlackTimes int64     `json:"black_times"`
+}
+
+// GetBlackList 获取黑名单记录
+func GetBlackList(db *sql.DB, groupID int64, blackID int64) (*BlackList, error) {
+	query := fmt.Sprintf(`
+	SELECT "Id", "GroupId", "GroupName", "BlackId", "IsBlack", "InsertDate", "StartDate", "EndDate", "BlackInfo", "UserId", "UserName", "BotUin", "BlackTimes"
+	FROM %s
+	WHERE "GroupId" = $1 AND "BlackId" = $2
+	`, TableBlackList)
+
+	bl := &BlackList{}
+	err := db.QueryRow(query, groupID, blackID).Scan(
+		&bl.ID, &bl.GroupID, &bl.GroupName, &bl.BlackID, &bl.IsBlack, &bl.InsertDate, &bl.StartDate, &bl.EndDate, &bl.BlackInfo, &bl.UserID, &bl.UserName, &bl.BotUin, &bl.BlackTimes,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取黑名单失败: %w", err)
+	}
+
+	return bl, nil
+}
+
+// WhiteList 定义白名单模型
+type WhiteList struct {
+	ID         int64     `json:"id"`
+	GroupID    int64     `json:"group_id"`
+	GroupName  string    `json:"group_name"`
+	WhiteID    int64     `json:"white_id"`
+	InsertDate time.Time `json:"insert_date"`
+	WhiteInfo  string    `json:"white_info"`
+	UserID     int64     `json:"user_id"`
+	UserName   string    `json:"user_name"`
+	BotUin     int64     `json:"bot_uin"`
+}
+
+// GetWhiteList 获取白名单记录
+func GetWhiteList(db *sql.DB, groupID int64, whiteID int64) (*WhiteList, error) {
+	query := fmt.Sprintf(`
+	SELECT "Id", "GroupId", "GroupName", "WhiteId", "InsertDate", "WhiteInfo", "UserId", "UserName", "BotUin"
+	FROM %s
+	WHERE "GroupId" = $1 AND "WhiteId" = $2
+	`, TableWhiteList)
+
+	wl := &WhiteList{}
+	err := db.QueryRow(query, groupID, whiteID).Scan(
+		&wl.ID, &wl.GroupID, &wl.GroupName, &wl.WhiteID, &wl.InsertDate, &wl.WhiteInfo, &wl.UserID, &wl.UserName, &wl.BotUin,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取白名单失败: %w", err)
+	}
+
+	return wl, nil
 }
 
 // CreatePet 创建宠物
@@ -1772,94 +2029,213 @@ func RegisterUserWithSession(db *sql.DB, user *User, session *Session) error {
 
 // ------------------- 积分系统相关操作 -------------------
 
-// GetPoints 获取用户积分
-func GetPoints(db *sql.DB, userID int64) (int, error) {
-	query := `SELECT points FROM users WHERE user_id = $1`
-	var points int
-	err := db.QueryRow(query, userID).Scan(&points)
+// IsGroupCreditSystemEnabled 检查群积分系统是否开启
+func IsGroupCreditSystemEnabled(db *sql.DB, groupID int64) (bool, error) {
+	if groupID <= 0 {
+		return false, nil
+	}
+	var enabled sql.NullBool
+	query := fmt.Sprintf(`SELECT "IsCreditSystem" FROM %s WHERE "Oid" = $1`, TableGroup)
+	err := db.QueryRow(query, groupID).Scan(&enabled)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return 0, nil // 用户还没有积分记录
+			return false, nil
 		}
-		return 0, fmt.Errorf("获取积分失败: %w", err)
+		return false, err
+	}
+	return enabled.Bool, nil
+}
+
+// IsRobotOwner 检查用户是否为机器人主人
+func IsRobotOwner(db *sql.DB, groupID int64, userID int64) (bool, error) {
+	if groupID <= 0 {
+		return false, nil
+	}
+	var ownerID sql.NullInt64
+	query := fmt.Sprintf(`SELECT "RobotOwner" FROM %s WHERE "Oid" = $1`, TableGroup)
+	err := db.QueryRow(query, groupID).Scan(&ownerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return ownerID.Int64 == userID, nil
+}
+
+// GetPoints 获取用户积分 (自动路由全局或群积分)
+func GetPoints(db *sql.DB, userID int64, groupID int64) (int64, error) {
+	isGroupActive, err := IsGroupCreditSystemEnabled(db, groupID)
+	if err != nil {
+		return 0, fmt.Errorf("检查群积分模式失败: %w", err)
+	}
+
+	var points int64
+	var query string
+	if isGroupActive {
+		query = fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember)
+		err := db.QueryRow(query, userID, groupID).Scan(&points)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return 0, nil
+			}
+			return 0, fmt.Errorf("获取群积分失败: %w", err)
+		}
+	} else {
+		query = fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser)
+		err := db.QueryRow(query, userID).Scan(&points)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return 0, nil
+			}
+			return 0, fmt.Errorf("获取全局积分失败: %w", err)
+		}
 	}
 	return points, nil
 }
 
-func GetFrozenPoints(db *sql.DB, userID int64) (int, error) {
-	query := `SELECT frozen_points FROM users WHERE user_id = $1`
-	var points int
-	err := db.QueryRow(query, userID).Scan(&points)
+func GetFrozenPoints(db *sql.DB, userID int64, groupID int64) (int64, error) {
+	isGroupActive, err := IsGroupCreditSystemEnabled(db, groupID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return 0, nil
+		return 0, fmt.Errorf("检查群积分模式失败: %w", err)
+	}
+
+	var points int64
+	var query string
+	if isGroupActive {
+		query = fmt.Sprintf(`SELECT "FreezeCredit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember)
+		err := db.QueryRow(query, userID, groupID).Scan(&points)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return 0, nil
+			}
+			return 0, fmt.Errorf("获取群冻结积分失败: %w", err)
 		}
-		return 0, fmt.Errorf("获取冻结积分失败: %w", err)
+	} else {
+		query = fmt.Sprintf(`SELECT "FreezeCredit" FROM %s WHERE "Id" = $1`, TableUser)
+		err := db.QueryRow(query, userID).Scan(&points)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return 0, nil
+			}
+			return 0, fmt.Errorf("获取全局冻结积分失败: %w", err)
+		}
 	}
 	return points, nil
 }
 
-// AddPoints 增加或扣除用户积分
-func AddPoints(db *sql.DB, userID int64, amount int, reason string, category string) error {
+// AddPoints 增加或扣除用户积分 (自动路由全局或群积分)
+func AddPoints(db *sql.DB, botUin int64, userID int64, groupID int64, amount int64, reason string, category string) error {
+	isGroupActive, err := IsGroupCreditSystemEnabled(db, groupID)
+	if err != nil {
+		return fmt.Errorf("检查群积分模式失败: %w", err)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("开始事务失败: %w", err)
 	}
 	defer tx.Rollback()
 
-	// 1. 更新用户积分
-	query := `
-	UPDATE users
-	SET points = points + $2, updated_at = CURRENT_TIMESTAMP
-	WHERE user_id = $1
-	`
-	result, err := tx.Exec(query, userID, amount)
-	if err != nil {
-		return fmt.Errorf("更新积分失败: %w", err)
-	}
+	var logType string
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取影响行数失败: %w", err)
-	}
-	if rowsAffected == 0 {
-		// 如果用户不存在，则创建用户并设置初始积分
-		insertQuery := `
-		INSERT INTO users (user_id, points, created_at, updated_at)
-		VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`
-		if _, err := tx.Exec(insertQuery, userID, amount); err != nil {
-			return fmt.Errorf("插入用户并初始化积分失败: %w", err)
+	if isGroupActive {
+		logType = "group"
+
+		// 更新 GroupMember 表积分
+		query := fmt.Sprintf(`
+		UPDATE %s
+		SET "Credit" = "Credit" + $3
+		WHERE "UserId" = $1 AND "GroupId" = $2
+		`, TableGroupMember)
+		result, err := tx.Exec(query, userID, groupID, amount)
+		if err != nil {
+			return fmt.Errorf("更新 GroupMember 积分失败: %w", err)
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			// 如果记录不存在，不自动插入，因为这通常由加群事件触发
+			return fmt.Errorf("群成员记录不存在: user=%d, group=%d", userID, groupID)
+		}
+	} else {
+		logType = "global"
+
+		// 更新 User 表积分
+		query := fmt.Sprintf(`
+		UPDATE %s
+		SET "Credit" = "Credit" + $2
+		WHERE "Id" = $1
+		`, TableUser)
+		result, err := tx.Exec(query, userID, amount)
+		if err != nil {
+			return fmt.Errorf("更新 User 积分失败: %w", err)
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			insertQuery := fmt.Sprintf(`
+			INSERT INTO %s ("Id", "Credit", "InsertDate")
+			VALUES ($1, $2, CURRENT_TIMESTAMP)
+			`, TableUser)
+			if _, err := tx.Exec(insertQuery, userID, amount); err != nil {
+				return fmt.Errorf("插入 User 并初始化积分失败: %w", err)
+			}
 		}
 	}
 
-	// 2. 记录日志
-	logQuery := `INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)`
-	_, err = tx.Exec(logQuery, userID, amount, reason, category)
+	// 记录日志到 Credit 表
+	var newPoints int64
+	if isGroupActive {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember), userID, groupID).Scan(&newPoints)
+	} else {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), userID).Scan(&newPoints)
+	}
+
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, groupID, botUin, amount, newPoints, fmt.Sprintf("%s [%s] (%s)", reason, category, logType))
 	if err != nil {
-		return fmt.Errorf("记录积分日志失败: %w", err)
+		return fmt.Errorf("记录积分日志到 Credit 表失败: %w", err)
 	}
 
 	return tx.Commit()
 }
 
-func applySavingsInterestTx(tx *sql.Tx, userID int64) (int, error) {
+func applySavingsInterestTx(tx *sql.Tx, botUin int64, userID int64) (int, error) {
 	var savings int
 	var lastInterest sql.NullTime
 
-	err := tx.QueryRow("SELECT savings_points, savings_last_interest_at FROM users WHERE user_id = $1 FOR UPDATE", userID).Scan(&savings, &lastInterest)
+	// 1. 获取存款金额
+	query := fmt.Sprintf(`SELECT "SaveCredit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+	err := tx.QueryRow(query, userID).Scan(&savings)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("查询存积分失败: %w", err)
+		return 0, fmt.Errorf("查询存款失败: %w", err)
+	}
+
+	// 2. 获取上次结息时间
+	err = tx.QueryRow(fmt.Sprintf(`SELECT "LastInterestAt" FROM %s WHERE "UserId" = $1 FOR UPDATE`, TableSavings), userID).Scan(&lastInterest)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, fmt.Errorf("查询结息元数据失败: %w", err)
 	}
 
 	now := time.Now()
 	if savings <= 0 {
-		_, err = tx.Exec("UPDATE users SET savings_last_interest_at = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", userID, now)
+		// 如果没有存款，只更新结息时间
+		upsertQuery := fmt.Sprintf(`
+		INSERT INTO %s ("UserId", "LastInterestAt", "UpdateDate")
+		VALUES ($1, $2, CURRENT_TIMESTAMP)
+		ON CONFLICT ("UserId") DO UPDATE
+		SET "LastInterestAt" = $2, "UpdateDate" = CURRENT_TIMESTAMP
+		`, TableSavings)
+		_, err = tx.Exec(upsertQuery, userID, now)
 		if err != nil {
-			return 0, fmt.Errorf("更新存积分时间失败: %w", err)
+			return 0, fmt.Errorf("更新结息时间失败: %w", err)
 		}
 		return 0, nil
 	}
@@ -1873,9 +2249,16 @@ func applySavingsInterestTx(tx *sql.Tx, userID int64) (int, error) {
 
 	days := int(now.Sub(fromTime).Hours() / 24)
 	if days <= 0 {
-		_, err = tx.Exec("UPDATE users SET savings_last_interest_at = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", userID, now)
+		// 如果不足一天，只更新结息时间（或者不更新也可以，这里选择更新）
+		upsertQuery := fmt.Sprintf(`
+		INSERT INTO %s ("UserId", "LastInterestAt", "UpdateDate")
+		VALUES ($1, $2, CURRENT_TIMESTAMP)
+		ON CONFLICT ("UserId") DO UPDATE
+		SET "LastInterestAt" = $2, "UpdateDate" = CURRENT_TIMESTAMP
+		`, TableSavings)
+		_, err = tx.Exec(upsertQuery, userID, now)
 		if err != nil {
-			return 0, fmt.Errorf("更新存积分时间失败: %w", err)
+			return 0, fmt.Errorf("更新结息时间失败: %w", err)
 		}
 		return 0, nil
 	}
@@ -1883,29 +2266,56 @@ func applySavingsInterestTx(tx *sql.Tx, userID int64) (int, error) {
 	dailyRate := 0.0005
 	interest := int(float64(savings) * dailyRate * float64(days))
 	if interest <= 0 {
-		_, err = tx.Exec("UPDATE users SET savings_last_interest_at = $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", userID, now)
+		upsertQuery := fmt.Sprintf(`
+		INSERT INTO %s ("UserId", "LastInterestAt", "UpdateDate")
+		VALUES ($1, $2, CURRENT_TIMESTAMP)
+		ON CONFLICT ("UserId") DO UPDATE
+		SET "LastInterestAt" = $2, "UpdateDate" = CURRENT_TIMESTAMP
+		`, TableSavings)
+		_, err = tx.Exec(upsertQuery, userID, now)
 		if err != nil {
-			return 0, fmt.Errorf("更新存积分时间失败: %w", err)
+			return 0, fmt.Errorf("更新结息时间失败: %w", err)
 		}
 		return 0, nil
 	}
 
 	newSavings := savings + interest
 
-	_, err = tx.Exec("UPDATE users SET savings_points = $2, savings_last_interest_at = $3, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", userID, newSavings, now)
+	// 3. 更新存款和结息时间
+	updateUserQuery := fmt.Sprintf(`UPDATE %s SET "SaveCredit" = $1 WHERE "Id" = $2`, TableUser)
+	_, err = tx.Exec(updateUserQuery, newSavings, userID)
 	if err != nil {
-		return 0, fmt.Errorf("更新存积分利息失败: %w", err)
+		return 0, fmt.Errorf("更新存款利息失败: %w", err)
 	}
 
-	_, err = tx.Exec("INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)", userID, interest, "存积分利息", "saving_interest")
+	upsertQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "LastInterestAt", "UpdateDate")
+	VALUES ($1, $2, CURRENT_TIMESTAMP)
+	ON CONFLICT ("UserId") DO UPDATE
+	SET "LastInterestAt" = $2, "UpdateDate" = CURRENT_TIMESTAMP
+	`, TableSavings)
+	_, err = tx.Exec(upsertQuery, userID, now)
 	if err != nil {
-		return 0, fmt.Errorf("记录存积分利息失败: %w", err)
+		return 0, fmt.Errorf("更新结息元数据失败: %w", err)
+	}
+
+	// 4. 记录日志到 Credit 表
+	var newPoints int64
+	tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), userID).Scan(&newPoints)
+
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, 0, botUin, int64(interest), newPoints, "存积分利息 [saving_interest]")
+	if err != nil {
+		return 0, fmt.Errorf("记录利息日志失败: %w", err)
 	}
 
 	return interest, nil
 }
 
-func DepositPointsToSavings(db *sql.DB, userID int64, amount int) error {
+func DepositPointsToSavings(db *sql.DB, botUin int64, userID int64, amount int) error {
 	if amount <= 0 {
 		return fmt.Errorf("存入积分必须大于0")
 	}
@@ -1917,7 +2327,8 @@ func DepositPointsToSavings(db *sql.DB, userID int64, amount int) error {
 	defer tx.Rollback()
 
 	var points int
-	err = tx.QueryRow("SELECT points FROM users WHERE user_id = $1 FOR UPDATE", userID).Scan(&points)
+	query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+	err = tx.QueryRow(query, userID).Scan(&points)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("用户不存在或没有积分")
@@ -1929,22 +2340,26 @@ func DepositPointsToSavings(db *sql.DB, userID int64, amount int) error {
 		return fmt.Errorf("积分不足，当前积分为: %d", points)
 	}
 
-	_, err = tx.Exec("UPDATE users SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", amount, userID)
+	updateQuery := fmt.Sprintf(`UPDATE %s SET "Credit" = "Credit" - $1, "SaveCredit" = "SaveCredit" + $1 WHERE "Id" = $2`, TableUser)
+	_, err = tx.Exec(updateQuery, amount, userID)
 	if err != nil {
-		return fmt.Errorf("扣除积分失败: %w", err)
+		return fmt.Errorf("存款失败: %w", err)
 	}
 
-	_, err = applySavingsInterestTx(tx, userID)
+	_, err = applySavingsInterestTx(tx, botUin, userID)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec("UPDATE users SET savings_points = savings_points + $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", userID, amount)
-	if err != nil {
-		return fmt.Errorf("更新存积分失败: %w", err)
-	}
+	// 记录日志到 Credit 表
+	var newPoints int64
+	tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), userID).Scan(&newPoints)
 
-	_, err = tx.Exec("INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)", userID, -amount, "存入积分", "saving_deposit")
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, 0, botUin, -amount, newPoints, "存入积分 [saving_deposit]")
 	if err != nil {
 		return fmt.Errorf("记录存入积分日志失败: %w", err)
 	}
@@ -1952,7 +2367,7 @@ func DepositPointsToSavings(db *sql.DB, userID int64, amount int) error {
 	return tx.Commit()
 }
 
-func WithdrawPointsFromSavings(db *sql.DB, userID int64, amount int) error {
+func WithdrawPointsFromSavings(db *sql.DB, botUin int64, userID int64, amount int) error {
 	if amount <= 0 {
 		return fmt.Errorf("取出积分必须大于0")
 	}
@@ -1963,35 +2378,40 @@ func WithdrawPointsFromSavings(db *sql.DB, userID int64, amount int) error {
 	}
 	defer tx.Rollback()
 
-	_, err = applySavingsInterestTx(tx, userID)
+	_, err = applySavingsInterestTx(tx, botUin, userID)
 	if err != nil {
 		return err
 	}
 
 	var balance int
-	err = tx.QueryRow("SELECT savings_points FROM users WHERE user_id = $1 FOR UPDATE", userID).Scan(&balance)
+	query := fmt.Sprintf(`SELECT "SaveCredit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+	err = tx.QueryRow(query, userID).Scan(&balance)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("没有存积分记录")
+			return fmt.Errorf("没有存款记录")
 		}
-		return fmt.Errorf("查询存积分失败: %w", err)
+		return fmt.Errorf("查询存款失败: %w", err)
 	}
 
 	if balance < amount {
-		return fmt.Errorf("存积分余额不足，当前余额为: %d", balance)
+		return fmt.Errorf("存款余额不足，当前余额为: %d", balance)
 	}
 
-	_, err = tx.Exec("UPDATE users SET savings_points = savings_points - $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1", userID, amount)
+	updateQuery := fmt.Sprintf(`UPDATE %s SET "SaveCredit" = "SaveCredit" - $1, "Credit" = "Credit" + $1 WHERE "Id" = $2`, TableUser)
+	_, err = tx.Exec(updateQuery, amount, userID)
 	if err != nil {
-		return fmt.Errorf("更新存积分失败: %w", err)
+		return fmt.Errorf("取款失败: %w", err)
 	}
 
-	_, err = tx.Exec("UPDATE users SET points = points + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", amount, userID)
-	if err != nil {
-		return fmt.Errorf("增加用户积分失败: %w", err)
-	}
+	// 记录日志到 Credit 表
+	var newPoints int64
+	tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), userID).Scan(&newPoints)
 
-	_, err = tx.Exec("INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)", userID, amount, "取出积分", "saving_withdraw")
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, 0, botUin, amount, newPoints, "取出积分 [saving_withdraw]")
 	if err != nil {
 		return fmt.Errorf("记录取出积分日志失败: %w", err)
 	}
@@ -1999,25 +2419,26 @@ func WithdrawPointsFromSavings(db *sql.DB, userID int64, amount int) error {
 	return tx.Commit()
 }
 
-func GetSavingsPoints(db *sql.DB, userID int64) (int, error) {
+func GetSavingsPoints(db *sql.DB, botUin int64, userID int64) (int, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, fmt.Errorf("开始事务失败: %w", err)
 	}
 	defer tx.Rollback()
 
-	_, err = applySavingsInterestTx(tx, userID)
+	_, err = applySavingsInterestTx(tx, botUin, userID)
 	if err != nil {
 		return 0, err
 	}
 
 	var balance int
-	err = tx.QueryRow("SELECT savings_points FROM users WHERE user_id = $1", userID).Scan(&balance)
+	query := fmt.Sprintf(`SELECT "SaveCredit" FROM %s WHERE "Id" = $1`, TableUser)
+	err = tx.QueryRow(query, userID).Scan(&balance)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			balance = 0
 		} else {
-			return 0, fmt.Errorf("查询存积分失败: %w", err)
+			return 0, fmt.Errorf("查询存款失败: %w", err)
 		}
 	}
 
@@ -2028,9 +2449,14 @@ func GetSavingsPoints(db *sql.DB, userID int64) (int, error) {
 	return balance, nil
 }
 
-func FreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
+func FreezePoints(db *sql.DB, botUin int64, userID int64, groupID int64, amount int64, reason string) error {
 	if amount <= 0 {
 		return fmt.Errorf("冻结积分数量必须大于0")
+	}
+
+	isGroupActive, err := IsGroupCreditSystemEnabled(db, groupID)
+	if err != nil {
+		return fmt.Errorf("检查群积分模式失败: %w", err)
 	}
 
 	tx, err := db.Begin()
@@ -2039,25 +2465,75 @@ func FreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
 	}
 	defer tx.Rollback()
 
-	var available int
-	err = tx.QueryRow("SELECT points FROM users WHERE user_id = $1 FOR UPDATE", userID).Scan(&available)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("用户不存在或没有积分")
+	var logType string
+
+	if isGroupActive {
+		logType = "group"
+
+		var available int64
+		query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2 FOR UPDATE`, TableGroupMember)
+		err = tx.QueryRow(query, userID, groupID).Scan(&available)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("群成员不存在或没有积分")
+			}
+			return fmt.Errorf("查询群成员积分失败: %w", err)
 		}
-		return fmt.Errorf("查询用户积分失败: %w", err)
+
+		if available < amount {
+			return fmt.Errorf("群可用积分不足，当前积分为: %d", available)
+		}
+
+		updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET "Credit" = "Credit" - $3, "FreezeCredit" = "FreezeCredit" + $3
+		WHERE "UserId" = $1 AND "GroupId" = $2
+		`, TableGroupMember)
+		_, err = tx.Exec(updateQuery, userID, groupID, amount)
+		if err != nil {
+			return fmt.Errorf("更新群成员冻结积分失败: %w", err)
+		}
+	} else {
+		logType = "global"
+
+		var available int64
+		query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+		err = tx.QueryRow(query, userID).Scan(&available)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("用户不存在或没有积分")
+			}
+			return fmt.Errorf("查询全局用户积分失败: %w", err)
+		}
+
+		if available < amount {
+			return fmt.Errorf("全局可用积分不足，当前积分为: %d", available)
+		}
+
+		updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET "Credit" = "Credit" - $2, "FreezeCredit" = "FreezeCredit" + $2, "UpgradeDate" = CURRENT_TIMESTAMP
+		WHERE "Id" = $1
+		`, TableUser)
+		_, err = tx.Exec(updateQuery, userID, amount)
+		if err != nil {
+			return fmt.Errorf("更新全局冻结积分失败: %w", err)
+		}
 	}
 
-	if available < amount {
-		return fmt.Errorf("可用积分不足，当前积分为: %d", available)
+	// 记录日志到 Credit 表
+	var newPoints int64
+	if isGroupActive {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember), userID, groupID).Scan(&newPoints)
+	} else {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), userID).Scan(&newPoints)
 	}
 
-	_, err = tx.Exec("UPDATE users SET points = points - $1, frozen_points = frozen_points + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", amount, userID)
-	if err != nil {
-		return fmt.Errorf("更新冻结积分失败: %w", err)
-	}
-
-	_, err = tx.Exec("INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)", userID, -amount, reason, "freeze")
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, groupID, botUin, -amount, newPoints, reason+fmt.Sprintf(" [freeze] (%s)", logType))
 	if err != nil {
 		return fmt.Errorf("记录冻结积分日志失败: %w", err)
 	}
@@ -2065,9 +2541,14 @@ func FreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
 	return tx.Commit()
 }
 
-func UnfreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
+func UnfreezePoints(db *sql.DB, botUin int64, userID int64, groupID int64, amount int64, reason string) error {
 	if amount <= 0 {
 		return fmt.Errorf("解冻积分数量必须大于0")
+	}
+
+	isGroupActive, err := IsGroupCreditSystemEnabled(db, groupID)
+	if err != nil {
+		return fmt.Errorf("检查群积分模式失败: %w", err)
 	}
 
 	tx, err := db.Begin()
@@ -2076,25 +2557,75 @@ func UnfreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
 	}
 	defer tx.Rollback()
 
-	var frozen int
-	err = tx.QueryRow("SELECT frozen_points FROM users WHERE user_id = $1 FOR UPDATE", userID).Scan(&frozen)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("没有冻结积分记录")
+	var logType string
+
+	if isGroupActive {
+		logType = "group"
+
+		var frozen int64
+		query := fmt.Sprintf(`SELECT "FreezeCredit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2 FOR UPDATE`, TableGroupMember)
+		err = tx.QueryRow(query, userID, groupID).Scan(&frozen)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("没有群成员冻结积分记录")
+			}
+			return fmt.Errorf("查询群成员冻结积分失败: %w", err)
 		}
-		return fmt.Errorf("查询冻结积分失败: %w", err)
+
+		if frozen < amount {
+			return fmt.Errorf("群成员冻结积分不足，当前冻结积分为: %d", frozen)
+		}
+
+		updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET "FreezeCredit" = "FreezeCredit" - $3, "Credit" = "Credit" + $3
+		WHERE "UserId" = $1 AND "GroupId" = $2
+		`, TableGroupMember)
+		_, err = tx.Exec(updateQuery, userID, groupID, amount)
+		if err != nil {
+			return fmt.Errorf("更新群成员解冻积分失败: %w", err)
+		}
+	} else {
+		logType = "global"
+
+		var frozen int64
+		query := fmt.Sprintf(`SELECT "FreezeCredit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+		err = tx.QueryRow(query, userID).Scan(&frozen)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("没有全局冻结积分记录")
+			}
+			return fmt.Errorf("查询全局冻结积分失败: %w", err)
+		}
+
+		if frozen < amount {
+			return fmt.Errorf("全局冻结积分不足，当前冻结积分为: %d", frozen)
+		}
+
+		updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET "FreezeCredit" = "FreezeCredit" - $2, "Credit" = "Credit" + $2, "UpgradeDate" = CURRENT_TIMESTAMP
+		WHERE "Id" = $1
+		`, TableUser)
+		_, err = tx.Exec(updateQuery, userID, amount)
+		if err != nil {
+			return fmt.Errorf("更新全局解冻积分失败: %w", err)
+		}
 	}
 
-	if frozen < amount {
-		return fmt.Errorf("冻结积分不足，当前冻结积分为: %d", frozen)
+	// 记录日志到 Credit 表
+	var newPoints int64
+	if isGroupActive {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember), userID, groupID).Scan(&newPoints)
+	} else {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), userID).Scan(&newPoints)
 	}
 
-	_, err = tx.Exec("UPDATE users SET frozen_points = frozen_points - $1, points = points + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", amount, userID)
-	if err != nil {
-		return fmt.Errorf("更新解冻积分失败: %w", err)
-	}
-
-	_, err = tx.Exec("INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)", userID, amount, reason, "unfreeze")
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, groupID, botUin, amount, newPoints, reason+fmt.Sprintf(" [unfreeze] (%s)", logType))
 	if err != nil {
 		return fmt.Errorf("记录解冻积分日志失败: %w", err)
 	}
@@ -2103,9 +2634,14 @@ func UnfreezePoints(db *sql.DB, userID int64, amount int, reason string) error {
 }
 
 // TransferPoints 积分转账
-func TransferPoints(db *sql.DB, fromUserID, toUserID int64, amount int, reason string, category string) error {
+func TransferPoints(db *sql.DB, botUin int64, fromUserID, toUserID int64, groupID int64, amount int64, reason string, category string) error {
 	if amount <= 0 {
 		return fmt.Errorf("转账金额必须大于0")
+	}
+
+	isGroupActive, err := IsGroupCreditSystemEnabled(db, groupID)
+	if err != nil {
+		return fmt.Errorf("检查群积分模式失败: %w", err)
 	}
 
 	tx, err := db.Begin()
@@ -2114,51 +2650,113 @@ func TransferPoints(db *sql.DB, fromUserID, toUserID int64, amount int, reason s
 	}
 	defer tx.Rollback()
 
-	// 1. 检查并锁定转出者积分
-	var fromPoints int
-	err = tx.QueryRow("SELECT points FROM users WHERE user_id = $1 FOR UPDATE", fromUserID).Scan(&fromPoints)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("转出用户不存在或没有积分")
+	var logType string
+
+	if isGroupActive {
+		logType = "group"
+
+		// 1. 检查并锁定转出者积分
+		var fromPoints int64
+		queryFrom := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2 FOR UPDATE`, TableGroupMember)
+		err = tx.QueryRow(queryFrom, fromUserID, groupID).Scan(&fromPoints)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("转出用户在群内不存在或没有积分")
+			}
+			return fmt.Errorf("查询转出用户群积分失败: %w", err)
 		}
-		return fmt.Errorf("查询转出用户积分失败: %w", err)
-	}
 
-	if fromPoints < amount {
-		return fmt.Errorf("积分不足，当前积分为: %d", fromPoints)
-	}
+		if fromPoints < amount {
+			return fmt.Errorf("群积分不足，当前积分为: %d", fromPoints)
+		}
 
-	_, err = tx.Exec("UPDATE users SET points = points - $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", amount, fromUserID)
-	if err != nil {
-		return fmt.Errorf("扣除积分失败: %w", err)
-	}
+		// 2. 更新转出者积分
+		updateFrom := fmt.Sprintf(`UPDATE %s SET "Credit" = "Credit" - $3 WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember)
+		_, err = tx.Exec(updateFrom, fromUserID, groupID, amount)
+		if err != nil {
+			return fmt.Errorf("扣除群积分失败: %w", err)
+		}
 
-	// 2. 增加接收者积分（如果不存在则插入）
-	result, err := tx.Exec("UPDATE users SET points = points + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2", amount, toUserID)
-	if err != nil {
-		return fmt.Errorf("增加接收者积分失败: %w", err)
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取影响行数失败: %w", err)
-	}
-	if rowsAffected == 0 {
-		insertQuery := `
-		INSERT INTO users (user_id, points, created_at, updated_at)
-		VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`
-		if _, err := tx.Exec(insertQuery, toUserID, amount); err != nil {
-			return fmt.Errorf("插入接收者用户并初始化积分失败: %w", err)
+		// 3. 增加接收者积分
+		updateTo := fmt.Sprintf(`UPDATE %s SET "Credit" = "Credit" + $3 WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember)
+		result, err := tx.Exec(updateTo, toUserID, groupID, amount)
+		if err != nil {
+			return fmt.Errorf("增加接收者群积分失败: %w", err)
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			// 群模式下，如果接收者不在群里，通常不自动创建记录
+			return fmt.Errorf("接收者不在群内，无法完成转账")
+		}
+	} else {
+		logType = "global"
+
+		// 1. 检查并锁定转出者积分
+		var fromPoints int64
+		queryFrom := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+		err = tx.QueryRow(queryFrom, fromUserID).Scan(&fromPoints)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("转出用户不存在或没有积分")
+			}
+			return fmt.Errorf("查询转出用户全局积分失败: %w", err)
+		}
+
+		if fromPoints < amount {
+			return fmt.Errorf("全局积分不足，当前积分为: %d", fromPoints)
+		}
+
+		// 2. 更新转出者积分
+		updateFrom := fmt.Sprintf(`UPDATE %s SET "Credit" = "Credit" - $1 WHERE "Id" = $2`, TableUser)
+		_, err = tx.Exec(updateFrom, amount, fromUserID)
+		if err != nil {
+			return fmt.Errorf("扣除全局积分失败: %w", err)
+		}
+
+		// 3. 增加接收者积分（如果不存在则插入）
+		updateTo := fmt.Sprintf(`UPDATE %s SET "Credit" = "Credit" + $1 WHERE "Id" = $2`, TableUser)
+		result, err := tx.Exec(updateTo, amount, toUserID)
+		if err != nil {
+			return fmt.Errorf("增加接收者全局积分失败: %w", err)
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			insertQuery := fmt.Sprintf(`
+			INSERT INTO %s ("Id", "Credit", "InsertDate")
+			VALUES ($1, $2, CURRENT_TIMESTAMP)
+			`, TableUser)
+			if _, err := tx.Exec(insertQuery, toUserID, amount); err != nil {
+				return fmt.Errorf("插入接收者全局积分失败: %w", err)
+			}
 		}
 	}
 
-	// 3. 记录日志 (两条记录)
-	logQuery := `INSERT INTO points_logs (user_id, amount, reason, category) VALUES ($1, $2, $3, $4)`
-	_, err = tx.Exec(logQuery, fromUserID, -amount, fmt.Sprintf("转账给 %s: %s", toUserID, reason), category)
+	// 4. 记录日志到 Credit 表 (两条记录)
+	creditLogQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	`, TableCredit)
+
+	// 为转出者记录
+	var fromNewPoints int64
+	if isGroupActive {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember), fromUserID, groupID).Scan(&fromNewPoints)
+	} else {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), fromUserID).Scan(&fromNewPoints)
+	}
+	_, err = tx.Exec(creditLogQuery, fromUserID, groupID, botUin, -amount, fromNewPoints, fmt.Sprintf("转账给 %d: %s [%s] (%s)", toUserID, reason, category, logType))
 	if err != nil {
 		return fmt.Errorf("记录转出日志失败: %w", err)
 	}
-	_, err = tx.Exec(logQuery, toUserID, amount, fmt.Sprintf("来自 %s 的转账: %s", fromUserID, reason), category)
+
+	// 为接收者记录
+	var toNewPoints int64
+	if isGroupActive {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember), toUserID, groupID).Scan(&toNewPoints)
+	} else {
+		tx.QueryRow(fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1`, TableUser), toUserID).Scan(&toNewPoints)
+	}
+	_, err = tx.Exec(creditLogQuery, toUserID, groupID, botUin, amount, toNewPoints, fmt.Sprintf("来自 %d 的转账: %s [%s] (%s)", fromUserID, reason, category, logType))
 	if err != nil {
 		return fmt.Errorf("记录转入日志失败: %w", err)
 	}
@@ -2210,7 +2808,7 @@ func RemoveGroupAdmin(db *sql.DB, groupID, userID int64) error {
 }
 
 // GetGroupAdmins 获取群管理员列表
-func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]interface{}, error) {
+func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]any, error) {
 	query := `
 	SELECT user_id, level
 	FROM group_admins
@@ -2223,14 +2821,14 @@ func GetGroupAdmins(db *sql.DB, groupID int64) ([]map[string]interface{}, error)
 	}
 	defer rows.Close()
 
-	admins := []map[string]interface{}{}
+	admins := []map[string]any{}
 	for rows.Next() {
 		var userID int64
 		var level int
 		if err := rows.Scan(&userID, &level); err != nil {
 			return nil, fmt.Errorf("扫描群管理员失败: %w", err)
 		}
-		admins = append(admins, map[string]interface{}{
+		admins = append(admins, map[string]any{
 			"user_id": userID,
 			"level":   level,
 		})
@@ -2412,90 +3010,25 @@ func GetGroupFeatureOverride(db *sql.DB, groupID int64, featureID string) (bool,
 	return enabled, true, nil
 }
 
-type SensitiveWord struct {
-	Word  string
-	Level int
-}
-
-func AddSensitiveWord(db *sql.DB, word string, level int) error {
-	if level <= 0 {
-		level = 1
-	}
-
-	query := `
-	INSERT INTO sensitive_words (word, level)
-	VALUES ($1, $2)
-	ON CONFLICT (word) DO UPDATE
-	SET level = EXCLUDED.level
-	`
-
-	_, err := db.Exec(query, word, level)
-	if err != nil {
-		return fmt.Errorf("添加敏感词失败: %w", err)
-	}
-
-	return nil
-}
-
-func RemoveSensitiveWord(db *sql.DB, word string) error {
-	query := `
-	DELETE FROM sensitive_words
-	WHERE word = $1
-	`
-
-	result, err := db.Exec(query, word)
-	if err != nil {
-		return fmt.Errorf("移除敏感词失败: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取影响行数失败: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("该敏感词不存在: %s", word)
-	}
-
-	return nil
-}
-
-func GetAllSensitiveWords(db *sql.DB) ([]SensitiveWord, error) {
-	query := `
-	SELECT word, level
-	FROM sensitive_words
-	`
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("获取敏感词列表失败: %w", err)
-	}
-	defer rows.Close()
-
-	words := []SensitiveWord{}
-	for rows.Next() {
-		var word SensitiveWord
-		if err := rows.Scan(&word.Word, &word.Level); err != nil {
-			return nil, fmt.Errorf("扫描敏感词失败: %w", err)
-		}
-		words = append(words, word)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历敏感词失败: %w", err)
-	}
-
-	return words, nil
-}
-
+// AddGroupWhitelistUser 添加群白名单用户
 func AddGroupWhitelistUser(db *sql.DB, groupID, userID int64) error {
-	query := `
-	INSERT INTO group_whitelist (group_id, user_id)
-	VALUES ($1, $2)
-	ON CONFLICT (group_id, user_id) DO NOTHING
-	`
+	// 先检查是否存在，因为没有唯一索引，直接插入会导致重复，但 ON CONFLICT 又报错
+	var exists bool
+	checkQuery := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s WHERE "GroupId" = $1 AND "WhiteId" = $2)`, TableWhiteList)
+	err := db.QueryRow(checkQuery, groupID, userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
 
-	_, err := db.Exec(query, groupID, userID)
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("GroupId", "WhiteId", "UserId", "InsertDate")
+	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+	`, TableWhiteList)
+
+	_, err = db.Exec(query, groupID, userID, userID)
 	if err != nil {
 		return fmt.Errorf("添加群白名单用户失败: %w", err)
 	}
@@ -2503,11 +3036,12 @@ func AddGroupWhitelistUser(db *sql.DB, groupID, userID int64) error {
 	return nil
 }
 
+// RemoveGroupWhitelistUser 移除群白名单用户
 func RemoveGroupWhitelistUser(db *sql.DB, groupID, userID int64) error {
-	query := `
-	DELETE FROM group_whitelist
-	WHERE group_id = $1 AND user_id = $2
-	`
+	query := fmt.Sprintf(`
+	DELETE FROM %s
+	WHERE "GroupId" = $1 AND "WhiteId" = $2
+	`, TableWhiteList)
 
 	_, err := db.Exec(query, groupID, userID)
 	if err != nil {
@@ -2517,11 +3051,126 @@ func RemoveGroupWhitelistUser(db *sql.DB, groupID, userID int64) error {
 	return nil
 }
 
+// IsUserInGroupWhitelist 检查用户是否在群白名单中
+func IsUserInGroupWhitelist(db *sql.DB, groupID, userID int64) (bool, error) {
+	query := fmt.Sprintf(`
+	SELECT EXISTS(SELECT 1 FROM %s WHERE "GroupId" = $1 AND "WhiteId" = $2)
+	`, TableWhiteList)
+
+	var exists bool
+	err := db.QueryRow(query, groupID, userID).Scan(&exists)
+	return exists, err
+}
+
+// AddGroupBlacklistUser 添加群黑名单用户
+func AddGroupBlacklistUser(db *sql.DB, groupID, userID int64, reason string) error {
+	// 先检查是否存在
+	var exists bool
+	checkQuery := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s WHERE "GroupId" = $1 AND "BlackId" = $2)`, TableBlackList)
+	err := db.QueryRow(checkQuery, groupID, userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		query := fmt.Sprintf(`
+		UPDATE %s
+		SET "IsBlack" = true, "BlackInfo" = $3, "InsertDate" = CURRENT_TIMESTAMP
+		WHERE "GroupId" = $1 AND "BlackId" = $2
+		`, TableBlackList)
+		_, err = db.Exec(query, groupID, userID, reason)
+	} else {
+		query := fmt.Sprintf(`
+		INSERT INTO %s ("GroupId", "BlackId", "UserId", "IsBlack", "BlackInfo", "InsertDate")
+		VALUES ($1, $2, $2, true, $3, CURRENT_TIMESTAMP)
+		`, TableBlackList)
+		_, err = db.Exec(query, groupID, userID, reason)
+	}
+
+	if err != nil {
+		return fmt.Errorf("添加群黑名单用户失败: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveGroupBlacklistUser 移除群黑名单用户
+func RemoveGroupBlacklistUser(db *sql.DB, groupID, userID int64) error {
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET "IsBlack" = false
+	WHERE "GroupId" = $1 AND "BlackId" = $2
+	`, TableBlackList)
+
+	_, err := db.Exec(query, groupID, userID)
+	if err != nil {
+		return fmt.Errorf("移除群黑名单用户失败: %w", err)
+	}
+
+	return nil
+}
+
+// IsUserInGroupBlacklist 检查用户是否在群黑名单中
+func IsUserInGroupBlacklist(db *sql.DB, groupID, userID int64) (bool, error) {
+	query := fmt.Sprintf(`
+	SELECT EXISTS(SELECT 1 FROM %s WHERE "GroupId" = $1 AND "BlackId" = $2 AND "IsBlack" = true)
+	`, TableBlackList)
+
+	var exists bool
+	err := db.QueryRow(query, groupID, userID).Scan(&exists)
+	return exists, err
+}
+
+// UpdateGroupKeyword 更新群组关键词（增量更新）
+func UpdateGroupKeyword(db *sql.DB, groupID int64, column string, word string, action string) error {
+	// 获取当前关键词
+	var currentKeywords string
+	query := fmt.Sprintf(`SELECT COALESCE("%s", '') FROM %s WHERE "Oid" = $1`, column, TableGroup)
+	err := db.QueryRow(query, groupID).Scan(&currentKeywords)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("群组不存在: %d", groupID)
+		}
+		return fmt.Errorf("获取群组关键词失败: %w", err)
+	}
+
+	keywords := strings.Split(currentKeywords, ",")
+	newKeywords := []string{}
+	found := false
+
+	for _, k := range keywords {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		if k == word {
+			found = true
+			if action == "remove" {
+				continue
+			}
+		}
+		newKeywords = append(newKeywords, k)
+	}
+
+	if action == "add" && !found {
+		newKeywords = append(newKeywords, word)
+	}
+
+	updatedKeywords := strings.Join(newKeywords, ",")
+	updateQuery := fmt.Sprintf(`UPDATE %s SET "%s" = $1, "LastDate" = CURRENT_TIMESTAMP WHERE "Oid" = $2`, TableGroup, column)
+	_, err = db.Exec(updateQuery, updatedKeywords, groupID)
+	if err != nil {
+		return fmt.Errorf("更新群组关键词失败: %w", err)
+	}
+
+	return nil
+}
+
 func ClearGroupWhitelist(db *sql.DB, groupID int64) error {
-	query := `
-	DELETE FROM group_whitelist
-	WHERE group_id = $1
-	`
+	query := fmt.Sprintf(`
+	DELETE FROM %s
+	WHERE "GroupId" = $1
+	`, TableWhiteList)
 
 	_, err := db.Exec(query, groupID)
 	if err != nil {
@@ -2531,162 +3180,19 @@ func ClearGroupWhitelist(db *sql.DB, groupID int64) error {
 	return nil
 }
 
-func IsUserInGroupWhitelist(db *sql.DB, groupID, userID int64) (bool, error) {
-	query := `
-	SELECT COUNT(*) > 0
-	FROM group_whitelist
-	WHERE group_id = $1 AND user_id = $2
-	`
+func ClearGroupBlacklist(db *sql.DB, groupID int64) error {
+	query := fmt.Sprintf(`
+	UPDATE %s
+	SET "IsBlack" = false
+	WHERE "GroupId" = $1
+	`, TableBlackList)
 
-	var exists bool
-	if err := db.QueryRow(query, groupID, userID).Scan(&exists); err != nil {
-		return false, fmt.Errorf("检查群白名单用户失败: %w", err)
-	}
-
-	return exists, nil
-}
-
-// ------------------- 禁言记录相关操作 -------------------
-
-// BanUser 禁言用户
-func BanUser(db *sql.DB, groupID, userID int64, banEndTime time.Time) error {
-	query := `
-	INSERT INTO banned_users (group_id, user_id, ban_end_time)
-	VALUES ($1, $2, $3)
-	ON CONFLICT (group_id, user_id) DO UPDATE
-	SET ban_end_time = $3
-	`
-
-	_, err := db.Exec(query, groupID, userID, banEndTime)
+	_, err := db.Exec(query, groupID)
 	if err != nil {
-		return fmt.Errorf("禁言用户失败: %w", err)
+		return fmt.Errorf("清空群黑名单失败: %w", err)
 	}
 
 	return nil
-}
-
-// UnbanUser 解除禁言
-func UnbanUser(db *sql.DB, groupID, userID int64) error {
-	query := `
-	DELETE FROM banned_users
-	WHERE group_id = $1 AND user_id = $2
-	`
-
-	result, err := db.Exec(query, groupID, userID)
-	if err != nil {
-		return fmt.Errorf("解除禁言失败: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取影响行数失败: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("该用户未被禁言: %s", userID)
-	}
-
-	return nil
-}
-
-// GetBannedUsersByGroup 获取群内禁言用户列表
-func GetBannedUsersByGroup(db *sql.DB, groupID int64) ([]map[string]interface{}, error) {
-	query := `
-	SELECT user_id, ban_end_time
-	FROM banned_users
-	WHERE group_id = $1
-	`
-
-	rows, err := db.Query(query, groupID)
-	if err != nil {
-		return nil, fmt.Errorf("获取禁言用户列表失败: %w", err)
-	}
-	defer rows.Close()
-
-	bannedUsers := []map[string]interface{}{}
-	for rows.Next() {
-		var userID int64
-		var banEndTime time.Time
-		if err := rows.Scan(&userID, &banEndTime); err != nil {
-			return nil, fmt.Errorf("扫描禁言用户失败: %w", err)
-		}
-
-		bannedUsers = append(bannedUsers, map[string]interface{}{
-			"user_id":      userID,
-			"ban_end_time": banEndTime,
-		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历禁言用户失败: %w", err)
-	}
-
-	return bannedUsers, nil
-}
-
-// GetExpiredBans 获取过期的禁言记录
-func GetExpiredBans(db *sql.DB) ([]map[string]interface{}, error) {
-	query := `
-	SELECT group_id, user_id, ban_end_time
-	FROM banned_users
-	WHERE ban_end_time <= CURRENT_TIMESTAMP
-	`
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("获取过期禁言记录失败: %w", err)
-	}
-	defer rows.Close()
-
-	expiredBans := []map[string]interface{}{}
-	for rows.Next() {
-		var groupID, userID int64
-		var banEndTime time.Time
-		if err := rows.Scan(&groupID, &userID, &banEndTime); err != nil {
-			return nil, fmt.Errorf("扫描过期禁言记录失败: %w", err)
-		}
-
-		expiredBans = append(expiredBans, map[string]interface{}{
-			"group_id":     groupID,
-			"user_id":      userID,
-			"ban_end_time": banEndTime,
-		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历过期禁言记录失败: %w", err)
-	}
-
-	return expiredBans, nil
-}
-
-// IsUserBanned 检查用户是否被禁言
-func IsUserBanned(db *sql.DB, groupID, userID int64) (bool, time.Time, error) {
-	query := `
-	SELECT ban_end_time
-	FROM banned_users
-	WHERE group_id = $1 AND user_id = $2
-	`
-
-	var banEndTime time.Time
-	err := db.QueryRow(query, groupID, userID).Scan(&banEndTime)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, time.Time{}, nil // 用户未被禁言
-		}
-		return false, time.Time{}, fmt.Errorf("检查用户禁言状态失败: %w", err)
-	}
-
-	// 检查禁言是否已过期
-	if time.Now().After(banEndTime) {
-		// 自动解除过期禁言
-		if err := UnbanUser(db, groupID, userID); err != nil {
-			return false, time.Time{}, fmt.Errorf("自动解除禁言失败: %w", err)
-		}
-		return false, time.Time{}, nil
-	}
-
-	return true, banEndTime, nil
 }
 
 // ------------------- 审核日志相关操作 -------------------
@@ -2748,6 +3254,324 @@ func GetAuditLogsByGroup(db *sql.DB, groupID int64, limit, offset int) ([]AuditL
 	}
 
 	return logs, nil
+}
+
+// ------------------- 本机积分 (Local Points) 相关操作 -------------------
+
+// GetLocalPoints 获取本机积分
+func GetLocalPoints(db *sql.DB, botUin int64, userID int64) (int64, error) {
+	var points int64
+	query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "BotUin" = $1 AND "UserId" = $2`, TableFriend)
+	err := db.QueryRow(query, botUin, userID).Scan(&points)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("获取本机积分失败: %w", err)
+	}
+	return points, nil
+}
+
+// UpdateLocalPoints 更新本机积分
+func UpdateLocalPoints(db *sql.DB, botUin int64, userID int64, amount int64) error {
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("BotUin", "UserId", "Credit", "UpdateDate")
+	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+	ON CONFLICT ("BotUin", "UserId") DO UPDATE
+	SET "Credit" = %s."Credit" + $3, "UpdateDate" = CURRENT_TIMESTAMP
+	`, TableFriend, TableFriend)
+
+	_, err := db.Exec(query, botUin, userID, amount)
+	if err != nil {
+		return fmt.Errorf("更新本机积分失败: %w", err)
+	}
+	return nil
+}
+
+// ------------------- 消费统计与个人激活相关操作 -------------------
+
+// RecordConsumption 记录消费
+func RecordConsumption(db *sql.DB, botUin int64, userID int64, amount int64) error {
+	if amount <= 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "BotUin", "Amount", "ConsumeDate")
+	VALUES ($1, $2, $3, CURRENT_DATE)
+	ON CONFLICT ("UserId", "BotUin", "ConsumeDate") DO UPDATE
+	SET "Amount" = %s."Amount" + $3
+	`, TableConsumption, TableConsumption)
+
+	_, err := db.Exec(query, userID, botUin, amount)
+	if err != nil {
+		return fmt.Errorf("记录消费失败: %w", err)
+	}
+	return nil
+}
+
+// GetTodayConsumption 获取用户今日在该机器人的消费总额
+func GetTodayConsumption(db *sql.DB, botUin int64, userID int64) (int64, error) {
+	var total int64
+	query := fmt.Sprintf(`SELECT COALESCE(SUM("Amount"), 0) FROM %s WHERE "UserId" = $1 AND "BotUin" = $2 AND "ConsumeDate" = CURRENT_DATE`, TableConsumption)
+	err := db.QueryRow(query, userID, botUin).Scan(&total)
+	return total, err
+}
+
+// GetRolling12MConsumption 获取用户最近12个月在该机器人的消费总额
+func GetRolling12MConsumption(db *sql.DB, botUin int64, userID int64) (int64, error) {
+	var total int64
+	query := fmt.Sprintf(`SELECT COALESCE(SUM("Amount"), 0) FROM %s WHERE "UserId" = $1 AND "BotUin" = $2 AND "ConsumeDate" >= CURRENT_DATE - INTERVAL '12 months'`, TableConsumption)
+	err := db.QueryRow(query, userID, botUin).Scan(&total)
+	return total, err
+}
+
+// CheckPersonalActivation 检查个人激活状态
+func CheckPersonalActivation(db *sql.DB, botUin int64, userID int64) (bool, error) {
+	todayTotal, err := GetTodayConsumption(db, botUin, userID)
+	if err != nil {
+		return false, err
+	}
+	if todayTotal >= 500 { // 对应 C# 中的 TODAY_TOTAL_THRESHOLD
+		return true, nil
+	}
+
+	rollingTotal, err := GetRolling12MConsumption(db, botUin, userID)
+	if err != nil {
+		return false, err
+	}
+	if rollingTotal >= 1000 { // 对应 C# 中的 ROLLING_12M_THRESHOLD
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// ------------------- 打赏与手动调整 -------------------
+
+// updatePointsTx 在事务中更新全局积分
+func updatePointsTx(tx *sql.Tx, userID int64, amount int64, reason string, category string, botUin int64) error {
+	var current int64
+	query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "Id" = $1 FOR UPDATE`, TableUser)
+	err := tx.QueryRow(query, userID).Scan(&current)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("查询全局积分失败: %w", err)
+	}
+
+	if amount < 0 && current < -amount {
+		return fmt.Errorf("全局积分不足，当前积分为: %d", current)
+	}
+
+	updateQuery := fmt.Sprintf(`
+	INSERT INTO %s ("Id", "Credit", "InsertDate", "UpgradeDate")
+	VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	ON CONFLICT ("Id") DO UPDATE
+	SET "Credit" = %s."Credit" + $2, "UpgradeDate" = CURRENT_TIMESTAMP
+	RETURNING "Credit"
+	`, TableUser, TableUser)
+
+	var newBalance int64
+	err = tx.QueryRow(updateQuery, userID, amount).Scan(&newBalance)
+	if err != nil {
+		return fmt.Errorf("更新全局积分失败: %w", err)
+	}
+
+	// 记录日志
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate", "Category")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, 0, botUin, amount, newBalance, reason, category)
+	return err
+}
+
+// GetGroupPoints 获取用户在本群的积分
+func GetGroupPoints(db *sql.DB, userID int64, groupID int64) (int64, error) {
+	var points int64
+	query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2`, TableGroupMember)
+	err := db.QueryRow(query, userID, groupID).Scan(&points)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("获取群积分失败: %w", err)
+	}
+	return points, nil
+}
+
+// UpdateGroupPoints 更新用户在本群的积分
+func UpdateGroupPoints(db *sql.DB, userID int64, groupID int64, amount int64) error {
+	return updateGroupPoints(db, userID, groupID, amount, "插件操作", "group")
+}
+
+// updateGroupPointsTx 在事务中更新群积分
+func updateGroupPointsTx(tx *sql.Tx, userID int64, groupID int64, amount int64, reason string, category string) error {
+	var current int64
+	query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "UserId" = $1 AND "GroupId" = $2 FOR UPDATE`, TableGroupMember)
+	err := tx.QueryRow(query, userID, groupID).Scan(&current)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("查询群积分失败: %w", err)
+	}
+
+	if amount < 0 && current < -amount {
+		return fmt.Errorf("群积分不足，当前积分为: %d", current)
+	}
+
+	updateQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "Credit", "InsertDate", "UpdateDate")
+	VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	ON CONFLICT ("UserId", "GroupId") DO UPDATE
+	SET "Credit" = %s."Credit" + $3, "UpdateDate" = CURRENT_TIMESTAMP
+	RETURNING "Credit"
+	`, TableGroupMember, TableGroupMember)
+
+	var newBalance int64
+	err = tx.QueryRow(updateQuery, userID, groupID, amount).Scan(&newBalance)
+	if err != nil {
+		return fmt.Errorf("更新群积分失败: %w", err)
+	}
+
+	// 记录日志
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "GroupId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate", "Category")
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, groupID, 0, amount, newBalance, reason, category)
+	return err
+}
+
+// updateGroupPoints 非事务版本更新群积分
+func updateGroupPoints(db *sql.DB, userID int64, groupID int64, amount int64, reason string, category string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := updateGroupPointsTx(tx, userID, groupID, amount, reason, category); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// TipPoints 打赏积分
+func TipPoints(db *sql.DB, botUin int64, fromUserID, toUserID int64, groupID int64, amount int64, tier string) error {
+	if amount <= 0 {
+		return fmt.Errorf("打赏金额必须大于0")
+	}
+
+	// 1. 获取转出者是否为超级用户（免手续费）
+	user, err := GetUserByUserID(db, fromUserID)
+	if err != nil {
+		return fmt.Errorf("获取用户信息失败: %w", err)
+	}
+	isSuper := user != nil && user.IsSuperPoints
+
+	// 2. 计算手续费 (20%)
+	fee := int64(0)
+	if !isSuper {
+		fee = int64(float64(amount) * 0.2)
+		if fee < 1 && amount > 0 {
+			fee = 1 // 最小手续费
+		}
+	}
+	netAmount := amount - fee
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("开始事务失败: %w", err)
+	}
+	defer tx.Rollback()
+
+	reason := fmt.Sprintf("打赏给用户 %d", toUserID)
+	receiveReason := fmt.Sprintf("收到来自用户 %d 的打赏", fromUserID)
+
+	switch tier {
+	case "global":
+		// 扣除转出者
+		if err := updatePointsTx(tx, fromUserID, -amount, reason, "tip_out", 0); err != nil {
+			return err
+		}
+		// 增加接收者
+		if err := updatePointsTx(tx, toUserID, netAmount, receiveReason, "tip_in", 0); err != nil {
+			return err
+		}
+	case "group":
+		// 扣除转出者
+		if err := updateGroupPointsTx(tx, fromUserID, groupID, -amount, reason, "tip_out"); err != nil {
+			return err
+		}
+		// 增加接收者
+		if err := updateGroupPointsTx(tx, toUserID, groupID, netAmount, receiveReason, "tip_in"); err != nil {
+			return err
+		}
+	case "local":
+		// 扣除转出者
+		if err := updateLocalPointsTx(tx, botUin, fromUserID, -amount, reason, "tip_out"); err != nil {
+			return err
+		}
+		// 增加接收者
+		if err := updateLocalPointsTx(tx, botUin, toUserID, netAmount, receiveReason, "tip_in"); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("无效的积分层级: %s", tier)
+	}
+
+	return tx.Commit()
+}
+
+// updateLocalPointsTx 在事务中更新本机积分
+func updateLocalPointsTx(tx *sql.Tx, botUin int64, userID int64, amount int64, reason string, category string) error {
+	// 检查余额
+	var current int64
+	query := fmt.Sprintf(`SELECT "Credit" FROM %s WHERE "BotUin" = $1 AND "UserId" = $2 FOR UPDATE`, TableFriend)
+	err := tx.QueryRow(query, botUin, userID).Scan(&current)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("查询本机积分失败: %w", err)
+	}
+
+	if amount < 0 && current < -amount {
+		return fmt.Errorf("本机积分不足，当前积分为: %d", current)
+	}
+
+	// 更新积分
+	updateQuery := fmt.Sprintf(`
+	INSERT INTO %s ("BotUin", "UserId", "Credit", "UpdateDate")
+	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+	ON CONFLICT ("BotUin", "UserId") DO UPDATE
+	SET "Credit" = %s."Credit" + $3, "UpdateDate" = CURRENT_TIMESTAMP
+	RETURNING "Credit"
+	`, TableFriend, TableFriend)
+
+	var newBalance int64
+	err = tx.QueryRow(updateQuery, botUin, userID, amount).Scan(&newBalance)
+	if err != nil {
+		return fmt.Errorf("更新本机积分失败: %w", err)
+	}
+
+	// 记录日志
+	logQuery := fmt.Sprintf(`
+	INSERT INTO %s ("UserId", "BotUin", "CreditAdd", "CreditValue", "CreditInfo", "InsertDate", "Category")
+	VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
+	`, TableCredit)
+	_, err = tx.Exec(logQuery, userID, botUin, amount, newBalance, reason, category)
+	return err
+}
+
+// AdjustPoints 手动调整积分
+func AdjustPoints(db *sql.DB, botUin int64, userID int64, groupID int64, amount int64, tier string, reason string) error {
+	switch tier {
+	case "global":
+		return UpdateUserPoints(db, userID, int(amount)) // 注意：UpdateUserPoints 是覆盖式的，而通常调整应该是增量式的。
+		// 应该使用增量式更新，这里我重新写一个增量式的。
+	case "group":
+		return updateGroupPoints(db, userID, groupID, amount, reason, "admin_adjust")
+	case "local":
+		return UpdateLocalPoints(db, botUin, userID, amount)
+	default:
+		return fmt.Errorf("无效的积分层级: %s", tier)
+	}
 }
 
 // ------------------- 裂变系统相关操作 -------------------
@@ -2921,7 +3745,7 @@ func CompleteFissionTask(db *sql.DB, userID int64, taskType string) error {
 		// 3. 发放奖励
 		reason := fmt.Sprintf("完成裂变任务: %s", taskName)
 		if points > 0 {
-			_ = AddPoints(db, userID, points, reason, "fission_task")
+			_ = AddPoints(db, 0, userID, 0, int64(points), reason, "fission_task")
 			_ = CreateFissionRewardLog(db, userID, "points", points, reason)
 		}
 
@@ -3006,7 +3830,7 @@ func UpdateUserFissionRecord(db *sql.DB, userID int64, inviteIncr, rewardIncr, p
 }
 
 // GetFissionRank 获取裂变排行榜
-func GetFissionRank(db *sql.DB, limit int) ([]map[string]interface{}, error) {
+func GetFissionRank(db *sql.DB, limit int) ([]map[string]any, error) {
 	query := `
 	SELECT user_id, invite_count, points
 	FROM user_fission_records
@@ -3019,14 +3843,14 @@ func GetFissionRank(db *sql.DB, limit int) ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	rank := []map[string]interface{}{}
+	rank := []map[string]any{}
 	for rows.Next() {
 		var userID int64
 		var inviteCount, points int
 		if err := rows.Scan(&userID, &inviteCount, &points); err != nil {
 			return nil, fmt.Errorf("扫描裂变排行失败: %w", err)
 		}
-		rank = append(rank, map[string]interface{}{
+		rank = append(rank, map[string]any{
 			"user_id":      userID,
 			"invite_count": inviteCount,
 			"points":       points,
