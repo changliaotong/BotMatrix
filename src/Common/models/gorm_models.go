@@ -8,37 +8,37 @@ import (
 
 // Member represents the bot (Member table in legacy C#)
 type Member struct {
-	BotUin         int64          `gorm:"primaryKey;column:BotUin" json:"bot_uin"`
-	Password       string         `gorm:"column:Password" json:"password"`
-	BotName        string         `gorm:"column:BotName" json:"bot_name"`
-	BotType        int            `gorm:"column:BotType" json:"bot_type"`
-	AdminId        int64          `gorm:"column:AdminId" json:"admin_id"`
-	InsertDate     time.Time      `gorm:"column:InsertDate" json:"insert_date"`
-	BotMemo        string         `gorm:"column:BotMemo" json:"bot_memo"`
-	WemcomeMessage string         `gorm:"column:WemcomeMessage" json:"welcome_message"`
-	ApiIP          string         `gorm:"column:ApiIP" json:"api_ip"`
-	ApiPort        string         `gorm:"column:ApiPort" json:"api_port"`
-	ApiKey         string         `gorm:"column:ApiKey" json:"api_key"`
-	WebUIToken     string         `gorm:"column:WebUIToken" json:"web_ui_token"`
-	WebUIPort      string         `gorm:"column:WebUIPort" json:"web_ui_port"`
-	IsSignalR      bool           `gorm:"column:IsSignalR" json:"is_signal_r"`
-	IsCredit       bool           `gorm:"column:IsCredit" json:"is_credit"`
-	IsGroup        bool           `gorm:"column:IsGroup" json:"is_group"`
-	IsPrivate      bool           `gorm:"column:IsPrivate" json:"is_private"`
-	Valid          int            `gorm:"column:Valid" json:"valid"`
-	ValidDate      time.Time      `gorm:"column:ValidDate" json:"valid_date"`
-	LastDate       time.Time      `gorm:"column:LastDate" json:"last_date"`
-	IsFreeze       bool           `gorm:"column:IsFreeze" json:"is_freeze"`
-	FreezeDate     time.Time      `gorm:"column:FreezeDate" json:"freeze_date"`
-	FreezeTimes    int            `gorm:"column:FreezeTimes" json:"freeze_times"`
-	IsBlock        bool           `gorm:"column:IsBlock" json:"is_block"`
-	BlockDate      time.Time      `gorm:"column:BlockDate" json:"block_date"`
-	HeartbeatDate  time.Time      `gorm:"column:HeartbeatDate" json:"heartbeat_date"`
-	ReceiveDate    time.Time      `gorm:"column:ReceiveDate" json:"receive_date"`
-	IsVip          bool           `gorm:"column:IsVip" json:"is_vip"`
-	BotGuid        string         `gorm:"column:BotGuid" json:"bot_guid"`
+	BotUin         int64     `gorm:"primaryKey;column:BotUin" json:"bot_uin"`
+	Password       string    `gorm:"column:Password" json:"password"`
+	BotName        string    `gorm:"column:BotName" json:"bot_name"`
+	BotType        int       `gorm:"column:BotType" json:"bot_type"`
+	AdminId        int64     `gorm:"column:AdminId" json:"admin_id"`
+	InsertDate     time.Time `gorm:"column:InsertDate" json:"insert_date"`
+	BotMemo        string    `gorm:"column:BotMemo" json:"bot_memo"`
+	WemcomeMessage string    `gorm:"column:WemcomeMessage" json:"welcome_message"`
+	ApiIP          string    `gorm:"column:ApiIP" json:"api_ip"`
+	ApiPort        string    `gorm:"column:ApiPort" json:"api_port"`
+	ApiKey         string    `gorm:"column:ApiKey" json:"api_key"`
+	WebUIToken     string    `gorm:"column:WebUIToken" json:"web_ui_token"`
+	WebUIPort      string    `gorm:"column:WebUIPort" json:"web_ui_port"`
+	IsSignalR      bool      `gorm:"column:IsSignalR" json:"is_signal_r"`
+	IsCredit       bool      `gorm:"column:IsCredit" json:"is_credit"`
+	IsGroup        bool      `gorm:"column:IsGroup" json:"is_group"`
+	IsPrivate      bool      `gorm:"column:IsPrivate" json:"is_private"`
+	Valid          int       `gorm:"column:Valid" json:"valid"`
+	ValidDate      time.Time `gorm:"column:ValidDate" json:"valid_date"`
+	LastDate       time.Time `gorm:"column:LastDate" json:"last_date"`
+	IsFreeze       bool      `gorm:"column:IsFreeze" json:"is_freeze"`
+	FreezeDate     time.Time `gorm:"column:FreezeDate" json:"freeze_date"`
+	FreezeTimes    int       `gorm:"column:FreezeTimes" json:"freeze_times"`
+	IsBlock        bool      `gorm:"column:IsBlock" json:"is_block"`
+	BlockDate      time.Time `gorm:"column:BlockDate" json:"block_date"`
+	HeartbeatDate  time.Time `gorm:"column:HeartbeatDate" json:"heartbeat_date"`
+	ReceiveDate    time.Time `gorm:"column:ReceiveDate" json:"receive_date"`
+	IsVip          bool      `gorm:"column:IsVip" json:"is_vip"`
+	BotGuid        string    `gorm:"column:BotGuid" json:"bot_guid"`
 	// Keep these for system status
-	Connected bool `gorm:"-" json:"connected"`
+	Connected bool           `gorm:"-" json:"connected"`
 	LastSeen  time.Time      `gorm:"-" json:"last_seen"`
 	DeletedAt gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
 }
@@ -187,7 +187,7 @@ type AIModel struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
 	ProviderID   uint       `gorm:"index;column:ProviderId" json:"provider_id"`
 	Provider     AIProvider `gorm:"foreignKey:ProviderID" json:"provider"`
-	ModelID      string     `gorm:"size:100;column:ApiModelId" json:"model_id"`       // 实际 API 调用的模型 ID (如 gpt-4)
+	APIModelID   string     `gorm:"size:100;column:ApiModelId" json:"model_id"`       // 实际 API 调用的模型 ID (如 gpt-4)
 	ModelName    string     `gorm:"size:100;column:ModelName" json:"model_name"`      // 展示名称 (如 GPT-4 Turbo)
 	Capabilities string     `gorm:"size:255;column:Capabilities" json:"capabilities"` // JSON array: ["chat", "vision"]
 	BaseURL      string     `gorm:"size:255;column:BaseUrl" json:"base_url"`          // 模型级别 BaseURL 覆盖
@@ -407,7 +407,7 @@ type Enterprise struct {
 	Name        string         `gorm:"size:255;uniqueIndex;not null;column:Name" json:"name"` // 企业名称
 	Code        string         `gorm:"size:100;uniqueIndex;not null;column:Code" json:"code"` // 企业唯一代码 (用于 B2B 通信)
 	Description string         `gorm:"type:text;column:Description" json:"description"`
-	OwnerID     uint           `gorm:"index;column:OwnerId" json:"owner_id"`                 // 企业所有者 (关联 UserGORM)
+	OwnerID     uint           `gorm:"index;column:OwnerId" json:"owner_id"`                 // 企业所有者 (关联 UserGorm)
 	Config      string         `gorm:"type:text;column:Config" json:"config"`                // 企业级全局配置 (JSON)
 	Status      string         `gorm:"size:20;default:'active';column:Status" json:"status"` // active, suspended
 	PublicKey   string         `gorm:"type:text;column:PublicKey" json:"public_key"`         // 用于 B2B 安全认证的公钥
@@ -438,6 +438,54 @@ type PlatformAccount struct {
 // TableName 设置表名
 func (PlatformAccount) TableName() string {
 	return "PlatformAccount"
+}
+
+// AIAgentTrace Agent 执行追踪日志
+type AIAgentTrace struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	SessionID string    `gorm:"index;size:100;not null;column:SessionId" json:"session_id"`
+	BotID     string    `gorm:"index;size:64;column:BotId" json:"bot_id"`
+	Step      int       `gorm:"column:Step" json:"step"`
+	Type      string    `gorm:"size:50;column:Type" json:"type"` // thought, action, observation, memory, etc.
+	Content   string    `gorm:"type:text;column:Content" json:"content"`
+	Metadata  string    `gorm:"type:text;column:Metadata" json:"metadata"`
+	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
+}
+
+func (AIAgentTrace) TableName() string {
+	return "AIAgentTrace"
+}
+
+// AIAgent AI 智能体配置
+type AIAgent struct {
+	ID          uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	Name        string         `gorm:"size:100;not null;column:Name" json:"name"`
+	Description string         `gorm:"size:500;column:Description" json:"description"`
+	Type        string         `gorm:"size:50;column:Type" json:"type"` // chat, task, assistant
+	ModelID     uint           `gorm:"index;column:ModelId" json:"model_id"`
+	Model       AIModel        `gorm:"foreignKey:ModelID" json:"model"`
+	Prompt      string         `gorm:"type:text;column:Prompt" json:"prompt"`
+	Temperature float32        `gorm:"default:0.7;column:Temperature" json:"temperature"`
+	TopP        float32        `gorm:"default:1.0;column:TopP" json:"top_p"`
+	MaxTokens   int            `gorm:"default:2000;column:MaxTokens" json:"max_tokens"`
+	Tools       string         `gorm:"type:text;column:Tools" json:"tools"`         // JSON array of tool IDs
+	Knowledge   string         `gorm:"type:text;column:Knowledge" json:"knowledge"` // JSON array of KB IDs
+	IsPublic    bool           `gorm:"default:false;column:IsPublic" json:"is_public"`
+	OwnerID     uint           `gorm:"index;column:OwnerId" json:"owner_id"`
+	CallCount   int            `gorm:"default:0;column:CallCount" json:"call_count"`
+	IsVoice     bool           `gorm:"default:false;column:IsVoice" json:"is_voice"`
+	VoiceID     string         `gorm:"size:100;column:VoiceId" json:"voice_id"`
+	VoiceName   string         `gorm:"size:100;column:VoiceName" json:"voice_name"`
+	VoiceLang   string         `gorm:"size:20;column:VoiceLang" json:"voice_lang"`
+	VoiceRate   float64        `gorm:"default:1.0;column:VoiceRate" json:"voice_rate"`
+	RevenueRate float64        `gorm:"default:0.0;column:RevenueRate" json:"revenue_rate"` // 费率 (点数/1k token)
+	CreatedAt   time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+}
+
+func (AIAgent) TableName() string {
+	return "AIAgent"
 }
 
 // DigitalEmployee 数字员工模型 (Bot 的高级拟人化抽象)
@@ -474,6 +522,42 @@ func (DigitalEmployee) TableName() string {
 	return "DigitalEmployee"
 }
 
+// DigitalEmployeeKpi 数字员工绩效记录
+type DigitalEmployeeKpi struct {
+	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	EmployeeID uint      `gorm:"index;column:EmployeeId" json:"employee_id"`
+	MetricName string    `gorm:"size:100;column:MetricName" json:"metric_name"` // 考核指标: response_time, satisfaction, task_completion
+	Score      float64   `gorm:"column:Score" json:"score"`                     // 分数
+	Detail     string    `gorm:"type:text;column:Detail" json:"detail"`         // 详情/反馈
+	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
+}
+
+func (DigitalEmployeeKpi) TableName() string {
+	return "DigitalEmployeeKpi"
+}
+
+// DigitalEmployeeTask 数字员工任务
+type DigitalEmployeeTask struct {
+	ID               uint       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	ExecutionID      string     `gorm:"uniqueIndex;size:64;column:ExecutionId" json:"execution_id"`
+	Title            string     `gorm:"size:255;not null;column:Title" json:"title"`
+	Description      string     `gorm:"type:text;column:Description" json:"description"`
+	Status           string     `gorm:"size:20;default:'pending';column:Status" json:"status"`       // pending, planning, executing, completed, failed
+	Progress         int        `gorm:"default:0;column:Progress" json:"progress"`                   // 0-100
+	PlanRaw          string     `gorm:"type:text;column:PlanRaw" json:"plan_raw"`                    // AI 生成的原始计划 JSON
+	ResultRaw        string     `gorm:"type:text;column:ResultRaw" json:"result_raw"`                // 执行结果汇总
+	CurrentStepIndex int        `gorm:"default:0;column:CurrentStepIndex" json:"current_step_index"` // 当前执行步骤索引
+	ParentTaskID     uint       `gorm:"index;column:ParentTaskId" json:"parent_task_id"`             // 父任务 ID
+	AssigneeID       uint       `gorm:"index;column:AssigneeId" json:"assignee_id"`                  // 被指派的员工 ID
+	CreatedAt        time.Time  `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt        time.Time  `gorm:"column:UpdatedAt" json:"updated_at"`
+	EndTime          *time.Time `gorm:"column:EndTime" json:"end_time"`
+}
+
+func (DigitalEmployeeTask) TableName() string {
+	return "DigitalEmployeeTask"
+}
+
 // DigitalRoleTemplate 岗位标准模板
 type DigitalRoleTemplate struct {
 	ID            uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
@@ -498,7 +582,8 @@ type EnterpriseMember struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
 	EnterpriseID uint      `gorm:"index:idx_ent_user,unique;column:EnterpriseId" json:"enterprise_id"`
 	UserID       uint      `gorm:"index:idx_ent_user,unique;column:UserId" json:"user_id"`
-	Role         string    `gorm:"size:50;default:'member';column:Role" json:"role"` // admin, hr, supervisor, member
+	Role         string    `gorm:"size:50;column:Role" json:"role"` // admin, member
+	Status       string    `gorm:"size:20;default:'active';column:Status" json:"status"`
 	JoinedAt     time.Time `gorm:"column:JoinedAt" json:"joined_at"`
 }
 
@@ -507,45 +592,128 @@ func (EnterpriseMember) TableName() string {
 	return "EnterpriseMember"
 }
 
-// B2BConnection 企业间 B2B 连接
-type B2BConnection struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	SourceEntID  uint      `gorm:"index:idx_b2b_conn;column:SourceEntId" json:"source_ent_id"`      // 发起方企业
-	TargetEntID  uint      `gorm:"index:idx_b2b_conn;column:TargetEntId" json:"target_ent_id"`      // 接收方企业
-	Status       string    `gorm:"size:20;default:'pending';column:Status" json:"status"`           // pending, active, blocked
-	AuthProtocol string    `gorm:"size:50;default:'mtls';column:AuthProtocol" json:"auth_protocol"` // mtls, oauth2, custom
-	Config       string    `gorm:"type:text;column:Config" json:"config"`                           // 连接特定配置
-	CreatedAt    time.Time `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
+// User represents a system user (admin/dashboard)
+type User struct {
+	ID             uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	Username       string    `gorm:"uniqueIndex;size:100;not null;column:Username" json:"username"`
+	PasswordHash   string    `gorm:"size:255;not null;column:PasswordHash" json:"-"`
+	IsAdmin        bool      `gorm:"default:false;column:IsAdmin" json:"is_admin"`
+	Active         bool      `gorm:"default:true;column:Active" json:"active"`
+	SessionVersion int       `gorm:"default:0;column:SessionVersion" json:"session_version"`
+	CreatedAt      time.Time `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
 }
 
-// B2BSkillSharing B2B 技能共享授权表
+func (User) TableName() string {
+	return "AppUser"
+}
+
+// BotEntity represents a bot instance (unified)
+type BotEntity struct {
+	SelfID    string    `gorm:"primaryKey;size:64;column:SelfId" json:"self_id"`
+	Nickname  string    `gorm:"size:100;column:Nickname" json:"nickname"`
+	Platform  string    `gorm:"size:50;column:Platform" json:"platform"`
+	Status    string    `gorm:"size:20;column:Status" json:"status"`
+	Connected bool      `gorm:"column:Connected" json:"connected"`
+	LastSeen  time.Time `gorm:"column:LastSeen" json:"last_seen"`
+	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
+}
+
+func (BotEntity) TableName() string {
+	return "BotEntity"
+}
+
+// B2BConnection 企业间连接表
+type B2BConnection struct {
+	ID           uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	SourceEntID  uint           `gorm:"index;column:SourceEntId" json:"source_ent_id"`
+	TargetEntID  uint           `gorm:"index;column:TargetEntId" json:"target_ent_id"`
+	Status       string         `gorm:"size:20;column:Status" json:"status"`              // active, inactive
+	AuthProtocol string         `gorm:"size:20;column:AuthProtocol" json:"auth_protocol"` // jwt
+	CreatedAt    time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+}
+
+func (B2BConnection) TableName() string {
+	return "B2BConnection"
+}
+
+// B2BSkillSharing 技能共享记录
 type B2BSkillSharing struct {
-	ID          uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	SourceEntID uint      `gorm:"index;column:SourceEntId" json:"source_ent_id"`         // 提供技能的企业
-	TargetEntID uint      `gorm:"index;column:TargetEntId" json:"target_ent_id"`         // 使用技能的企业
-	SkillName   string    `gorm:"size:100;column:SkillName" json:"skill_name"`           // 共享的技能名称
-	AliasName   string    `gorm:"size:100;column:AliasName" json:"alias_name"`           // 在目标企业的别名 (可选)
-	Status      string    `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, approved, rejected, blocked
-	IsActive    bool      `gorm:"default:true;column:IsActive" json:"is_active"`
-	CreatedAt   time.Time `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
+	ID          uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	SourceEntID uint           `gorm:"index;column:SourceEntId" json:"source_ent_id"`
+	TargetEntID uint           `gorm:"index;column:TargetEntId" json:"target_ent_id"`
+	SkillName   string         `gorm:"size:100;column:SkillName" json:"skill_name"`
+	Status      string         `gorm:"size:20;column:Status" json:"status"` // pending, approved, rejected
+	IsActive    bool           `gorm:"default:true;column:IsActive" json:"is_active"`
+	CreatedAt   time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
 }
 
 func (B2BSkillSharing) TableName() string {
 	return "B2BSkillSharing"
 }
 
-// DigitalEmployeeDispatch 数字员工外派授权表
+// AISession 会话记录
+type AISession struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	SessionID string    `gorm:"uniqueIndex;size:100;not null;column:SessionId" json:"session_id"`
+	UserID    uint      `gorm:"index;column:UserId" json:"user_id"`
+	BotID     string    `gorm:"index;size:64;column:BotId" json:"bot_id"`
+	AgentID   uint      `gorm:"index;column:AgentId" json:"agent_id"`
+	Status    string    `gorm:"size:20;column:Status" json:"status"`
+	Topic     string    `gorm:"size:200;column:Topic" json:"topic"`
+	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
+}
+
+func (AISession) TableName() string {
+	return "AISession"
+}
+
+// AIChatMessage 聊天记录
+type AIChatMessage struct {
+	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	SessionID  string    `gorm:"index;size:100;not null;column:SessionId" json:"session_id"`
+	UserID     uint      `gorm:"index;column:UserId" json:"user_id"`
+	Role       string    `gorm:"size:20;not null;column:Role" json:"role"` // user, assistant, system
+	Content    string    `gorm:"type:text;not null;column:Content" json:"content"`
+	UsageToken int       `gorm:"column:UsageToken" json:"usage_token"`
+	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
+}
+
+func (AIChatMessage) TableName() string {
+	return "AIChatMessage"
+}
+
+// BotSkillPermission 机器人技能权限
+type BotSkillPermission struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	BotID     string    `gorm:"index;size:64;not null;column:BotId" json:"bot_id"`
+	SkillName string    `gorm:"index;size:100;column:SkillName" json:"skill_name"`
+	SkillID   uint      `gorm:"index;column:SkillId" json:"skill_id"`
+	IsAllowed bool      `gorm:"default:true;column:IsAllowed" json:"is_allowed"`
+	Config    string    `gorm:"type:text;column:Config" json:"config"`
+	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
+}
+
+func (BotSkillPermission) TableName() string {
+	return "BotSkillPermission"
+}
+
+// DigitalEmployeeDispatch 调度记录 (B2B 外派)
 type DigitalEmployeeDispatch struct {
 	ID          uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	EmployeeID  uint      `gorm:"index;column:EmployeeId" json:"employee_id"`            // 外派的员工 ID
-	SourceEntID uint      `gorm:"index;column:SourceEntId" json:"source_ent_id"`         // 所属企业
-	TargetEntID uint      `gorm:"index;column:TargetEntId" json:"target_ent_id"`         // 接收企业
-	Status      string    `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, approved, rejected, recalled
-	Permissions string    `gorm:"type:text;column:Permissions" json:"permissions"`       // 授予的权限列表 (JSON: ["chat", "skill_call"])
+	EmployeeID  uint      `gorm:"index;column:EmployeeId" json:"employee_id"`
+	SourceEntID uint      `gorm:"index;column:SourceEntId" json:"source_ent_id"`
+	TargetEntID uint      `gorm:"index;column:TargetEntId" json:"target_ent_id"`
+	Permissions string    `gorm:"type:text;column:Permissions" json:"permissions"` // JSON array of allowed actions
+	Status      string    `gorm:"size:20;column:Status" json:"status"`             // pending, approved, rejected, terminated
 	DispatchAt  time.Time `gorm:"column:DispatchAt" json:"dispatch_at"`
-	ExpireAt    time.Time `gorm:"column:ExpireAt" json:"expire_at"` // 有效期 (可选)
 	CreatedAt   time.Time `gorm:"column:CreatedAt" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
 }
@@ -554,183 +722,33 @@ func (DigitalEmployeeDispatch) TableName() string {
 	return "DigitalEmployeeDispatch"
 }
 
-// TableName 设置表名
-func (B2BConnection) TableName() string {
-	return "B2BConnection"
-}
-
-// DigitalEmployeeKpi 数字员工考核日志
-type DigitalEmployeeKpi struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	EmployeeID uint      `gorm:"index;column:EmployeeId" json:"employee_id"`
-	MetricName string    `gorm:"size:100;column:MetricName" json:"metric_name"` // 考核项: response_speed, accuracy, satisfaction
-	Score      float64   `gorm:"column:Score" json:"score"`
-	Detail     string    `gorm:"type:text;column:Detail" json:"detail"` // 考核详情 (关联的消息 ID 或评价内容)
-	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
-}
-
-// DigitalEmployeeTodo 数字员工待办事项
+// DigitalEmployeeTodo 待办事项
 type DigitalEmployeeTodo struct {
-	ID          uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	EmployeeID  uint           `gorm:"index;column:EmployeeId" json:"employee_id"`  // 所属员工 ID
-	Title       string         `gorm:"size:255;not null;column:Title" json:"title"` // 待办事项标题
-	Description string         `gorm:"type:text;column:Description" json:"description"`
-	Priority    string         `gorm:"size:20;default:'medium';column:Priority" json:"priority"` // low, medium, high
-	Status      string         `gorm:"size:20;default:'pending';column:Status" json:"status"`    // pending, in_progress, completed, cancelled
-	DueDate     *time.Time     `gorm:"column:DueDate" json:"due_date"`                           // 截止日期
-	CompletedAt *time.Time     `gorm:"column:CompletedAt" json:"completed_at"`                   // 完成时间
-	CreatedAt   time.Time      `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+	ID          uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	EmployeeID  uint      `gorm:"index;column:EmployeeId" json:"employee_id"`
+	Title       string    `gorm:"size:255;not null;column:Title" json:"title"`
+	Description string    `gorm:"type:text;column:Description" json:"description"`
+	Status      string    `gorm:"size:20;default:'pending';column:Status" json:"status"`
+	DueAt       time.Time `gorm:"column:DueAt" json:"due_at"`
+	CreatedAt   time.Time `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
 }
 
 func (DigitalEmployeeTodo) TableName() string {
 	return "DigitalEmployeeTodo"
 }
 
-// DigitalEmployeeTask 数字员工任务全生命周期管理
-type DigitalEmployeeTask struct {
-	ID               uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	ExecutionID      string         `gorm:"size:100;uniqueIndex;column:ExecutionId" json:"execution_id"` // 全局唯一执行 ID
-	ParentTaskID     uint           `gorm:"index;column:ParentTaskId" json:"parent_task_id"`             // 父任务 ID (用于子任务拆解)
-	CreatorID        string         `gorm:"size:64;column:CreatorId" json:"creator_id"`                  // 创建者 (可以是 UserID 或 EmployeeID)
-	AssigneeID       uint           `gorm:"index;column:AssigneeId" json:"assignee_id"`                  // 负责人 (数字员工 ID)
-	Title            string         `gorm:"size:255;not null;column:Title" json:"title"`
-	Description      string         `gorm:"type:text;column:Description" json:"description"`
-	Priority         string         `gorm:"size:20;default:'medium';column:Priority" json:"priority"`
-	Status           string         `gorm:"size:20;default:'pending';column:Status" json:"status"`       // pending, planning, executing, validating, completed, failed
-	Progress         int            `gorm:"default:0;column:Progress" json:"progress"`                   // 0-100
-	PlanRaw          string         `gorm:"type:text;column:PlanRaw" json:"plan_raw"`                    // AI 生成的任务计划 (JSON)
-	CurrentStepIndex int            `gorm:"default:0;column:CurrentStepIndex" json:"current_step_index"` // 当前正在执行的步骤索引
-	ResultRaw        string         `gorm:"type:text;column:ResultRaw" json:"result_raw"`                // 最终执行结果 (JSON)
-	ErrorMsg         string         `gorm:"type:text;column:ErrorMsg" json:"error_msg"`                  // 错误信息
-	TokenUsage       int            `gorm:"default:0;column:TokenUsage" json:"token_usage"`              // 任务总消耗 Token
-	Duration         int            `gorm:"default:0;column:Duration" json:"duration"`                   // 执行耗时 (秒)
-	StartTime        *time.Time     `gorm:"column:StartTime" json:"start_time"`
-	EndTime          *time.Time     `gorm:"column:EndTime" json:"end_time"`
-	Deadline         *time.Time     `gorm:"column:Deadline" json:"deadline"`
-	CreatedAt        time.Time      `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt        time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
-}
-
-func (DigitalEmployeeTask) TableName() string {
-	return "DigitalEmployeeTask"
-}
-
-// TableName 设置表名
-func (DigitalEmployeeKpi) TableName() string {
-	return "DigitalEmployeeKpi"
-}
-
-// AIAgent 智能体定义 (LLM 核心配置)
-type AIAgent struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	Name         string    `gorm:"size:100;not null;column:Name" json:"name"`
-	Description  string    `gorm:"type:text;column:Description" json:"description"`
-	SystemPrompt string    `gorm:"type:text;column:SystemPrompt" json:"system_prompt"`
-	ModelID      uint      `gorm:"index;column:ModelId" json:"model_id"`
-	Model        AIModel   `gorm:"foreignKey:ModelID" json:"model"`
-	Temperature  float32   `gorm:"default:0.7;column:Temperature" json:"temperature"`
-	MaxTokens    int       `gorm:"default:2048;column:MaxTokens" json:"max_tokens"`
-	Tools        string    `gorm:"type:text;column:Tools" json:"tools"` // JSON array of tool names or IDs
-	IsVoice      bool      `gorm:"default:false;column:IsVoice" json:"is_voice"`
-	VoiceID      string    `gorm:"size:100;column:VoiceId" json:"voice_id"`
-	VoiceName    string    `gorm:"size:100;column:VoiceName" json:"voice_name"`
-	VoiceLang    string    `gorm:"size:50;column:VoiceLang" json:"voice_lang"`
-	VoiceRate    float32   `gorm:"default:1.0;column:VoiceRate" json:"voice_rate"`                      // 语速 0.1 - 10
-	OwnerID      uint      `gorm:"index;column:OwnerId" json:"owner_id"`                                // 所属用户 ID
-	Visibility   string    `gorm:"size:20;default:'public';column:Visibility" json:"visibility"`        // public, private, link_only
-	RevenueRate  float64   `gorm:"type:decimal(10,4);default:0;column:RevenueRate" json:"revenue_rate"` // 收益率 (每 1k tokens 收益多少算力)
-	CallCount    int       `gorm:"default:0;column:CallCount" json:"call_count"`                        // 使用次数 (热门排序依据)
-	CreatedAt    time.Time `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
-}
-
-func (AIAgent) TableName() string {
-	return "AIAgent"
-}
-
-// AISession AI 对话会话
-type AISession struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	SessionID  string    `gorm:"size:100;uniqueIndex;not null;column:SessionId" json:"session_id"` // 会话唯一 ID
-	UserID     uint      `gorm:"index;column:UserId" json:"user_id"`                               // 所属用户
-	AgentID    uint      `gorm:"index;column:AgentId" json:"agent_id"`                             // 关联智能体
-	Agent      AIAgent   `gorm:"foreignKey:AgentID" json:"agent"`                                  // 关联智能体详情
-	Topic      string    `gorm:"size:200;column:Topic" json:"topic"`                               // 对话主题
-	LastMsg    string    `gorm:"type:text;column:LastMsg" json:"last_msg"`                         // 最后一条消息预览
-	Platform   string    `gorm:"size:50;column:Platform" json:"platform"`
-	Status     string    `gorm:"size:20;default:'active';column:Status" json:"status"`
-	ContextRaw string    `gorm:"type:text;column:ContextRaw" json:"context_raw"` // 额外的上下文元数据 (JSON)
-	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt  time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
-}
-
-func (AISession) TableName() string {
-	return "AISession"
-}
-
-// AIChatMessage AI 对话历史消息
-type AIChatMessage struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	SessionID  string    `gorm:"size:100;index;column:SessionId" json:"session_id"`
-	UserID     uint      `gorm:"index;column:UserId" json:"user_id"` // 所属用户
-	Role       string    `gorm:"size:20;column:Role" json:"role"`    // system, user, assistant, tool
-	Content    string    `gorm:"type:text;column:Content" json:"content"`
-	ToolCalls  string    `gorm:"type:text;column:ToolCalls" json:"tool_calls"` // JSON 存储 ToolCall 详情
-	UsageToken int       `gorm:"default:0;column:UsageToken" json:"usage_token"`
-	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
-}
-
-func (AIChatMessage) TableName() string {
-	return "AIChatMessage"
-}
-
-// BotSkillPermission 机器人技能授权表
-type BotSkillPermission struct {
+// LimiterLog 限流日志
+type LimiterLog struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	BotID     string    `gorm:"index;size:64;column:BotId" json:"bot_id"`
-	SkillName string    `gorm:"index;size:100;column:SkillName" json:"skill_name"`
-	IsAllowed bool      `gorm:"default:true;column:IsAllowed" json:"is_allowed"`
+	Key       string    `gorm:"index;size:255;not null;column:Key" json:"key"`
+	Action    string    `gorm:"size:50;column:Action" json:"action"`
+	Count     int       `gorm:"column:Count" json:"count"`
+	Limit     int       `gorm:"column:Limit" json:"limit"`
+	Blocked   bool      `gorm:"column:Blocked" json:"blocked"`
 	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
 }
 
-func (BotSkillPermission) TableName() string {
-	return "BotSkillPermission"
-}
-
-// SessionGORM represents general plugin session state
-type SessionGORM struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	SessionID string    `gorm:"size:255;uniqueIndex;not null;column:session_id" json:"session_id"`
-	UserID    int64     `gorm:"index;column:user_id" json:"user_id"`
-	GroupID   int64     `gorm:"index;column:group_id" json:"group_id"`
-	State     string    `gorm:"size:255;column:state" json:"state"`
-	Data      string    `gorm:"type:jsonb;column:data" json:"data"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
-}
-
-func (SessionGORM) TableName() string {
-	return "sessions"
-}
-
-// AIAgentTrace AI Agent 执行追踪日志
-type AIAgentTrace struct {
-	ID          uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	SessionID   string    `gorm:"index;size:64;column:SessionId" json:"session_id"`
-	ExecutionID string    `gorm:"index;size:100;column:ExecutionId" json:"execution_id"` // 关联的任务执行 ID
-	TaskID      uint      `gorm:"index;column:TaskId" json:"task_id"`                    // 关联的任务 ID
-	BotID       string    `gorm:"index;size:64;column:BotId" json:"bot_id"`
-	Step        int       `gorm:"column:Step" json:"step"`
-	Type        string    `gorm:"size:32;column:Type" json:"type"` // reasoning, tool_call, tool_result, llm_response
-	Content     string    `gorm:"type:text;column:Content" json:"content"`
-	Metadata    string    `gorm:"type:text;column:Metadata" json:"metadata"` // JSON 格式的额外信息
-	CreatedAt   time.Time `gorm:"column:CreatedAt" json:"created_at"`
-}
-
-// TableName 设置表名
-func (AIAgentTrace) TableName() string {
-	return "AIAgentTrace"
+func (LimiterLog) TableName() string {
+	return "LimiterLog"
 }
