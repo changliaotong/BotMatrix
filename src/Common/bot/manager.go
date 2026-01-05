@@ -92,16 +92,89 @@ type Manager struct {
 
 	MessageCache []types.InternalMessage
 	CacheMutex   sync.RWMutex
-	GroupCache   map[string]types.GroupInfo
-	MemberCache  map[string]types.MemberInfo
-	FriendCache  map[string]types.FriendInfo
-	BotCache     map[string]types.BotClient
+
+	Ctx        context.Context
+	CancelFunc context.CancelFunc
+
+	GroupCache  map[string]types.GroupInfo
+	MemberCache map[string]types.MemberInfo
+	FriendCache map[string]types.FriendInfo
+	BotCache    map[string]types.BotClient
 
 	RulesMutex       sync.RWMutex
 	LocalIdempotency sync.Map
 	ConfigCache      map[string]string
 	ConfigCacheMu    sync.RWMutex
 	SessionCache     sync.Map
+
+	// Services
+	AIService                  types.AIService
+	AIIntegrationService       types.AIService // Alias for backward compatibility in core_plugin.go
+	B2BService                 types.B2BService
+	CognitiveMemoryService     types.CognitiveMemoryService
+	DigitalEmployeeService     types.DigitalEmployeeService
+	DigitalEmployeeTaskService types.DigitalEmployeeTaskService
+	TaskManager                any // Will be cast to *tasks.TaskManager
+	MCPManager                 types.MCPManagerInterface
+	KnowledgeBase              types.KnowledgeBase
+}
+
+// GetGORMDB returns the GORM database instance
+func (m *Manager) GetGORMDB() *gorm.DB {
+	return m.GORMDB
+}
+
+// GetAIService returns the AI service instance
+func (m *Manager) GetAIService() types.AIService {
+	return m.AIService
+}
+
+// GetB2BService returns the B2B service instance
+func (m *Manager) GetB2BService() types.B2BService {
+	return m.B2BService
+}
+
+// GetCognitiveMemoryService returns the cognitive memory service instance
+func (m *Manager) GetCognitiveMemoryService() types.CognitiveMemoryService {
+	return m.CognitiveMemoryService
+}
+
+// GetDigitalEmployeeService returns the digital employee service instance
+func (m *Manager) GetDigitalEmployeeService() types.DigitalEmployeeService {
+	return m.DigitalEmployeeService
+}
+
+// GetDigitalEmployeeTaskService returns the digital employee task service instance
+func (m *Manager) GetDigitalEmployeeTaskService() types.DigitalEmployeeTaskService {
+	return m.DigitalEmployeeTaskService
+}
+
+// GetTaskManager returns the task manager instance
+func (m *Manager) GetTaskManager() types.TaskManagerInterface {
+	if tm, ok := m.TaskManager.(types.TaskManagerInterface); ok {
+		return tm
+	}
+	return nil
+}
+
+// GetMCPManager returns the MCP manager instance
+func (m *Manager) GetMCPManager() types.MCPManagerInterface {
+	return m.MCPManager
+}
+
+// GetKnowledgeBase returns the knowledge base instance
+func (m *Manager) GetKnowledgeBase() types.KnowledgeBase {
+	return m.KnowledgeBase
+}
+
+// ValidateToken validates a user token (placeholder for now)
+// func (m *Manager) ValidateToken(token string) (*types.UserClaims, error) {
+// 	return nil, fmt.Errorf("ValidateToken not implemented")
+// }
+
+// SyncSystemKnowledge syncs system knowledge (placeholder for now)
+func (m *Manager) SyncSystemKnowledge() error {
+	return nil
 }
 
 var GlobalManager = NewManager()
@@ -158,7 +231,10 @@ func (m *Manager) LoadFriendCachesFromDB() ([]*models.FriendCacheGORM, error) {
 }
 
 func NewManager() *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Manager{
+		Ctx:               ctx,
+		CancelFunc:        cancel,
 		Bots:              make(map[string]*types.BotClient),
 		Subscribers:       make(map[*websocket.Conn]*types.Subscriber),
 		Workers:           make([]*types.WorkerClient, 0),

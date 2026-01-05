@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"BotMatrix/common/models"
 	"bufio"
 	"bytes"
 	"context"
@@ -213,4 +214,30 @@ func (a *OpenAIAdapter) CreateEmbedding(ctx context.Context, req EmbeddingReques
 	}
 
 	return &result, nil
+}
+
+func (a *OpenAIAdapter) GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
+	resp, err := a.CreateEmbedding(ctx, EmbeddingRequest{
+		Model: "text-embedding-3-small",
+		Input: text,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Data) == 0 {
+		return nil, fmt.Errorf("no embedding data returned")
+	}
+	return resp.Data[0].Embedding, nil
+}
+
+func (a *OpenAIAdapter) GenerateQueryEmbedding(ctx context.Context, query string) ([]float32, error) {
+	return a.GenerateEmbedding(ctx, query)
+}
+
+func (a *OpenAIAdapter) GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error) {
+	return nil, fmt.Errorf("OpenAI adapter does not support local employee retrieval")
+}
+
+func (a *OpenAIAdapter) PlanTask(ctx context.Context, executionID string) error {
+	return fmt.Errorf("OpenAI adapter does not support task planning")
 }

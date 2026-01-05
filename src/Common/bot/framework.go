@@ -169,6 +169,20 @@ func (b *BaseBot) SetupStandardHandlers(botName string, configPtr any, restartFu
 	b.Mux.HandleFunc("/config-ui", b.HandleConfigUI)
 }
 
+func (b *BaseBot) SendNexusCommand(command string, data any) error {
+	b.ConnMu.Lock()
+	defer b.ConnMu.Unlock()
+	if b.NexusConn == nil {
+		return fmt.Errorf("nexus connection not established")
+	}
+
+	msg := map[string]any{
+		"type":    command,
+		"payload": data,
+	}
+	return b.NexusConn.WriteJSON(msg)
+}
+
 func (b *BaseBot) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		b.Mu.RLock()

@@ -30,7 +30,7 @@
 3. **知识层**: 挂载的 RAG 知识库，提供“如何使用 [功能]”的深度文档。
 
 ## 4. 实现详情
-- **数据模型**: [model.go](../../BotNexus/internal/rag/model.go) 定义了 `KnowledgeDoc` 和 `KnowledgeChunk`。
+- **数据模型**: [model.go](../../BotMatrix/common/rag/model.go) 定义了 `KnowledgeDoc` 和 `KnowledgeChunk`。
 - **知识库实现**: [pg_knowledge.go](../../BotNexus/internal/rag/pg_knowledge.go) 实现了基于 pgvector 的存储与搜索。
 - **能力注入**: [capabilities.go](../../BotNexus/tasks/capabilities.go) 负责将身份与 RAG 提示词注入 System Prompt。
 

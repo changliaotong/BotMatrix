@@ -66,7 +66,37 @@ export const useAuthStore = defineStore('auth', {
         return false;
       } catch (error: any) {
         console.error('Login failed:', error);
-        throw new Error(error.response?.data?.message || 'login_failed');
+        throw new Error(error.response?.data?.error || error.response?.data?.message || 'login_failed');
+      }
+    },
+    async register(username: string, password: string) {
+      try {
+        const { data } = await api.post('/api/register', { username, password });
+        return data.success;
+      } catch (error: any) {
+        console.error('Register failed:', error);
+        throw error;
+      }
+    },
+    async loginWithToken(platform: string, platformID: string, token: string) {
+      try {
+        const { data } = await api.post('/api/auth/token-login', { 
+          platform, 
+          platform_id: platformID, 
+          token 
+        });
+        if (data.success && data.data?.token) {
+          this.setToken(data.data.token);
+          this.setRole(data.data.role || 'user');
+          if (data.data.user) {
+            this.user = data.data.user;
+          }
+          return true;
+        }
+        return false;
+      } catch (error: any) {
+        console.error('Token login failed:', error);
+        throw error;
       }
     },
     async loginWithMagicToken(token: string) {

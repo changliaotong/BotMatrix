@@ -23,8 +23,8 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		return fmt.Errorf("failed to connect gorm: %v", err)
 	}
 
-	// Auto migrate
-	if err := db.AutoMigrate(
+	// Auto migrate in batches to handle potential failures better
+	modelsToMigrate := []any{
 		&models.AIProviderGORM{},
 		&models.AIModelGORM{},
 		&models.AIAgentGORM{},
@@ -40,6 +40,24 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		&models.GroupCacheGORM{},
 		&models.MemberCacheGORM{},
 		&models.FriendCacheGORM{},
+		&models.DigitalRoleTemplateGORM{},
+		&models.CognitiveMemoryGORM{},
+		&models.AIAgentTraceGORM{},
+		&models.BotSkillPermissionGORM{},
+		&models.MCPServerGORM{},
+		&models.MCPToolGORM{},
+		&models.MessageStatGORM{},
+		&models.UserLoginTokenGORM{},
+	}
+
+	for _, model := range modelsToMigrate {
+		if err := db.AutoMigrate(model); err != nil {
+			log.Printf("GORM AutoMigrate failed for model %T: %v", model, err)
+		}
+	}
+
+	// Migrate other models
+	if err := db.AutoMigrate(
 		&models.FissionConfigGORM{},
 		&models.InvitationGORM{},
 		&models.FissionTaskGORM{},
@@ -60,16 +78,16 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		&models.DigitalEmployeeDispatchGORM{},
 		&models.DigitalEmployeeTodoGORM{},
 		&models.DigitalEmployeeTaskGORM{},
-		&models.DigitalRoleTemplateGORM{},
-		&models.CognitiveMemoryGORM{},
-		&models.AIAgentTraceGORM{},
-		&models.BotSkillPermissionGORM{},
-		&models.MCPServerGORM{},
-		&models.MCPToolGORM{},
+		&models.Task{},
+		&models.Execution{},
+		&models.Tag{},
+		&models.Strategy{},
+		&models.AIDraft{},
+		&models.UserIdentity{},
+		&models.ShadowRule{},
+		&models.TaskTag{},
 	); err != nil {
-		log.Printf("GORM AutoMigrate failed (first attempt): %v", err)
-		// Try again without certain constraints if they fail
-		// This is a workaround for GORM migration issues with existing constraints
+		log.Printf("GORM AutoMigrate failed (remaining models): %v", err)
 	}
 
 	m.DB = db

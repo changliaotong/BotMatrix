@@ -116,7 +116,32 @@ export const aiApi = {
    * Get current AI system status
    */
   getStatus: () => 
-    api.get<AIStatus>('/api/ai/status')
+    api.get<AIStatus>('/api/ai/status'),
+
+  /**
+   * 知识库管理 (RAG)
+   */
+  getKnowledgeList: () => 
+    api.get<any[]>('/api/knowledge/list'),
+
+  uploadKnowledge: (file: File, type: string = 'doc', targetType?: string, targetId?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    if (targetType) formData.append('target_type', targetType);
+    if (targetId) formData.append('target_id', targetId);
+    return api.post('/api/knowledge/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  deleteKnowledge: (id: number) => 
+    api.delete(`/api/knowledge/delete/${id}`),
+
+  getKnowledgeDetail: (id: number) => 
+    api.get(`/api/knowledge/detail/${id}`)
 };
 
 export default aiApi;

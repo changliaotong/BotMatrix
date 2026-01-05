@@ -143,7 +143,11 @@ conn, _, _ := websocket.DefaultDialer.Dial("ws://nexus-address/worker", nil)
 
 // 2. 报备能力 (携带版本和环境)
 reg := map[string]interface{}{
-    "type": "register_capabilities",
+    "type": "update_metadata",
+    "metadata": {
+      "plugins": [ ... ]
+    }
+    // 注：旧版 type: "register_capabilities" 已弃用 (Deprecated)
     "capabilities": []map[string]interface{}{
         {
             "name": "translate",
@@ -183,11 +187,12 @@ for {
 
 ### Worker 技能报备机制
 业务 Worker 在连接后可向调度中心报备其具备的能力：
-- **报备接口**: 发送 `type: "register_capabilities"` 消息。
+- **报备接口**: 发送 `type: "update_metadata"` 消息 (原 `register_capabilities` 已弃用)。
 - **协议结构**:
   ```json
   {
-    "type": "register_capabilities",
+    "type": "update_metadata",
+    "metadata": { ... } // 原 register_capabilities 已弃用
     "capabilities": [
       {
         "name": "checkin",

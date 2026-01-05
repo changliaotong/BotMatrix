@@ -1,12 +1,13 @@
 package ai
 
 import (
+	"BotMatrix/common/types"
 	"testing"
 )
 
 func TestPrivacyFilter(t *testing.T) {
-	f := NewPrivacyFilter()
-	ctx := NewMaskContext()
+	f := types.NewPrivacyFilter()
+	ctx := types.NewMaskContext()
 
 	input := "我的电话是 13800138000，邮箱是 test@example.com，IP 地址是 192.168.1.1。记得回电！"
 	masked := f.Mask(input, ctx)

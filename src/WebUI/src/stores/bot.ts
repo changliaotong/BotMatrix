@@ -219,7 +219,7 @@ export const useBotStore = defineStore('bot', {
         if (params.search) query.append('search', params.search);
         if (params.level) query.append('level', params.level);
         
-        const { data } = await api.get(`/api/logs?${query.toString()}`);
+        const { data } = await api.get(`/api/admin/logs?${query.toString()}`);
         return data;
       } catch (err) {
         console.error('Failed to fetch system logs:', err);

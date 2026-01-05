@@ -6,17 +6,19 @@ import (
 
 	"BotMatrix/common/config"
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 )
 
 // GORMManager manages GORM database operations
 type GORMManager struct {
-	DB *gorm.DB
+	DB      *gorm.DB
+	LegacyDB *gorm.DB
 }
 
 // NewGORMManager creates a new GORMManager
-func NewGORMManager(db *gorm.DB) *GORMManager {
-	return &GORMManager{DB: db}
+func NewGORMManager(db *gorm.DB, legacyDB *gorm.DB) *GORMManager {
+	return &GORMManager{DB: db, LegacyDB: legacyDB}
 }
 
 // InitGORM initializes the GORM database connection
@@ -29,6 +31,24 @@ func InitGORM(cfg *config.AppConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to GORM database: %v", err)
 	}
 
-	log.Printf("GORM: Successfully connected to database %s", cfg.PGDBName)
+	log.Printf("GORM: Successfully connected to PostgreSQL database %s", cfg.PGDBName)
+	return db, nil
+}
+
+// InitLegacyMSSQL initializes the SQL Server database connection (legacy)
+func InitLegacyMSSQL(cfg *config.AppConfig) (*gorm.DB, error) {
+	if cfg.MSSQLHost == "" {
+		return nil, nil // Not configured, skip
+	}
+
+	dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s",
+		cfg.MSSQLUser, cfg.MSSQLPassword, cfg.MSSQLHost, cfg.MSSQLPort, cfg.MSSQLDBName)
+
+	db, err := gorm.Open(sqlserver.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to Legacy MSSQL: %v", err)
+	}
+
+	log.Printf("GORM: Successfully connected to Legacy MSSQL database %s", cfg.MSSQLDBName)
 	return db, nil
 }

@@ -17,6 +17,20 @@ export interface CustomStyleConfig {
   '--custom-radius-card'?: string;
 }
 
+export interface MenuItem {
+  id: string;
+  icon: string;
+  titleKey: string;
+  adminOnly?: boolean;
+}
+
+export interface MenuGroup {
+  id: string;
+  titleKey: string;
+  items: MenuItem[];
+  adminOnly?: boolean;
+}
+
 export const useSystemStore = defineStore('system', {
   state: () => {
     const getInitialLang = (): Language => {
@@ -45,49 +59,44 @@ export const useSystemStore = defineStore('system', {
       isSidebarCollapsed: localStorage.getItem('wxbot_sidebar_collapsed') === 'true',
       showMobileMenu: false,
       aiTranslations: {} as Record<string, string>,
-      menuGroups: [
+      rawMenuGroups: [
         {
-          id: 'main',
-          titleKey: 'main_menu',
+          id: 'console',
+          titleKey: 'console_menu',
           items: [
             { id: 'dashboard', icon: 'LayoutDashboard', titleKey: 'dashboard' },
-            { id: 'ai', icon: 'Sparkles', titleKey: 'ai_nexus' },
             { id: 'bots', icon: 'Bot', titleKey: 'bots' },
-            { id: 'messages', icon: 'MessageSquare', titleKey: 'messages' },
-            { id: 'workers', icon: 'Cpu', titleKey: 'workers' },
-            { id: 'plugins', icon: 'Box', titleKey: 'plugins' },
             { id: 'contacts', icon: 'Users', titleKey: 'contacts' },
-            { id: 'visualization', icon: 'Share2', titleKey: 'sidebar_visualization' },
-          ]
-        },
-        {
-          id: 'automation',
-          titleKey: 'automation_menu',
-          items: [
+            { id: 'messages', icon: 'MessageSquare', titleKey: 'messages' },
             { id: 'tasks', icon: 'ListTodo', titleKey: 'tasks' },
             { id: 'fission', icon: 'Share2', titleKey: 'fission' },
-          ]
-        },
-        {
-          id: 'infrastructure',
-          titleKey: 'infrastructure_menu',
-          items: [
-            { id: 'docker', icon: 'Box', titleKey: 'docker' },
-            { id: 'routing', icon: 'Route', titleKey: 'routing' },
-            { id: 'monitor', icon: 'Activity', titleKey: 'sidebar_monitor' },
-          ]
-        },
-        {
-          id: 'system',
-          titleKey: 'system_menu',
-          items: [
-            { id: 'users', icon: 'UserCog', titleKey: 'users' },
-            { id: 'logs', icon: 'Terminal', titleKey: 'logs' },
-            { id: 'manual', icon: 'BookOpen', titleKey: 'manual' },
             { id: 'settings', icon: 'Settings', titleKey: 'settings' },
           ]
+        },
+        {
+          id: 'admin',
+          titleKey: 'admin_menu',
+          adminOnly: true,
+          items: [
+            { id: 'workers', icon: 'Cpu', titleKey: 'workers' },
+            { id: 'users', icon: 'UserCog', titleKey: 'users' },
+            { id: 'logs', icon: 'Terminal', titleKey: 'logs' },
+            { id: 'monitor', icon: 'Activity', titleKey: 'sidebar_monitor' },
+            { id: 'nexus', icon: 'Network', titleKey: 'nexus' },
+            { id: 'ai', icon: 'Sparkles', titleKey: 'ai_nexus' },
+            { id: 'routing', icon: 'Route', titleKey: 'routing' },
+            { id: 'docker', icon: 'Box', titleKey: 'docker' },
+            { id: 'plugins', icon: 'Box', titleKey: 'plugins' },
+          ]
+        },
+        {
+          id: 'help',
+          titleKey: 'help_menu',
+          items: [
+            { id: 'manual', icon: 'BookOpen', titleKey: 'manual' },
+          ]
         }
-      ]
+      ] as MenuGroup[]
     };
   },
   getters: {
@@ -96,6 +105,12 @@ export const useSystemStore = defineStore('system', {
       const local = t(state.lang, key);
       if (local !== key) return local;
       return state.aiTranslations[`${state.lang}:${key}`] || key;
+    },
+    menuGroups: (state) => {
+      const authStore = (window as any).authStore; // We'll need a way to access authStore here
+      // Alternatively, we can pass it from Sidebar.vue or use a reactive approach
+      // But for now, let's assume Sidebar.vue will use a filtered version.
+      return state.rawMenuGroups;
     }
   },
   actions: {

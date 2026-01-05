@@ -87,18 +87,19 @@ type WorkerClient struct {
 }
 
 type WorkerInfo struct {
-	ID              string `json:"id"`
-	RemoteAddr      string `json:"remote_addr"`
-	Type            string `json:"type"`
-	Status          string `json:"status"`
-	Connected       string `json:"connected"`
-	LastSeen        string `json:"last_seen"`
-	HandledCount    int64  `json:"handled_count"`
-	AvgRTT          string `json:"avg_rtt"`
-	LastRTT         string `json:"last_rtt"`
-	AvgProcessTime  string `json:"avg_process_time"`
-	LastProcessTime string `json:"last_process_time"`
-	IsAlive         bool   `json:"is_alive"`
+	ID              string             `json:"id"`
+	RemoteAddr      string             `json:"remote_addr"`
+	Type            string             `json:"type"`
+	Status          string             `json:"status"`
+	Connected       string             `json:"connected"`
+	LastSeen        string             `json:"last_seen"`
+	HandledCount    int64              `json:"handled_count"`
+	AvgRTT          string             `json:"avg_rtt"`
+	LastRTT         string             `json:"last_rtt"`
+	AvgProcessTime  string             `json:"avg_process_time"`
+	LastProcessTime string             `json:"last_process_time"`
+	Capabilities    []WorkerCapability `json:"capabilities"`
+	IsAlive         bool               `json:"is_alive"`
 }
 
 // WorkerUpdateEvent represents a worker status update event

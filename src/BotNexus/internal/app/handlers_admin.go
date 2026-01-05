@@ -33,6 +33,8 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 )
 
+// --- 原有管理后台接口 ---
+
 // GetAvatarURL 根据平台、ID 和是否为群组返回头像地址
 func GetAvatarURL(platform string, id string, isGroup bool, providedAvatar string) string {
 	platform = strings.ToUpper(platform)
@@ -165,6 +167,142 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 		})
 	}
 }
+
+// HandleTokenLogin 处理 Token 自动登录请求
+func HandleTokenLogin(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := utils.GetLangFromRequest(r)
+
+		var loginData struct {
+			Platform   string `json:"platform"`
+			PlatformID string `json:"platform_id"`
+			Token      string `json:"token"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request"), nil)
+			return
+		}
+
+		if loginData.PlatformID == "" || loginData.Token == "" {
+			utils.SendJSONResponse(w, false, "PlatformID and Token are required", nil)
+			return
+		}
+
+		// 1. 验证 Token 是否有效且未过期
+		var tokenRecord models.UserLoginTokenGORM
+		err := m.GORMDB.Where("platform = ? AND platform_id = ? AND token = ? AND expires_at > ?",
+			loginData.Platform, loginData.PlatformID, loginData.Token, time.Now()).First(&tokenRecord).Error
+
+		if err != nil {
+			utils.SendJSONResponse(w, false, "验证码错误或已过期", nil)
+			return
+		}
+
+		// 2. 查找绑定的用户
+		var user models.UserGORM
+		err = m.GORMDB.Where("platform = ? AND platform_id = ?", loginData.Platform, loginData.PlatformID).First(&user).Error
+		if err != nil {
+			utils.SendJSONResponse(w, false, "该账号尚未绑定系统用户，请先注册并绑定 ID: "+loginData.PlatformID, nil)
+			return
+		}
+
+		if !user.Active {
+			utils.SendJSONResponse(w, false, utils.T(lang, "user_inactive"), nil)
+			return
+		}
+
+		// 3. 验证成功，删除已使用的 Token
+		m.GORMDB.Delete(&tokenRecord)
+
+		// 4. 生成 JWT Token
+		jwtToken, err := utils.GenerateToken(&types.User{
+			ID:             int64(user.ID),
+			Username:       user.Username,
+			IsAdmin:        user.IsAdmin,
+			SessionVersion: 0, // 默认版本
+		}, config.GlobalConfig.JWTSecret)
+		if err != nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "token_gen_failed"), nil)
+			return
+		}
+
+		role := "user"
+		if user.IsAdmin {
+			role = "admin"
+		}
+
+		utils.SendJSONResponse(w, true, utils.T(lang, "login_success"), map[string]interface{}{
+			"token": jwtToken,
+			"role":  role,
+			"user": map[string]interface{}{
+				"username": user.Username,
+				"is_admin": user.IsAdmin,
+				"role":     role,
+			},
+		})
+	}
+}
+
+// HandleRegister 处理用户注册请求
+func HandleRegister(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := utils.GetLangFromRequest(r)
+
+		var regData struct {
+			Username   string `json:"username"`
+			Password   string `json:"password"`
+			Platform   string `json:"platform"`
+			PlatformID string `json:"platform_id"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&regData); err != nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request"), nil)
+			return
+		}
+
+		if regData.Username == "" || regData.Password == "" {
+			utils.SendJSONResponse(w, false, "Username and password are required", nil)
+			return
+		}
+
+		// 1. 检查用户名是否已存在
+		var count int64
+		m.GORMDB.Model(&models.UserGORM{}).Where("username = ?", regData.Username).Count(&count)
+		if count > 0 {
+			utils.SendJSONResponse(w, false, "用户名已存在", nil)
+			return
+		}
+
+		// 2. 如果提供了 PlatformID，检查是否已被绑定
+		if regData.PlatformID != "" {
+			m.GORMDB.Model(&models.UserGORM{}).Where("platform = ? AND platform_id = ?", regData.Platform, regData.PlatformID).Count(&count)
+			if count > 0 {
+				utils.SendJSONResponse(w, false, "该平台 ID 已被绑定", nil)
+				return
+			}
+		}
+
+		// 3. 创建用户
+		hash, _ := utils.HashPassword(regData.Password)
+		user := &models.UserGORM{
+			Username:     regData.Username,
+			PasswordHash: hash,
+			Platform:     regData.Platform,
+			PlatformID:   regData.PlatformID,
+			Active:       true,
+			IsAdmin:      false,
+		}
+
+		if err := m.GORMDB.Create(user).Error; err != nil {
+			utils.SendJSONResponse(w, false, "注册失败: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "注册成功", nil)
+	}
+}
+
 
 // HandleGetUserInfo 获取当前登录用户信息
 // @Summary 获取用户信息
@@ -2888,67 +3026,6 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 		bot.Mutex.Lock()
 		var err error
 
-		// --- 优化：后台测试聊天绕过机器人通道，直接调用大模型 ---
-		// 检查是否是数字员工，如果是，且是发送消息动作，直接由 AI 回复
-		if m.DigitalEmployeeService != nil && m.AIIntegrationService != nil &&
-			(req.Action == "send_private_msg" || req.Action == "send_group_msg" || req.Action == "send_msg") {
-			employee, _ := m.DigitalEmployeeService.GetEmployeeByBotID(bot.SelfID)
-			if employee != nil {
-				params, ok := req.Params.(map[string]any)
-				if ok {
-					message := utils.ToString(params["message"])
-					userID := utils.ToString(params["user_id"])
-					if userID == "" {
-						userID = "admin"
-					}
-					groupID := utils.ToString(params["group_id"])
-
-					incomingMsg := types.InternalMessage{
-						ID:         fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-						Time:       time.Now().Unix(),
-						Platform:   bot.Platform,
-						SelfID:     bot.SelfID,
-						PostType:   "message",
-						RawMessage: message,
-						UserID:     userID,
-						GroupID:    groupID,
-					}
-					if groupID != "" {
-						incomingMsg.MessageType = "group"
-					} else {
-						incomingMsg.MessageType = "private"
-					}
-
-					log.Printf("[Admin] Digital Employee %s detected in inject, bypassing channel for direct AI response", bot.SelfID)
-
-					response, err := m.AIIntegrationService.ChatWithEmployee(employee, incomingMsg, employee.EnterpriseID)
-					if err == nil && response != "" {
-						bot.Mutex.Unlock() // 提前释放锁
-						go func() {
-							m.PendingMutex.Lock()
-							if ch, ok := m.PendingRequests[echo]; ok {
-								ch <- types.InternalMessage{
-									SelfID: bot.SelfID,
-									Time:   time.Now().Unix(),
-									Extras: map[string]any{
-										"status":  "ok",
-										"retcode": 0,
-										"data": map[string]any{
-											"message_id": 12345,
-											"reply":      response,
-										},
-									},
-								}
-							}
-							m.PendingMutex.Unlock()
-						}()
-						return
-					}
-					log.Printf("[Admin] AI response failed or empty, falling back to normal flow: %v", err)
-				}
-			}
-		}
-
 		if bot.Conn != nil {
 			err = bot.Conn.WriteJSON(msg)
 		} else if bot.Platform == "Online" {
@@ -3835,20 +3912,211 @@ func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 
 // HandleListEmployees 获取数字员工列表
 // @Summary 获取数字员工列表
-// @Description 获取所有配置的数字员工信息
+// @Description 获取所有配置的数字员工信息，支持按部门和状态过滤
 // @Tags Admin
 // @Produce json
 // @Security BearerAuth
+// @Param department query string false "部门名称"
+// @Param status query string false "状态"
 // @Success 200 {object} utils.JSONResponse "数字员工列表"
 // @Router /api/admin/employees [get]
 func HandleListEmployees(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var employees []models.DigitalEmployeeGORM
-		if err := m.GORMDB.Find(&employees).Error; err != nil {
+		query := m.GORMDB.Model(&models.DigitalEmployeeGORM{})
+
+		if dept := r.URL.Query().Get("department"); dept != "" {
+			query = query.Where("department = ?", dept)
+		}
+		if status := r.URL.Query().Get("status"); status != "" {
+			query = query.Where("status = ?", status)
+		}
+
+		if err := query.Find(&employees).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
 		utils.SendJSONResponse(w, true, "", employees)
+	}
+}
+
+// HandleGetEmployeeKPI 获取员工 KPI 统计
+// @Summary 获取员工 KPI
+// @Description 获取指定数字员工的任务完成统计和当前 KPI 分数
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id query string true "员工 ID"
+// @Success 200 {object} utils.JSONResponse "KPI 统计"
+// @Router /api/admin/employees/kpi [get]
+func HandleGetEmployeeKPI(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		employeeIDStr := r.URL.Query().Get("id")
+		if employeeIDStr == "" {
+			utils.SendJSONResponse(w, false, "Missing employee ID", nil)
+			return
+		}
+
+		id, err := strconv.ParseUint(employeeIDStr, 10, 64)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Invalid employee ID", nil)
+			return
+		}
+
+		var stats struct {
+			TotalTasks     int64   `json:"total_tasks"`
+			CompletedTasks int64   `json:"completed_tasks"`
+			FailedTasks    int64   `json:"failed_tasks"`
+			SuccessRate    float64 `json:"success_rate"`
+			AverageKPI     float64 `json:"average_kpi"`
+		}
+
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ?", id).Count(&stats.TotalTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ?", id, "completed").Count(&stats.CompletedTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ?", id, "failed").Count(&stats.FailedTasks)
+
+		if stats.TotalTasks > 0 {
+			stats.SuccessRate = float64(stats.CompletedTasks) / float64(stats.TotalTasks)
+		}
+
+		// 获取员工当前 KPI 分数
+		var emp models.DigitalEmployeeGORM
+		if err := m.GORMDB.First(&emp, id).Error; err != nil {
+			utils.SendJSONResponse(w, false, "Employee not found", nil)
+			return
+		}
+		stats.AverageKPI = emp.KpiScore
+
+		utils.SendJSONResponse(w, true, "", stats)
+	}
+}
+
+// HandleGetDepartmentKPISummary 获取部门级数字员工绩效汇总
+// @Summary 获取部门绩效汇总
+// @Description 获取指定部门下所有数字员工的平均 KPI 和任务统计
+// @Tags DigitalEmployee
+// @Produce json
+// @Param department query string true "部门名称"
+// @Success 200 {object} utils.JSONResponse "绩效汇总"
+// @Router /api/admin/department/kpi [get]
+func HandleGetDepartmentKPISummary(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		dept := r.URL.Query().Get("department")
+		if dept == "" {
+			utils.SendJSONResponse(w, false, "Missing department", nil)
+			return
+		}
+
+		var employees []models.DigitalEmployeeGORM
+		if err := m.GORMDB.Where("department = ?", dept).Find(&employees).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		if len(employees) == 0 {
+			utils.SendJSONResponse(w, true, "No employees found in this department", nil)
+			return
+		}
+
+		var summary struct {
+			Department     string  `json:"department"`
+			EmployeeCount  int     `json:"employee_count"`
+			AverageKPI     float64 `json:"average_kpi"`
+			TotalTasks     int64   `json:"total_tasks"`
+			CompletedTasks int64   `json:"completed_tasks"`
+			SuccessRate    float64 `json:"success_rate"`
+			HighPerformers int     `json:"high_performers"` // KPI > 90
+			NeedsAttention int     `json:"needs_attention"` // KPI < 70
+		}
+
+		summary.Department = dept
+		summary.EmployeeCount = len(employees)
+
+		var totalKPI float64
+		var employeeIDs []uint
+		for _, emp := range employees {
+			totalKPI += emp.KpiScore
+			employeeIDs = append(employeeIDs, emp.ID)
+			if emp.KpiScore > 90 {
+				summary.HighPerformers++
+			} else if emp.KpiScore < 70 {
+				summary.NeedsAttention++
+			}
+		}
+		summary.AverageKPI = totalKPI / float64(len(employees))
+
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id IN ?", employeeIDs).Count(&summary.TotalTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id IN ? AND status = ?", employeeIDs, "completed").Count(&summary.CompletedTasks)
+
+		if summary.TotalTasks > 0 {
+			summary.SuccessRate = float64(summary.CompletedTasks) / float64(summary.TotalTasks)
+		}
+
+		utils.SendJSONResponse(w, true, "", summary)
+	}
+}
+
+// HandleOptimizeEmployee 触发数字员工 AI 自动优化
+// @Summary 优化数字员工
+// @Description 根据历史表现，利用 AI 自动优化数字员工的 Bio/能力描述
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id query string true "员工 ID"
+// @Success 200 {object} utils.JSONResponse "优化结果"
+// @Router /api/admin/employees/optimize [post]
+func HandleOptimizeEmployee(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		employeeIDStr := r.URL.Query().Get("id")
+		if employeeIDStr == "" {
+			utils.SendJSONResponse(w, false, "Missing employee ID", nil)
+			return
+		}
+
+		id, err := strconv.ParseUint(employeeIDStr, 10, 64)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Invalid employee ID", nil)
+			return
+		}
+		err = m.DigitalEmployeeKPIService.OptimizeEmployee(r.Context(), uint(id))
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "Employee optimization successful", nil)
+	}
+}
+
+// HandleListDepartments 获取部门列表
+// @Summary 获取部门列表
+// @Description 获取所有已存在的部门名称列表
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "部门列表"
+// @Router /api/admin/departments [get]
+func HandleListDepartments(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var departments []string
+		m.GORMDB.Model(&models.DigitalEmployeeGORM{}).Distinct().Pluck("department", &departments)
+		utils.SendJSONResponse(w, true, "", departments)
+	}
+}
+
+// HandleListRoleTemplates 获取岗位模板列表
+// @Summary 获取岗位模板
+// @Description 获取所有预定义的岗位模板
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "模板列表"
+// @Router /api/admin/employees/templates [get]
+func HandleListRoleTemplates(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var templates []models.DigitalRoleTemplateGORM
+		m.GORMDB.Find(&templates)
+		utils.SendJSONResponse(w, true, "", templates)
 	}
 }
 

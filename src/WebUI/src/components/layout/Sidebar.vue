@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useSystemStore } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute, useRouter } from 'vue-router';
@@ -52,24 +52,23 @@ const iconMap: Record<string, any> = {
 
 // Map item IDs to routes
 const routeMap: Record<string, string> = {
-  'dashboard': '/',
-  'ai': '/ai',
-  'bots': '/bots',
-  'messages': '/messages',
-  'workers': '/workers',
-  'plugins': '/plugins',
-  'contacts': '/contacts',
-  'nexus': '/nexus',
-  'visualization': '/visualization',
-  'tasks': '/tasks',
-  'fission': '/fission',
-  'docker': '/docker',
-  'routing': '/routing',
-  'monitor': '/monitor',
-  'users': '/users',
-  'logs': '/logs',
-  'settings': '/settings',
-  'manual': '/manual'
+  'dashboard': '/console',
+  'bots': '/console/bots',
+  'contacts': '/console/contacts',
+  'messages': '/console/messages',
+  'tasks': '/console/tasks',
+  'fission': '/console/fission',
+  'settings': '/console/settings',
+  'manual': '/console/manual',
+  'workers': '/admin/workers',
+  'users': '/admin/users',
+  'logs': '/admin/logs',
+  'monitor': '/admin/monitor',
+  'nexus': '/admin/nexus',
+  'ai': '/admin/ai',
+  'routing': '/admin/routing',
+  'docker': '/admin/docker',
+  'plugins': '/admin/plugins',
 };
 
 const isNavigating = ref(false);
@@ -117,6 +116,29 @@ const isItemActive = (itemId: string) => {
 
 // Translation function
 const t = (key: string) => systemStore.t(key);
+
+// Filtered menu groups based on user role
+const filteredMenuGroups = computed(() => {
+    return systemStore.rawMenuGroups.filter(group => {
+        // If group is admin only and user is not admin, hide group
+        if (group.adminOnly && !authStore.isAdmin) return false;
+        
+        // Filter items within group
+        const visibleItems = group.items.filter(item => {
+            if (item.adminOnly && !authStore.isAdmin) return false;
+            return true;
+        });
+        
+        // If no items left in group, hide group (unless it's a special group)
+        if (visibleItems.length === 0) return false;
+        
+        // Return group with only visible items
+        return {
+            ...group,
+            items: visibleItems
+        };
+    });
+});
 </script>
 
 <template>
@@ -156,7 +178,7 @@ const t = (key: string) => systemStore.t(key);
 
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto py-2 px-3 space-y-2 custom-scrollbar">
-        <template v-for="(group, idx) in systemStore.menuGroups" :key="group?.id || idx">
+        <template v-for="(group, idx) in filteredMenuGroups" :key="group?.id || idx">
             <div v-if="group">
                 <div v-show="!systemStore.isSidebarCollapsed" class="px-3 mt-4 mb-1 text-[9px] font-black uppercase tracking-[0.2em] text-[var(--sidebar-text-muted)] opacity-80">
                     {{ t(group.titleKey) }}

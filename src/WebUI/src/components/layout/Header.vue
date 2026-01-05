@@ -4,7 +4,7 @@ import { useSystemStore, type Style } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { useBotStore } from '@/stores/bot';
 import { useRoute, useRouter } from 'vue-router';
-import { Menu, Github, Sun, Moon, LogOut, Palette, Check, Languages } from 'lucide-vue-next';
+import { Menu, Github, Sun, Moon, LogOut, Palette, Check, Languages, Globe } from 'lucide-vue-next';
 import { type Language } from '@/utils/i18n';
 
 const systemStore = useSystemStore();
@@ -45,20 +45,23 @@ const updateUptime = () => {
 
 // Map route paths back to translation keys
 const routeTitleMap: Record<string, string> = {
-  '/': 'dashboard',
-  '/bots': 'bots',
-  '/workers': 'workers',
-  '/contacts': 'contacts',
-  '/nexus': 'nexus',
-  '/tasks': 'tasks',
-  '/fission': 'fission',
-  '/docker': 'docker',
-  '/routing': 'routing',
-  '/users': 'users',
-  '/settings': 'settings',
-  '/logs': 'logs',
-  '/manual': 'manual',
-  '/monitor': 'monitor'
+  '/console': 'dashboard',
+  '/console/bots': 'bots',
+  '/console/contacts': 'contacts',
+  '/console/messages': 'messages',
+  '/console/tasks': 'tasks',
+  '/console/fission': 'fission',
+  '/console/manual': 'manual',
+  '/console/settings': 'settings',
+  '/admin/workers': 'workers',
+  '/admin/users': 'users',
+  '/admin/logs': 'logs',
+  '/admin/monitor': 'monitor',
+  '/admin/nexus': 'nexus',
+  '/admin/ai': 'ai_nexus',
+  '/admin/routing': 'routing',
+  '/admin/docker': 'docker',
+  '/admin/plugins': 'plugins',
 };
 
 const t = (key: string) => systemStore.t(key);
@@ -196,6 +199,12 @@ onUnmounted(() => {
     </div>
     
     <div class="flex items-center gap-2 sm:gap-4">
+      <!-- Portal Link -->
+      <router-link to="/" class="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-colors">
+        <Globe class="w-4 h-4" />
+        官网门户
+      </router-link>
+
       <!-- Uptime & Time (Hidden on small mobile) -->
       <div class="hidden sm:flex items-center gap-2 sm:gap-6 px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
         <div class="flex flex-col">

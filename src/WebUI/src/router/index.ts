@@ -1,105 +1,186 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import Dashboard from '@/views/Dashboard.vue';
+import { createRouter, createWebHistory, RouterView } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    // --- Portal / Official Website ---
     {
       path: '/',
-      name: 'dashboard',
-      component: Dashboard,
+      name: 'home',
+      component: () => import('@/views/portal/Home.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/bots',
-      name: 'bots',
-      component: () => import('@/views/Bots.vue'),
+      path: '/bots/early-meow',
+      name: 'bot-early-meow',
+      component: () => import('@/views/portal/bots/EarlyMeow.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/workers',
-      name: 'workers',
-      component: () => import('@/views/Workers.vue'),
+      path: '/bots/nexus-guard',
+      name: 'bot-nexus-guard',
+      component: () => import('@/views/portal/bots/NexusGuard.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/plugins',
-      name: 'plugins',
-      component: () => import('@/views/Plugins.vue'),
+      path: '/bots/digital-employee',
+      name: 'bot-digital-employee',
+      component: () => import('@/views/portal/bots/DigitalEmployee.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/contacts',
-      name: 'contacts',
-      component: () => import('@/views/Contacts.vue'),
+      path: '/about',
+      name: 'about',
+      component: () => import('@/views/portal/About.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/messages',
-      name: 'messages',
-      component: () => import('@/views/Messages.vue'),
+      path: '/pricing',
+      name: 'pricing',
+      component: () => import('@/views/portal/Pricing.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/nexus',
-      name: 'nexus',
-      component: () => import('@/views/Nexus.vue'),
+      path: '/docs',
+      name: 'docs',
+      component: () => import('@/views/portal/Docs.vue'),
+      meta: { layout: 'blank' }
     },
     {
-      path: '/ai',
-      name: 'ai',
-      component: () => import('@/views/NexusAI.vue'),
+      path: '/news',
+      name: 'news',
+      component: () => import('@/views/portal/News.vue'),
+      meta: { layout: 'blank' }
     },
-    {
-      path: '/visualization',
-      name: 'visualization',
-      component: () => import('@/views/Nexus.vue'),
-    },
-    {
-      path: '/tasks',
-      name: 'tasks',
-      component: () => import('@/views/Tasks.vue'),
-    },
-    {
-      path: '/fission',
-      name: 'fission',
-      component: () => import('@/views/Fission.vue'),
-    },
-    {
-      path: '/docker',
-      name: 'docker',
-      component: () => import('@/views/Docker.vue'),
-    },
-    {
-      path: '/routing',
-      name: 'routing',
-      component: () => import('@/views/Routing.vue'),
-    },
-    {
-      path: '/users',
-      name: 'users',
-      component: () => import('@/views/Users.vue'),
-    },
-    {
-      path: '/settings',
-      name: 'settings',
-      component: () => import('@/views/Settings.vue'),
-    },
-    {
-      path: '/logs',
-      name: 'logs',
-      component: () => import('@/views/Logs.vue'),
-    },
-    {
-      path: '/manual',
-      name: 'manual',
-      component: () => import('@/views/Manual.vue'),
-    },
-    {
-      path: '/monitor',
-      name: 'monitor',
-      component: () => import('@/views/Monitor.vue'),
-    },
+
+    // --- Auth ---
     {
       path: '/login',
       name: 'login',
-      component: () => import('@/views/Login.vue'),
+      component: () => import('@/views/auth/Login.vue'),
       meta: { layout: 'blank' }
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/auth/Register.vue'),
+      meta: { layout: 'blank' }
+    },
+    {
+      path: '/auth/token-login',
+      name: 'token-login',
+      component: () => import('@/views/auth/TokenLogin.vue'),
+      meta: { layout: 'blank' }
+    },
+
+    // --- User Console ---
+    {
+      path: '/console',
+      component: RouterView,
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'console-dashboard',
+          component: () => import('@/views/console/Dashboard.vue'),
+        },
+        {
+          path: 'bots',
+          name: 'console-bots',
+          component: () => import('@/views/console/Bots.vue'),
+        },
+        {
+          path: 'contacts',
+          name: 'console-contacts',
+          component: () => import('@/views/console/Contacts.vue'),
+        },
+        {
+          path: 'messages',
+          name: 'console-messages',
+          component: () => import('@/views/console/Messages.vue'),
+        },
+        {
+          path: 'tasks',
+          name: 'console-tasks',
+          component: () => import('@/views/console/Tasks.vue'),
+        },
+        {
+          path: 'fission',
+          name: 'console-fission',
+          component: () => import('@/views/console/Fission.vue'),
+        },
+        {
+          path: 'manual',
+          name: 'console-manual',
+          component: () => import('@/views/console/Manual.vue'),
+        },
+        {
+          path: 'settings',
+          name: 'console-settings',
+          component: () => import('@/views/console/Settings.vue'),
+        }
+      ]
+    },
+
+    // --- Admin Dashboard ---
+    {
+      path: '/admin',
+      component: RouterView,
+      meta: { requiresAuth: true, requiresAdmin: true },
+      children: [
+        {
+          path: 'workers',
+          name: 'admin-workers',
+          component: () => import('@/views/admin/Workers.vue'),
+        },
+        {
+          path: 'users',
+          name: 'admin-users',
+          component: () => import('@/views/admin/Users.vue'),
+        },
+        {
+          path: 'logs',
+          name: 'admin-logs',
+          component: () => import('@/views/admin/Logs.vue'),
+        },
+        {
+          path: 'monitor',
+          name: 'admin-monitor',
+          component: () => import('@/views/admin/Monitor.vue'),
+        },
+        {
+          path: 'nexus',
+          name: 'admin-nexus',
+          component: () => import('@/views/admin/Nexus.vue'),
+        },
+        {
+          path: 'ai',
+          name: 'admin-ai',
+          component: () => import('@/views/admin/NexusAI.vue'),
+        },
+        {
+          path: 'routing',
+          name: 'admin-routing',
+          component: () => import('@/views/admin/Routing.vue'),
+        },
+        {
+          path: 'docker',
+          name: 'admin-docker',
+          component: () => import('@/views/admin/Docker.vue'),
+        },
+        {
+          path: 'plugins',
+          name: 'admin-plugins',
+          component: () => import('@/views/admin/Plugins.vue'),
+        }
+      ]
+    },
+
+    // --- Fallback ---
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/'
     }
   ],
 });
@@ -108,38 +189,51 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
   const token = localStorage.getItem('wxbot_token');
   
-  console.log(`[Router] Navigating to: ${String(to.name)}, hasToken: ${!!token}, hasUser: ${!!authStore.user}`);
+  // Check if the route or any of its parents require authentication
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const isPublic = !requiresAuth;
 
-  if (to.name !== 'login') {
+  console.log(`[Router] Navigating to: ${String(to.name || to.path)}, hasToken: ${!!token}, isPublic: ${isPublic}`);
+
+  if (requiresAuth) {
     if (!token) {
       console.log('[Router] No token found, redirecting to login');
+      authStore.logout(); // Ensure state is cleared
       next({ name: 'login' });
     } else {
-      // 如果没有用户信息，尝试验证 token
+      // Check auth if user info is missing
       if (!authStore.user) {
         try {
-          console.log('[Router] Token exists but no user info, checking auth...');
           const isValid = await authStore.checkAuth();
-          console.log(`[Router] Auth check result: ${isValid}, hasToken after check: ${!!authStore.token}`);
-          
-          // 只有在明确验证失败（token被清除）的情况下才跳转登录
-          if (!isValid && !authStore.token) {
-            console.log('[Router] Auth check failed and token cleared, redirecting to login');
+          if (!isValid) {
+            console.log('[Router] Auth check failed, redirecting to login');
+            authStore.logout();
             next({ name: 'login' });
             return;
           }
         } catch (err) {
-          console.error('[Router] Router auth check error:', err);
-          // 网络错误等情况不强制跳转，让页面尝试加载
+          console.error('[Router] Auth check error:', err);
+          authStore.logout();
+          next({ name: 'login' });
+          return;
         }
       }
+
+      // Check Admin permissions for admin routes
+      const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+      if (requiresAdmin && !authStore.isAdmin) {
+        console.warn('[Router] Access denied: Admin role required');
+        next({ name: 'console-dashboard' });
+        return;
+      }
+
       next();
     }
   } else {
-    // 如果已登录且访问登录页，重定向到首页
-    if (token && authStore.user) {
-      console.log('[Router] Already logged in, redirecting to dashboard');
-      next({ name: 'dashboard' });
+    // Public paths
+    // If already logged in and visiting login/register, redirect to console
+    if (token && (to.name === 'login' || to.name === 'register')) {
+      next({ name: 'console-dashboard' });
     } else {
       next();
     }

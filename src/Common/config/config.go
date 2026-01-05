@@ -18,13 +18,21 @@ type AppConfig struct {
 	PGDBName   string `json:"pg_dbname"`
 	PGSSLMode  string `json:"pg_sslmode"`
 
+	// Legacy SQL Server Configuration (for migration)
+	MSSQLHost     string `json:"mssql_host"`
+	MSSQLPort     int    `json:"mssql_port"`
+	MSSQLUser     string `json:"mssql_user"`
+	MSSQLPassword string `json:"mssql_password"`
+	MSSQLDBName   string `json:"mssql_dbname"`
+
 	// AI Configuration
 	AIEmbeddingModel string `json:"ai_embedding_model"`
 
 	// Feature Flags
-	EnableSkill bool   `json:"enable_skill"`
-	LogLevel    string `json:"log_level"`
-	AutoReply   bool   `json:"auto_reply"`
+	EnableSkill           bool   `json:"enable_skill"`
+	EnableDigitalEmployee bool   `json:"enable_digital_employee"`
+	LogLevel              string `json:"log_level"`
+	AutoReply             bool   `json:"auto_reply"`
 
 	// Azure Translator Config
 	AzureTranslateKey      string `json:"azure_translate_key"`

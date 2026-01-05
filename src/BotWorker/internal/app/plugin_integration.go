@@ -1,6 +1,8 @@
 package app
 
 import (
+	"BotMatrix/common/ai"
+	"BotMatrix/common/ai/employee"
 	"BotMatrix/common/log"
 	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/session"
@@ -23,11 +25,12 @@ import (
 type PluginBridge struct {
 	pluginManager    *core.PluginManager
 	server           *server.CombinedServer
+	aiService        ai.AIService
 	pendingResponses sync.Map // map[string]chan string
 	watcher          *fsnotify.Watcher
 }
 
-func NewPluginBridge(server *server.CombinedServer) *PluginBridge {
+func NewPluginBridge(server *server.CombinedServer, aiService ai.AIService) *PluginBridge {
 	pm := server.GetPluginManager()
 	// 配置插件路径：优先使用配置中的路径，默认为 plugins/worker
 	workerPluginsDir := "plugins/worker"
@@ -39,6 +42,7 @@ func NewPluginBridge(server *server.CombinedServer) *PluginBridge {
 	bridge := &PluginBridge{
 		pluginManager: pm,
 		server:        server,
+		aiService:     aiService,
 	}
 
 	// 初始化文件监听器
@@ -192,6 +196,22 @@ func (pb *PluginBridge) startAndRegisterPlugin(v *core.Plugin) {
 }
 
 func (pb *PluginBridge) LoadInternalPlugins() error {
+	// 加载 AIPlugin
+	if pb.aiService != nil {
+		aiPlugin := plugins.NewAIPlugin(pb.aiService)
+		// 初始化数字员工服务
+		empSvc := employee.NewEmployeeService(plugins.GlobalGORMDB)
+		empSvc.SetAIService(pb.aiService)
+		memSvc := employee.NewCognitiveMemoryService(plugins.GlobalGORMDB)
+		taskSvc := employee.NewDigitalEmployeeTaskService(plugins.GlobalGORMDB, pb.aiService.GetMCPManager())
+		taskSvc.SetAIService(pb.aiService)
+
+		aiPlugin.SetEmployeeServices(empSvc, memSvc, taskSvc)
+		if err := pb.pluginManager.LoadPluginModule(aiPlugin, pb.server); err != nil {
+			log.Errorf("加载 AIPlugin 失败: %v", err)
+		}
+	}
+
 	// 加载 PointsProxy
 	pointsProxy := &plugins.PointsProxy{}
 	if err := pb.pluginManager.LoadPluginModule(pointsProxy, pb.server); err != nil {
@@ -548,56 +568,108 @@ func (w *ExternalPluginWrapper) Version() string {
 }
 
 func (w *ExternalPluginWrapper) Init(robot core.Robot) {
-	// 注册技能处理器
+	// 1. 注册 Intents 为技能
 	for _, intent := range w.plugin.Config.Intents {
 		intentName := intent.Name
-		robot.HandleSkill(intentName, func(params map[string]string) (string, error) {
-			log.Printf("[Skill] Triggered skill: %s, params: %+v", intentName, params)
-
-			eventID := fmt.Sprintf("skill_%d", core.NextID())
-			// 将技能调用转换为事件发送给插件
-			coreEvent := &core.EventMessage{
-				ID:   eventID,
-				Type: "request",
-				Name: "call_skill",
-				Payload: map[string]any{
-					"skill":    intentName,
-					"params":   params,
-					"from":     params["user_id"],
-					"group_id": params["group_id"],
-				},
-			}
-
-			// 创建等待响应的通道
-			respCh := make(chan string, 1)
-			w.bridge.pendingResponses.Store(eventID, respCh)
-			defer w.bridge.pendingResponses.Delete(eventID)
-
-			// 分发事件给插件
-			w.pm.DispatchEventToPlugin(w.plugin.ID, w.plugin.Version, coreEvent)
-
-			// 等待响应或超时
-			select {
-			case result := <-respCh:
-				log.Printf("[Skill] Received synchronous result for %s: %s", intentName, result)
-				return result, nil
-			case <-time.After(10 * time.Second):
-				log.Printf("[Skill] Timeout waiting for result of %s", intentName)
-				return fmt.Sprintf("Skill %s timed out", intentName), nil
-			}
-		})
+		capability := core.SkillCapability{
+			Name:        intentName,
+			Description: w.plugin.Config.Description,
+			Regex:       intent.Regex,
+			Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
+		}
+		w.registerSkill(robot, capability)
 	}
+
+	// 2. 注册 Capabilities 为技能 (支持 sz84 等没有明确 intent 的传统插件)
+	for _, capName := range w.plugin.Config.Capabilities {
+		// 如果已经作为 intent 注册过了，跳过
+		alreadyRegistered := false
+		for _, intent := range w.plugin.Config.Intents {
+			if intent.Name == capName {
+				alreadyRegistered = true
+				break
+			}
+		}
+		if alreadyRegistered {
+			continue
+		}
+
+		capability := core.SkillCapability{
+			Name:        capName,
+			Description: fmt.Sprintf("Capability: %s", capName),
+			Usage:       fmt.Sprintf("Directly call capability %s", capName),
+		}
+		w.registerSkill(robot, capability)
+	}
+}
+
+func (w *ExternalPluginWrapper) registerSkill(robot core.Robot, capability core.SkillCapability) {
+	skillName := capability.Name
+	robot.RegisterSkill(capability, func(params map[string]string) (string, error) {
+		log.Printf("[Skill] Triggered skill: %s, params: %+v", skillName, params)
+
+		eventID := fmt.Sprintf("skill_%d", core.NextID())
+		// 将技能调用转换为事件发送给插件
+		coreEvent := &core.EventMessage{
+			ID:   eventID,
+			Type: "request",
+			Name: "call_skill",
+			Payload: map[string]any{
+				"skill":    skillName,
+				"params":   params,
+				"from":     params["user_id"],
+				"group_id": params["group_id"],
+			},
+		}
+
+		// 创建等待响应的通道
+		respCh := make(chan string, 1)
+		w.bridge.pendingResponses.Store(eventID, respCh)
+		defer w.bridge.pendingResponses.Delete(eventID)
+
+		// 分发事件给插件
+		w.pm.DispatchEventToPlugin(w.plugin.ID, w.plugin.Version, coreEvent)
+
+		// 等待响应或超时
+		select {
+		case result := <-respCh:
+			log.Printf("[Skill] Received synchronous result for %s: %s", skillName, result)
+			return result, nil
+		case <-time.After(10 * time.Second):
+			log.Printf("[Skill] Timeout waiting for result of %s", skillName)
+			return fmt.Sprintf("Skill %s timed out", skillName), nil
+		}
+	})
 }
 
 // 实现 SkillCapable 接口
 func (w *ExternalPluginWrapper) GetSkills() []core.SkillCapability {
 	skills := []core.SkillCapability{}
+	// 1. Intents
 	for _, intent := range w.plugin.Config.Intents {
 		skills = append(skills, core.SkillCapability{
 			Name:        intent.Name,
 			Description: w.plugin.Config.Description,
 			Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
 			Regex:       intent.Regex,
+		})
+	}
+	// 2. Capabilities
+	for _, capName := range w.plugin.Config.Capabilities {
+		alreadyAdded := false
+		for _, s := range skills {
+			if s.Name == capName {
+				alreadyAdded = true
+				break
+			}
+		}
+		if alreadyAdded {
+			continue
+		}
+		skills = append(skills, core.SkillCapability{
+			Name:        capName,
+			Description: fmt.Sprintf("Capability: %s", capName),
+			Usage:       fmt.Sprintf("Directly call capability %s", capName),
 		})
 	}
 	return skills
