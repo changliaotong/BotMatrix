@@ -3,14 +3,15 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useSystemStore, type Style } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { useBotStore } from '@/stores/bot';
-import { useRoute } from 'vue-router';
-import { Menu, Github, Sun, Moon, LogOut, Palette, Check, Languages } from 'lucide-vue-next';
+import { useRoute, useRouter } from 'vue-router';
+import { Menu, Github, Sun, Moon, LogOut, Palette, Check, Languages, Globe } from 'lucide-vue-next';
 import { type Language } from '@/utils/i18n';
 
 const systemStore = useSystemStore();
 const authStore = useAuthStore();
 const botStore = useBotStore();
 const route = useRoute();
+const router = useRouter();
 
 const showStylePicker = ref(false);
 const stylePickerRef = ref<HTMLElement | null>(null);
@@ -44,20 +45,23 @@ const updateUptime = () => {
 
 // Map route paths back to translation keys
 const routeTitleMap: Record<string, string> = {
-  '/': 'dashboard',
-  '/bots': 'bots',
-  '/workers': 'workers',
-  '/contacts': 'contacts',
-  '/nexus': 'nexus',
-  '/tasks': 'tasks',
-  '/fission': 'fission',
-  '/docker': 'docker',
-  '/routing': 'routing',
-  '/users': 'users',
-  '/settings': 'settings',
-  '/logs': 'logs',
-  '/manual': 'manual',
-  '/monitor': 'monitor'
+  '/console': 'dashboard',
+  '/console/bots': 'bots',
+  '/console/contacts': 'contacts',
+  '/console/messages': 'messages',
+  '/console/tasks': 'tasks',
+  '/console/fission': 'fission',
+  '/console/manual': 'manual',
+  '/console/settings': 'settings',
+  '/admin/workers': 'workers',
+  '/admin/users': 'users',
+  '/admin/logs': 'logs',
+  '/admin/monitor': 'monitor',
+  '/admin/nexus': 'nexus',
+  '/admin/ai': 'ai_nexus',
+  '/admin/routing': 'routing',
+  '/admin/docker': 'docker',
+  '/admin/plugins': 'plugins',
 };
 
 const t = (key: string) => systemStore.t(key);
@@ -147,6 +151,12 @@ const selectLang = (lang: Language) => {
   showLangPicker.value = false;
 };
 
+const handleLogout = () => {
+  authStore.logout();
+  botStore.reset();
+  router.push('/login');
+};
+
 const handleClickOutside = (event: MouseEvent) => {
   const target = event.target as Node;
   if (stylePickerRef.value && !stylePickerRef.value.contains(target)) {
@@ -179,25 +189,31 @@ onUnmounted(() => {
 <template>
   <header class="h-16 flex-shrink-0 flex items-center justify-between px-4 sm:px-6 bg-[var(--bg-header)] border-b border-[var(--border-color)] z-40 transition-colors duration-300">
     <div class="flex items-center gap-2 sm:gap-4">
-      <button @click="systemStore.toggleMobileMenu()" class="p-2 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors lg:hidden">
+      <button @click="systemStore.toggleMobileMenu()" class="p-2 text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors lg:hidden">
         <Menu class="w-5 h-5" />
       </button>
-      <button @click="systemStore.toggleSidebar()" class="hidden lg:block p-2 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors">
+      <button @click="systemStore.toggleSidebar()" class="hidden lg:block p-2 text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors">
         <Menu class="w-5 h-5" />
       </button>
       <h2 class="text-base sm:text-lg font-bold tracking-tight text-[var(--text-main)] truncate max-w-[120px] sm:max-w-none">{{ t(routeTitleMap[route.path] || 'dashboard') }}</h2>
     </div>
     
     <div class="flex items-center gap-2 sm:gap-4">
+      <!-- Portal Link -->
+      <router-link to="/" class="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-colors">
+        <Globe class="w-4 h-4" />
+        官网门户
+      </router-link>
+
       <!-- Uptime & Time (Hidden on small mobile) -->
       <div class="hidden sm:flex items-center gap-2 sm:gap-6 px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
         <div class="flex flex-col">
-          <span class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] leading-tight">{{ t('system_uptime') }}</span>
+          <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-tight">{{ t('system_uptime') }}</span>
           <span class="text-xs sm:text-sm font-bold text-[var(--matrix-color)] mono">{{ localUptime }}</span>
         </div>
         <div class="h-4 sm:h-6 w-px bg-black/10 dark:bg-white/10"></div>
         <div class="flex flex-col text-right">
-          <span class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] leading-tight">{{ t('current_time') }}</span>
+          <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-tight">{{ t('current_time') }}</span>
           <span class="text-xs sm:text-sm font-bold text-[var(--text-main)] mono">{{ systemStore.currentTime }}</span>
         </div>
       </div>
@@ -216,8 +232,8 @@ onUnmounted(() => {
             class="flex items-center justify-center px-2 sm:px-3 h-8 rounded-lg transition-all border"
             :class="[
               showLangPicker 
-                ? 'bg-[var(--matrix-color)] text-black border-[var(--matrix-color)]' 
-                : 'bg-black/5 dark:bg-white/5 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-white dark:hover:text-black border-[var(--matrix-color)]/20'
+                ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] border-[var(--matrix-color)]' 
+                : 'bg-black/5 dark:bg-white/5 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-[var(--sidebar-text-active)] border-[var(--matrix-color)]/20'
             ]"
             :title="t('switch_lang')"
           >
@@ -313,7 +329,7 @@ onUnmounted(() => {
       
       <div class="h-6 w-px bg-black/5 dark:bg-white/5 hidden xs:block"></div>
       
-      <button @click="authStore.logout()" class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+      <button @click="handleLogout" class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
         <LogOut class="w-4 h-4" />
         <span class="text-xs font-bold hidden md:inline">{{ t('logout') }}</span>
       </button>

@@ -14,7 +14,7 @@ type PluginModule interface {
 }
 
 // Skill 插件提供的技能函数类型
-type Skill func(params map[string]string) (string, error)
+type Skill func(ctx BaseContext, params map[string]string) (string, error)
 
 // SkillCapability 描述插件提供的技能
 type SkillCapability struct {
@@ -47,5 +47,6 @@ type Robot interface {
 	ClearSessionState(platform, userID string) error
 
 	// 任务与技能管理
-	HandleSkill(skillName string, fn func(params map[string]string) (string, error))
+	HandleSkill(skillName string, fn func(ctx BaseContext, params map[string]string) (string, error))
+	RegisterSkill(capability SkillCapability, fn func(ctx BaseContext, params map[string]string) (string, error))
 }

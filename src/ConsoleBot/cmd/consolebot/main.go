@@ -62,11 +62,12 @@ func (r *ConsoleRobot) readLoop() {
 		// Debug: print raw message from Nexus
 		// log.Printf("[ConsoleBot] Received raw from Nexus: %s", string(message))
 
-		// Try parsing as response first (if echo is present)
+		// Try parsing as response first (if echo is present and has status)
 		var resp onebot.Response
-		if err := json.Unmarshal(message, &resp); err == nil && resp.Echo != nil {
+		if err := json.Unmarshal(message, &resp); err == nil && resp.Echo != nil && resp.Status != "" {
 			echoStr := fmt.Sprintf("%v", resp.Echo)
 			// log.Printf("[ConsoleBot] Received API Response: echo=%s, status=%s", echoStr, resp.Status)
+			fmt.Printf("\n[Nexus Response]: %s\n", resp.Status)
 			r.mu.Lock()
 			if ch, ok := r.echoMap[echoStr]; ok {
 				ch <- &resp
@@ -80,6 +81,7 @@ func (r *ConsoleRobot) readLoop() {
 		var event onebot.Event
 		if err := json.Unmarshal(message, &event); err == nil && event.PostType != "" {
 			// log.Printf("[ConsoleBot] Received Event: post_type=%s, message=%s", event.PostType, event.RawMessage)
+			fmt.Printf("\n[Nexus Event] %s: %s\n", event.PostType, event.RawMessage)
 			// Handle different post types
 			switch event.PostType {
 			case "message":
@@ -95,47 +97,82 @@ func (r *ConsoleRobot) readLoop() {
 		// Try parsing as API request (from Nexus to Bot)
 		var apiReq onebot.Request
 		if err := json.Unmarshal(message, &apiReq); err == nil && apiReq.Action != "" {
-			// log.Printf("[ConsoleBot] Received API Request: action=%s, echo=%v", apiReq.Action, apiReq.Echo)
-			if apiReq.Action == "send_msg" || apiReq.Action == "send_message" {
-				msgContent := ""
-				// Params is any, need to cast to map
-				if params, ok := apiReq.Params.(map[string]any); ok {
-					if m, ok := params["message"].(string); ok {
-						msgContent = m
-					} else if segments, ok := params["message"].([]any); ok {
-						// Handle segment list (v12 style or array of v11)
-						for _, seg := range segments {
-							if sMap, ok := seg.(map[string]any); ok {
-								if sType, ok := sMap["type"].(string); ok && sType == "text" {
-									if sData, ok := sMap["data"].(map[string]any); ok {
-										if text, ok := sData["text"].(string); ok {
-											msgContent += text
-										}
+			// fmt.Printf("\n[Nexus -> Bot Action]: %s, Params: %v\n", apiReq.Action, apiReq.Params)
+
+			msgContent := ""
+			// Params is any, need to cast to map
+			if params, ok := apiReq.Params.(map[string]any); ok {
+				if m, ok := params["message"].(string); ok {
+					msgContent = m
+				} else if segments, ok := params["message"].([]any); ok {
+					// Handle segment list (v12 style or array of v11)
+					for _, seg := range segments {
+						if sMap, ok := seg.(map[string]any); ok {
+							if sType, ok := sMap["type"].(string); ok && sType == "text" {
+								if sData, ok := sMap["data"].(map[string]any); ok {
+									if text, ok := sData["text"].(string); ok {
+										msgContent += text
 									}
 								}
 							}
 						}
 					}
 				}
+			}
 
-				if msgContent != "" {
-					fmt.Printf("\n[Nexus -> Bot Action]: %s\n", msgContent)
-				}
-
-				// Send success response back to Nexus if echo is present
-				if apiReq.Echo != nil {
-					resp := onebot.Response{
-						Status: "ok",
-						Data:   map[string]any{"message_id": time.Now().Unix()},
-						Echo:   apiReq.Echo,
+			if msgContent != "" {
+				fmt.Printf("\n🤖 [Bot -> %s]: %s\n", apiReq.Action, msgContent)
+				if apiReq.Action == "send_group_msg" && strings.Contains(msgContent, "#确认") {
+					parts := strings.Split(msgContent, "#确认 ")
+					if len(parts) > 1 {
+						idPart := strings.TrimSpace(parts[1])
+						// 只取前 16 位字符作为 DraftID
+						if len(idPart) >= 16 {
+							draftID := idPart[:16]
+							go func(id string) {
+								time.Sleep(2 * time.Second)
+								fmt.Printf("\n[Test] Auto-confirming draft: %s\n", id)
+								confirmEvent := &onebot.Event{
+									Time:        time.Now().Unix(),
+									SelfID:      onebot.FlexibleInt64(r.selfID),
+									PostType:    "message",
+									MessageType: "group",
+									UserID:      onebot.FlexibleInt64(1653346663), // Admin
+									GroupID:     onebot.FlexibleInt64(527340256),  // Group
+									Message:     "#确认 " + id,
+									RawMessage:  "#确认 " + id,
+									Platform:    r.platform,
+									Sender: onebot.Sender{
+										UserID:   onebot.FlexibleInt64(1653346663),
+										Nickname: "ConsoleTest",
+										Role:     "owner",
+									},
+								}
+								r.SendEvent(confirmEvent)
+							}(draftID)
+						}
 					}
-					r.mu.Lock()
-					r.conn.WriteJSON(resp)
-					r.mu.Unlock()
 				}
+			} else {
+				fmt.Printf("\n⚙️ [Bot Action]: %s, Params: %v\n", apiReq.Action, apiReq.Params)
+			}
+
+			// Send success response back to Nexus if echo is present
+			if apiReq.Echo != nil {
+				resp := onebot.Response{
+					Status: "ok",
+					Data:   map[string]any{"message_id": time.Now().Unix()},
+					Echo:   apiReq.Echo,
+				}
+				r.mu.Lock()
+				r.conn.WriteJSON(resp)
+				r.mu.Unlock()
 			}
 			continue
 		}
+
+		// Unknown message type
+		fmt.Printf("\n❓ [Unknown Msg]: %s\n", string(message))
 	}
 }
 
@@ -182,7 +219,7 @@ func (r *ConsoleRobot) SendEvent(event *onebot.Event) error {
 func main() {
 	// Configuration
 	nexusAddr := "ws://localhost:3001/ws/bots" // Default Nexus Bot WebSocket address
-	selfID := int64(888888)
+	selfID := int64(51437810)
 	platform := "qq"
 	userID := int64(1653346663)
 	groupID := int64(527340256)
@@ -199,23 +236,6 @@ func main() {
 		os.Exit(1)
 	} else {
 		fmt.Println("Connected to BotNexus successfully.")
-		// Auto-send test command
-		go func() {
-			time.Sleep(2 * time.Second)
-			testEvent := &onebot.Event{
-				Time:        time.Now().Unix(),
-				SelfID:      onebot.FlexibleInt64(selfID),
-				PostType:    "message",
-				MessageType: "group",
-				UserID:      onebot.FlexibleInt64(userID),
-				GroupID:     onebot.FlexibleInt64(groupID),
-				Message:     "积分",
-				RawMessage:  "积分",
-				Platform:    platform,
-			}
-			robot.SendEvent(testEvent)
-			fmt.Println("\n[Test] Sent '积分' command")
-		}()
 	}
 
 	fmt.Println("======================================")
@@ -223,6 +243,29 @@ func main() {
 	fmt.Println("======================================")
 	fmt.Println("Type 'help' for available commands.")
 	fmt.Println()
+
+	// Auto-send test command for AI task
+	go func() {
+		time.Sleep(3 * time.Second)
+		fmt.Println("\n[Test] Sending 'AI 随机禁言套餐'...")
+		testEvent := &onebot.Event{
+			Time:        time.Now().Unix(),
+			SelfID:      onebot.FlexibleInt64(selfID),
+			PostType:    "message",
+			MessageType: "group",
+			UserID:      onebot.FlexibleInt64(userID),
+			GroupID:     onebot.FlexibleInt64(groupID),
+			Message:     "AI 随机禁言套餐",
+			RawMessage:  "AI 随机禁言套餐",
+			Platform:    platform,
+			Sender: onebot.Sender{
+				UserID:   onebot.FlexibleInt64(userID),
+				Nickname: "ConsoleTest",
+				Role:     "owner",
+			},
+		}
+		robot.SendEvent(testEvent)
+	}()
 
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -333,6 +376,11 @@ func main() {
 			Message:     trimmed,
 			RawMessage:  trimmed,
 			Platform:    platform,
+			Sender: onebot.Sender{
+				UserID:   onebot.FlexibleInt64(userID),
+				Nickname: "ConsoleUser",
+				Role:     "owner",
+			},
 		}
 
 		if robot.conn != nil {

@@ -19,27 +19,23 @@ const isBlankLayout = computed(() => route.meta.layout === 'blank');
 
 const handleUnauthorized = () => {
   authStore.logout();
-  if (route.name !== 'login') {
+  
+  // Only redirect if the current route requires authentication
+  if (route.meta.requiresAuth) {
     router.push('/login');
   }
 };
 
 onMounted(async () => {
   systemStore.initTheme();
+  
+  // Wait for router to be ready to ensure route.meta is populated
+  await router.isReady();
+
   try {
-    if (authStore.token) {
-      // Use checkAuth but don't automatically logout if it fails due to network/500
-      const isAuthed = await authStore.checkAuth();
-      if (!isAuthed) {
-        // Only redirect if we're sure the session is invalid (token was cleared by checkAuth)
-        if (!authStore.token && route.name !== 'login') {
-          handleUnauthorized();
-        }
-      } else if (route.name === 'login') {
-        router.push('/');
-      }
-    } else if (route.name !== 'login') {
-      router.push('/login');
+    // If we have a token but no user info, try to fetch it
+    if (authStore.token && !authStore.user) {
+      await authStore.checkAuth();
     }
   } catch (err) {
     console.error('Initial auth check failed:', err);
@@ -75,7 +71,11 @@ onUnmounted(() => {
     </div>
 
     <template v-else-if="isBlankLayout">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </template>
     <template v-else>
       <div class="flex h-screen overflow-hidden">

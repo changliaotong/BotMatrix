@@ -17,6 +17,9 @@ BotMatrix 是一个 **AI 原生 (AI-Native)** 的分布式跨平台机器人技�
 - **多平台适配**: 统一适配微信、QQ、钉钉、飞书、公众号、抖音、Discord、Telegram、Slack 等主流平台。
 - **数字员工 (Digital Employee)**: 引入工号、职位、KPI 考评体系，将机器人升级为具备企业属性的虚拟雇员。
 - **B2B 协作**: 支持不同企业数字员工之间的自然语言业务对接，建立安全可靠的跨企业通信协议。
+- **Global Agent Mesh**: 去中心化的智能体协作网络，支持跨域发现、联邦搜索与任务共识。
+- **MCP 标准支持**: 深度集成 Model Context Protocol，通过 SSE 与 B2B 协议连接全球 AI 工具生态。
+- **隐私堡垒 (Privacy Bastion)**: 内置全链路隐私保护，自动识别并脱敏敏感信息，确保 AI 交互安全。
 - **管理 App**: 提供专属移动 App，随时随地管理数字员工，支持实时人工干预与技能分发。
 - **实时控制台 (WebUI)**: 提供全局弹出式聊天窗口，支持实时消息监控、技能结果反馈与未读提醒。
 - **Online 机器人仿真**: 支持模拟机器人连接，无需外部 Docker 容器即可测试技能逻辑与消息路由。
@@ -32,8 +35,9 @@ BotMatrix 是一个 **AI 原生 (AI-Native)** 的分布式跨平台机器人技�
 ### 📚 文档中心
 
 - **[简体中文文档中心](docs/zh-CN/README.md)**
-  - [系统架构图](docs/zh-CN/core/ARCHITECTURE.md)
-  - [API 接口参考](docs/zh-CN/core/API_REFERENCE.md)
+  - **[系统架构图](docs/zh-CN/core/ARCHITECTURE.md)**: 了解系统的分层设计与组件关系。
+  - **[理念深度解析：Mesh、MCP 与适配器](docs/zh-CN/core/AGENT_MESH_AND_MCP_RELATIONSHIP.md)**: **[必读]** 深入理解我们如何重新定义 AI 时代的机器人架构。
+  - **[API 接口参考](docs/zh-CN/core/API_REFERENCE.md)**: 开发与集成的详细规范。
   - [部署指南](docs/zh-CN/core/DEPLOY.md)
   - [AI 助手指南](docs/zh-CN/development/AI_GUIDE.md)
   - [插件开发手册](docs/zh-CN/plugins/PLUGIN_DEVELOPMENT.md)
@@ -58,6 +62,9 @@ BotMatrix is an **AI-Native** distributed cross-platform bot skill platform. It 
 - **Multi-Platform Support**: Unified adapters for WeChat, QQ, DingTalk, Feishu, Discord, Telegram, Slack, and more.
 - **Multi-Language Plugin System**: Support for writing AI-capable plugins in Go, Python, C#, and other languages.
 - **Enterprise Control**: Includes RBAC permission management, audit logs, sensitive word filtering, and unified cross-platform identity mapping (NexusUID).
+- **Global Agent Mesh**: Decentralized smart agent collaboration network supporting cross-domain discovery and federated search.
+- **MCP Protocol**: Deep integration with Model Context Protocol via SSE and B2B protocols to connect with the global AI tool ecosystem.
+- **Privacy Bastion**: Built-in full-link privacy protection with automatic de-identification and restoration of sensitive data.
 - **Real-time Console (WebUI)**: Features a global pop-up chat window for real-time message monitoring, skill results, and unread notifications.
 - **Online Bot Simulation**: Supports simulated bot connections for testing skill logic and message routing without external Docker containers.
 

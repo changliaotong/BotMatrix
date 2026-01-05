@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"BotMatrix/common/models"
 	"bufio"
 	"bytes"
 	"context"
@@ -102,7 +103,6 @@ func (a *OpenAIAdapter) ChatStream(ctx context.Context, req ChatRequest) (<-chan
 		if len(errStr) > 500 {
 			errStr = errStr[:500] + "... (truncated)"
 		}
-		fmt.Printf("[DEBUG] OpenAI Error Response: %s\n", errStr)
 		return nil, fmt.Errorf("AI API error (status %d): %s", resp.StatusCode, errStr)
 	}
 
@@ -130,10 +130,6 @@ func (a *OpenAIAdapter) ChatStream(ctx context.Context, req ChatRequest) (<-chan
 				continue
 			}
 			if !strings.HasPrefix(line, "data: ") {
-				// 非 data 开头的行，如果是简单的调试信息可以保留，但不要打印超长行
-				if len(line) < 100 {
-					fmt.Printf("[DEBUG] OpenAI Stream Line: %s\n", line)
-				}
 				continue
 			}
 			data := strings.TrimPrefix(line, "data: ")
@@ -154,4 +150,94 @@ func (a *OpenAIAdapter) ChatStream(ctx context.Context, req ChatRequest) (<-chan
 	}()
 
 	return ch, nil
+}
+
+func (a *OpenAIAdapter) CreateEmbedding(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error) {
+	if a.APIKey == "" {
+		return nil, fmt.Errorf("API Key is empty, please check your provider configuration")
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	path := "/embeddings"
+	// 针对豆包多模态向量模型的特殊处理
+	if strings.Contains(strings.ToLower(req.Model), "vision") || strings.Contains(strings.ToLower(req.Model), "multimodal") {
+		path = "/embeddings/multimodal"
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.BaseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	resp, err := a.HTTP.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("AI API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// 针对多模态响应的特殊处理
+	if strings.Contains(path, "multimodal") {
+		var multiResult struct {
+			Data  EmbeddingData `json:"data"`
+			Model string        `json:"model"`
+			Usage UsageInfo     `json:"usage"`
+		}
+		if err := json.Unmarshal(respBody, &multiResult); err != nil {
+			return nil, err
+		}
+		return &EmbeddingResponse{
+			Data:  []EmbeddingData{multiResult.Data},
+			Model: multiResult.Model,
+			Usage: multiResult.Usage,
+		}, nil
+	}
+
+	var result EmbeddingResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (a *OpenAIAdapter) GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
+	resp, err := a.CreateEmbedding(ctx, EmbeddingRequest{
+		Model: "text-embedding-3-small",
+		Input: text,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Data) == 0 {
+		return nil, fmt.Errorf("no embedding data returned")
+	}
+	return resp.Data[0].Embedding, nil
+}
+
+func (a *OpenAIAdapter) GenerateQueryEmbedding(ctx context.Context, query string) ([]float32, error) {
+	return a.GenerateEmbedding(ctx, query)
+}
+
+func (a *OpenAIAdapter) GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error) {
+	return nil, fmt.Errorf("OpenAI adapter does not support local employee retrieval")
+}
+
+func (a *OpenAIAdapter) PlanTask(ctx context.Context, executionID string) error {
+	return fmt.Errorf("OpenAI adapter does not support task planning")
 }

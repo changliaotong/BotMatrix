@@ -105,6 +105,14 @@ export const useBotStore = defineStore('bot', {
       }
     },
 
+    reset() {
+      this.bots = [];
+      this.messages = [];
+      this.stats = {};
+      this.currentBotId = null;
+      localStorage.removeItem('wxbot_current_bot_id');
+    },
+
     // --- Plugin Management API ---
     async fetchPlugins() {
       try {
@@ -163,7 +171,7 @@ export const useBotStore = defineStore('bot', {
     // --- Bot & Worker Management ---
     async fetchBots() {
       try {
-        const { data } = await api.get('/api/admin/bots');
+        const { data } = await api.get('/api/bots');
         if (data.success && data.data) {
           this.bots = data.data.bots || [];
         }
@@ -229,10 +237,18 @@ export const useBotStore = defineStore('bot', {
     },
     async fetchStats() {
       try {
-        const { data } = await api.get('/api/admin/stats');
+        const { data } = await api.get('/api/stats');
         if (data.success && data.data) {
           // Backend returns { stats: { ... } }, so we need to extract data.data.stats
-          this.stats = data.data.stats || data.data;
+          const rawStats = data.data.stats || data.data;
+          
+          // Map backend 'top_processes' to frontend 'top_processes' if needed
+          // or ensure it's consistently named.
+          this.stats = {
+            ...rawStats,
+            top_processes: rawStats.top_processes || rawStats.processes || []
+          };
+          console.log('Fetched stats with processes:', this.stats.top_processes?.length);
         } else {
           // Keep existing stats or set to empty object if null
           this.stats = this.stats || {};
@@ -249,7 +265,10 @@ export const useBotStore = defineStore('bot', {
         const { data } = await api.get(`/api/admin/messages?limit=${limit}`);
         if (data.success && data.data) {
           const msgs = data.data.messages || [];
-          this.messages = msgs;
+          // 合并并去重
+          const existingIds = new Set(this.messages.map(m => m.id));
+          const newMsgs = msgs.filter((m: any) => !existingIds.has(m.id));
+          this.messages = [...this.messages, ...newMsgs].sort((a, b) => (a.time || 0) - (b.time || 0));
           return msgs;
         }
         return [];
@@ -260,7 +279,7 @@ export const useBotStore = defineStore('bot', {
     },
     async fetchWorkers() {
       try {
-        const { data } = await api.get('/api/admin/workers');
+        const { data } = await api.get('/api/workers');
         return data;
       } catch (err) {
         console.error('Failed to fetch workers:', err);
@@ -317,7 +336,7 @@ export const useBotStore = defineStore('bot', {
     },
     async fetchContacts(botId?: string) {
       try {
-        const url = botId ? `/api/admin/contacts?bot_id=${botId}` : '/api/admin/contacts';
+        const url = botId ? `/api/contacts?bot_id=${botId}` : '/api/contacts';
         const { data } = await api.get(url);
         return data;
       } catch (err) {

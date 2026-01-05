@@ -9,23 +9,25 @@ import (
 
 // SkillResult represents the result of a skill execution from a Worker
 type SkillResult struct {
-	TaskID      any    `json:"task_id"`
-	ExecutionID any    `json:"execution_id"`
-	Status      string `json:"status"`
-	Result      string `json:"result"`
-	Error       string `json:"error"`
-	WorkerID    string `json:"worker_id"`
+	TaskID        any    `json:"task_id"`
+	ExecutionID   any    `json:"execution_id"`
+	CorrelationID string `json:"correlation_id,omitempty"`
+	Status        string `json:"status"`
+	Result        string `json:"result"`
+	Error         string `json:"error"`
+	WorkerID      string `json:"worker_id"`
 }
 
 // WorkerCommand represents a command sent from Nexus to a Worker
 type WorkerCommand struct {
-	Type        string         `json:"type"`
-	Skill       string         `json:"skill,omitempty"`
-	Params      map[string]any `json:"params,omitempty"`
-	UserID      string         `json:"user_id,omitempty"`
-	TaskID      any            `json:"task_id,omitempty"`
-	ExecutionID any            `json:"execution_id,omitempty"`
-	Timestamp   int64          `json:"timestamp,omitempty"`
+	Type          string         `json:"type"`
+	Skill         string         `json:"skill,omitempty"`
+	Params        map[string]any `json:"params,omitempty"`
+	UserID        string         `json:"user_id,omitempty"`
+	TaskID        any            `json:"task_id,omitempty"`
+	ExecutionID   any            `json:"execution_id,omitempty"`
+	CorrelationID string         `json:"correlation_id,omitempty"`
+	Timestamp     int64          `json:"timestamp,omitempty"`
 }
 
 // WorkerMessage represents any message coming from a Worker via WebSocket
@@ -85,18 +87,19 @@ type WorkerClient struct {
 }
 
 type WorkerInfo struct {
-	ID              string `json:"id"`
-	RemoteAddr      string `json:"remote_addr"`
-	Type            string `json:"type"`
-	Status          string `json:"status"`
-	Connected       string `json:"connected"`
-	LastSeen        string `json:"last_seen"`
-	HandledCount    int64  `json:"handled_count"`
-	AvgRTT          string `json:"avg_rtt"`
-	LastRTT         string `json:"last_rtt"`
-	AvgProcessTime  string `json:"avg_process_time"`
-	LastProcessTime string `json:"last_process_time"`
-	IsAlive         bool   `json:"is_alive"`
+	ID              string             `json:"id"`
+	RemoteAddr      string             `json:"remote_addr"`
+	Type            string             `json:"type"`
+	Status          string             `json:"status"`
+	Connected       string             `json:"connected"`
+	LastSeen        string             `json:"last_seen"`
+	HandledCount    int64              `json:"handled_count"`
+	AvgRTT          string             `json:"avg_rtt"`
+	LastRTT         string             `json:"last_rtt"`
+	AvgProcessTime  string             `json:"avg_process_time"`
+	LastProcessTime string             `json:"last_process_time"`
+	Capabilities    []WorkerCapability `json:"capabilities"`
+	IsAlive         bool               `json:"is_alive"`
 }
 
 // WorkerUpdateEvent represents a worker status update event

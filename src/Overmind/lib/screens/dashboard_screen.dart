@@ -105,24 +105,135 @@ class BotListTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundImage: NetworkImage(bot.avatarUrl),
-              backgroundColor: Colors.black,
-            ),
-            title: Text(bot.nickname, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            subtitle: Text('${bot.platform} • ${bot.id}', style: const TextStyle(color: Colors.grey)),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('${l10n.msgPrefix}: ${bot.msgCount}', style: const TextStyle(color: Colors.cyanAccent)),
-                Text(bot.uptime, style: const TextStyle(color: Colors.grey, fontSize: 10)),
-              ],
+          child: InkWell(
+            onTap: () => _showSalaryDialog(context, bot, service, l10n),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: NetworkImage(bot.avatarUrl),
+                  backgroundColor: Colors.black,
+                ),
+                title: Row(
+                  children: [
+                    Text(bot.nickname, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.cyanAccent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        '${l10n.kpi}: ${bot.kpiScore.toStringAsFixed(1)}',
+                        style: const TextStyle(color: Colors.cyanAccent, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${bot.platform} • ${bot.id}', style: const TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: bot.salaryLimit > 0 ? bot.salaryToken / bot.salaryLimit : 0,
+                        backgroundColor: Colors.grey.withOpacity(0.1),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          bot.salaryToken > bot.salaryLimit * 0.8 ? Colors.redAccent : Colors.greenAccent,
+                        ),
+                        minHeight: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${l10n.salary}: ${bot.salaryToken} / ${bot.salaryLimit}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 10),
+                    ),
+                  ],
+                ),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('${l10n.msgPrefix}: ${bot.msgCount}', style: const TextStyle(color: Colors.cyanAccent)),
+                    Text(bot.uptime, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                  ],
+                ),
+              ),
             ),
           ),
         ).animate().fadeIn(delay: (index * 100).ms).slideX();
       },
+    );
+  }
+
+  void _showSalaryDialog(BuildContext context, BotInfo bot, BotNexusService service, AppLocalizations l10n) {
+    final tokenController = TextEditingController(text: '0');
+    final limitController = TextEditingController(text: bot.salaryLimit.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: Text('${bot.nickname} - ${l10n.salary}管理', style: const TextStyle(color: Colors.cyanAccent)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: tokenController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: '重置已用 Token (设为 0)',
+                labelStyle: const TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent.withOpacity(0.5))),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: limitController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: '${l10n.limit} (Token)',
+                labelStyle: const TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent.withOpacity(0.5))),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent),
+            onPressed: () async {
+              final newToken = int.tryParse(tokenController.text);
+              final newLimit = int.tryParse(limitController.text);
+              if (newToken != null || newLimit != null) {
+                final success = await service.updateEmployeeSalary(
+                  bot.id,
+                  salaryToken: newToken,
+                  salaryLimit: newLimit,
+                );
+                if (success) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('更新成功'), backgroundColor: Colors.green),
+                  );
+                }
+              }
+            },
+            child: const Text('保存', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
     );
   }
 }

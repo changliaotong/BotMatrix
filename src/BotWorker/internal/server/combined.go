@@ -1,12 +1,15 @@
 package server
 
 import (
-	"BotMatrix/common"
+	"BotMatrix/common/ai"
+	"BotMatrix/common/ai/employee"
 	"BotMatrix/common/bot"
 	"BotMatrix/common/log"
+	"BotMatrix/common/models"
 	commononebot "BotMatrix/common/onebot"
 	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/session"
+	"BotMatrix/common/tasks"
 	"BotMatrix/common/types"
 	"botworker/internal/config"
 	"botworker/internal/db"
@@ -17,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,17 +30,60 @@ import (
 )
 
 type CombinedServer struct {
-	botService    *bot.BaseBot
-	wsServer      *WebSocketServer
-	httpServer    *HTTPServer
-	pluginManager *core.PluginManager
-	redisClient   *redis.Client
-	config        *config.Config
-	actionRouter  func(string, string, map[string]any) (any, error)
-	lastSelfID    int64
-	lastPlatform  string
-	skills        map[string]core.Skill
-	skillsMu      sync.RWMutex
+	botService             *bot.BaseBot
+	wsServer               *WebSocketServer
+	httpServer             *HTTPServer
+	pluginManager          *core.PluginManager
+	redisClient            *redis.Client
+	config                 *config.Config
+	actionRouter           func(string, string, map[string]any) (any, error)
+	lastSelfID             int64
+	lastPlatform           string
+	skills                 map[string]core.Skill
+	skillCapabilities      []core.SkillCapability
+	skillsMu               sync.RWMutex
+	aiService              ai.AIService
+	employeeService        employee.DigitalEmployeeService
+	cognitiveMemoryService employee.CognitiveMemoryService
+	taskManager            *tasks.TaskManager
+}
+
+func (s *CombinedServer) SetAIService(aiSvc ai.AIService) {
+	s.aiService = aiSvc
+	if plugins.GlobalGORMDB != nil {
+		s.employeeService = employee.NewEmployeeService(plugins.GlobalGORMDB)
+		s.cognitiveMemoryService = employee.NewCognitiveMemoryService(plugins.GlobalGORMDB)
+
+		// 初始化任务管理器
+		if s.taskManager == nil {
+			s.taskManager = tasks.NewTaskManager(plugins.GlobalGORMDB, s.redisClient.Client, s, s.config.WorkerID)
+			s.taskManager.AI.SetAIService(aiSvc)
+			// Worker 仅作为任务生成端和同步端，不执行调度触发
+			s.taskManager.Start(false)
+			log.Info("[Worker] TaskManager started (Scheduler Disabled)")
+
+			// 注册任务系统消息处理器
+			s.OnMessage(func(e *onebot.Event) error {
+				if s.taskManager == nil {
+					return nil
+				}
+				// 转换 OneBot 事件为任务系统需要的格式
+				ctx := context.Background()
+				botID := fmt.Sprintf("%v", e.SelfID)
+				groupID := e.GroupID.String()
+				userID := e.UserID.String()
+				content := e.RawMessage
+
+				// 异步处理消息，避免阻塞消息流水线
+				go func() {
+					if err := s.taskManager.ProcessChatMessage(ctx, botID, groupID, userID, content); err != nil {
+						log.Errorf("[Worker] TaskManager.ProcessChatMessage error: %v", err)
+					}
+				}()
+				return nil
+			})
+		}
+	}
 }
 
 func NewCombinedServer(botService *bot.BaseBot, cfg *config.Config, rdb *redis.Client) *CombinedServer {
@@ -54,7 +102,72 @@ func NewCombinedServer(botService *bot.BaseBot, cfg *config.Config, rdb *redis.C
 		pluginManager: core.NewPluginManager(),
 	}
 	server.registerStorageHandlers()
+	server.registerCoreHandlers()
 	return server
+}
+
+func (s *CombinedServer) registerCoreHandlers() {
+	s.OnMessage(func(e *onebot.Event) error {
+		if plugins.GlobalStore == nil {
+			return nil
+		}
+
+		// 1. 记录消息日志
+		logEntry := &models.MessageLog{
+			BotID:     fmt.Sprintf("%v", e.SelfID),
+			UserID:    e.UserID.String(),
+			GroupID:   e.GroupID.String(),
+			Content:   e.RawMessage,
+			Platform:  e.Platform,
+			Direction: "incoming",
+			CreatedAt: time.Now(),
+		}
+		if raw, err := json.Marshal(e); err == nil {
+			logEntry.RawData = string(raw)
+		}
+		_ = plugins.GlobalStore.Messages.LogMessage(logEntry)
+
+		// 2. 更新消息统计
+		if e.GroupID.String() != "" && e.UserID.String() != "" {
+			_ = plugins.GlobalStore.Messages.UpdateStat(e.GroupID.String(), e.UserID.String(), time.Now(), 1)
+		}
+
+		// 3. 异步更新缓存 (不阻塞主流程)
+		go func() {
+			// 更新群组缓存
+			if e.GroupID.String() != "" {
+				groupCache := &models.GroupCache{
+					GroupID:  e.GroupID.String(),
+					BotID:    fmt.Sprintf("%v", e.SelfID),
+					LastSeen: time.Now(),
+				}
+				// 尝试获取群名（如果 event 中有）
+				// 注意：OneBot 事件中不一定有群名，通常需要调用 API 获取
+				_ = plugins.GlobalStore.Caches.UpdateGroupCache(groupCache)
+			}
+
+			// 更新成员缓存
+			if e.GroupID.String() != "" && e.UserID.String() != "" {
+				memberCache := &models.MemberCache{
+					GroupID:  e.GroupID.String(),
+					UserID:   e.UserID.String(),
+					LastSeen: time.Now(),
+				}
+				// 尝试获取昵称（如果 event 中有）
+				if e.Sender.Nickname != "" {
+					memberCache.Nickname = e.Sender.Nickname
+				}
+				if e.Sender.Card != "" {
+					memberCache.Card = e.Sender.Card
+				}
+				if e.Sender.Role != "" {
+					memberCache.Role = e.Sender.Role
+				}
+				_ = plugins.GlobalStore.Caches.UpdateMemberCache(memberCache)
+			}
+		}()
+		return nil
+	})
 }
 
 func (s *CombinedServer) registerStorageHandlers() {
@@ -140,7 +253,7 @@ func (s *CombinedServer) registerStorageHandlers() {
 
 		ctx := context.Background()
 		if s.redisClient != nil {
-			store := common.NewRedisSessionStore(s.redisClient.Client)
+			store := session.NewRedisSessionStore(s.redisClient.Client)
 			expiration := time.Duration(expirationMs) * time.Millisecond
 			err := store.Set(ctx, key, value, expiration)
 			if err != nil {
@@ -226,7 +339,7 @@ func (s *CombinedServer) registerStorageHandlers() {
 
 		ctx := context.Background()
 		if s.redisClient != nil {
-			store := common.NewRedisSessionStore(s.redisClient.Client)
+			store := session.NewRedisSessionStore(s.redisClient.Client)
 			err := store.Delete(ctx, key)
 			if err != nil {
 				return nil, err
@@ -250,7 +363,7 @@ func (s *CombinedServer) registerStorageHandlers() {
 
 		ctx := context.Background()
 		if s.redisClient != nil {
-			store := common.NewRedisSessionStore(s.redisClient.Client)
+			store := session.NewRedisSessionStore(s.redisClient.Client)
 			exists, err := store.Exists(ctx, key)
 			if err != nil {
 				return nil, err
@@ -287,6 +400,33 @@ func (s *CombinedServer) HandleAPI(action string, fn any) {
 	if handler, ok := fn.(onebot.RequestHandler); ok {
 		s.wsServer.HandleAPI(action, handler)
 		s.httpServer.HandleAPI(action, handler)
+	} else if handler, ok := fn.(onebot.EventHandler); ok {
+		// 如果是事件处理器，根据 action 名称注册
+		switch action {
+		case "on_message":
+			s.OnMessage(handler)
+		case "on_notice":
+			s.OnNotice(handler)
+		case "on_request":
+			s.OnRequest(handler)
+		default:
+			s.OnEvent(action, handler)
+		}
+	} else if handler, ok := fn.(func(map[string]any)); ok {
+		// 兼容 map[string]any 类型的处理器
+		wrappedHandler := func(e *onebot.Event) error {
+			payload := map[string]any{
+				"from":     e.UserID.String(),
+				"group_id": e.GroupID.String(),
+				"user_id":  e.UserID.String(),
+				"text":     e.RawMessage,
+				"platform": e.Platform,
+				"self_id":  fmt.Sprintf("%v", e.SelfID),
+			}
+			handler(payload)
+			return nil
+		}
+		s.HandleAPI(action, wrappedHandler)
 	}
 }
 
@@ -391,6 +531,108 @@ func (s *CombinedServer) GetSelfID() int64 {
 		return s.lastSelfID
 	}
 	return s.wsServer.GetSelfID()
+}
+
+// --- BotManager Interface Implementation ---
+
+func (s *CombinedServer) SendBotAction(botID string, action string, params any) error {
+	_, err := s.CallBotAction(action, params)
+	return err
+}
+
+func (s *CombinedServer) SendToWorker(workerID string, msg types.WorkerCommand) error {
+	// Worker 无法直接发送给另一个 Worker，转发给 Nexus
+	return s.botService.SendNexusCommand("worker_command", map[string]any{
+		"target_worker": workerID,
+		"command":       msg,
+	})
+}
+
+func (s *CombinedServer) FindWorkerBySkill(skillName string) string {
+	// 目前简单返回自己，后续可以通过 Nexus 查找
+	return s.config.WorkerID
+}
+
+func (s *CombinedServer) GetTags(targetType string, targetID string) []string {
+	if plugins.GlobalGORMDB == nil {
+		return nil
+	}
+	var tags []models.Tag
+	if err := plugins.GlobalGORMDB.Where("type = ? AND target_id = ?", targetType, targetID).Find(&tags).Error; err != nil {
+		log.Printf("[BotWorker] GetTags error: %v", err)
+		return nil
+	}
+	var names []string
+	for _, t := range tags {
+		names = append(names, t.Name)
+	}
+	return names
+}
+
+func (s *CombinedServer) GetTargetsByTags(targetType string, tags []string, logic string) []string {
+	if plugins.GlobalGORMDB == nil || len(tags) == 0 {
+		return nil
+	}
+
+	var results []string
+	if logic == "AND" {
+		// 所有的标签都必须存在
+		err := plugins.GlobalGORMDB.Model(&models.Tag{}).
+			Where("type = ? AND name IN ?", targetType, tags).
+			Group("target_id").
+			Having("COUNT(DISTINCT name) = ?", len(tags)).
+			Pluck("target_id", &results).Error
+		if err != nil {
+			log.Printf("[BotWorker] GetTargetsByTags error: %v", err)
+			return nil
+		}
+	} else {
+		// 只要有一个标签存在即可 (OR)
+		err := plugins.GlobalGORMDB.Model(&models.Tag{}).
+			Where("type = ? AND name IN ?", targetType, tags).
+			Distinct("target_id").
+			Pluck("target_id", &results).Error
+		if err != nil {
+			log.Printf("[BotWorker] GetTargetsByTags error: %v", err)
+			return nil
+		}
+	}
+
+	return results
+}
+
+func (s *CombinedServer) GetGroupMembers(botID string, groupID string) ([]types.MemberInfo, error) {
+	gid, _ := strconv.ParseInt(groupID, 10, 64)
+	resp, err := s.wsServer.GetGroupMemberList(&onebot.GetGroupMemberListParams{
+		GroupID: onebot.FlexibleInt64(gid),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	members, ok := resp.Data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response data type: %T", resp.Data)
+	}
+
+	var result []types.MemberInfo
+	for _, mAny := range members {
+		mMap, ok := mAny.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		m := types.MemberInfo{
+			GroupID:  groupID,
+			UserID:   fmt.Sprintf("%v", mMap["user_id"]),
+			Nickname: fmt.Sprintf("%v", mMap["nickname"]),
+			Card:     fmt.Sprintf("%v", mMap["card"]),
+			Role:     fmt.Sprintf("%v", mMap["role"]),
+			BotID:    botID,
+		}
+		result = append(result, m)
+	}
+	return result, nil
 }
 
 func (s *CombinedServer) publishActionToNexus(action string, params any) error {
@@ -533,6 +775,121 @@ func (s *CombinedServer) HandleSkill(skillName string, fn func(params map[string
 	s.skills[skillName] = fn
 }
 
+// RegisterSkill 注册带有元数据的技能
+func (s *CombinedServer) RegisterSkill(capability core.SkillCapability, fn func(params map[string]string) (string, error)) {
+	s.skillsMu.Lock()
+	defer s.skillsMu.Unlock()
+	s.skills[capability.Name] = fn
+
+	// 检查是否已经存在同名能力，如果存在则更新，否则添加
+	found := false
+	for i, c := range s.skillCapabilities {
+		if c.Name == capability.Name {
+			s.skillCapabilities[i] = capability
+			found = true
+			break
+		}
+	}
+	if !found {
+		s.skillCapabilities = append(s.skillCapabilities, capability)
+	}
+	log.Printf("[Worker] Registered skill: %s (Regex: %s)", capability.Name, capability.Regex)
+}
+
+// routeMessageToSkill 尝试将消息路由到特定插件技能
+func (s *CombinedServer) routeMessageToSkill(e *onebot.Event) (bool, error) {
+	s.skillsMu.RLock()
+	defer s.skillsMu.RUnlock()
+
+	// 1. 优先从 Redis 获取动态插件路由规则 (例如：group_123 -> weather)
+	if s.redisClient != nil {
+		ctx := context.Background()
+		matchKeys := []string{
+			fmt.Sprintf("user_%v", e.UserID),
+			fmt.Sprintf("group_%v", e.GroupID),
+			fmt.Sprintf("bot_%v", e.SelfID),
+		}
+
+		// 规则存储在 worker:{workerID}:plugin_rules 哈希表中
+		rulesKey := fmt.Sprintf("worker:%s:plugin_rules", s.config.WorkerID)
+		for _, key := range matchKeys {
+			if skillName, err := s.redisClient.HGet(ctx, rulesKey, key).Result(); err == nil && skillName != "" {
+				if _, ok := s.skills[skillName]; ok {
+					log.Printf("[Routing] Dynamic plugin route matched (Redis): %s -> %s", key, skillName)
+					params := map[string]string{
+						"user_id":  e.UserID.String(),
+						"group_id": e.GroupID.String(),
+						"message":  e.RawMessage,
+						"platform": e.Platform,
+						"self_id":  fmt.Sprintf("%v", e.SelfID),
+					}
+					_, err := s.InvokeSkill(skillName, params)
+					if err != nil {
+						return true, fmt.Errorf("failed to invoke dynamic skill %s: %v", skillName, err)
+					}
+					return true, nil
+				}
+			}
+		}
+	}
+
+	// 2. 遍历已注册能力的 Regex 进行匹配
+	for _, cap := range s.skillCapabilities {
+		if cap.Regex == "" {
+			continue
+		}
+
+		matched, err := regexp.MatchString(cap.Regex, e.RawMessage)
+		if err == nil && matched {
+			log.Printf("[Routing] Message matched skill: %s (Regex: %s)", cap.Name, cap.Regex)
+			params := map[string]string{
+				"user_id":  e.UserID.String(),
+				"group_id": e.GroupID.String(),
+				"message":  e.RawMessage,
+				"platform": e.Platform,
+				"self_id":  fmt.Sprintf("%v", e.SelfID),
+			}
+			_, err := s.InvokeSkill(cap.Name, params)
+			if err != nil {
+				return true, fmt.Errorf("failed to invoke skill %s: %v", cap.Name, err)
+			}
+			return true, nil
+		}
+	}
+
+	// 2. 如果没有任何匹配，路由到 sz84 兜底
+	if handler, ok := s.skills["sz84"]; ok {
+		log.Printf("[Routing] No specific skill matched, falling back to sz84")
+		params := map[string]string{
+			"user_id":  e.UserID.String(),
+			"group_id": e.GroupID.String(),
+			"message":  e.RawMessage,
+			"platform": e.Platform,
+			"self_id":  fmt.Sprintf("%v", e.SelfID),
+		}
+		_, err := handler(params)
+		if err != nil {
+			return true, fmt.Errorf("failed to invoke fallback sz84 skill: %v", err)
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// InvokeSkill 调用已注册的技能
+func (s *CombinedServer) InvokeSkill(skillName string, params map[string]string) (string, error) {
+	s.skillsMu.RLock()
+	fn, ok := s.skills[skillName]
+	s.skillsMu.RUnlock()
+
+	if !ok {
+		return "", fmt.Errorf("skill %s not found", skillName)
+	}
+
+	return fn(params)
+}
+
 func (s *CombinedServer) CallPluginAction(pluginID string, action string, payload map[string]any) (any, error) {
 	if s.actionRouter != nil {
 		return s.actionRouter(pluginID, action, payload)
@@ -568,9 +925,6 @@ func (s *CombinedServer) Run() error {
 		}
 	}()
 
-	// 报备能力给 BotNexus
-	go s.reportCapabilities()
-
 	// 启动Redis队列监听 (如果配置了Redis)
 	if s.redisClient != nil {
 		go s.startRedisQueueListener()
@@ -578,53 +932,6 @@ func (s *CombinedServer) Run() error {
 
 	// 保持主运行状态
 	select {}
-}
-
-func (s *CombinedServer) reportCapabilities() {
-	if s.redisClient == nil {
-		return
-	}
-
-	// 如果禁用了技能系统，则不报备能力
-	if !s.config.EnableSkill {
-		log.Printf("[SKILL] Skill system is disabled, skipping capability reporting")
-		return
-	}
-
-	// 等待插件加载完成
-	time.Sleep(2 * time.Second)
-
-	capabilities := []map[string]any{}
-	for _, versions := range s.pluginManager.GetPlugins() {
-		for _, p := range versions {
-			// 目前插件架构中，SkillCapable 接口通常由插件模块实现
-			// 这里由于插件是以进程方式运行的，报备能力应该基于配置或元数据
-			// 暂时保留逻辑结构，修复语法错误
-			if any(p).(interface{}) != nil {
-				// 以后这里可以添加从插件元数据读取能力的逻辑
-			}
-		}
-	}
-
-	if len(capabilities) == 0 {
-		return
-	}
-
-	regMsg := map[string]any{
-		"type":         "worker_register",
-		"worker_id":    s.config.WorkerID,
-		"capabilities": capabilities,
-		"timestamp":    time.Now().Unix(),
-	}
-
-	payload, _ := json.Marshal(regMsg)
-	ctx := context.Background()
-	err := s.redisClient.Publish(ctx, "botmatrix:worker:register", payload).Err()
-	if err != nil {
-		log.Printf("[Combined] Failed to report capabilities: %v", err)
-	} else {
-		log.Printf("[Combined] Successfully reported %d capabilities to BotNexus", len(capabilities))
-	}
 }
 
 func (s *CombinedServer) startRedisQueueListener() {
@@ -881,6 +1188,60 @@ func (s *CombinedServer) HandleQueueEvent(msg map[string]any) {
 
 	// 处理 QQGuild ID 生成（确保 ID 映射正确）
 	processEventIDs(&event)
+
+	// --- 技能路由逻辑 (New) ---
+	if event.PostType == "message" && event.RawMessage != "" {
+		handled, err := s.routeMessageToSkill(&event)
+		if err != nil {
+			log.Errorf("[Worker] routeMessageToSkill error: %v", err)
+		}
+		if handled {
+			return
+		}
+	}
+
+	// --- 智能体 (Digital Employee) 处理逻辑 ---
+	// 如果该 Bot 被定义为“数字员工”，则在 Worker 端直接进行 AI 响应
+	if s.employeeService != nil && s.aiService != nil && event.PostType == "message" && event.UserID.String() != fmt.Sprintf("%v", event.SelfID) {
+		employee, err := s.employeeService.GetEmployeeByBotID(fmt.Sprintf("%v", event.SelfID))
+		if err == nil && employee != nil {
+			log.Printf("[Agent] Bot %v is a Digital Employee: %s (%s)", event.SelfID, employee.Name, employee.Title)
+
+			// 只有文本消息才触发 AI
+			if event.RawMessage != "" {
+				// 调用 AI 进行数字员工响应 (带上下文历史)
+				// 注意：这里需要将 onebot.Event 转换为 types.InternalMessage
+				internalMsg := types.InternalMessage{
+					ID:          event.MessageID.String(),
+					Time:        event.Time,
+					Platform:    event.Platform,
+					SelfID:      fmt.Sprintf("%v", event.SelfID),
+					UserID:      event.UserID.String(),
+					GroupID:     event.GroupID.String(),
+					MessageType: event.MessageType,
+					RawMessage:  event.RawMessage,
+				}
+
+				response, err := s.aiService.ChatWithEmployee(employee, internalMsg, employee.EnterpriseID)
+				if err == nil && response != "" {
+					log.Printf("[Agent] AI Response for Bot %v: %s", event.SelfID, response)
+					// 发送回复
+					s.SendMessage(&onebot.SendMessageParams{
+						MessageType: event.MessageType,
+						UserID:      event.UserID,
+						GroupID:     event.GroupID,
+						Message:     response,
+					})
+
+					// 数字员工回复后，通常不需要再分发给插件处理通用逻辑
+					return
+				} else if err != nil {
+					log.Printf("[Agent] AI Chat failed: %v", err)
+				}
+			}
+		}
+	}
+	// ------------------------------------------
 
 	// 分发到内部处理器
 	s.dispatchInternalEvent(&event)

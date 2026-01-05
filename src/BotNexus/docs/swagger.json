@@ -1,0 +1,4184 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/api/action": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "向机器人发送 OneBot 标准 API 动作",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "发送 API 动作",
+                "parameters": [
+                    {
+                        "description": "动作参数 (bot_id, action, params)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "动作执行结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/agents": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "新增或更新 AI 智能体配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "保存智能体",
+                "parameters": [
+                    {
+                        "description": "智能体信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AIAgentGORM"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/agents/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 删除指定的 AI 智能体配置",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "删除智能体",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "智能体 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取最近的 AI 调用日志，用于审计和统计",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "获取 AI 使用日志",
+                "responses": {
+                    "200": {
+                        "description": "日志列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/models": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有已配置的 AI 模型，包含其关联的提供商信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "获取 AI 模型列表",
+                "responses": {
+                    "200": {
+                        "description": "模型列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "新增或更新 AI 模型配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "保存 AI 模型",
+                "parameters": [
+                    {
+                        "description": "模型信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AIModelGORM"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/models/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 删除指定的 AI 模型配置",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "删除 AI 模型",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "模型 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/providers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有已配置的 AI 模型提供商（如 OpenAI, Anthropic 等），API Key 会被脱敏",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "获取 AI 提供商列表",
+                "responses": {
+                    "200": {
+                        "description": "提供商列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "新增或更新 AI 提供商配置。如果 API Key 为 \"********\" 则保持原值。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "保存 AI 提供商",
+                "parameters": [
+                    {
+                        "description": "提供商信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AIProviderGORM"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/ai/providers/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 删除指定的 AI 提供商配置",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "删除 AI 提供商",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "提供商 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/b2b/connections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有已建立的企业间数字员工 (B2B) 连接记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取 B2B 连接列表",
+                "responses": {
+                    "200": {
+                        "description": "连接列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/b2b/skills": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有已配置的 B2B 技能共享记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取 B2B 技能列表",
+                "responses": {
+                    "200": {
+                        "description": "技能列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建或更新 B2B 技能共享配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "保存 B2B 技能",
+                "parameters": [
+                    {
+                        "description": "技能共享信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/b2b/skills/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 删除一条 B2B 技能共享记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "删除 B2B 技能",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "技能 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/batch_send": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "向多个目标（群或私聊）批量发送相同内容的群发消息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "批量发送消息",
+                "parameters": [
+                    {
+                        "description": "群发参数 (targets, message)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "任务启动结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/bots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有当前连接的机器人（OneBot 客户端）及其状态信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取机器人列表",
+                "responses": {
+                    "200": {
+                        "description": "机器人列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/config": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前应用的完整配置信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取配置",
+                "responses": {
+                    "200": {
+                        "description": "应用配置",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "更新当前应用的全局配置信息并持久化到文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "更新配置",
+                "parameters": [
+                    {
+                        "description": "新的配置对象",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/config.AppConfig"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新后的配置",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/contacts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定机器人的群组和好友列表，支持强制刷新",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取联系人列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "机器人 ID (GET 请求)",
+                        "name": "bot_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否强制刷新 (GET 请求)",
+                        "name": "refresh",
+                        "in": "query"
+                    },
+                    {
+                        "description": "请求体 (POST 请求，包含 bot_id 和 refresh)",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "联系人列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定机器人的群组和好友列表，支持强制刷新",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取联系人列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "机器人 ID (GET 请求)",
+                        "name": "bot_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否强制刷新 (GET 请求)",
+                        "name": "refresh",
+                        "in": "query"
+                    },
+                    {
+                        "description": "请求体 (POST 请求，包含 bot_id 和 refresh)",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "联系人列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/docker/action": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启动、停止、重启或删除指定的 Docker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "操作 Docker 容器",
+                "parameters": [
+                    {
+                        "description": "操作参数 (container_id, action)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/docker/add-bot": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "在 Docker 中创建并启动一个新的机器人容器，支持多种平台",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "添加机器人容器",
+                "parameters": [
+                    {
+                        "description": "机器人配置 (platform, image, env, cmd)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "添加结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/docker/add-worker": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "在 Docker 中创建并启动一个新的 Worker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "添加 Worker 容器",
+                "parameters": [
+                    {
+                        "description": "Worker 配置 (image, env, cmd, name)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "添加结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/docker/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统宿主机上的所有 Docker 容器列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Docker 容器列表",
+                "responses": {
+                    "200": {
+                        "description": "容器列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/docker/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定 Docker 容器的最近运行日志",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Docker 日志",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "容器 ID",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "日志内容",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/employees": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有配置的数字员工信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取数字员工列表",
+                "responses": {
+                    "200": {
+                        "description": "数字员工列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建或更新数字员工的配置信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "保存数字员工",
+                "parameters": [
+                    {
+                        "description": "数字员工信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/employees/kpi": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "手动记录数字员工的关键绩效指标 (KPI)，如评分或特定指标",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "记录员工 KPI",
+                "parameters": [
+                    {
+                        "description": "KPI 记录参数 (employee_id, metric, score)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "记录结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/employees/status": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "手动更新数字员工的在线状态或薪资限制",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "更新数字员工状态",
+                "parameters": [
+                    {
+                        "description": "状态参数 (bot_id, status, salary_limit)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/fission/config": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统的裂变策略配置，如积分规则、开关状态等",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "获取裂变全局配置",
+                "responses": {
+                    "200": {
+                        "description": "裂变配置",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "更新系统的裂变策略配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "更新裂变全局配置",
+                "parameters": [
+                    {
+                        "description": "配置信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.FissionConfigGORM"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/fission/invitations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统的最近 100 条用户邀请记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "获取邀请记录",
+                "responses": {
+                    "200": {
+                        "description": "邀请记录列表",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/fission/leaderboard": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统邀请人数排名前 20 的用户记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "获取裂变排行榜",
+                "responses": {
+                    "200": {
+                        "description": "排行榜数据",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/fission/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取裂变总数、积分总额、活跃邀请人及最近 7 天趋势",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "获取裂变统计",
+                "responses": {
+                    "200": {
+                        "description": "统计数据",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/fission/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有定义的裂变任务列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "获取裂变任务",
+                "responses": {
+                    "200": {
+                        "description": "任务列表",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "新增或更新裂变任务配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "保存裂变任务",
+                "parameters": [
+                    {
+                        "description": "任务信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.FissionTaskGORM"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/fission/tasks/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 删除指定的裂变任务配置",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fission"
+                ],
+                "summary": "删除裂变任务",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "任务 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/group/members": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定群组的成员列表，支持从机器人实时获取或从缓存读取",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取群成员列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "机器人 ID",
+                        "name": "bot_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "群组 ID",
+                        "name": "group_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否强制刷新缓存",
+                        "name": "refresh",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成员列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "分页获取系统运行日志，支持按级别、来源和关键词过滤，支持排序",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取系统日志",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "日志级别",
+                        "name": "level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "机器人 ID 或来源",
+                        "name": "botId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索关键词",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序字段",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序顺序 (asc/desc)",
+                        "name": "sortOrder",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "日志列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/logs/clear": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "清空内存中的所有系统日志记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "清空系统日志",
+                "responses": {
+                    "200": {
+                        "description": "清空结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/manual": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取管理后台的帮助文档和操作说明",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取管理员手册",
+                "responses": {
+                    "200": {
+                        "description": "帮助手册内容",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/memories": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有数字员工的认知记忆记录，支持按 bot_id、user_id 或内容关键词过滤",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取认知记忆列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "机器人 ID",
+                        "name": "bot_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "用户 ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索关键词",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "记忆列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/memories/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 删除一条特定的数字员工认知记忆",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "删除认知记忆",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "记忆 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/messages": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "从数据库获取最新的聊天消息记录，包括私聊和群聊",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取消息列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "获取的消息数量 (默认 50)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "消息列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/nexus/status": {
+            "get": {
+                "description": "获取 BotNexus 服务的整体运行状态和版本信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Nexus 状态",
+                "responses": {
+                    "200": {
+                        "description": "服务状态信息",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/plugins": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统中所有插件（包括 Nexus 中心插件和所有 Worker 节点的插件）及其运行状态",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取插件列表",
+                "responses": {
+                    "200": {
+                        "description": "插件列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/plugins/action": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启动、停止、重启或重载指定的插件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "操作插件",
+                "parameters": [
+                    {
+                        "description": "操作参数 (id, action, source)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/plugins/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "从指定节点（Nexus 或 Worker）彻底删除指定的插件及其文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "删除插件",
+                "parameters": [
+                    {
+                        "description": "删除参数 (id, version, source)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/plugins/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "上传 .bmpk 插件包并安装到指定节点（Nexus 或 Worker）",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "安装插件",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "插件文件 (.bmpk)",
+                        "name": "plugin",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "目标节点 (nexus 或 workerID)",
+                        "name": "target",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "安装结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/redis/config": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取存储在 Redis 中的限流、TTL 和路由规则等动态配置",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Redis 动态配置",
+                "responses": {
+                    "200": {
+                        "description": "Redis 配置信息",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "更新存储在 Redis 中的动态配置项（限流、TTL 或路由）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "更新 Redis 配置",
+                "parameters": [
+                    {
+                        "description": "配置更新参数 (type, data, clear)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/routing": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有的消息路由规则",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取路由规则",
+                "responses": {
+                    "200": {
+                        "description": "路由规则列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建或更新一条消息路由规则，将特定 Key 映射到 WorkerID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "设置路由规则",
+                "parameters": [
+                    {
+                        "description": "路由规则参数 (key, worker_id)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "设置结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 Key 删除一条消息路由规则",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "删除路由规则",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "规则 Key",
+                        "name": "key",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取 CPU、内存、磁盘、在线机器人及消息量趋势等统计数据",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取系统统计",
+                "responses": {
+                    "200": {
+                        "description": "详细统计数据",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有已定义的自动化任务列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "获取任务列表",
+                "responses": {
+                    "200": {
+                        "description": "任务列表",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/tasks.Task"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建一个新的自动化任务，支持定时、周期或触发式执行",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "创建自动化任务",
+                "parameters": [
+                    {
+                        "description": "任务定义",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tasks.Task"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功的任务",
+                        "schema": {
+                            "$ref": "#/definitions/tasks.Task"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/ai-confirm": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "确认并执行之前由 AI 生成的任务草稿",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "AI 执行确认",
+                "parameters": [
+                    {
+                        "description": "确认请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "执行成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/ai-parse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "使用 AI 解析用户自然语言指令，识别意图并生成任务草稿",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "AI 意图解析",
+                "parameters": [
+                    {
+                        "description": "解析请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tasks.ParseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "解析结果",
+                        "schema": {
+                            "$ref": "#/definitions/tasks.ParseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/capabilities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统支持的所有动作 (Actions) 和拦截器 (Interceptors)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "获取系统能力",
+                "responses": {
+                    "200": {
+                        "description": "系统能力列表",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/executions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定任务的最近执行历史记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "获取执行记录",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "任务 ID",
+                        "name": "task_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "执行记录列表",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/tasks.Execution"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/manifest": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统支持的 Manifest 配置和系统 Prompt 模板",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "获取系统能力清单",
+                "responses": {
+                    "200": {
+                        "description": "系统能力数据",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/strategies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统定义的所有任务执行拦截策略列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "获取策略列表",
+                "responses": {
+                    "200": {
+                        "description": "策略列表",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/tasks.Strategy"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "新增或更新任务执行拦截策略",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "保存策略配置",
+                "parameters": [
+                    {
+                        "description": "策略配置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tasks.Strategy"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tasks/strategies/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据名称获取特定拦截策略的详细配置",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "获取策略详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "策略名称",
+                        "name": "name",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "策略详情",
+                        "schema": {
+                            "$ref": "#/definitions/tasks.Strategy"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tools/tags": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "为指定资源（任务、用户等）添加或移除标签",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tools"
+                ],
+                "summary": "管理标签",
+                "parameters": [
+                    {
+                        "description": "标签操作请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/tools/translate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "使用 Azure Translate 服务进行多语言文本翻译",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tools"
+                ],
+                "summary": "文本翻译",
+                "parameters": [
+                    {
+                        "description": "翻译请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "翻译结果",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "从数据库获取所有系统用户的信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取用户列表",
+                "responses": {
+                    "200": {
+                        "description": "用户列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "执行用户管理操作，包括创建、编辑、删除、重置密码和切换激活状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "管理用户信息",
+                "parameters": [
+                    {
+                        "description": "管理操作参数 (action, username, password, is_admin, is_super_points)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/workers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有当前在线和历史连接过的 Worker 列表及其详细状态",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取 Worker 列表",
+                "responses": {
+                    "200": {
+                        "description": "Worker 列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ai/agents": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取可用的 AI 智能体列表。非管理员仅能看到公开的和自己创建的。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "获取智能体列表",
+                "responses": {
+                    "200": {
+                        "description": "智能体列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ai/agents/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据 ID 获取 AI 智能体的详细配置，包含关联的模型信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Management"
+                ],
+                "summary": "获取智能体详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "智能体 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "智能体详情",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ai/chat/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定会话的聊天历史记录，支持分页",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Trial"
+                ],
+                "summary": "获取对话历史",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "获取条数，默认 20",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "获取该 ID 之前的消息",
+                        "name": "before_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "消息列表",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.AIChatMessageGORM"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ai/chat/sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前登录用户最近的 AI 对话会话列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Trial"
+                ],
+                "summary": "获取最近会话",
+                "responses": {
+                    "200": {
+                        "description": "会话列表",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.AISessionGORM"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ai/chat/stream": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "在管理后台直接与指定的 AI 智能体对话，支持 SSE 流式返回",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "AI Trial"
+                ],
+                "summary": "AI 试用对话 (流式)",
+                "parameters": [
+                    {
+                        "description": "对话请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE Stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/b2b/handshake": {
+            "post": {
+                "description": "接收并验证来自外部企业的握手请求 (内部接口)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "响应 B2B 握手",
+                "parameters": [
+                    {
+                        "description": "握手请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.HandshakeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "握手响应",
+                        "schema": {
+                            "$ref": "#/definitions/app.HandshakeResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/add-bot": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "在 Docker 中创建并启动一个新的机器人容器，支持多种平台",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "添加机器人容器",
+                "parameters": [
+                    {
+                        "description": "机器人配置 (platform, image, env, cmd)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "添加结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/add-worker": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "在 Docker 中创建并启动一个新的 Worker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "添加 Worker 容器",
+                "parameters": [
+                    {
+                        "description": "Worker 配置 (image, env, cmd, name)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "添加结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/containers": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统宿主机上的所有 Docker 容器列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Docker 容器列表",
+                "responses": {
+                    "200": {
+                        "description": "容器列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统宿主机上的所有 Docker 容器列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Docker 容器列表",
+                "responses": {
+                    "200": {
+                        "description": "容器列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定 Docker 容器的最近运行日志",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取 Docker 日志",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "容器 ID",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "日志内容",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/remove": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启动、停止、重启或删除指定的 Docker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "操作 Docker 容器",
+                "parameters": [
+                    {
+                        "description": "操作参数 (container_id, action)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/restart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启动、停止、重启或删除指定的 Docker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "操作 Docker 容器",
+                "parameters": [
+                    {
+                        "description": "操作参数 (container_id, action)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/start": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启动、停止、重启或删除指定的 Docker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "操作 Docker 容器",
+                "parameters": [
+                    {
+                        "description": "操作参数 (container_id, action)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docker/stop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启动、停止、重启或删除指定的 Docker 容器",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "操作 Docker 容器",
+                "parameters": [
+                    {
+                        "description": "操作参数 (container_id, action)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/login": {
+            "post": {
+                "description": "使用用户名和密码登录管理后台，获取访问 Token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "管理后台登录",
+                "parameters": [
+                    {
+                        "description": "登录凭据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功，返回 Token",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "用户名或密码错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "用户未激活",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mcp/v1/sse": {
+            "get": {
+                "description": "建立符合 MCP 规范的 SSE 连接，用于双向异步通信",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "MCP"
+                ],
+                "summary": "MCP SSE 传输",
+                "responses": {
+                    "200": {
+                        "description": "SSE Event Stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mcp/v1/tools": {
+            "get": {
+                "description": "获取当前节点暴露的所有 MCP 工具列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MCP"
+                ],
+                "summary": "列出 MCP 工具",
+                "responses": {
+                    "200": {
+                        "description": "工具列表",
+                        "schema": {
+                            "$ref": "#/definitions/ai.MCPListToolsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mcp/v1/tools/call": {
+            "post": {
+                "description": "调用指定的 MCP 工具并返回执行结果，支持隐私数据脱敏",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MCP"
+                ],
+                "summary": "调用 MCP 工具",
+                "parameters": [
+                    {
+                        "description": "调用请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai.MCPCallToolRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "调用结果",
+                        "schema": {
+                            "$ref": "#/definitions/ai.MCPCallToolResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前登录用户的详细信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取用户信息",
+                "responses": {
+                    "200": {
+                        "description": "用户信息",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mesh/call": {
+            "post": {
+                "description": "通过 Mesh 网络调用远程企业的 MCP 工具",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "跨企业工具调用",
+                "parameters": [
+                    {
+                        "description": "调用请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "调用结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mesh/connect": {
+            "post": {
+                "description": "发起与远程企业的握手请求，建立信任关系",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "建立 B2B 连接",
+                "parameters": [
+                    {
+                        "description": "连接请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "连接成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mesh/discover": {
+            "get": {
+                "description": "在已连接的 B2B 联邦网络中搜索可用的 MCP 节点",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "发现 Mesh 节点",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键字",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "搜索结果列表",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/mesh/register": {
+            "post": {
+                "description": "将本地 MCP 节点注册到 Mesh 目录中，供其他企业发现",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Mesh"
+                ],
+                "summary": "注册 Mesh 节点",
+                "parameters": [
+                    {
+                        "description": "注册信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "注册成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/proxy/avatar": {
+            "get": {
+                "description": "代理并缓存外部头像图片，解决跨域或防盗链问题",
+                "tags": [
+                    "System"
+                ],
+                "summary": "代理头像",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "原始头像 URL",
+                        "name": "url",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "图片流",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/smart_action": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "向机器人发送 OneBot 标准 API 动作",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "发送 API 动作",
+                "parameters": [
+                    {
+                        "description": "动作参数 (bot_id, action, params)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "动作执行结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stats/chat": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取所有群聊和私聊的各种统计数据，包括消息量、活跃度等",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取聊天统计",
+                "responses": {
+                    "200": {
+                        "description": "聊天统计数据",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/system/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取更详尽的系统硬件使用情况，包括 CPU、内存、各磁盘分区等",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "获取详细系统统计",
+                "responses": {
+                    "200": {
+                        "description": "详细统计数据",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/user/info": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前登录用户的详细信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "获取用户信息",
+                "responses": {
+                    "200": {
+                        "description": "用户信息",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/user/password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "修改当前登录用户的登录密码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "修改密码",
+                "parameters": [
+                    {
+                        "description": "密码参数 (old_password, new_password)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "修改结果",
+                        "schema": {
+                            "$ref": "#/definitions/utils.JSONResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/ws/subscriber": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "用于 UI 实时同步状态的 WebSocket 连接",
+                "tags": [
+                    "System"
+                ],
+                "summary": "管理后台 WebSocket 连接",
+                "responses": {}
+            }
+        }
+    },
+    "definitions": {
+        "ai.MCPCallToolRequest": {
+            "type": "object",
+            "properties": {
+                "arguments": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai.MCPCallToolResponse": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai.MCPContent"
+                    }
+                },
+                "isError": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "ai.MCPContent": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "text, image, resource",
+                    "type": "string"
+                }
+            }
+        },
+        "ai.MCPListToolsResponse": {
+            "type": "object",
+            "properties": {
+                "tools": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai.MCPTool"
+                    }
+                }
+            }
+        },
+        "ai.MCPTool": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "inputSchema": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "app.HandshakeRequest": {
+            "type": "object",
+            "properties": {
+                "challenge": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "source_ent_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "app.HandshakeResponse": {
+            "type": "object",
+            "properties": {
+                "acceptance": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "target_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "config.AppConfig": {
+            "type": "object",
+            "properties": {
+                "ai_embedding_model": {
+                    "description": "AI Configuration",
+                    "type": "string"
+                },
+                "auto_reply": {
+                    "type": "boolean"
+                },
+                "azure_translate_endpoint": {
+                    "type": "string"
+                },
+                "azure_translate_key": {
+                    "description": "Azure Translator Config",
+                    "type": "string"
+                },
+                "azure_translate_region": {
+                    "type": "string"
+                },
+                "default_admin_password": {
+                    "type": "string"
+                },
+                "enable_skill": {
+                    "description": "Feature Flags",
+                    "type": "boolean"
+                },
+                "jwt_secret": {
+                    "type": "string"
+                },
+                "log_level": {
+                    "type": "string"
+                },
+                "pg_dbname": {
+                    "type": "string"
+                },
+                "pg_host": {
+                    "description": "Database Configuration",
+                    "type": "string"
+                },
+                "pg_password": {
+                    "type": "string"
+                },
+                "pg_port": {
+                    "type": "integer"
+                },
+                "pg_sslmode": {
+                    "type": "string"
+                },
+                "pg_user": {
+                    "type": "string"
+                },
+                "redis_addr": {
+                    "type": "string"
+                },
+                "redis_pwd": {
+                    "type": "string"
+                },
+                "stats_file": {
+                    "type": "string"
+                },
+                "webui_port": {
+                    "type": "string"
+                },
+                "ws_port": {
+                    "type": "string"
+                }
+            }
+        },
+        "gorm.DeletedAt": {
+            "type": "object",
+            "properties": {
+                "time": {
+                    "type": "string"
+                },
+                "valid": {
+                    "description": "Valid is true if Time is not NULL",
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.AIAgentGORM": {
+            "type": "object",
+            "properties": {
+                "call_count": {
+                    "description": "使用次数 (热门排序依据)",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_voice": {
+                    "type": "boolean"
+                },
+                "max_tokens": {
+                    "type": "integer"
+                },
+                "model": {
+                    "$ref": "#/definitions/models.AIModelGORM"
+                },
+                "model_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner_id": {
+                    "description": "所属用户 ID",
+                    "type": "integer"
+                },
+                "revenue_rate": {
+                    "description": "收益率 (每 1k tokens 收益多少算力)",
+                    "type": "number"
+                },
+                "system_prompt": {
+                    "type": "string"
+                },
+                "temperature": {
+                    "type": "number"
+                },
+                "tools": {
+                    "description": "JSON array of tool names or IDs",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "description": "public, private, link_only",
+                    "type": "string"
+                },
+                "voice_id": {
+                    "type": "string"
+                },
+                "voice_lang": {
+                    "type": "string"
+                },
+                "voice_name": {
+                    "type": "string"
+                },
+                "voice_rate": {
+                    "description": "语速 0.1 - 10",
+                    "type": "number"
+                }
+            }
+        },
+        "models.AIChatMessageGORM": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "description": "system, user, assistant, tool",
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "tool_calls": {
+                    "description": "JSON 存储 ToolCall 详情",
+                    "type": "string"
+                },
+                "usage_token": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "description": "所属用户",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.AIModelGORM": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "模型级别 APIKey 覆盖",
+                    "type": "string"
+                },
+                "base_url": {
+                    "description": "模型级别 BaseURL 覆盖",
+                    "type": "string"
+                },
+                "capabilities": {
+                    "description": "JSON array: [\"chat\", \"vision\"]",
+                    "type": "string"
+                },
+                "context_size": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_default": {
+                    "type": "boolean"
+                },
+                "model_id": {
+                    "description": "实际 API 调用的模型 ID (如 gpt-4)",
+                    "type": "string"
+                },
+                "model_name": {
+                    "description": "展示名称 (如 GPT-4 Turbo)",
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/models.AIProviderGORM"
+                },
+                "provider_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.AIProviderGORM": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "存储时加密",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "openai, ollama, deepseek, etc.",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "为空表示系统公共配置，不为空表示用户私有配置",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.AISessionGORM": {
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "description": "关联智能体详情",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.AIAgentGORM"
+                        }
+                    ]
+                },
+                "agent_id": {
+                    "description": "关联智能体",
+                    "type": "integer"
+                },
+                "context_raw": {
+                    "description": "额外的上下文元数据 (JSON)",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_msg": {
+                    "description": "最后一条消息预览",
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "description": "会话唯一 ID",
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "topic": {
+                    "description": "对话主题",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "所属用户",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.FissionConfigGORM": {
+            "type": "object",
+            "properties": {
+                "anti_fraud_enabled": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "invite_code_template": {
+                    "type": "string"
+                },
+                "invite_reward_duration": {
+                    "description": "小时",
+                    "type": "integer"
+                },
+                "invite_reward_points": {
+                    "type": "integer"
+                },
+                "max_daily_invites": {
+                    "type": "integer"
+                },
+                "min_level_required": {
+                    "type": "integer"
+                },
+                "new_user_reward_points": {
+                    "type": "integer"
+                },
+                "rules": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "welcome_message": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.FissionTaskGORM": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reward_duration": {
+                    "type": "integer"
+                },
+                "reward_points": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "active, inactive",
+                    "type": "string"
+                },
+                "target_count": {
+                    "type": "integer"
+                },
+                "task_type": {
+                    "description": "register, use_bot, join_group",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.AIActionType": {
+            "type": "string",
+            "enum": [
+                "create_task",
+                "adjust_policy",
+                "manage_tags",
+                "system_query",
+                "skill_call",
+                "cancel_task",
+                "batch_task"
+            ],
+            "x-enum-comments": {
+                "AIActionBatch": "新增：批量/多重任务并行",
+                "AIActionCancelTask": "新增：取消任务",
+                "AIActionSkillCall": "新增：技能调用"
+            },
+            "x-enum-descriptions": [
+                "",
+                "",
+                "",
+                "",
+                "新增：技能调用",
+                "新增：取消任务",
+                "新增：批量/多重任务并行"
+            ],
+            "x-enum-varnames": [
+                "AIActionCreateTask",
+                "AIActionAdjustPolicy",
+                "AIActionManageTags",
+                "AIActionSystemQuery",
+                "AIActionSkillCall",
+                "AIActionCancelTask",
+                "AIActionBatch"
+            ]
+        },
+        "tasks.Execution": {
+            "type": "object",
+            "properties": {
+                "actual_time": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "$ref": "#/definitions/gorm.DeletedAt"
+                },
+                "execution_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "max_retries": {
+                    "type": "integer"
+                },
+                "next_retry_time": {
+                    "type": "string"
+                },
+                "result": {
+                    "description": "JSON 结果或错误详情",
+                    "type": "string"
+                },
+                "retry_count": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/tasks.ExecutionStatus"
+                },
+                "task_id": {
+                    "type": "integer"
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "trigger_time": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.ExecutionStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "dispatching",
+                "running",
+                "success",
+                "failed",
+                "dead"
+            ],
+            "x-enum-comments": {
+                "ExecDead": "已放弃",
+                "ExecDispatching": "调度中",
+                "ExecFailed": "失败",
+                "ExecPending": "等待中",
+                "ExecRunning": "执行中",
+                "ExecSuccess": "成功"
+            },
+            "x-enum-descriptions": [
+                "等待中",
+                "调度中",
+                "执行中",
+                "成功",
+                "失败",
+                "已放弃"
+            ],
+            "x-enum-varnames": [
+                "ExecPending",
+                "ExecDispatching",
+                "ExecRunning",
+                "ExecSuccess",
+                "ExecFailed",
+                "ExecDead"
+            ]
+        },
+        "tasks.ParseRequest": {
+            "type": "object",
+            "properties": {
+                "action_type": {
+                    "description": "可选，明确指定意图",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/tasks.AIActionType"
+                        }
+                    ]
+                },
+                "context": {
+                    "description": "上下文信息",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "input": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.ParseResult": {
+            "type": "object",
+            "properties": {
+                "analysis": {
+                    "description": "AI 的推理过程",
+                    "type": "string"
+                },
+                "data": {
+                    "description": "解析出的结构化数据"
+                },
+                "draft_id": {
+                    "description": "新增 DraftID",
+                    "type": "string"
+                },
+                "intent": {
+                    "$ref": "#/definitions/tasks.AIActionType"
+                },
+                "is_safe": {
+                    "description": "是否安全（低风险）",
+                    "type": "boolean"
+                },
+                "sub_actions": {
+                    "description": "新增：支持多任务并行",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tasks.ParseResult"
+                    }
+                },
+                "summary": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.Strategy": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "description": "JSON 配置",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "$ref": "#/definitions/gorm.DeletedAt"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "rate_limit, maintenance, flow_control",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.Tag": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "$ref": "#/definitions/gorm.DeletedAt"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_internal": {
+                    "description": "系统内置标签",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "group, friend",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.Task": {
+            "type": "object",
+            "properties": {
+                "action_params": {
+                    "description": "JSON 参数",
+                    "type": "string"
+                },
+                "action_type": {
+                    "description": "send_message, mute_group, unmute_group",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "creator_id": {
+                    "type": "integer"
+                },
+                "deleted_at": {
+                    "$ref": "#/definitions/gorm.DeletedAt"
+                },
+                "executions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tasks.Execution"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_enterprise": {
+                    "type": "boolean"
+                },
+                "last_run_time": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_run_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/tasks.TaskStatus"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tasks.Tag"
+                    }
+                },
+                "trigger_config": {
+                    "description": "JSON 触发配置 (cron, delay, conditions)",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "once, cron, delayed, condition",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "tasks.TaskStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "disabled",
+                "completed"
+            ],
+            "x-enum-comments": {
+                "TaskCompleted": "已完成（一次性任务）",
+                "TaskDisabled": "暂停",
+                "TaskPending": "启用中"
+            },
+            "x-enum-descriptions": [
+                "启用中",
+                "暂停",
+                "已完成（一次性任务）"
+            ],
+            "x-enum-varnames": [
+                "TaskPending",
+                "TaskDisabled",
+                "TaskCompleted"
+            ]
+        },
+        "utils.JSONResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        }
+    }
+}

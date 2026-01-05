@@ -143,7 +143,11 @@ conn, _, _ := websocket.DefaultDialer.Dial("ws://nexus-address/worker", nil)
 
 // 2. Report capabilities (with version and environment)
 reg := map[string]interface{}{
-    "type": "register_capabilities",
+    "type": "update_metadata",
+    "metadata": {
+      "plugins": [ ... ]
+    }
+    // Note: legacy type: "register_capabilities" is Deprecated
     "capabilities": []map[string]interface{}{
         {
             "name": "translate",
@@ -183,11 +187,12 @@ To let AI models understand system capabilities, BotNexus provides a dynamically
 
 ### Worker Skill Reporting Mechanism
 Business Workers can report their capabilities to the scheduling center after connecting:
-- **Reporting Interface**: Send `type: "register_capabilities"` message.
+- **Reporting Interface**: Send `type: "update_metadata"` message (Legacy `register_capabilities` is Deprecated).
 - **Protocol Structure**:
   ```json
   {
-    "type": "register_capabilities",
+    "type": "update_metadata",
+    "metadata": { ... } // Legacy register_capabilities is Deprecated
     "capabilities": [
       {
         "name": "checkin",

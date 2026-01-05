@@ -1,6 +1,8 @@
 package app
 
 import (
+	"BotMatrix/common/ai"
+	"BotMatrix/common/ai/employee"
 	"BotMatrix/common/log"
 	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/session"
@@ -23,11 +25,12 @@ import (
 type PluginBridge struct {
 	pluginManager    *core.PluginManager
 	server           *server.CombinedServer
+	aiService        ai.AIService
 	pendingResponses sync.Map // map[string]chan string
 	watcher          *fsnotify.Watcher
 }
 
-func NewPluginBridge(server *server.CombinedServer) *PluginBridge {
+func NewPluginBridge(server *server.CombinedServer, aiService ai.AIService) *PluginBridge {
 	pm := server.GetPluginManager()
 	// 配置插件路径：优先使用配置中的路径，默认为 plugins/worker
 	workerPluginsDir := "plugins/worker"
@@ -39,6 +42,7 @@ func NewPluginBridge(server *server.CombinedServer) *PluginBridge {
 	bridge := &PluginBridge{
 		pluginManager: pm,
 		server:        server,
+		aiService:     aiService,
 	}
 
 	// 初始化文件监听器
@@ -192,10 +196,32 @@ func (pb *PluginBridge) startAndRegisterPlugin(v *core.Plugin) {
 }
 
 func (pb *PluginBridge) LoadInternalPlugins() error {
+	// 加载 AIPlugin
+	if pb.aiService != nil {
+		aiPlugin := plugins.NewAIPlugin(pb.aiService)
+		// 初始化数字员工服务
+		empSvc := employee.NewEmployeeService(plugins.GlobalGORMDB)
+		empSvc.SetAIService(pb.aiService)
+		memSvc := employee.NewCognitiveMemoryService(plugins.GlobalGORMDB)
+		taskSvc := employee.NewDigitalEmployeeTaskService(plugins.GlobalGORMDB, pb.aiService.GetMCPManager())
+		taskSvc.SetAIService(pb.aiService)
+
+		aiPlugin.SetEmployeeServices(empSvc, memSvc, taskSvc)
+		if err := pb.pluginManager.LoadPluginModule(aiPlugin, pb.server); err != nil {
+			log.Errorf("加载 AIPlugin 失败: %v", err)
+		}
+	}
+
 	// 加载 PointsProxy
 	pointsProxy := &plugins.PointsProxy{}
 	if err := pb.pluginManager.LoadPluginModule(pointsProxy, pb.server); err != nil {
 		return fmt.Errorf("加载 PointsProxy 失败: %v", err)
+	}
+
+	// 加载 PluginBuilder
+	builder := plugins.NewBuilderPlugin(pb.pluginManager.GetPluginPath())
+	if err := pb.pluginManager.LoadPluginModule(builder, pb.server); err != nil {
+		return fmt.Errorf("加载 PluginBuilder 失败: %v", err)
 	}
 	return nil
 }
@@ -228,6 +254,24 @@ func (pb *PluginBridge) LoadExternalPlugins() error {
 
 	// 注册全局动作路由，允许 Go 插件调用外部插件
 	pb.server.SetActionRouter(func(pluginID string, action string, payload map[string]any) (any, error) {
+		// 1. 首先检查是否是内部插件且目标是一个已注册的技能
+		if pluginID != "" {
+			internalPlugins := pb.pluginManager.GetInternalPlugins()
+			if _, ok := internalPlugins[pluginID]; ok {
+				// 如果是内部插件，尝试作为技能调用
+				params := make(map[string]string)
+				for k, v := range payload {
+					params[k] = fmt.Sprintf("%v", v)
+				}
+				result, err := pb.server.InvokeSkill(action, params)
+				if err == nil {
+					return result, nil
+				}
+				// 如果技能未找到，继续尝试作为外部插件动作分发（可能是包装器）
+			}
+		}
+
+		// 2. 分发给外部进程插件
 		coreEvent := &core.EventMessage{
 			ID:      fmt.Sprintf("action_%d", core.NextID()),
 			Type:    "request",
@@ -246,6 +290,46 @@ func (pb *PluginBridge) LoadExternalPlugins() error {
 	// 注册全局动作处理 (处理插件发出的动作，如发送消息)
 	pb.pluginManager.RegisterActionHandler(func(p *core.Plugin, a *core.Action) {
 		log.Printf("[PluginAction] Received action from plugin %s: %+v", p.ID, a)
+
+		// 处理跨插件技能调用 (当 routeSkillCall 返回 false 时落到这里)
+		if a.Type == "call_skill" {
+			go func() {
+				skillName, _ := a.Payload["skill_name"].(string)
+				payload, _ := a.Payload["payload"].(map[string]any)
+
+				// 转换 payload 为 map[string]string 以适配 InvokeSkill
+				params := make(map[string]string)
+				for k, v := range payload {
+					params[k] = fmt.Sprintf("%v", v)
+				}
+
+				result, err := pb.server.InvokeSkill(skillName, params)
+
+				// 发送响应回插件
+				correlationID := a.CorrelationID
+				if correlationID == "" {
+					correlationID, _ = a.Payload["correlation_id"].(string)
+				}
+
+				if correlationID != "" {
+					resp := &core.EventMessage{
+						ID:            fmt.Sprintf("resp_%d", core.NextID()),
+						Type:          "event",
+						Name:          "skill_response",
+						CorrelationId: correlationID,
+						Payload: map[string]any{
+							"result": result,
+							"error":  "",
+						},
+					}
+					if err != nil {
+						resp.Payload.(map[string]any)["error"] = err.Error()
+					}
+					pb.pluginManager.DispatchEventToPlugin(p.ID, p.Config.Version, resp)
+				}
+			}()
+			return
+		}
 
 		// 处理存储操作 (内部逻辑)
 		if a.Type == "storage.get" || a.Type == "storage.set" || a.Type == "storage.delete" || a.Type == "storage.exists" {
@@ -484,56 +568,108 @@ func (w *ExternalPluginWrapper) Version() string {
 }
 
 func (w *ExternalPluginWrapper) Init(robot core.Robot) {
-	// 注册技能处理器
+	// 1. 注册 Intents 为技能
 	for _, intent := range w.plugin.Config.Intents {
 		intentName := intent.Name
-		robot.HandleSkill(intentName, func(params map[string]string) (string, error) {
-			log.Printf("[Skill] Triggered skill: %s, params: %+v", intentName, params)
-
-			eventID := fmt.Sprintf("skill_%d", core.NextID())
-			// 将技能调用转换为事件发送给插件
-			coreEvent := &core.EventMessage{
-				ID:   eventID,
-				Type: "request",
-				Name: "call_skill",
-				Payload: map[string]any{
-					"skill":    intentName,
-					"params":   params,
-					"from":     params["user_id"],
-					"group_id": params["group_id"],
-				},
-			}
-
-			// 创建等待响应的通道
-			respCh := make(chan string, 1)
-			w.bridge.pendingResponses.Store(eventID, respCh)
-			defer w.bridge.pendingResponses.Delete(eventID)
-
-			// 分发事件给插件
-			w.pm.DispatchEventToPlugin(w.plugin.ID, w.plugin.Version, coreEvent)
-
-			// 等待响应或超时
-			select {
-			case result := <-respCh:
-				log.Printf("[Skill] Received synchronous result for %s: %s", intentName, result)
-				return result, nil
-			case <-time.After(10 * time.Second):
-				log.Printf("[Skill] Timeout waiting for result of %s", intentName)
-				return fmt.Sprintf("Skill %s timed out", intentName), nil
-			}
-		})
+		capability := core.SkillCapability{
+			Name:        intentName,
+			Description: w.plugin.Config.Description,
+			Regex:       intent.Regex,
+			Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
+		}
+		w.registerSkill(robot, capability)
 	}
+
+	// 2. 注册 Capabilities 为技能 (支持 sz84 等没有明确 intent 的传统插件)
+	for _, capName := range w.plugin.Config.Capabilities {
+		// 如果已经作为 intent 注册过了，跳过
+		alreadyRegistered := false
+		for _, intent := range w.plugin.Config.Intents {
+			if intent.Name == capName {
+				alreadyRegistered = true
+				break
+			}
+		}
+		if alreadyRegistered {
+			continue
+		}
+
+		capability := core.SkillCapability{
+			Name:        capName,
+			Description: fmt.Sprintf("Capability: %s", capName),
+			Usage:       fmt.Sprintf("Directly call capability %s", capName),
+		}
+		w.registerSkill(robot, capability)
+	}
+}
+
+func (w *ExternalPluginWrapper) registerSkill(robot core.Robot, capability core.SkillCapability) {
+	skillName := capability.Name
+	robot.RegisterSkill(capability, func(params map[string]string) (string, error) {
+		log.Printf("[Skill] Triggered skill: %s, params: %+v", skillName, params)
+
+		eventID := fmt.Sprintf("skill_%d", core.NextID())
+		// 将技能调用转换为事件发送给插件
+		coreEvent := &core.EventMessage{
+			ID:   eventID,
+			Type: "request",
+			Name: "call_skill",
+			Payload: map[string]any{
+				"skill":    skillName,
+				"params":   params,
+				"from":     params["user_id"],
+				"group_id": params["group_id"],
+			},
+		}
+
+		// 创建等待响应的通道
+		respCh := make(chan string, 1)
+		w.bridge.pendingResponses.Store(eventID, respCh)
+		defer w.bridge.pendingResponses.Delete(eventID)
+
+		// 分发事件给插件
+		w.pm.DispatchEventToPlugin(w.plugin.ID, w.plugin.Version, coreEvent)
+
+		// 等待响应或超时
+		select {
+		case result := <-respCh:
+			log.Printf("[Skill] Received synchronous result for %s: %s", skillName, result)
+			return result, nil
+		case <-time.After(10 * time.Second):
+			log.Printf("[Skill] Timeout waiting for result of %s", skillName)
+			return fmt.Sprintf("Skill %s timed out", skillName), nil
+		}
+	})
 }
 
 // 实现 SkillCapable 接口
 func (w *ExternalPluginWrapper) GetSkills() []core.SkillCapability {
 	skills := []core.SkillCapability{}
+	// 1. Intents
 	for _, intent := range w.plugin.Config.Intents {
 		skills = append(skills, core.SkillCapability{
 			Name:        intent.Name,
 			Description: w.plugin.Config.Description,
 			Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
 			Regex:       intent.Regex,
+		})
+	}
+	// 2. Capabilities
+	for _, capName := range w.plugin.Config.Capabilities {
+		alreadyAdded := false
+		for _, s := range skills {
+			if s.Name == capName {
+				alreadyAdded = true
+				break
+			}
+		}
+		if alreadyAdded {
+			continue
+		}
+		skills = append(skills, core.SkillCapability{
+			Name:        capName,
+			Description: fmt.Sprintf("Capability: %s", capName),
+			Usage:       fmt.Sprintf("Directly call capability %s", capName),
 		})
 	}
 	return skills

@@ -1,107 +1,98 @@
 package ai
 
 import (
+	"BotMatrix/common/models"
+	"BotMatrix/common/types"
 	"context"
+
+	"gorm.io/gorm"
 )
 
-// Role 定义对话角色
-type Role string
+// Re-export types from common/types for convenience and backward compatibility if needed,
+// but it's better to use them directly.
+type Role = types.Role
 
 const (
-	RoleSystem    Role = "system"
-	RoleUser      Role = "user"
-	RoleAssistant Role = "assistant"
-	RoleTool      Role = "tool"
+	RoleSystem    = types.RoleSystem
+	RoleUser      = types.RoleUser
+	RoleAssistant = types.RoleAssistant
+	RoleTool      = types.RoleTool
 )
 
-// Message 对话消息
-type Message struct {
-	Role       Role       `json:"role"`
-	Content    string     `json:"content"`
-	Name       string     `json:"name,omitempty"`         // 用于 Tool 角色
-	ToolCallID string     `json:"tool_call_id,omitempty"` // 用于 Tool 角色
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // 用于 Assistant 角色发起调用
+type Message = types.Message
+type ToolCall = types.ToolCall
+type Tool = types.Tool
+type ChatRequest = types.ChatRequest
+type ChatResponse = types.ChatResponse
+type ChatStreamResponse = types.ChatStreamResponse
+type EmbeddingRequest = types.EmbeddingRequest
+type EmbeddingResponse = types.EmbeddingResponse
+type EmbeddingData = types.EmbeddingData
+type UsageInfo = types.UsageInfo
+type FunctionDefinition = types.FunctionDefinition
+type SearchFilter = types.SearchFilter
+type DocChunk = types.DocChunk
+type KnowledgeBase = types.KnowledgeBase
+type MCPManagerInterface = types.MCPManagerInterface
+
+type MCPTool = types.MCPTool
+type MCPResource = types.MCPResource
+type MCPPrompt = types.MCPPrompt
+type MCPPromptArgument = types.MCPPromptArgument
+type MCPServerScope = types.MCPServerScope
+
+const (
+	ScopeGlobal = types.ScopeGlobal
+	ScopeOrg    = types.ScopeOrg
+	ScopeUser   = types.ScopeUser
+)
+
+type MCPServerInfo = types.MCPServerInfo
+type MCPListToolsResponse = types.MCPListToolsResponse
+type MCPCallToolRequest = types.MCPCallToolRequest
+type MCPCallToolResponse = types.MCPCallToolResponse
+type MCPContent = types.MCPContent
+type MCPHost = types.MCPHost
+type MCPManager = types.MCPManager
+type RegisteredServer = types.RegisteredServer
+type PrivacyFilter = types.PrivacyFilter
+type MaskContext = types.MaskContext
+type SensitiveType = types.SensitiveType
+
+const (
+	SensitivePhone  = types.SensitivePhone
+	SensitiveEmail  = types.SensitiveEmail
+	SensitiveIDCard = types.SensitiveIDCard
+	SensitiveIP     = types.SensitiveIP
+	SensitiveCustom = types.SensitiveCustom
+)
+
+type Capability = types.Capability
+
+// AIServiceProvider AI 服务提供者接口 (由 Nexus 或 Worker 实现)
+type AIService = types.AIService
+type AIServiceProvider interface {
+	SyncSkillCall(ctx context.Context, skillName string, params map[string]any) (any, error)
+	GetWorkers() []types.WorkerInfo
+	CheckPermission(ctx context.Context, botID string, userID uint, orgID uint, skillName string) (bool, error)
+	GetGORMDB() *gorm.DB
+	GetKnowledgeBase() KnowledgeBase
+	GetManifest() *SystemManifest
+	IsDigitalEmployeeEnabled() bool
 }
 
-// ToolCall 具体的工具调用请求
-type ToolCall struct {
-	ID       string       `json:"id"`
-	Type     string       `json:"type"` // 总是 "function"
-	Function FunctionCall `json:"function"`
-}
-
-// FunctionCall 函数调用详情
-type FunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"` // JSON 字符串
-}
-
-// Tool 工具定义 (Function Definition)
-type Tool struct {
-	Type     string             `json:"type"` // 总是 "function"
-	Function FunctionDefinition `json:"function"`
-}
-
-// FunctionDefinition 函数定义详情
-type FunctionDefinition struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Parameters  map[string]any `json:"parameters"` // JSON Schema
-}
-
-// ChatRequest 对话请求
-type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	Temperature float32   `json:"temperature,omitempty"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Stream      bool      `json:"stream,omitempty"`
-}
-
-// ChatResponse 对话响应
-type ChatResponse struct {
-	ID      string    `json:"id"`
-	Choices []Choice  `json:"choices"`
-	Usage   UsageInfo `json:"usage"`
-}
-
-// Choice 响应选项
-type Choice struct {
-	Message      Message `json:"message"`
-	FinishReason string  `json:"finish_reason"`
-	Index        int     `json:"index"`
-}
-
-// UsageInfo Token 消耗统计
-type UsageInfo struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+type ContentPart = types.ContentPart
+type ImageURLValue = types.ImageURLValue
 
 // Client AI 客户端接口
 type Client interface {
 	Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	ChatStream(ctx context.Context, req ChatRequest) (<-chan ChatStreamResponse, error)
+	CreateEmbedding(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error)
+	GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error)
+	PlanTask(ctx context.Context, executionID string) error
 }
 
-// ChatStreamResponse 流式响应增量
-type ChatStreamResponse struct {
-	ID      string         `json:"id"`
-	Choices []StreamChoice `json:"choices"`
-	Error   error          `json:"-"`
-}
-
-// StreamChoice 流式选项
-type StreamChoice struct {
-	Delta        MessageDelta `json:"delta"`
-	FinishReason string       `json:"finish_reason"`
-}
-
-// MessageDelta 消息增量
-type MessageDelta struct {
-	Role      Role       `json:"role,omitempty"`
-	Content   string     `json:"content,omitempty"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-}
+type BotIdentity = types.BotIdentity
+type SystemManifest = types.SystemManifest
+type Manager = types.Manager

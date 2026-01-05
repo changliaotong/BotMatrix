@@ -14,16 +14,16 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:8080',
         ws: true,
         changeOrigin: true,
       },
       '/overmind': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       }
     }

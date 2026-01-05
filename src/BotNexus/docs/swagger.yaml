@@ -1,0 +1,2646 @@
+definitions:
+  ai.MCPCallToolRequest:
+    properties:
+      arguments:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+    type: object
+  ai.MCPCallToolResponse:
+    properties:
+      content:
+        items:
+          $ref: '#/definitions/ai.MCPContent'
+        type: array
+      isError:
+        type: boolean
+    type: object
+  ai.MCPContent:
+    properties:
+      text:
+        type: string
+      type:
+        description: text, image, resource
+        type: string
+    type: object
+  ai.MCPListToolsResponse:
+    properties:
+      tools:
+        items:
+          $ref: '#/definitions/ai.MCPTool'
+        type: array
+    type: object
+  ai.MCPTool:
+    properties:
+      description:
+        type: string
+      inputSchema:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+    type: object
+  app.HandshakeRequest:
+    properties:
+      challenge:
+        type: string
+      signature:
+        type: string
+      source_ent_code:
+        type: string
+    type: object
+  app.HandshakeResponse:
+    properties:
+      acceptance:
+        type: string
+      signature:
+        type: string
+      success:
+        type: boolean
+      target_code:
+        type: string
+    type: object
+  config.AppConfig:
+    properties:
+      ai_embedding_model:
+        description: AI Configuration
+        type: string
+      auto_reply:
+        type: boolean
+      azure_translate_endpoint:
+        type: string
+      azure_translate_key:
+        description: Azure Translator Config
+        type: string
+      azure_translate_region:
+        type: string
+      default_admin_password:
+        type: string
+      enable_skill:
+        description: Feature Flags
+        type: boolean
+      jwt_secret:
+        type: string
+      log_level:
+        type: string
+      pg_dbname:
+        type: string
+      pg_host:
+        description: Database Configuration
+        type: string
+      pg_password:
+        type: string
+      pg_port:
+        type: integer
+      pg_sslmode:
+        type: string
+      pg_user:
+        type: string
+      redis_addr:
+        type: string
+      redis_pwd:
+        type: string
+      stats_file:
+        type: string
+      webui_port:
+        type: string
+      ws_port:
+        type: string
+    type: object
+  gorm.DeletedAt:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
+    type: object
+  models.AIAgentGORM:
+    properties:
+      call_count:
+        description: 使用次数 (热门排序依据)
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_voice:
+        type: boolean
+      max_tokens:
+        type: integer
+      model:
+        $ref: '#/definitions/models.AIModelGORM'
+      model_id:
+        type: integer
+      name:
+        type: string
+      owner_id:
+        description: 所属用户 ID
+        type: integer
+      revenue_rate:
+        description: 收益率 (每 1k tokens 收益多少算力)
+        type: number
+      system_prompt:
+        type: string
+      temperature:
+        type: number
+      tools:
+        description: JSON array of tool names or IDs
+        type: string
+      updated_at:
+        type: string
+      visibility:
+        description: public, private, link_only
+        type: string
+      voice_id:
+        type: string
+      voice_lang:
+        type: string
+      voice_name:
+        type: string
+      voice_rate:
+        description: 语速 0.1 - 10
+        type: number
+    type: object
+  models.AIChatMessageGORM:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      role:
+        description: system, user, assistant, tool
+        type: string
+      session_id:
+        type: string
+      tool_calls:
+        description: JSON 存储 ToolCall 详情
+        type: string
+      usage_token:
+        type: integer
+      user_id:
+        description: 所属用户
+        type: integer
+    type: object
+  models.AIModelGORM:
+    properties:
+      api_key:
+        description: 模型级别 APIKey 覆盖
+        type: string
+      base_url:
+        description: 模型级别 BaseURL 覆盖
+        type: string
+      capabilities:
+        description: 'JSON array: ["chat", "vision"]'
+        type: string
+      context_size:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_default:
+        type: boolean
+      model_id:
+        description: 实际 API 调用的模型 ID (如 gpt-4)
+        type: string
+      model_name:
+        description: 展示名称 (如 GPT-4 Turbo)
+        type: string
+      provider:
+        $ref: '#/definitions/models.AIProviderGORM'
+      provider_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.AIProviderGORM:
+    properties:
+      api_key:
+        description: 存储时加密
+        type: string
+      base_url:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_enabled:
+        type: boolean
+      name:
+        type: string
+      priority:
+        type: integer
+      type:
+        description: openai, ollama, deepseek, etc.
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        description: 为空表示系统公共配置，不为空表示用户私有配置
+        type: integer
+    type: object
+  models.AISessionGORM:
+    properties:
+      agent:
+        allOf:
+        - $ref: '#/definitions/models.AIAgentGORM'
+        description: 关联智能体详情
+      agent_id:
+        description: 关联智能体
+        type: integer
+      context_raw:
+        description: 额外的上下文元数据 (JSON)
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      last_msg:
+        description: 最后一条消息预览
+        type: string
+      platform:
+        type: string
+      session_id:
+        description: 会话唯一 ID
+        type: string
+      status:
+        type: string
+      topic:
+        description: 对话主题
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        description: 所属用户
+        type: integer
+    type: object
+  models.FissionConfigGORM:
+    properties:
+      anti_fraud_enabled:
+        type: boolean
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      invite_code_template:
+        type: string
+      invite_reward_duration:
+        description: 小时
+        type: integer
+      invite_reward_points:
+        type: integer
+      max_daily_invites:
+        type: integer
+      min_level_required:
+        type: integer
+      new_user_reward_points:
+        type: integer
+      rules:
+        type: string
+      updated_at:
+        type: string
+      welcome_message:
+        type: string
+    type: object
+  models.FissionTaskGORM:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      reward_duration:
+        type: integer
+      reward_points:
+        type: integer
+      status:
+        description: active, inactive
+        type: string
+      target_count:
+        type: integer
+      task_type:
+        description: register, use_bot, join_group
+        type: string
+      updated_at:
+        type: string
+    type: object
+  tasks.AIActionType:
+    enum:
+    - create_task
+    - adjust_policy
+    - manage_tags
+    - system_query
+    - skill_call
+    - cancel_task
+    - batch_task
+    type: string
+    x-enum-comments:
+      AIActionBatch: 新增：批量/多重任务并行
+      AIActionCancelTask: 新增：取消任务
+      AIActionSkillCall: 新增：技能调用
+    x-enum-descriptions:
+    - ""
+    - ""
+    - ""
+    - ""
+    - 新增：技能调用
+    - 新增：取消任务
+    - 新增：批量/多重任务并行
+    x-enum-varnames:
+    - AIActionCreateTask
+    - AIActionAdjustPolicy
+    - AIActionManageTags
+    - AIActionSystemQuery
+    - AIActionSkillCall
+    - AIActionCancelTask
+    - AIActionBatch
+  tasks.Execution:
+    properties:
+      actual_time:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      execution_id:
+        type: string
+      id:
+        type: integer
+      max_retries:
+        type: integer
+      next_retry_time:
+        type: string
+      result:
+        description: JSON 结果或错误详情
+        type: string
+      retry_count:
+        type: integer
+      status:
+        $ref: '#/definitions/tasks.ExecutionStatus'
+      task_id:
+        type: integer
+      trace_id:
+        type: string
+      trigger_time:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  tasks.ExecutionStatus:
+    enum:
+    - pending
+    - dispatching
+    - running
+    - success
+    - failed
+    - dead
+    type: string
+    x-enum-comments:
+      ExecDead: 已放弃
+      ExecDispatching: 调度中
+      ExecFailed: 失败
+      ExecPending: 等待中
+      ExecRunning: 执行中
+      ExecSuccess: 成功
+    x-enum-descriptions:
+    - 等待中
+    - 调度中
+    - 执行中
+    - 成功
+    - 失败
+    - 已放弃
+    x-enum-varnames:
+    - ExecPending
+    - ExecDispatching
+    - ExecRunning
+    - ExecSuccess
+    - ExecFailed
+    - ExecDead
+  tasks.ParseRequest:
+    properties:
+      action_type:
+        allOf:
+        - $ref: '#/definitions/tasks.AIActionType'
+        description: 可选，明确指定意图
+      context:
+        additionalProperties: {}
+        description: 上下文信息
+        type: object
+      input:
+        type: string
+    type: object
+  tasks.ParseResult:
+    properties:
+      analysis:
+        description: AI 的推理过程
+        type: string
+      data:
+        description: 解析出的结构化数据
+      draft_id:
+        description: 新增 DraftID
+        type: string
+      intent:
+        $ref: '#/definitions/tasks.AIActionType'
+      is_safe:
+        description: 是否安全（低风险）
+        type: boolean
+      sub_actions:
+        description: 新增：支持多任务并行
+        items:
+          $ref: '#/definitions/tasks.ParseResult'
+        type: array
+      summary:
+        type: string
+    type: object
+  tasks.Strategy:
+    properties:
+      config:
+        description: JSON 配置
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      description:
+        type: string
+      id:
+        type: integer
+      is_enabled:
+        type: boolean
+      name:
+        type: string
+      type:
+        description: rate_limit, maintenance, flow_control
+        type: string
+      updated_at:
+        type: string
+    type: object
+  tasks.Tag:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      id:
+        type: integer
+      is_internal:
+        description: 系统内置标签
+        type: boolean
+      name:
+        type: string
+      target_id:
+        type: string
+      type:
+        description: group, friend
+        type: string
+      updated_at:
+        type: string
+    type: object
+  tasks.Task:
+    properties:
+      action_params:
+        description: JSON 参数
+        type: string
+      action_type:
+        description: send_message, mute_group, unmute_group
+        type: string
+      created_at:
+        type: string
+      creator_id:
+        type: integer
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      executions:
+        items:
+          $ref: '#/definitions/tasks.Execution'
+        type: array
+      id:
+        type: integer
+      is_enterprise:
+        type: boolean
+      last_run_time:
+        type: string
+      name:
+        type: string
+      next_run_time:
+        type: string
+      status:
+        $ref: '#/definitions/tasks.TaskStatus'
+      tags:
+        items:
+          $ref: '#/definitions/tasks.Tag'
+        type: array
+      trigger_config:
+        description: JSON 触发配置 (cron, delay, conditions)
+        type: string
+      type:
+        description: once, cron, delayed, condition
+        type: string
+      updated_at:
+        type: string
+    type: object
+  tasks.TaskStatus:
+    enum:
+    - pending
+    - disabled
+    - completed
+    type: string
+    x-enum-comments:
+      TaskCompleted: 已完成（一次性任务）
+      TaskDisabled: 暂停
+      TaskPending: 启用中
+    x-enum-descriptions:
+    - 启用中
+    - 暂停
+    - 已完成（一次性任务）
+    x-enum-varnames:
+    - TaskPending
+    - TaskDisabled
+    - TaskCompleted
+  utils.JSONResponse:
+    properties:
+      code:
+        type: string
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+info:
+  contact: {}
+paths:
+  /api/action:
+    post:
+      consumes:
+      - application/json
+      description: 向机器人发送 OneBot 标准 API 动作
+      parameters:
+      - description: 动作参数 (bot_id, action, params)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 动作执行结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 发送 API 动作
+      tags:
+      - Admin
+  /api/admin/ai/agents:
+    post:
+      consumes:
+      - application/json
+      description: 新增或更新 AI 智能体配置
+      parameters:
+      - description: 智能体信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AIAgentGORM'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存智能体
+      tags:
+      - AI Management
+  /api/admin/ai/agents/{id}:
+    delete:
+      description: 根据 ID 删除指定的 AI 智能体配置
+      parameters:
+      - description: 智能体 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除智能体
+      tags:
+      - AI Management
+  /api/admin/ai/logs:
+    get:
+      description: 获取最近的 AI 调用日志，用于审计和统计
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 AI 使用日志
+      tags:
+      - AI Management
+  /api/admin/ai/models:
+    get:
+      description: 获取所有已配置的 AI 模型，包含其关联的提供商信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 模型列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 AI 模型列表
+      tags:
+      - AI Management
+    post:
+      consumes:
+      - application/json
+      description: 新增或更新 AI 模型配置
+      parameters:
+      - description: 模型信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AIModelGORM'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存 AI 模型
+      tags:
+      - AI Management
+  /api/admin/ai/models/{id}:
+    delete:
+      description: 根据 ID 删除指定的 AI 模型配置
+      parameters:
+      - description: 模型 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除 AI 模型
+      tags:
+      - AI Management
+  /api/admin/ai/providers:
+    get:
+      description: 获取所有已配置的 AI 模型提供商（如 OpenAI, Anthropic 等），API Key 会被脱敏
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 提供商列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 AI 提供商列表
+      tags:
+      - AI Management
+    post:
+      consumes:
+      - application/json
+      description: 新增或更新 AI 提供商配置。如果 API Key 为 "********" 则保持原值。
+      parameters:
+      - description: 提供商信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AIProviderGORM'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存 AI 提供商
+      tags:
+      - AI Management
+  /api/admin/ai/providers/{id}:
+    delete:
+      description: 根据 ID 删除指定的 AI 提供商配置
+      parameters:
+      - description: 提供商 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除 AI 提供商
+      tags:
+      - AI Management
+  /api/admin/b2b/connections:
+    get:
+      description: 获取所有已建立的企业间数字员工 (B2B) 连接记录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 连接列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 B2B 连接列表
+      tags:
+      - Admin
+  /api/admin/b2b/skills:
+    get:
+      description: 获取所有已配置的 B2B 技能共享记录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 技能列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 B2B 技能列表
+      tags:
+      - Admin
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新 B2B 技能共享配置
+      parameters:
+      - description: 技能共享信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存 B2B 技能
+      tags:
+      - Admin
+  /api/admin/b2b/skills/{id}:
+    delete:
+      description: 根据 ID 删除一条 B2B 技能共享记录
+      parameters:
+      - description: 技能 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除 B2B 技能
+      tags:
+      - Admin
+  /api/admin/batch_send:
+    post:
+      consumes:
+      - application/json
+      description: 向多个目标（群或私聊）批量发送相同内容的群发消息
+      parameters:
+      - description: 群发参数 (targets, message)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 任务启动结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 批量发送消息
+      tags:
+      - Admin
+  /api/admin/bots:
+    get:
+      description: 获取所有当前连接的机器人（OneBot 客户端）及其状态信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 机器人列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取机器人列表
+      tags:
+      - Admin
+  /api/admin/config:
+    get:
+      description: 获取当前应用的完整配置信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 应用配置
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取配置
+      tags:
+      - System
+    post:
+      consumes:
+      - application/json
+      description: 更新当前应用的全局配置信息并持久化到文件
+      parameters:
+      - description: 新的配置对象
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/config.AppConfig'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新后的配置
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新配置
+      tags:
+      - System
+  /api/admin/contacts:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定机器人的群组和好友列表，支持强制刷新
+      parameters:
+      - description: 机器人 ID (GET 请求)
+        in: query
+        name: bot_id
+        type: string
+      - description: 是否强制刷新 (GET 请求)
+        in: query
+        name: refresh
+        type: boolean
+      - description: 请求体 (POST 请求，包含 bot_id 和 refresh)
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 联系人列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取联系人列表
+      tags:
+      - Admin
+    post:
+      consumes:
+      - application/json
+      description: 获取指定机器人的群组和好友列表，支持强制刷新
+      parameters:
+      - description: 机器人 ID (GET 请求)
+        in: query
+        name: bot_id
+        type: string
+      - description: 是否强制刷新 (GET 请求)
+        in: query
+        name: refresh
+        type: boolean
+      - description: 请求体 (POST 请求，包含 bot_id 和 refresh)
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 联系人列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取联系人列表
+      tags:
+      - Admin
+  /api/admin/docker/action:
+    post:
+      consumes:
+      - application/json
+      description: 启动、停止、重启或删除指定的 Docker 容器
+      parameters:
+      - description: 操作参数 (container_id, action)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 操作 Docker 容器
+      tags:
+      - System
+  /api/admin/docker/add-bot:
+    post:
+      consumes:
+      - application/json
+      description: 在 Docker 中创建并启动一个新的机器人容器，支持多种平台
+      parameters:
+      - description: 机器人配置 (platform, image, env, cmd)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 添加结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 添加机器人容器
+      tags:
+      - System
+  /api/admin/docker/add-worker:
+    post:
+      consumes:
+      - application/json
+      description: 在 Docker 中创建并启动一个新的 Worker 容器
+      parameters:
+      - description: Worker 配置 (image, env, cmd, name)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 添加结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 添加 Worker 容器
+      tags:
+      - System
+  /api/admin/docker/list:
+    get:
+      description: 获取系统宿主机上的所有 Docker 容器列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 容器列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Docker 容器列表
+      tags:
+      - System
+  /api/admin/docker/logs:
+    get:
+      description: 获取指定 Docker 容器的最近运行日志
+      parameters:
+      - description: 容器 ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志内容
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Docker 日志
+      tags:
+      - System
+  /api/admin/employees:
+    get:
+      description: 获取所有配置的数字员工信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 数字员工列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取数字员工列表
+      tags:
+      - Admin
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新数字员工的配置信息
+      parameters:
+      - description: 数字员工信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存数字员工
+      tags:
+      - Admin
+  /api/admin/employees/kpi:
+    post:
+      consumes:
+      - application/json
+      description: 手动记录数字员工的关键绩效指标 (KPI)，如评分或特定指标
+      parameters:
+      - description: KPI 记录参数 (employee_id, metric, score)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 记录结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 记录员工 KPI
+      tags:
+      - Admin
+  /api/admin/employees/status:
+    post:
+      consumes:
+      - application/json
+      description: 手动更新数字员工的在线状态或薪资限制
+      parameters:
+      - description: 状态参数 (bot_id, status, salary_limit)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新数字员工状态
+      tags:
+      - Admin
+  /api/admin/fission/config:
+    get:
+      description: 获取系统的裂变策略配置，如积分规则、开关状态等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 裂变配置
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取裂变全局配置
+      tags:
+      - Fission
+    post:
+      consumes:
+      - application/json
+      description: 更新系统的裂变策略配置
+      parameters:
+      - description: 配置信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.FissionConfigGORM'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新裂变全局配置
+      tags:
+      - Fission
+  /api/admin/fission/invitations:
+    get:
+      description: 获取系统的最近 100 条用户邀请记录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 邀请记录列表
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取邀请记录
+      tags:
+      - Fission
+  /api/admin/fission/leaderboard:
+    get:
+      description: 获取系统邀请人数排名前 20 的用户记录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 排行榜数据
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取裂变排行榜
+      tags:
+      - Fission
+  /api/admin/fission/stats:
+    get:
+      description: 获取裂变总数、积分总额、活跃邀请人及最近 7 天趋势
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统计数据
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取裂变统计
+      tags:
+      - Fission
+  /api/admin/fission/tasks:
+    get:
+      description: 获取所有定义的裂变任务列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 任务列表
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取裂变任务
+      tags:
+      - Fission
+    post:
+      consumes:
+      - application/json
+      description: 新增或更新裂变任务配置
+      parameters:
+      - description: 任务信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.FissionTaskGORM'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存裂变任务
+      tags:
+      - Fission
+  /api/admin/fission/tasks/{id}:
+    delete:
+      description: 根据 ID 删除指定的裂变任务配置
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除裂变任务
+      tags:
+      - Fission
+  /api/admin/group/members:
+    get:
+      description: 获取指定群组的成员列表，支持从机器人实时获取或从缓存读取
+      parameters:
+      - description: 机器人 ID
+        in: query
+        name: bot_id
+        required: true
+        type: string
+      - description: 群组 ID
+        in: query
+        name: group_id
+        required: true
+        type: string
+      - description: 是否强制刷新缓存
+        in: query
+        name: refresh
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成员列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取群成员列表
+      tags:
+      - Admin
+  /api/admin/logs:
+    get:
+      description: 分页获取系统运行日志，支持按级别、来源和关键词过滤，支持排序
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: pageSize
+        type: integer
+      - description: 日志级别
+        in: query
+        name: level
+        type: string
+      - description: 机器人 ID 或来源
+        in: query
+        name: botId
+        type: string
+      - description: 搜索关键词
+        in: query
+        name: search
+        type: string
+      - description: 排序字段
+        in: query
+        name: sortBy
+        type: string
+      - description: 排序顺序 (asc/desc)
+        in: query
+        name: sortOrder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取系统日志
+      tags:
+      - System
+  /api/admin/logs/clear:
+    post:
+      description: 清空内存中的所有系统日志记录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 清空结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 清空系统日志
+      tags:
+      - System
+  /api/admin/manual:
+    get:
+      description: 获取管理后台的帮助文档和操作说明
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 帮助手册内容
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取管理员手册
+      tags:
+      - Admin
+  /api/admin/memories:
+    get:
+      description: 获取所有数字员工的认知记忆记录，支持按 bot_id、user_id 或内容关键词过滤
+      parameters:
+      - description: 机器人 ID
+        in: query
+        name: bot_id
+        type: string
+      - description: 用户 ID
+        in: query
+        name: user_id
+        type: string
+      - description: 搜索关键词
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 记忆列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取认知记忆列表
+      tags:
+      - Admin
+  /api/admin/memories/{id}:
+    delete:
+      description: 根据 ID 删除一条特定的数字员工认知记忆
+      parameters:
+      - description: 记忆 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除认知记忆
+      tags:
+      - Admin
+  /api/admin/messages:
+    get:
+      description: 从数据库获取最新的聊天消息记录，包括私聊和群聊
+      parameters:
+      - description: 获取的消息数量 (默认 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 消息列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取消息列表
+      tags:
+      - Admin
+  /api/admin/nexus/status:
+    get:
+      description: 获取 BotNexus 服务的整体运行状态和版本信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服务状态信息
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      summary: 获取 Nexus 状态
+      tags:
+      - System
+  /api/admin/plugins:
+    get:
+      description: 获取系统中所有插件（包括 Nexus 中心插件和所有 Worker 节点的插件）及其运行状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 插件列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取插件列表
+      tags:
+      - Admin
+  /api/admin/plugins/action:
+    post:
+      consumes:
+      - application/json
+      description: 启动、停止、重启或重载指定的插件
+      parameters:
+      - description: 操作参数 (id, action, source)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 操作插件
+      tags:
+      - Admin
+  /api/admin/plugins/delete:
+    post:
+      consumes:
+      - application/json
+      description: 从指定节点（Nexus 或 Worker）彻底删除指定的插件及其文件
+      parameters:
+      - description: 删除参数 (id, version, source)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除插件
+      tags:
+      - Admin
+  /api/admin/plugins/install:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传 .bmpk 插件包并安装到指定节点（Nexus 或 Worker）
+      parameters:
+      - description: 插件文件 (.bmpk)
+        in: formData
+        name: plugin
+        required: true
+        type: file
+      - description: 目标节点 (nexus 或 workerID)
+        in: formData
+        name: target
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 安装结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 安装插件
+      tags:
+      - Admin
+  /api/admin/redis/config:
+    get:
+      description: 获取存储在 Redis 中的限流、TTL 和路由规则等动态配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Redis 配置信息
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Redis 动态配置
+      tags:
+      - System
+    post:
+      consumes:
+      - application/json
+      description: 更新存储在 Redis 中的动态配置项（限流、TTL 或路由）
+      parameters:
+      - description: 配置更新参数 (type, data, clear)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新 Redis 配置
+      tags:
+      - System
+  /api/admin/routing:
+    delete:
+      description: 根据 Key 删除一条消息路由规则
+      parameters:
+      - description: 规则 Key
+        in: query
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除路由规则
+      tags:
+      - System
+    get:
+      description: 获取所有的消息路由规则
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 路由规则列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取路由规则
+      tags:
+      - System
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新一条消息路由规则，将特定 Key 映射到 WorkerID
+      parameters:
+      - description: 路由规则参数 (key, worker_id)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 设置结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 设置路由规则
+      tags:
+      - System
+  /api/admin/stats:
+    get:
+      description: 获取 CPU、内存、磁盘、在线机器人及消息量趋势等统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 详细统计数据
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取系统统计
+      tags:
+      - System
+  /api/admin/tasks:
+    get:
+      description: 获取所有已定义的自动化任务列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 任务列表
+          schema:
+            items:
+              $ref: '#/definitions/tasks.Task'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 获取任务列表
+      tags:
+      - Tasks
+    post:
+      consumes:
+      - application/json
+      description: 创建一个新的自动化任务，支持定时、周期或触发式执行
+      parameters:
+      - description: 任务定义
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tasks.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功的任务
+          schema:
+            $ref: '#/definitions/tasks.Task'
+      security:
+      - BearerAuth: []
+      summary: 创建自动化任务
+      tags:
+      - Tasks
+  /api/admin/tasks/ai-confirm:
+    post:
+      consumes:
+      - application/json
+      description: 确认并执行之前由 AI 生成的任务草稿
+      parameters:
+      - description: 确认请求
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 执行成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: AI 执行确认
+      tags:
+      - Tasks
+  /api/admin/tasks/ai-parse:
+    post:
+      consumes:
+      - application/json
+      description: 使用 AI 解析用户自然语言指令，识别意图并生成任务草稿
+      parameters:
+      - description: 解析请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tasks.ParseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 解析结果
+          schema:
+            $ref: '#/definitions/tasks.ParseResult'
+      security:
+      - BearerAuth: []
+      summary: AI 意图解析
+      tags:
+      - Tasks
+  /api/admin/tasks/capabilities:
+    get:
+      description: 获取系统支持的所有动作 (Actions) 和拦截器 (Interceptors)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统能力列表
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取系统能力
+      tags:
+      - Tasks
+  /api/admin/tasks/executions:
+    get:
+      description: 获取指定任务的最近执行历史记录
+      parameters:
+      - description: 任务 ID
+        in: query
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 执行记录列表
+          schema:
+            items:
+              $ref: '#/definitions/tasks.Execution'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 获取执行记录
+      tags:
+      - Tasks
+  /api/admin/tasks/manifest:
+    get:
+      description: 获取系统支持的 Manifest 配置和系统 Prompt 模板
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统能力数据
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取系统能力清单
+      tags:
+      - Tasks
+  /api/admin/tasks/strategies:
+    get:
+      description: 获取系统定义的所有任务执行拦截策略列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 策略列表
+          schema:
+            items:
+              $ref: '#/definitions/tasks.Strategy'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 获取策略列表
+      tags:
+      - Tasks
+    post:
+      consumes:
+      - application/json
+      description: 新增或更新任务执行拦截策略
+      parameters:
+      - description: 策略配置
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tasks.Strategy'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 保存策略配置
+      tags:
+      - Tasks
+  /api/admin/tasks/strategies/detail:
+    get:
+      description: 根据名称获取特定拦截策略的详细配置
+      parameters:
+      - description: 策略名称
+        in: query
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 策略详情
+          schema:
+            $ref: '#/definitions/tasks.Strategy'
+      security:
+      - BearerAuth: []
+      summary: 获取策略详情
+      tags:
+      - Tasks
+  /api/admin/tools/tags:
+    post:
+      consumes:
+      - application/json
+      description: 为指定资源（任务、用户等）添加或移除标签
+      parameters:
+      - description: 标签操作请求
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 管理标签
+      tags:
+      - Tools
+  /api/admin/tools/translate:
+    post:
+      consumes:
+      - application/json
+      description: 使用 Azure Translate 服务进行多语言文本翻译
+      parameters:
+      - description: 翻译请求
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 翻译结果
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 文本翻译
+      tags:
+      - Tools
+  /api/admin/users:
+    get:
+      description: 从数据库获取所有系统用户的信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取用户列表
+      tags:
+      - Admin
+    post:
+      consumes:
+      - application/json
+      description: 执行用户管理操作，包括创建、编辑、删除、重置密码和切换激活状态
+      parameters:
+      - description: 管理操作参数 (action, username, password, is_admin, is_super_points)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 管理用户信息
+      tags:
+      - Admin
+  /api/admin/workers:
+    get:
+      description: 获取所有当前在线和历史连接过的 Worker 列表及其详细状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Worker 列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Worker 列表
+      tags:
+      - Admin
+  /api/ai/agents:
+    get:
+      description: 获取可用的 AI 智能体列表。非管理员仅能看到公开的和自己创建的。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 智能体列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取智能体列表
+      tags:
+      - AI Management
+  /api/ai/agents/{id}:
+    get:
+      description: 根据 ID 获取 AI 智能体的详细配置，包含关联的模型信息
+      parameters:
+      - description: 智能体 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 智能体详情
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取智能体详情
+      tags:
+      - AI Management
+  /api/ai/chat/history:
+    get:
+      description: 获取指定会话的聊天历史记录，支持分页
+      parameters:
+      - description: 会话 ID
+        in: query
+        name: session_id
+        required: true
+        type: string
+      - description: 获取条数，默认 20
+        in: query
+        name: limit
+        type: integer
+      - description: 获取该 ID 之前的消息
+        in: query
+        name: before_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 消息列表
+          schema:
+            items:
+              $ref: '#/definitions/models.AIChatMessageGORM'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 获取对话历史
+      tags:
+      - AI Trial
+  /api/ai/chat/sessions:
+    get:
+      description: 获取当前登录用户最近的 AI 对话会话列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 会话列表
+          schema:
+            items:
+              $ref: '#/definitions/models.AISessionGORM'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 获取最近会话
+      tags:
+      - AI Trial
+  /api/ai/chat/stream:
+    post:
+      consumes:
+      - application/json
+      description: 在管理后台直接与指定的 AI 智能体对话，支持 SSE 流式返回
+      parameters:
+      - description: 对话请求
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE Stream
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: AI 试用对话 (流式)
+      tags:
+      - AI Trial
+  /api/b2b/handshake:
+    post:
+      consumes:
+      - application/json
+      description: 接收并验证来自外部企业的握手请求 (内部接口)
+      parameters:
+      - description: 握手请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/app.HandshakeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 握手响应
+          schema:
+            $ref: '#/definitions/app.HandshakeResponse'
+      summary: 响应 B2B 握手
+      tags:
+      - Mesh
+  /api/docker/add-bot:
+    post:
+      consumes:
+      - application/json
+      description: 在 Docker 中创建并启动一个新的机器人容器，支持多种平台
+      parameters:
+      - description: 机器人配置 (platform, image, env, cmd)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 添加结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 添加机器人容器
+      tags:
+      - System
+  /api/docker/add-worker:
+    post:
+      consumes:
+      - application/json
+      description: 在 Docker 中创建并启动一个新的 Worker 容器
+      parameters:
+      - description: Worker 配置 (image, env, cmd, name)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 添加结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 添加 Worker 容器
+      tags:
+      - System
+  /api/docker/containers:
+    get:
+      description: 获取系统宿主机上的所有 Docker 容器列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 容器列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Docker 容器列表
+      tags:
+      - System
+  /api/docker/list:
+    get:
+      description: 获取系统宿主机上的所有 Docker 容器列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 容器列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Docker 容器列表
+      tags:
+      - System
+  /api/docker/logs:
+    get:
+      description: 获取指定 Docker 容器的最近运行日志
+      parameters:
+      - description: 容器 ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志内容
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取 Docker 日志
+      tags:
+      - System
+  /api/docker/remove:
+    post:
+      consumes:
+      - application/json
+      description: 启动、停止、重启或删除指定的 Docker 容器
+      parameters:
+      - description: 操作参数 (container_id, action)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 操作 Docker 容器
+      tags:
+      - System
+  /api/docker/restart:
+    post:
+      consumes:
+      - application/json
+      description: 启动、停止、重启或删除指定的 Docker 容器
+      parameters:
+      - description: 操作参数 (container_id, action)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 操作 Docker 容器
+      tags:
+      - System
+  /api/docker/start:
+    post:
+      consumes:
+      - application/json
+      description: 启动、停止、重启或删除指定的 Docker 容器
+      parameters:
+      - description: 操作参数 (container_id, action)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 操作 Docker 容器
+      tags:
+      - System
+  /api/docker/stop:
+    post:
+      consumes:
+      - application/json
+      description: 启动、停止、重启或删除指定的 Docker 容器
+      parameters:
+      - description: 操作参数 (container_id, action)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 操作结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 操作 Docker 容器
+      tags:
+      - System
+  /api/login:
+    post:
+      consumes:
+      - application/json
+      description: 使用用户名和密码登录管理后台，获取访问 Token
+      parameters:
+      - description: 登录凭据
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功，返回 Token
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+        "401":
+          description: 用户名或密码错误
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+        "403":
+          description: 用户未激活
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      summary: 管理后台登录
+      tags:
+      - Admin
+  /api/mcp/v1/sse:
+    get:
+      description: 建立符合 MCP 规范的 SSE 连接，用于双向异步通信
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE Event Stream
+          schema:
+            type: string
+      summary: MCP SSE 传输
+      tags:
+      - MCP
+  /api/mcp/v1/tools:
+    get:
+      description: 获取当前节点暴露的所有 MCP 工具列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 工具列表
+          schema:
+            $ref: '#/definitions/ai.MCPListToolsResponse'
+      summary: 列出 MCP 工具
+      tags:
+      - MCP
+  /api/mcp/v1/tools/call:
+    post:
+      consumes:
+      - application/json
+      description: 调用指定的 MCP 工具并返回执行结果，支持隐私数据脱敏
+      parameters:
+      - description: 调用请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/ai.MCPCallToolRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 调用结果
+          schema:
+            $ref: '#/definitions/ai.MCPCallToolResponse'
+      summary: 调用 MCP 工具
+      tags:
+      - MCP
+  /api/me:
+    get:
+      description: 获取当前登录用户的详细信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户信息
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取用户信息
+      tags:
+      - Admin
+  /api/mesh/call:
+    post:
+      consumes:
+      - application/json
+      description: 通过 Mesh 网络调用远程企业的 MCP 工具
+      parameters:
+      - description: 调用请求
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 调用结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      summary: 跨企业工具调用
+      tags:
+      - Mesh
+  /api/mesh/connect:
+    post:
+      consumes:
+      - application/json
+      description: 发起与远程企业的握手请求，建立信任关系
+      parameters:
+      - description: 连接请求
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 连接成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      summary: 建立 B2B 连接
+      tags:
+      - Mesh
+  /api/mesh/discover:
+    get:
+      consumes:
+      - application/json
+      description: 在已连接的 B2B 联邦网络中搜索可用的 MCP 节点
+      parameters:
+      - description: 搜索关键字
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜索结果列表
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      summary: 发现 Mesh 节点
+      tags:
+      - Mesh
+  /api/mesh/register:
+    post:
+      consumes:
+      - application/json
+      description: 将本地 MCP 节点注册到 Mesh 目录中，供其他企业发现
+      parameters:
+      - description: 注册信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 注册成功
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      summary: 注册 Mesh 节点
+      tags:
+      - Mesh
+  /api/proxy/avatar:
+    get:
+      description: 代理并缓存外部头像图片，解决跨域或防盗链问题
+      parameters:
+      - description: 原始头像 URL
+        in: query
+        name: url
+        required: true
+        type: string
+      responses:
+        "200":
+          description: 图片流
+          schema:
+            type: file
+      summary: 代理头像
+      tags:
+      - System
+  /api/smart_action:
+    post:
+      consumes:
+      - application/json
+      description: 向机器人发送 OneBot 标准 API 动作
+      parameters:
+      - description: 动作参数 (bot_id, action, params)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 动作执行结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 发送 API 动作
+      tags:
+      - Admin
+  /api/stats/chat:
+    get:
+      description: 获取所有群聊和私聊的各种统计数据，包括消息量、活跃度等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 聊天统计数据
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取聊天统计
+      tags:
+      - Admin
+  /api/system/stats:
+    get:
+      description: 获取更详尽的系统硬件使用情况，包括 CPU、内存、各磁盘分区等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 详细统计数据
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取详细系统统计
+      tags:
+      - System
+  /api/user/info:
+    get:
+      description: 获取当前登录用户的详细信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户信息
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取用户信息
+      tags:
+      - Admin
+  /api/user/password:
+    post:
+      consumes:
+      - application/json
+      description: 修改当前登录用户的登录密码
+      parameters:
+      - description: 密码参数 (old_password, new_password)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 修改结果
+          schema:
+            $ref: '#/definitions/utils.JSONResponse'
+      security:
+      - BearerAuth: []
+      summary: 修改密码
+      tags:
+      - Admin
+  /ws/subscriber:
+    get:
+      description: 用于 UI 实时同步状态的 WebSocket 连接
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: 管理后台 WebSocket 连接
+      tags:
+      - System
+swagger: "2.0"

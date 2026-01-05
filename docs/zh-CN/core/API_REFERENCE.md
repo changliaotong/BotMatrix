@@ -93,12 +93,84 @@ Web 管理后台使用的 RESTful API。
     }
 ]
 ```
-
 ### 3. 头像代理 (GET /api/proxy/avatar?url=...)
 - **描述**: 代理外部头像图片，解决跨域 (CORS) 和 Referer 限制问题。
 - **参数**: `url` - 原始头像图片的编码 URL。
 
-### 4. 更新路由规则 (POST /api/routing/update)
+---
+
+## 🕸️ Global Agent Mesh & MCP API
+
+全球智能体网格与模型上下文协议接口。
+
+### 1. 服务发现 (GET /api/mesh/discover)
+- **描述**: 在本地和已连接的远程企业中搜索可用的 MCP 工具和 Agent。
+- **参数**: `q` - 搜索关键词。
+- **返回**: 包含本地和远程匹配项的列表。
+
+### 2. 企业连接 (POST /api/mesh/connect)
+- **描述**: 在两个 BotMatrix 节点之间建立 B2B 信任连接。
+- **认证**: 需要 Admin 权限。
+- **参数**: 
+  ```json
+  {
+      "source_code": "ENT_A_CODE",
+      "target_code": "ENT_B_CODE"
+  }
+  ```
+
+### 3. 跨域工具调用 (POST /api/mesh/call)
+- **描述**: 代理调用远程企业的 MCP 工具。
+- **参数**:
+  ```json
+  {
+      "target_ent_id": 2,
+      "tool_name": "im_send_message",
+      "arguments": { "content": "hello" }
+  }
+  ```
+
+### 4. MCP 工具调用 (POST /api/mcp/v1/tools/call)
+- **描述**: 标准 MCP 工具执行接口，支持本地和桥接工具。
+- **认证**: 支持 Bearer Token (B2B 场景)。
+- **参数**:
+  ```json
+  {
+      "server_id": "bridge_id",
+      "tool_name": "tool_name",
+      "arguments": { ... }
+  }
+  ```
+
+---
+
+### 1. Mesh 发现 (GET /api/mesh/discover)
+- **描述**: 在联邦网络中发现可用的服务或数字员工。
+- **参数**: `q` (可选) - 搜索关键词。
+- **认证**: 需要 JWT 令牌。
+
+### 2. MCP SSE 端点 (GET /api/mcp/sse)
+- **描述**: 符合 Model Context Protocol 规范的 SSE 通信端点。
+- **认证**: 支持标准 JWT 或 B2B 联邦身份令牌。
+- **功能**: 支持工具发现、资源读取与函数调用通知。
+
+### 3. B2B 跨域调用 (POST /api/mesh/call)
+- **描述**: 代理跨企业、跨域的智能体能力调用。
+- **请求体**:
+```json
+{
+    "target_ent_id": 1001,
+    "tool_name": "internal_skills/check_inventory",
+    "arguments": {
+        "item_id": "SKU-001"
+    }
+}
+```
+- **认证**: 必须携带包含企业私钥签名的 B2B 令牌。
+
+---
+
+## 🏗️ 开发者注意事项4. 更新路由规则 (POST /api/routing/update)
 - **描述**: 动态修改消息路由规则。
 
 ---

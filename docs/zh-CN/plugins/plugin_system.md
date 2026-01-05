@@ -47,21 +47,38 @@ Each plugin must have:
 
 ```json
 {
+  "id": "com.botmatrix.example",
   "name": "echo",
   "description": "Echo plugin - repeats messages",
-  "api_version": "1.0",
+  "author": "Developer",
   "version": "1.0.0",
   "entry_point": "echo.exe",
   "run_on": ["worker"],
-  "capabilities": ["message"],
-  "actions": ["send_message"],
-  "timeout_ms": 5000,
-  "max_concurrency": 1,
-  "max_restarts": 3,
-  "plugin_level": "feature",
-  "source": "local"
+  "permissions": ["send_msg", "call_skill"],
+  "events": ["on_message"],
+  "intents": [
+    {
+      "name": "hello",
+      "keywords": ["hello", "hi"],
+      "regex": "^hi.*"
+    }
+  ],
+  "max_restarts": 5
 }
 ```
+
+## Security Policy
+
+The system implements a robust security layer for plugin actions:
+
+1. **Action Whitelisting**: Every action requested by a plugin (via `ResponseMessage.Actions`) is validated against its `permissions` defined in `plugin.json`.
+2. **Wildcard Support**: Plugins can use `*` in their permissions to allow all actions (use with caution).
+3. **Global Policy**: Actions are also checked against a global worker policy to ensure they are appropriate for the environment.
+4. **Validation Flow**:
+   - Check if action type is in `permissions`.
+   - Check if action type is allowed by global policy.
+   - Log and block unauthorized attempts.
+
 
 ## Communication Protocol
 
@@ -94,6 +111,47 @@ Each plugin must have:
   ]
 }
 ```
+
+### Skill Protocol (Cross-Plugin Communication)
+
+The Skill mechanism allows a plugin to export its functionality and another plugin to call it.
+
+#### 1. Skill Call (Plugin A -> Core)
+A plugin requests to call a skill by sending a `call_skill` action.
+```json
+{
+  "id": "event-456",
+  "actions": [
+    {
+      "type": "call_skill",
+      "payload": {
+        "plugin_id": "com.example.bank",
+        "skill": "get_balance",
+        "correlation_id": "skill_get_balance_1712345678",
+        "additional_param": "..."
+      }
+    }
+  ]
+}
+```
+
+#### 2. Skill Execution (Core -> Plugin B)
+The Core routes the request to the target plugin as a specialized event.
+```json
+{
+  "id": "skill_get_balance_1712345678",
+  "type": "event",
+  "name": "skill_get_balance",
+  "payload": {
+    "from": "user123",
+    "group_id": "group456",
+    "additional_param": "..."
+  }
+}
+```
+
+#### 3. Skill Result (Plugin B -> Core -> Plugin A)
+Plugin B returns the result, which the Core then routes back to Plugin A using the `correlation_id`.
 
 ## Usage
 

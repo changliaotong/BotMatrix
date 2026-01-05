@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,9 @@ import (
 	dclient "github.com/docker/docker/client"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
 	"gorm.io/gorm"
 )
@@ -88,16 +92,89 @@ type Manager struct {
 
 	MessageCache []types.InternalMessage
 	CacheMutex   sync.RWMutex
-	GroupCache   map[string]types.GroupInfo
-	MemberCache  map[string]types.MemberInfo
-	FriendCache  map[string]types.FriendInfo
-	BotCache     map[string]types.BotClient
+
+	Ctx        context.Context
+	CancelFunc context.CancelFunc
+
+	GroupCache  map[string]types.GroupInfo
+	MemberCache map[string]types.MemberInfo
+	FriendCache map[string]types.FriendInfo
+	BotCache    map[string]types.BotClient
 
 	RulesMutex       sync.RWMutex
 	LocalIdempotency sync.Map
 	ConfigCache      map[string]string
 	ConfigCacheMu    sync.RWMutex
 	SessionCache     sync.Map
+
+	// Services
+	AIService                  types.AIService
+	AIIntegrationService       types.AIService // Alias for backward compatibility in core_plugin.go
+	B2BService                 types.B2BService
+	CognitiveMemoryService     types.CognitiveMemoryService
+	DigitalEmployeeService     types.DigitalEmployeeService
+	DigitalEmployeeTaskService types.DigitalEmployeeTaskService
+	TaskManager                any // Will be cast to *tasks.TaskManager
+	MCPManager                 types.MCPManagerInterface
+	KnowledgeBase              types.KnowledgeBase
+}
+
+// GetGORMDB returns the GORM database instance
+func (m *Manager) GetGORMDB() *gorm.DB {
+	return m.GORMDB
+}
+
+// GetAIService returns the AI service instance
+func (m *Manager) GetAIService() types.AIService {
+	return m.AIService
+}
+
+// GetB2BService returns the B2B service instance
+func (m *Manager) GetB2BService() types.B2BService {
+	return m.B2BService
+}
+
+// GetCognitiveMemoryService returns the cognitive memory service instance
+func (m *Manager) GetCognitiveMemoryService() types.CognitiveMemoryService {
+	return m.CognitiveMemoryService
+}
+
+// GetDigitalEmployeeService returns the digital employee service instance
+func (m *Manager) GetDigitalEmployeeService() types.DigitalEmployeeService {
+	return m.DigitalEmployeeService
+}
+
+// GetDigitalEmployeeTaskService returns the digital employee task service instance
+func (m *Manager) GetDigitalEmployeeTaskService() types.DigitalEmployeeTaskService {
+	return m.DigitalEmployeeTaskService
+}
+
+// GetTaskManager returns the task manager instance
+func (m *Manager) GetTaskManager() types.TaskManagerInterface {
+	if tm, ok := m.TaskManager.(types.TaskManagerInterface); ok {
+		return tm
+	}
+	return nil
+}
+
+// GetMCPManager returns the MCP manager instance
+func (m *Manager) GetMCPManager() types.MCPManagerInterface {
+	return m.MCPManager
+}
+
+// GetKnowledgeBase returns the knowledge base instance
+func (m *Manager) GetKnowledgeBase() types.KnowledgeBase {
+	return m.KnowledgeBase
+}
+
+// ValidateToken validates a user token (placeholder for now)
+// func (m *Manager) ValidateToken(token string) (*types.UserClaims, error) {
+// 	return nil, fmt.Errorf("ValidateToken not implemented")
+// }
+
+// SyncSystemKnowledge syncs system knowledge (placeholder for now)
+func (m *Manager) SyncSystemKnowledge() error {
+	return nil
 }
 
 var GlobalManager = NewManager()
@@ -154,7 +231,10 @@ func (m *Manager) LoadFriendCachesFromDB() ([]*models.FriendCacheGORM, error) {
 }
 
 func NewManager() *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Manager{
+		Ctx:               ctx,
+		CancelFunc:        cancel,
 		Bots:              make(map[string]*types.BotClient),
 		Subscribers:       make(map[*websocket.Conn]*types.Subscriber),
 		Workers:           make([]*types.WorkerClient, 0),
@@ -545,6 +625,24 @@ func (m *Manager) LoadRoutingRulesFromDB() error {
 	return nil
 }
 
+// GetGroupMembers retrieves members for a specific group from cache
+func (m *Manager) GetGroupMembers(botID string, groupID string) ([]types.MemberInfo, error) {
+	m.CacheMutex.RLock()
+	defer m.CacheMutex.RUnlock()
+
+	var members []types.MemberInfo
+	for _, mem := range m.MemberCache {
+		if mem.GroupID == groupID {
+			// 如果提供了 botID，则进一步过滤
+			if botID != "" && mem.BotID != "" && mem.BotID != botID {
+				continue
+			}
+			members = append(members, mem)
+		}
+	}
+	return members, nil
+}
+
 // LoadCachesFromDB loads all group/member/friend caches from database
 func (m *Manager) LoadCachesFromDB() error {
 	m.CacheMutex.Lock()
@@ -768,13 +866,136 @@ func (m *Manager) EnsureAdminUser() error {
 	return nil
 }
 
+// CollectSystemStats collects system statistics like CPU, Memory and Top processes
+func (m *Manager) CollectSystemStats() {
+	// 1. Get CPU usage
+	cpuPercent, _ := cpu.Percent(0, false)
+	var cpuUsage float64
+	if len(cpuPercent) > 0 {
+		cpuUsage = cpuPercent[0]
+	}
+
+	// 2. Get Memory usage
+	vm, _ := mem.VirtualMemory()
+	var memUsed uint64
+	if vm != nil {
+		memUsed = vm.Used
+	}
+
+	// 3. Get Network IO
+	netIO, _ := net.IOCounters(false)
+	var netSent, netRecv uint64
+	if len(netIO) > 0 {
+		netSent = netIO[0].BytesSent
+		netRecv = netIO[0].BytesRecv
+	}
+
+	// 4. Update Trends
+	m.HistoryMutex.Lock()
+	m.CPUTrend = append(m.CPUTrend, cpuUsage)
+	m.MemTrend = append(m.MemTrend, memUsed)
+	m.NetSentTrend = append(m.NetSentTrend, netSent)
+	m.NetRecvTrend = append(m.NetRecvTrend, netRecv)
+	m.MsgTrend = append(m.MsgTrend, m.TotalMessages)
+	m.SentTrend = append(m.SentTrend, m.SentMessages)
+	m.RecvTrend = append(m.RecvTrend, m.TotalMessages-m.SentMessages)
+
+	now := time.Now().Format("15:04")
+	m.TrendLabels = append(m.TrendLabels, now)
+
+	// Keep only last 30 points
+	maxPoints := 30
+	if len(m.CPUTrend) > maxPoints {
+		m.CPUTrend = m.CPUTrend[1:]
+		m.MemTrend = m.MemTrend[1:]
+		m.NetSentTrend = m.NetSentTrend[1:]
+		m.NetRecvTrend = m.NetRecvTrend[1:]
+		m.MsgTrend = m.MsgTrend[1:]
+		m.SentTrend = m.SentTrend[1:]
+		m.RecvTrend = m.RecvTrend[1:]
+		m.TrendLabels = m.TrendLabels[1:]
+	}
+
+	// 5. Get Top Processes
+	procs, err := process.Processes()
+	if err != nil {
+		log.Printf("[Stats] Failed to get processes: %v", err)
+	} else {
+		var procInfos []types.ProcInfo
+		newProcMap := make(map[int32]*process.Process)
+
+		for _, p := range procs {
+			// 复用已有的进程对象以获得准确的 CPU 使用率
+			var procObj *process.Process
+			if oldP, ok := m.ProcMap[p.Pid]; ok {
+				procObj = oldP
+			} else {
+				procObj = p
+			}
+			newProcMap[p.Pid] = procObj
+
+			name, _ := procObj.Name()
+			if name == "" {
+				continue
+			}
+
+			cpuP, _ := procObj.CPUPercent()
+			memI, _ := procObj.MemoryInfo()
+			memUsage := uint64(0)
+			if memI != nil {
+				memUsage = memI.RSS
+			}
+
+			procInfos = append(procInfos, types.ProcInfo{
+				Pid:    procObj.Pid,
+				Name:   name,
+				CPU:    cpuP,
+				Memory: memUsage,
+			})
+		}
+
+		// 更新进程映射
+		m.ProcMap = newProcMap
+
+		// Sort by CPU usage descending
+		sort.Slice(procInfos, func(i, j int) bool {
+			return procInfos[i].CPU > procInfos[j].CPU
+		})
+
+		// Take top 10
+		if len(procInfos) > 10 {
+			procInfos = procInfos[:10]
+		}
+		m.TopProcesses = procInfos
+		log.Printf("[Stats] Collected %d processes, Top 1: %s (%.1f%%)", len(procInfos), "", 0.0) // Placeholder for log
+		if len(procInfos) > 0 {
+			log.Printf("[Stats] Top 1 Process: %s (PID: %d, CPU: %.1f%%)", procInfos[0].Name, procInfos[0].Pid, procInfos[0].CPU)
+		}
+	}
+	m.HistoryMutex.Unlock()
+}
+
 // StartTrendCollection starts the background trend collection task
 func (m *Manager) StartTrendCollection() {
+	// 立即收集一次
+	m.CollectSystemStats()
+
 	go func() {
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			m.SaveAllStatsToDB()
+		// 每 10 秒收集一次实时数据和进程列表
+		statsTicker := time.NewTicker(10 * time.Second)
+		defer statsTicker.Stop()
+
+		// 每小时保存一次统计数据到数据库
+		dbTicker := time.NewTicker(time.Hour)
+		defer dbTicker.Stop()
+
+		for {
+			select {
+			case <-statsTicker.C:
+				m.CollectSystemStats()
+			case <-dbTicker.C:
+				m.SaveAllStatsToDB()
+			}
 		}
 	}()
 }

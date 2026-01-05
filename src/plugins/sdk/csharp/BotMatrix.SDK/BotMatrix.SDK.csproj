@@ -5,4 +5,51 @@
     <Nullable>enable</Nullable>
     <RootNamespace>BotMatrix.SDK</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CHTCHSConv" Version="1.0.0" />
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Flurl.Http" Version="4.0.2" />
+    <PackageReference Include="LazyCache" Version="2.4.0" />
+    <PackageReference Include="Markdig" Version="0.44.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Core" Version="1.1.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+    <PackageReference Include="Azure.Identity" Version="1.11.4" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.61.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
+    <PackageReference Include="DotNetty.Buffers" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Codecs" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Codecs.Http" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Codecs.Protobuf" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Common" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Handlers" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Transport" Version="0.7.6" />
+    <PackageReference Include="DotNetty.Transport.Libuv" Version="0.7.6" />
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.4" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.68.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureOpenAI" Version="1.68.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.68.0" />
+    <PackageReference Include="Manganese" Version="1.2.4" />
+    <PackageReference Include="Websocket.Client" Version="5.2.0" />
+    <PackageReference Include="System.Reactive" Version="6.0.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
+    <PackageReference Include="WatsonWebsocket" Version="4.0.10" />
+    <PackageReference Include="Lagrange.Core" Version="0.3.1" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+  </ItemGroup>
+
 </Project>

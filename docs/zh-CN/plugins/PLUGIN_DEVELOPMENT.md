@@ -27,20 +27,23 @@ src/plugins/your_plugin/
 ### 插件配置文件 (plugin.json)
 ```json
 {
+  "id": "com.botmatrix.example",
   "name": "echo_csharp",
   "description": "C#语言实现的回声插件",
-  "api_version": "1.0.0",
+  "author": "Developer",
   "version": "1.0.0",
   "entry_point": "echo_csharp.exe",
   "run_on": ["worker"],
-  "capabilities": ["echo"],
-  "actions": ["send_message"],
-  "timeout_ms": 5000,
-  "max_concurrency": 1,
-  "max_restarts": 3,
-  "signature": "",
-  "plugin_level": "feature",
-  "source": "internal"
+  "permissions": ["send_msg", "call_skill"],
+  "events": ["on_message"],
+  "intents": [
+    {
+      "name": "hello",
+      "keywords": ["hello", "hi"],
+      "regex": "^hi.*"
+    }
+  ],
+  "max_restarts": 5
 }
 ```
 
@@ -56,12 +59,66 @@ src/plugins/your_plugin/
 
 ## 📦 打包与分发 (.bmpk)
 
-BotMatrix 使用 `.bmpk` (BotMatrix Package) 作为标准插件分发格式。它实际上是一个包含插件代码和 `plugin.json` 的压缩包。
+BotMatrix 使用 `.bmpk` (BotMatrix Package) 作为标准插件分发格式。
 
 ### 使用 bm-cli 工具
 1. **安装**: `go build -o bm-cli src/tools/bm-cli/main.go`
-2. **打包**: `./bm-cli pack ./your_plugin_dir`
-3. **安装**: 将生成的 `.bmpk` 文件上传到 BotNexus 管理后台，或放置在插件热加载目录。
+2. **初始化**: `./bm-cli init my_plugin --lang go` (自动生成模版代码和规范的 `plugin.json`)
+3. **本地调试**: `./bm-cli debug ./my_plugin` (无需安装，直接在本地模拟核心环境进行交互测试)
+4. **自动化测试**: `./bm-cli test ./my_plugin` (运行 `tests.json` 中定义的自动化测试用例)
+5. **打包**: `./bm-cli pack ./my_plugin`
+6. **安装**: 将生成的 `.bmpk` 文件上传到 BotNexus 管理后台。
+
+## 🔍 调试插件
+
+为了方便开发者调试，`bm-cli` 提供了交互式的调试环境：
+
+```bash
+./bm-cli debug ./your_plugin_dir
+```
+
+### 调试命令
+- `msg <text>`: 模拟发送一条文本消息。插件会收到 `on_message` 事件。
+- `event <name> <json_payload>`: 模拟发送自定义事件。
+- `exit`: 退出调试会话。
+
+### 调试特性
+- **实时日志**: 插件输出到 `stderr` 的日志会实时显示在控制台中。
+- **动作捕获**: 插件尝试执行的所有 `Action`（如发送消息、调用技能）都会被拦截并打印在控制台，方便验证逻辑。
+- **独立运行**: 调试环境完全模拟了核心协议，无需运行完整的 BotNexus 或 BotWorker。
+
+
+## 🧪 自动化测试
+
+`bm-cli` 支持基于 JSON 的自动化回归测试。在插件目录下创建 `tests.json` 文件：
+
+```json
+[
+  {
+    "name": "基础 Ping 测试",
+    "input": {
+      "type": "on_message",
+      "payload": { "text": "ping" }
+    },
+    "expect": [
+      { "type": "send_text", "text": "pong!" }
+    ]
+  }
+]
+```
+
+### 运行测试
+```bash
+./bm-cli test ./your_plugin_dir
+```
+
+该工具会：
+1. 启动插件。
+2. 发送 `input` 中定义的事件。
+3. 捕获插件的响应。
+4. 验证响应中的 `actions` 是否与 `expect` 一致。
+5. 输出测试结果报告。
+
 
 ## 🚀 快速开始 (原生协议)
 

@@ -33,6 +33,8 @@ import (
 	"github.com/shirou/gopsutil/v3/net"
 )
 
+// --- 原有管理后台接口 ---
+
 // GetAvatarURL 根据平台、ID 和是否为群组返回头像地址
 func GetAvatarURL(platform string, id string, isGroup bool, providedAvatar string) string {
 	platform = strings.ToUpper(platform)
@@ -77,6 +79,16 @@ func GetAvatarURL(platform string, id string, isGroup bool, providedAvatar strin
 }
 
 // HandleLogin 处理登录请求
+// @Summary 管理后台登录
+// @Description 使用用户名和密码登录管理后台，获取访问 Token
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Param body body object true "登录凭据"
+// @Success 200 {object} utils.JSONResponse "登录成功，返回 Token"
+// @Failure 401 {object} utils.JSONResponse "用户名或密码错误"
+// @Failure 403 {object} utils.JSONResponse "用户未激活"
+// @Router /api/login [post]
 func HandleLogin(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -87,18 +99,18 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
-			log.Printf(utils.T("", "login_request_failed"), err)
+			log.Printf("%s: %v", utils.T("", "login_request_failed"), err)
 			w.WriteHeader(http.StatusBadRequest)
 			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
-		log.Printf(utils.T("", "login_attempt"), loginData.Username, r.RemoteAddr)
+		log.Printf("%s: %s, %s", utils.T("", "login_attempt"), loginData.Username, r.RemoteAddr)
 
 		user, exists := m.GetOrLoadUser(loginData.Username)
 
 		if !exists || !utils.CheckPassword(loginData.Password, user.PasswordHash) {
-			log.Printf(utils.T("", "invalid_username_password|用户名或密码错误") + ": " + loginData.Username)
+			log.Printf("%s: %s", utils.T("", "invalid_username_password|用户名或密码错误"), loginData.Username)
 			w.WriteHeader(http.StatusUnauthorized)
 			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_username_password|用户名或密码错误"), nil)
 			return
@@ -156,7 +168,151 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 	}
 }
 
+// HandleTokenLogin 处理 Token 自动登录请求
+func HandleTokenLogin(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := utils.GetLangFromRequest(r)
+
+		var loginData struct {
+			Platform   string `json:"platform"`
+			PlatformID string `json:"platform_id"`
+			Token      string `json:"token"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request"), nil)
+			return
+		}
+
+		if loginData.PlatformID == "" || loginData.Token == "" {
+			utils.SendJSONResponse(w, false, "PlatformID and Token are required", nil)
+			return
+		}
+
+		// 1. 验证 Token 是否有效且未过期
+		var tokenRecord models.UserLoginTokenGORM
+		err := m.GORMDB.Where("platform = ? AND platform_id = ? AND token = ? AND expires_at > ?",
+			loginData.Platform, loginData.PlatformID, loginData.Token, time.Now()).First(&tokenRecord).Error
+
+		if err != nil {
+			utils.SendJSONResponse(w, false, "验证码错误或已过期", nil)
+			return
+		}
+
+		// 2. 查找绑定的用户
+		var user models.UserGORM
+		err = m.GORMDB.Where("platform = ? AND platform_id = ?", loginData.Platform, loginData.PlatformID).First(&user).Error
+		if err != nil {
+			utils.SendJSONResponse(w, false, "该账号尚未绑定系统用户，请先注册并绑定 ID: "+loginData.PlatformID, nil)
+			return
+		}
+
+		if !user.Active {
+			utils.SendJSONResponse(w, false, utils.T(lang, "user_inactive"), nil)
+			return
+		}
+
+		// 3. 验证成功，删除已使用的 Token
+		m.GORMDB.Delete(&tokenRecord)
+
+		// 4. 生成 JWT Token
+		jwtToken, err := utils.GenerateToken(&types.User{
+			ID:             int64(user.ID),
+			Username:       user.Username,
+			IsAdmin:        user.IsAdmin,
+			SessionVersion: 0, // 默认版本
+		}, config.GlobalConfig.JWTSecret)
+		if err != nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "token_gen_failed"), nil)
+			return
+		}
+
+		role := "user"
+		if user.IsAdmin {
+			role = "admin"
+		}
+
+		utils.SendJSONResponse(w, true, utils.T(lang, "login_success"), map[string]interface{}{
+			"token": jwtToken,
+			"role":  role,
+			"user": map[string]interface{}{
+				"username": user.Username,
+				"is_admin": user.IsAdmin,
+				"role":     role,
+			},
+		})
+	}
+}
+
+// HandleRegister 处理用户注册请求
+func HandleRegister(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := utils.GetLangFromRequest(r)
+
+		var regData struct {
+			Username   string `json:"username"`
+			Password   string `json:"password"`
+			Platform   string `json:"platform"`
+			PlatformID string `json:"platform_id"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&regData); err != nil {
+			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request"), nil)
+			return
+		}
+
+		if regData.Username == "" || regData.Password == "" {
+			utils.SendJSONResponse(w, false, "Username and password are required", nil)
+			return
+		}
+
+		// 1. 检查用户名是否已存在
+		var count int64
+		m.GORMDB.Model(&models.UserGORM{}).Where("username = ?", regData.Username).Count(&count)
+		if count > 0 {
+			utils.SendJSONResponse(w, false, "用户名已存在", nil)
+			return
+		}
+
+		// 2. 如果提供了 PlatformID，检查是否已被绑定
+		if regData.PlatformID != "" {
+			m.GORMDB.Model(&models.UserGORM{}).Where("platform = ? AND platform_id = ?", regData.Platform, regData.PlatformID).Count(&count)
+			if count > 0 {
+				utils.SendJSONResponse(w, false, "该平台 ID 已被绑定", nil)
+				return
+			}
+		}
+
+		// 3. 创建用户
+		hash, _ := utils.HashPassword(regData.Password)
+		user := &models.UserGORM{
+			Username:     regData.Username,
+			PasswordHash: hash,
+			Platform:     regData.Platform,
+			PlatformID:   regData.PlatformID,
+			Active:       true,
+			IsAdmin:      false,
+		}
+
+		if err := m.GORMDB.Create(user).Error; err != nil {
+			utils.SendJSONResponse(w, false, "注册失败: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "注册成功", nil)
+	}
+}
+
+
 // HandleGetUserInfo 获取当前登录用户信息
+// @Summary 获取用户信息
+// @Description 获取当前登录用户的详细信息
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "用户信息"
+// @Router /api/user/info [get]
+// @Router /api/me [get]
 func HandleGetUserInfo(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -211,6 +367,12 @@ func HandleGetUserInfo(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetNexusStatus 获取 Nexus 运行状态
+// @Summary 获取 Nexus 状态
+// @Description 获取 BotNexus 服务的整体运行状态和版本信息
+// @Tags System
+// @Produce json
+// @Success 200 {object} utils.JSONResponse "服务状态信息"
+// @Router /api/admin/nexus/status [get]
 func HandleGetNexusStatus(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.Mutex.RLock()
@@ -256,6 +418,13 @@ func HandleGetNexusStatus(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetStats 获取统计信息的请求
+// @Summary 获取系统统计
+// @Description 获取 CPU、内存、磁盘、在线机器人及消息量趋势等统计数据
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "详细统计数据"
+// @Router /api/admin/stats [get]
 func HandleGetStats(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.Mutex.RLock()
@@ -329,6 +498,7 @@ func HandleGetStats(m *bot.Manager) http.HandlerFunc {
 		recvTrend := append([]int64{}, m.RecvTrend...)
 		netSentTrend := append([]uint64{}, m.NetSentTrend...)
 		netRecvTrend := append([]uint64{}, m.NetRecvTrend...)
+		topProcesses := append([]types.ProcInfo{}, m.TopProcesses...)
 		m.HistoryMutex.RUnlock()
 
 		// 如果当前 CPU 使用率为 0，尝试从趋势中获取最新值
@@ -425,7 +595,7 @@ func HandleGetStats(m *bot.Manager) http.HandlerFunc {
 			RecvTrend:         recvTrend,
 			NetSentTrend:      netSentTrend,
 			NetRecvTrend:      netRecvTrend,
-			TopProcesses:      m.TopProcesses,
+			TopProcesses:      topProcesses,
 		}
 
 		utils.SendJSONResponse(w, true, "", struct {
@@ -437,6 +607,13 @@ func HandleGetStats(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetSystemStats 获取详细的系统运行统计
+// @Summary 获取详细系统统计
+// @Description 获取更详尽的系统硬件使用情况，包括 CPU、内存、各磁盘分区等
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "详细统计数据"
+// @Router /api/system/stats [get]
 func HandleGetSystemStats(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cpuCount, _ := cpu.Counts(true)
@@ -567,6 +744,20 @@ func HandleGetSystemStats(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetLogs 处理获取日志的请求
+// @Summary 获取系统日志
+// @Description 分页获取系统运行日志，支持按级别、来源和关键词过滤，支持排序
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码"
+// @Param pageSize query int false "每页数量"
+// @Param level query string false "日志级别"
+// @Param botId query string false "机器人 ID 或来源"
+// @Param search query string false "搜索关键词"
+// @Param sortBy query string false "排序字段"
+// @Param sortOrder query string false "排序顺序 (asc/desc)"
+// @Success 200 {object} utils.JSONResponse "日志列表"
+// @Router /api/admin/logs [get]
 func HandleGetLogs(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 获取查询参数
@@ -666,6 +857,13 @@ func HandleGetLogs(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleClearLogs 处理清空日志的请求
+// @Summary 清空系统日志
+// @Description 清空内存中的所有系统日志记录
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "清空结果"
+// @Router /api/admin/logs/clear [post]
 func HandleClearLogs(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -675,6 +873,13 @@ func HandleClearLogs(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetBots 处理获取机器人列表的请求
+// @Summary 获取机器人列表
+// @Description 获取所有当前连接的机器人（OneBot 客户端）及其状态信息
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "机器人列表"
+// @Router /api/admin/bots [get]
 func HandleGetBots(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.Mutex.RLock()
@@ -738,6 +943,13 @@ func HandleGetBots(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetWorkers 处理获取Worker列表的请求
+// @Summary 获取 Worker 列表
+// @Description 获取所有当前在线和历史连接过的 Worker 列表及其详细状态
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "Worker 列表"
+// @Router /api/admin/workers [get]
 func HandleGetWorkers(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.Mutex.RLock()
@@ -821,6 +1033,13 @@ func HandleGetWorkers(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleListPlugins 处理获取插件列表的请求
+// @Summary 获取插件列表
+// @Description 获取系统中所有插件（包括 Nexus 中心插件和所有 Worker 节点的插件）及其运行状态
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "插件列表"
+// @Router /api/admin/plugins [get]
 func HandleListPlugins(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_ = utils.GetLangFromRequest(r) // 使用 _ 忽略未使用的变量
@@ -1006,6 +1225,15 @@ func HandleListPlugins(m *Manager) http.HandlerFunc {
 }
 
 // HandlePluginAction 处理插件操作 (启动、停止、重启)
+// @Summary 操作插件
+// @Description 启动、停止、重启或重载指定的插件
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "操作参数 (id, action, source)"
+// @Success 200 {object} utils.JSONResponse "操作结果"
+// @Router /api/admin/plugins/action [post]
 func HandlePluginAction(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1096,6 +1324,16 @@ func HandlePluginAction(m *Manager) http.HandlerFunc {
 }
 
 // HandleInstallPlugin 处理插件安装 (上传 .bmpk 文件)
+// @Summary 安装插件
+// @Description 上传 .bmpk 插件包并安装到指定节点（Nexus 或 Worker）
+// @Tags Admin
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param plugin formData file true "插件文件 (.bmpk)"
+// @Param target formData string false "目标节点 (nexus 或 workerID)"
+// @Success 200 {object} utils.JSONResponse "安装结果"
+// @Router /api/admin/plugins/install [post]
 func HandleInstallPlugin(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. 解析上传的文件
@@ -1202,6 +1440,15 @@ func HandleInstallPlugin(m *Manager) http.HandlerFunc {
 }
 
 // HandleDeletePlugin 处理插件删除
+// @Summary 删除插件
+// @Description 从指定节点（Nexus 或 Worker）彻底删除指定的插件及其文件
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "删除参数 (id, version, source)"
+// @Success 200 {object} utils.JSONResponse "删除结果"
+// @Router /api/admin/plugins/delete [post]
 func HandleDeletePlugin(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1293,6 +1540,15 @@ func HandleDeletePlugin(m *Manager) http.HandlerFunc {
 }
 
 // HandleDockerList 获取 Docker 容器列表
+// @Summary 获取 Docker 容器列表
+// @Description 获取系统宿主机上的所有 Docker 容器列表
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "容器列表"
+// @Router /api/admin/docker/list [get]
+// @Router /api/docker/list [get]
+// @Router /api/docker/containers [get]
 func HandleDockerList(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1338,6 +1594,19 @@ func HandleDockerList(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleDockerAction 处理 Docker 容器操作 (start/stop/restart/delete)
+// @Summary 操作 Docker 容器
+// @Description 启动、停止、重启或删除指定的 Docker 容器
+// @Tags System
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "操作参数 (container_id, action)"
+// @Success 200 {object} utils.JSONResponse "操作结果"
+// @Router /api/admin/docker/action [post]
+// @Router /api/docker/start [post]
+// @Router /api/docker/stop [post]
+// @Router /api/docker/restart [post]
+// @Router /api/docker/remove [post]
 func HandleDockerAction(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1463,6 +1732,16 @@ func HandleDockerAction(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleDockerAddBot 添加机器人容器
+// @Summary 添加机器人容器
+// @Description 在 Docker 中创建并启动一个新的机器人容器，支持多种平台
+// @Tags System
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "机器人配置 (platform, image, env, cmd)"
+// @Success 200 {object} utils.JSONResponse "添加结果"
+// @Router /api/admin/docker/add-bot [post]
+// @Router /api/docker/add-bot [post]
 func HandleDockerAddBot(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1674,6 +1953,16 @@ func HandleDockerAddBot(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleDockerAddWorker 添加 Worker 容器
+// @Summary 添加 Worker 容器
+// @Description 在 Docker 中创建并启动一个新的 Worker 容器
+// @Tags System
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "Worker 配置 (image, env, cmd, name)"
+// @Success 200 {object} utils.JSONResponse "添加结果"
+// @Router /api/admin/docker/add-worker [post]
+// @Router /api/docker/add-worker [post]
 func HandleDockerAddWorker(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1792,6 +2081,15 @@ func HandleDockerAddWorker(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleChangePassword 修改用户密码
+// @Summary 修改密码
+// @Description 修改当前登录用户的登录密码
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "密码参数 (old_password, new_password)"
+// @Success 200 {object} utils.JSONResponse "修改结果"
+// @Router /api/user/password [post]
 func HandleChangePassword(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -1850,6 +2148,14 @@ func HandleChangePassword(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetMessages 获取最新消息列表
+// @Summary 获取消息列表
+// @Description 从数据库获取最新的聊天消息记录，包括私聊和群聊
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "获取的消息数量 (默认 50)"
+// @Success 200 {object} utils.JSONResponse "消息列表"
+// @Router /api/admin/messages [get]
 func HandleGetMessages(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		limitStr := r.URL.Query().Get("limit")
@@ -1987,6 +2293,18 @@ func HandleGetMessages(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetContacts 获取联系人列表 (群组和好友)
+// @Summary 获取联系人列表
+// @Description 获取指定机器人的群组和好友列表，支持强制刷新
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param bot_id query string false "机器人 ID (GET 请求)"
+// @Param refresh query bool false "是否强制刷新 (GET 请求)"
+// @Param body body object false "请求体 (POST 请求，包含 bot_id 和 refresh)"
+// @Success 200 {object} utils.JSONResponse "联系人列表"
+// @Router /api/admin/contacts [get]
+// @Router /api/admin/contacts [post]
 func HandleGetContacts(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var botID string
@@ -2283,6 +2601,16 @@ func HandleGetContacts(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetGroupMembers 获取群成员列表
+// @Summary 获取群成员列表
+// @Description 获取指定群组的成员列表，支持从机器人实时获取或从缓存读取
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param bot_id query string true "机器人 ID"
+// @Param group_id query string true "群组 ID"
+// @Param refresh query boolean false "是否强制刷新缓存"
+// @Success 200 {object} utils.JSONResponse "成员列表"
+// @Router /api/admin/group/members [get]
 func HandleGetGroupMembers(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -2426,6 +2754,12 @@ func HandleGetGroupMembers(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleProxyAvatar 代理头像请求
+// @Summary 代理头像
+// @Description 代理并缓存外部头像图片，解决跨域或防盗链问题
+// @Tags System
+// @Param url query string true "原始头像 URL"
+// @Success 200 {file} image "图片流"
+// @Router /api/proxy/avatar [get]
 func HandleProxyAvatar(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
@@ -2485,6 +2819,15 @@ func HandleProxyAvatar(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleBatchSend 处理批量发送消息
+// @Summary 批量发送消息
+// @Description 向多个目标（群或私聊）批量发送相同内容的群发消息
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "群发参数 (targets, message)"
+// @Success 200 {object} utils.JSONResponse "任务启动结果"
+// @Router /api/admin/batch_send [post]
 func HandleBatchSend(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 拦截并设置 action 为 batch_send_msg
@@ -2495,6 +2838,16 @@ func HandleBatchSend(m *Manager) http.HandlerFunc {
 }
 
 // HandleSendAction 处理发送 API 动作
+// @Summary 发送 API 动作
+// @Description 向机器人发送 OneBot 标准 API 动作
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "动作参数 (bot_id, action, params)"
+// @Success 200 {object} utils.JSONResponse "动作执行结果"
+// @Router /api/action [post]
+// @Router /api/smart_action [post]
 func HandleSendAction(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -2672,45 +3025,10 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 
 		bot.Mutex.Lock()
 		var err error
+
 		if bot.Conn != nil {
 			err = bot.Conn.WriteJSON(msg)
 		} else if bot.Platform == "Online" {
-			// 对于在线机器人，模拟成功发送并将动作记录到日志
-			log.Printf("[OnlineBot] Action: %s, Params: %+v, Echo: %s", req.Action, req.Params, echo)
-
-			// 如果是发送消息动作，模拟一个对应的接收事件，以便 Worker 能够处理
-			if req.Action == "send_private_msg" || req.Action == "send_group_msg" || req.Action == "send_msg" {
-				params, ok := req.Params.(map[string]any)
-				if ok {
-					message := utils.ToString(params["message"])
-					userID := utils.ToString(params["user_id"])
-					groupID := utils.ToString(params["group_id"])
-
-					if userID == "" {
-						userID = "admin"
-					}
-
-					incomingMsg := types.InternalMessage{
-						ID:         fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-						Time:       time.Now().Unix(),
-						Platform:   bot.Platform,
-						SelfID:     bot.SelfID,
-						PostType:   "message",
-						RawMessage: message,
-						UserID:     userID,
-						GroupID:    groupID,
-					}
-					if groupID != "" || (req.Action == "send_msg" && params["message_type"] == "group") {
-						incomingMsg.MessageType = "group"
-					} else {
-						incomingMsg.MessageType = "private"
-					}
-
-					// 注入到消息处理流程，这样 Worker 就能收到并处理了
-					log.Printf("[OnlineBot] Injecting message to worker pipeline: %s", message)
-					go m.handleBotMessage(bot, incomingMsg)
-				}
-			}
 
 			// 模拟成功响应给 WebUI
 			go func() {
@@ -2753,6 +3071,13 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 }
 
 // HandleGetChatStats 获取聊天统计信息
+// @Summary 获取聊天统计
+// @Description 获取所有群聊和私聊的各种统计数据，包括消息量、活跃度等
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "聊天统计数据"
+// @Router /api/stats/chat [get]
 func HandleGetChatStats(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.Mutex.RLock()
@@ -2848,6 +3173,13 @@ func HandleGetChatStats(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetConfig 获取配置
+// @Summary 获取配置
+// @Description 获取当前应用的完整配置信息
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "应用配置"
+// @Router /api/admin/config [get]
 func HandleGetConfig(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[DEBUG] HandleGetConfig returning config: %+v", m.Config)
@@ -2863,6 +3195,15 @@ func HandleGetConfig(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleUpdateConfig 更新配置
+// @Summary 更新配置
+// @Description 更新当前应用的全局配置信息并持久化到文件
+// @Tags System
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body config.AppConfig true "新的配置对象"
+// @Success 200 {object} utils.JSONResponse "更新后的配置"
+// @Router /api/admin/config [post]
 func HandleUpdateConfig(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -2901,6 +3242,13 @@ func HandleUpdateConfig(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetRedisConfig 获取 Redis 动态配置
+// @Summary 获取 Redis 动态配置
+// @Description 获取存储在 Redis 中的限流、TTL 和路由规则等动态配置
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "Redis 配置信息"
+// @Router /api/admin/redis/config [get]
 func HandleGetRedisConfig(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -2934,6 +3282,15 @@ func HandleGetRedisConfig(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleUpdateRedisConfig 更新 Redis 动态配置
+// @Summary 更新 Redis 配置
+// @Description 更新存储在 Redis 中的动态配置项（限流、TTL 或路由）
+// @Tags System
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "配置更新参数 (type, data, clear)"
+// @Success 200 {object} utils.JSONResponse "更新结果"
+// @Router /api/admin/redis/config [post]
 func HandleUpdateRedisConfig(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -2990,6 +3347,11 @@ func HandleUpdateRedisConfig(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleSubscriberWebSocket 处理订阅者 WebSocket 连接 (用于 UI 同步)
+// @Summary 管理后台 WebSocket 连接
+// @Description 用于 UI 实时同步状态的 WebSocket 连接
+// @Tags System
+// @Security BearerAuth
+// @Router /ws/subscriber [get]
 func HandleSubscriberWebSocket(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[WS] Incoming subscriber connection from %s", r.RemoteAddr)
@@ -3078,6 +3440,13 @@ func HandleSubscriberWebSocket(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleAdminListUsers 获取用户列表
+// @Summary 获取用户列表
+// @Description 从数据库获取所有系统用户的信息
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "用户列表"
+// @Router /api/admin/users [get]
 func HandleAdminListUsers(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -3126,6 +3495,15 @@ func HandleAdminListUsers(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleAdminManageUsers 用户管理操作 (create/delete/reset_pwd/toggle_status)
+// @Summary 管理用户信息
+// @Description 执行用户管理操作，包括创建、编辑、删除、重置密码和切换激活状态
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "管理操作参数 (action, username, password, is_admin, is_super_points)"
+// @Success 200 {object} utils.JSONResponse "操作结果"
+// @Router /api/admin/users [post]
 func HandleAdminManageUsers(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -3321,6 +3699,13 @@ func handleAdminToggleUser(m *bot.Manager, w http.ResponseWriter, lang, username
 }
 
 // HandleGetRoutingRules 获取所有路由规则
+// @Summary 获取路由规则
+// @Description 获取所有的消息路由规则
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "路由规则列表"
+// @Router /api/admin/routing [get]
 func HandleGetRoutingRules(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.Mutex.RLock()
@@ -3335,6 +3720,15 @@ func HandleGetRoutingRules(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleSetRoutingRule 设置路由规则
+// @Summary 设置路由规则
+// @Description 创建或更新一条消息路由规则，将特定 Key 映射到 WorkerID
+// @Tags System
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "路由规则参数 (key, worker_id)"
+// @Success 200 {object} utils.JSONResponse "设置结果"
+// @Router /api/admin/routing [post]
 func HandleSetRoutingRule(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -3372,6 +3766,14 @@ func HandleSetRoutingRule(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleDeleteRoutingRule 删除路由规则
+// @Summary 删除路由规则
+// @Description 根据 Key 删除一条消息路由规则
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Param key query string true "规则 Key"
+// @Success 200 {object} utils.JSONResponse "删除结果"
+// @Router /api/admin/routing [delete]
 func HandleDeleteRoutingRule(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -3405,6 +3807,15 @@ func toString(v interface{}) string {
 }
 
 // HandleDockerLogs 获取 Docker 容器日志
+// @Summary 获取 Docker 日志
+// @Description 获取指定 Docker 容器的最近运行日志
+// @Tags System
+// @Produce json
+// @Security BearerAuth
+// @Param id query string true "容器 ID"
+// @Success 200 {object} utils.JSONResponse "日志内容"
+// @Router /api/docker/logs [get]
+// @Router /api/admin/docker/logs [get]
 func HandleDockerLogs(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -3450,6 +3861,13 @@ func HandleDockerLogs(m *bot.Manager) http.HandlerFunc {
 }
 
 // HandleGetManual 获取管理员手册
+// @Summary 获取管理员手册
+// @Description 获取管理后台的帮助文档和操作说明
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "帮助手册内容"
+// @Router /api/admin/manual [get]
 func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
@@ -3489,5 +3907,490 @@ func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 		}
 
 		utils.SendJSONResponse(w, true, "", manual)
+	}
+}
+
+// HandleListEmployees 获取数字员工列表
+// @Summary 获取数字员工列表
+// @Description 获取所有配置的数字员工信息，支持按部门和状态过滤
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param department query string false "部门名称"
+// @Param status query string false "状态"
+// @Success 200 {object} utils.JSONResponse "数字员工列表"
+// @Router /api/admin/employees [get]
+func HandleListEmployees(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var employees []models.DigitalEmployeeGORM
+		query := m.GORMDB.Model(&models.DigitalEmployeeGORM{})
+
+		if dept := r.URL.Query().Get("department"); dept != "" {
+			query = query.Where("department = ?", dept)
+		}
+		if status := r.URL.Query().Get("status"); status != "" {
+			query = query.Where("status = ?", status)
+		}
+
+		if err := query.Find(&employees).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", employees)
+	}
+}
+
+// HandleGetEmployeeKPI 获取员工 KPI 统计
+// @Summary 获取员工 KPI
+// @Description 获取指定数字员工的任务完成统计和当前 KPI 分数
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id query string true "员工 ID"
+// @Success 200 {object} utils.JSONResponse "KPI 统计"
+// @Router /api/admin/employees/kpi [get]
+func HandleGetEmployeeKPI(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		employeeIDStr := r.URL.Query().Get("id")
+		if employeeIDStr == "" {
+			utils.SendJSONResponse(w, false, "Missing employee ID", nil)
+			return
+		}
+
+		id, err := strconv.ParseUint(employeeIDStr, 10, 64)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Invalid employee ID", nil)
+			return
+		}
+
+		var stats struct {
+			TotalTasks     int64   `json:"total_tasks"`
+			CompletedTasks int64   `json:"completed_tasks"`
+			FailedTasks    int64   `json:"failed_tasks"`
+			SuccessRate    float64 `json:"success_rate"`
+			AverageKPI     float64 `json:"average_kpi"`
+		}
+
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ?", id).Count(&stats.TotalTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ?", id, "completed").Count(&stats.CompletedTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ?", id, "failed").Count(&stats.FailedTasks)
+
+		if stats.TotalTasks > 0 {
+			stats.SuccessRate = float64(stats.CompletedTasks) / float64(stats.TotalTasks)
+		}
+
+		// 获取员工当前 KPI 分数
+		var emp models.DigitalEmployeeGORM
+		if err := m.GORMDB.First(&emp, id).Error; err != nil {
+			utils.SendJSONResponse(w, false, "Employee not found", nil)
+			return
+		}
+		stats.AverageKPI = emp.KpiScore
+
+		utils.SendJSONResponse(w, true, "", stats)
+	}
+}
+
+// HandleGetDepartmentKPISummary 获取部门级数字员工绩效汇总
+// @Summary 获取部门绩效汇总
+// @Description 获取指定部门下所有数字员工的平均 KPI 和任务统计
+// @Tags DigitalEmployee
+// @Produce json
+// @Param department query string true "部门名称"
+// @Success 200 {object} utils.JSONResponse "绩效汇总"
+// @Router /api/admin/department/kpi [get]
+func HandleGetDepartmentKPISummary(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		dept := r.URL.Query().Get("department")
+		if dept == "" {
+			utils.SendJSONResponse(w, false, "Missing department", nil)
+			return
+		}
+
+		var employees []models.DigitalEmployeeGORM
+		if err := m.GORMDB.Where("department = ?", dept).Find(&employees).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		if len(employees) == 0 {
+			utils.SendJSONResponse(w, true, "No employees found in this department", nil)
+			return
+		}
+
+		var summary struct {
+			Department     string  `json:"department"`
+			EmployeeCount  int     `json:"employee_count"`
+			AverageKPI     float64 `json:"average_kpi"`
+			TotalTasks     int64   `json:"total_tasks"`
+			CompletedTasks int64   `json:"completed_tasks"`
+			SuccessRate    float64 `json:"success_rate"`
+			HighPerformers int     `json:"high_performers"` // KPI > 90
+			NeedsAttention int     `json:"needs_attention"` // KPI < 70
+		}
+
+		summary.Department = dept
+		summary.EmployeeCount = len(employees)
+
+		var totalKPI float64
+		var employeeIDs []uint
+		for _, emp := range employees {
+			totalKPI += emp.KpiScore
+			employeeIDs = append(employeeIDs, emp.ID)
+			if emp.KpiScore > 90 {
+				summary.HighPerformers++
+			} else if emp.KpiScore < 70 {
+				summary.NeedsAttention++
+			}
+		}
+		summary.AverageKPI = totalKPI / float64(len(employees))
+
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id IN ?", employeeIDs).Count(&summary.TotalTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id IN ? AND status = ?", employeeIDs, "completed").Count(&summary.CompletedTasks)
+
+		if summary.TotalTasks > 0 {
+			summary.SuccessRate = float64(summary.CompletedTasks) / float64(summary.TotalTasks)
+		}
+
+		utils.SendJSONResponse(w, true, "", summary)
+	}
+}
+
+// HandleOptimizeEmployee 触发数字员工 AI 自动优化
+// @Summary 优化数字员工
+// @Description 根据历史表现，利用 AI 自动优化数字员工的 Bio/能力描述
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id query string true "员工 ID"
+// @Success 200 {object} utils.JSONResponse "优化结果"
+// @Router /api/admin/employees/optimize [post]
+func HandleOptimizeEmployee(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		employeeIDStr := r.URL.Query().Get("id")
+		if employeeIDStr == "" {
+			utils.SendJSONResponse(w, false, "Missing employee ID", nil)
+			return
+		}
+
+		id, err := strconv.ParseUint(employeeIDStr, 10, 64)
+		if err != nil {
+			utils.SendJSONResponse(w, false, "Invalid employee ID", nil)
+			return
+		}
+		err = m.DigitalEmployeeKPIService.OptimizeEmployee(r.Context(), uint(id))
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "Employee optimization successful", nil)
+	}
+}
+
+// HandleListDepartments 获取部门列表
+// @Summary 获取部门列表
+// @Description 获取所有已存在的部门名称列表
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "部门列表"
+// @Router /api/admin/departments [get]
+func HandleListDepartments(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var departments []string
+		m.GORMDB.Model(&models.DigitalEmployeeGORM{}).Distinct().Pluck("department", &departments)
+		utils.SendJSONResponse(w, true, "", departments)
+	}
+}
+
+// HandleListRoleTemplates 获取岗位模板列表
+// @Summary 获取岗位模板
+// @Description 获取所有预定义的岗位模板
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "模板列表"
+// @Router /api/admin/employees/templates [get]
+func HandleListRoleTemplates(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var templates []models.DigitalRoleTemplateGORM
+		m.GORMDB.Find(&templates)
+		utils.SendJSONResponse(w, true, "", templates)
+	}
+}
+
+// HandleSaveEmployee 保存/更新数字员工信息
+// @Summary 保存数字员工
+// @Description 创建或更新数字员工的配置信息
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "数字员工信息"
+// @Success 200 {object} utils.JSONResponse "保存结果"
+// @Router /api/admin/employees [post]
+func HandleSaveEmployee(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var employee models.DigitalEmployeeGORM
+		if err := json.NewDecoder(r.Body).Decode(&employee); err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		var err error
+		if employee.ID > 0 {
+			err = m.GORMDB.Save(&employee).Error
+		} else {
+			err = m.GORMDB.Create(&employee).Error
+		}
+
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "Saved digital employee", employee)
+	}
+}
+
+// HandleRecordEmployeeKpi 手动记录 KPI (如评价)
+// @Summary 记录员工 KPI
+// @Description 手动记录数字员工的关键绩效指标 (KPI)，如评分或特定指标
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "KPI 记录参数 (employee_id, metric, score)"
+// @Success 200 {object} utils.JSONResponse "记录结果"
+// @Router /api/admin/employees/kpi [post]
+func HandleRecordEmployeeKpi(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			EmployeeID uint    `json:"employee_id"`
+			Metric     string  `json:"metric"`
+			Score      float64 `json:"score"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		if m.DigitalEmployeeService == nil {
+			utils.SendJSONResponse(w, false, "Employee service not initialized", nil)
+			return
+		}
+
+		err := m.DigitalEmployeeService.RecordKpi(req.EmployeeID, req.Metric, req.Score)
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "KPI recorded successfully", nil)
+	}
+}
+
+// HandleListMemories 获取记忆列表
+// @Summary 获取认知记忆列表
+// @Description 获取所有数字员工的认知记忆记录，支持按 bot_id、user_id 或内容关键词过滤
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param bot_id query string false "机器人 ID"
+// @Param user_id query string false "用户 ID"
+// @Param q query string false "搜索关键词"
+// @Success 200 {object} utils.JSONResponse "记忆列表"
+// @Router /api/admin/memories [get]
+func HandleListMemories(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		botID := r.URL.Query().Get("bot_id")
+		userID := r.URL.Query().Get("user_id")
+		query := r.URL.Query().Get("q")
+
+		var memories []models.CognitiveMemoryGORM
+		db := m.GORMDB.Model(&models.CognitiveMemoryGORM{})
+
+		if botID != "" {
+			db = db.Where("bot_id = ?", botID)
+		}
+		if userID != "" {
+			db = db.Where("user_id = ?", userID)
+		}
+		if query != "" {
+			db = db.Where("content LIKE ?", "%"+query+"%")
+		}
+
+		if err := db.Order("last_seen DESC").Find(&memories).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", memories)
+	}
+}
+
+// HandleDeleteMemory 删除特定记忆
+// @Summary 删除认知记忆
+// @Description 根据 ID 删除一条特定的数字员工认知记忆
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "记忆 ID"
+// @Success 200 {object} utils.JSONResponse "删除结果"
+// @Router /api/admin/memories/{id} [delete]
+func HandleDeleteMemory(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/admin/memories/")
+		if idStr == "" {
+			utils.SendJSONResponse(w, false, "Missing memory ID", nil)
+			return
+		}
+
+		if err := m.GORMDB.Delete(&models.CognitiveMemoryGORM{}, idStr).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "Memory deleted", nil)
+	}
+}
+
+// HandleListB2BSkills 获取 B2B 技能共享列表
+// @Summary 获取 B2B 技能列表
+// @Description 获取所有已配置的 B2B 技能共享记录
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "技能列表"
+// @Router /api/admin/b2b/skills [get]
+func HandleListB2BSkills(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var sharings []models.B2BSkillSharingGORM
+		if err := m.GORMDB.Find(&sharings).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", sharings)
+	}
+}
+
+// HandleSaveB2BSkill 保存/更新 B2B 技能共享
+// @Summary 保存 B2B 技能
+// @Description 创建或更新 B2B 技能共享配置
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "技能共享信息"
+// @Success 200 {object} utils.JSONResponse "保存结果"
+// @Router /api/admin/b2b/skills [post]
+func HandleSaveB2BSkill(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var sharing models.B2BSkillSharingGORM
+		if err := json.NewDecoder(r.Body).Decode(&sharing); err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		var err error
+		if sharing.ID > 0 {
+			err = m.GORMDB.Save(&sharing).Error
+		} else {
+			err = m.GORMDB.Create(&sharing).Error
+		}
+
+		if err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "Saved B2B skill sharing", sharing)
+	}
+}
+
+// HandleDeleteB2BSkill 删除 B2B 技能共享
+// @Summary 删除 B2B 技能
+// @Description 根据 ID 删除一条 B2B 技能共享记录
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "技能 ID"
+// @Success 200 {object} utils.JSONResponse "删除结果"
+// @Router /api/admin/b2b/skills/{id} [delete]
+func HandleDeleteB2BSkill(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/admin/b2b/skills/")
+		if idStr == "" {
+			utils.SendJSONResponse(w, false, "Missing sharing ID", nil)
+			return
+		}
+
+		if err := m.GORMDB.Delete(&models.B2BSkillSharingGORM{}, idStr).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "B2B skill sharing deleted", nil)
+	}
+}
+
+// HandleListB2BConnections 获取 B2B 连接列表
+// @Summary 获取 B2B 连接列表
+// @Description 获取所有已建立的企业间数字员工 (B2B) 连接记录
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "连接列表"
+// @Router /api/admin/b2b/connections [get]
+func HandleListB2BConnections(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var connections []models.B2BConnectionGORM
+		if err := m.GORMDB.Find(&connections).Error; err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+		utils.SendJSONResponse(w, true, "", connections)
+	}
+}
+
+// HandleUpdateEmployeeStatus 手动更新数字员工状态/预算
+// @Summary 更新数字员工状态
+// @Description 手动更新数字员工的在线状态或薪资限制
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "状态参数 (bot_id, status, salary_limit)"
+// @Success 200 {object} utils.JSONResponse "更新结果"
+// @Router /api/admin/employees/status [post]
+func HandleUpdateEmployeeStatus(m *Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			BotID       string `json:"bot_id"`
+			Status      string `json:"status"`
+			SalaryLimit *int64 `json:"salary_limit"`
+			SalaryToken *int64 `json:"salary_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.SendJSONResponse(w, false, err.Error(), nil)
+			return
+		}
+
+		if m.DigitalEmployeeService == nil {
+			utils.SendJSONResponse(w, false, "Employee service not initialized", nil)
+			return
+		}
+
+		if req.Status != "" {
+			if err := m.DigitalEmployeeService.UpdateOnlineStatus(req.BotID, req.Status); err != nil {
+				utils.SendJSONResponse(w, false, err.Error(), nil)
+				return
+			}
+		}
+
+		if req.SalaryLimit != nil || req.SalaryToken != nil {
+			if err := m.DigitalEmployeeService.UpdateSalary(req.BotID, req.SalaryToken, req.SalaryLimit); err != nil {
+				utils.SendJSONResponse(w, false, err.Error(), nil)
+				return
+			}
+		}
+
+		utils.SendJSONResponse(w, true, "Employee status/salary updated", nil)
 	}
 }

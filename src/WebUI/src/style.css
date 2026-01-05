@@ -21,6 +21,9 @@
   --bg-sidebar: #ffffff;
   --text-main: #111827;
   --text-muted: #6b7280;
+  --sidebar-text: #111827;
+  --sidebar-text-muted: #6b7280;
+  --sidebar-text-active: #ffffff;
   --border-color: rgba(0, 0, 0, 0.05);
   --matrix-color: #3b82f6;
   --matrix-glow: 0 0 10px rgba(59, 130, 246, 0.2);
@@ -36,8 +39,11 @@
   --bg-sidebar: #0f172a;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
+  --sidebar-text: #f8fafc;
+  --sidebar-text-muted: #94a3b8;
+  --sidebar-text-active: #ffffff;
   --border-color: rgba(255, 255, 255, 0.08);
-  --matrix-color: #f59e0b; /* Amber instead of blue for better contrast on dark blue */
+  --matrix-color: #f59e0b;
   --matrix-glow: 0 0 15px rgba(245, 158, 11, 0.3);
   --radius-main: 12px;
   --radius-card: 16px;
@@ -46,24 +52,29 @@
 
 /* --- Matrix Style (The Matrix Redesign) --- */
 .matrix.light {
-  --bg-body: #d8e6d8; /* Retro Digital Paper / Light Console */
-  --bg-card: rgba(255, 255, 255, 0.6);
-  --bg-header: rgba(200, 220, 200, 0.9);
-  --bg-sidebar: #c0d0c0;
-  --text-main: #004400; /* Deep Matrix Green */
-  --text-muted: #006600;
-  --border-color: #88aa88;
-  --matrix-color: #008800;
-  --matrix-glow: 0 0 5px rgba(0, 100, 0, 0.2);
-  --font-main: 'Share Tech Mono', 'VT323', monospace;
-  --text-transform: uppercase;
-  --font-size-base: 20px;
-  --crt-flicker: matrix-flicker 0.2s infinite;
-  --radius-main: 0px;
-  --radius-card: 0px;
-  --radius-sm: 0px;
-  line-height: 1.4;
-  letter-spacing: 0.05em;
+  --bg-body: #f0fdf4; /* Mint white */
+  --bg-card: #ffffff;
+  --bg-header: #ffffff;
+  --bg-sidebar: #064e3b; /* Deep emerald for high-end look */
+  --text-main: #064e3b;
+  --text-muted: #1e293b; /* Darker slate for better contrast on mint background */
+  --sidebar-text: #ecfdf5;
+  --sidebar-text-muted: #a7f3d0;
+  --sidebar-text-active: #064e3b; /* Dark emerald for active text on bright matrix color */
+  --border-color: #d1fae5;
+  --matrix-color: #10b981; /* Brighter emerald for better visibility */
+  --matrix-glow: 0 0 10px rgba(16, 185, 129, 0.2);
+  --font-main: 'Share Tech Mono', monospace;
+  --text-transform: none;
+  --font-size-base: 16px;
+  --crt-flicker: none;
+  --radius-main: 12px;
+  --radius-card: 16px;
+  --radius-sm: 8px;
+  --status-online: #059669;
+  --status-busy: #d97706;
+  --status-offline: #dc2626;
+  line-height: 1.6;
 }
 
 .matrix.dark {
@@ -73,6 +84,9 @@
   --bg-sidebar: rgba(0, 0, 0, 1);
   --text-main: #00ff41;
   --text-muted: #008f11;
+  --sidebar-text: #00ff41;
+  --sidebar-text-muted: #008f11;
+  --sidebar-text-active: #ffffff;
   --border-color: #003b00;
   --matrix-color: #00ff41;
   --matrix-glow: 0 0 12px rgba(0, 255, 65, 0.7);
@@ -83,8 +97,19 @@
   --radius-main: 0px;
   --radius-card: 0px;
   --radius-sm: 0px;
+  --status-online: #00ff41;
+  --status-busy: #f59e0b;
+  --status-offline: #ff0000;
   line-height: 1.4;
   letter-spacing: 0.05em;
+  background-color: #000 !important;
+  color: #00ff41 !important;
+}
+
+.matrix.light {
+  background-color: var(--bg-body) !important;
+  color: var(--text-main) !important;
+  font-family: 'Share Tech Mono', monospace !important;
 }
 
 /* --- Custom Scrollbar --- */
@@ -114,9 +139,27 @@
   scrollbar-color: var(--border-color) transparent;
 }
 
-/* Global Text Glow for Matrix */
+/* Global Text Glow for Matrix - Optimized for clarity */
 .matrix * {
-  text-shadow: var(--matrix-glow);
+  text-shadow: none; /* Disable global shadow to prevent blurriness */
+}
+
+.matrix .text-matrix, 
+.matrix .matrix-btn,
+.matrix h1,
+.matrix h2,
+.matrix h3 {
+  text-shadow: var(--matrix-glow); /* Only apply to headings and buttons */
+}
+
+/* Light mode should have even less glow for better readability */
+.matrix.light * {
+  text-shadow: none !important;
+}
+
+.matrix.light .text-matrix,
+.matrix.light h1 {
+  text-shadow: 0 0 5px rgba(16, 185, 129, 0.1) !important;
 }
 
 @keyframes matrix-flicker {
@@ -153,15 +196,21 @@
 
 .matrix.light .matrix-overlay {
   background: linear-gradient(
-    rgba(0, 50, 0, 0.05) 50%,
-    rgba(255, 255, 255, 0.05) 50%
+    rgba(0, 50, 0, 0.02) 50%,
+    rgba(255, 255, 255, 0.02) 50%
   ), linear-gradient(
     90deg,
-    rgba(0, 255, 0, 0.02),
     rgba(0, 255, 0, 0.01),
-    rgba(0, 255, 0, 0.02)
+    rgba(0, 255, 0, 0.005),
+    rgba(0, 255, 0, 0.01)
   );
   background-size: 100% 4px, 4px 100%;
+  opacity: 0.5; /* Further reduce overall intensity in light mode */
+}
+
+.matrix.light .matrix-overlay::after {
+  animation: none; /* Disable flicker in light mode to prevent eye strain */
+  background: transparent;
 }
 
 .matrix .matrix-overlay::after {
@@ -322,6 +371,9 @@
   --bg-sidebar: #fff9fb;
   --text-main: #ff6b9d;
   --text-muted: #ff9db4;
+  --sidebar-text: #ff6b9d;
+  --sidebar-text-muted: #ff9db4;
+  --sidebar-text-active: #ffffff;
   --border-color: #ffdae9;
   --matrix-color: #ff6b9d;
   --matrix-glow: 0 0 20px rgba(255, 107, 157, 0.4);
@@ -456,15 +508,25 @@
   99% { opacity: 0.5; }
 }
 
-.matrix aside {
+.matrix.dark aside {
   border-right: 1px solid var(--matrix-color) !important;
   background: rgba(0, 5, 0, 0.95) !important;
   box-shadow: 5px 0 20px rgba(0, 255, 65, 0.1) !important;
 }
 
-.matrix header {
+.matrix.dark header {
   border-bottom: 1px solid var(--matrix-color) !important;
   background: rgba(0, 5, 0, 0.95) !important;
+}
+
+.matrix.light aside {
+  border-right: 1px solid var(--border-color) !important;
+  background: var(--bg-sidebar) !important;
+}
+
+.matrix.light header {
+  border-bottom: 1px solid var(--border-color) !important;
+  background: var(--bg-header) !important;
 }
 
 /* --- XP Style (The Clippy Spirit v2) --- */
@@ -743,31 +805,23 @@
    ==========================================================================
 */
 
-.matrix {
-  background-color: #000 !important;
-  color: #00ff41 !important;
-  font-family: 'Share Tech Mono', monospace !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-/* Force high contrast for all text in matrix mode */
-.matrix .text-gray-400,
-.matrix .text-gray-500,
-.matrix .text-gray-600,
-.matrix .text-slate-500 {
+/* Force high contrast for all text in matrix mode - Dark Mode only */
+.matrix.dark .text-gray-400,
+.matrix.dark .text-gray-500,
+.matrix.dark .text-gray-600,
+.matrix.dark .text-slate-500 {
   color: rgba(0, 255, 65, 0.6) !important;
 }
 
-.matrix .text-black,
-.matrix .text-gray-900,
-.matrix .text-slate-900 {
+.matrix.dark .text-black,
+.matrix.dark .text-gray-900,
+.matrix.dark .text-slate-900 {
   color: #00ff41 !important;
 }
 
 /* Global Border Unification */
 .matrix * {
-  border-color: rgba(0, 255, 65, 0.4) !important;
+  border-color: var(--border-color) !important;
 }
 
 /* Data Stream Borders & Enhanced Hierarchy */
@@ -776,19 +830,19 @@
 .matrix .bg-gray-50,
 .matrix .bg-slate-50,
 .matrix [class*="bg-opacity"] {
-  background: rgba(0, 10, 0, 0.95) !important; /* Slightly deeper green-black */
-  border: 1px solid #00ff41 !important;
-  box-shadow: 0 0 20px rgba(0, 255, 65, 0.15) !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--matrix-color) !important;
+  box-shadow: var(--matrix-glow) !important;
   backdrop-filter: blur(8px);
-  border-radius: 0 !important;
+  border-radius: var(--radius-card) !important;
 }
 
 /* Modal/Dropdown Elevation */
 .matrix .shadow-lg,
 .matrix .shadow-xl,
 .matrix .fixed.inset-0 {
-  background: rgba(0, 0, 0, 0.9) !important;
-  border: 2px solid #00ff41 !important;
+  background: var(--bg-card) !important;
+  border: 2px solid var(--matrix-color) !important;
   box-shadow: 0 0 40px rgba(0, 255, 65, 0.3) !important;
 }
 
@@ -812,50 +866,54 @@
 /* Hacker Buttons */
 .matrix button:not(.close-btn),
 .matrix .matrix-btn {
-  background: rgba(0, 40, 0, 0.3) !important;
-  color: #00ff41 !important;
-  border: 1px solid #00ff41 !important;
+  background: var(--matrix-color) !important;
+  color: var(--sidebar-text-active) !important;
+  border: 1px solid var(--matrix-color) !important;
   text-transform: uppercase;
   font-weight: bold;
   position: relative;
   overflow: hidden;
   transition: all 0.1s steps(2);
-  border-radius: 0 !important;
-  box-shadow: inset 0 0 10px rgba(0, 255, 65, 0.1);
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--matrix-glow);
 }
 
 .matrix button:not(.close-btn):hover,
 .matrix .matrix-btn:hover {
-  background: rgba(0, 255, 65, 0.2) !important;
-  color: #00ff41 !important;
-  box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
-  text-shadow: 0 0 5px #00ff41;
+  filter: brightness(1.1);
+  box-shadow: 0 0 15px var(--matrix-color);
 }
 
 /* Inputs */
 .matrix input, 
 .matrix textarea, 
 .matrix select {
-  background: #000 !important;
-  border: 1px solid #00ff41 !important;
-  color: #00ff41 !important;
-  border-radius: 0 !important;
+  background: var(--bg-body) !important;
+  border: 1px solid var(--matrix-color) !important;
+  color: var(--text-main) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 .matrix input::placeholder {
-  color: rgba(0, 255, 65, 0.4) !important;
+  color: var(--text-muted) !important;
+  opacity: 0.5;
 }
 
 .matrix input:focus {
-  outline: 2px solid #00ff41 !important;
+  outline: 2px solid var(--matrix-color) !important;
   outline-offset: 2px;
-  background: rgba(0, 20, 0, 1) !important;
+  background: var(--bg-card) !important;
 }
 
-/* Matrix Text Glow */
-.matrix h1, .matrix h2, .matrix h3 {
+/* Matrix Text Glow - Refined for both modes */
+.matrix.dark h1, .matrix.dark h2, .matrix.dark h3 {
   text-shadow: 0 0 10px #00ff41, 0 0 20px rgba(0, 255, 65, 0.5);
-  color: #fff !important; /* High contrast for headers */
+  color: #fff !important; /* High contrast for dark headers */
+}
+
+.matrix.light h1, .matrix.light h2, .matrix.light h3 {
+  text-shadow: none !important;
+  color: var(--text-main) !important;
 }
 
 /* Custom Scrollbar for Matrix */
@@ -863,10 +921,10 @@
   width: 6px;
 }
 .matrix ::-webkit-scrollbar-track {
-  background: #000;
+  background: var(--bg-body);
 }
 .matrix ::-webkit-scrollbar-thumb {
-  background: #00ff41;
+  background: var(--matrix-color);
 }
 
 /* Kawaii Specific Text Overrides (Extreme Global) */

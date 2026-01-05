@@ -3,16 +3,20 @@ package app
 import (
 	"BotMatrix/common/config"
 	"BotMatrix/common/log"
+	"BotMatrix/common/models"
 	"BotMatrix/common/onebot"
+	"BotMatrix/common/tasks"
 	"BotMatrix/common/types"
 	"BotMatrix/common/utils"
-	"BotNexus/tasks"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -79,9 +83,14 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 	if m.Bots == nil {
 		m.Bots = make(map[string]*types.BotClient)
 	}
-	botKey := fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID)
+	botKey := bot.SelfID
 	m.Bots[botKey] = bot
 	m.Mutex.Unlock()
+
+	// Update online status to online
+	if m.DigitalEmployeeService != nil {
+		go m.DigitalEmployeeService.UpdateOnlineStatus(bot.SelfID, "online")
+	}
 
 	// Update connection stats
 	m.ConnectionStats.Mutex.Lock()
@@ -237,6 +246,11 @@ func (m *Manager) handleBotConnection(bot *types.BotClient) {
 		m.removeBot(bot.SelfID)
 		bot.Conn.Close()
 
+		// Update online status to offline
+		if m.DigitalEmployeeService != nil {
+			go m.DigitalEmployeeService.UpdateOnlineStatus(bot.SelfID, "offline")
+		}
+
 		// Record disconnection
 		duration := time.Since(bot.Connected)
 		m.ConnectionStats.Mutex.Lock()
@@ -279,7 +293,7 @@ func (m *Manager) handleBotConnection(bot *types.BotClient) {
 				log.Printf("Bot %s v12 unmarshal error: %v", bot.SelfID, err)
 				continue
 			}
-			internalMsg = m.v12ToInternal(v12Msg)
+			internalMsg = onebot.V12ToInternal(v12Msg)
 			log.Printf("[Nexus][%s:%s] Converted v12 to internal: message=%v, raw=%s", bot.Platform, bot.SelfID, internalMsg.Message, internalMsg.RawMessage)
 		} else {
 			var v11Msg onebot.V11RawMessage
@@ -293,7 +307,7 @@ func (m *Manager) handleBotConnection(bot *types.BotClient) {
 			if v11Msg.SelfID == nil || v11Msg.SelfID == "" {
 				v11Msg.SelfID = bot.SelfID
 			}
-			internalMsg = m.v11ToInternal(v11Msg, bot.Platform)
+			internalMsg = onebot.V11ToInternal(v11Msg, bot.Platform)
 			log.Printf("[Nexus][%s:%s] Converted v11 to internal: message=%v, raw=%s", bot.Platform, bot.SelfID, internalMsg.Message, internalMsg.RawMessage)
 		}
 
@@ -368,7 +382,7 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 		}
 
 		// If admin command is intercepted by system (e.g. system closed), try to handle admin command
-		if reason == "system_closed" && m.Core.identifyMessageType(msg) == "admin_command" {
+		if reason == "system_closed" && m.Core.IdentifyMessageType(msg) == "admin_command" {
 			// Continue to let handleBotMessageEvent handle or intercept directly here
 		} else {
 			return
@@ -376,7 +390,7 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 	}
 
 	// Core plugin handles admin commands
-	if m.Core.identifyMessageType(msg) == "admin_command" {
+	if m.Core.IdentifyMessageType(msg) == "admin_command" {
 		resp, err := m.Core.HandleAdminCommand(msg)
 		if err == nil && resp != "" {
 			// Send response back to bot
@@ -532,6 +546,8 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 			m.UpdateContext(bot.Platform, userID, msg)
 		}
 
+		// ------------------------------------------
+
 		// 拦截器检查：在分发给 Worker 之前进行全局控制
 		if m.TaskManager != nil {
 			interceptorCtx := &tasks.InterceptorContext{
@@ -558,10 +574,10 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 		m.handleBotMessageEvent(bot, msg)
 	}
 
-	// Forward to Worker for processing
 	// 5.5 Broadcast to subscribers (Web UI Monitor)
 	m.BroadcastEvent(msg.ToV11Map())
 
+	// Forward to Worker for processing
 	// 打印转发详情，方便排查频繁转发的消息
 	log.Printf("[Forwarding] Bot: %s, PostType: %v, MessageType: %v, GroupID: %v, UserID: %v",
 		bot.SelfID, msg.PostType, msg.MessageType, msg.GroupID, msg.UserID)
@@ -667,36 +683,8 @@ func (m *Manager) enrichMessageWithCache(msg *types.InternalMessage) {
 	}
 }
 
-// getTargetWorkerID helper method: Get target Worker ID based on routing rules
+// getTargetWorkerID helper method: Get target Worker ID based on core routing rules (Group/Bot/User)
 func (m *Manager) getTargetWorkerID(msg types.InternalMessage) string {
-	// 0. 优先处理正则触发器 (Fast-Track Regex Matching)
-	// 插件上报的正则指令具有最高优先级，命中后直接路由
-	if m.TaskManager != nil && m.TaskManager.AI != nil {
-		if skill, matched := m.TaskManager.AI.MatchSkillByRegex(msg.RawMessage); matched {
-			log.Printf("[Routing] Regex matched skill: %s. Routing to capable worker.", skill.Name)
-			workerID := m.FindWorkerBySkill(skill.Name)
-			if workerID != "" {
-				log.Printf("[Routing] Regex Fast-Track: skill=%s -> worker=%s", skill.Name, workerID)
-				return workerID
-			}
-		}
-	}
-
-	// 1. 处理拦截器注入的语义路由提示 (Intelligent Semantic Routing)
-	if hint, ok := msg.Extras["intent_hint"].(string); ok && hint != "" {
-		log.Printf("[Routing] Using semantic intent hint: %s", hint)
-		// 如果提示是技能名称，则寻找具备该能力的 Worker
-		if strings.HasPrefix(hint, "skill:") {
-			skillName := strings.TrimPrefix(hint, "skill:")
-			workerID := m.FindWorkerBySkill(skillName)
-			if workerID != "" {
-				log.Printf("[Routing] Resolved skill hint %s to worker %s", skillName, workerID)
-				return workerID
-			}
-		}
-		return hint
-	}
-
 	var matchKeys []string
 
 	// Extract match keys
@@ -757,6 +745,8 @@ func (m *Manager) getTargetWorkerID(msg types.InternalMessage) string {
 		}
 	}
 
+	// 3. No Match
+	// 如果没有任何路由匹配，则返回空，由调用方决定后续动作 (通常是负载均衡分发)
 	return ""
 }
 
@@ -934,9 +924,46 @@ func (m *Manager) sendBotMessage(bot *types.BotClient, originalMsg types.Interna
 	}
 
 	bot.Mutex.Lock()
-	err := bot.Conn.WriteJSON(action)
-	bot.Mutex.Unlock()
+	defer bot.Mutex.Unlock()
 
+	// 如果是 Online 平台或者连接断开，我们通过广播事件来让 WebUI 收到消息
+	if bot.Conn == nil || bot.Platform == "Online" {
+		// 构造一个响应消息
+		resp := types.InternalMessage{
+			ID:          fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			Time:        time.Now().Unix(),
+			Platform:    bot.Platform,
+			SelfID:      bot.SelfID,
+			PostType:    "message_sent",
+			MessageType: originalMsg.MessageType,
+			RawMessage:  text,
+			UserID:      originalMsg.UserID,
+			GroupID:     originalMsg.GroupID,
+			SenderName:  "AI Assistant",
+		}
+
+		// 广播给 Web UI Monitor
+		m.BroadcastEvent(resp.ToV11Map())
+
+		// 同时通过 RoutingEvent 记录
+		params := &types.RoutingParams{
+			UserID:   originalMsg.UserID,
+			Content:  text,
+			Platform: bot.Platform,
+			UserName: "AI Assistant",
+		}
+		if originalMsg.GroupID != "" {
+			params.GroupID = originalMsg.GroupID
+			m.BroadcastRoutingEvent(bot.SelfID, originalMsg.GroupID, "bot_to_group", "message", params)
+		} else {
+			m.BroadcastRoutingEvent(bot.SelfID, originalMsg.UserID, "bot_to_user", "message", params)
+		}
+
+		log.Printf("[Bot] Message sent via Broadcast for Bot %s (Online/NoConn)", bot.SelfID)
+		return
+	}
+
+	err := bot.Conn.WriteJSON(action)
 	if err != nil {
 		log.Printf("[Bot] Failed to send message to Bot %s: %v", bot.SelfID, err)
 	}
@@ -1025,11 +1052,54 @@ func (m *Manager) handleBotMessageEvent(bot *types.BotClient, msg types.Internal
 	if !isSystemMessage(msg) {
 		m.UpdateBotStats(bot.SelfID, userID, groupID)
 
-		// 保存到数据库
+		// 检查“后台”指令
+		if strings.TrimSpace(message) == "后台" {
+			go m.handleBackendCommand(bot, msg)
+		}
+
+		// 1. 异步保存到数据库（全量日志）
 		messageID := msg.ID
 		msgType := msg.MessageType
 		rawMsg, _ := json.Marshal(msg)
 		go m.SaveMessageToDB(messageID, bot.SelfID, userID, groupID, msgType, message, string(rawMsg))
+
+		// 2. 写入 Redis 用于 BotWorker 实时统计展示
+		go func() {
+			ctx := context.Background()
+			today := time.Now().Format("2006-01-02")
+			pipe := m.Rdb.Pipeline()
+
+			// 全局统计
+			pipe.Incr(ctx, "stats:total_messages")
+
+			// 按天统计
+			if groupID != "" && userID != "" {
+				// 核心：记录每个群内每个人的发言排行
+				// Key: stats:rank:{date}:group:{groupID} -> ZSET {userID: count}
+				pipe.ZIncrBy(ctx, fmt.Sprintf("stats:rank:%s:group:%s", today, groupID), 1, userID)
+
+				// 群组当日总计
+				pipe.Incr(ctx, fmt.Sprintf("stats:total:%s:group:%s", today, groupID))
+			}
+
+			// 个人当日总计
+			if userID != "" {
+				pipe.Incr(ctx, fmt.Sprintf("stats:total:%s:user:%s", today, userID))
+			}
+
+			// 兼容旧的全局排名 (可选保留)
+			if userID != "" {
+				pipe.HIncrBy(ctx, "stats:users:rank", userID, 1)
+			}
+			if groupID != "" {
+				pipe.HIncrBy(ctx, "stats:groups:rank", groupID, 1)
+			}
+
+			_, err := pipe.Exec(ctx)
+			if err != nil {
+				log.Printf("[Redis] Failed to update stats: %v", err)
+			}
+		}()
 	}
 }
 
@@ -1101,6 +1171,62 @@ func (m *Manager) findWorkerByID(workerID string) *types.WorkerClient {
 	return nil
 }
 
+// handleWorkerProxy proxies HTTP requests to a healthy Worker
+func (m *Manager) handleWorkerProxy(w http.ResponseWriter, r *http.Request) {
+	m.Mutex.RLock()
+	var candidates []*types.WorkerClient
+	for _, worker := range m.Workers {
+		// Check if worker is healthy and has an HTTP address
+		if time.Since(worker.LastHeartbeat) < 60*time.Second {
+			if addr, ok := worker.Metadata["http_addr"].(string); ok && addr != "" {
+				candidates = append(candidates, worker)
+			}
+		}
+	}
+	m.Mutex.RUnlock()
+
+	if len(candidates) == 0 {
+		http.Error(w, "No healthy workers with HTTP capability available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Select a worker (random for now, could be improved to round-robin or least-load)
+	targetWorker := candidates[rand.Intn(len(candidates))]
+	targetAddr := targetWorker.Metadata["http_addr"].(string)
+
+	// Ensure the address has a scheme
+	if !strings.HasPrefix(targetAddr, "http://") && !strings.HasPrefix(targetAddr, "https://") {
+		targetAddr = "http://" + targetAddr
+	}
+
+	targetURL, err := url.Parse(targetAddr)
+	if err != nil {
+		log.Error("Failed to parse worker HTTP address", zap.String("worker_id", targetWorker.ID), zap.String("addr", targetAddr), zap.Error(err))
+		http.Error(w, "Invalid worker address", http.StatusInternalServerError)
+		return
+	}
+
+	// Create reverse proxy
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	// Update the request for the proxy
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Host = targetURL.Host
+		// Optional: Add some headers to identify the source
+		req.Header.Set("X-Forwarded-From", "BotNexus")
+		req.Header.Set("X-Worker-ID", targetWorker.ID)
+	}
+
+	log.Info("Proxying request to worker",
+		zap.String("worker_id", targetWorker.ID),
+		zap.String("path", r.URL.Path),
+		zap.String("target", targetAddr))
+
+	proxy.ServeHTTP(w, r)
+}
+
 // forwardMessageToWorker forwards the message to a Worker for processing
 func (m *Manager) forwardMessageToWorker(msg types.InternalMessage) {
 	m.forwardMessageToWorkerWithRetry(msg, 0)
@@ -1156,57 +1282,8 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg types.InternalMessage, ret
 		return
 	}
 
-	// 1. Try to use routing rules
-	var targetWorkerID string
-	var matchKeys []string
-
-	// Extract matching keys
-	if msg.UserID != "" && msg.UserID != "0" {
-		matchKeys = append(matchKeys, fmt.Sprintf("user_%s", msg.UserID))
-		matchKeys = append(matchKeys, msg.UserID)
-	}
-
-	if msg.GroupID != "" && msg.GroupID != "0" {
-		matchKeys = append(matchKeys, fmt.Sprintf("group_%s", msg.GroupID))
-		matchKeys = append(matchKeys, msg.GroupID)
-	}
-
-	if msg.SelfID != "" {
-		matchKeys = append(matchKeys, fmt.Sprintf("bot_%s", msg.SelfID))
-		matchKeys = append(matchKeys, msg.SelfID)
-	}
-
-	// Find matching rules
-	m.Mutex.RLock()
-	var matchedKey string
-
-	// A. Exact match priority
-	for _, key := range matchKeys {
-		if wID, exists := m.RoutingRules[key]; exists && wID != "" {
-			targetWorkerID = wID
-			matchedKey = key
-			break
-		}
-	}
-
-	// B. If no exact match, try wildcard match
-	if targetWorkerID == "" {
-		for p, w := range m.RoutingRules {
-			if strings.Contains(p, "*") {
-				for _, key := range matchKeys {
-					if utils.MatchRoutePattern(p, key) {
-						targetWorkerID = w
-						matchedKey = fmt.Sprintf("%s (via pattern %s)", key, p)
-						break
-					}
-				}
-			}
-			if targetWorkerID != "" {
-				break
-			}
-		}
-	}
-	m.Mutex.RUnlock()
+	// 1. Try to use core routing rules
+	targetWorkerID := m.getTargetWorkerID(msg)
 
 	// Ensure the message has a unique echo
 	echo := msg.Echo
@@ -1217,7 +1294,7 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg types.InternalMessage, ret
 	// If a target Worker is found, try to get it
 	if targetWorkerID != "" {
 		if w := m.findWorkerByID(targetWorkerID); w != nil {
-			log.Printf("[ROUTING] Rule Matched: %s -> Target Worker: %s", matchedKey, targetWorkerID)
+			log.Printf("[ROUTING] Rule Matched -> Target Worker: %s", targetWorkerID)
 
 			// 根据 Worker 协议转换
 			var finalMsg any
@@ -1247,7 +1324,7 @@ func (m *Manager) forwardMessageToWorkerWithRetry(msg types.InternalMessage, ret
 			}
 			log.Printf("[ROUTING] [ERROR] Failed to send to target worker %s: %v. Falling back to load balancer.", targetWorkerID, err)
 		} else {
-			log.Printf("[ROUTING] [WARNING] Target worker %s defined in rule (%s) is OFFLINE or NOT FOUND. Falling back to load balancer.", targetWorkerID, matchedKey)
+			log.Printf("[ROUTING] [WARNING] Target worker %s defined in rules is OFFLINE or NOT FOUND. Falling back to load balancer.", targetWorkerID)
 		}
 	}
 
@@ -1382,6 +1459,7 @@ func (m *Manager) handleWorkerWebSocket(w http.ResponseWriter, r *http.Request) 
 		Connected:     time.Now(),
 		LastHeartbeat: time.Now(),
 		Protocol:      protocol,
+		Metadata:      make(map[string]any),
 	}
 
 	log.Printf("Worker client created successfully: %s (ID: %s)", conn.RemoteAddr(), workerID)
@@ -1443,28 +1521,17 @@ func (m *Manager) loadWorkerCapabilitiesFromRedis(worker *types.WorkerClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// 1. 恢复能力列表 (Capabilities)
-	capKey := fmt.Sprintf("botmatrix:worker:%s:capabilities", worker.ID)
-	capsData, err := m.Rdb.Get(ctx, capKey).Result()
-	if err == nil && capsData != "" {
-		var capabilities []types.WorkerCapability
-		if err := json.Unmarshal([]byte(capsData), &capabilities); err == nil {
-			worker.Capabilities = capabilities
-			log.Printf("[Worker] Restored %d capabilities for %s from Redis", len(capabilities), worker.ID)
-			m.SyncWorkerSkills()
-		}
-	}
-
-	// 2. 恢复元数据 (Metadata/Plugins)
+	// 1. 恢复元数据 (Metadata/Plugins)
 	metaKey := fmt.Sprintf("botmatrix:worker:%s:plugins", worker.ID)
 	metaData, err := m.Rdb.Get(ctx, metaKey).Result()
 	if err == nil && metaData != "" {
-		var pluginsInfo []map[string]any
-		if err := json.Unmarshal([]byte(metaData), &pluginsInfo); err == nil {
-			worker.Metadata = map[string]any{
-				"plugins": pluginsInfo,
-			}
-			log.Printf("[Worker] Restored metadata for %s from Redis", worker.ID)
+		var metadata map[string]any
+		if err := json.Unmarshal([]byte(metaData), &metadata); err == nil {
+			worker.Metadata = metadata
+			log.Printf("[Worker] Restored metadata for %s from Redis (including %d plugins)", worker.ID, len(metadata))
+
+			// 从恢复的元数据中提取能力
+			m.updateWorkerCapabilitiesFromMetadata(worker)
 		}
 	}
 }
@@ -1500,14 +1567,16 @@ func (m *Manager) FindWorkerBySkill(skillName string) string {
 
 // SyncWorkerSkills 汇总所有 Worker 的能力并同步给 AI 解析器
 func (m *Manager) SyncWorkerSkills() {
+	// 在新架构中，BotNexus 仅作为管理后台和 B2B 场景的汇聚点
+	// 如果 BotNexus 自身需要执行 AI 任务（如管理后台的 AI 试用），则依然需要同步
 	m.Mutex.RLock()
-	var allSkills []tasks.Capability
+	var allSkills []types.Capability
 	seen := make(map[string]bool)
 
 	for _, w := range m.Workers {
 		for _, cap := range w.Capabilities {
 			if !seen[cap.Name] {
-				allSkills = append(allSkills, tasks.Capability{
+				allSkills = append(allSkills, types.Capability{
 					Name:        cap.Name,
 					Description: cap.Description,
 					Example:     cap.Usage,
@@ -1520,11 +1589,85 @@ func (m *Manager) SyncWorkerSkills() {
 	}
 	m.Mutex.RUnlock()
 
-	if m.TaskManager != nil && m.TaskManager.AI != nil {
-		m.TaskManager.AI.UpdateSkills(allSkills)
-		log.Printf("[AI] Synced %d unique skills from %d workers", len(allSkills), len(m.Workers))
-	} else {
-		log.Printf("[AI] TaskManager or AI not initialized, skipping skill sync")
+	if m.TaskManager != nil && m.TaskManager.GetAI() != nil {
+		m.TaskManager.GetAI().UpdateSkills(allSkills)
+		log.Printf("[AI] Nexus synced %d unique skills for central AI trial/mgmt", len(allSkills))
+	}
+}
+
+// updateWorkerCapabilitiesFromMetadata 从 Worker 的元数据（插件列表）中提取技能
+func (m *Manager) updateWorkerCapabilitiesFromMetadata(worker *types.WorkerClient) {
+	if worker.Metadata == nil {
+		return
+	}
+
+	var plugins []any
+	if p, ok := worker.Metadata["plugins"]; ok {
+		if pList, ok := p.([]any); ok {
+			plugins = pList
+		} else if pList, ok := p.([]map[string]any); ok {
+			// 处理从 Redis 恢复的情况
+			for _, item := range pList {
+				plugins = append(plugins, item)
+			}
+		}
+	}
+
+	if len(plugins) == 0 {
+		return
+	}
+
+	var newCapabilities []types.WorkerCapability
+	for _, p := range plugins {
+		pMap, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		var skills []any
+		if s, ok := pMap["skills"]; ok {
+			if sList, ok := s.([]any); ok {
+				skills = sList
+			} else if sList, ok := s.([]map[string]any); ok {
+				for _, item := range sList {
+					skills = append(skills, item)
+				}
+			}
+		}
+
+		for _, s := range skills {
+			sMap, ok := s.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			cap := types.WorkerCapability{
+				Name:        utils.ToString(sMap["name"]),
+				Description: utils.ToString(sMap["description"]),
+				Usage:       utils.ToString(sMap["usage"]),
+				Regex:       utils.ToString(sMap["regex"]),
+			}
+
+			// 处理 Params map[string]string
+			if params, ok := sMap["params"].(map[string]any); ok {
+				cap.Params = make(map[string]string)
+				for k, v := range params {
+					cap.Params[k] = utils.ToString(v)
+				}
+			} else if params, ok := sMap["params"].(map[string]string); ok {
+				cap.Params = params
+			}
+
+			newCapabilities = append(newCapabilities, cap)
+		}
+	}
+
+	if len(newCapabilities) > 0 {
+		worker.Mutex.Lock()
+		worker.Capabilities = newCapabilities
+		worker.Mutex.Unlock()
+		m.SyncWorkerSkills()
+		log.Printf("[Worker] Worker %s updated %d capabilities from metadata", worker.ID, len(newCapabilities))
 	}
 }
 
@@ -1605,30 +1748,36 @@ func (m *Manager) handleWorkerMessage(worker *types.WorkerClient, msg types.Work
 	// Only record key information, do not print full message
 	msgType := msg.Type
 
-	// 处理 Worker 报备的能力列表
-	if msgType == "register_capabilities" || msgType == "update_metadata" {
+	// 处理 Worker 的元数据更新 (新架构)
+	if msgType == "update_metadata" {
 		updated := false
-		if len(msg.Capabilities) > 0 {
-			worker.Capabilities = msg.Capabilities
-			m.SyncWorkerSkills()
-			log.Printf("[Worker] Worker %s registered %d capabilities", worker.ID, len(msg.Capabilities))
-			updated = true
-
-			// 持久化到 Redis
-			if m.Rdb != nil {
-				go func(wID string, caps []types.WorkerCapability) {
-					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-					defer cancel()
-					key := fmt.Sprintf("botmatrix:worker:%s:capabilities", wID)
-					data, _ := json.Marshal(caps)
-					m.Rdb.Set(ctx, key, string(data), 24*time.Hour)
-				}(worker.ID, msg.Capabilities)
-			}
-		}
 		if msg.Metadata != nil {
-			worker.Metadata = msg.Metadata
+			worker.Mutex.Lock()
+			if worker.Metadata == nil {
+				worker.Metadata = make(map[string]any)
+			}
+			for k, v := range msg.Metadata {
+				worker.Metadata[k] = v
+			}
+
+			// 特殊处理 http_addr: 如果以 : 开头，说明只有端口，需要补全 IP
+			if addr, ok := worker.Metadata["http_addr"].(string); ok && strings.HasPrefix(addr, ":") {
+				remoteAddr := worker.Conn.RemoteAddr().String()
+				if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+					if host == "::1" {
+						host = "127.0.0.1"
+					}
+					worker.Metadata["http_addr"] = host + addr
+					log.Printf("[Worker] Worker %s http_addr updated with IP: %s", worker.ID, worker.Metadata["http_addr"])
+				}
+			}
+			worker.Mutex.Unlock()
+
 			log.Printf("[Worker] Worker %s updated metadata", worker.ID)
 			updated = true
+
+			// 从元数据中提取技能 (新架构)
+			m.updateWorkerCapabilitiesFromMetadata(worker)
 
 			// 持久化到 Redis
 			if m.Rdb != nil {
@@ -1934,7 +2083,6 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 				"post_type":    "message",
 				"message_type": action.MessageType,
 				"sub_type":     "normal",
-				"message_id":   fmt.Sprintf("reply_%d", time.Now().UnixNano()),
 				"user_id":      targetBot.SelfID, // 发送者是机器人
 				"target_id":    userID,           // 接收者是用户
 				"group_id":     groupID,
@@ -2124,7 +2272,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 	m.BroadcastRoutingEvent("Nexus", targetBot.SelfID, "nexus_to_bot", "request", params)
 
 	// Update sending statistics (if it is a send message type operation)
-	actionName := action.Action
+	actionName = action.Action
 	if actionName == "send_msg" || actionName == "send_private_msg" || actionName == "send_group_msg" || actionName == "send_guild_channel_msg" {
 		if !isSystemAction(action) {
 			m.UpdateBotSentStats(targetBot.SelfID)
@@ -2416,6 +2564,23 @@ func (m *Manager) CheckRateLimit(userID, groupID string) bool {
 
 // PushToRedisQueue 将消息推送到 Redis 队列 (支持重试)
 func (m *Manager) PushToRedisQueue(targetWorkerID string, msg types.InternalMessage) error {
+	// 0. 尝试通过测试钩子发送
+	if m.OnCommandSent != nil {
+		cmd := types.WorkerCommand{
+			Type:   "message",
+			Params: msg.ToV11Map(),
+		}
+
+		// 如果 Extras 中有 intent_hint，且为 skill: 开头，则视为技能调用 (用于测试)
+		if hint, ok := msg.Extras["intent_hint"].(string); ok && strings.HasPrefix(hint, "skill:") {
+			cmd.Type = "skill_call"
+			cmd.Skill = strings.TrimPrefix(hint, "skill:")
+		}
+
+		m.OnCommandSent(targetWorkerID, cmd)
+		return nil
+	}
+
 	if m.Rdb == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
@@ -2577,4 +2742,56 @@ func (m *Manager) GetSessionState(platform, userID string) *types.SessionState {
 		return nil
 	}
 	return &state
+}
+
+// handleBackendCommand 处理“后台”指令，生成登录 Token 并下发
+func (m *Manager) handleBackendCommand(bot *types.BotClient, msg types.InternalMessage) {
+	userID := msg.UserID
+	if userID == "" {
+		return
+	}
+
+	// 1. 生成 6 位随机数字 Token
+	token := fmt.Sprintf("%06d", rand.Intn(1000000))
+
+	// 2. 保存或更新 Token 到数据库
+	loginToken := &models.UserLoginTokenGORM{
+		Platform:   bot.Platform,
+		PlatformID: userID,
+		Token:      token,
+		ExpiresAt:  time.Now().Add(5 * time.Minute),
+		CreatedAt:  time.Now(),
+	}
+
+	// 使用 Upsert 逻辑：如果该平台 ID 已有 Token 则更新
+	if err := m.GORMDB.Where("platform = ? AND platform_id = ?", bot.Platform, userID).Delete(&models.UserLoginTokenGORM{}).Error; err != nil {
+		log.Printf("[Auth] Failed to clear old tokens: %v", err)
+	}
+	if err := m.GORMDB.Create(loginToken).Error; err != nil {
+		log.Printf("[Auth] Failed to save login token: %v", err)
+		return
+	}
+
+	// 3. 构造回复消息
+	replyText := fmt.Sprintf("【登录验证】\n您的临时登录验证码为：%s\n请在 5 分钟内完成登录。\n如尚未注册，请先在后台注册页面绑定您的 ID: %s", token, userID)
+
+	// 4. 发送私聊消息给用户
+	action := onebot.Request{
+		Action: "send_private_msg",
+		Params: map[string]any{
+			"user_id": userID,
+			"message": replyText,
+		},
+	}
+
+	bot.Mutex.Lock()
+	if bot.Conn != nil {
+		err := bot.Conn.WriteJSON(action)
+		if err != nil {
+			log.Printf("[Auth] Failed to send token message: %v", err)
+		}
+	}
+	bot.Mutex.Unlock()
+
+	log.Printf("[Auth] Generated token %s for user %s on %s", token, userID, bot.Platform)
 }

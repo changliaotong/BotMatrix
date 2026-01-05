@@ -3,6 +3,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.9.0 (2026-01-02)
+*   **🛡️ Plugin Security & Permissions Architecture**:
+    - **Granular Permission Validation**: Implemented an action whitelisting mechanism based on `plugin.json`, supporting `*` wildcard permissions to ensure plugins only execute authorized actions.
+    - **Security Audit Logging**: Added real-time interception and detailed logging for unauthorized plugin operations, enhancing system defense against malicious or abnormal plugins.
+*   **🌐 Inter-Plugin Hybrid Routing**:
+    - **Full-Chain Skill Invocation**: Refactored the `Skill` call mechanism to support seamless bidirectional invocation between external process plugins and internal Go plugins.
+    - **Automatic Capability Reporting**: Improved dynamic discovery and reporting of plugin capabilities; all internal and external plugin skills are now automatically synchronized to the BotNexus core.
+    - **Async-to-Sync Response**: Established a complete cross-plugin response loop, supporting complex asynchronous collaboration workflows via `correlation_id`.
+*   **🛠️ Developer Tooling Upgrade**:
+    - **Enhanced bm-cli Initialization**: Upgraded the plugin initialization template to automatically generate development environments with standard permission declarations, intent definitions, and example code.
+    - **Standardized Manifest**: Unified the `plugin.json` structure with the core system's configuration, adding key productivity fields such as `Permissions`, `RunOn`, and `Intents`.
+
 ## v1.8.0 (2025-12-31)
 *   **🗄️ Database Standardization**:
     - **Uniform Naming**: Standardized all database table and column names to `snake_case` across the entire project for PostgreSQL compatibility and consistency.

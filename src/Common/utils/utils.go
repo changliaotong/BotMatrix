@@ -16,6 +16,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// JSONResponse is an alias for types.ApiResponse used for Swagger documentation
+type JSONResponse types.ApiResponse
+
 // GenerateRandomToken generates a random hex token
 func GenerateRandomToken(length int) string {
 	b := make([]byte, length)
@@ -164,4 +167,14 @@ func ToInt64(v any) int64 {
 	default:
 		return 0
 	}
+}
+
+// ContainsOne checks if string s contains any of the keywords
+func ContainsOne(s string, keywords ...string) bool {
+	for _, k := range keywords {
+		if strings.Contains(s, k) {
+			return true
+		}
+	}
+	return false
 }
