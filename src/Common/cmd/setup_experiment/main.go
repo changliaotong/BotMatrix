@@ -157,20 +157,97 @@ If you encounter errors, analyze the output, adjust your plan, and try again.
 		log.Printf("Employee already exists: %s (BotID: %s)", emp.Name, emp.BotID)
 	}
 
-	// 6. Ensure 'local_dev' MCP Server exists
-	var mcpServer models.MCPServer
-	if err := db.Where(&models.MCPServer{Name: "local_dev"}).First(&mcpServer).Error; err != nil {
-		log.Println("Creating local_dev MCP server...")
-		mcpServer = models.MCPServer{
+	// 6. Ensure default MCP Servers exist
+	defaultServers := []models.MCPServer{
+		{
 			Name:        "local_dev",
 			Description: "Local development tools",
-			Type:        "internal", // internal means it's built-in
+			Type:        "internal",
 			Endpoint:    "internal://local_dev",
 			Scope:       "global",
 			Status:      "active",
+		},
+		{
+			Name:        "knowledge",
+			Description: "Knowledge Base RAG",
+			Type:        "internal",
+			Endpoint:    "internal://knowledge",
+			Scope:       "global",
+			Status:      "active",
+		},
+		{
+			Name:        "browser",
+			Description: "Web Browser Automation",
+			Type:        "internal",
+			Endpoint:    "internal://browser",
+			Scope:       "global",
+			Status:      "active",
+		},
+		{
+			Name:        "collaboration",
+			Description: "Agent Collaboration",
+			Type:        "internal",
+			Endpoint:    "internal://collaboration",
+			Scope:       "global",
+			Status:      "active",
+		},
+		{
+			Name:        "sys_admin",
+			Description: "System Administration",
+			Type:        "internal",
+			Endpoint:    "internal://sys_admin",
+			Scope:       "global",
+			Status:      "active",
+		},
+		{
+			Name:        "memory",
+			Description: "Cognitive Memory",
+			Type:        "internal",
+			Endpoint:    "internal://memory",
+			Scope:       "global",
+			Status:      "active",
+		},
+	}
+
+	for _, srv := range defaultServers {
+		var mcpServer models.MCPServer
+		if err := db.Where(&models.MCPServer{Name: srv.Name}).First(&mcpServer).Error; err != nil {
+			log.Printf("Creating %s MCP server...", srv.Name)
+			if err := db.Create(&srv).Error; err != nil {
+				log.Printf("Failed to create MCP server %s: %v", srv.Name, err)
+			}
 		}
-		if err := db.Create(&mcpServer).Error; err != nil {
-			log.Fatalf("Failed to create MCP server: %v", err)
+	}
+
+	// 7. Ensure "Factory Manager" Role Template exists
+	factoryRoleName := "Digital Employee Architect"
+	var factoryTemplate models.DigitalRoleTemplate
+	factoryBasePrompt := `You are the Architect and Factory Manager of BotMatrix. 
+Your goal is to design and manufacture other digital employees to automate the software production line.
+Use 'sys_admin__create_role_template' to design new roles (SOPs).
+Use 'sys_admin__create_digital_employee' to recruit new employees based on templates.
+Use 'collaboration' tools to coordinate with other agents.
+`
+	if err := db.Where(&models.DigitalRoleTemplate{Name: factoryRoleName}).First(&factoryTemplate).Error; err != nil {
+		log.Printf("Creating role template: %s", factoryRoleName)
+		factoryTemplate = models.DigitalRoleTemplate{
+			Name:          factoryRoleName,
+			Description:   "Factory Manager responsible for creating and managing other digital employees",
+			BasePrompt:    factoryBasePrompt,
+			DefaultSkills: "sys_admin,collaboration,knowledge",
+			DefaultBio:    "I am the architect of the digital workforce.",
+		}
+		db.Create(&factoryTemplate)
+	}
+
+	// 8. Recruit Factory Manager
+	var managerEmp models.DigitalEmployee
+	if err := db.Where(&models.DigitalEmployee{RoleTemplateID: factoryTemplate.ID}).First(&managerEmp).Error; err != nil {
+		log.Println("Recruiting Factory Manager...")
+		svc := employee.NewEmployeeService(db)
+		_, err := svc.Recruit(1, factoryTemplate.ID)
+		if err != nil {
+			log.Printf("Failed to recruit Factory Manager: %v", err)
 		}
 	}
 

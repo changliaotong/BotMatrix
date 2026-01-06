@@ -105,6 +105,24 @@ func (h *LocalDevMCPHost) ListTools(ctx context.Context, serverID string) ([]typ
 				"required": []string{"message"},
 			},
 		},
+		{
+			Name:        "dev_git_clone",
+			Description: "Clone a git repository into the workspace.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"url": map[string]any{
+						"type":        "string",
+						"description": "Git repository URL",
+					},
+					"dir": map[string]any{
+						"type":        "string",
+						"description": "Directory name to clone into (optional)",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
 	}, nil
 }
 
@@ -131,6 +149,10 @@ func (h *LocalDevMCPHost) CallTool(ctx context.Context, serverID string, toolNam
 	case "dev_git_commit":
 		msg, _ := arguments["message"].(string)
 		return h.gitCommit(msg)
+	case "dev_git_clone":
+		url, _ := arguments["url"].(string)
+		dir, _ := arguments["dir"].(string)
+		return h.gitClone(url, dir)
 	}
 	return nil, fmt.Errorf("unknown tool: %s", toolName)
 }
@@ -285,6 +307,28 @@ func (h *LocalDevMCPHost) gitCommit(message string) (any, error) {
 	return types.MCPCallToolResponse{
 		Content: []types.MCPContent{
 			{Type: "text", Text: fmt.Sprintf("Git commit successful:\n%s", result)},
+		},
+	}, nil
+}
+
+func (h *LocalDevMCPHost) gitClone(url, dir string) (any, error) {
+	args := []string{"clone", url}
+	if dir != "" {
+		args = append(args, dir)
+	}
+
+	cloneCmd := exec.Command("git", args...)
+	cloneCmd.Dir = h.baseDir
+	out, err := cloneCmd.CombinedOutput()
+
+	result := string(out)
+	if err != nil {
+		return nil, fmt.Errorf("git clone failed: %s", result)
+	}
+
+	return types.MCPCallToolResponse{
+		Content: []types.MCPContent{
+			{Type: "text", Text: fmt.Sprintf("Git clone successful:\n%s", result)},
 		},
 	}, nil
 }

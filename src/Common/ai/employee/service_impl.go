@@ -262,7 +262,7 @@ func (s *EmployeeServiceImpl) Recruit(orgID uint, jobID uint) (*models.DigitalEm
 	employee := models.DigitalEmployee{
 		EnterpriseID:   orgID,
 		BotID:          fmt.Sprintf("bot_%d_%d", orgID, time.Now().UnixNano()), // Generate unique BotID
-		EmployeeID:     fmt.Sprintf("EMP%d%d", orgID, time.Now().Unix()%10000),
+		EmployeeID:     fmt.Sprintf("EMP%d%d", orgID, time.Now().UnixNano()%100000),
 		RoleTemplateID: template.ID,
 		Name:           template.Name, // Default name
 		Title:          template.Name,

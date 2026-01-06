@@ -230,6 +230,13 @@ func NewMCPManager(m types.Manager) *MCPManager {
 		Scope: types.ScopeGlobal,
 	}, NewAgentCollaborationMCPHost(NewCollaborationProviderImpl(m)))
 
+	// Register System Administration Tools
+	mgr.RegisterServer(types.MCPServerInfo{
+		ID:    "sys_admin",
+		Name:  "System Administration",
+		Scope: types.ScopeGlobal,
+	}, NewSysAdminMCPHost(m.GetGORMDB()))
+
 	// 加载数据库配置
 	mgr.LoadFromDB()
 	return mgr
