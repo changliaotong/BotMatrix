@@ -74,8 +74,14 @@ func (s *HTTPServer) handleEvent(w http.ResponseWriter, r *http.Request) {
 	// 处理 QQGuild ID 生成
 	processEventIDs(&event)
 
-	// 分发事件到对应的处理器
-	s.dispatchEvent(event)
+	// 构建并执行中间件链
+	finalHandler := func(e *onebot.Event) error {
+		s.dispatchEvent(*e)
+		return nil
+	}
+	
+	wrappedHandler := ChainMiddleware(s.middlewares, finalHandler)
+	wrappedHandler(&event)
 
 	// 返回成功响应
 	w.WriteHeader(http.StatusOK)

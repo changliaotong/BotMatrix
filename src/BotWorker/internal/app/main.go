@@ -294,6 +294,8 @@ func setupHandlers() {
 				{Label: "Port", ID: "redis.port", Type: "number", Value: currentConfig.Redis.Port},
 				{Label: "Password", ID: "redis.password", Type: "password", Value: currentConfig.Redis.Password},
 				{Label: "DB", ID: "redis.db", Type: "number", Value: currentConfig.Redis.DB},
+				{Label: "Stream Group", ID: "redis.stream.group", Type: "text", Value: currentConfig.Redis.Stream.Group},
+				{Label: "Stream Consumer", ID: "redis.stream.consumer", Type: "text", Value: currentConfig.Redis.Stream.Consumer},
 			},
 		},
 		{

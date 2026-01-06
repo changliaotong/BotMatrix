@@ -3,6 +3,9 @@ package ai
 import (
 	"BotMatrix/common/ai/b2b"
 	"BotMatrix/common/ai/employee"
+	// "BotMatrix/common/ai/employee" // Moved to SetEmployeeService to break cycle
+
+	// "BotMatrix/common/ai/employee" // Moved to SetEmployeeService to break cycle
 	"BotMatrix/common/ai/rag"
 	clog "BotMatrix/common/log"
 	"BotMatrix/common/models"
@@ -28,8 +31,8 @@ type AIServiceImpl struct {
 	contextManager  *ContextManager
 	mcpManager      MCPManagerInterface
 	skillManager    *SkillManager
-	memoryService   employee.CognitiveMemoryService
-	employeeService employee.DigitalEmployeeService
+	memoryService   types.CognitiveMemoryService // Use interface
+	employeeService types.DigitalEmployeeService // Use interface
 	b2bService      b2b.B2BService
 }
 
@@ -42,9 +45,17 @@ func NewAIService(db *gorm.DB, provider AIServiceProvider, mcp MCPManagerInterfa
 		contextManager:  NewContextManager(8192), // 默认支持 8k token 上下文
 		mcpManager:      mcp,
 		skillManager:    NewSkillManager(db, provider, mcp),
-		memoryService:   employee.NewCognitiveMemoryService(db),
-		employeeService: employee.NewEmployeeService(db),
+		// memoryService:   employee.NewCognitiveMemoryService(db), // Initialize later or use interface wrapper if needed
+		// employeeService: employee.NewEmployeeService(db), // Initialize later
 	}
+}
+
+func (s *AIServiceImpl) SetEmployeeService(svc types.DigitalEmployeeService) {
+	s.employeeService = svc
+}
+
+func (s *AIServiceImpl) SetCognitiveMemoryService(svc types.CognitiveMemoryService) {
+	s.memoryService = svc
 }
 
 func (s *AIServiceImpl) SetB2BService(b2bSvc b2b.B2BService) {
@@ -64,21 +75,25 @@ func (s *AIServiceImpl) GetMCPManager() MCPManagerInterface {
 	return s.mcpManager
 }
 
-func (s *AIServiceImpl) GetProvider(id uint) (*models.AIProviderGORM, error) {
-	var provider models.AIProviderGORM
+func (s *AIServiceImpl) GetProvider(id uint) (*models.AIProvider, error) {
+	var provider models.AIProvider
 	if err := s.db.First(&provider, id).Error; err != nil {
 		return nil, err
 	}
 	return &provider, nil
 }
 
-func (s *AIServiceImpl) getClient(provider *models.AIProviderGORM, model *models.AIModelGORM) (Client, error) {
+func (s *AIServiceImpl) getClient(provider *models.AIProvider, model *models.AIModel) (Client, error) {
+	baseURL := provider.BaseURL
+	apiKey := provider.APIKey
+
 	if provider.Type == "worker" {
 		return NewWorkerAIClient(s.provider), nil
 	}
 
-	baseURL := provider.BaseURL
-	apiKey := provider.APIKey
+	if provider.Type == "mock" {
+		return NewMockClient(baseURL, apiKey), nil
+	}
 
 	// 模型级别覆盖
 	if model != nil {
@@ -245,7 +260,7 @@ func (s *AIServiceImpl) GetKnowledgeBase() rag.KnowledgeBase {
 func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []Message, tools []Tool) (*ChatResponse, error) {
 	maskedMessages, finalTools, maskCtx := s.prepareChat(ctx, messages, tools)
 
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
 	}
@@ -261,7 +276,7 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []Messa
 	}
 
 	req := ChatRequest{
-		Model:    model.ModelID,
+		Model:    model.ApiModelID,
 		Messages: maskedMessages,
 		Tools:    finalTools,
 	}
@@ -286,7 +301,7 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []Messa
 
 		// 异步记录使用日志
 		go func() {
-			usage := models.AIUsageLogGORM{
+			usage := models.AIUsageLog{
 				UserID:       0, // TODO: 从 context 获取
 				ModelName:    model.ModelName,
 				ProviderType: provider.Type,
@@ -305,137 +320,71 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []Messa
 
 // ChatAgent 提供自主 Agent 循环能力，自动处理工具调用并返回最终结果
 func (s *AIServiceImpl) ChatAgent(ctx context.Context, modelID uint, messages []Message, tools []Tool) (*ChatResponse, error) {
-	const maxIterations = 10
-	currentMessages := messages
-
-	// 提取元数据用于工具调用
+	// 提取元数据
 	botID, _ := ctx.Value("botID").(string)
-	userIDNum, _ := ctx.Value("userIDNum").(uint)
-	orgIDNum, _ := ctx.Value("orgIDNum").(uint)
+	userID, _ := ctx.Value("userID").(string)
 	sessionID, _ := ctx.Value("sessionID").(string)
 
 	if botID == "" {
 		botID = "default_bot"
 	}
-
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("agent_%d", time.Now().UnixNano())
 	}
 
-	var finalResp *ChatResponse
+	// 使用新的 AgentExecutor
+	executor := NewAgentExecutor(s, modelID, botID, userID, sessionID)
 
-	for i := 0; i < maxIterations; i++ {
-		clog.Info("[Agent] Iteration", zap.Int("step", i+1), zap.String("session", sessionID))
+	// 执行 ReAct 循环
+	// 注意：tools 已经在 prepareChat 中准备好了，但在这里我们需要确保它们包含 Sandbox 等工具
+	// 这里的 tools 参数通常是外部传入的，而 prepareChat 会注入更多系统级工具
+	// 为了复用 prepareChat 的注入逻辑 (Memory, RAG, MCP Tools)，我们需要先调用一次 prepareChat
+	// 但 prepareChat 只是准备数据，不执行。
 
-		// --- 极致优化：在循环内进行上下文修剪，防止多轮工具调用导致 Token 超限 ---
-		if s.contextManager != nil {
-			currentMessages = s.contextManager.PruneMessages(currentMessages)
+	// 正确的做法是：
+	// 1. prepareChat 获取完整的上下文和工具列表
+	maskedMessages, finalTools, maskCtx := s.prepareChat(ctx, messages, tools)
+
+	// 2. 将这些传递给 Executor
+	resp, err := executor.Execute(ctx, maskedMessages, finalTools)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 处理响应中的隐私脱敏
+	if resp != nil && len(resp.Choices) > 0 {
+		for i := range resp.Choices {
+			resp.Choices[i].Message.Content = s.unmaskContent(resp.Choices[i].Message.Content, maskCtx)
 		}
 
-		// 更新 context 中的 step
-		agentCtx := context.WithValue(ctx, "sessionID", sessionID)
-		agentCtx = context.WithValue(agentCtx, "step", i)
-
-		// 调用基础 Chat
-		resp, err := s.Chat(agentCtx, modelID, currentMessages, tools)
-		if err != nil {
-			s.SaveTrace(sessionID, botID, i, "error", err.Error(), "")
-			return nil, err
-		}
-		finalResp = resp
-
-		if len(resp.Choices) == 0 {
-			break
-		}
-
-		choice := resp.Choices[0]
-
-		// 记录 LLM 响应
-		contentStr, _ := choice.Message.Content.(string)
-		if contentStr != "" {
-			s.SaveTrace(sessionID, botID, i, "llm_response", contentStr, "")
-		}
-
-		// 如果不需要调用工具，或者模型已经给出了最终答案
-		if choice.FinishReason != "tool_calls" && len(choice.Message.ToolCalls) == 0 {
-			break
-		}
-
-		// 将 Assistant 的消息添加到历史记录中
-		currentMessages = append(currentMessages, choice.Message)
-
-		// --- 极致优化：并发执行独立工具调用 ---
-		type toolResult struct {
-			tc     ToolCall
-			result any
-			err    error
-		}
-
-		toolCount := len(choice.Message.ToolCalls)
-		resultChan := make(chan toolResult, toolCount)
-		var wg sync.WaitGroup
-
-		for _, tc := range choice.Message.ToolCalls {
-			wg.Add(1)
-			go func(t ToolCall) {
-				defer wg.Done()
-				clog.Info("[Agent] Executing tool", zap.String("name", t.Function.Name))
-				s.SaveTrace(sessionID, botID, i, "tool_call", t.Function.Name, t.Function.Arguments)
-
-				res, err := s.ExecuteTool(agentCtx, botID, userIDNum, orgIDNum, t)
-				resultChan <- toolResult{tc: t, result: res, err: err}
-			}(tc)
-		}
-
-		// 等待所有工具执行完成
-		wg.Wait()
-		close(resultChan)
-
-		hasError := false
-		for res := range resultChan {
-			resultStr := ""
-			if res.err != nil {
-				clog.Error("[Agent] Tool execution failed", zap.Error(res.err))
-				resultStr = fmt.Sprintf("Error: %v", res.err)
-				hasError = true
-				s.SaveTrace(sessionID, botID, i, "error", fmt.Sprintf("Tool %s failed: %v", res.tc.Function.Name, res.err), "")
-			} else {
-				b, _ := json.Marshal(res.result)
-				resultStr = string(b)
+		// 异步记录日志与洞察 (复用原有逻辑)
+		// ...
+		go func() {
+			// 这里简单记录最后一次调用的 token 使用情况
+			// 实际应该累加整个 Session 的消耗
+			var model models.AIModel
+			s.db.First(&model, modelID)
+			usage := models.AIUsageLog{
+				UserID:       0, // TODO
+				ModelName:    model.ModelName,
+				ProviderType: "agent",
+				InputTokens:  resp.Usage.PromptTokens,
+				OutputTokens: resp.Usage.CompletionTokens,
+				Status:       "success",
+				CreatedAt:    time.Now(),
 			}
+			s.db.Create(&usage)
+		}()
 
-			// 记录工具结果
-			s.SaveTrace(sessionID, botID, i, "tool_result", res.tc.Function.Name, resultStr)
-
-			// 检查是否为推理工具，如果是则优化迭代
-			if res.tc.Function.Name == "sequential_thinking" {
-				clog.Debug("[Agent] Reasoning tool executed", zap.String("session", sessionID))
-			}
-
-			// 将工具结果添加到历史记录中
-			currentMessages = append(currentMessages, Message{
-				Role:       RoleTool,
-				Content:    resultStr,
-				ToolCallID: res.tc.ID,
-				Name:       res.tc.Function.Name,
-			})
-		}
-
-		// 如果发生了严重错误，且重试次数过多，停止循环
-		if hasError && i > 3 {
-			break
+		if s.memoryService != nil && botID != "" && userID != "" {
+			// 注意：这里需要传入完整的 agent 历史记录才能提取洞察
+			// Executor 内部维护了历史，但没有返回给我们。
+			// 暂时只用最后几轮
+			go s.extractInsightsAndSave(context.Background(), modelID, userID, botID, maskedMessages)
 		}
 	}
 
-	// --- 极致优化：异步提取对话洞察并存入认知记忆 (让机器人具备自动学习能力) ---
-	if s.memoryService != nil && botID != "" {
-		userIDStr, _ := ctx.Value("userID").(string)
-		if userIDStr != "" {
-			go s.extractInsightsAndSave(context.Background(), modelID, userIDStr, botID, currentMessages)
-		}
-	}
-
-	return finalResp, nil
+	return resp, nil
 }
 
 // extractInsightsAndSave 异步提取对话中的重要信息并保存到认知记忆
@@ -487,7 +436,7 @@ func (s *AIServiceImpl) extractInsightsAndSave(ctx context.Context, modelID uint
 			importance := 3
 			fmt.Sscanf(matches[3], "%d", &importance)
 
-			s.memoryService.SaveMemory(ctx, &models.CognitiveMemoryGORM{
+			s.memoryService.SaveMemory(ctx, &models.CognitiveMemory{
 				UserID:     userID,
 				BotID:      botID,
 				Category:   matches[1],
@@ -577,6 +526,7 @@ func (s *AIServiceImpl) unmaskContent(content any, ctx *types.MaskContext) any {
 		return content
 	}
 }
+
 func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages []Message, tools []Tool) (<-chan ChatStreamResponse, error) {
 	// 获取技能与工具并合并
 	if s.skillManager != nil {
@@ -588,7 +538,7 @@ func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages [
 		}
 	}
 
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
 	}
@@ -608,7 +558,7 @@ func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages [
 	maskedMessages := s.maskMessages(messages, maskCtx)
 
 	req := ChatRequest{
-		Model:    model.ModelID,
+		Model:    model.ApiModelID,
 		Messages: maskedMessages,
 		Tools:    tools,
 		Stream:   true,
@@ -616,7 +566,7 @@ func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages [
 
 	// 打印 LLM 流式调用详情
 	fmt.Printf("\n--- [LLM STREAM START] ---\n")
-	fmt.Printf("Model: %s (%s)\n", model.ModelName, model.ModelID)
+	fmt.Printf("Model: %s (%s)\n", model.ModelName, model.ApiModelID)
 	for i, msg := range maskedMessages {
 		fmt.Printf("Message #%d [%s]: %v\n", i, msg.Role, msg.Content)
 	}
@@ -626,7 +576,7 @@ func (s *AIServiceImpl) ChatStream(ctx context.Context, modelID uint, messages [
 }
 
 func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input any) (*EmbeddingResponse, error) {
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.First(&model, modelID).Error; err != nil {
 		return nil, err
 	}
@@ -642,7 +592,7 @@ func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input
 	}
 
 	req := EmbeddingRequest{
-		Model: model.ModelID,
+		Model: model.ApiModelID,
 		Input: input,
 	}
 
@@ -656,7 +606,7 @@ func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input
 
 func (s *AIServiceImpl) CreateEmbeddingSimple(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error) {
 	// 找到默认的嵌入模型
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.Where("is_default = ? AND type = ?", true, "embedding").First(&model).Error; err != nil {
 		if err := s.db.Where("type = ?", "embedding").First(&model).Error; err != nil {
 			// 如果没有专门的 embedding 模型，尝试默认模型
@@ -669,19 +619,33 @@ func (s *AIServiceImpl) CreateEmbeddingSimple(ctx context.Context, req Embedding
 }
 
 func (s *AIServiceImpl) ChatSimple(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
-	// 找到默认的对话模型
-	var model models.AIModelGORM
-	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
-		if err := s.db.First(&model).Error; err != nil {
-			return nil, fmt.Errorf("no chat model available: %v", err)
+	var modelID uint
+	modelIDStr := req.Model
+
+	// 1. 尝试根据 Model 名称查找模型
+	if modelIDStr != "" {
+		var model models.AIModel
+		if err := s.db.Where("api_model_id = ?", modelIDStr).First(&model).Error; err == nil {
+			modelID = model.ID
 		}
 	}
-	return s.Chat(ctx, model.ID, req.Messages, req.Tools)
+
+	// 2. 如果未指定或未找到，使用默认模型
+	if modelID == 0 {
+		var model models.AIModel
+		if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+			if err := s.db.First(&model).Error; err != nil {
+				return nil, fmt.Errorf("no chat model available: %v", err)
+			}
+		}
+		modelID = model.ID
+	}
+	return s.Chat(ctx, modelID, req.Messages, req.Tools)
 }
 
 // SaveTrace 记录 AI Agent 的执行追踪日志
 func (s *AIServiceImpl) SaveTrace(sessionID, botID string, step int, traceType, content, metadata string) {
-	trace := models.AIAgentTraceGORM{
+	trace := models.AIAgentTrace{
 		SessionID: sessionID,
 		BotID:     botID,
 		Step:      step,
@@ -710,7 +674,7 @@ func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error
 	}
 
 	// 2. 找到默认的对话模型
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
 		// 如果没有默认模型，尝试获取第一个模型
 		if err := s.db.First(&model).Error; err != nil {
@@ -755,7 +719,7 @@ func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error
 	return "No response from AI", nil
 }
 
-func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage, targetOrgID uint) (string, error) {
+func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployee, msg types.InternalMessage, targetOrgID uint) (string, error) {
 	// 0. 检查功能开关
 	if s.provider != nil && !s.provider.IsDigitalEmployeeEnabled() {
 		return "对不起，数字员工服务当前已禁用。请联系管理员开启 EnableDigitalEmployee。", nil
@@ -783,7 +747,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	}
 
 	// 2. 获取最近历史记录 (最近 10 条)
-	var historyMessages []models.AIChatMessageGORM
+	var historyMessages []models.AIChatMessage
 	s.db.Where("session_id = ?", sessionID).Order("id desc").Limit(10).Find(&historyMessages)
 
 	// 3. 构造 AI 消息列表
@@ -818,7 +782,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 	// 4. 获取模型 ID (如果数字员工绑定了智能体，使用智能体的模型)
 	modelID := uint(0)
 	if employee.AgentID > 0 {
-		var agent models.AIAgentGORM
+		var agent models.AIAgent
 		if err := s.db.First(&agent, employee.AgentID).Error; err == nil {
 			modelID = agent.ModelID
 		}
@@ -826,7 +790,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 
 	// 如果还是没模型，用默认的
 	if modelID == 0 {
-		var model models.AIModelGORM
+		var model models.AIModel
 		if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
 			s.db.First(&model)
 			modelID = model.ID
@@ -890,14 +854,14 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployeeGORM, m
 		// 6. 异步保存消息到历史并更新薪资消耗
 		go func() {
 			// 保存用户消息
-			s.db.Create(&models.AIChatMessageGORM{
+			s.db.Create(&models.AIChatMessage{
 				SessionID: sessionID,
 				UserID:    uint(0), // 这里的 UserID 是指 Nexus 用户，机器人对话中的用户 ID 存在 SessionID 中
 				Role:      string(RoleUser),
 				Content:   msg.RawMessage,
 			})
 			// 保存 AI 回复
-			s.db.Create(&models.AIChatMessageGORM{
+			s.db.Create(&models.AIChatMessage{
 				SessionID:  sessionID,
 				UserID:     uint(0),
 				Role:       string(RoleAssistant),
@@ -954,7 +918,7 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 	}
 
 	// 获取默认模型
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
 		if err := s.db.First(&model).Error; err != nil {
 			clog.Error("[Memory] No default model found for extraction")
@@ -970,7 +934,7 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 	}
 
 	req := ChatRequest{
-		Model: model.ModelID,
+		Model: model.ApiModelID,
 		Messages: []Message{
 			{Role: RoleSystem, Content: prompt},
 		},
@@ -1014,7 +978,7 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 		// --- 去重与冲突解决逻辑 ---
 		// 检索该用户下该机器人是否已有相似记忆
 		existing, _ := s.memoryService.SearchMemories(ctx, botID, fact, category)
-		var memory *models.CognitiveMemoryGORM
+		var memory *models.CognitiveMemory
 
 		if len(existing) > 0 {
 			// 找到相似记忆
@@ -1032,7 +996,7 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 				// 冲突解决：让 AI 决定是否合并或作为新记忆
 				mergePrompt := fmt.Sprintf("请判断以下两个关于用户的记忆是否描述同一件事。如果是，请合并它们；如果不是，请回复 'NEW'。\n现有记忆：%s\n新提炼记忆：%s\n请直接输出合并后的内容或 'NEW'。", topMatch.Content, fact)
 				mergeResp, err := client.Chat(ctx, ChatRequest{
-					Model: model.ModelID,
+					Model: model.ApiModelID,
 					Messages: []Message{
 						{Role: RoleSystem, Content: mergePrompt},
 					},
@@ -1052,7 +1016,7 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 
 		if memory == nil {
 			// 创建新记忆
-			memory = &models.CognitiveMemoryGORM{
+			memory = &models.CognitiveMemory{
 				UserID:     userID,
 				BotID:      botID,
 				Category:   category,
@@ -1069,7 +1033,7 @@ func (s *AIServiceImpl) ExtractAndSaveMemories(ctx context.Context, userID strin
 }
 
 // AutoLearnFromConversation 从对话中自动学习新知识或技能
-func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee *models.DigitalEmployeeGORM, messages []Message) {
+func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee *models.DigitalEmployee, messages []Message) {
 	if s.provider == nil || s.provider.GetManifest() == nil || s.provider.GetManifest().KnowledgeBase == nil {
 		return
 	}
@@ -1099,7 +1063,7 @@ func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee 
 	}
 
 	// 2. 获取默认模型
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
 		if err := s.db.First(&model).Error; err != nil {
 			return
@@ -1114,7 +1078,7 @@ func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee 
 	}
 
 	req := ChatRequest{
-		Model: model.ModelID,
+		Model: model.ApiModelID,
 		Messages: []Message{
 			{Role: RoleSystem, Content: prompt},
 		},
@@ -1177,7 +1141,7 @@ func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee 
 				// 中等相似度：尝试合并知识
 				mergePrompt := fmt.Sprintf("请合并以下两条相关的知识点，生成一个更全面、准确的版本。\n知识点1：%s\n知识点2：%s\n请直接输出合并后的内容，不要有其他解释。", topMatch.Content, fact)
 				mergeResp, err := client.Chat(ctx, ChatRequest{
-					Model: model.ModelID,
+					Model: model.ApiModelID,
 					Messages: []Message{
 						{Role: RoleSystem, Content: mergePrompt},
 					},
@@ -1206,7 +1170,7 @@ func (s *AIServiceImpl) AutoLearnFromConversation(ctx context.Context, employee 
 }
 
 // EvaluateAndRecordKpi AI 自动对回复质量进行打分
-func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *models.DigitalEmployeeGORM, userMsg, aiResp string) {
+func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *models.DigitalEmployee, userMsg, aiResp string) {
 	if s.employeeService == nil {
 		return
 	}
@@ -1227,7 +1191,7 @@ func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *mode
 请仅回复一个 0-100 之间的数字，不要有任何其他文字。`, employee.Name, employee.Title, userMsg, aiResp)
 
 	// 获取默认模型
-	var model models.AIModelGORM
+	var model models.AIModel
 	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
 		if err := s.db.First(&model).Error; err != nil {
 			return
@@ -1241,7 +1205,7 @@ func (s *AIServiceImpl) EvaluateAndRecordKpi(ctx context.Context, employee *mode
 	}
 
 	req := ChatRequest{
-		Model: model.ModelID,
+		Model: model.ApiModelID,
 		Messages: []Message{
 			{Role: RoleSystem, Content: prompt},
 		},
@@ -1282,7 +1246,7 @@ func (s *AIServiceImpl) MaybeConsolidateMemories(ctx context.Context, userID str
 
 	// 简单的触发逻辑：获取该用户记忆总数
 	var count int64
-	s.db.Model(&models.CognitiveMemoryGORM{}).Where("user_id = ? AND bot_id = ?", userID, botID).Count(&count)
+	s.db.Model(&models.CognitiveMemory{}).Where("user_id = ? AND bot_id = ?", userID, botID).Count(&count)
 
 	// 如果记忆超过 20 条，尝试固化
 	if count >= 20 {

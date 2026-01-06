@@ -3,7 +3,7 @@ package app
 import (
 	"BotMatrix/common/ai"
 	"BotMatrix/common/ai/rag"
-	"BotMatrix/common/core"
+	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/types"
 	"botworker/internal/config"
 	"botworker/plugins"

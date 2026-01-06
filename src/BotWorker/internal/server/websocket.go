@@ -24,6 +24,7 @@ type WebSocketServer struct {
 	requestHandlers []onebot.EventHandler
 	eventHandlers   map[string][]onebot.EventHandler
 	apiHandlers     map[string]onebot.RequestHandler
+	middlewares     []MiddlewareFunc
 	closeChan       chan struct{}
 }
 

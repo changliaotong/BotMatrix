@@ -20,7 +20,7 @@ func NewWorkerAIClient(provider AIServiceProvider) *WorkerAIClient {
 	}
 }
 
-func (c *WorkerAIClient) GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error) {
+func (c *WorkerAIClient) GetEmployeeByBotID(botID string) (*models.DigitalEmployee, error) {
 	res, err := c.provider.SyncSkillCall(context.Background(), "employee_get_info", map[string]any{
 		"bot_id": botID,
 	})
@@ -31,7 +31,7 @@ func (c *WorkerAIClient) GetEmployeeByBotID(botID string) (*models.DigitalEmploy
 	if !ok {
 		return nil, fmt.Errorf("unexpected response type")
 	}
-	var emp models.DigitalEmployeeGORM
+	var emp models.DigitalEmployee
 	json.Unmarshal([]byte(resStr), &emp)
 	return &emp, nil
 }

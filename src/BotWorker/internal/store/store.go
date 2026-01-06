@@ -43,8 +43,8 @@ type UserStore struct {
 	db *gorm.DB
 }
 
-func (s *UserStore) GetByID(id int64) (*models.User, error) {
-	var user models.User
+func (s *UserStore) GetByID(id int64) (*models.UserInfo, error) {
+	var user models.UserInfo
 	err := s.db.First(&user, "Id = ?", id).Error
 	if err != nil {
 		return nil, err
@@ -52,12 +52,12 @@ func (s *UserStore) GetByID(id int64) (*models.User, error) {
 	return &user, nil
 }
 
-func (s *UserStore) GetOrCreate(id int64, name string) (*models.User, error) {
-	var user models.User
+func (s *UserStore) GetOrCreate(id int64, name string) (*models.UserInfo, error) {
+	var user models.UserInfo
 	err := s.db.First(&user, "Id = ?", id).Error
 	if err == gorm.ErrRecordNotFound {
-		user = models.User{
-			ID:   id,
+		user = models.UserInfo{
+			Id:   id,
 			Name: name,
 		}
 		if err := s.db.Create(&user).Error; err != nil {
@@ -69,10 +69,10 @@ func (s *UserStore) GetOrCreate(id int64, name string) (*models.User, error) {
 }
 
 func (s *UserStore) AddCredit(id int64, amount int64) error {
-	return s.db.Model(&models.User{}).Where("Id = ?", id).Update("Credit", gorm.Expr("Credit + ?", amount)).Error
+	return s.db.Model(&models.UserInfo{}).Where("Id = ?", id).Update("Credit", gorm.Expr("Credit + ?", amount)).Error
 }
 
-func (s *UserStore) Update(user *models.User) error {
+func (s *UserStore) Update(user *models.UserInfo) error {
 	return s.db.Save(user).Error
 }
 
@@ -81,21 +81,21 @@ type GroupStore struct {
 	db *gorm.DB
 }
 
-func (s *GroupStore) GetByID(id int64) (*models.Group, error) {
-	var group models.Group
-	err := s.db.First(&group, "GroupId = ?", id).Error
+func (s *GroupStore) GetByID(id int64) (*models.GroupInfo, error) {
+	var group models.GroupInfo
+	err := s.db.First(&group, "Id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &group, nil
 }
 
-func (s *GroupStore) GetOrCreate(id int64) (*models.Group, error) {
-	var group models.Group
-	err := s.db.First(&group, "GroupId = ?", id).Error
+func (s *GroupStore) GetOrCreate(id int64) (*models.GroupInfo, error) {
+	var group models.GroupInfo
+	err := s.db.First(&group, "Id = ?", id).Error
 	if err == gorm.ErrRecordNotFound {
-		group = models.Group{
-			GroupID: id,
+		group = models.GroupInfo{
+			Id: id,
 		}
 		if err := s.db.Create(&group).Error; err != nil {
 			return nil, err
@@ -105,7 +105,7 @@ func (s *GroupStore) GetOrCreate(id int64) (*models.Group, error) {
 	return &group, err
 }
 
-func (s *GroupStore) Update(group *models.Group) error {
+func (s *GroupStore) Update(group *models.GroupInfo) error {
 	return s.db.Save(group).Error
 }
 
@@ -134,8 +134,8 @@ func (s *MemberStore) GetOrCreate(groupID, userID int64, name string) (*models.G
 	err := s.db.First(&member, "GroupId = ? AND UserId = ?", groupID, userID).Error
 	if err == gorm.ErrRecordNotFound {
 		member = models.GroupMember{
-			GroupID:  groupID,
-			UserID:   userID,
+			GroupId:  groupID,
+			UserId:   userID,
 			UserName: name,
 		}
 		if err := s.db.Create(&member).Error; err != nil {
@@ -213,8 +213,8 @@ type VIPStore struct {
 	db *gorm.DB
 }
 
-func (s *VIPStore) GetByGroupID(groupID int64) (*models.VIPInfo, error) {
-	var vip models.VIPInfo
+func (s *VIPStore) GetByGroupID(groupID int64) (*models.GroupVip, error) {
+	var vip models.GroupVip
 	err := s.db.First(&vip, "GroupId = ?", groupID).Error
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (s *VIPStore) GetByGroupID(groupID int64) (*models.VIPInfo, error) {
 
 func (s *VIPStore) IsVIP(groupID int64) bool {
 	var count int64
-	s.db.Model(&models.VIPInfo{}).Where("GroupId = ? AND EndDate > ?", groupID, time.Now()).Count(&count)
+	s.db.Model(&models.GroupVip{}).Where("GroupId = ? AND EndDate > ?", groupID, time.Now()).Count(&count)
 	return count > 0
 }
 
@@ -280,9 +280,9 @@ func (s *SessionStore) Set(sessionID string, userID, groupID int64, state string
 	err := s.db.Where("SessionId = ?", sessionID).First(&session).Error
 	if err == gorm.ErrRecordNotFound {
 		session = models.Session{
-			SessionID: sessionID,
-			UserID:    userID,
-			GroupID:   groupID,
+			SessionId: sessionID,
+			UserId:    userID,
+			GroupId:   groupID,
 			State:     state,
 			Data:      dataJSON,
 		}

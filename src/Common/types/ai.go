@@ -26,7 +26,7 @@ type Manager interface {
 
 // B2BService 企业间通信服务接口
 type B2BService interface {
-	VerifyB2BToken(tokenString string) (*models.EnterpriseGORM, error)
+	VerifyB2BToken(tokenString string) (*models.Enterprise, error)
 	CheckDispatchPermission(employeeID, targetOrgID uint, action string) (bool, error)
 }
 
@@ -35,17 +35,17 @@ type CognitiveMemoryService interface {
 	LearnFromURL(ctx context.Context, botID string, url string, category string) error
 	LearnFromContent(ctx context.Context, botID string, content []byte, filename string, category string) error
 	ConsolidateMemories(ctx context.Context, userID string, botID string, aiSvc AIService) error
-	GetRelevantMemories(ctx context.Context, userID string, botID string, query string) ([]models.CognitiveMemoryGORM, error)
-	GetRoleMemories(ctx context.Context, botID string) ([]models.CognitiveMemoryGORM, error)
-	SaveMemory(ctx context.Context, memory *models.CognitiveMemoryGORM) error
+	GetRelevantMemories(ctx context.Context, userID string, botID string, query string) ([]models.CognitiveMemory, error)
+	GetRoleMemories(ctx context.Context, botID string) ([]models.CognitiveMemory, error)
+	SaveMemory(ctx context.Context, memory *models.CognitiveMemory) error
 	ForgetMemory(ctx context.Context, memoryID uint) error
-	SearchMemories(ctx context.Context, botID string, query string, category string) ([]models.CognitiveMemoryGORM, error)
+	SearchMemories(ctx context.Context, botID string, query string, category string) ([]models.CognitiveMemory, error)
 	SetEmbeddingService(svc any)
 }
 
 // DigitalEmployeeService 数字员工核心服务接口
 type DigitalEmployeeService interface {
-	GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error)
+	GetEmployeeByBotID(botID string) (*models.DigitalEmployee, error)
 	RecordKpi(employeeID uint, metric string, score float64) error
 	UpdateOnlineStatus(botID string, status string) error
 	ConsumeSalary(botID string, tokens int64) error
@@ -56,15 +56,15 @@ type DigitalEmployeeService interface {
 
 // DigitalEmployeeTaskService 数字员工任务服务接口
 type DigitalEmployeeTaskService interface {
-	CreateTask(ctx context.Context, task *models.DigitalEmployeeTaskGORM) error
+	CreateTask(ctx context.Context, task *models.DigitalEmployeeTask) error
 	UpdateTaskStatus(ctx context.Context, executionID string, status string, progress int) error
-	GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTaskGORM, error)
+	GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTask, error)
 	AssignTask(ctx context.Context, executionID string, assigneeID uint) error
 	PlanTask(ctx context.Context, executionID string) error
 	ExecuteTask(ctx context.Context, executionID string) error
 	ExecuteStep(ctx context.Context, executionID string, stepIndex int) error
 	ApproveTask(ctx context.Context, executionID string) error
-	CreateSubTask(ctx context.Context, parentExecutionID string, subTask *models.DigitalEmployeeTaskGORM) error
+	CreateSubTask(ctx context.Context, parentExecutionID string, subTask *models.DigitalEmployeeTask) error
 	RecordTaskResult(ctx context.Context, executionID string, result string, success bool) error
 }
 
@@ -374,9 +374,9 @@ type AIService interface {
 	CreateEmbeddingSimple(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error)
 	ExecuteTool(ctx context.Context, botID string, userID uint, orgID uint, toolCall ToolCall) (any, error)
 	GetMCPManager() MCPManagerInterface
-	GetProvider(id uint) (*models.AIProviderGORM, error)
+	GetProvider(id uint) (*models.AIProvider, error)
 	DispatchIntent(msg InternalMessage) (string, error)
-	ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg InternalMessage, targetOrgID uint) (string, error)
+	ChatWithEmployee(employee *models.DigitalEmployee, msg InternalMessage, targetOrgID uint) (string, error)
 }
 
 // MCP (Model Context Protocol) 核心结构定义

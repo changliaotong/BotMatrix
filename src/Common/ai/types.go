@@ -21,9 +21,11 @@ const (
 
 type Message = types.Message
 type ToolCall = types.ToolCall
+type FunctionCall = types.FunctionCall
 type Tool = types.Tool
 type ChatRequest = types.ChatRequest
 type ChatResponse = types.ChatResponse
+type Choice = types.Choice
 type ChatStreamResponse = types.ChatStreamResponse
 type EmbeddingRequest = types.EmbeddingRequest
 type EmbeddingResponse = types.EmbeddingResponse
@@ -89,7 +91,7 @@ type Client interface {
 	Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	ChatStream(ctx context.Context, req ChatRequest) (<-chan ChatStreamResponse, error)
 	CreateEmbedding(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error)
-	GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error)
+	GetEmployeeByBotID(botID string) (*models.DigitalEmployee, error)
 	PlanTask(ctx context.Context, executionID string) error
 }
 

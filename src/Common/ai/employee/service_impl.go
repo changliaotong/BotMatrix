@@ -37,8 +37,12 @@ func (s *EmployeeServiceImpl) SetAIService(aiSvc types.AIService) {
 	s.aiSvc = aiSvc
 }
 
-func (s *EmployeeServiceImpl) GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error) {
-	var employee models.DigitalEmployeeGORM
+func (s *EmployeeServiceImpl) GetAIService() types.AIService {
+	return s.aiSvc
+}
+
+func (s *EmployeeServiceImpl) GetEmployeeByBotID(botID string) (*models.DigitalEmployee, error) {
+	var employee models.DigitalEmployee
 	if err := s.db.Where("bot_id = ?", botID).First(&employee).Error; err != nil {
 		return nil, err
 	}
@@ -46,7 +50,7 @@ func (s *EmployeeServiceImpl) GetEmployeeByBotID(botID string) (*models.DigitalE
 }
 
 func (s *EmployeeServiceImpl) RecordKpi(employeeID uint, metric string, score float64) error {
-	log := models.DigitalEmployeeKpiGORM{
+	log := models.DigitalEmployeeKpi{
 		EmployeeID: employeeID,
 		MetricName: metric,
 		Score:      score,
@@ -56,12 +60,12 @@ func (s *EmployeeServiceImpl) RecordKpi(employeeID uint, metric string, score fl
 	}
 
 	var avgScore float64
-	s.db.Model(&models.DigitalEmployeeKpiGORM{}).
+	s.db.Model(&models.DigitalEmployeeKpi{}).
 		Where("employee_id = ?", employeeID).
 		Select("AVG(score)").
 		Scan(&avgScore)
 
-	err := s.db.Model(&models.DigitalEmployeeGORM{}).
+	err := s.db.Model(&models.DigitalEmployee{}).
 		Where("id = ?", employeeID).
 		Update("kpi_score", avgScore).Error
 
@@ -71,7 +75,7 @@ func (s *EmployeeServiceImpl) RecordKpi(employeeID uint, metric string, score fl
 
 	if avgScore < 85 {
 		var recentEvolution int64
-		s.db.Model(&models.DigitalEmployeeKpiGORM{}).
+		s.db.Model(&models.DigitalEmployeeKpi{}).
 			Where("employee_id = ? AND metric_name = ? AND created_at > ?", employeeID, "auto_evolution", time.Now().Add(-24*time.Hour)).
 			Count(&recentEvolution)
 
@@ -84,19 +88,19 @@ func (s *EmployeeServiceImpl) RecordKpi(employeeID uint, metric string, score fl
 }
 
 func (s *EmployeeServiceImpl) UpdateOnlineStatus(botID string, status string) error {
-	return s.db.Model(&models.DigitalEmployeeGORM{}).
+	return s.db.Model(&models.DigitalEmployee{}).
 		Where("bot_id = ?", botID).
 		Update("online_status", status).Error
 }
 
 func (s *EmployeeServiceImpl) ConsumeSalary(botID string, tokens int64) error {
-	return s.db.Model(&models.DigitalEmployeeGORM{}).
+	return s.db.Model(&models.DigitalEmployee{}).
 		Where("bot_id = ?", botID).
 		UpdateColumn("salary_token", gorm.Expr("salary_token + ?", tokens)).Error
 }
 
 func (s *EmployeeServiceImpl) CheckSalaryLimit(botID string) (bool, error) {
-	var employee models.DigitalEmployeeGORM
+	var employee models.DigitalEmployee
 	if err := s.db.Where("bot_id = ?", botID).First(&employee).Error; err != nil {
 		return false, err
 	}
@@ -121,7 +125,7 @@ func (s *EmployeeServiceImpl) UpdateSalary(botID string, salaryToken *int64, sal
 		return nil
 	}
 
-	return s.db.Model(&models.DigitalEmployeeGORM{}).
+	return s.db.Model(&models.DigitalEmployee{}).
 		Where("bot_id = ?", botID).
 		Updates(updates).Error
 }
@@ -131,7 +135,7 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 		return fmt.Errorf("AI service not initialized")
 	}
 
-	var employee models.DigitalEmployeeGORM
+	var employee models.DigitalEmployee
 	if err := s.db.Preload("Agent").First(&employee, employeeID).Error; err != nil {
 		return err
 	}
@@ -140,7 +144,7 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 		return fmt.Errorf("employee %d has no associated agent", employeeID)
 	}
 
-	var kpis []models.DigitalEmployeeKpiGORM
+	var kpis []models.DigitalEmployeeKpi
 	s.db.Where("employee_id = ?", employeeID).Order("created_at desc").Limit(10).Find(&kpis)
 
 	if len(kpis) == 0 {
@@ -218,11 +222,11 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 		return nil
 	}
 
-	if err := s.db.Model(&models.AIAgentGORM{}).Where("id = ?", employee.AgentID).Update("system_prompt", newPrompt).Error; err != nil {
+	if err := s.db.Model(&models.AIAgent{}).Where("id = ?", employee.AgentID).Update("system_prompt", newPrompt).Error; err != nil {
 		return err
 	}
 
-	evolutionLog := models.DigitalEmployeeKpiGORM{
+	evolutionLog := models.DigitalEmployeeKpi{
 		EmployeeID: employeeID,
 		MetricName: "auto_evolution",
 		Score:      avgScore,
@@ -233,6 +237,185 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 	clog.Info("数字员工进化成功", zap.Uint("id", employeeID), zap.String("name", employee.Name))
 
 	return nil
+}
+
+func (s *EmployeeServiceImpl) Recruit(orgID uint, jobID uint) (*models.DigitalEmployee, error) {
+	// 1. Get Role Template
+	var template models.DigitalRoleTemplate
+	if err := s.db.First(&template, jobID).Error; err != nil {
+		return nil, fmt.Errorf("role template not found: %v", err)
+	}
+
+	// 2. Create Agent
+	agent := models.AIAgent{
+		Name:         template.Name + "_" + fmt.Sprintf("%d", time.Now().Unix()),
+		SystemPrompt: template.BasePrompt,
+		ModelID:      1, // Default model, should be configurable
+		OwnerID:      orgID,
+		Tools:        template.DefaultSkills,
+	}
+	if err := s.db.Create(&agent).Error; err != nil {
+		return nil, fmt.Errorf("failed to create agent: %v", err)
+	}
+
+	// 3. Create Digital Employee
+	employee := models.DigitalEmployee{
+		EnterpriseID:   orgID,
+		BotID:          fmt.Sprintf("bot_%d_%d", orgID, time.Now().UnixNano()), // Generate unique BotID
+		EmployeeID:     fmt.Sprintf("EMP%d%d", orgID, time.Now().Unix()%10000),
+		RoleTemplateID: template.ID,
+		Name:           template.Name, // Default name
+		Title:          template.Name,
+		Bio:            template.DefaultBio,
+		AgentID:        agent.ID,
+		Skills:         template.DefaultSkills,
+		Status:         "active",
+		OnboardingAt:   time.Now(),
+	}
+
+	if err := s.db.Create(&employee).Error; err != nil {
+		return nil, fmt.Errorf("failed to create employee: %v", err)
+	}
+
+	return &employee, nil
+}
+
+func (s *EmployeeServiceImpl) Fire(orgID uint, employeeID string) error {
+	return s.db.Model(&models.DigitalEmployee{}).
+		Where("enterprise_id = ? AND employee_id = ?", orgID, employeeID).
+		Update("status", "retired").Error
+}
+
+func (s *EmployeeServiceImpl) Transfer(orgID uint, employeeID string, newJobID uint) error {
+	var template models.DigitalRoleTemplate
+	if err := s.db.First(&template, newJobID).Error; err != nil {
+		return fmt.Errorf("role template not found: %v", err)
+	}
+
+	return s.db.Model(&models.DigitalEmployee{}).
+		Where("enterprise_id = ? AND employee_id = ?", orgID, employeeID).
+		Updates(map[string]interface{}{
+			"role_template_id": newJobID,
+			"title":            template.Name,
+			"bio":              template.DefaultBio, // Reset bio or merge? Resetting for now.
+		}).Error
+}
+
+func (s *EmployeeServiceImpl) ChatWithEmployee(employee *models.DigitalEmployee, message types.InternalMessage, orgID uint) (string, error) {
+	if s.aiSvc == nil {
+		return "", fmt.Errorf("AI service not initialized")
+	}
+
+	// Get history... simplified for now, just send message
+	msgs := []types.Message{
+		{Role: types.RoleSystem, Content: employee.Agent.SystemPrompt},
+		{Role: types.RoleUser, Content: message.RawMessage},
+	}
+
+	resp, err := s.aiSvc.Chat(context.Background(), employee.Agent.ModelID, msgs, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if len(resp.Choices) > 0 {
+		if content, ok := resp.Choices[0].Message.Content.(string); ok {
+			return content, nil
+		}
+	}
+	return "", fmt.Errorf("no response from AI")
+}
+
+// Cognitive Memory Methods
+
+func (s *EmployeeServiceImpl) GetCognitiveMemory(ctx context.Context, employeeID string, category string) ([]models.CognitiveMemory, error) {
+	var memories []models.CognitiveMemory
+	query := s.db.WithContext(ctx).Where("bot_id = ?", employeeID) // Assuming employeeID is BotID
+	if category != "" {
+		query = query.Where("category = ?", category)
+	}
+	err := query.Order("created_at desc").Find(&memories).Error
+	return memories, err
+}
+
+func (s *EmployeeServiceImpl) AddCognitiveMemory(ctx context.Context, employeeID string, memory models.CognitiveMemory) error {
+	memory.BotID = employeeID
+	if memory.CreatedAt.IsZero() {
+		memory.CreatedAt = time.Now()
+	}
+	return s.db.WithContext(ctx).Create(&memory).Error
+}
+
+func (s *EmployeeServiceImpl) UpdateCognitiveMemory(ctx context.Context, employeeID string, memory models.CognitiveMemory) error {
+	return s.db.WithContext(ctx).Model(&models.CognitiveMemory{}).
+		Where("id = ? AND bot_id = ?", memory.ID, employeeID).
+		Updates(memory).Error
+}
+
+func (s *EmployeeServiceImpl) DeleteCognitiveMemory(ctx context.Context, employeeID string, memoryID uint) error {
+	return s.db.WithContext(ctx).Where("bot_id = ? AND id = ?", employeeID, memoryID).
+		Delete(&models.CognitiveMemory{}).Error
+}
+
+func (s *EmployeeServiceImpl) SearchCognitiveMemory(ctx context.Context, employeeID string, query string) ([]models.CognitiveMemory, error) {
+	var memories []models.CognitiveMemory
+	db := s.db.WithContext(ctx).Where("bot_id = ?", employeeID)
+	if query != "" {
+		db = db.Where("content LIKE ?", "%"+query+"%")
+	}
+	err := db.Order("created_at desc").Limit(10).Find(&memories).Error
+	return memories, err
+}
+
+// Task Methods
+
+func (s *EmployeeServiceImpl) AssignTask(ctx context.Context, employeeID string, task models.DigitalEmployeeTask) error {
+	// Look up employee ID
+	var emp models.DigitalEmployee
+	if err := s.db.Where("bot_id = ?", employeeID).First(&emp).Error; err != nil {
+		return fmt.Errorf("employee not found: %v", err)
+	}
+
+	task.AssigneeID = emp.ID
+	if task.Status == "" {
+		task.Status = "pending"
+	}
+	return s.db.WithContext(ctx).Create(&task).Error
+}
+
+func (s *EmployeeServiceImpl) GetTask(ctx context.Context, employeeID string, taskID uint) (*models.DigitalEmployeeTask, error) {
+	var task models.DigitalEmployeeTask
+	// Verify task belongs to employee (via AssigneeID)
+	var emp models.DigitalEmployee
+	if err := s.db.Where("bot_id = ?", employeeID).First(&emp).Error; err != nil {
+		return nil, fmt.Errorf("employee not found: %v", err)
+	}
+
+	if err := s.db.WithContext(ctx).Where("id = ? AND assignee_id = ?", taskID, emp.ID).First(&task).Error; err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+func (s *EmployeeServiceImpl) UpdateTaskStatus(ctx context.Context, employeeID string, taskID uint, status string) error {
+	var emp models.DigitalEmployee
+	if err := s.db.Where("bot_id = ?", employeeID).First(&emp).Error; err != nil {
+		return fmt.Errorf("employee not found: %v", err)
+	}
+
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
+		Where("id = ? AND assignee_id = ?", taskID, emp.ID).
+		Update("status", status).Error
+}
+
+func (s *EmployeeServiceImpl) GetTasksByStatus(ctx context.Context, employeeID string, status string) ([]models.DigitalEmployeeTask, error) {
+	var emp models.DigitalEmployee
+	if err := s.db.Where("bot_id = ?", employeeID).First(&emp).Error; err != nil {
+		return nil, fmt.Errorf("employee not found: %v", err)
+	}
+
+	var tasks []models.DigitalEmployeeTask
+	err := s.db.WithContext(ctx).Where("assignee_id = ? AND status = ?", emp.ID, status).Find(&tasks).Error
+	return tasks, err
 }
 
 // --- CognitiveMemoryService Implementation ---
@@ -256,9 +439,9 @@ func (s *CognitiveMemoryServiceImpl) SetEmbeddingService(svc any) {
 	}
 }
 
-func (s *CognitiveMemoryServiceImpl) GetRelevantMemories(ctx context.Context, userID string, botID string, query string) ([]models.CognitiveMemoryGORM, error) {
-	var userMemories []models.CognitiveMemoryGORM
-	var roleMemories []models.CognitiveMemoryGORM
+func (s *CognitiveMemoryServiceImpl) GetRelevantMemories(ctx context.Context, userID string, botID string, query string) ([]models.CognitiveMemory, error) {
+	var userMemories []models.CognitiveMemory
+	var roleMemories []models.CognitiveMemory
 
 	hasVector := false
 	if query != "" && s.embeddingSvc != nil && s.db.Dialector.Name() == "postgres" {
@@ -303,8 +486,8 @@ func (s *CognitiveMemoryServiceImpl) GetRelevantMemories(ctx context.Context, us
 	return allMemories, nil
 }
 
-func (s *CognitiveMemoryServiceImpl) GetRoleMemories(ctx context.Context, botID string) ([]models.CognitiveMemoryGORM, error) {
-	var memories []models.CognitiveMemoryGORM
+func (s *CognitiveMemoryServiceImpl) GetRoleMemories(ctx context.Context, botID string) ([]models.CognitiveMemory, error) {
+	var memories []models.CognitiveMemory
 	err := s.db.WithContext(ctx).
 		Where("user_id = '' AND bot_id = ?", botID).
 		Order("importance DESC").
@@ -312,8 +495,8 @@ func (s *CognitiveMemoryServiceImpl) GetRoleMemories(ctx context.Context, botID 
 	return memories, err
 }
 
-func (s *CognitiveMemoryServiceImpl) SearchMemories(ctx context.Context, botID string, query string, category string) ([]models.CognitiveMemoryGORM, error) {
-	var memories []models.CognitiveMemoryGORM
+func (s *CognitiveMemoryServiceImpl) SearchMemories(ctx context.Context, botID string, query string, category string) ([]models.CognitiveMemory, error) {
+	var memories []models.CognitiveMemory
 	db := s.db.WithContext(ctx).Where("bot_id = ?", botID)
 
 	if query != "" {
@@ -327,7 +510,7 @@ func (s *CognitiveMemoryServiceImpl) SearchMemories(ctx context.Context, botID s
 	return memories, err
 }
 
-func (s *CognitiveMemoryServiceImpl) SaveMemory(ctx context.Context, memory *models.CognitiveMemoryGORM) error {
+func (s *CognitiveMemoryServiceImpl) SaveMemory(ctx context.Context, memory *models.CognitiveMemory) error {
 	if memory.CreatedAt.IsZero() {
 		memory.CreatedAt = time.Now()
 	}
@@ -347,7 +530,7 @@ func (s *CognitiveMemoryServiceImpl) SaveMemory(ctx context.Context, memory *mod
 }
 
 func (s *CognitiveMemoryServiceImpl) ForgetMemory(ctx context.Context, memoryID uint) error {
-	return s.db.WithContext(ctx).Delete(&models.CognitiveMemoryGORM{}, memoryID).Error
+	return s.db.WithContext(ctx).Delete(&models.CognitiveMemory{}, memoryID).Error
 }
 
 func (s *CognitiveMemoryServiceImpl) ConsolidateMemories(ctx context.Context, userID string, botID string, aiSvc types.AIService) error {
@@ -355,7 +538,7 @@ func (s *CognitiveMemoryServiceImpl) ConsolidateMemories(ctx context.Context, us
 		return fmt.Errorf("AI service is required for consolidation")
 	}
 
-	var memories []models.CognitiveMemoryGORM
+	var memories []models.CognitiveMemory
 	query := s.db.WithContext(ctx).Where("bot_id = ?", botID)
 	if userID != "" {
 		query = query.Where("user_id = ?", userID)
@@ -403,7 +586,7 @@ func (s *CognitiveMemoryServiceImpl) ConsolidateMemories(ctx context.Context, us
 	}
 
 	lines := strings.Split(content, "\n")
-	var newMemories []models.CognitiveMemoryGORM
+	var newMemories []models.CognitiveMemory
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -418,7 +601,7 @@ func (s *CognitiveMemoryServiceImpl) ConsolidateMemories(ctx context.Context, us
 			fact = strings.TrimSpace(line[idx+1:])
 		}
 
-		newMemories = append(newMemories, models.CognitiveMemoryGORM{
+		newMemories = append(newMemories, models.CognitiveMemory{
 			UserID:     userID,
 			BotID:      botID,
 			Category:   category,
@@ -437,7 +620,7 @@ func (s *CognitiveMemoryServiceImpl) ConsolidateMemories(ctx context.Context, us
 				delQuery = delQuery.Where("user_id = '' OR user_id IS NULL")
 			}
 
-			if err := delQuery.Delete(&models.CognitiveMemoryGORM{}).Error; err != nil {
+			if err := delQuery.Delete(&models.CognitiveMemory{}).Error; err != nil {
 				return err
 			}
 
@@ -518,7 +701,7 @@ func (s *CognitiveMemoryServiceImpl) LearnFromContent(ctx context.Context, botID
 	}
 
 	for i, chunk := range chunks {
-		mem := &models.CognitiveMemoryGORM{
+		mem := &models.CognitiveMemory{
 			BotID:      botID,
 			UserID:     "",
 			Content:    chunk.Content,
@@ -572,7 +755,7 @@ type TaskStep struct {
 	RequiresApproval bool   `json:"requires_approval,omitempty"`
 }
 
-func (s *DigitalEmployeeTaskServiceImpl) CreateTask(ctx context.Context, task *models.DigitalEmployeeTaskGORM) error {
+func (s *DigitalEmployeeTaskServiceImpl) CreateTask(ctx context.Context, task *models.DigitalEmployeeTask) error {
 	if task.ExecutionID == "" {
 		task.ExecutionID = fmt.Sprintf("exec-%d", time.Now().UnixNano())
 	}
@@ -591,13 +774,13 @@ func (s *DigitalEmployeeTaskServiceImpl) UpdateTaskStatus(ctx context.Context, e
 		now := time.Now()
 		updates["end_time"] = &now
 	}
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTaskGORM{}).
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
 		Where("execution_id = ?", executionID).
 		Updates(updates).Error
 }
 
-func (s *DigitalEmployeeTaskServiceImpl) GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTaskGORM, error) {
-	var task models.DigitalEmployeeTaskGORM
+func (s *DigitalEmployeeTaskServiceImpl) GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTask, error) {
+	var task models.DigitalEmployeeTask
 	if err := s.db.WithContext(ctx).Where("execution_id = ?", executionID).First(&task).Error; err != nil {
 		return nil, err
 	}
@@ -605,7 +788,7 @@ func (s *DigitalEmployeeTaskServiceImpl) GetTaskByExecutionID(ctx context.Contex
 }
 
 func (s *DigitalEmployeeTaskServiceImpl) AssignTask(ctx context.Context, executionID string, assigneeID uint) error {
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTaskGORM{}).
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
 		Where("execution_id = ?", executionID).
 		Update("assignee_id", assigneeID).Error
 }
@@ -669,7 +852,7 @@ func (s *DigitalEmployeeTaskServiceImpl) PlanTask(ctx context.Context, execution
 		return fmt.Errorf("failed to parse task plan: %v", err)
 	}
 
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTaskGORM{}).
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
 		Where("execution_id = ?", executionID).
 		Updates(map[string]any{
 			"plan_raw": content,
@@ -720,7 +903,7 @@ func (s *DigitalEmployeeTaskServiceImpl) ExecuteTask(ctx context.Context, execut
 		step := plan.Steps[i]
 
 		if step.RequiresApproval && task.Status != "approved" {
-			s.db.Model(&models.DigitalEmployeeTaskGORM{}).
+			s.db.Model(&models.DigitalEmployeeTask{}).
 				Where("execution_id = ?", executionID).
 				Updates(map[string]any{
 					"status":             "pending_approval",
@@ -768,7 +951,7 @@ func (s *DigitalEmployeeTaskServiceImpl) ExecuteTask(ctx context.Context, execut
 
 		results = append(results, fmt.Sprintf("### %s\n%s", step.Title, stepResult))
 
-		s.db.Model(&models.DigitalEmployeeTaskGORM{}).
+		s.db.Model(&models.DigitalEmployeeTask{}).
 			Where("execution_id = ?", executionID).
 			Updates(map[string]any{
 				"progress":           progress,
@@ -790,12 +973,12 @@ func (s *DigitalEmployeeTaskServiceImpl) ExecuteStep(ctx context.Context, execut
 }
 
 func (s *DigitalEmployeeTaskServiceImpl) ApproveTask(ctx context.Context, executionID string) error {
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTaskGORM{}).
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
 		Where("execution_id = ?", executionID).
 		Update("status", "approved").Error
 }
 
-func (s *DigitalEmployeeTaskServiceImpl) CreateSubTask(ctx context.Context, parentExecutionID string, subTask *models.DigitalEmployeeTaskGORM) error {
+func (s *DigitalEmployeeTaskServiceImpl) CreateSubTask(ctx context.Context, parentExecutionID string, subTask *models.DigitalEmployeeTask) error {
 	parent, err := s.GetTaskByExecutionID(ctx, parentExecutionID)
 	if err != nil {
 		return err
@@ -818,7 +1001,7 @@ func (s *DigitalEmployeeTaskServiceImpl) RecordTaskResult(ctx context.Context, e
 		clog.Info("[TaskEngine] Task completed successfully", zap.String("execution_id", executionID))
 	}
 	now := time.Now()
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTaskGORM{}).
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
 		Where("execution_id = ?", executionID).
 		Updates(map[string]any{
 			"result_raw": result,
@@ -859,7 +1042,7 @@ func (s *DigitalEmployeeKPIServiceImpl) CalculateKPI(ctx context.Context, employ
 	}
 
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).
+	s.db.Model(&models.DigitalEmployeeTask{}).
 		Where("assignee_id = ? AND created_at > ?", employeeID, thirtyDaysAgo).
 		Count(&stats.TotalTasks)
 
@@ -867,7 +1050,7 @@ func (s *DigitalEmployeeKPIServiceImpl) CalculateKPI(ctx context.Context, employ
 		return 100, nil
 	}
 
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).
+	s.db.Model(&models.DigitalEmployeeTask{}).
 		Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "completed", thirtyDaysAgo).
 		Count(&stats.CompletedTasks)
 
@@ -875,7 +1058,7 @@ func (s *DigitalEmployeeKPIServiceImpl) CalculateKPI(ctx context.Context, employ
 		AvgTokenUsage float64 `gorm:"column:avg_token_usage"`
 		AvgDuration   float64 `gorm:"column:avg_duration"`
 	}
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).
+	s.db.Model(&models.DigitalEmployeeTask{}).
 		Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "completed", thirtyDaysAgo).
 		Select("COALESCE(AVG(token_usage), 0) as avg_token_usage, COALESCE(AVG(duration), 0) as avg_duration").
 		Scan(&avgStats)
@@ -917,7 +1100,7 @@ func (s *DigitalEmployeeKPIServiceImpl) CalculateKPI(ctx context.Context, employ
 
 	finalScore := (scoreCompletion * 0.6) + (scoreEfficiency * 0.2) + (scoreCost * 0.2)
 
-	if err := s.db.Model(&models.DigitalEmployeeGORM{}).Where("id = ?", employeeID).Update("kpi_score", finalScore).Error; err != nil {
+	if err := s.db.Model(&models.DigitalEmployee{}).Where("id = ?", employeeID).Update("kpi_score", finalScore).Error; err != nil {
 		return finalScore, err
 	}
 
@@ -925,13 +1108,13 @@ func (s *DigitalEmployeeKPIServiceImpl) CalculateKPI(ctx context.Context, employ
 }
 
 func (s *DigitalEmployeeKPIServiceImpl) OptimizeEmployee(ctx context.Context, employeeID uint) error {
-	var emp models.DigitalEmployeeGORM
+	var emp models.DigitalEmployee
 	if err := s.db.First(&emp, employeeID).Error; err != nil {
 		return err
 	}
 
 	if s.b2bSvc != nil {
-		var dispatch models.DigitalEmployeeDispatchGORM
+		var dispatch models.DigitalEmployeeDispatch
 		err := s.db.Where("employee_id = ? AND status = ?", employeeID, "approved").First(&dispatch).Error
 		if err == nil {
 			hasPerm, err := s.b2bSvc.CheckDispatchPermission(employeeID, dispatch.TargetEntID, "optimize")
@@ -944,7 +1127,7 @@ func (s *DigitalEmployeeKPIServiceImpl) OptimizeEmployee(ctx context.Context, em
 		}
 	}
 
-	var failedTasks []models.DigitalEmployeeTaskGORM
+	var failedTasks []models.DigitalEmployeeTask
 	s.db.Where("assignee_id = ? AND status = ?", employeeID, "failed").
 		Order("created_at DESC").
 		Limit(5).
@@ -964,7 +1147,7 @@ func (s *DigitalEmployeeKPIServiceImpl) OptimizeEmployee(ctx context.Context, em
 请直接输出优化后的 Bio 内容，不要包含其他解释文字。`,
 		emp.Name, emp.Title, string(taskData), emp.Bio)
 
-	var chatModel models.AIModelGORM
+	var chatModel models.AIModel
 	if err := s.db.Where("is_default = ?", true).First(&chatModel).Error; err != nil {
 		if err := s.db.First(&chatModel).Error; err != nil {
 			return fmt.Errorf("no AI models configured: %w", err)
@@ -986,11 +1169,11 @@ func (s *DigitalEmployeeKPIServiceImpl) OptimizeEmployee(ctx context.Context, em
 		zap.String("name", emp.Name),
 		zap.Uint("enterprise_id", emp.EnterpriseID))
 
-	return s.db.Model(&models.DigitalEmployeeGORM{}).Where("id = ?", employeeID).Update("bio", optimizedBio).Error
+	return s.db.Model(&models.DigitalEmployee{}).Where("id = ?", employeeID).Update("bio", optimizedBio).Error
 }
 
 func (s *DigitalEmployeeKPIServiceImpl) GetPerformanceReport(ctx context.Context, employeeID uint, days int) (string, error) {
-	var emp models.DigitalEmployeeGORM
+	var emp models.DigitalEmployee
 	if err := s.db.First(&emp, employeeID).Error; err != nil {
 		return "", err
 	}
@@ -1005,15 +1188,15 @@ func (s *DigitalEmployeeKPIServiceImpl) GetPerformanceReport(ctx context.Context
 		AvgDuration   float64
 	}
 	startTime := time.Now().AddDate(0, 0, -days)
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND created_at > ?", employeeID, startTime).Count(&stats.Total)
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "completed", startTime).Count(&stats.Completed)
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "failed", startTime).Count(&stats.Failed)
+	s.db.Model(&models.DigitalEmployeeTask{}).Where("assignee_id = ? AND created_at > ?", employeeID, startTime).Count(&stats.Total)
+	s.db.Model(&models.DigitalEmployeeTask{}).Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "completed", startTime).Count(&stats.Completed)
+	s.db.Model(&models.DigitalEmployeeTask{}).Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "failed", startTime).Count(&stats.Failed)
 
 	var avgStats struct {
 		AvgTokenUsage float64 `gorm:"column:avg_token_usage"`
 		AvgDuration   float64 `gorm:"column:avg_duration"`
 	}
-	s.db.Model(&models.DigitalEmployeeTaskGORM{}).
+	s.db.Model(&models.DigitalEmployeeTask{}).
 		Where("assignee_id = ? AND status = ? AND created_at > ?", employeeID, "completed", startTime).
 		Select("COALESCE(AVG(token_usage), 0) as avg_token_usage, COALESCE(AVG(duration), 0) as avg_duration").
 		Scan(&avgStats)
@@ -1029,7 +1212,7 @@ func (s *DigitalEmployeeKPIServiceImpl) GetPerformanceReport(ctx context.Context
 	report += fmt.Sprintf("- **平均资源消耗**: %.0f Token/任务\n", stats.AvgTokenUsage)
 	report += fmt.Sprintf("- **累计消耗 Token**: %d / %d (预算)\n", emp.SalaryToken, emp.SalaryLimit)
 
-	var tasks []models.DigitalEmployeeTaskGORM
+	var tasks []models.DigitalEmployeeTask
 	s.db.Where("assignee_id = ? AND status = ? AND plan_raw != ''", employeeID, "completed").Limit(20).Find(&tasks)
 	toolCounts := make(map[string]int)
 	for _, t := range tasks {

@@ -10,11 +10,11 @@ type BaseContext interface {
 	// BotInfo 获取当前机器人信息
 	BotInfo() *BotInfo
 	// Group 获取当前群组信息（如果是私聊则返回 nil）
-	Group() *models.Group
+	Group() *models.GroupInfo
 	// Member 获取当前发送者在群内的成员信息
 	Member() *models.GroupMember
 	// User 获取当前发送者的全局用户信息（含积分）
-	User() *models.User
+	User() *models.UserInfo
 	// Store 获取底层存储，用于执行高级数据库操作
 	Store() *models.Sz84Store
 }

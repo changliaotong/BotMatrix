@@ -10,6 +10,7 @@ import (
 	"botworker/plugins"
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"gorm.io/gorm"
@@ -113,8 +114,35 @@ func (s *WorkerAIService) Chat(ctx context.Context, modelID uint, messages []typ
 }
 
 func (s *WorkerAIService) ChatAgent(ctx context.Context, modelID uint, messages []types.Message, tools []types.Tool) (*types.ChatResponse, error) {
-	// Worker 端暂不实现复杂的 Agent 逻辑，直接调用 Chat
-	return s.Chat(ctx, modelID, messages, tools)
+	// 获取上下文中的 SessionID, BotID 等
+	sessionID, _ := ctx.Value("session_id").(string)
+	botID, _ := ctx.Value("bot_id").(string)
+	userIDStr, _ := ctx.Value("user_id").(string)
+	orgIDStr, _ := ctx.Value("org_id").(string)
+
+	if sessionID == "" {
+		sessionID = "worker_session"
+	}
+	if botID == "" {
+		botID = "worker_bot"
+	}
+
+	// 自动注入 MCP 工具
+	if s.mcp != nil {
+		uid, _ := strconv.ParseUint(userIDStr, 10, 64)
+		oid, _ := strconv.ParseUint(orgIDStr, 10, 64)
+		mcpTools, err := s.mcp.GetToolsForContext(ctx, uint(uid), uint(oid))
+		if err == nil && len(mcpTools) > 0 {
+			if tools == nil {
+				tools = make([]types.Tool, 0)
+			}
+			tools = append(tools, mcpTools...)
+		}
+	}
+
+	// 使用 Common/ai 中的 AgentExecutor
+	executor := ai.NewAgentExecutor(s, modelID, botID, userIDStr, sessionID)
+	return executor.Execute(ctx, messages, tools)
 }
 
 func (s *WorkerAIService) CreateEmbedding(ctx context.Context, modelID uint, input any) (*types.EmbeddingResponse, error) {
@@ -159,6 +187,6 @@ func (s *WorkerAIService) DispatchIntent(msg types.InternalMessage) (string, err
 	return "", fmt.Errorf("DispatchIntent not implemented on WorkerAIService")
 }
 
-func (s *WorkerAIService) ChatWithEmployee(employee *models.DigitalEmployeeGORM, msg types.InternalMessage, targetOrgID uint) (string, error) {
+func (s *WorkerAIService) ChatWithEmployee(employee *models.DigitalEmployee, msg types.InternalMessage, targetOrgID uint) (string, error) {
 	return "", fmt.Errorf("ChatWithEmployee not implemented on WorkerAIService")
 }

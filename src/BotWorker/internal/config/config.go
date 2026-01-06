@@ -175,6 +175,23 @@ type RedisConfig struct {
 
 	// Redis数据库编号
 	DB int `json:"db"`
+
+	// Stream配置
+	Stream StreamConfig `json:"stream"`
+}
+
+// StreamConfig 定义Redis Stream配置
+type StreamConfig struct {
+	// 要消费的 Stream 列表
+	Streams []string `json:"streams"`
+	// 消费者组名称
+	Group string `json:"group"`
+	// 消费者名称
+	Consumer string `json:"consumer"`
+	// 每次读取的消息数量
+	BatchSize int64 `json:"batch_size"`
+	// 阻塞读取时间
+	BlockTime time.Duration `json:"block_time"`
 }
 
 // WeatherConfig 定义天气API配置
@@ -402,6 +419,21 @@ func UpdateConfigFromJSON(config *Config, content []byte) (*Config, error) {
 		config.Redis.Password = jsonCfg.Redis.Password
 	}
 	config.Redis.DB = jsonCfg.Redis.DB
+
+	config.Redis.Stream.Streams = jsonCfg.Redis.Stream.Streams
+	config.Redis.Stream.Group = jsonCfg.Redis.Stream.Group
+	config.Redis.Stream.Consumer = jsonCfg.Redis.Stream.Consumer
+	config.Redis.Stream.BatchSize = jsonCfg.Redis.Stream.BatchSize
+	if config.Redis.Stream.BatchSize == 0 {
+		config.Redis.Stream.BatchSize = 10 // 默认值
+	}
+
+	if d, ok := parseDuration(jsonCfg.Redis.Stream.BlockTime); ok {
+		config.Redis.Stream.BlockTime = d
+	}
+	if config.Redis.Stream.BlockTime == 0 {
+		config.Redis.Stream.BlockTime = 2 * time.Second // 默认值
+	}
 
 	// 更新天气API配置
 	if jsonCfg.Weather.APIKey != "" {

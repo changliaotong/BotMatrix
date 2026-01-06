@@ -33,6 +33,7 @@ type CombinedServer struct {
 	botService             *bot.BaseBot
 	wsServer               *WebSocketServer
 	httpServer             *HTTPServer
+	streamServer           *RedisStreamServer
 	pluginManager          *core.PluginManager
 	redisClient            *redis.Client
 	config                 *config.Config
@@ -96,6 +97,7 @@ func NewCombinedServer(botService *bot.BaseBot, cfg *config.Config, rdb *redis.C
 		botService:    botService,
 		wsServer:      NewWebSocketServer(&cfg.WebSocket),
 		httpServer:    NewHTTPServer(&cfg.HTTP),
+		streamServer:  NewRedisStreamServer(&cfg.Redis.Stream, rdb),
 		redisClient:   rdb,
 		config:        cfg,
 		skills:        make(map[string]core.Skill),
@@ -104,6 +106,12 @@ func NewCombinedServer(botService *bot.BaseBot, cfg *config.Config, rdb *redis.C
 	server.registerStorageHandlers()
 	server.registerCoreHandlers()
 	return server
+}
+
+// Use 注册全局中间件
+func (s *CombinedServer) Use(m ...MiddlewareFunc) {
+	s.httpServer.Use(m...)
+	s.wsServer.Use(m...)
 }
 
 func (s *CombinedServer) registerCoreHandlers() {
@@ -379,21 +387,25 @@ func (s *CombinedServer) registerStorageHandlers() {
 func (s *CombinedServer) OnMessage(fn onebot.EventHandler) {
 	s.wsServer.OnMessage(fn)
 	s.httpServer.OnMessage(fn)
+	s.streamServer.OnMessage(fn)
 }
 
 func (s *CombinedServer) OnNotice(fn onebot.EventHandler) {
 	s.wsServer.OnNotice(fn)
 	s.httpServer.OnNotice(fn)
+	s.streamServer.OnNotice(fn)
 }
 
 func (s *CombinedServer) OnRequest(fn onebot.EventHandler) {
 	s.wsServer.OnRequest(fn)
 	s.httpServer.OnRequest(fn)
+	s.streamServer.OnRequest(fn)
 }
 
 func (s *CombinedServer) OnEvent(eventName string, fn onebot.EventHandler) {
 	s.wsServer.OnEvent(eventName, fn)
 	s.httpServer.OnEvent(eventName, fn)
+	s.streamServer.OnEvent(eventName, fn)
 }
 
 func (s *CombinedServer) HandleAPI(action string, fn any) {
@@ -925,6 +937,13 @@ func (s *CombinedServer) Run() error {
 		}
 	}()
 
+	// 启动 Redis Stream 服务器
+	go func() {
+		if err := s.streamServer.Run(); err != nil {
+			log.Printf("[Combined] RedisStream server error: %v", err)
+		}
+	}()
+
 	// 启动Redis队列监听 (如果配置了Redis)
 	if s.redisClient != nil {
 		go s.startRedisQueueListener()
@@ -1282,4 +1301,7 @@ func (s *CombinedServer) dispatchInternalEvent(event *onebot.Event) {
 func (s *CombinedServer) Stop() {
 	s.wsServer.Stop()
 	s.httpServer.Stop()
+	if s.streamServer != nil {
+		s.streamServer.Stop()
+	}
 }

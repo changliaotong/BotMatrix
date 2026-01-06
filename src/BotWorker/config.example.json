@@ -34,6 +34,13 @@
     "host": "localhost",
     "port": 6379,
     "password": "",
-    "db": 0
+    "db": 0,
+    "stream": {
+      "streams": ["onebot_events"],
+      "group": "bot_worker_group",
+      "consumer": "worker_1",
+      "batch_size": 10,
+      "block_time": 2000
+    }
   }
 }

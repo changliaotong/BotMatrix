@@ -1,9 +1,11 @@
-package models
+package services
 
 import (
 	"fmt"
 	"math"
 	"time"
+
+	"BotMatrix/common/models"
 
 	"gorm.io/gorm"
 )
@@ -22,25 +24,37 @@ type SigninResult struct {
 	AlreadySigned bool
 }
 
-// SigninService handles the replicated C# sign-in logic
 type SigninService struct {
-	store *Sz84Store
+	db *gorm.DB
 }
 
-func NewSigninService(store *Sz84Store) *SigninService {
-	return &SigninService{store: store}
+func NewSigninService(db *gorm.DB) *SigninService {
+	return &SigninService{db: db}
+}
+
+// Helper to get start of day
+func startOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+func (s *SigninService) getDateDiffInDays(t1, t2 time.Time) int {
+	// Normalize to midnight for day difference
+	d1 := startOfDay(t1)
+	d2 := startOfDay(t2)
+	diff := d2.Sub(d1).Hours() / 24
+	return int(math.Abs(diff))
 }
 
 // TrySignIn replicates the C# BotMessage.TrySignIn logic
 func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string, userID int64, userName string, isAuto bool) (*SigninResult, error) {
-	db := s.store.db
+	db := s.db
 
 	// 1. Get Group Info
-	var group Group
-	if err := db.Where("GroupId = ?", groupID).First(&group).Error; err != nil {
+	var group models.GroupInfo
+	if err := db.Where("Id = ?", groupID).First(&group).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// If group doesn't exist, we might want to create it or handle default
-			group = Group{GroupID: groupID, IsCredit: true, IsAutoSignin: true}
+			group = models.GroupInfo{Id: groupID, IsCredit: true, IsAutoSignin: true}
 		} else {
 			return nil, err
 		}
@@ -51,7 +65,7 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 	}
 
 	// 1.5 Get member info to check today's status
-	var member GroupMember
+	var member models.GroupMember
 	err := db.Where("GroupId = ? AND UserId = ?", groupID, userID).First(&member).Error
 
 	// Check if already signed in today
@@ -59,7 +73,7 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 	if err == nil && member.SignDate != nil {
 		if s.getDateDiffInDays(*member.SignDate, now) == 0 {
 			// Already signed in today
-			var user User
+			var user models.UserInfo
 			db.Where("Id = ?", userID).First(&user)
 			res := s.buildSignedMessage(&member, &user, true, group.IsCredit)
 			return &SigninResult{
@@ -77,9 +91,9 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// Add member if not exists
-			member = GroupMember{
-				GroupID:     groupID,
-				UserID:      userID,
+			member = models.GroupMember{
+				GroupId:     groupID,
+				UserId:      userID,
 				UserName:    userName,
 				GroupCredit: 50,
 			}
@@ -95,7 +109,7 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 	newSignTimes := 1
 	newSignLevel := 1
 
-	if member.SignDate != nil {
+	if member.SignDate != nil && !member.SignDate.IsZero() {
 		daysDiff := s.getDateDiffInDays(*member.SignDate, now)
 		if daysDiff <= 1 {
 			newSignTimes = member.SignTimes + 1
@@ -106,16 +120,16 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 	creditAdd := int64(newSignLevel * 50)
 
 	// 5. Get User Info for Super status and global credits
-	var user User
+	var user models.UserInfo
 	if err := db.Where("Id = ?", userID).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// Create user if not exists
-			user = User{
-				ID:      userID,
+			user = models.UserInfo{
+				Id:      userID,
 				Name:    userName,
 				Credit:  50,
 				BotUin:  botUin,
-				GroupID: groupID,
+				GroupId: groupID,
 			}
 			if err := db.Create(&user).Error; err != nil {
 				return nil, err
@@ -153,12 +167,12 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 		}
 
 		// Log in RobotWeibo
-		log := RobotWeibo{
+		log := models.RobotWeibo{
 			RobotQQ:    botUin,
 			WeiboQQ:    userID,
 			WeiboInfo:  "", // CmdPara in C#
 			WeiboType:  1,
-			GroupID:    groupID,
+			GroupId:    groupID,
 			InsertDate: now,
 		}
 		if err := tx.Create(&log).Error; err != nil {
@@ -167,11 +181,11 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 
 		// Log Credit change
 		if group.IsCredit {
-			creditLog := CreditLog{
+			creditLog := models.CreditLog{
 				BotUin:      botUin,
-				GroupID:     groupID,
+				GroupId:     groupID,
 				GroupName:   groupName,
-				UserID:      userID,
+				UserId:      userID,
 				UserName:    userName,
 				CreditAdd:   creditAdd,
 				CreditValue: user.Credit + creditAdd,
@@ -184,11 +198,11 @@ func (s *SigninService) TrySignIn(botUin int64, groupID int64, groupName string,
 		}
 
 		// Log Tokens change
-		tokensLog := TokensLog{
+		tokensLog := models.TokensLog{
 			BotUin:      botUin,
-			GroupID:     groupID,
+			GroupId:     groupID,
 			GroupName:   groupName,
-			UserID:      userID,
+			UserId:      userID,
 			UserName:    userName,
 			TokensAdd:   tokensAdd,
 			TokensValue: user.Tokens + tokensAdd,
@@ -264,15 +278,12 @@ func (s *SigninService) calculateSignLevel(days int) int {
 	}
 }
 
-func (s *SigninService) getDateDiffInDays(t1, t2 time.Time) int {
-	// Normalize to midnight for day difference
-	d1 := time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, t1.Location())
-	d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, t2.Location())
-	diff := d2.Sub(d1).Hours() / 24
-	return int(math.Abs(diff))
+// Reuse calculateSignLevel for calculateLevel
+func (s *SigninService) calculateLevel(signTimes int) int {
+	return s.calculateSignLevel(signTimes)
 }
 
-func (s *SigninService) buildSignedMessage(member *GroupMember, user *User, alreadySigned bool, isCreditSystem bool) string {
+func (s *SigninService) buildSignedMessage(member *models.GroupMember, user *models.UserInfo, alreadySigned bool, isCreditSystem bool) string {
 	res := ""
 	if alreadySigned {
 		res = "✅ 今天签过了，明天再来！\n"
@@ -310,19 +321,19 @@ func (s *SigninService) buildSignedMessage(member *GroupMember, user *User, alre
 	}
 
 	if isCreditSystem {
-		groupRank := s.getCreditRanking(member.GroupID, user.Credit)
+		groupRank := s.getCreditRanking(member.GroupId, user.Credit)
 		worldRank := s.getCreditRankingAll(user.Credit + user.SaveCredit)
 		res += fmt.Sprintf("🏆 积分排名：本群%d 世界%d\n", groupRank, worldRank)
 	}
 
 	res += fmt.Sprintf("📅 签到天数：连签%d 累计%d ✨\n", signTimes, signTimesAll)
 
-	todayMsgCount := s.getMsgCount(member.GroupID, member.UserID, 0)
-	yesterdayMsgCount := s.getMsgCount(member.GroupID, member.UserID, 1)
+	todayMsgCount := s.getMsgCount(member.GroupId, member.UserId, 0)
+	yesterdayMsgCount := s.getMsgCount(member.GroupId, member.UserId, 1)
 	res += fmt.Sprintf("🗣️ 发言次数：今天%d 昨天%d\n", todayMsgCount, yesterdayMsgCount)
 
-	todaySignCount := s.getTodaySignCount(member.GroupID)
-	yesterdaySignCount := s.getYesterdaySignCount(member.GroupID)
+	todaySignCount := s.getTodaySignCount(member.GroupId)
+	yesterdaySignCount := s.getYesterdaySignCount(member.GroupId)
 	res += fmt.Sprintf("👥 签到人次：今天%d 昨日%d", todaySignCount, yesterdaySignCount)
 
 	if nextLevelDays > 0 {
@@ -334,38 +345,71 @@ func (s *SigninService) buildSignedMessage(member *GroupMember, user *User, alre
 
 func (s *SigninService) getCreditRanking(groupID int64, credit int64) int64 {
 	var count int64
-	db := s.store.db
-	db.Model(&GroupMember{}).Where("GroupId = ? AND GroupCredit > ?", groupID, credit).Count(&count)
+	s.db.Model(&models.GroupMember{}).Where("GroupId = ? AND GroupCredit > ?", groupID, credit).Count(&count)
 	return count + 1
 }
 
 func (s *SigninService) getCreditRankingAll(totalCredit int64) int64 {
 	var count int64
-	db := s.store.db
-	db.Model(&User{}).Where("Credit + SaveCredit > ?", totalCredit).Count(&count)
+	s.db.Model(&models.UserInfo{}).Where("Credit + SaveCredit > ?", totalCredit).Count(&count)
 	return count + 1
 }
 
 func (s *SigninService) getTodaySignCount(groupID int64) int64 {
 	var count int64
-	db := s.store.db
-	db.Model(&RobotWeibo{}).Where("GroupId = ? AND WeiboType = 1 AND "+s.store.GetDateCondition("InsertDate", 0), groupID).Count(&count)
+	start, end := s.getDateRange(0)
+	s.db.Model(&models.RobotWeibo{}).Where("group_id = ? AND weibo_type = 1 AND insert_date >= ? AND insert_date < ?", groupID, start, end).Count(&count)
 	return count
 }
 
 func (s *SigninService) getYesterdaySignCount(groupID int64) int64 {
 	var count int64
-	db := s.store.db
-	db.Model(&RobotWeibo{}).Where("GroupId = ? AND WeiboType = 1 AND "+s.store.GetDateCondition("InsertDate", 1), groupID).Count(&count)
+	start, end := s.getDateRange(1)
+	s.db.Model(&models.RobotWeibo{}).Where("group_id = ? AND weibo_type = 1 AND insert_date >= ? AND insert_date < ?", groupID, start, end).Count(&count)
 	return count
 }
 
 func (s *SigninService) getMsgCount(groupID int64, userID int64, daysAgo int) int {
 	var count int
-	db := s.store.db
-	db.Model(&MsgCount{}).
-		Where("GroupId = ? AND UserId = ? AND "+s.store.GetDateCondition("CDate", daysAgo), groupID, userID).
+	start, _ := s.getDateRange(daysAgo)
+	// MsgCount CDate is just the date (midnight), so we can use exact match
+	s.db.Model(&models.MsgCount{}).
+		Where("GroupId = ? AND UserId = ? AND CDate = ?", groupID, userID, start).
 		Select("CMsg").
 		Scan(&count)
 	return count
+}
+
+func (s *SigninService) getDateRange(daysAgo int) (time.Time, time.Time) {
+	now := time.Now()
+	start := startOfDay(now.Add(time.Duration(-daysAgo) * 24 * time.Hour))
+	end := start.Add(24 * time.Hour)
+	return start, end
+}
+
+// IsSignIn checks if user has signed in today (kept for compatibility)
+func (s *SigninService) IsSignIn(groupId int64, userId int64) bool {
+	var count int64
+	now := time.Now()
+	today := startOfDay(now)
+
+	s.db.Model(&models.RobotWeibo{}).
+		Where("group_id = ? AND weibo_qq = ? AND weibo_type = 1 AND insert_date >= ?", groupId, userId, today).
+		Count(&count)
+
+	return count > 0
+}
+
+// Get Sign Counts (kept for compatibility)
+func (s *SigninService) getSignCounts(groupId int64) (int64, int64) {
+	todayCount := s.getTodaySignCount(groupId)
+	yesterdayCount := s.getYesterdaySignCount(groupId)
+	return todayCount, yesterdayCount
+}
+
+// Get Msg Counts (kept for compatibility)
+func (s *SigninService) getMsgCounts(groupId int64, userId int64) (int64, int64) {
+	todayCount := int64(s.getMsgCount(groupId, userId, 0))
+	yesterdayCount := int64(s.getMsgCount(groupId, userId, 1))
+	return todayCount, yesterdayCount
 }

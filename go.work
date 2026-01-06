@@ -13,7 +13,4 @@ use (
 	./src/SlackBot
 	./src/TelegramBot
 	./src/TencentBot
-	./src/WeComBot
-	./src/WxBotGo
-	./src/tools/bm-cli
 )

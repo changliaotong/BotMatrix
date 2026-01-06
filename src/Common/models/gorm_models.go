@@ -8,37 +8,37 @@ import (
 
 // Member represents the bot (Member table in legacy C#)
 type Member struct {
-	BotUin         int64          `gorm:"primaryKey;column:BotUin" json:"bot_uin"`
-	Password       string         `gorm:"column:Password" json:"password"`
-	BotName        string         `gorm:"column:BotName" json:"bot_name"`
-	BotType        int            `gorm:"column:BotType" json:"bot_type"`
-	AdminId        int64          `gorm:"column:AdminId" json:"admin_id"`
-	InsertDate     time.Time      `gorm:"column:InsertDate" json:"insert_date"`
-	BotMemo        string         `gorm:"column:BotMemo" json:"bot_memo"`
-	WemcomeMessage string         `gorm:"column:WemcomeMessage" json:"welcome_message"`
-	ApiIP          string         `gorm:"column:ApiIP" json:"api_ip"`
-	ApiPort        string         `gorm:"column:ApiPort" json:"api_port"`
-	ApiKey         string         `gorm:"column:ApiKey" json:"api_key"`
-	WebUIToken     string         `gorm:"column:WebUIToken" json:"web_ui_token"`
-	WebUIPort      string         `gorm:"column:WebUIPort" json:"web_ui_port"`
-	IsSignalR      bool           `gorm:"column:IsSignalR" json:"is_signal_r"`
-	IsCredit       bool           `gorm:"column:IsCredit" json:"is_credit"`
-	IsGroup        bool           `gorm:"column:IsGroup" json:"is_group"`
-	IsPrivate      bool           `gorm:"column:IsPrivate" json:"is_private"`
-	Valid          int            `gorm:"column:Valid" json:"valid"`
-	ValidDate      time.Time      `gorm:"column:ValidDate" json:"valid_date"`
-	LastDate       time.Time      `gorm:"column:LastDate" json:"last_date"`
-	IsFreeze       bool           `gorm:"column:IsFreeze" json:"is_freeze"`
-	FreezeDate     time.Time      `gorm:"column:FreezeDate" json:"freeze_date"`
-	FreezeTimes    int            `gorm:"column:FreezeTimes" json:"freeze_times"`
-	IsBlock        bool           `gorm:"column:IsBlock" json:"is_block"`
-	BlockDate      time.Time      `gorm:"column:BlockDate" json:"block_date"`
-	HeartbeatDate  time.Time      `gorm:"column:HeartbeatDate" json:"heartbeat_date"`
-	ReceiveDate    time.Time      `gorm:"column:ReceiveDate" json:"receive_date"`
-	IsVip          bool           `gorm:"column:IsVip" json:"is_vip"`
-	BotGuid        string         `gorm:"column:BotGuid" json:"bot_guid"`
+	BotUin         int64     `gorm:"primaryKey;column:BotUin" json:"bot_uin"`
+	Password       string    `gorm:"column:Password" json:"password"`
+	BotName        string    `gorm:"column:BotName" json:"bot_name"`
+	BotType        int       `gorm:"column:BotType" json:"bot_type"`
+	AdminId        int64     `gorm:"column:AdminId" json:"admin_id"`
+	InsertDate     time.Time `gorm:"column:InsertDate" json:"insert_date"`
+	BotMemo        string    `gorm:"column:BotMemo" json:"bot_memo"`
+	WemcomeMessage string    `gorm:"column:WemcomeMessage" json:"welcome_message"`
+	ApiIP          string    `gorm:"column:ApiIP" json:"api_ip"`
+	ApiPort        string    `gorm:"column:ApiPort" json:"api_port"`
+	ApiKey         string    `gorm:"column:ApiKey" json:"api_key"`
+	WebUIToken     string    `gorm:"column:WebUIToken" json:"web_ui_token"`
+	WebUIPort      string    `gorm:"column:WebUIPort" json:"web_ui_port"`
+	IsSignalR      bool      `gorm:"column:IsSignalR" json:"is_signal_r"`
+	IsCredit       bool      `gorm:"column:IsCredit" json:"is_credit"`
+	IsGroup        bool      `gorm:"column:IsGroup" json:"is_group"`
+	IsPrivate      bool      `gorm:"column:IsPrivate" json:"is_private"`
+	Valid          int       `gorm:"column:Valid" json:"valid"`
+	ValidDate      time.Time `gorm:"column:ValidDate" json:"valid_date"`
+	LastDate       time.Time `gorm:"column:LastDate" json:"last_date"`
+	IsFreeze       bool      `gorm:"column:IsFreeze" json:"is_freeze"`
+	FreezeDate     time.Time `gorm:"column:FreezeDate" json:"freeze_date"`
+	FreezeTimes    int       `gorm:"column:FreezeTimes" json:"freeze_times"`
+	IsBlock        bool      `gorm:"column:IsBlock" json:"is_block"`
+	BlockDate      time.Time `gorm:"column:BlockDate" json:"block_date"`
+	HeartbeatDate  time.Time `gorm:"column:HeartbeatDate" json:"heartbeat_date"`
+	ReceiveDate    time.Time `gorm:"column:ReceiveDate" json:"receive_date"`
+	IsVip          bool      `gorm:"column:IsVip" json:"is_vip"`
+	BotGuid        string    `gorm:"column:BotGuid" json:"bot_guid"`
 	// Keep these for system status
-	Connected bool `gorm:"-" json:"connected"`
+	Connected bool           `gorm:"-" json:"connected"`
 	LastSeen  time.Time      `gorm:"-" json:"last_seen"`
 	DeletedAt gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
 }
@@ -187,11 +187,11 @@ type AIModel struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
 	ProviderID   uint       `gorm:"index;column:ProviderId" json:"provider_id"`
 	Provider     AIProvider `gorm:"foreignKey:ProviderID" json:"provider"`
-	ModelID      string     `gorm:"size:100;column:ApiModelId" json:"model_id"`       // 实际 API 调用的模型 ID (如 gpt-4)
-	ModelName    string     `gorm:"size:100;column:ModelName" json:"model_name"`      // 展示名称 (如 GPT-4 Turbo)
-	Capabilities string     `gorm:"size:255;column:Capabilities" json:"capabilities"` // JSON array: ["chat", "vision"]
-	BaseURL      string     `gorm:"size:255;column:BaseUrl" json:"base_url"`          // 模型级别 BaseURL 覆盖
-	APIKey       string     `gorm:"size:500;column:ApiKey" json:"api_key"`            // 模型级别 APIKey 覆盖
+	ApiModelID   string     `gorm:"type:varchar(100);column:ApiModelId" json:"model_id"` // 实际 API 调用的模型 ID (如 gpt-4)
+	ModelName    string     `gorm:"size:100;column:ModelName" json:"model_name"`         // 展示名称 (如 GPT-4 Turbo)
+	Capabilities string     `gorm:"size:255;column:Capabilities" json:"capabilities"`    // JSON array: ["chat", "vision"]
+	BaseURL      string     `gorm:"size:255;column:BaseUrl" json:"base_url"`             // 模型级别 BaseURL 覆盖
+	APIKey       string     `gorm:"size:500;column:ApiKey" json:"api_key"`               // 模型级别 APIKey 覆盖
 	ContextSize  int        `gorm:"default:4096;column:ContextSize" json:"context_size"`
 	IsDefault    bool       `gorm:"default:false;column:IsDefault" json:"is_default"`
 	CreatedAt    time.Time  `gorm:"column:CreatedAt" json:"created_at"`
@@ -591,14 +591,18 @@ func (DigitalEmployeeTodo) TableName() string {
 // DigitalEmployeeTask 数字员工任务全生命周期管理
 type DigitalEmployeeTask struct {
 	ID               uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	ExecutionID      string         `gorm:"size:100;uniqueIndex;column:ExecutionId" json:"execution_id"` // 全局唯一执行 ID
-	ParentTaskID     uint           `gorm:"index;column:ParentTaskId" json:"parent_task_id"`             // 父任务 ID (用于子任务拆解)
-	CreatorID        string         `gorm:"size:64;column:CreatorId" json:"creator_id"`                  // 创建者 (可以是 UserID 或 EmployeeID)
-	AssigneeID       uint           `gorm:"index;column:AssigneeId" json:"assignee_id"`                  // 负责人 (数字员工 ID)
+	ExecutionID      string         `gorm:"size:100;uniqueIndex;column:ExecutionId" json:"execution_id"`      // 全局唯一执行 ID
+	ParentTaskID     uint           `gorm:"index;column:ParentTaskId" json:"parent_task_id"`                  // 父任务 ID (用于子任务拆解)
+	CreatorID        string         `gorm:"size:64;column:CreatorId" json:"creator_id"`                       // 创建者 (可以是 UserID 或 EmployeeID)
+	AssigneeID       uint           `gorm:"index;column:AssigneeId" json:"assignee_id"`                       // 负责人 (数字员工 ID)
+	TaskType         string         `gorm:"size:20;not null;default:'rule';column:TaskType" json:"task_type"` // rule, ai, hybrid
 	Title            string         `gorm:"size:255;not null;column:Title" json:"title"`
 	Description      string         `gorm:"type:text;column:Description" json:"description"`
+	Context          string         `gorm:"type:text;column:Context" json:"context"`               // 任务上下文 (JSON)
+	Steps            string         `gorm:"type:text;column:Steps" json:"steps"`                   // 执行步骤记录 (JSON)
+	Result           string         `gorm:"type:text;column:Result" json:"result"`                 // 最终结果
+	Status           string         `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, running, paused, done, failed
 	Priority         string         `gorm:"size:20;default:'medium';column:Priority" json:"priority"`
-	Status           string         `gorm:"size:20;default:'pending';column:Status" json:"status"`       // pending, planning, executing, validating, completed, failed
 	Progress         int            `gorm:"default:0;column:Progress" json:"progress"`                   // 0-100
 	PlanRaw          string         `gorm:"type:text;column:PlanRaw" json:"plan_raw"`                    // AI 生成的任务计划 (JSON)
 	CurrentStepIndex int            `gorm:"default:0;column:CurrentStepIndex" json:"current_step_index"` // 当前正在执行的步骤索引
