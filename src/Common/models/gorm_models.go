@@ -594,8 +594,9 @@ type DigitalEmployeeTask struct {
 	ExecutionID      string         `gorm:"size:100;uniqueIndex;column:ExecutionId" json:"execution_id"`      // 全局唯一执行 ID
 	ParentTaskID     uint           `gorm:"index;column:ParentTaskId" json:"parent_task_id"`                  // 父任务 ID (用于子任务拆解)
 	CreatorID        string         `gorm:"size:64;column:CreatorId" json:"creator_id"`                       // 创建者 (可以是 UserID 或 EmployeeID)
-	AssigneeID       uint           `gorm:"index;column:AssigneeId" json:"assignee_id"`                       // 负责人 (数字员工 ID)
-	TaskType         string         `gorm:"size:20;not null;default:'rule';column:TaskType" json:"task_type"` // rule, ai, hybrid
+	AssigneeID       uint             `gorm:"index;column:AssigneeId" json:"assignee_id"`                       // 负责人 (数字员工 ID)
+	Assignee         *DigitalEmployee `gorm:"foreignKey:AssigneeID" json:"assignee"`                            // 关联负责人详情
+	TaskType         string           `gorm:"size:20;not null;default:'rule';column:TaskType" json:"task_type"` // rule, ai, hybrid
 	Title            string         `gorm:"size:255;not null;column:Title" json:"title"`
 	Description      string         `gorm:"type:text;column:Description" json:"description"`
 	Context          string         `gorm:"type:text;column:Context" json:"context"`               // 任务上下文 (JSON)

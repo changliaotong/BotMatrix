@@ -5,14 +5,16 @@ import (
 	"log"
 
 	"BotMatrix/common/config"
+
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 )
 
 // GORMManager manages GORM database operations
 type GORMManager struct {
-	DB      *gorm.DB
+	DB       *gorm.DB
 	LegacyDB *gorm.DB
 }
 
@@ -23,6 +25,16 @@ func NewGORMManager(db *gorm.DB, legacyDB *gorm.DB) *GORMManager {
 
 // InitGORM initializes the GORM database connection
 func InitGORM(cfg *config.AppConfig) (*gorm.DB, error) {
+	// Support SQLite for local testing if pg_host is empty or set to "sqlite"
+	if cfg.PGHost == "" || cfg.PGHost == "sqlite" {
+		dbName := cfg.PGDBName
+		if dbName == "" {
+			dbName = "botmatrix.db"
+		}
+		log.Printf("GORM: Using SQLite database: %s", dbName)
+		return gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	}
+
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
 		cfg.PGHost, cfg.PGUser, cfg.PGPassword, cfg.PGDBName, cfg.PGPort, cfg.PGSSLMode)
 

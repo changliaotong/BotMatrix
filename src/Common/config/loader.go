@@ -98,6 +98,18 @@ func loadConfigFromEnv() {
 	if val := os.Getenv("AI_EMBEDDING_MODEL"); val != "" {
 		GlobalConfig.AIEmbeddingModel = val
 	}
+	if val := os.Getenv("AI_PROVIDER_TYPE"); val != "" {
+		GlobalConfig.AIProviderType = val
+	}
+	if val := os.Getenv("AI_API_KEY"); val != "" {
+		GlobalConfig.AIApiKey = val
+	}
+	if val := os.Getenv("AI_BASE_URL"); val != "" {
+		GlobalConfig.AIBaseURL = val
+	}
+	if val := os.Getenv("AI_MODEL_NAME"); val != "" {
+		GlobalConfig.AIModelName = val
+	}
 	// ... add other env vars as needed
 }
 

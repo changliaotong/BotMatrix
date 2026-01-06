@@ -5,6 +5,7 @@ import (
 	"BotMatrix/common/config"
 	"BotMatrix/common/database"
 	"BotMatrix/common/models"
+	"BotMatrix/common/service"
 	"fmt"
 	"log"
 	"os"
@@ -14,9 +15,9 @@ import (
 func main() {
 	// 1. Load config
 	cwd, _ := os.Getwd()
-	configPath := filepath.Join(cwd, "src", "Common", "config.json")
+	configPath := filepath.Join(cwd, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		log.Println("Config file not found, creating default...")
+		log.Printf("Config file %s not found, will use env/defaults", configPath)
 	}
 
 	if err := config.InitConfig(configPath); err != nil {
@@ -71,25 +72,57 @@ func main() {
 
 	// 3.1 Ensure Default AI Provider and Model exist
 	var provider models.AIProvider
-	if err := db.First(&provider).Error; err != nil {
-		log.Println("Creating default AI provider...")
+
+	// Determine provider details from config or default to OpenAI (Placeholder)
+	providerType := "openai"
+	providerName := "OpenAI"
+	baseURL := "https://api.openai.com/v1"
+	apiKey := "sk-placeholder"
+
+	if config.GlobalConfig.AIProviderType != "" {
+		providerType = config.GlobalConfig.AIProviderType
+		providerName = "PrimaryLLM" // Generic name for configured provider
+		baseURL = config.GlobalConfig.AIBaseURL
+		apiKey = config.GlobalConfig.AIApiKey
+	}
+
+	// Check if a provider of this type exists
+	if err := db.Where(&models.AIProvider{Type: providerType}).First(&provider).Error; err != nil {
+		log.Printf("Creating AI provider: %s...", providerName)
 		provider = models.AIProvider{
-			Name:      "OpenAI",
-			Type:      "openai",
-			BaseURL:   "https://api.openai.com/v1",
-			APIKey:    "sk-placeholder", // User should update this
+			Name:      providerName,
+			Type:      providerType,
+			BaseURL:   baseURL,
+			APIKey:    apiKey,
 			IsEnabled: true,
 		}
 		db.Create(&provider)
+	} else {
+		// Update existing provider with config values if they are present in config
+		if config.GlobalConfig.AIProviderType != "" {
+			log.Printf("Updating AI provider %s from config...", providerName)
+			provider.BaseURL = baseURL
+			provider.APIKey = apiKey
+			provider.IsEnabled = true
+			db.Save(&provider)
+		}
 	}
 
 	var aiModel models.AIModel
-	if err := db.First(&aiModel).Error; err != nil {
-		log.Println("Creating default AI model...")
+	modelName := "GPT-4"
+	modelID := "gpt-4"
+
+	if config.GlobalConfig.AIModelName != "" {
+		modelID = config.GlobalConfig.AIModelName
+		modelName = config.GlobalConfig.AIModelName
+	}
+
+	if err := db.Where(&models.AIModel{ApiModelID: modelID, ProviderID: provider.ID}).First(&aiModel).Error; err != nil {
+		log.Printf("Creating AI model: %s...", modelName)
 		aiModel = models.AIModel{
 			ProviderID:   provider.ID,
-			ApiModelID:   "gpt-4",
-			ModelName:    "GPT-4",
+			ApiModelID:   modelID,
+			ModelName:    modelName,
 			Capabilities: `["chat", "code"]`,
 			IsDefault:    true,
 		}
@@ -252,4 +285,41 @@ Use 'collaboration' tools to coordinate with other agents.
 	}
 
 	log.Println("Experiment setup completed successfully.")
+
+	// 9. Start Dashboard Server
+	log.Println("Starting Web Dashboard...")
+	dashboardSvc := service.NewDashboardService(db)
+	dashboardSvc.StartServer("8080")
+
+	// 10. Start Webhook Service
+	log.Println("Starting Webhook Service...")
+	// We need Redis for TaskService
+	redisMgr, err := database.NewRedisManager(config.GlobalConfig)
+	if err != nil {
+		log.Printf("Warning: Failed to init Redis for Webhook Service: %v. Using degraded TaskService.", err)
+	}
+
+	empSvc := employee.NewEmployeeService(db)
+
+	// --- NEW: Initialize Real AI Service based on config ---
+	var aiSvc types.AIService
+	switch config.GlobalConfig.AIProviderType {
+	case "openai", "deepseek":
+		log.Printf("Using Real LLM Provider: %s", config.GlobalConfig.AIProviderType)
+		aiSvc = ai.NewOpenAIAdapter(config.GlobalConfig.AIBaseURL, config.GlobalConfig.AIApiKey)
+	default:
+		log.Printf("Using Mock LLM Provider (Default)")
+		aiSvc = ai.NewMockClient()
+	}
+	empSvc.SetAIService(aiSvc)
+	// -------------------------------------------------------
+
+	taskSvc := employee.NewTaskService(db, empSvc, redisMgr)
+	webhookSvc := service.NewWebhookService(db, taskSvc)
+	webhookSvc.StartServer("8081")
+
+	// Keep main process alive
+	log.Println("Factory is running. Dashboard: http://localhost:8080, Webhooks: http://localhost:8081")
+	log.Println("Press Ctrl+C to stop.")
+	select {}
 }
