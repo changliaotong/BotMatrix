@@ -174,7 +174,7 @@ func (sm *SkillManager) CheckPermission(ctx context.Context, botID string, userI
 	// 3. 从数据库查询授权记录 (Bot 级别的精细化授权)
 	var permission models.BotSkillPermission
 	err := sm.db.WithContext(ctx).
-		Where("bot_id = ? AND skill_name = ?", botID, skillName).
+		Where(&models.BotSkillPermission{BotID: botID, SkillName: skillName}).
 		First(&permission).Error
 
 	if err == nil {
