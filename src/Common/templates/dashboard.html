@@ -7,7 +7,7 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #e0e0e0; margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #4CAF50; }
+        h1 { color: #4CAF50; margin: 0; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background-color: #2d2d2d; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .card h3 { margin-top: 0; color: #aaa; font-size: 0.9em; text-transform: uppercase; }
@@ -16,55 +16,82 @@
         .card .value.blue { color: #2196F3; }
         .card .value.orange { color: #FF9800; }
         
+        .goals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .goal-card { background-color: #2d2d2d; border-left: 4px solid #2196F3; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .goal-card.completed { border-left-color: #4CAF50; }
+        .goal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .goal-title { font-weight: bold; font-size: 1.1em; color: #fff; }
+        .goal-progress-bar { height: 8px; background-color: #444; border-radius: 4px; overflow: hidden; margin: 10px 0; }
+        .goal-progress-fill { height: 100%; background-color: #2196F3; transition: width 0.3s; }
+        .goal-card.completed .goal-progress-fill { background-color: #4CAF50; }
+        .milestones-list { list-style: none; padding: 0; margin: 10px 0 0 0; font-size: 0.85em; color: #aaa; }
+        .milestone-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+        .milestone-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #555; flex-shrink: 0; }
+        .milestone-dot.completed { background-color: #4CAF50; box-shadow: 0 0 5px #4CAF50; }
+        .milestone-dot.in_progress { background-color: #2196F3; box-shadow: 0 0 5px #2196F3; }
+
         table { width: 100%; border-collapse: collapse; background-color: #2d2d2d; border-radius: 8px; overflow: hidden; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #3d3d3d; }
         th { background-color: #333; color: #aaa; font-weight: 600; }
         tr:hover { background-color: #383838; }
         .status-pending { color: #FF9800; }
-        .status-in_progress { color: #2196F3; }
-        .status-completed { color: #4CAF50; }
+        .status-running { color: #2196F3; }
+        .status-done { color: #4CAF50; }
         .status-failed { color: #F44336; }
         
-        .refresh-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        button { background-color: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background-color: #252525; padding: 15px 20px; border-radius: 8px; }
+        .actions { display: flex; gap: 10px; align-items: center; }
+        button { background-color: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; }
         button:hover { background-color: #1976D2; }
+        select { background-color: #333; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="refresh-bar">
-            <h1>🏭 Digital Employee Factory</h1>
-            <button onclick="fetchData()">Refresh Now</button>
+        <div class="header-bar">
+            <h1 data-i18n="title">🏭 Digital Employee Factory</h1>
+            <div class="actions">
+                <select id="lang-select" onchange="changeLanguage(this.value)">
+                    <option value="zh">简体中文</option>
+                    <option value="en">English</option>
+                </select>
+                <button onclick="fetchData()" data-i18n="refresh">Refresh Now</button>
+            </div>
         </div>
 
         <div class="stats-grid">
             <div class="card">
-                <h3>Active Employees</h3>
+                <h3 data-i18n="active_employees">Active Employees</h3>
                 <div class="value blue" id="active-employees">-</div>
             </div>
             <div class="card">
-                <h3>Pending Tasks</h3>
+                <h3 data-i18n="pending_tasks">Pending Tasks</h3>
                 <div class="value orange" id="pending-tasks">-</div>
             </div>
             <div class="card">
-                <h3>Completed Tasks (Today)</h3>
+                <h3 data-i18n="completed_today">Completed Tasks (Today)</h3>
                 <div class="value green" id="completed-tasks">-</div>
             </div>
             <div class="card">
-                <h3>Failed Tasks</h3>
+                <h3 data-i18n="failed_tasks">Failed Tasks</h3>
                 <div class="value" style="color: #F44336;" id="failed-tasks">-</div>
             </div>
         </div>
 
-        <h2>Live Task Stream</h2>
+        <h2 data-i18n="strategic_goals">Strategic Goals & Progress</h2>
+        <div id="goals-container" class="goals-grid">
+            <!-- Goals will be populated here -->
+        </div>
+
+        <h2 data-i18n="task_stream">Live Task Stream</h2>
         <table id="tasks-table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Description</th>
-                    <th>Assignee</th>
-                    <th>Status</th>
-                    <th>Updated</th>
+                    <th data-i18n="th_id">ID</th>
+                    <th data-i18n="th_description">Description</th>
+                    <th data-i18n="th_assignee">Assignee</th>
+                    <th data-i18n="th_status">Status</th>
+                    <th data-i18n="th_updated">Updated</th>
                 </tr>
             </thead>
             <tbody>
@@ -74,6 +101,145 @@
     </div>
 
     <script>
+        const translations = {
+            zh: {
+                title: "🏭 数字员工工厂监控",
+                refresh: "立即刷新",
+                active_employees: "活跃员工",
+                pending_tasks: "待处理任务",
+                completed_today: "今日完成",
+                failed_tasks: "失败任务",
+                strategic_goals: "战略目标与进度",
+                task_stream: "实时任务流",
+                th_id: "ID",
+                th_description: "任务描述",
+                th_assignee: "负责人",
+                th_status: "状态",
+                th_updated: "更新时间",
+                status_pending: "排队中",
+                status_running: "处理中",
+                status_done: "已完成",
+                status_failed: "失败",
+                unassigned: "未分配",
+                no_tasks: "暂无活跃任务",
+                untitled: "无标题"
+            },
+            en: {
+                title: "🏭 Digital Employee Factory",
+                refresh: "Refresh Now",
+                active_employees: "Active Employees",
+                pending_tasks: "Pending Tasks",
+                completed_today: "Completed Today",
+                failed_tasks: "Failed Tasks",
+                strategic_goals: "Strategic Goals & Progress",
+                task_stream: "Live Task Stream",
+                th_id: "ID",
+                th_description: "Description",
+                th_assignee: "Assignee",
+                th_status: "Status",
+                th_updated: "Updated",
+                status_pending: "Pending",
+                status_running: "Running",
+                status_done: "Done",
+                status_failed: "Failed",
+                unassigned: "Unassigned",
+                no_tasks: "No active tasks found",
+                untitled: "Untitled"
+            }
+        };
+
+        let currentLang = localStorage.getItem('lang') || 'zh';
+        document.getElementById('lang-select').value = currentLang;
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('lang', lang);
+            updateUI();
+        }
+
+        function updateUI() {
+            const t = translations[currentLang];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (t[key]) {
+                    el.textContent = t[key];
+                }
+            });
+            // Re-render tasks to update statuses
+            renderTasks(window.lastTasks || []);
+        }
+
+        window.lastTasks = [];
+
+        function renderGoals(goals) {
+            const container = document.getElementById('goals-container');
+            container.innerHTML = '';
+            
+            if (!goals || goals.length === 0) {
+                container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #888;">No strategic goals defined</div>';
+                return;
+            }
+
+            goals.forEach(goal => {
+                const card = document.createElement('div');
+                card.className = `goal-card ${goal.status === 'completed' ? 'completed' : ''}`;
+                
+                let milestonesHtml = '';
+                if (goal.milestones && goal.milestones.length > 0) {
+                    milestonesHtml = '<ul class="milestones-list">' + 
+                        goal.milestones.map(m => `
+                            <li class="milestone-item">
+                                <span class="milestone-dot ${m.status}"></span>
+                                <span>${m.title}</span>
+                            </li>
+                        `).join('') + '</ul>';
+                }
+
+                card.innerHTML = `
+                    <div class="goal-header">
+                        <span class="goal-title">${goal.title}</span>
+                        <span style="font-size: 0.8em; color: #888;">${goal.progress}%</span>
+                    </div>
+                    <div style="font-size: 0.85em; color: #aaa; margin-bottom: 5px;">${goal.description || ''}</div>
+                    <div class="goal-progress-bar">
+                        <div class="goal-progress-fill" style="width: ${goal.progress}%"></div>
+                    </div>
+                    ${milestonesHtml}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderTasks(tasks) {
+            window.lastTasks = tasks;
+            const t = translations[currentLang];
+            const tbody = document.querySelector('#tasks-table tbody');
+            tbody.innerHTML = '';
+            
+            if (tasks && tasks.length > 0) {
+                tasks.forEach(task => {
+                    const tr = document.createElement('tr');
+                    const assigneeName = task.assignee ? task.assignee.name : t.unassigned;
+                    const updatedAt = task.updated_at ? new Date(task.updated_at).toLocaleTimeString() : '-';
+                    const statusKey = `status_${task.status}`;
+                    const statusText = t[statusKey] || task.status;
+                    const statusClass = `status-${task.status}`;
+                    const description = task.description ? task.description.substring(0, 100) + (task.description.length > 100 ? '...' : '') : '';
+                    
+                    tr.innerHTML = `
+                        <td>${task.execution_id ? task.execution_id.substring(0, 8) + '...' : 'N/A'}</td>
+                        <td><strong>${task.title || t.untitled}</strong><br><small>${description}</small></td>
+                        <td>${assigneeName}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                        <td>${updatedAt}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center;">${t.no_tasks}</td></tr>`;
+            }
+        }
+
         async function fetchData() {
             try {
                 // Fetch Stats
@@ -88,31 +254,24 @@
                 // Fetch Tasks
                 const tasksRes = await fetch('/api/tasks');
                 const tasks = await tasksRes.json();
+                renderTasks(tasks);
 
-                const tbody = document.querySelector('#tasks-table tbody');
-                tbody.innerHTML = '';
-                tasks.forEach(task => {
-                    const tr = document.createElement('tr');
-                    const assigneeName = task.assignee ? task.assignee.name : 'Unassigned';
-                    const updatedAt = task.updated_at ? new Date(task.updated_at).toLocaleTimeString() : '-';
-                    
-                    tr.innerHTML = `
-                        <td>${task.execution_id ? task.execution_id.substring(0, 8) + '...' : 'N/A'}</td>
-                        <td>${task.description ? task.description.substring(0, 60) + (task.description.length > 60 ? '...' : '') : ''}</td>
-                        <td>${assigneeName}</td>
-                        <td class="status-${task.status}">${task.status}</td>
-                        <td>${updatedAt}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+                // Fetch Goals
+                const goalsRes = await fetch('/api/goals');
+                const goals = await goalsRes.json();
+                renderGoals(goals);
+                
             } catch (error) {
                 console.error('Error fetching data:', error);
             }
         }
 
-        // Fetch immediately and then every 5 seconds
-        fetchData();
+        // Auto refresh every 5 seconds
         setInterval(fetchData, 5000);
+        
+        // Initial setup
+        updateUI();
+        fetchData();
     </script>
 </body>
 </html>

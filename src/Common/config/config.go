@@ -18,6 +18,16 @@ type AppConfig struct {
 	PGDBName   string `json:"pg_dbname"`
 	PGSSLMode  string `json:"pg_sslmode"`
 
+	// Compatibility for nested database config
+	Database struct {
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		User     string `json:"user"`
+		Password string `json:"password"`
+		DBName   string `json:"dbname"`
+		SSLMode  string `json:"sslmode"`
+	} `json:"database"`
+
 	// Legacy SQL Server Configuration (for migration)
 	MSSQLHost     string `json:"mssql_host"`
 	MSSQLPort     int    `json:"mssql_port"`

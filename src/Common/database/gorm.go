@@ -35,8 +35,8 @@ func InitGORM(cfg *config.AppConfig) (*gorm.DB, error) {
 		return gorm.Open(sqlite.Open(dbName), &gorm.Config{})
 	}
 
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
-		cfg.PGHost, cfg.PGUser, cfg.PGPassword, cfg.PGDBName, cfg.PGPort, cfg.PGSSLMode)
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&TimeZone=Asia/Shanghai",
+		cfg.PGUser, cfg.PGPassword, cfg.PGHost, cfg.PGPort, cfg.PGDBName, cfg.PGSSLMode)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

@@ -3,6 +3,7 @@ package ai
 import (
 	"BotMatrix/common/ai/b2b"
 	"BotMatrix/common/ai/employee"
+
 	// "BotMatrix/common/ai/employee" // Moved to SetEmployeeService to break cycle
 
 	// "BotMatrix/common/ai/employee" // Moved to SetEmployeeService to break cycle
@@ -52,6 +53,13 @@ func NewAIService(db *gorm.DB, provider AIServiceProvider, mcp MCPManagerInterfa
 
 func (s *AIServiceImpl) SetEmployeeService(svc types.DigitalEmployeeService) {
 	s.employeeService = svc
+}
+
+func (s *AIServiceImpl) SetMCPManager(mcp MCPManagerInterface) {
+	s.mcpManager = mcp
+	if s.skillManager != nil {
+		s.skillManager.mcpManager = mcp
+	}
 }
 
 func (s *AIServiceImpl) SetCognitiveMemoryService(svc types.CognitiveMemoryService) {
@@ -607,10 +615,10 @@ func (s *AIServiceImpl) CreateEmbedding(ctx context.Context, modelID uint, input
 func (s *AIServiceImpl) CreateEmbeddingSimple(ctx context.Context, req EmbeddingRequest) (*EmbeddingResponse, error) {
 	// 找到默认的嵌入模型
 	var model models.AIModel
-	if err := s.db.Where("is_default = ? AND type = ?", true, "embedding").First(&model).Error; err != nil {
-		if err := s.db.Where("type = ?", "embedding").First(&model).Error; err != nil {
-			// 如果没有专门的 embedding 模型，尝试默认模型
-			if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+	if err := s.db.Where("\"IsDefault\" = ? AND \"Type\" = ?", true, "embedding").First(&model).Error; err != nil {
+		if err := s.db.Where("\"Type\" = ?", "embedding").First(&model).Error; err != nil {
+			// Fallback to any default model if no specific embedding model found
+			if err := s.db.Where("\"IsDefault\" = ?", true).First(&model).Error; err != nil {
 				return nil, fmt.Errorf("no embedding model available: %v", err)
 			}
 		}
@@ -625,7 +633,7 @@ func (s *AIServiceImpl) ChatSimple(ctx context.Context, req ChatRequest) (*ChatR
 	// 1. 尝试根据 Model 名称查找模型
 	if modelIDStr != "" {
 		var model models.AIModel
-		if err := s.db.Where("api_model_id = ?", modelIDStr).First(&model).Error; err == nil {
+		if err := s.db.Where("\"ApiModelId\" = ?", modelIDStr).First(&model).Error; err == nil {
 			modelID = model.ID
 		}
 	}
@@ -633,7 +641,7 @@ func (s *AIServiceImpl) ChatSimple(ctx context.Context, req ChatRequest) (*ChatR
 	// 2. 如果未指定或未找到，使用默认模型
 	if modelID == 0 {
 		var model models.AIModel
-		if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+		if err := s.db.Where("\"IsDefault\" = ?", true).First(&model).Error; err != nil {
 			if err := s.db.First(&model).Error; err != nil {
 				return nil, fmt.Errorf("no chat model available: %v", err)
 			}
@@ -675,7 +683,7 @@ func (s *AIServiceImpl) DispatchIntent(msg types.InternalMessage) (string, error
 
 	// 2. 找到默认的对话模型
 	var model models.AIModel
-	if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+	if err := s.db.Where("\"IsDefault\" = ?", true).First(&model).Error; err != nil {
 		// 如果没有默认模型，尝试获取第一个模型
 		if err := s.db.First(&model).Error; err != nil {
 			return "", fmt.Errorf("no ai model available: %v", err)
@@ -748,7 +756,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployee, msg t
 
 	// 2. 获取最近历史记录 (最近 10 条)
 	var historyMessages []models.AIChatMessage
-	s.db.Where("session_id = ?", sessionID).Order("id desc").Limit(10).Find(&historyMessages)
+	s.db.Where("\"SessionId\" = ?", sessionID).Order("\"Id\" desc").Limit(10).Find(&historyMessages)
 
 	// 3. 构造 AI 消息列表
 	var messages []Message
@@ -791,7 +799,7 @@ func (s *AIServiceImpl) ChatWithEmployee(employee *models.DigitalEmployee, msg t
 	// 如果还是没模型，用默认的
 	if modelID == 0 {
 		var model models.AIModel
-		if err := s.db.Where("is_default = ?", true).First(&model).Error; err != nil {
+		if err := s.db.Where("\"IsDefault\" = ?", true).First(&model).Error; err != nil {
 			s.db.First(&model)
 			modelID = model.ID
 		} else {

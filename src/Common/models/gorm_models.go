@@ -739,3 +739,38 @@ type AIAgentTrace struct {
 func (AIAgentTrace) TableName() string {
 	return "AIAgentTrace"
 }
+
+// DigitalFactoryGoal 数字工厂战略目标
+type DigitalFactoryGoal struct {
+	ID          uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	Title       string         `gorm:"size:255;not null;column:Title" json:"title"`
+	Description string         `gorm:"type:text;column:Description" json:"description"`
+	Status      string         `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, in_progress, completed, failed
+	Progress    float64        `gorm:"default:0;column:Progress" json:"progress"`             // 0-100
+	Priority    int            `gorm:"default:1;column:Priority" json:"priority"`
+	Deadline    *time.Time     `gorm:"column:Deadline" json:"deadline"`
+	CreatedAt   time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+}
+
+func (DigitalFactoryGoal) TableName() string {
+	return "DigitalFactoryGoal"
+}
+
+// DigitalFactoryMilestone 目标里程碑
+type DigitalFactoryMilestone struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	GoalID      uint      `gorm:"index;column:GoalId" json:"goal_id"`
+	Title       string    `gorm:"size:255;not null;column:Title" json:"title"`
+	Description string    `gorm:"type:text;column:Description" json:"description"`
+	Status      string    `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, in_progress, completed
+	Weight      float64   `gorm:"default:10;column:Weight" json:"weight"`                // 权重，用于计算目标进度
+	Order       int       `gorm:"default:0;column:Order" json:"order"`
+	CreatedAt   time.Time `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
+}
+
+func (DigitalFactoryMilestone) TableName() string {
+	return "DigitalFactoryMilestone"
+}

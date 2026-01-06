@@ -30,6 +30,7 @@ func (s *DashboardService) StartServer(port string) {
 	mux.HandleFunc("/api/stats", s.handleGetStats)
 	mux.HandleFunc("/api/tasks", s.handleGetRecentTasks)
 	mux.HandleFunc("/api/employees", s.handleGetEmployees)
+	mux.HandleFunc("/api/goals", s.handleGetGoals)
 
 	// Dashboard Page
 	mux.HandleFunc("/", s.handleDashboard)
@@ -93,17 +94,20 @@ func (s *DashboardService) handleGetStats(w http.ResponseWriter, r *http.Request
 	var stats StatsResponse
 
 	// Count Active Employees
-	s.DB.Model(&models.DigitalEmployee{}).Where("status = ?", "active").Count(&stats.ActiveEmployees)
+	s.DB.Model(&models.DigitalEmployee{}).Where("\"Status\" = ?", "active").Count(&stats.ActiveEmployees)
 
 	// Count Pending Tasks
-	s.DB.Model(&models.DigitalEmployeeTask{}).Where("status = ?", "pending").Count(&stats.PendingTasks)
+	s.DB.Model(&models.DigitalEmployeeTask{}).Where("\"Status\" = ?", "pending").Count(&stats.PendingTasks)
 
-	// Count Completed Tasks (Today)
-	startOfDay := time.Now().Truncate(24 * time.Hour)
-	s.DB.Model(&models.DigitalEmployeeTask{}).Where("status = ? AND updated_at >= ?", "completed", startOfDay).Count(&stats.CompletedToday)
+	// Count Completed Today
+	today := time.Now().Truncate(24 * time.Hour)
+	s.DB.Model(&models.DigitalEmployeeTask{}).Where("\"Status\" = ? AND \"UpdatedAt\" >= ?", "done", today).Count(&stats.CompletedToday)
 
 	// Count Failed Tasks
-	s.DB.Model(&models.DigitalEmployeeTask{}).Where("status = ?", "failed").Count(&stats.FailedTasks)
+	s.DB.Model(&models.DigitalEmployeeTask{}).Where("\"Status\" = ?", "failed").Count(&stats.FailedTasks)
+
+	log.Printf("Dashboard Stats: Employees=%d, Pending=%d, DoneToday=%d, Failed=%d",
+		stats.ActiveEmployees, stats.PendingTasks, stats.CompletedToday, stats.FailedTasks)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -111,12 +115,7 @@ func (s *DashboardService) handleGetStats(w http.ResponseWriter, r *http.Request
 
 func (s *DashboardService) handleGetRecentTasks(w http.ResponseWriter, r *http.Request) {
 	var tasks []models.DigitalEmployeeTask
-	// Fetch recent 20 tasks with Assignee preloaded
-	result := s.DB.Preload("Assignee").Order("created_at desc").Limit(20).Find(&tasks)
-	if result.Error != nil {
-		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
-		return
-	}
+	s.DB.Preload("Assignee").Order("\"CreatedAt\" desc").Limit(10).Find(&tasks)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)
@@ -124,8 +123,34 @@ func (s *DashboardService) handleGetRecentTasks(w http.ResponseWriter, r *http.R
 
 func (s *DashboardService) handleGetEmployees(w http.ResponseWriter, r *http.Request) {
 	var employees []models.DigitalEmployee
-	s.DB.Order("id asc").Find(&employees)
+	s.DB.Order("\"CreatedAt\" desc").Find(&employees)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(employees)
+}
+
+func (s *DashboardService) handleGetGoals(w http.ResponseWriter, r *http.Request) {
+	var goals []models.DigitalFactoryGoal
+	if err := s.DB.Order("\"Priority\" asc, \"CreatedAt\" desc").Find(&goals).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	type GoalWithMilestones struct {
+		models.DigitalFactoryGoal
+		Milestones []models.DigitalFactoryMilestone `json:"milestones"`
+	}
+
+	var result []GoalWithMilestones
+	for _, g := range goals {
+		var ms []models.DigitalFactoryMilestone
+		s.DB.Where("\"GoalId\" = ?", g.ID).Order("\"Order\" asc, \"Id\" asc").Find(&ms)
+		result = append(result, GoalWithMilestones{
+			DigitalFactoryGoal: g,
+			Milestones:        ms,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }

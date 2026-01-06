@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 // GlobalConfig is the global configuration instance
@@ -36,9 +37,31 @@ const (
 
 // InitConfig initializes the global configuration
 func InitConfig(path string) error {
-	resolvedPath := CONFIG_FILE
-	if path != "" {
-		resolvedPath = path
+	resolvedPath := path
+	if resolvedPath == "" {
+		// Try current directory
+		if _, err := os.Stat(CONFIG_FILE); err == nil {
+			resolvedPath = CONFIG_FILE
+			log.Printf("[DEBUG] Found config in current dir: %s", resolvedPath)
+		} else {
+			// Try project root (assuming we are in a subfolder of BotMatrix)
+			cwd, _ := os.Getwd()
+			log.Printf("[DEBUG] CWD: %s", cwd)
+			// Look for BotMatrix root
+			rootPath := findProjectRoot(cwd)
+			log.Printf("[DEBUG] RootPath: %s", rootPath)
+			if rootPath != "" {
+				testPath := filepath.Join(rootPath, CONFIG_FILE)
+				if _, err := os.Stat(testPath); err == nil {
+					resolvedPath = testPath
+					log.Printf("[DEBUG] Found config in root: %s", resolvedPath)
+				}
+			}
+		}
+	}
+
+	if resolvedPath == "" {
+		resolvedPath = CONFIG_FILE // fallback
 	}
 
 	loadConfigFromFile(resolvedPath)
@@ -62,6 +85,21 @@ func InitConfig(path string) error {
 	return nil
 }
 
+func findProjectRoot(startDir string) string {
+	curr := startDir
+	for {
+		if _, err := os.Stat(filepath.Join(curr, "go.mod")); err == nil {
+			return curr
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	return ""
+}
+
 func loadConfigFromFile(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -72,6 +110,27 @@ func loadConfigFromFile(path string) {
 	if err := json.Unmarshal(data, GlobalConfig); err != nil {
 		log.Printf("Error: Failed to parse config file: %v", err)
 	} else {
+		// Map nested database config to flat fields if necessary
+		if GlobalConfig.Database.Host != "" {
+			if GlobalConfig.PGHost == "" {
+				GlobalConfig.PGHost = GlobalConfig.Database.Host
+			}
+			if GlobalConfig.PGPort == 0 {
+				GlobalConfig.PGPort = GlobalConfig.Database.Port
+			}
+			if GlobalConfig.PGUser == "" {
+				GlobalConfig.PGUser = GlobalConfig.Database.User
+			}
+			if GlobalConfig.PGPassword == "" {
+				GlobalConfig.PGPassword = GlobalConfig.Database.Password
+			}
+			if GlobalConfig.PGDBName == "" {
+				GlobalConfig.PGDBName = GlobalConfig.Database.DBName
+			}
+			if GlobalConfig.PGSSLMode == "" {
+				GlobalConfig.PGSSLMode = GlobalConfig.Database.SSLMode
+			}
+		}
 		log.Printf("Successfully loaded config from %s", path)
 	}
 }
@@ -98,31 +157,4 @@ func loadConfigFromEnv() {
 	if val := os.Getenv("AI_EMBEDDING_MODEL"); val != "" {
 		GlobalConfig.AIEmbeddingModel = val
 	}
-	if val := os.Getenv("AI_PROVIDER_TYPE"); val != "" {
-		GlobalConfig.AIProviderType = val
-	}
-	if val := os.Getenv("AI_API_KEY"); val != "" {
-		GlobalConfig.AIApiKey = val
-	}
-	if val := os.Getenv("AI_BASE_URL"); val != "" {
-		GlobalConfig.AIBaseURL = val
-	}
-	if val := os.Getenv("AI_MODEL_NAME"); val != "" {
-		GlobalConfig.AIModelName = val
-	}
-	// ... add other env vars as needed
-}
-
-// GetResolvedConfigPath returns the absolute path to the config file
-func GetResolvedConfigPath() string {
-	return CONFIG_FILE
-}
-
-// SaveConfig persists configuration to disk
-func SaveConfig(cfg *AppConfig) error {
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(CONFIG_FILE, data, 0644)
 }

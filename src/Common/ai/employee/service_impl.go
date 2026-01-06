@@ -247,10 +247,18 @@ func (s *EmployeeServiceImpl) Recruit(orgID uint, jobID uint) (*models.DigitalEm
 	}
 
 	// 2. Create Agent
+	var defaultModel models.AIModel
+	if err := s.db.Where("\"IsDefault\" = ?", true).First(&defaultModel).Error; err != nil {
+		// Fallback: Get the first available model
+		if err := s.db.First(&defaultModel).Error; err != nil {
+			return nil, fmt.Errorf("no AI model found in database: %v", err)
+		}
+	}
+
 	agent := models.AIAgent{
 		Name:         template.Name + "_" + fmt.Sprintf("%d", time.Now().Unix()),
 		SystemPrompt: template.BasePrompt,
-		ModelID:      1, // Default model, should be configurable
+		ModelID:      defaultModel.ID,
 		OwnerID:      orgID,
 		Tools:        template.DefaultSkills,
 	}

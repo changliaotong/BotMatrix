@@ -1,26 +1,26 @@
 package main
 
 import (
+	"BotMatrix/common/ai"
 	"BotMatrix/common/ai/employee"
+	"BotMatrix/common/ai/mcp"
 	"BotMatrix/common/config"
 	"BotMatrix/common/database"
+	clog "BotMatrix/common/log"
 	"BotMatrix/common/models"
 	"BotMatrix/common/service"
-	"fmt"
+	"BotMatrix/common/types"
 	"log"
-	"os"
-	"path/filepath"
+
+	"gorm.io/gorm"
 )
 
 func main() {
-	// 1. Load config
-	cwd, _ := os.Getwd()
-	configPath := filepath.Join(cwd, "config.json")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		log.Printf("Config file %s not found, will use env/defaults", configPath)
-	}
+	// 0. Init Logger
+	clog.InitDefaultLogger()
 
-	if err := config.InitConfig(configPath); err != nil {
+	// 1. Load config (uses unified lookup logic in config package)
+	if err := config.InitConfig(""); err != nil {
 		log.Printf("Warning: Failed to load config: %v. Using defaults/env vars.", err)
 	}
 
@@ -31,26 +31,7 @@ func main() {
 	}
 
 	// 3. Auto Migrate
-	log.Println("Migrating database...")
-
-	// Force Drop tables to ensure clean state
-	tables := []string{
-		"AIAgentTrace",
-		"DigitalEmployeeTask",
-		"MCPServer",
-		"DigitalEmployee",
-		"DigitalRoleTemplate",
-		"AIAgent",
-		"AIModel",
-		"AIProvider",
-		"AIUsageLog",
-		"BotSkillPermission",
-	}
-	for _, table := range tables {
-		if err := db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS "%s" CASCADE`, table)).Error; err != nil {
-			log.Printf("Warning: Failed to drop table %s: %v", table, err)
-		}
-	}
+	log.Println("Migrating database (preserving existing data)...")
 
 	err = db.AutoMigrate(
 		&models.AIProvider{},
@@ -65,6 +46,8 @@ func main() {
 		&models.AIAgentTrace{},
 		&models.AIUsageLog{},
 		&models.BotSkillPermission{},
+		&models.DigitalFactoryGoal{},
+		&models.DigitalFactoryMilestone{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -73,22 +56,23 @@ func main() {
 	// 3.1 Ensure Default AI Provider and Model exist
 	var provider models.AIProvider
 
-	// Determine provider details from config or default to OpenAI (Placeholder)
-	providerType := "openai"
-	providerName := "OpenAI"
-	baseURL := "https://api.openai.com/v1"
-	apiKey := "sk-placeholder"
+	// 1. Try to find an existing enabled provider first
+	if err := db.Where("\"IsEnabled\" = ?", true).First(&provider).Error; err != nil {
+		log.Println("No active AI provider found in DB, creating from config...")
 
-	if config.GlobalConfig.AIProviderType != "" {
-		providerType = config.GlobalConfig.AIProviderType
-		providerName = "PrimaryLLM" // Generic name for configured provider
-		baseURL = config.GlobalConfig.AIBaseURL
-		apiKey = config.GlobalConfig.AIApiKey
-	}
+		// Determine provider details from config or default to OpenAI (Placeholder)
+		providerType := "openai"
+		providerName := "OpenAI"
+		baseURL := "https://api.openai.com/v1"
+		apiKey := "sk-placeholder"
 
-	// Check if a provider of this type exists
-	if err := db.Where(&models.AIProvider{Type: providerType}).First(&provider).Error; err != nil {
-		log.Printf("Creating AI provider: %s...", providerName)
+		if config.GlobalConfig.AIProviderType != "" && config.GlobalConfig.AIProviderType != "mock" {
+			providerType = config.GlobalConfig.AIProviderType
+			providerName = "PrimaryLLM"
+			baseURL = config.GlobalConfig.AIBaseURL
+			apiKey = config.GlobalConfig.AIApiKey
+		}
+
 		provider = models.AIProvider{
 			Name:      providerName,
 			Type:      providerType,
@@ -96,29 +80,26 @@ func main() {
 			APIKey:    apiKey,
 			IsEnabled: true,
 		}
-		db.Create(&provider)
-	} else {
-		// Update existing provider with config values if they are present in config
-		if config.GlobalConfig.AIProviderType != "" {
-			log.Printf("Updating AI provider %s from config...", providerName)
-			provider.BaseURL = baseURL
-			provider.APIKey = apiKey
-			provider.IsEnabled = true
-			db.Save(&provider)
+		if err := db.Create(&provider).Error; err != nil {
+			log.Fatalf("Failed to create AI provider: %v", err)
 		}
+	} else {
+		log.Printf("Using existing AI provider from DB: %s (Type: %s)", provider.Name, provider.Type)
 	}
 
 	var aiModel models.AIModel
-	modelName := "GPT-4"
-	modelID := "gpt-4"
+	// 2. Try to find a default model for this provider
+	if err := db.Where(&models.AIModel{ProviderID: provider.ID, IsDefault: true}).First(&aiModel).Error; err != nil {
+		log.Println("No default AI model found for provider, creating...")
 
-	if config.GlobalConfig.AIModelName != "" {
-		modelID = config.GlobalConfig.AIModelName
-		modelName = config.GlobalConfig.AIModelName
-	}
+		modelName := "GPT-4"
+		modelID := "gpt-4"
 
-	if err := db.Where(&models.AIModel{ApiModelID: modelID, ProviderID: provider.ID}).First(&aiModel).Error; err != nil {
-		log.Printf("Creating AI model: %s...", modelName)
+		if config.GlobalConfig.AIModelName != "" {
+			modelID = config.GlobalConfig.AIModelName
+			modelName = config.GlobalConfig.AIModelName
+		}
+
 		aiModel = models.AIModel{
 			ProviderID:   provider.ID,
 			ApiModelID:   modelID,
@@ -126,7 +107,11 @@ func main() {
 			Capabilities: `["chat", "code"]`,
 			IsDefault:    true,
 		}
-		db.Create(&aiModel)
+		if err := db.Create(&aiModel).Error; err != nil {
+			log.Fatalf("Failed to create AI model: %v", err)
+		}
+	} else {
+		log.Printf("Using existing default AI model from DB: %s (ID: %s)", aiModel.ModelName, aiModel.ApiModelID)
 	}
 
 	// 4. Ensure "Code Repair Expert" Role Template exists
@@ -284,6 +269,59 @@ Use 'collaboration' tools to coordinate with other agents.
 		}
 	}
 
+	// 8.1 Create Sample Factory Goals
+	var goalCount int64
+	db.Model(&models.DigitalFactoryGoal{}).Count(&goalCount)
+	if goalCount == 0 {
+		log.Println("Creating sample factory goals...")
+		goals := []models.DigitalFactoryGoal{
+			{
+				Title:       "构建数字员工自动产线 (V1)",
+				Description: "实现从代码提交到自动修复的完整闭环",
+				Status:      "in_progress",
+				Progress:    65,
+				Priority:    1,
+			},
+			{
+				Title:       "工厂扩容：接入多模型协作",
+				Description: "支持 DeepSeek, OpenAI, Anthropic 多模型动态切换与协作",
+				Status:      "pending",
+				Progress:    20,
+				Priority:    2,
+			},
+		}
+		for _, g := range goals {
+			db.Create(&g)
+			// Create milestones for each goal
+			if g.Title == "构建数字员工自动产线 (V1)" {
+				milestones := []models.DigitalFactoryMilestone{
+					{GoalID: g.ID, Title: "基础设施搭建", Status: "completed", Weight: 30, Order: 1},
+					{GoalID: g.ID, Title: "GitLab Webhook 集成", Status: "completed", Weight: 20, Order: 2},
+					{GoalID: g.ID, Title: "Web 监控看板 (基础版)", Status: "completed", Weight: 15, Order: 3},
+					{GoalID: g.ID, Title: "真实 LLM 深度集成", Status: "in_progress", Weight: 35, Order: 4},
+				}
+				for _, m := range milestones {
+					db.Create(&m)
+				}
+			}
+		}
+	}
+
+	// 8.2 Create a Sample Task to show on dashboard
+	var taskCount int64
+	db.Model(&models.DigitalEmployeeTask{}).Count(&taskCount)
+	if taskCount == 0 {
+		log.Println("Creating sample task...")
+		sampleTask := models.DigitalEmployeeTask{
+			ExecutionID: "exec-init-001",
+			Title:       "初始化产线监控",
+			Description: "确保看板能够正确显示所有数字员工的状态",
+			Status:      "done",
+			AssigneeID:  emp.ID, // Assign to Code Repair Expert
+		}
+		db.Create(&sampleTask)
+	}
+
 	log.Println("Experiment setup completed successfully.")
 
 	// 9. Start Dashboard Server
@@ -301,16 +339,20 @@ Use 'collaboration' tools to coordinate with other agents.
 
 	empSvc := employee.NewEmployeeService(db)
 
-	// --- NEW: Initialize Real AI Service based on config ---
-	var aiSvc types.AIService
-	switch config.GlobalConfig.AIProviderType {
-	case "openai", "deepseek":
-		log.Printf("Using Real LLM Provider: %s", config.GlobalConfig.AIProviderType)
-		aiSvc = ai.NewOpenAIAdapter(config.GlobalConfig.AIBaseURL, config.GlobalConfig.AIApiKey)
-	default:
-		log.Printf("Using Mock LLM Provider (Default)")
-		aiSvc = ai.NewMockClient()
-	}
+	// --- NEW: Initialize AI Service & MCP Manager with Circular Dependency Handling ---
+	// 1. Create a simple manager to satisfy MCP requirements
+	sm := &simpleManager{db: db}
+
+	// 2. Create AI Service (initially without MCP)
+	aiSvc := ai.NewAIService(db, nil, nil)
+	sm.aiSvc = aiSvc
+
+	// 3. Create real MCP Manager (registers local_dev, browser, etc.)
+	mcpMgr := mcp.NewMCPManager(sm)
+
+	// 4. Inject MCP Manager back into AI Service
+	aiSvc.SetMCPManager(mcpMgr)
+
 	empSvc.SetAIService(aiSvc)
 	// -------------------------------------------------------
 
@@ -323,3 +365,22 @@ Use 'collaboration' tools to coordinate with other agents.
 	log.Println("Press Ctrl+C to stop.")
 	select {}
 }
+
+// simpleManager implements types.Manager to satisfy MCP requirements
+type simpleManager struct {
+	db    *gorm.DB
+	aiSvc types.AIService
+}
+
+func (m *simpleManager) GetGORMDB() *gorm.DB                                     { return m.db }
+func (m *simpleManager) GetKnowledgeBase() types.KnowledgeBase                   { return nil }
+func (m *simpleManager) GetAIService() types.AIService                           { return m.aiSvc }
+func (m *simpleManager) GetB2BService() types.B2BService                         { return nil }
+func (m *simpleManager) GetCognitiveMemoryService() types.CognitiveMemoryService { return nil }
+func (m *simpleManager) GetDigitalEmployeeService() types.DigitalEmployeeService { return nil }
+func (m *simpleManager) GetDigitalEmployeeTaskService() types.DigitalEmployeeTaskService {
+	return nil
+}
+func (m *simpleManager) GetTaskManager() types.TaskManagerInterface            { return nil }
+func (m *simpleManager) GetMCPManager() types.MCPManagerInterface              { return nil }
+func (m *simpleManager) ValidateToken(token string) (*types.UserClaims, error) { return nil, nil }

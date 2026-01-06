@@ -105,18 +105,25 @@ func (s *WebhookService) handleGitLabWebhook(w http.ResponseWriter, r *http.Requ
 
 	// Find a suitable assignee (Developer Role)
 	var assignee models.DigitalEmployee
-	// Try to find an employee with "Developer" or "Software Engineer" in their Title or Role Template Name
-	// This is a simplified logic. In a real system, we might look up a specific team.
+	// Try to find an employee with "Developer", "Engineer" or "Expert" in their Title or Role Template Name
 	err = s.DB.Joins("JOIN \"DigitalRoleTemplate\" ON \"DigitalEmployee\".\"RoleTemplateId\" = \"DigitalRoleTemplate\".\"Id\"").
-		Where("\"DigitalEmployee\".\"Status\" = ? AND (\"DigitalRoleTemplate\".\"Name\" LIKE ? OR \"DigitalEmployee\".\"Title\" LIKE ?)", "active", "%Developer%", "%Engineer%").
+		Where("\"DigitalEmployee\".\"Status\" = ? AND (\"DigitalRoleTemplate\".\"Name\" ILIKE ? OR \"DigitalEmployee\".\"Title\" ILIKE ? OR \"DigitalRoleTemplate\".\"Name\" ILIKE ?)",
+			"active", "%Developer%", "%Engineer%", "%Expert%").
 		First(&assignee).Error
 
 	assigneeID := uint(0)
 	if err == nil {
 		assigneeID = assignee.ID
-		log.Printf("Assigning CI/CD fix task to: %s (ID: %d)", assignee.Name, assignee.ID)
+		log.Printf("Assigning CI/CD fix task to specialist: %s (ID: %d)", assignee.Name, assignee.ID)
 	} else {
-		log.Printf("No specific developer found, task will be unassigned. Error: %v", err)
+		// Fallback: Find any active employee (e.g., Factory Manager)
+		log.Printf("No specialist found, falling back to any active employee. Error: %v", err)
+		if err := s.DB.Where("\"Status\" = ?", "active").First(&assignee).Error; err == nil {
+			assigneeID = assignee.ID
+			log.Printf("Assigning CI/CD fix task to fallback: %s (ID: %d)", assignee.Name, assignee.ID)
+		} else {
+			log.Printf("CRITICAL: No active employees found at all!")
+		}
 	}
 
 	// Create Digital Employee Task

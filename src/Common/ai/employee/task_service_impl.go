@@ -45,39 +45,33 @@ func (s *TaskServiceImpl) CreateTask(ctx context.Context, task *models.DigitalEm
 
 func (s *TaskServiceImpl) UpdateTaskStatus(ctx context.Context, executionID string, status string, progress int) error {
 	updates := map[string]interface{}{
-		"status":   status,
-		"progress": progress,
+		"Status":   status,
+		"Progress": progress,
 	}
-	if status == "completed" || status == "failed" {
+	if status == "done" || status == "failed" {
 		now := time.Now()
-		updates["completed_at"] = &now
+		updates["EndTime"] = &now
 	}
-	// Use struct-based condition to handle column names automatically
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).Where(&models.DigitalEmployeeTask{ID: uint(parseID(executionID))}).Updates(updates).Error
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
+		Where("\"ExecutionId\" = ?", executionID).Updates(updates).Error
 }
 
 func (s *TaskServiceImpl) GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTask, error) {
 	var task models.DigitalEmployeeTask
-	// Use struct-based condition to handle column names automatically
-	if err := s.db.WithContext(ctx).Where(&models.DigitalEmployeeTask{ID: uint(parseID(executionID))}).First(&task).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("\"ExecutionId\" = ?", executionID).First(&task).Error; err != nil {
 		return nil, err
 	}
 	return &task, nil
 }
 
 func (s *TaskServiceImpl) AssignTask(ctx context.Context, executionID string, assigneeID uint) error {
-	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).Where(&models.DigitalEmployeeTask{ID: uint(parseID(executionID))}).Update("assignee_id", assigneeID).Error
-}
-
-func parseID(idStr string) uint {
-	var id uint
-	fmt.Sscanf(idStr, "%d", &id)
-	return id
+	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
+		Where("\"ExecutionId\" = ?", executionID).Update("\"AssigneeId\"", assigneeID).Error
 }
 
 func (s *TaskServiceImpl) PlanTask(ctx context.Context, executionID string) error {
 	// Simple plan: Just mark as in_progress
-	return s.UpdateTaskStatus(ctx, executionID, "in_progress", 0)
+	return s.UpdateTaskStatus(ctx, executionID, "running", 0)
 }
 
 // ExecuteTask implements the generic execution logic driven by DB configuration
@@ -181,7 +175,7 @@ func (s *TaskServiceImpl) processAITask(ctx context.Context, task *models.Digita
 
 	resp, err := aiSvc.ChatAgent(ctx, emp.Agent.ModelID, msgs, tools)
 	if err != nil {
-		s.RecordTaskResult(ctx, fmt.Sprintf("%d", task.ID), fmt.Sprintf("Execution failed: %v", err), false)
+		s.RecordTaskResult(ctx, task.ExecutionID, fmt.Sprintf("Execution failed: %v", err), false)
 		return err
 	}
 
@@ -193,7 +187,7 @@ func (s *TaskServiceImpl) processAITask(ctx context.Context, task *models.Digita
 		}
 	}
 
-	return s.RecordTaskResult(ctx, fmt.Sprintf("%d", task.ID), result, true)
+	return s.RecordTaskResult(ctx, task.ExecutionID, result, true)
 }
 
 func (s *TaskServiceImpl) ExecuteStep(ctx context.Context, executionID string, stepIndex int) error {
@@ -211,17 +205,13 @@ func (s *TaskServiceImpl) CreateSubTask(ctx context.Context, parentExecutionID s
 }
 
 func (s *TaskServiceImpl) RecordTaskResult(ctx context.Context, executionID string, result string, success bool) error {
-	status := "completed"
+	status := "done"
 	if !success {
 		status = "failed"
 	}
 
-	// Assuming Result field exists in DigitalEmployeeTask
-	// Use struct-based condition to handle column names automatically
-	// Note: keys in map must match GORM column names or DB column names
-	// The model defines columns as: Status, Result, EndTime (not completed_at)
 	return s.db.WithContext(ctx).Model(&models.DigitalEmployeeTask{}).
-		Where(&models.DigitalEmployeeTask{ID: uint(parseID(executionID))}).
+		Where("\"ExecutionId\" = ?", executionID).
 		Updates(map[string]interface{}{
 			"Status":  status,
 			"Result":  result,
