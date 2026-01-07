@@ -1,7 +1,7 @@
 ﻿using System.Data;
 using Microsoft.Data.SqlClient;
 
-namespace sz84.Core.Database
+namespace BotWorker.Core.Database
 {
     public class SqlParameterDTO
     {

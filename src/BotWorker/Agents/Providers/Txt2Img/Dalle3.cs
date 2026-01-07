@@ -1,11 +1,11 @@
 ﻿using Azure.AI.OpenAI;
 using Azure;
 using OpenAI.Images;
-using sz84.Core;
-using sz84.Agents.Entries;
-using sz84.Core.MetaDatas;
+using BotWorker.Core;
+using BotWorker.Agents.Entries;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Agents.Providers.Txt2Img
+namespace BotWorker.Agents.Providers.Txt2Img
 {
     public class Dalle3 : MetaData<Dalle3>
     {

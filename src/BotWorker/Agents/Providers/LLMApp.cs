@@ -1,8 +1,8 @@
-﻿using sz84.Agents.Providers.Configs;
-using sz84.Agents.Providers.Helpers;
-using sz84.Agents.Services;
+﻿using BotWorker.Agents.Providers.Configs;
+using BotWorker.Agents.Providers.Helpers;
+using BotWorker.Agents.Services;
 
-namespace sz84.Agents.Providers
+namespace BotWorker.Agents.Providers
 {
     public class LLMApp
     {

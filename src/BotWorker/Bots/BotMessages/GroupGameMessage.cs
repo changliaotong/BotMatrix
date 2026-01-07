@@ -1,11 +1,11 @@
-using sz84.Bots.Entries;
-using sz84.Bots.Games;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Games;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage :MetaData<BotMessage>
     {
@@ -68,7 +68,7 @@ namespace sz84.Bots.BotMessages
             if (creditValue < blockCredit)
                 return $"您的积分{creditValue}不足{blockCredit}";
 
-            int iRobot = Common.RandomInt(1, 3);
+            int iRobot = RandomInt(1, 3);
             long bonus = blockCredit;
             string strRobot = iRobot switch
             {
@@ -132,7 +132,7 @@ namespace sz84.Bots.BotMessages
                     return $"您的积分{creditValue}不足{blockCredit}";
 
                 //生成随机数，保存积分以及猜测次数
-                resCsz = Common.RandomInt(1, 13);
+                resCsz = RandomInt(1, 13);
                 cszCredit = blockCredit;
 
                 if (UserInfo.NewGuessNumGame(resCsz, cszCredit, UserId) != -1)

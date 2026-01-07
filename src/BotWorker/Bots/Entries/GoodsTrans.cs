@@ -1,7 +1,7 @@
-﻿using sz84.Bots.Users;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Bots.Users;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public class GoodsTrans : MetaData<GoodsTrans>
     {

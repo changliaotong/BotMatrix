@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Zodiac
+﻿namespace BotWorker.Bots.Models.Zodiac
 {
     public static class ZodiacHelper
     {

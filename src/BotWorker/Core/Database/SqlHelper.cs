@@ -1,8 +1,8 @@
 ﻿using System.Reflection;
-using sz84.Core.Database.Mapping;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.Database.Mapping;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Core.Database
+namespace BotWorker.Core.Database
 {
     public static class SqlHelper
     {

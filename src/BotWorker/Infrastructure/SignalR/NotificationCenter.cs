@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 
-namespace sz84.Infrastructure.SignalR
+namespace BotWorker.Infrastructure.SignalR
 {
     public class NotificationCenter(IHubContext<MyHub> hub, IUserConnectionManager manager)
     {

@@ -1,8 +1,8 @@
 ﻿using Microsoft.SemanticKernel;
 using System.ComponentModel;
-using sz84.Infrastructure.Tools;
+using BotWorker.Infrastructure.Tools;
 
-namespace sz84.Agents.Plugins
+namespace BotWorker.Agents.Plugins
 {
     internal class WeatherPlugin
     {

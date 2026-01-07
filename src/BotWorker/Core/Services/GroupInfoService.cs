@@ -1,7 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Infrastructure.Caching;
+﻿using BotWorker.Bots.Entries;
+using BotWorker.Infrastructure.Caching;
 
-namespace sz84.Core.Services
+namespace BotWorker.Core.Services
 {
     public class GroupInfoService(ICacheRepository<GroupInfo> cache)
     {

@@ -1,6 +1,6 @@
 ﻿using LazyCache;
 
-namespace sz84.Infrastructure.Caching
+namespace BotWorker.Infrastructure.Caching
 {
     public static class LazyCacheHelper
     {

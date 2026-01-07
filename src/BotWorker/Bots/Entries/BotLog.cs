@@ -1,8 +1,8 @@
-﻿using sz84.Bots.BotMessages;
-using sz84.Bots.Platform;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Bots.BotMessages;
+using BotWorker.Bots.Platform;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public class BotLog : MetaData<BotLog>
     {

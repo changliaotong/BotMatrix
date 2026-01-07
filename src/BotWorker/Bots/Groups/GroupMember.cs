@@ -1,12 +1,12 @@
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
-using sz84.Bots.Models.Office;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Models.Office;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Groups
+namespace BotWorker.Groups
 {
     public partial class GroupMember : MetaData<GroupMember>
     {

@@ -1,6 +1,6 @@
-﻿using sz84.Core.Interfaces;
+﻿using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Models.PvP
+namespace BotWorker.Bots.Models.PvP
 {
     public class PvPMetadata : IModuleMetadata
     {

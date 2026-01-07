@@ -1,8 +1,8 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using sz84.Bots.BotMessages;
+using BotWorker.Bots.BotMessages;
 
-namespace sz84.Agents.Interfaces
+namespace BotWorker.Agents.Interfaces
 {
     public interface IModelProvider
     {

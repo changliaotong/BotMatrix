@@ -1,13 +1,13 @@
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Public;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Public;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.Database;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.Database;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
@@ -103,7 +103,7 @@ namespace sz84.Bots.BotMessages
             if (GroupId != BotInfo.MonitorGroupUin)
             {
                 if (GroupMsgCount.Update(SelfId, GroupId, GroupName, UserId, Name) == -1)
-                    ErrorMessage("更新发言统计数据时出错。");
+                    Logger.Error("更新发言统计数据时出错。");
             }
 
             if (!Group.IsPowerOn && CurrentMessage == "开机")

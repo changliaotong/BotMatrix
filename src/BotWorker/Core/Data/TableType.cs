@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace sz84.Core.Data
+namespace BotWorker.Core.Data
 {
     /// <summary>
     /// simpleTable 可展示的数据类型

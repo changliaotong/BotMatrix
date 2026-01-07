@@ -128,7 +128,7 @@ namespace BotWorker.Common.Exts
                 var typeName = typeof(T).FullName ?? typeof(T).Name;
 
                 // 将 T 的类型信息和默认值 def 记录下来
-               Common.ErrorMessage($"Ext:AsObject {ex.Message}\nType: {typeName}\nJson:{json}");
+               ErrorMessage($"Ext:AsObject {ex.Message}\nType: {typeName}\nJson:{json}");
 
                 return def;
             }

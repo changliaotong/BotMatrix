@@ -1,7 +1,7 @@
-﻿using sz84.Bots.Extensions;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Bots.Extensions;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

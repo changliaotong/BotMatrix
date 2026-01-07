@@ -1,15 +1,35 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Users;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {        
         public async Task HandleEventAsync()
         {
+            // 插件系统优先处理所有事件
+            if (PluginManager != null)
+            {
+                var pluginResult = await PluginManager.HandleEventAsync(
+                    new Core.OneBot.BotMessageEvent(this),
+                    async (reply) =>
+                    {
+                        var originalAnswer = Answer;
+                        Answer = reply;
+                        await SendMessageAsync();
+                        Answer = originalAnswer;
+                    });
+
+                if (!string.IsNullOrEmpty(pluginResult))
+                {
+                    Answer = pluginResult;
+                    return;
+                }
+            }
+
             //官机openid处理
             (var isNewGroup, var isBot) = await HandleGuildMessageAsync();
             if (isBot)

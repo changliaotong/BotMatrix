@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 
-namespace sz84.Infrastructure.Caching
+namespace BotWorker.Infrastructure.Caching
 {
     public class LoggerAdapter : ICacheLogger
     {

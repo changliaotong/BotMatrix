@@ -68,4 +68,36 @@ namespace BotWorker.Core.OneBot
         [JsonPropertyName("role")]
         public string? Role { get; set; }
     }
+
+    public class BotMessageEvent : EventBase
+    {
+        private readonly Bots.BotMessages.BotMessage _msg;
+
+        public BotMessageEvent(Bots.BotMessages.BotMessage msg)
+        {
+            _msg = msg;
+            SelfId = msg.SelfId;
+            Platform = msg.Platform;
+            Time = DateTimeOffset.Now.ToUnixTimeSeconds();
+            
+            // 将 BotMessage 的 EventType 映射到 PostType
+            // 如果是消息类事件，设为 "message" 以便触发指令处理
+            if (msg.EventType == "GroupMessageEvent" || msg.EventType == "FriendMessageEvent" || string.IsNullOrEmpty(msg.EventType))
+            {
+                PostType = "message";
+            }
+            else
+            {
+                PostType = msg.EventType;
+            }
+        }
+
+        public override string UserId => _msg.UserId.ToString();
+        public override string? GroupId => _msg.GroupId == 0 ? null : _msg.GroupId.ToString();
+        public override string RawMessage 
+        { 
+            get => _msg.CurrentMessage; 
+            set => _msg.CurrentMessage = value; 
+        }
+    }
 }

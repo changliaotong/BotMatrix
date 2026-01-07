@@ -11,10 +11,14 @@ namespace BotWorker.Services
     public class PluginMcpHost : IMCPHost
     {
         private readonly PluginManager _pluginManager;
+        private readonly IAIService _aiService;
+        private readonly II18nService _i18nService;
 
-        public PluginMcpHost(PluginManager pluginManager)
+        public PluginMcpHost(PluginManager pluginManager, IAIService aiService, II18nService i18nService)
         {
             _pluginManager = pluginManager;
+            _aiService = aiService;
+            _i18nService = i18nService;
         }
 
         public Task<IEnumerable<MCPTool>> ListToolsAsync(string serverId, CancellationToken ct = default)
@@ -81,7 +85,12 @@ namespace BotWorker.Services
                     RawMessage = "" 
                 };
 
-                var ctx = new PluginContext(ev, "mcp", "system");
+                var ctx = new PluginContext(
+                    ev, 
+                    "mcp", 
+                    "system", 
+                    _aiService, 
+                    _i18nService);
                 
                 string result = await skill.Handler(ctx, args);
 

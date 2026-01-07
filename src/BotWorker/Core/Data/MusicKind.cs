@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace sz84.Core.Data;
+namespace BotWorker.Core.Data;
 
 public enum MusicKind
 {

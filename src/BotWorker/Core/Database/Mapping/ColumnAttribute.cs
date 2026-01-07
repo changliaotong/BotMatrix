@@ -1,4 +1,4 @@
-﻿namespace sz84.Core.MetaDatas
+﻿namespace BotWorker.Core.MetaDatas
 {
     [AttributeUsage(AttributeTargets.Property)]
     public class ColumnAttribute(string? name = null) : Attribute

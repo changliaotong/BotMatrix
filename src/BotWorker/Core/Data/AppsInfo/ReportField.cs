@@ -1,7 +1,7 @@
-﻿using sz84.Core;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Core.Data.AppsInfo
+namespace BotWorker.Core.Data.AppsInfo
 {
     public class ReportField : MetaData<ReportField>
     {

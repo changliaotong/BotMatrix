@@ -1,8 +1,8 @@
 ﻿using System.Reflection;
 using System.Text;
-using sz84.Infrastructure.Utils.Schema.Attributes;
+using BotWorker.Infrastructure.Utils.Schema.Attributes;
 
-namespace sz84.Infrastructure.Utils.Schema;
+namespace BotWorker.Infrastructure.Utils.Schema;
 
 public static class SchemaSynchronizer
 {

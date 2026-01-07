@@ -1,7 +1,7 @@
 ﻿using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries;
+namespace BotWorker.Bots.Entries;
 public class Bug : MetaData<Bug>
 {
     public override string TableName => "Bug";

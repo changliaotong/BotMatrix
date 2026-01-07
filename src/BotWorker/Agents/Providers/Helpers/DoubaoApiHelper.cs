@@ -1,10 +1,10 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using sz84.Agents.Interfaces;
-using sz84.Agents.Providers.Configs;
-using sz84.Bots.BotMessages;
+using BotWorker.Agents.Interfaces;
+using BotWorker.Agents.Providers.Configs;
+using BotWorker.Bots.BotMessages;
 
-namespace sz84.Agents.Providers.Helpers
+namespace BotWorker.Agents.Providers.Helpers
 {
     public class DoubaoApiHelper(DoubaoConfig config) : IModelProvider
     {

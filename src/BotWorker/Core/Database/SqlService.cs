@@ -2,9 +2,9 @@ using Newtonsoft.Json;
 using System.Text;
 using Microsoft.Data.SqlClient;
 using BotWorker.Common;
-using sz84.Core.Database;
+using BotWorker.Core.Database;
 
-namespace sz84.Services
+namespace BotWorker.Services
 {
     public static class SqlService
     {
@@ -45,14 +45,14 @@ namespace sz84.Services
 
         public static async Task<string> QueryAsyncAPI(SqlRequest request)
         {
-            var url = $"{Common.url}/api/sql/query";
-            return await GetWebResponse(url, request);
+            var apiUrl = $"{url}/api/sql/query";
+            return await GetWebResponse(apiUrl, request);
         }
 
         public static async Task<string> ExecTransAsyncAPI(ExecTransRequest request)
         {
-            var url = $"{Common.url}/api/sql/exec";
-            return await GetWebResponse(url, request);
+            var apiUrl = $"{url}/api/sql/exec";
+            return await GetWebResponse(apiUrl, request);
         }
 
         public static async Task<string> GetWebResponse(string url, object request)
@@ -83,7 +83,7 @@ namespace sz84.Services
         public static async Task<HttpResponseMessage> PostDataAsync<T>(string url, T data)
         {
             HttpClient client = new();
-            client.DefaultRequestHeaders.Add("X-Api-Key", Common.apiKey);
+            client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
             var json = JsonConvert.SerializeObject(data);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await client.PostAsync(url, content);

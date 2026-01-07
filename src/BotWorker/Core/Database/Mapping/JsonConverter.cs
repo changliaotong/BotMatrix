@@ -1,8 +1,8 @@
 ﻿using System.Reflection;
 using System.Text.Json;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Core.Database.Mapping
 {
     public class JsonConverter : IValueConverter
     {

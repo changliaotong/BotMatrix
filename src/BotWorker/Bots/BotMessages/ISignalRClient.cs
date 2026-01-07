@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.BotMessages
+﻿namespace BotWorker.Bots.BotMessages
 {
     public interface ISignalRClient
     {

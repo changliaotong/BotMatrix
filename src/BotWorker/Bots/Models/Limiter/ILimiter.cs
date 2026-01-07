@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Limiter
+﻿namespace BotWorker.Bots.Models.Limiter
 {
     public interface ILimiter
     {

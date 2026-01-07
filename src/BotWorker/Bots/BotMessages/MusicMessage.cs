@@ -2,17 +2,17 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Newtonsoft.Json;
 using OneBotSharp.Objs.Message;
 using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Platform;
-using sz84.Bots.Services;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Platform;
+using BotWorker.Bots.Services;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
 using BotWorker.Models;
-using sz84.Core.Data;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.Data;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
@@ -21,7 +21,7 @@ namespace sz84.Bots.BotMessages
         //收到音乐分享消息时添加到音乐库 (使用 OneBot 格式)
         public void HandleMusic(OneBotSharp.Objs.Message.MsgMusic.MsgData message, string payload, bool isForce = false)
         {            
-            ShowMessage($"kind:{message.Type}\n Title:{message.Title}\n Summary:{message.Content}\n JumpUrl:{message.Url}\n PictureUrl:{message.Image}\n MusicUrl:{message.Audio}\n Brief:{message.Content}");
+            Logger.Show($"kind:{message.Type}\n Title:{message.Title}\n Summary:{message.Content}\n JumpUrl:{message.Url}\n PictureUrl:{message.Image}\n MusicUrl:{message.Audio}\n Brief:{message.Content}");
             Song song = Music.GetSong(message.Url ?? "", message.Audio ?? "");
             long musicId = 0;
             string songId = song.SongId.AsString();
@@ -39,7 +39,7 @@ namespace sz84.Bots.BotMessages
                     else
                         info = $"✅ 添加成功！ \nMusicId: {musicId} SongId：{song?.SongId ?? ""} Music数量：{Count()}\n{message.Title} {message.Content}";
                 }
-                ShowMessage(info);
+                Logger.Show(info);
                 if (!songId.IsNull() || (isForce && musicId != 0))
                 {                    
                     //处理问答库
@@ -163,16 +163,16 @@ namespace sz84.Bots.BotMessages
                 if (msm == null) return;
                 Song song = Music.GetSong(msm?.JumpUrl ?? "", msm?.MusicUrl ?? "");
                 if (song == null) return;
-                Answer = OneBotSharp.Objs.Message.MsgMusic.BuildCustom(msm?.JumpUrl ?? "", msm?.MusicUrl ?? "", msm?.Title ?? "", msm?.Summary, User.IsMusicLogo ? sz84.Bots.Users.UserInfo.GetHead(UserId) : msm?.PictureUrl).BuildSendCq();
+                Answer = OneBotSharp.Objs.Message.MsgMusic.BuildCustom(msm?.JumpUrl ?? "", msm?.MusicUrl ?? "", msm?.Title ?? "", msm?.Summary, User.IsMusicLogo ? BotWorker.Bots.Users.UserInfo.GetHead(UserId) : msm?.PictureUrl).BuildSendCq();
             }
             else if (Answer.IsMatch(Regexs.MusicIdZaomiao))
             {
                 var msm = Music.GetMusicShareMessage(Music.GetSong(Answer).MusicId);
-                Answer = OneBotSharp.Objs.Message.MsgMusic.BuildCustom(msm?.JumpUrl ?? "", msm?.MusicUrl ?? "", msm?.Title ?? "", msm?.Summary, User.IsMusicLogo ? sz84.Bots.Users.UserInfo.GetHead(UserId) : msm?.PictureUrl).BuildSendCq();
+                Answer = OneBotSharp.Objs.Message.MsgMusic.BuildCustom(msm?.JumpUrl ?? "", msm?.MusicUrl ?? "", msm?.Title ?? "", msm?.Summary, User.IsMusicLogo ? BotWorker.Bots.Users.UserInfo.GetHead(UserId) : msm?.PictureUrl).BuildSendCq();
             }
             else if (IsMusic && Answer.StartsWith("[Music]"))
             {
-                Answer = OneBotSharp.Objs.Message.MsgMusic.BuildCustom(SongResult?.AudioUrl ?? "", SongResult?.AudioUrl ?? "", SongResult?.Name ?? "", SongResult?.Artist, User.IsMusicLogo ? sz84.Bots.Users.UserInfo.GetHead(UserId) : SongResult?.Cover).BuildSendCq();
+                Answer = OneBotSharp.Objs.Message.MsgMusic.BuildCustom(SongResult?.AudioUrl ?? "", SongResult?.AudioUrl ?? "", SongResult?.Name ?? "", SongResult?.Artist, User.IsMusicLogo ? BotWorker.Bots.Users.UserInfo.GetHead(UserId) : SongResult?.Cover).BuildSendCq();
             }
         }
     }

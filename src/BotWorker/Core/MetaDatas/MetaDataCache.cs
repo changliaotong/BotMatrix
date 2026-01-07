@@ -1,8 +1,8 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Core.Database;
-using sz84.Infrastructure.Caching;
+using BotWorker.Core.Database;
+using BotWorker.Infrastructure.Caching;
 
-namespace sz84.Core.MetaDatas
+namespace BotWorker.Core.MetaDatas
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {

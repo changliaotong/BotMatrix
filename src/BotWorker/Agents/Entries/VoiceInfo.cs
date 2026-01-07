@@ -1,4 +1,4 @@
-﻿namespace sz84.Agents.Entries
+﻿namespace BotWorker.Agents.Entries
 {
     public class VoiceInfo
     {

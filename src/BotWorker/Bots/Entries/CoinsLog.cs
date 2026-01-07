@@ -1,8 +1,8 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Core.MetaDatas;
-using sz84.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Groups;
 
-namespace sz84.Bots.Entries;
+namespace BotWorker.Bots.Entries;
 public class CoinsLog : MetaData<CoinsLog>
 {
     public override string TableName => "Coins";

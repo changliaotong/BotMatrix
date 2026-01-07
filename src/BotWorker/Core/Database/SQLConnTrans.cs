@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 
-namespace sz84.Core.Database
+namespace BotWorker.Core.Database
 {
     public static partial class SQLConn
     {

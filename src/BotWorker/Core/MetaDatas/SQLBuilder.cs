@@ -2,7 +2,7 @@
 using Microsoft.Data.SqlClient;
 using BotWorker.Common.Exts;
 
-namespace sz84.Core.MetaDatas
+namespace BotWorker.Core.MetaDatas
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {    

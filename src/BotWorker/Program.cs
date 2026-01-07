@@ -1,15 +1,22 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Linq;
 using BotWorker.Services;
 using BotWorker.Core.Plugin;
-using sz84.Core.Services;
-using sz84.Infrastructure.Caching;
+using BotWorker.Core.Services;
+using BotWorker.Infrastructure.Caching;
 using Serilog;
 using Microsoft.EntityFrameworkCore;
-using sz84.Infrastructure.Background;
+using BotWorker.Infrastructure.Background;
+using BotWorker.Core.Pipeline;
+
+using BotWorker.Core.Configurations;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 初始化静态配置
+AppConfig.Initialize(builder.Configuration);
 
 // 配置 Serilog
 Log.Logger = new LoggerConfiguration()
@@ -31,7 +38,11 @@ builder.Services.AddSingleton<EntityCacheHelper>(sp =>
     new EntityCacheHelper(builder.Configuration.GetConnectionString("Redis") ?? "localhost"));
 
 // 注册核心业务服务
+builder.Services.AddSingleton<IMcpService, MCPManager>();
+builder.Services.AddSingleton<IAIService, AIService>();
+builder.Services.AddSingleton<II18nService, I18nService>();
 builder.Services.AddSingleton<PluginManager>();
+builder.Services.AddSingleton<MessagePipeline>();
 builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();
 builder.Services.AddSingleton<IMCPHost, PluginMcpHost>();
 
@@ -39,6 +50,17 @@ builder.Services.AddSingleton<IMCPHost, PluginMcpHost>();
 builder.Services.AddHostedService<StartupPluginLoader>();
 
 var app = builder.Build();
+
+// 注入插件管理器到 BotMessage
+BotWorker.Bots.BotMessages.BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
+BotWorker.Bots.BotMessages.BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
+
+// 检查是否为测试模式
+if (args.Contains("--test"))
+{
+    await BotWorker.TestConsole.RunAsync(builder.Configuration);
+    return;
+}
 
 if (app.Environment.IsDevelopment())
 {

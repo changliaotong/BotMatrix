@@ -1,9 +1,9 @@
-using sz84.Bots.BotMessages;
+using BotWorker.Bots.BotMessages;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Infrastructure.Extensions.Text;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Extensions.Text;
 
-namespace sz84.Agents.Entries
+namespace BotWorker.Agents.Entries
 {
     public class AgentLog : MetaData<AgentLog>
     {

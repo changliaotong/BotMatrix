@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using BotWorker.Common.Exts;
 
-namespace sz84.Bots.Public
+namespace BotWorker.Bots.Public
 {
     public class FaceInfo(int faceId, string faceWeixinName, string faceQQName)
     {

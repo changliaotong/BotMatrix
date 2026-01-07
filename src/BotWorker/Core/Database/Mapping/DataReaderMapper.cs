@@ -2,7 +2,7 @@
 using Microsoft.Data.SqlClient;
 using System.Reflection;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Core.Database.Mapping
 {
     public static class DataReaderMapper
     {

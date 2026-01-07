@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
 using BotWorker.Models;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public class MusicVideo : MetaData<MusicVideo>
     {

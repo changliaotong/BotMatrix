@@ -1,10 +1,10 @@
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Groups;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
@@ -18,7 +18,7 @@ namespace sz84.Bots.BotMessages
                 string confirmCode = GroupMember.GetValue("ConfirmCode", RealGroupId, UserId);
                 if (confirmCode.IsNull())
                 {
-                    confirmCode = Common.RandomInt(100, 999).ToString();
+                    confirmCode = RandomInt(100, 999).ToString();
                     int i = AddGroupMember(50, confirmCode);
                     if (i == -1)
                         return res;

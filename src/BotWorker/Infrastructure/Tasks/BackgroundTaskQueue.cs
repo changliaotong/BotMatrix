@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace sz84.Infrastructure.Tasks
+namespace BotWorker.Infrastructure.Tasks
 {
     public class BackgroundTaskQueue : IBackgroundTaskQueue
     {

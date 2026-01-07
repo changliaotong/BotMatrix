@@ -1,6 +1,6 @@
 using BotWorker.Common.Exts;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public class MusicAnswer : AnswerInfo
     {

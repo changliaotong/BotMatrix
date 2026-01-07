@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
-using sz84.Agents.Plugins;
-using sz84.Infrastructure.Caching;
+using BotWorker.Agents.Plugins;
+using BotWorker.Infrastructure.Caching;
 
-namespace sz84.Infrastructure.SignalR
+namespace BotWorker.Infrastructure.SignalR
 {
     public class MyHub(ICacheService cache, KnowledgeBaseService qaService, IUserConnectionManager userConnectionManager, ILogger<MyHub> logger) : Hub
     {

@@ -1,6 +1,6 @@
-﻿using sz84.Infrastructure.Extensions.Array;
+﻿using BotWorker.Infrastructure.Extensions.Array;
 
-namespace sz84.Infrastructure.Extensions.Array
+namespace BotWorker.Infrastructure.Extensions.Array
 {
     /// <summary>
     /// Methods for checking specified sequence

@@ -1,10 +1,10 @@
 using System.Globalization;
-using sz84.Bots.BotMessages;
+using BotWorker.Bots.BotMessages;
 using BotWorker.Common;
-using sz84.Core;
-using sz84.Core.MetaDatas;
+using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Core.Data
+namespace BotWorker.Core.Data
 {
     public class CID : MetaData<CID>
     {

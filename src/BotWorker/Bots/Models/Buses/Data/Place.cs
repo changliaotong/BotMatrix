@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Buses.Data
+﻿namespace BotWorker.Bots.Models.Buses.Data
 {
     public class Place
     {

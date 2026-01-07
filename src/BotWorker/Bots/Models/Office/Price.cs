@@ -1,7 +1,7 @@
-﻿using sz84.Core;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Models.Office
+namespace BotWorker.Bots.Models.Office
 {
     public class Price : MetaData<Price>
     {

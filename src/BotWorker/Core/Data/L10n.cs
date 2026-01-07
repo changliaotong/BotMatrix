@@ -1,4 +1,4 @@
-﻿namespace sz84.Core.Data
+﻿namespace BotWorker.Core.Data
 {
     public class L10n
     {

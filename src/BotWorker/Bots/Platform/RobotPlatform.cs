@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Platform;
+﻿namespace BotWorker.Bots.Platform;
 
 public static class Platforms
 {

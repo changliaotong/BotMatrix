@@ -1,7 +1,7 @@
 using StackExchange.Redis;
 using BotWorker.Common;
 
-namespace sz84.Infrastructure.SignalR
+namespace BotWorker.Infrastructure.SignalR
 {
     public static class RedisConnectionMap
     {

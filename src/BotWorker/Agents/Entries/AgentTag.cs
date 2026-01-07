@@ -1,6 +1,6 @@
-﻿using sz84.Core.MetaDatas;
+﻿using BotWorker.Core.MetaDatas;
 
-namespace sz84.Agents.Entries
+namespace BotWorker.Agents.Entries
 {
     public class AgentTag: MetaDataGuid<AgentTag>
     {

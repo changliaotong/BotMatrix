@@ -1,0 +1,46 @@
+{
+  "http": {
+    "addr": ":8081",
+    "read_timeout": "10s",
+    "write_timeout": "10s"
+  },
+  "websocket": {
+    "addr": ":8080",
+    "read_timeout": "10s",
+    "write_timeout": "10s",
+    "pong_timeout": "60s",
+    "check_origin": true
+  },
+  "log": {
+    "level": "info",
+    "file": "bot.log",
+    "max_size": 10,
+    "max_backups": 3,
+    "max_age": 28
+  },
+  "plugin": {
+    "dir": "plugins",
+    "load_builtin": true
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "postgres",
+    "password": "",
+    "dbname": "bot",
+    "sslmode": "disable"
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "db": 0,
+    "stream": {
+      "streams": ["onebot_events"],
+      "group": "bot_worker_group",
+      "consumer": "worker_1",
+      "batch_size": 10,
+      "block_time": 2000
+    }
+  }
+}

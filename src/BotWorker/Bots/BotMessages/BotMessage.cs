@@ -1,14 +1,17 @@
-using sz84.Agents.Entries;
+using BotWorker.Agents.Entries;
 using BotWorker.Common.Exts;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using System.Diagnostics;
 using System.Reflection;
-using sz84.Bots.Platform;
+using BotWorker.Bots.Platform;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage
     {        
+        public static Core.Plugin.PluginManager? PluginManager { get; set; }
+        public static Core.Pipeline.MessagePipeline? Pipeline { get; set; }
+
         public string MsgGuid { get; set; } = Guid.NewGuid().ToString();
         public long SelfId => SelfInfo.BotUin;
         public string SelfName => SelfInfo.BotName;

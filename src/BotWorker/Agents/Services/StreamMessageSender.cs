@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace sz84.Agents.Services
+namespace BotWorker.Agents.Services
 {
     //流式消息通过机器人多次发送 测试过程
     public class StreamMessageSender

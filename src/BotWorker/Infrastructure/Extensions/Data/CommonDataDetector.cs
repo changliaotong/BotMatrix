@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Extensions.Data
+﻿namespace BotWorker.Infrastructure.Extensions.Data
 {
     /// <summary>
     /// General detector

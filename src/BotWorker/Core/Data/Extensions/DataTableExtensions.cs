@@ -1,6 +1,6 @@
 ﻿using System.Data;
 
-namespace sz84.Core.Data.Extensions;
+namespace BotWorker.Core.Data.Extensions;
 
 public static class DataTableExtensions
 {

@@ -1,12 +1,12 @@
-using sz84.Bots.Entries;
-using sz84.Bots.Models.Office;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Models.Office;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Groups;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

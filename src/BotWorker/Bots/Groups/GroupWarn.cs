@@ -1,9 +1,9 @@
 using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Groups
+namespace BotWorker.Bots.Groups
 {
     public class GroupWarn : MetaData<GroupWarn>
     {

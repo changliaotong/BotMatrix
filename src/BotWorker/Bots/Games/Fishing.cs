@@ -1,9 +1,9 @@
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Groups;
 
-namespace sz84.Bots.Games
+namespace BotWorker.Bots.Games
 {
     internal class Fishing : MetaData<Fishing>
     {

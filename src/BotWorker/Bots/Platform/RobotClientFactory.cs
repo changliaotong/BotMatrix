@@ -1,6 +1,6 @@
-﻿using sz84.Bots.Interfaces;
+﻿using BotWorker.Bots.Interfaces;
 
-namespace sz84.Bots.Platform;
+namespace BotWorker.Bots.Platform;
 
 public static class RobotClientFactory
 {

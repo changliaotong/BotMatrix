@@ -1,10 +1,10 @@
-using sz84.Bots.BotMessages;
-using sz84.Bots.Entries;
+using BotWorker.Bots.BotMessages;
+using BotWorker.Bots.Entries;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Core.Data;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Core.Data;
 
-namespace sz84.Bots.Games
+namespace BotWorker.Bots.Games
 {
     public class Jielong : MetaData<Jielong>
     {

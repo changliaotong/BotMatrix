@@ -1,7 +1,7 @@
-using sz84.Core.MetaDatas;
-using sz84.Bots.Entries;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Bots.Entries;
 
-namespace sz84.Bots.Groups;
+namespace BotWorker.Bots.Groups;
 public partial class GroupOffical : MetaData<GroupOffical>
 {
     public override string TableName => "Group";

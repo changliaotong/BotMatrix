@@ -3,11 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using sz84.Core.Data;
-using sz84.Core.Interfaces;
+using BotWorker.Core.Data;
+using BotWorker.Core.Interfaces;
 
 
-namespace sz84.Bots.Models.Limiter
+namespace BotWorker.Bots.Models.Limiter
 {
     public class LimiterService(AppDbContext db) : ILimiter, IBotModule
     {

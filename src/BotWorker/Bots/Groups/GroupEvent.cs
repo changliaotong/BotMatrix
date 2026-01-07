@@ -1,7 +1,7 @@
-using sz84.Bots.BotMessages;
-using sz84.Core.MetaDatas;
+using BotWorker.Bots.BotMessages;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Groups
+namespace BotWorker.Bots.Groups
 {
     public class GroupEvent : MetaData<GroupEvent>
     {

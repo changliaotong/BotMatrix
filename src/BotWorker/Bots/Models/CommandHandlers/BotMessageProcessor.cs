@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.CommandHandlers
+﻿namespace BotWorker.Bots.Models.CommandHandlers
 {
     public class BotMessageProcessor
     {

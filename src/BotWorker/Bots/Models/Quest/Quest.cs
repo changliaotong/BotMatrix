@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Quest
+﻿namespace BotWorker.Bots.Models.Quest
 {
     public enum QuestType
     {

@@ -1,11 +1,11 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Models.Office;
-using sz84.Bots.Public;
+﻿using BotWorker.Bots.Entries;
+using BotWorker.Bots.Models.Office;
+using BotWorker.Bots.Public;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Groups;
 
-namespace sz84.Bots.Users;
+namespace BotWorker.Bots.Users;
 
 public partial class UserInfo : MetaDataGuid<UserInfo>
 {

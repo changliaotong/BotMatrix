@@ -1,10 +1,10 @@
-using sz84.Bots.Entries;
-using sz84.Bots.Games;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Games;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Bots.Users;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Bots.Users;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     //红和蓝
     public partial class BotMessage : MetaData<BotMessage>

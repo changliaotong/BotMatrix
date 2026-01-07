@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace sz84.Core.Interfaces
+namespace BotWorker.Core.Interfaces
 {
     public interface IBotModule
     {

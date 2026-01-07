@@ -1,6 +1,6 @@
-﻿using sz84.Core.Interfaces;
+﻿using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Models.Limiter
+namespace BotWorker.Bots.Models.Limiter
 {
     public class LimiterMetadata : IModuleMetadata
     {

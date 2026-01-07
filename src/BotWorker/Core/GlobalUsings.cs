@@ -1,8 +1,10 @@
-﻿global using static BotWorker.Common.Common;
-global using static sz84.Core.Database.SQLConn;
-global using static sz84.Services.SqlService;
+global using static BotWorker.Core.Configurations.AppConfig;
+global using Logger = BotWorker.Core.Logging.Logger;
+global using BotWorker.Core.Logging;
+global using static BotWorker.Core.Database.SQLConn;
+global using static BotWorker.Services.SqlService;
 global using static BotWorker.Common.LogX;
-namespace sz84.Core
+namespace BotWorker.Core
 {
     public class GlobalUsings
     {

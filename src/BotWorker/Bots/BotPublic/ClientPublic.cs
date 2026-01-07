@@ -1,13 +1,13 @@
 using Microsoft.Data.SqlClient;
-using sz84.Bots.BotMessages;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
+using BotWorker.Bots.BotMessages;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Users;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Infrastructure.Utils;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Utils;
 
-namespace sz84.Bots.Public
+namespace BotWorker.Bots.Public
 {
     public class ClientPublic : MetaData<ClientPublic>
     {

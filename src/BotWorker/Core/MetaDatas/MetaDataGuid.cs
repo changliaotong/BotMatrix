@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace sz84.Core.MetaDatas
+namespace BotWorker.Core.MetaDatas
 {
     public abstract class MetaDataGuid<TDerived> : MetaData<TDerived> where TDerived : MetaDataGuid<TDerived>, new()
     {

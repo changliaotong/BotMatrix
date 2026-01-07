@@ -2,11 +2,11 @@
 using System.Drawing;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.Database;
-using sz84.Core;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.Database;
+using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class Calendar : MetaData<Calendar>
     {

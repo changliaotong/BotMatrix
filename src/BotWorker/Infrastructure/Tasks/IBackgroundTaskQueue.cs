@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Tasks
+﻿namespace BotWorker.Infrastructure.Tasks
 {
     public interface IBackgroundTaskQueue
     {

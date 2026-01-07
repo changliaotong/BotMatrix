@@ -1,15 +1,15 @@
 using System.Data;
-using sz84.Agents.Entries;
-using sz84.Agents.Providers;
-using sz84.Agents.Providers.Txt2Img;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
-using BotWorker.Common;
+using BotWorker.Agents.Entries;
+using BotWorker.Agents.Providers;
+using BotWorker.Agents.Providers.Txt2Img;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Users;
+using BotWorker.Core.Logging;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
@@ -199,7 +199,7 @@ namespace sz84.Bots.BotMessages
             else
             {
                 Answer = "模型提供者不存在";
-                Debug(Answer);
+                Logger.Debug(Answer);
                 return;
             }
 
@@ -221,8 +221,8 @@ namespace sz84.Bots.BotMessages
             {
                 if (IsPublic)
                 {
-                    var url = $"< a href =\"{Common.url}/ai?t={Token.GetToken(UserId)}";
-                    Answer = $"以下地址直接<a href=\"{url}\">进入后台</a>使用文生图:\n{url}";
+                    var urlFull = $"< a href =\"{url}/ai?t={Token.GetToken(UserId)}";
+                    Answer = $"以下地址直接<a href=\"{urlFull}\">进入后台</a>使用文生图:\n{urlFull}";
                 }
                 else if (CmdPara.IsNull())
                     Answer = $"命令格式：生图 + 提示词\n模型：豆包通用2.1-文生图\n消耗算力：12000单位/图";

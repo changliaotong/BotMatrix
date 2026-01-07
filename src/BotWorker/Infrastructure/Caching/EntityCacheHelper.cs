@@ -2,7 +2,7 @@ using Serilog;
 using StackExchange.Redis;
 using System.Text.Json;
 
-namespace sz84.Infrastructure.Caching
+namespace BotWorker.Infrastructure.Caching
 {
     
     /// <summary>

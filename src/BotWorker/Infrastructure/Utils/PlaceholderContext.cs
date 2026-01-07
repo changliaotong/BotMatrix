@@ -1,10 +1,10 @@
 ﻿using System.Reflection;
 using System.Text.RegularExpressions;
-using sz84.Bots.BotMessages;
-using sz84.Core;
-using sz84.Core.MetaDatas;
+using BotWorker.Bots.BotMessages;
+using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Infrastructure.Utils
+namespace BotWorker.Infrastructure.Utils
 {
     public class PlaceholderContext
     {

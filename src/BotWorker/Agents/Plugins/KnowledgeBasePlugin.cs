@@ -1,9 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.SemanticKernel;
-using sz84.Agents.Interfaces;
+using BotWorker.Agents.Interfaces;
 
-namespace sz84.Agents.Plugins
+namespace BotWorker.Agents.Plugins
 {
     public class KnowledgeBasePlugin(IKnowledgeBaseService knowledgeBaseService, long groupId): KernelPlugin("knowledge", "当用户的问题与本群所配置的知识库内容有关时，调用此函数（如学校政策、公司制度等）")
     {

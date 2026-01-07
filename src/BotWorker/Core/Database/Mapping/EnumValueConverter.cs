@@ -1,4 +1,4 @@
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Core.Database.Mapping
 {
     public class EnumValueConverter<TEnum> : IValueConverter where TEnum : struct, Enum
     {

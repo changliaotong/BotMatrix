@@ -1,11 +1,11 @@
 using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Infrastructure.Utils;
-using sz84.Bots.Users;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Utils;
+using BotWorker.Bots.Users;
 
-namespace sz84.Bots.Games
+namespace BotWorker.Bots.Games
 {
     // 区块链+游戏
     public partial class Block : MetaDataGuid<Block>

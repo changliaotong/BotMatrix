@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
@@ -345,7 +345,7 @@ namespace BotWorker.Common.Exts
             }
             catch (Exception e)
             {
-                Common.ErrorMessage($"\nException Caught!\nMessage :{e.Message}");
+                ErrorMessage($"\nException Caught!\nMessage :{e.Message}");
                 return "";
             }
         }

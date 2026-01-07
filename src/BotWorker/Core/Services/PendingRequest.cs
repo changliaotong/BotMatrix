@@ -1,6 +1,6 @@
-﻿using sz84.Bots.BotMessages;
+﻿using BotWorker.Bots.BotMessages;
 
-namespace sz84.Core.Services
+namespace BotWorker.Core.Services
 {
     public class PendingRequest(string requestId, string methodName, BotMessage context, object[] args)
     {

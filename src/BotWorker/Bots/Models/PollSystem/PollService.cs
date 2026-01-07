@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace sz84.Bots.Models.PollSystem
+namespace BotWorker.Bots.Models.PollSystem
 {
     public class PollService
     {

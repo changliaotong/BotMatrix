@@ -1,4 +1,4 @@
-﻿namespace sz84.Agents.Providers.Configs
+﻿namespace BotWorker.Agents.Providers.Configs
 {
     public class DoubaoConfig(string url, string key, string modelId)
     {

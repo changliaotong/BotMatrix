@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using BotWorker.Core.OneBot;
+using BotWorker.Services;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
 
 namespace BotWorker.Core.Plugin
 {
@@ -15,27 +18,65 @@ namespace BotWorker.Core.Plugin
 
     public class PluginContext : IPluginContext
     {
-        public string Message { get; set; } = string.Empty;
-        public string? GroupId { get; set; }
-        public string UserId { get; set; } = string.Empty;
-        public string Platform { get; set; } = string.Empty;
-        public string BotId { get; set; } = string.Empty;
+        private readonly EventBase _ev;
+        private readonly Func<string, Task>? _replyDelegate;
+
+        // 基础信息
+        public string Message => _ev.RawMessage;
+        public string? GroupId => _ev.GroupId;
+        public string UserId => _ev.UserId;
+        public string Platform { get; }
+        public string BotId { get; }
+        public string EventType => _ev.PostType; // 或者是更具体的事件类型
+        public bool IsMessage => _ev.PostType == "message";
         public string RawMessage { get; set; } = string.Empty;
 
-        public PluginContext(EventBase ev, string platform, string botId)
+        // 丰富实体
+        public UserInfo? User { get; }
+        public GroupInfo? Group { get; }
+        public GroupMember? Member { get; }
+        public BotInfo? Bot { get; }
+
+        // 服务接口
+        public IAIService AI { get; }
+        public II18nService I18n { get; }
+
+        public PluginContext(
+            EventBase ev, 
+            string platform, 
+            string botId,
+            IAIService ai,
+            II18nService i18n,
+            UserInfo? user = null,
+            GroupInfo? group = null,
+            GroupMember? member = null,
+            BotInfo? bot = null,
+            Func<string, Task>? replyDelegate = null)
         {
-            Message = ev.RawMessage;
-            UserId = ev.UserId;
-            GroupId = ev.GroupId;
+            _ev = ev;
             Platform = platform;
             BotId = botId;
+            RawMessage = ev.RawMessage;
+
+            AI = ai;
+            I18n = i18n;
+            User = user;
+            Group = group;
+            Member = member;
+            Bot = bot;
+            _replyDelegate = replyDelegate;
         }
 
-        public Task ReplyAsync(string message)
-        {
-            // TODO: 实现发送逻辑
-            Console.WriteLine($"Reply to {UserId} in {GroupId}: {message}");
-            return Task.CompletedTask;
+        public async Task ReplyAsync(string message)
+        {            if (_replyDelegate != null)
+            {
+                await _replyDelegate(message);
+            }
+            else
+            {
+                // 回退逻辑，如果没提供委托则记录日志
+                Console.WriteLine($"[PluginContext] Reply to {UserId} on {Platform}: {message}");
+            }
         }
     }
 

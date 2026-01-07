@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Entries
+﻿namespace BotWorker.Bots.Entries
 {
     public class Order
     {

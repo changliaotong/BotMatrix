@@ -1,4 +1,4 @@
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class RmbDaxie
     {

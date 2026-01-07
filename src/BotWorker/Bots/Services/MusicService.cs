@@ -1,8 +1,8 @@
 using OneBotSharp.Objs.Message;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Models;
 
-namespace sz84.Bots.Services;
+namespace BotWorker.Bots.Services;
 
 public static class MusicService
 {

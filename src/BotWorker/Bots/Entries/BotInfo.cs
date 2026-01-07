@@ -1,11 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using Newtonsoft.Json;
 using OneBotSharp.Objs.Event;
-using sz84.Bots.Platform;
+using BotWorker.Bots.Platform;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public partial class BotInfo : MetaData<BotInfo>
     {

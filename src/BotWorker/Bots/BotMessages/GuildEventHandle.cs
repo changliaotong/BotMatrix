@@ -1,9 +1,9 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Users;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Games
+﻿namespace BotWorker.Bots.Games
 {
     public class Fortune
     {

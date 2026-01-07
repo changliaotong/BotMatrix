@@ -1,9 +1,9 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Core.MetaDatas;
-using sz84.Bots.Users;
-using sz84.Bots.Entries;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Bots.Users;
+using BotWorker.Bots.Entries;
 
-namespace sz84.Bots.Models.Office
+namespace BotWorker.Bots.Models.Office
 {
     public class Partner : MetaData<Partner>
     {

@@ -2,18 +2,18 @@ using System.Diagnostics;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Newtonsoft.Json;
 using QQBot4Sharp.Models;
-using sz84.Agents.Entries;
-using sz84.Agents.Plugins;
-using sz84.Agents.Providers;
-using sz84.Bots.Entries;
-using sz84.Bots.Platform;
-using sz84.Bots.Users;
+using BotWorker.Agents.Entries;
+using BotWorker.Agents.Plugins;
+using BotWorker.Agents.Providers;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Platform;
+using BotWorker.Bots.Users;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Core.Services;
-using sz84.Infrastructure.Utils;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Core.Services;
+using BotWorker.Infrastructure.Utils;
 
-namespace sz84.Bots.BotMessages;
+namespace BotWorker.Bots.BotMessages;
 
 public partial class BotMessage : MetaData<BotMessage>
 {

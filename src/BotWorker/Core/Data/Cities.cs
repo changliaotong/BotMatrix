@@ -1,7 +1,7 @@
-﻿using sz84.Core;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Core.Data
+namespace BotWorker.Core.Data
 {
     /// <summary>
     /// 中国城市数据

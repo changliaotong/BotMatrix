@@ -1,15 +1,15 @@
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Public;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Public;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Groups;
-using sz84.Core.MetaDatas;
-using sz84.Bots.Users;
+using BotWorker.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Bots.Users;
 using System.Diagnostics;
-using sz84.Bots.Platform;
+using BotWorker.Bots.Platform;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
@@ -27,7 +27,7 @@ namespace sz84.Bots.BotMessages
                 if (MsgId == lastMsgId)
                 {
                     var token = Token.GetToken(UserId);
-                    var url = $"{Common.url}/ai?t={token}&gid={GroupId}msgid={MsgId}";
+                    var url = $"{BotWorker.Common.C.url}/ai?t={token}&gid={GroupId}msgid={MsgId}";
                     Answer = $"已超时请前往\n<a href=\"{url}\">网站后台</a>查看结果\n你的TOKEN：{token}";
                 }
                 else

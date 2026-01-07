@@ -1,8 +1,8 @@
 using Microsoft.Data.SqlClient;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Agents.Entries
+namespace BotWorker.Agents.Entries
 {
     //智能体
     public partial class Agent : MetaDataGuid<Agent>

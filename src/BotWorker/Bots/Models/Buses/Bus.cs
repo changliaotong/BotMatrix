@@ -1,9 +1,9 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Text.RegularExpressions;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Bots.Models.Buses
 {
 
     public class Bus : MetaData<Bus>

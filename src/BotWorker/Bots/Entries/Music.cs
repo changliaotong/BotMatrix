@@ -5,10 +5,10 @@ using System.Text.Json;
 using System.Web;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.Data;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.Data;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public class Music : MetaData<Music>
     {

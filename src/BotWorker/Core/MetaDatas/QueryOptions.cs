@@ -1,6 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 
-namespace sz84.Core.MetaDatas
+namespace BotWorker.Core.MetaDatas
 {    public class QueryOptions
     {
         public int? PageIndex { get; set; }     // 从1开始

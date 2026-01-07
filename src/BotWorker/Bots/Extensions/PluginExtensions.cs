@@ -3,9 +3,9 @@ using System.Runtime.Loader;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using sz84.Core.Interfaces;
+using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Extensions
+namespace BotWorker.Bots.Extensions
 {
     public static class PluginExtensions
     {

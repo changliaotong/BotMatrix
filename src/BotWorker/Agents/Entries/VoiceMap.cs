@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace sz84.Agents.Entries;
+namespace BotWorker.Agents.Entries;
 
 public record VoiceItem(string Id, string Name, string PreviewUrl);
 

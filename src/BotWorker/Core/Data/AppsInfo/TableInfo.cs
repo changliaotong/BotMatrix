@@ -1,6 +1,6 @@
-﻿using sz84.Core.MetaDatas;
+﻿using BotWorker.Core.MetaDatas;
 
-namespace sz84.Core.Data.AppsInfo
+namespace BotWorker.Core.Data.AppsInfo
 {
     public class TableInfo : MetaData<TableInfo>
     {

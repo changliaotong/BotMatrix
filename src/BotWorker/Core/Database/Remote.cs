@@ -1,9 +1,9 @@
 using Newtonsoft.Json;
 using System.Text;
 using Microsoft.Data.SqlClient;
-using BotWorker.Common;
+using static BotWorker.Core.Configurations.AppConfig;
 
-namespace sz84.Core.Database
+namespace BotWorker.Core.Database
 {
     //远程执行sql
     public static class Remote
@@ -62,14 +62,14 @@ namespace sz84.Core.Database
 
         public static async Task<string> QueryAsyncAPI(SqlRequest request)
         {
-            var url = $"{Common.url}/api/sql/query";
-            return await GetWebResponse(url, request);
+            var apiUrl = $"{url}/api/sql/query";
+            return await GetWebResponse(apiUrl, request);
         }
 
         public static async Task<string> ExecTransAsyncAPI(ExecTransRequest request)
         {
-            var url = $"{Common.url}/api/sql/exec";
-            return await GetWebResponse(url, request);
+            var apiUrl = $"{url}/api/sql/exec";
+            return await GetWebResponse(apiUrl, request);
         }
 
         public static async Task<string> GetWebResponse(string url, object request)
@@ -86,13 +86,13 @@ namespace sz84.Core.Database
                 }
                 else
                 {
-                    SQLConn.DbDebug("Error: " + response.StatusCode, "SqlService:GetWebAPI");
+                    Logger.Error("Error: " + response.StatusCode, null, new { Service = "Remote", Method = "GetWebResponse" });
                     return string.Empty;
                 }
             }
             catch (Exception ex)
             {
-                SQLConn.DbDebug("Exception: " + ex.Message, "SqlService:GetWebAPI");
+                Logger.Error("Exception: " + ex.Message, ex, new { Service = "Remote", Method = "GetWebResponse" });
                 return string.Empty;
             }
         }
@@ -100,7 +100,7 @@ namespace sz84.Core.Database
         public static async Task<HttpResponseMessage> PostDataAsync<T>(string url, T data)
         {
             HttpClient client = new();
-            client.DefaultRequestHeaders.Add("X-Api-Key", Common.apiKey);
+            client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
             var json = JsonConvert.SerializeObject(data);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await client.PostAsync(url, content);

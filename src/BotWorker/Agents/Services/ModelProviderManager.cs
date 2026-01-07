@@ -1,6 +1,6 @@
-﻿using sz84.Agents.Interfaces;
+﻿using BotWorker.Agents.Interfaces;
 
-namespace sz84.Agents.Services
+namespace BotWorker.Agents.Services
 {
     public class ModelProviderManager
     {

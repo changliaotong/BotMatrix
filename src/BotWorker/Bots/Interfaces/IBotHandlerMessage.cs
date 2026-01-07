@@ -1,6 +1,6 @@
-﻿using sz84.Bots.BotMessages;
+﻿using BotWorker.Bots.BotMessages;
 
-namespace sz84.Bots.Interfaces
+namespace BotWorker.Bots.Interfaces
 {
     public interface IBotHandlerMessage
     {

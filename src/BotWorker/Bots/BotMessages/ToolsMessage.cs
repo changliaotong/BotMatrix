@@ -1,10 +1,10 @@
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Infrastructure.Tools;
-using sz84.Bots.Users;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Tools;
+using BotWorker.Bots.Users;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

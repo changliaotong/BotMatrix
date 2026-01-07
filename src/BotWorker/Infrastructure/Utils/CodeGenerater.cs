@@ -1,9 +1,9 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Text;
-using sz84.Core.Database;
+using BotWorker.Core.Database;
 
-namespace sz84.Infrastructure.Utils
+namespace BotWorker.Infrastructure.Utils
 {
     public class CodeGenerator
     {

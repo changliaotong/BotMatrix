@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using sz84.Core.Interfaces;
+using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Models.Punch
+namespace BotWorker.Bots.Models.Punch
 {
     public class PunchService : IBotModule
     {

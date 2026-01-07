@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using Newtonsoft.Json;
-using sz84.Bots.BotMessages;
+using BotWorker.Bots.BotMessages;
 
-namespace sz84.Core.Services
+namespace BotWorker.Core.Services
 {
     public class RemoteRequest
     {

@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using sz84.Bots.Groups;
-using sz84.Core.MetaDatas;
+using BotWorker.Bots.Groups;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public partial class GroupInfo : MetaDataGuid<GroupInfo>
     {

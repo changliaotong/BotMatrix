@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Extensions.Array
+﻿namespace BotWorker.Infrastructure.Extensions.Array
 {
     /// <summary>
     /// Handle specified sequence in a more convenient way

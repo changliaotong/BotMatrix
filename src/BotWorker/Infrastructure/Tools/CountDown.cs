@@ -1,7 +1,7 @@
-﻿using sz84.Core;
-using sz84.Core.MetaDatas;
+﻿using BotWorker.Core;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class CountDown : MetaData<CountDown>
     {

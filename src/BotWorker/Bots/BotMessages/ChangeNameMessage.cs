@@ -1,11 +1,11 @@
 using System.Text.RegularExpressions;
 using BotWorker.Common.Exts;
 using BotWorker.Common;
-using sz84.Bots.Groups;
-using sz84.Core.MetaDatas;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Bots.Entries;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

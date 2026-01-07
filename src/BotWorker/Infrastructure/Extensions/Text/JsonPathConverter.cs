@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 
-namespace sz84.Infrastructure.Extensions.Text
+namespace BotWorker.Infrastructure.Extensions.Text
 {
     /// <summary>
     /// Path-access json property

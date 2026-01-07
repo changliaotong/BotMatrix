@@ -1,12 +1,12 @@
 using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Games;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Games;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     //猜大小
     public partial class BotMessage : MetaData<BotMessage>

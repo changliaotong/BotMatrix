@@ -2,7 +2,7 @@
 using System.Reflection;
 using System.Text.Json;
 
-namespace sz84.Core.Data.Extensions;
+namespace BotWorker.Core.Data.Extensions;
 
 public static class DataRowExtensions
 {

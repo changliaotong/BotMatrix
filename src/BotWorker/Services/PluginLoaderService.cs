@@ -60,13 +60,40 @@ namespace BotWorker.Services
 
         public async Task LoadAllPluginsAsync()
         {
-            _logger.LogInformation("开始从目录加载插件: {Dir}", _pluginsDir);
-            
-            if (!Directory.Exists(_pluginsDir)) return;
+            _logger.LogInformation("开始加载插件...");
 
-            foreach (var dll in Directory.GetFiles(_pluginsDir, "*.dll", SearchOption.AllDirectories))
+            // 1. 加载当前程序集中的内置插件
+            var builtInPlugins = Assembly.GetExecutingAssembly().GetTypes()
+                .Where(t => typeof(IPlugin).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
+
+            foreach (var type in builtInPlugins)
             {
-                await LoadPluginFileAsync(dll);
+                await LoadPluginTypeAsync(type);
+            }
+            
+            // 2. 加载外部插件 DLL
+            if (Directory.Exists(_pluginsDir))
+            {
+                foreach (var dll in Directory.GetFiles(_pluginsDir, "*.dll", SearchOption.AllDirectories))
+                {
+                    await LoadPluginFileAsync(dll);
+                }
+            }
+        }
+
+        private async Task LoadPluginTypeAsync(Type type)
+        {
+            try
+            {
+                if (Activator.CreateInstance(type) is IPlugin plugin)
+                {
+                    _logger.LogInformation("加载插件: {Name} ({Description})", plugin.Name, plugin.Description);
+                    await _pluginManager.LoadPluginAsync(plugin);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "实例化插件类失败: {Type}", type.FullName);
             }
         }
 
@@ -85,18 +112,7 @@ namespace BotWorker.Services
 
                 foreach (var type in pluginTypes)
                 {
-                    try
-                    {
-                        if (Activator.CreateInstance(type) is IPlugin plugin)
-                        {
-                            _logger.LogInformation("加载插件: {Name} ({Description})", plugin.Name, plugin.Description);
-                            await _pluginManager.LoadPluginAsync(plugin);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "实例化插件类失败: {Type}", type.FullName);
-                    }
+                    await LoadPluginTypeAsync(type);
                 }
             }
             catch (Exception ex)

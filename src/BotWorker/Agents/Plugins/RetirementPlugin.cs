@@ -1,8 +1,8 @@
 ﻿using Microsoft.SemanticKernel;
 using System.ComponentModel;
-using static sz84.Infrastructure.Tools.Retirement;
+using static BotWorker.Infrastructure.Tools.Retirement;
 
-namespace sz84.Agents.Plugins
+namespace BotWorker.Agents.Plugins
 {
     internal class RetirementPlugin
     {

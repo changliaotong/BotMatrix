@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace sz84.Bots.Plugins
+namespace BotWorker.Bots.Plugins
 {
     public interface IAppModuleDbContext
     {

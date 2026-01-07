@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Gacha
+﻿namespace BotWorker.Bots.Models.Gacha
 {
     public class GachaCard
     {

@@ -1,8 +1,8 @@
 using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
-using sz84.Core.MetaDatas;
+using BotWorker.Bots.Entries;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Games.Gift
+namespace BotWorker.Bots.Games.Gift
 {
     public class GiftLog : MetaData<GiftLog>
     {

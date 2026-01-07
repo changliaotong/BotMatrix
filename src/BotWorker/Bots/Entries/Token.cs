@@ -1,8 +1,8 @@
 ﻿using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
-using sz84.Infrastructure.Utils;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Utils;
 
-namespace sz84.Bots.Entries
+namespace BotWorker.Bots.Entries
 {
     public class Token : MetaData<Token>
     {

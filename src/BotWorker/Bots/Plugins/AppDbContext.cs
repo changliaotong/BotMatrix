@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using sz84.Bots.Models.Limiter;
+using BotWorker.Bots.Models.Limiter;
 
-namespace sz84.Bots.Plugins
+namespace BotWorker.Bots.Plugins
 {
     public class AppDbContext(DbContextOptions<AppDbContext> options, IEnumerable<IAppModuleDbContext>? moduleDbContexts = null) : DbContext(options)
     {

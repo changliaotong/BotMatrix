@@ -1,8 +1,8 @@
 using Newtonsoft.Json;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common.Exts;
 
-namespace sz84.Agents.Entries
+namespace BotWorker.Agents.Entries
 {
     public class MessageBot
     {

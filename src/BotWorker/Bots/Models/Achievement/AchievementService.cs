@@ -1,6 +1,6 @@
-﻿using sz84.Core.Data;
+﻿using BotWorker.Core.Data;
 
-namespace sz84.Bots.Models.Achievement
+namespace BotWorker.Bots.Models.Achievement
 {
     public partial class AchievementService(AppDbContext db) : IAchievementService
     {

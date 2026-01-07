@@ -1,6 +1,6 @@
-using sz84.Agents.Plugins;
+using BotWorker.Agents.Plugins;
 
-namespace sz84.Bots.Services
+namespace BotWorker.Bots.Services
 {
     public class QueryAnswerService(KnowledgeBaseService knowledgeBaseService)
     {

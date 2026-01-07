@@ -1,7 +1,7 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 
-namespace sz84.Infrastructure.Logging
+namespace BotWorker.Infrastructure.Logging
 {
     public class LoggingHandler(HttpMessageHandler innerHandler) : DelegatingHandler(innerHandler)
     {

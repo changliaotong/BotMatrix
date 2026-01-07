@@ -2,9 +2,9 @@
 using Newtonsoft.Json;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
-using sz84.Infrastructure.Extensions.Array;
+using BotWorker.Infrastructure.Extensions.Array;
 
-namespace sz84.Infrastructure.Extensions.Text
+namespace BotWorker.Infrastructure.Extensions.Text
 {
     /// <summary>
     /// Check if a string is valid

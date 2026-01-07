@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using sz84.Bots.Models.Achievement;
-using sz84.Bots.Models.Limiter;
+using BotWorker.Bots.Models.Achievement;
+using BotWorker.Bots.Models.Limiter;
 
-namespace sz84.Core.Data
+namespace BotWorker.Core.Data
 {
     public partial class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {

@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Ranking
+﻿namespace BotWorker.Bots.Models.Ranking
 {
     public class RankingEntry
     {

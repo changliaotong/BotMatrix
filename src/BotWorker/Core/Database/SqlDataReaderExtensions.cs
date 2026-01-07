@@ -1,6 +1,6 @@
 ﻿using System.Data.Common;
 
-namespace sz84.Core.Database
+namespace BotWorker.Core.Database
 {
     public static class SqlDataReaderExtensions
     {

@@ -1,7 +1,7 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Entries;
+namespace BotWorker.Bots.Entries;
 public class Friend : MetaData<Friend>
 {
     public override string TableName => "Friend";

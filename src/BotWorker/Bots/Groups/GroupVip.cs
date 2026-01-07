@@ -1,10 +1,10 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
-using sz84.Bots.Models.Office;
-using sz84.Core.MetaDatas;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Models.Office;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Bots.Users;
 
-namespace sz84.Bots.Groups
+namespace BotWorker.Bots.Groups
 {
 
     public class GroupVip : MetaData<GroupVip>

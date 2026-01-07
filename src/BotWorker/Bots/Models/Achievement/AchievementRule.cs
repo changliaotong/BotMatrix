@@ -1,4 +1,4 @@
-﻿namespace sz84.Bots.Models.Achievement
+﻿namespace BotWorker.Bots.Models.Achievement
 {
     public class AchievementRule
     {

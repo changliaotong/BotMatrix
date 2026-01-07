@@ -1,4 +1,4 @@
-﻿namespace sz84.Agents.Providers.Configs
+﻿namespace BotWorker.Agents.Providers.Configs
 {
     public class ModelConfig(string modelId, string modelName, string description, string size, string type, int maxTokens)
     {

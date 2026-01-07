@@ -1,9 +1,9 @@
 ﻿using System.Runtime.Loader;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using sz84.Core.Interfaces;
+using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Plugins
+namespace BotWorker.Bots.Plugins
 {
     public class ModuleLoader
     {

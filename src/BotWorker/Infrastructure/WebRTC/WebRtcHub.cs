@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 
-namespace sz84.Infrastructure.WebRTC
+namespace BotWorker.Infrastructure.WebRTC
 {
     public class WebRtcHub : Hub
     {

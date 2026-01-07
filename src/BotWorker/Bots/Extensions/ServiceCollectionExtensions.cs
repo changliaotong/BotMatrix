@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using sz84.Bots.Models.Achievement;
-using sz84.Bots.Models.Ranking;
+using BotWorker.Bots.Models.Achievement;
+using BotWorker.Bots.Models.Ranking;
 
-namespace sz84.Bots.Extensions
+namespace BotWorker.Bots.Extensions
 {
     public static class ServiceCollectionExtensions
     {

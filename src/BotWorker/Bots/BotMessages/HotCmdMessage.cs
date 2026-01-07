@@ -1,19 +1,19 @@
 using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Extensions;
-using sz84.Bots.Games;
-using sz84.Bots.Groups;
-using sz84.Bots.Platform;
-using sz84.Bots.Public;
-using sz84.Bots.Users;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Extensions;
+using BotWorker.Bots.Games;
+using BotWorker.Bots.Groups;
+using BotWorker.Bots.Platform;
+using BotWorker.Bots.Public;
+using BotWorker.Bots.Users;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.Data;
-using sz84.Core.MetaDatas;
-using sz84.Groups;
-using sz84.Infrastructure.Tools;
+using BotWorker.Core.Data;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Groups;
+using BotWorker.Infrastructure.Tools;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

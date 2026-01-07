@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.Data.SqlClient;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Agents.Entries
+namespace BotWorker.Agents.Entries
 {
     public class KnowledgeFile : MetaDataGuid<KnowledgeFile>
     {

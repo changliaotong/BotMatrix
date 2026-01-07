@@ -1,8 +1,8 @@
 ﻿using System.Net;
 using Microsoft.SemanticKernel;
-using sz84.Agents.Providers.Configs;
+using BotWorker.Agents.Providers.Configs;
 
-namespace sz84.Agents.Plugins
+namespace BotWorker.Agents.Plugins
 {
     public static class KernelManager
     {

@@ -1,9 +1,9 @@
 ﻿using System.Net.Http.Json;
 using System.Text;
-using sz84.Agents.Interfaces;
-using sz84.Bots.Entries;
+using BotWorker.Agents.Interfaces;
+using BotWorker.Bots.Entries;
 
-namespace sz84.Agents.Plugins
+namespace BotWorker.Agents.Plugins
 {
     public class KnowledgeBaseService(HttpClient httpClient, string kbApiUrl = "/ask") : IKnowledgeBaseService
     {

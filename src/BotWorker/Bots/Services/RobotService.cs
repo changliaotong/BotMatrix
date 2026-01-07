@@ -1,7 +1,7 @@
-﻿using sz84.Bots.BotMessages;
-using sz84.Bots.Interfaces;
+﻿using BotWorker.Bots.BotMessages;
+using BotWorker.Bots.Interfaces;
 
-namespace sz84.Bots.Services
+namespace BotWorker.Bots.Services
 {
     public class RobotService : IBotHandlerMessage, IBotSendMessage
     {

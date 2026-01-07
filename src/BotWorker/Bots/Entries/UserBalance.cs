@@ -1,10 +1,10 @@
 using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Users
+namespace BotWorker.Bots.Users
 {
     public partial class UserInfo : MetaDataGuid<UserInfo>
     {

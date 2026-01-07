@@ -1,6 +1,6 @@
-﻿using sz84.Core.MetaDatas;
+﻿using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotWeChat
+namespace BotWorker.Bots.BotWeChat
 {
     public class ClientWx : MetaData<ClientWx>
     {

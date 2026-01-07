@@ -1,7 +1,7 @@
 ﻿using System.Text;
-using sz84.Bots.Models.Achievement;
+using BotWorker.Bots.Models.Achievement;
 
-namespace sz84.Bots.Models.CommandHandlers
+namespace BotWorker.Bots.Models.CommandHandlers
 {
     public class BotCommandHandler
     {

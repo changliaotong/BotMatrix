@@ -1,7 +1,7 @@
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Games
+namespace BotWorker.Bots.Games
 {
     class SecretLove : MetaData<SecretLove>
     {

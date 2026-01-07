@@ -2,9 +2,9 @@ using Microsoft.Data.SqlClient;
 using System.Security.Cryptography;
 using System.Text;
 using BotWorker.Common.Exts;
-using sz84.Core.MetaDatas;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.Games
+namespace BotWorker.Bots.Games
 {
     internal class RedBlue
     {

@@ -1,6 +1,6 @@
-﻿using sz84.Bots.Models.Achievement;
+﻿using BotWorker.Bots.Models.Achievement;
 
-namespace sz84.Bots.Models.Event
+namespace BotWorker.Bots.Models.Event
 {
     public class BotEventHandler
     {

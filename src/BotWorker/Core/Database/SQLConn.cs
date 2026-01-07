@@ -3,10 +3,10 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
-using sz84.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Common;
 
-namespace sz84.Core.Database
+namespace BotWorker.Core.Database
 {
     public static partial class SQLConn
     {        
@@ -27,7 +27,7 @@ namespace sz84.Core.Database
             }
             catch (Exception ex)
             {
-                DbDebug(ex.Message, "ExecScalar");
+                Logger.Error($"ExecScalar Error: {ex.Message}", ex, new { sql, parameters });
                 return null;
             }        
         }
@@ -74,15 +74,8 @@ namespace sz84.Core.Database
             }
             catch (Exception ex)
             {
-                var debugInfo = $"[QueryScalar Exception]\n" +
-                                $"- Caller: {callerName}\n" +
-                                $"- File: {Path.GetFileName(callerFile)}\n" +
-                                $"- Line: {callerLine}\n" +
-                                $"- SQL: {sql}\n" +
-                                $"- Message: {ex.Message}\n" +
-                                $"- StackTrace: {ex.StackTrace}";
-
-                DbDebug(debugInfo, "QueryScalar");
+                var debugInfo = $"[QueryScalar Exception] Message: {ex.Message}";
+                Logger.Error(debugInfo, ex, new { sql, parameters, callerName, callerFile, callerLine });
                 return default;
             }
         }
@@ -566,7 +559,7 @@ namespace sz84.Core.Database
         // 调试信息 红字显示 并写入数据库
         public static int DbDebug(object bugInfo, string? bugGroup = null)
         {
-            Debug(bugInfo.AsString());
+            Logger.Error(bugInfo.ToString() ?? "", null, new { Group = bugGroup });
             return Bug.Insert(bugInfo, bugGroup);
         }
 

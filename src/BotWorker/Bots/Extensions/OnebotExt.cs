@@ -1,9 +1,9 @@
 ﻿using OneBotSharp.Objs.Event;
-using sz84.Bots.Entries;
-using sz84.Bots.Platform;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Platform;
 using BotWorker.Common.Exts;
 
-namespace sz84.Bots.Extensions
+namespace BotWorker.Bots.Extensions
 {
     public static class OnebotExt
     {

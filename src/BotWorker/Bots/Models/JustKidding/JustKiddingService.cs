@@ -2,10 +2,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using sz84.Bots.Models.Limiter;
-using sz84.Core.Interfaces;
+using BotWorker.Bots.Models.Limiter;
+using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Models.JustKidding
+namespace BotWorker.Bots.Models.JustKidding
 {
     public class JustKiddingService(ILimiter dailyLimiter) : IBotModule
     {

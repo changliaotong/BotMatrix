@@ -1,9 +1,9 @@
 using System.Text.RegularExpressions;
 using BotWorker.Common;
-using sz84.Core.MetaDatas;
-using sz84.Core.Database;
+using BotWorker.Core.MetaDatas;
+using BotWorker.Core.Database;
 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Bots.Models.Buses
 {
     public class Search : MetaData<Search>
     {
@@ -43,7 +43,7 @@ namespace sz84.Bots.Models.Buses
             string answer = "BBS";
             string url = GetKeywordURL(client_id, client_ip, keyword, ref answer, false);
             if (answer != "")
-                return answer + $"\n{Common.url}" + url;
+                return answer + $"\n{url}" + url;
             else
                 return "";
         }

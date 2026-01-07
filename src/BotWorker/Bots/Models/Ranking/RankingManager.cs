@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
-using sz84.Core.Interfaces;
+using BotWorker.Core.Interfaces;
 
-namespace sz84.Bots.Models.Ranking
+namespace BotWorker.Bots.Models.Ranking
 {
     public class RankingManager : IRankingService
     {

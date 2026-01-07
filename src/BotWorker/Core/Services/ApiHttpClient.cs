@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components;
 
-namespace sz84.Core.Services
+namespace BotWorker.Core.Services
 {
     public class ApiHttpClient
     {

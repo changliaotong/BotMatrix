@@ -1,9 +1,9 @@
 ﻿using Newtonsoft.Json;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Core.MetaDatas;
+using BotWorker.Bots.Entries;
+using BotWorker.Bots.Groups;
+using BotWorker.Core.MetaDatas;
 
-namespace sz84.Bots.BotMessages
+namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
