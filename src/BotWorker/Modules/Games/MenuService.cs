@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Models;
 using Microsoft.Extensions.Logging;
 
 namespace BotWorker.Modules.Games
@@ -114,8 +115,18 @@ namespace BotWorker.Modules.Games
                 newRoot.Children.Add(categoryNode);
             }
 
-            // 3. 添加退出选项
-            newRoot.Children.Add(new MenuNode { Id = "exit", Title = "� 退出系统", Type = MenuNodeType.Command, ActionSkill = "menu.exit" });
+            // 3. 添加荣耀榜单选项
+            newRoot.Children.Add(new MenuNode 
+            { 
+                Id = "rankings", 
+                Title = "🏆 荣耀榜单", 
+                Description = "查看全服进化等级 Top 10", 
+                Type = MenuNodeType.Command,
+                ActionSkill = "menu.rankings"
+            });
+
+            // 4. 添加退出选项
+            newRoot.Children.Add(new MenuNode { Id = "exit", Title = "🚪 退出系统", Type = MenuNodeType.Command, ActionSkill = "menu.exit" });
 
             _rootMenu = newRoot;
             _logger?.LogInformation($"菜单系统已完成自动发现，共聚合了 {categoryGroups.Count} 个分类。");
@@ -150,7 +161,19 @@ namespace BotWorker.Modules.Games
                 return "✅ 菜单树已实时重构，请输入【菜单】查看。";
             }
 
-            var session = _sessions.GetOrAdd(ctx.UserId, id => new MenuSession { UserId = id, Path = new List<string> { "root" } });
+            var session = _sessions.GetOrAdd(ctx.UserId, id => {
+                // 第一次进入菜单，触发系统交互事件
+                if (_robot != null)
+                {
+                    _ = _robot.Events.PublishAsync(new SystemInteractionEvent
+                    {
+                        UserId = ctx.UserId,
+                        InteractionType = "OpenMenu",
+                        Details = "用户首次开启超级菜单"
+                    });
+                }
+                return new MenuSession { UserId = id, Path = new List<string> { "root" } };
+            });
             session.LastActiveTime = DateTime.Now;
 
             if (session.CurrentQuestionIndex >= 0)
@@ -191,6 +214,10 @@ namespace BotWorker.Modules.Games
                     {
                         _sessions.TryRemove(ctx.UserId, out _);
                         return "👋 感谢使用，再见！";
+                    }
+                    if (selected.Id == "rankings")
+                    {
+                        return await GetRankingsDisplayAsync();
                     }
                     return $"🚀 正在为您启动：{selected.Title}...\n(描述: {selected.Description})\n\n💡 请直接输入该功能的指令。";
 
@@ -237,26 +264,66 @@ namespace BotWorker.Modules.Games
         private string RenderMenu(MenuSession session)
         {
             var node = FindNodeById(_rootMenu, session.CurrentMenuId);
-            if (node == null) return "菜单丢失";
+            if (node == null) return "❌ 菜单节点丢失，请尝试回复【刷新菜单】。";
 
             var sb = new StringBuilder();
-            sb.AppendLine("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓");
-            sb.AppendLine($"┃  {node.Title.PadRight(24)}┃");
-            sb.AppendLine("┠────────────────────────────┨");
-            sb.AppendLine($"┃ {node.Description.PadRight(26)}┃");
-            sb.AppendLine("┃                            ┃");
+            sb.AppendLine("╔════════════════════════════╗");
+            sb.AppendLine($"║  {node.Title.PadRight(24)}║");
+            
+            if (session.CurrentMenuId == "root")
+            {
+                sb.AppendLine("╟────────────────────────────╢");
+                sb.AppendLine($"║ 👤 用户: {session.UserId.PadRight(18)}║");
+            }
+
+            sb.AppendLine("╟────────────────────────────╢");
+            sb.AppendLine($"║ 📝 {node.Description.PadRight(24)}║");
+            sb.AppendLine("║                            ║");
             
             for (int i = 0; i < node.Children.Count; i++)
             {
                 var child = node.Children[i];
-                var line = $" {i + 1}. {child.Title}";
-                sb.AppendLine($"┃ {line.PadRight(27)}┃");
+                var icon = child.Type switch {
+                    MenuNodeType.Container => "📁",
+                    MenuNodeType.Command => "⚡",
+                    MenuNodeType.Input => "⌨️",
+                    MenuNodeType.Back => "🔙",
+                    _ => "🔹"
+                };
+                var line = $" {i + 1}. {icon} {child.Title}";
+                sb.AppendLine($"║ {line.PadRight(25)}║");
             }
 
-            sb.AppendLine("┃                            ┃");
-            sb.AppendLine("┃ 输入数字选择，回复【退出菜单】离开 ┃");
-            sb.AppendLine("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛");
+            sb.AppendLine("║                            ║");
+            sb.AppendLine("║ 💡 输入数字选择 | 退出菜单 ║");
+            sb.AppendLine("╚════════════════════════════╝");
 
+            return sb.ToString();
+        }
+
+        private async Task<string> GetRankingsDisplayAsync()
+        {
+            var topList = await UserLevel.GetTopRankingsAsync(10);
+            var sb = new StringBuilder();
+            sb.AppendLine("🏆 【BotMatrix 进化荣耀榜】 🏆");
+            sb.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            
+            if (topList.Count == 0)
+            {
+                sb.AppendLine("  暂无排名数据，快去进化吧！");
+            }
+            else
+            {
+                for (int i = 0; i < topList.Count; i++)
+                {
+                    var user = topList[i];
+                    string medal = i switch { 0 => "🥇", 1 => "🥈", 2 => "🥉", _ => $" {i + 1}. " };
+                    sb.AppendLine($"{medal} {user.UserId.PadRight(12)} Lv.{user.Level}");
+                }
+            }
+            
+            sb.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            sb.AppendLine("💡 回复任意数字返回主菜单");
             return sb.ToString();
         }
 

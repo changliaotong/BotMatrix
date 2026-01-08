@@ -22,6 +22,7 @@ namespace BotWorker.Modules.Plugins
         private readonly ILogger<PluginManager> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly SessionManager _sessionManager;
+        private readonly IEventNexus _eventNexus;
         private IPlugin? _currentLoadingPlugin;
 
         private FileSystemWatcher? _watcher;
@@ -35,18 +36,21 @@ namespace BotWorker.Modules.Plugins
         public IAIService AI => _aiService;
         public II18nService I18n => _i18nService;
         public SessionManager Sessions => _sessionManager;
+        public IEventNexus Events => _eventNexus;
 
         public PluginManager(
             IAIService aiService, 
             II18nService i18nService, 
             ILogger<PluginManager> logger,
             IServiceProvider serviceProvider,
-            IConnectionMultiplexer redis)
+            IConnectionMultiplexer redis,
+            IEventNexus eventNexus)
         {
             _aiService = aiService;
             _i18nService = i18nService;
             _logger = logger;
             _serviceProvider = serviceProvider;
+            _eventNexus = eventNexus;
             _sessionManager = new SessionManager(redis);
 
             _reloadTimer = new System.Timers.Timer(3000); // 3秒防抖，与Go一致

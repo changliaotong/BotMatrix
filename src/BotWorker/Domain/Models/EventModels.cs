@@ -1,0 +1,49 @@
+using System;
+
+namespace BotWorker.Domain.Models
+{
+    /// <summary>
+    /// 所有 BotMatrix 事件的基类
+    /// </summary>
+    public abstract class BaseEvent
+    {
+        public string EventId { get; set; } = Guid.NewGuid().ToString("N");
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+    }
+
+    /// <summary>
+    /// 积分交易事件
+    /// 当 PointsService 发生任何资金变动时触发
+    /// </summary>
+    public class PointTransactionEvent : BaseEvent
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string AccountType { get; set; } = string.Empty; // User, System, Revenue
+        public decimal Amount { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string TransactionType { get; set; } = string.Empty; // Income, Expense
+    }
+
+    /// <summary>
+    /// 等级提升事件
+    /// 当 EvolutionService 检测到用户升级时触发
+    /// </summary>
+    public class LevelUpEvent : BaseEvent
+    {
+        public string UserId { get; set; } = string.Empty;
+        public int OldLevel { get; set; }
+        public int NewLevel { get; set; }
+        public string RankName { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 系统交互事件
+    /// 用于追踪用户在系统中的各种行为
+    /// </summary>
+    public class SystemInteractionEvent : BaseEvent
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string InteractionType { get; set; } = string.Empty; // OpenMenu, UseCommand, etc.
+        public string Details { get; set; } = string.Empty;
+    }
+}

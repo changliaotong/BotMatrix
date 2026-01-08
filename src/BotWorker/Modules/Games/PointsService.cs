@@ -1,4 +1,5 @@
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Models;
 using BotWorker.Infrastructure.Utils.Schema;
 using Microsoft.Extensions.Logging;
 using System;
@@ -140,6 +141,28 @@ namespace BotWorker.Modules.Games
                     TransactionTime = DateTime.Now
                 };
                 await ledger.InsertAsync();
+
+                // 发布交易事件
+                if (_robot != null)
+                {
+                    _ = _robot.Events.PublishAsync(new PointTransactionEvent
+                    {
+                        UserId = debitId,
+                        AccountType = debitAccount.Type.ToString(),
+                        Amount = amount,
+                        Description = description,
+                        TransactionType = "Income"
+                    });
+
+                    _ = _robot.Events.PublishAsync(new PointTransactionEvent
+                    {
+                        UserId = creditId,
+                        AccountType = creditAccount.Type.ToString(),
+                        Amount = -amount,
+                        Description = description,
+                        TransactionType = "Expense"
+                    });
+                }
 
                 _logger?.LogInformation($"[会计分录] {description}: {creditAccount.AccountName} -> {debitAccount.AccountName} | 金额: {amount}");
                 return true;

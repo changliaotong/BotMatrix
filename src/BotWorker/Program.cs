@@ -26,6 +26,7 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker
 builder.Services.AddHttpClient();
 
 // 注册核心业务服务
+builder.Services.AddSingleton<IEventNexus, EventNexus>();
 builder.Services.AddSingleton<IMcpService, MCPManager>();
 builder.Services.AddSingleton<IAIService, AIService>();
 builder.Services.AddSingleton<II18nService, I18nService>();

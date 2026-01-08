@@ -35,6 +35,11 @@ namespace BotWorker.Domain.Interfaces
         /// 会话管理器
         /// </summary>
         SessionManager Sessions { get; }
+
+        /// <summary>
+        /// 事件中枢
+        /// </summary>
+        IEventNexus Events { get; }
     }
 }
 
