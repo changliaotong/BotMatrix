@@ -261,7 +261,8 @@ namespace BotWorker.Modules.Plugins
                 await groupTask,
                 await memberTask,
                 await botTask,
-                replyDelegate)
+                replyDelegate,
+                musicReplyDelegate: null) // 这里暂时不传，因为 HandleEventAsync 通常不处理音乐
             {
                 RawMessage = ev.RawMessage
             };

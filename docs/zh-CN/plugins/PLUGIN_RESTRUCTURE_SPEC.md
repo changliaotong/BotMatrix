@@ -64,6 +64,21 @@
 - [ProcessPlugin.cs](file:///d:/projects/BotMatrix/src/BotWorker/Plugins/ProcessPlugin.cs)：Stdin/Stdout 通信实现。
 - [PluginManager.cs](file:///d:/projects/BotMatrix/src/BotWorker/Plugins/PluginManager.cs)：插件生命周期与路由中心。
 
+## 6. 重构案例 (2026.01)
+
+### 6.1 超级坐骑系统 (Mount System)
+- **目标**：展示原生 C# 插件与数据库同步的高级用法。
+- **实现**：采用 `MountModels.cs` 定义多阶品质与属性加成，利用 `MountService.cs` 实现复杂的捕捉与训练逻辑。
+- **文档**：[mount.md](file:///d:/projects/BotMatrix/docs/zh-CN/plugins/mount.md)
+
+### 6.2 独立点歌系统 (Music System)
+- **目标**：实现功能解耦与跨用户交互。
+- **实现**：将音乐逻辑从核心服务抽离至 `MusicService.cs` 插件，引入 `SongOrder` 实体实现“送歌”记录持久化。
+- **技术亮点**：
+  - 扩展 `IPluginContext` 支持 `@提及` 用户解析。
+  - 引入 `SendMusicAsync` 委托，实现富媒体消息的插件化发送。
+- **文档**：[music.md](file:///d:/projects/BotMatrix/docs/zh-CN/plugins/music.md)
+
 ---
 **文档状态**：已发布
 **维护团队**：BotMatrix Core Team

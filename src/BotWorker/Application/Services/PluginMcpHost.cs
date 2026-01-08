@@ -92,7 +92,9 @@ namespace BotWorker.Application.Services
                     "system", 
                     _aiService, 
                     _i18nService,
-                    _logger);
+                    _logger,
+                    replyDelegate: null,
+                    musicReplyDelegate: null);
                 
                 string result = await skill.Handler(ctx, args);
 

@@ -190,7 +190,7 @@ namespace BotWorker.Modules.Plugins
                                 UserIdLong = action.Payload.ContainsKey("from") ? long.Parse(action.Payload["from"].ToString() ?? "0") : 0,
                                 GroupIdLong = action.Payload.ContainsKey("group_id") ? long.Parse(action.Payload["group_id"].ToString() ?? "0") : 0
                             };
-                            var ctx = new PluginContext(ev, "onebot", "", null!, null!, _logger!);
+                            var ctx = new PluginContext(ev, "onebot", "", null!, null!, _logger!, replyDelegate: null, musicReplyDelegate: null);
 
                             var result = await _robot.CallSkillAsync(skillName, ctx, skillArgs!);
                             

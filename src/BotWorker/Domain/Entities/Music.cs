@@ -6,6 +6,7 @@ using System.Web;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Modules.Games;
 
 namespace BotWorker.Domain.Entities
 {
@@ -275,26 +276,5 @@ namespace BotWorker.Domain.Entities
             return Insert(covs) == -1 ? 0 : GetAutoId(FullName);
         }
 
-    }
-    public class SongResult
-    {
-        public string Name { get; set; } = "";
-        public string Artist { get; set; } = "";
-        public string Cover { get; set; } = "";
-        public string AudioUrl { get; set; } = "";
-
-        public BotWorker.Models.MusicShareMessage ToMusicShareMessage()
-        {
-            return new BotWorker.Models.MusicShareMessage
-            {
-                Title = Name,
-                Summary = Artist,
-                PictureUrl = Cover,
-                JumpUrl = AudioUrl,
-                MusicUrl = AudioUrl,
-                Brief = $"[分享]{Name}",
-                Kind = "QQMusic"
-            };
-        }
     }
 }

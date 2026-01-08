@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Diagnostics;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages;
@@ -83,6 +83,12 @@ public partial class BotMessage
         public int Accept { get; set; } = 0;                         
         public string Reason { get; set; } = string.Empty;
         public bool IsProxy { get; set; } = false;
+
+        public virtual async Task SendMusicAsync(string title, string artist, string jumpUrl, string coverUrl, string audioUrl)
+        {
+            Answer = $"🎵 {title} - {artist}\n🔗 {audioUrl}";
+            await SendMessageAsync();
+        }
         private bool _isCancelProxy;
 
         public bool IsCancelProxy
@@ -157,7 +163,7 @@ public partial class BotMessage
         public int DelayMs { get; set; } = 0; // 延迟发送的毫秒数
         public bool IsRecall { get; set; } = false;
         public int RecallAfterMs { get; set; } = 0; // 撤回消息的毫秒数
-        public SongResult? SongResult { get; set; }
+        public BotWorker.Modules.Games.SongResult? SongResult { get; set; }
 
         // 判断整条文本是否被括号包住
         bool IsEntirelyInBrackets(string text)

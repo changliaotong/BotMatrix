@@ -53,7 +53,8 @@ namespace BotWorker.Application.Messaging.Pipeline
                 context.Group,
                 null, // Member property seems missing in BotMessage
                 context.SelfInfo,
-                async msg => { context.Answer = msg; await context.SendMessageAsync(); }
+                async msg => { context.Answer = msg; await context.SendMessageAsync(); },
+                async (title, artist, jumpUrl, coverUrl, audioUrl) => { await context.SendMusicAsync(title, artist, jumpUrl, coverUrl, audioUrl); }
             );
 
             int index = 0;

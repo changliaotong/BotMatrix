@@ -33,6 +33,7 @@ namespace BotWorker.Modules.Plugins
         private readonly EventBase _ev;
         public EventBase Event => _ev;
         private readonly Func<string, Task>? _replyDelegate;
+        private readonly Func<string, string, string, string, string, Task>? _musicReplyDelegate;
         private readonly ConcurrentDictionary<string, object?> _state = new();
 
         // 基础信息
@@ -46,6 +47,27 @@ namespace BotWorker.Modules.Plugins
         public bool IsMessage => _ev.PostType == "message";
         public string RawMessage { get; set; } = string.Empty;
         public string? GroupName => Group?.GroupName;
+
+        // 提及解析
+        private List<MentionedUser>? _mentionedUsers;
+        public List<MentionedUser> MentionedUsers
+        {
+            get
+            {
+                if (_mentionedUsers == null)
+                {
+                    _mentionedUsers = new List<MentionedUser>();
+                    // 解析 CQ 码中的 at: [CQ:at,qq=123456]
+                    var matches = System.Text.RegularExpressions.Regex.Matches(RawMessage, @"\[CQ:at,qq=(\d+)\]");
+                    foreach (System.Text.RegularExpressions.Match match in matches)
+                    {
+                        var userId = match.Groups[1].Value;
+                        _mentionedUsers.Add(new MentionedUser { UserId = userId, Name = "" }); // 名字可能需要后续从缓存或 API 获取
+                    }
+                }
+                return _mentionedUsers;
+            }
+        }
 
         // 丰富实体
         public UserInfo? User { get; }
@@ -69,7 +91,8 @@ namespace BotWorker.Modules.Plugins
             GroupInfo? group = null,
             GroupMember? member = null,
             BotInfo? bot = null,
-            Func<string, Task>? replyDelegate = null)
+            Func<string, Task>? replyDelegate = null,
+            Func<string, string, string, string, string, Task>? musicReplyDelegate = null)
         {
             _ev = ev;
             Platform = platform;
@@ -84,6 +107,7 @@ namespace BotWorker.Modules.Plugins
             Member = member;
             Bot = bot;
             _replyDelegate = replyDelegate;
+            _musicReplyDelegate = musicReplyDelegate;
         }
 
         public async Task ReplyAsync(string message)
@@ -95,6 +119,19 @@ namespace BotWorker.Modules.Plugins
             else
             {
                 Logger.LogWarning($"[PluginContext] Reply to {UserId} on {Platform} failed: No reply delegate provided. Message: {message}");
+            }
+        }
+
+        public async Task SendMusicAsync(string title, string artist, string jumpUrl, string coverUrl, string audioUrl)
+        {
+            if (_musicReplyDelegate != null)
+            {
+                await _musicReplyDelegate(title, artist, jumpUrl, coverUrl, audioUrl);
+            }
+            else
+            {
+                // 如果不支持音乐消息，退而求其次发送链接
+                await ReplyAsync($"🎵 {title} - {artist}\n🔗 {audioUrl}");
             }
         }
 
