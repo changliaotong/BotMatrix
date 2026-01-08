@@ -19,36 +19,46 @@ public partial class BotMessage: MetaData<BotMessage>
 
         public bool IsRobotOwner() => Group.RobotOwner == UserId;
 
+        public async Task<int> AddGroupMemberAsync(long groupCredit = 50, string confirmCode = "")
+        {
+            return await GroupMember.AppendAsync(GroupId, UserId, Name, DisplayName);
+        }
+
         public int AddGroupMember(long groupCredit = 50, string confirmCode = "")
         {
-            return GroupMember.Append(GroupId, UserId, Name, DisplayName, groupCredit, confirmCode);
+            return AddGroupMemberAsync(groupCredit, confirmCode).GetAwaiter().GetResult();
         }
 
-        public int AddClient()
+        public async Task<int> AddClientAsync(long qqRef)
         {
-            return AddClient(GroupInfo.GetGroupOwner(GroupId));
-        }
-
-        public int AddClient(long qqRef)
-        {
-            int i = UserInfo.Append(SelfId, GroupId, UserId, Name, qqRef);
+            int i = await UserInfo.AppendAsync(SelfId, GroupId, UserId, Name, qqRef);
             if (i == -1)
                 return i;
 
             if (Group.IsCredit)
             {
-                i = AddGroupMember();
+                i = await AddGroupMemberAsync();
                 if (i == -1)
                     return i;
             }
 
             if (SelfInfo.IsCredit)
             {
-                i = Friend.Append(SelfId, UserId, Name);
+                i = await Friend.AppendAsync(SelfId, UserId, Name);
                 if (i == -1)
                     return i;
             }
 
             return i;
-    }
+        }
+
+        public int AddClient()
+        {
+            return AddClientAsync(GroupInfo.GetGroupOwner(GroupId)).GetAwaiter().GetResult();
+        }
+
+        public int AddClient(long qqRef)
+        {
+            return AddClientAsync(qqRef).GetAwaiter().GetResult();
+        }
 }

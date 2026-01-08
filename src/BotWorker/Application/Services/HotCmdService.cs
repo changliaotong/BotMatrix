@@ -103,7 +103,7 @@ namespace BotWorker.Application.Services
             regexCmd = Regexs.BuyBet;
             if (Regex.IsMatch(currentMessage, regexCmd))
             {
-                answer = PetOld.GetBuyPet(botMsg.SelfId, botMsg.GroupId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, currentMessage.RegexGetValue(regexCmd, "UserId"));
+                answer = await PetOld.GetBuyPetAsync(botMsg.SelfId, botMsg.GroupId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, currentMessage.RegexGetValue(regexCmd, "UserId"));
                 return CommandResult.Intercepted(answer);
             }
 

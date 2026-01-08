@@ -74,7 +74,7 @@ public partial class BotMessage : MetaData<BotMessage>
                             Message = Message.RemoveUserId(botUin).Trim();
                             var sql = $"SELECT TOP 1 GroupId FROM {GroupSendMessage.FullName} WHERE ABS(DATEDIFF(SECOND, InsertDate, GETDATE())) < 40 " +
                                       $"AND LTRIM(RTRIM(question)) = {Message.Quotes()} AND GroupId > {UserGuild.MIN_USER_ID} AND GroupId != {GroupId} AND UserId = {UserId} ORDER BY Id DESC";
-                            sourceGroupId = Query(sql).AsLong();
+                            sourceGroupId = QueryScalar<long>(sql);
                             if (sourceGroupId != 0)
                             {
                                 sql = $"EXEC sz84_robot.DBO.sp_UpdateGroupInfo {sourceGroupId}, {GroupId} ";

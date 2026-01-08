@@ -26,7 +26,7 @@ namespace BotWorker.Agents.Entries
 
         public static async Task<int?> UpdateAsync(LLMProvider llmProvider)
         {
-            return await UpdateAsync(new
+            return await UpdateObjectAsync(new
             {
                 llmProvider.Name,
                 llmProvider.BaseUrl,

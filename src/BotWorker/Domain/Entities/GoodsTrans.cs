@@ -30,6 +30,11 @@ namespace BotWorker.Domain.Entities
 
         public static string TransIt(long botUin, long orderId, long groupId, string groupName, long qq, string name)
         {
+            return TransItAsync(botUin, orderId, groupId, groupName, qq, name).GetAwaiter().GetResult();
+        }
+
+        public static async Task<string> TransItAsync(long botUin, long orderId, long groupId, string groupName, long qq, string name)
+        {
             string res = "";
             //新买单或新卖单加入时自动撮合交易
             int orderType = GoodsOrder.GetInt("OrderType", orderId);
@@ -41,7 +46,7 @@ namespace BotWorker.Domain.Entities
             while (!isFinish)
             {
                 bool isSell = orderType == 0;
-                string id2 = Query($"select top 1 orderId from {GoodsOrder.FullName} where GoodsID = {goodsId} and orderType != {orderType} and price {(isSell ? ">=" : "<=")} {price} order by price {(isSell ? "desc" : "")}");
+                string id2 = await QueryScalarAsync<string>($"select top 1 orderId from {GoodsOrder.FullName} where GoodsID = {goodsId} and orderType != {orderType} and price {(isSell ? ">=" : "<=")} {price} order by price {(isSell ? "desc" : "")}", null) ?? "";
                 if (!id2.IsNull())
                 {
                     long orderId2 = id2.AsLong();
@@ -50,48 +55,67 @@ namespace BotWorker.Domain.Entities
                     decimal fee = amount2 * price2 * 0.01m;
                     if (goodsId == 1)
                     {
-                        //积分
-                        var sql = CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, amount, $"买入积分");
-                        var sql2 = CreditLog.SqlHistory(botUin, groupId, groupName, sellerQQ, name, amount, $"卖出积分");
-                        var sql3 = UserInfo.SqlAddCredit(botUin, groupId, qq, amount);
-                        var sql4 = UserInfo.SqlAddCredit(botUin, groupId, sellerQQ, -amount2);
-                        //余额
-                        var sql5 = UserInfo.SqlAddBalance(qq, amount * price);
-                        var sql6 = UserInfo.SqlAddBalance(sellerQQ, amount * price);
-                        var sql7 = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, amount * price, $"购买积分");
-                        var sql8 = BalanceLog.SqlLog(botUin, groupId, groupName, sellerQQ, name, amount * price, $"卖出积分");
-                        var sql9 = BalanceLog.SqlLog(botUin, groupId, groupName, sellerQQ, name, fee, $"手续费");
-                        //goods trans
-                        var sql10 = SqlInsert([
-                                                new Cov("GroupID", groupId),
-                                                new Cov("SellerQQ", sellerQQ),
-                                                new Cov("SellerOrderID", orderId),
-                                                new Cov("BuyerQQ", qq),
-                                                new Cov("BuyerOrderID", orderId2),
-                                                new Cov("GoodsID", goodsId),
-                                                new Cov("Amount", amount),
-                                                new Cov("Price", price),
-                                                new Cov("SellerFee", fee),
-                                                new Cov("BuyerFee", 0),
-                                                new Cov("SellerBalance", amount * price - fee),
-                                                new Cov("BuyerBalance", amount * price + 0),
-                                            ]);
-
-                        int i = ExecTrans(sql, sql2, sql2, sql3, sql4, sql5, sql6, sql7, sql8, sql9, sql10);
-                        if (i == 0)
+                        //积分和余额交易
+                        using var trans = await BeginTransactionAsync();
+                        try
                         {
-                            UserInfo.SyncCacheField(qq, groupId, "Credit", UserInfo.GetCredit(groupId, qq) + amount);
-                            UserInfo.SyncCacheField(sellerQQ, groupId, "Credit", UserInfo.GetCredit(groupId, sellerQQ) - amount2);
-                            UserInfo.SyncCacheField(qq, "Balance", UserInfo.GetBalance(qq) + amount * price);
-                            UserInfo.SyncCacheField(sellerQQ, "Balance", UserInfo.GetBalance(sellerQQ) + amount * price - fee);
+                            // 1. 积分操作
+                            var addResBuyer = await UserInfo.AddCreditAsync(botUin, groupId, groupName, qq, name, amount, "买入积分", trans);
+                            if (addResBuyer.Result == -1) throw new Exception("买入积分失败");
+
+                            var addResSeller = await UserInfo.AddCreditAsync(botUin, groupId, groupName, sellerQQ, name, -amount2, "卖出积分", trans);
+                            if (addResSeller.Result == -1) throw new Exception("卖出积分失败");
+
+                            // 2. 余额操作
+                            var balResBuyer = await UserInfo.AddBalanceAsync(botUin, groupId, groupName, qq, name, -amount * price, "购买积分", trans);
+                            if (balResBuyer.Result == -1) throw new Exception("购买积分扣除余额失败");
+
+                            var balResSeller = await UserInfo.AddBalanceAsync(botUin, groupId, groupName, sellerQQ, name, amount * price - fee, "卖出积分", trans);
+                            if (balResSeller.Result == -1) throw new Exception("卖出积分增加余额失败");
+
+                            // 3. 手续费日志
+                            // 注意：UserInfo.AddBalanceAsync 已经记录了流水日志，但如果需要额外记录手续费，可以在这里手动添加，或者合并到 AddBalanceAsync 的描述中
+                            // 这里我们保留手动记录手续费日志，或者可以将其作为 AddBalanceAsync 的一部分逻辑处理。
+                            // 由于 balResSeller.BalanceValue 是增加后的余额，我们直接用它作为日志的当前余额。
+                            var (sqlFee, parasFee) = BalanceLog.SqlLog(botUin, groupId, groupName, sellerQQ, name, -fee, "交易手续费", balResSeller.BalanceValue);
+                            await ExecAsync(sqlFee, trans, parasFee);
+
+                            // 4. 交易记录
+                            var (sqlTrans, parasTrans) = SqlInsert([
+                                new Cov("GroupID", groupId),
+                                new Cov("SellerQQ", sellerQQ),
+                                new Cov("SellerOrderID", orderId),
+                                new Cov("BuyerQQ", qq),
+                                new Cov("BuyerOrderID", orderId2),
+                                new Cov("GoodsID", goodsId),
+                                new Cov("Amount", amount),
+                                new Cov("Price", price),
+                                new Cov("SellerFee", fee),
+                                new Cov("BuyerFee", 0),
+                                new Cov("SellerBalance", amount * price - fee),
+                                new Cov("BuyerBalance", amount * price + 0),
+                            ]);
+                            await ExecAsync(sqlTrans, trans, parasTrans);
+
+                            await trans.CommitAsync();
+
+                            // 同步缓存
+                            UserInfo.SyncCacheField(qq, groupId, "Credit", addResBuyer.CreditValue);
+                            UserInfo.SyncCacheField(sellerQQ, groupId, "Credit", addResSeller.CreditValue);
+                            UserInfo.SyncCacheField(qq, "Balance", balResBuyer.BalanceValue);
+                            UserInfo.SyncCacheField(sellerQQ, "Balance", balResSeller.BalanceValue);
+
+                            return "✅ 交易成功";
                         }
-                        return i == -1
-                            ? RetryMsg 
-                            : "✅ 交易成功";
+                        catch (Exception ex)
+                        {
+                            await trans.RollbackAsync();
+                            Console.WriteLine($"[TransIt Error] {ex.Message}");
+                            return RetryMsg;
+                        }
                     }
                     else
                         return $"目前仅支持积分交易，敬请期待";
-                    //先处理 goodsId = 1 积分的情况？  2 = 算力
                 }
                 else
                     isFinish = true;

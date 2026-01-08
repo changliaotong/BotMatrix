@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Microsoft.Data.SqlClient;
 
 namespace BotWorker.Modules.Buses
@@ -45,12 +45,12 @@ namespace BotWorker.Modules.Buses
 
         public static string StopInBusA(string bus_id, string stop_id)
         {
-            return Query($"select top 1 stops_id from bus_stops where stop_order is null and bus_id = {bus_id} and stop_id = {stop_id}");
+            return QueryScalar<string>($"select top 1 stops_id from bus_stops where stop_order is null and bus_id = {bus_id} and stop_id = {stop_id}") ?? "";
         }
 
         public static string StopInBusB(string bus_id, string stop_id)
         {
-            return Query($"select top 1 stops_id from bus_stops where stop_order2 is null and bus_id = {bus_id} and stop_id = {stop_id}");
+            return QueryScalar<string>($"select top 1 stops_id from bus_stops where stop_order2 is null and bus_id = {bus_id} and stop_id = {stop_id}") ?? "";
         }
 
         //途经站点信息预处理
@@ -224,7 +224,7 @@ namespace BotWorker.Modules.Buses
         public static string GetStopName(string stop_id)
         {
             if (stop_id.IsNum())
-                return Query("select stop_name as res from bus_stop where stop_id = " + stop_id);
+                return QueryScalar<string>("select stop_name as res from bus_stop where stop_id = " + stop_id) ?? "";
             else
                 return "";
         }
@@ -233,7 +233,7 @@ namespace BotWorker.Modules.Buses
         public static string GetStopName2(string stop_id)
         {
             if (stop_id.IsNum())
-                return Query("select stop_name2 as res from bus_stop where stop_id = " + stop_id);
+                return QueryScalar<string>("select stop_name2 as res from bus_stop where stop_id = " + stop_id) ?? "";
             else
                 return "";
         }

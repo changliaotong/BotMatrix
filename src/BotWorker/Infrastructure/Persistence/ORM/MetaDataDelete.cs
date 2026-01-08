@@ -44,10 +44,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
 
         public static int Delete(object id, object? id2 = null, SqlTransaction? trans = null)
-        {
-            var (sql, paras) = SqlDelete(id, id2);
-            return Exec(sql, trans, paras);
-        }
+            => DeleteAsync(id, id2, trans).GetAwaiter().GetResult();
 
         //delete async
         public static async Task<int> DeleteAsync(object id, object? id2 = null, SqlTransaction? trans = null)
@@ -62,8 +59,11 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static int DeleteAll(object value, SqlTransaction? trans = null)
+            => DeleteAllAsync(value, trans).GetAwaiter().GetResult();
+
+        public static async Task<int> DeleteAllAsync(object value, SqlTransaction? trans = null)
         {
-            return Exec(SqlDeleteAll(value), trans);
+            return await ExecAsync(SqlDeleteAll(value), trans);
         }
 
         public static string SqlDeleteAll2(object value)
@@ -72,13 +72,19 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static int DeleteAll2(object value, SqlTransaction? trans = null)
+            => DeleteAll2Async(value, trans).GetAwaiter().GetResult();
+
+        public static async Task<int> DeleteAll2Async(object value, SqlTransaction? trans = null)
         {
-            return Exec(SqlDeleteAll2(value), trans);
+            return await ExecAsync(SqlDeleteAll2(value), trans);
         }
 
         public static int DeleteWhere(string sWhere, SqlTransaction? trans = null)
+            => DeleteWhereAsync(sWhere, trans).GetAwaiter().GetResult();
+
+        public static async Task<int> DeleteWhereAsync(string sWhere, SqlTransaction? trans = null)
         {
-            return Exec($"DELETE FROM {FullName} {sWhere.EnsureStartsWith("WHERE")}", trans);
+            return await ExecAsync($"DELETE FROM {FullName} {sWhere.EnsureStartsWith("WHERE")}", trans);
         }
     }
 }

@@ -139,7 +139,7 @@ namespace BotWorker.Modules.Buses
                 else
                 {
                     answer = "";
-                    int c_place = Convert.ToInt32(Query("select count(place_id) from sz84..place where place_name like '%" + key1 + "%'"));
+                    int c_place = Convert.ToInt32(QueryScalar<string>("select count(place_id) from sz84..place where place_name like '%" + key1 + "%'"));
                     if (c_place > 0)
                         return "/place/list.aspx?keyword=" + key1;
                     else //线路标签
@@ -289,7 +289,7 @@ namespace BotWorker.Modules.Buses
         {
             string sql = "select count(bus_id) as res from sz84..bus where exists (select 1 from sz84..bus_stops where stop_id in (select stop_id from sz84..place_stops where place_id = " + place_id + ") and bus_id = sz84..bus.bus_id) and exists (select 1 from sz84..bus_stops where stop_id in (select stop_id from sz84..place_stops where place_id = " + place_id2 + ") and bus_id = sz84..bus.bus_id)";
             //取得符合条件的线路的数量，大于0时表明有直达车
-            string c_res = Query(sql);
+            string c_res = QueryScalar<string>(sql) ?? "0";
             if (c_res != "0") //有直到的车的情况
             {
                 if (isMobile)
@@ -314,7 +314,7 @@ namespace BotWorker.Modules.Buses
                 w += " 1=2";
             string sql = "select count(bus_id) as res from sz84..bus " + w;
             //取得符合条件的线路的数量，大于0时表明有直达
-            string c_res = Query(sql);
+            string c_res = QueryScalar<string>(sql) ?? "0";
             if (c_res != "0") //有直到的车的情况
             {
                 string url = "/bus/" + key1;
@@ -331,7 +331,7 @@ namespace BotWorker.Modules.Buses
             string sql = "select count(bus_id) as res from sz84..bus where exists (select 1 from sz84..bus_stops where stop_id in (select stop_id from sz84..place_stops where place_id = " + place_id + ") and bus_id = sz84..bus.bus_id) and exists (select 1 from sz84..bus_stops where stop_id in (select stop_id from sz84..place_stops where place_id = " + place_id2 + ") and bus_id = sz84..bus.bus_id)";
             sql += " and dbo.getStopCount2(bus_id, " + place_id + "," + place_id2 + ") >= 0 ";
             //取得符合条件的线路的数量，大于0时表明有直达车
-            string c_res = Query(sql);
+            string c_res = QueryScalar<string>(sql) ?? "0";
             return c_res != "0";
         }
 
@@ -348,7 +348,7 @@ namespace BotWorker.Modules.Buses
         {
             string sql = "select count(bus_id) as res from sz84..bus where exists (select 1 from sz84..bus_stops where stop_id in (select stop_id from sz84..place_stops where place_id = " + place_id + ") and bus_id = sz84..bus.bus_id) and exists (select 1 from sz84..bus_stops where stop_id in (select stop_id from sz84..place_stops where place_id = " + place_id2 + ") and bus_id = sz84..bus.bus_id)";
             //取得符合条件的线路的数量，大于0时表明有直达车
-            string c_res = Query(sql);
+            string c_res = QueryScalar<string>(sql) ?? "0";
             if (c_res != "0") //有直到的车的情况
             {
                 return " 的直达车有：\n" + Place.GetPlaceBuses(place_id, place_id2);

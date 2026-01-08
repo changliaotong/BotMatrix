@@ -14,7 +14,7 @@ namespace BotWorker.Domain.Entities
 
         public static int UserCount(long groupId)
         {
-            return Query($"SELECT COUNT(DISTINCT UserId) FROM {FullName} WHERE DATEDIFF(SECOND, InsertDate, GETDATE()) < 60 AND GroupId = {groupId}").AsInt();
+            return QueryScalar<int>($"SELECT COUNT(DISTINCT UserId) FROM {FullName} WHERE DATEDIFF(SECOND, InsertDate, GETDATE()) < 60 AND GroupId = {groupId}");
         }
 
         public static int Append(BotMessage bm)

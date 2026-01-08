@@ -52,7 +52,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 Answer = $"{{#系统提示词生成器 请以【{CmdPara}】为主题生成一段智能体的系统提示词}}";
             else if (CmdName == "签到")
             { 
-                Answer = TrySignIn(false);
+                Answer = await TrySignInAsync(false);
                 IsCancelProxy = !Answer.IsNull();
             }
             else if (CmdName == "天气")
@@ -102,7 +102,7 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName == "小写")
                 Answer = RmbDaxie.GetXiaoxieRes(CmdPara);
             else if (CmdName == "打赏")
-                Answer = GetRewardCredit();
+                Answer = await GetRewardCreditAsync();
             else if (CmdName == "三公")
                 Answer = GetSanggongRes();
             else if (CmdName == "抽奖")
@@ -140,21 +140,21 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName == "降级")
                 Answer = GetCancelSuper();
             else if (CmdName == "结算")
-                Answer = Partner.GetSettleRes(SelfId, GroupId, GroupName, UserId, Name);
+                Answer = await Partner.GetSettleResAsync(SelfId, GroupId, GroupName, UserId, Name);
             else if (CmdName == "兑换礼品")
                 Answer = GetGoodsCredit();
             else if (CmdName == "买入")
-                Answer = GetBuyRes();
+                Answer = await GetBuyResAsync();
             else if (CmdName == "赎身")
-                Answer = GetFreeMe();
+                Answer = await GetFreeMeAsync();
             else if (CmdName == "买分")
-                Answer = UserInfo.GetBuyCredit(this, SelfId, GroupId, GroupName, UserId, Name, CmdPara);
+                Answer = await UserInfo.GetBuyCreditAsync(this, SelfId, GroupId, GroupName, UserId, Name, CmdPara);
             else if (CmdName == "卖分")
                 Answer = GetSellCredit();
             else if (CmdName == "加团")
-                Answer = GetBingFans(CmdName);
+                Answer = await GetBingFansAsync(CmdName);
             else if (CmdName == "退灯牌")
-                Answer = GetBingFans(CmdName);
+                Answer = await GetBingFansAsync(CmdName);
             else if (CmdName == "抽礼物")
                 Answer = GetGiftRes(UserId, CmdPara);
             else if (CmdName == "送礼物")
@@ -166,9 +166,9 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName == "暗恋")
                 Answer = await GetSecretLove();
             else if (CmdName.In("押大", "押小", "押单", "押双", "押围", "押全围", "押点", "押对"))
-                Answer = GetBlockRes();
+                Answer = await GetBlockResAsync();
             else if (CmdName == "梭哈")
-                Answer = GetAllIn();
+                Answer = await GetAllInAsync();
             else if (CmdName.In("猜数字", "我猜"))
                 Answer = GetGuessNum();
             else if (CmdName == "todo")
@@ -178,7 +178,7 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName.In("红", "和", "蓝"))
             {
                 if (CmdPara.IsNum())
-                    Answer = GetRedBlueRes(GroupId == 10084);
+                    Answer = await GetRedBlueResAsync(GroupId == 10084);
                 else
                 {
                     IsCmd = false;
@@ -242,7 +242,7 @@ public partial class BotMessage : MetaData<BotMessage>
                         Answer = GroupInfo.GetSetRobotOpen(GroupId, CmdName, CmdPara);
                 }
                 else if (CmdName.In("上分", "下分"))
-                    Answer = GroupMember.GetShangFen(SelfId, GroupId, GroupName, UserId, CmdName, CmdPara);
+                    Answer = await GroupMember.GetShangFenAsync(SelfId, GroupId, GroupName, UserId, CmdName, CmdPara);
                 else if (CmdName.In("拉黑", "取消拉黑", "清空黑名单"))
                     Answer = await GetBlackRes();
                 else if (CmdName.In("拉灰", "取消拉灰", "清空灰名单"))

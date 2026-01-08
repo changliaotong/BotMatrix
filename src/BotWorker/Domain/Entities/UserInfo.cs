@@ -81,8 +81,35 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     }
 
     public static long GetSourceQQ(long botQQ, long qq)
+        => GetSourceQQAsync(botQQ, qq).GetAwaiter().GetResult();
+
+    public static async Task<long> GetSourceQQAsync(long botQQ, long qq)
     {
-        return GetWhere("Id", $"BotUin = {botQQ} and TargetUserId = {qq}").AsLong();
+        return (await GetWhereAsync("Id", $"BotUin = {botQQ} and TargetUserId = {qq}")).AsLong();
+    }
+
+    public static bool GetIsBlack(long qq)
+        => GetIsBlackAsync(qq).GetAwaiter().GetResult();
+
+    public static async Task<bool> GetIsBlackAsync(long qq)
+    {
+        return await GetBoolAsync("IsBlack", qq);
+    }
+
+    public static bool GetIsFreeze(long qq)
+        => GetIsFreezeAsync(qq).GetAwaiter().GetResult();
+
+    public static async Task<bool> GetIsFreezeAsync(long qq)
+    {
+        return await GetBoolAsync("IsFreeze", qq);
+    }
+
+    public static bool GetIsShutup(long qq)
+        => GetIsShutupAsync(qq).GetAwaiter().GetResult();
+
+    public static async Task<bool> GetIsShutupAsync(long qq)
+    {
+        return await GetBoolAsync("IsShutup", qq);
     }
 
     public static bool SubscribedPublic(long qq)
@@ -96,14 +123,20 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     }
 
     public static string GetCreditType(long groupId, long qq)
+        => GetCreditTypeAsync(groupId, qq).GetAwaiter().GetResult();
+
+    public static async Task<string> GetCreditTypeAsync(long groupId, long qq)
     {
-        return groupId != 0 && GroupInfo.GetIsCredit(groupId) ? "本群积分" : GetIsSuper(qq) ? "超级积分" : "通用积分";
+        return groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId) ? "本群积分" : await GetIsSuperAsync(qq) ? "超级积分" : "通用积分";
     }
 
     public static bool GetIsSuper(long qq)
+        => GetIsSuperAsync(qq).GetAwaiter().GetResult();
+
+    public static async Task<bool> GetIsSuperAsync(long qq)
     {
         if (qq == 0) return false;
-        return GetBool("IsSuper", qq);
+        return await GetBoolAsync("IsSuper", qq);
     }
 
     public static int NewGuessNumGame(int csz_res, long csz_credit, long qq)
@@ -126,8 +159,11 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     }
 
     public static string GetStateRes(int funcDefault)
+        => GetStateResAsync(funcDefault).GetAwaiter().GetResult();
+
+    public static async Task<string> GetStateResAsync(int funcDefault)
     {
-        return funcDefault switch
+        return await Task.FromResult(funcDefault switch
         {
             0 => "闲聊",
             1 => "AI",
@@ -136,7 +172,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
             4 => "接龙",
             5 => "2048",
             _ => "闲聊"
-        };
+        });
     }
 
     public enum States
@@ -150,15 +186,18 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     }
 
     public static int SetState(States funcDefault, long qq)
+        => SetStateAsync(funcDefault, qq).GetAwaiter().GetResult();
+
+    public static async Task<int> SetStateAsync(States funcDefault, long qq)
     {
-        return SetValue("state", (int)funcDefault, qq);
+        return await SetValueAsync("state", (int)funcDefault, qq);
     }
 
-    public static int Append(long botQQ, long groupId, long userId, string name, long userRef, string userOpenid = "", string groupOpenid = "")
+    public static async Task<int> AppendAsync(long botQQ, long groupId, long userId, string name, long userRef, string userOpenid = "", string groupOpenid = "")
     {
-        return Exists(userId)
+        return await ExistsAsync(userId)
             ? 0
-            : Insert([
+            : await InsertAsync(new List<Cov> {
                 new Cov("BotUin", botQQ),
                     new Cov("UserOpenid", userOpenid),
                     new Cov("GroupOpenid", groupOpenid),
@@ -167,7 +206,43 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
                     new Cov("Credit", userOpenid.IsNull() ? 50 : 5000),
                     new Cov("Name", name),
                     new Cov("RefUserId", userRef),
-            ]);
+            });
+    }
+
+    public static async Task<int> AppendUserAsync(long botUin, long groupId, long userId, string name, string userOpenid = "", string groupOpenid = "")
+    {
+        if (userId.In(2107992324, 3677524472, 3662527857, 2174158062, 2188157235, 3375620034, 1611512438, 3227607419, 3586811032,
+                    3835195413, 3527470977, 3394199803, 2437953621, 3082166471, 2375832958, 1807139582, 2704647312, 1420694846, 3788007880)) return 0;
+
+        int i = await AppendAsync(botUin, groupId, userId, name, GroupInfo.GetGroupOwner(groupId), userOpenid, groupOpenid);
+        if (i == -1) return i;
+
+        i = await GroupMember.AppendAsync(groupId, userId, name, "");
+        if (i == -1) return i;
+
+        if (BotInfo.GetBool("IsCredit", botUin))
+        {
+            i = await Friend.AppendAsync(botUin, userId, name);
+            if (i == -1) return i;
+        }
+
+        return i;
+    }
+
+    public static int Append(long botQQ, long groupId, long userId, string name, long userRef, string userOpenid = "", string groupOpenid = "")
+    {
+        return Exists(userId)
+            ? 0
+            : Insert(new List<Cov> {
+                new Cov("BotUin", botQQ),
+                    new Cov("UserOpenid", userOpenid),
+                    new Cov("GroupOpenid", groupOpenid),
+                    new Cov("GroupId", groupId),
+                    new Cov("Id", userId),
+                    new Cov("Credit", userOpenid.IsNull() ? 50 : 5000),
+                    new Cov("Name", name),
+                    new Cov("RefUserId", userRef),
+            });
     }
 
     public static int AppendUser(long botUin, long groupId, long userId, string name, string userOpenid = "", string groupOpenid = "")

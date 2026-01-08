@@ -13,7 +13,7 @@ public class TokensLog : MetaData<TokensLog>
     public static (string, SqlParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string userName, long tokensAdd, string tokensInfo)
     {
         long tokensValue = UserInfo.GetTokens(userId);
-        return SqlInsert([
+        return SqlInsert(new List<Cov> {
                             new Cov("BotUin", botUin),
                                 new Cov("GroupId", groupId),
                                 new Cov("GroupName", groupName),
@@ -22,7 +22,13 @@ public class TokensLog : MetaData<TokensLog>
                                 new Cov("TokensAdd", tokensAdd),
                                 new Cov("TokensValue", tokensValue + tokensAdd),
                                 new Cov("TokensInfo", tokensInfo)
-                        ]);
+                        });
+    }
+
+    public static async Task AddLogAsync(long botUin, long groupId, string groupName, long userId, string userName, long tokensAdd, string tokensInfo, SqlTransaction? trans = null)
+    {
+        var (sql, paras) = SqlLog(botUin, groupId, groupName, userId, userName, tokensAdd, tokensInfo);
+        await ExecAsync(sql, trans, paras);
     }
 
 }

@@ -54,7 +54,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return Exec(sql, trans, paras);
         }
 
-        public static (string, SqlParameter[]) SqlInsert(List<Cov> columns)
+        public static async Task<int> InsertAsync(List<Cov> columns, SqlTransaction? trans = null)
+        {
+            var data = CovToParams(columns);
+            var (sql, paras) = SqlInsertDict(data);
+            return await ExecAsync(sql, trans, paras);
+        }
+
+        public static (string sql, SqlParameter[] paras) SqlInsert(List<Cov> columns)
         {
             var data = CovToParams(columns);
             return SqlInsertDict(data);

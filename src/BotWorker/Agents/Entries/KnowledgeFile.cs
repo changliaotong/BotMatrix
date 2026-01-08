@@ -86,7 +86,7 @@ namespace BotWorker.Agents.Entries
         {
             string sql = $"SELECT * FROM {FullName} WHERE GroupId = @GroupId AND IsEmbedded = 0";
             SqlParameter[] paras = {  new("@GroupId", groupId) };
-            return await QueryListAsync<KnowledgeFile>(sql, paras);
+            return await QueryListAsync<KnowledgeFile>(sql, null, paras);
         }
 
         // 修改启用状态

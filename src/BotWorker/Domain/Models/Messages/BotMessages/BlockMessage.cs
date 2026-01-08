@@ -1,11 +1,12 @@
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages;
 
 //猜大小
 public partial class BotMessage : MetaData<BotMessage>
 {
-        public string GetAllIn()
+        public async Task<string> GetAllInAsync()
         {
             if (!Group.IsCreditSystem)
                 return CreditSystemClosed;
@@ -13,7 +14,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!CmdPara.In("大", "小", "单", "双", "围", "d", "x", "w", "s", "j", "z", "红", "蓝", "和", "三公", "剪刀", "石头", "布", "抽奖", "庄", "闲") && !CmdPara.IsNum())
             {
                 if (CmdPara.Length <= 3)
-                    return $"🎁 梭哈 + 大小单双围4-17\n📌 例如：梭哈 大\n         梭哈 9\n💎 积分:{{积分}}全押 ✨";
+                    return $"🎁 梭哈 + 大小单双围4-17\n📌 例如：梭哈 大\n         梭哈 9\n💎 积分:{UserInfo.GetCredit(GroupId, UserId)}全押 ✨";
                 else
                     return "";
             }
@@ -34,10 +35,10 @@ public partial class BotMessage : MetaData<BotMessage>
                 return $"您的积分{credit}不足{min}";
             
             CmdPara = credit.AsString();
-            return GetBlockRes();
+            return await GetBlockResAsync();
         }
 
-        public string GetBlockRes()
+        public async Task<string> GetBlockResAsync()
         {
             IsCancelProxy = true;
 
@@ -52,7 +53,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return "请押积分，您的积分：{积分}";
 
             if (CmdName.In("红", "和", "蓝", "庄", "闲"))
-                return GetRedBlueRes(GroupId == 10084);
+                return await GetRedBlueResAsync(GroupId == 10084);
 
             if (CmdName.In("剪刀", "石头", "布"))            
                 return GetCaiquan();
@@ -104,20 +105,43 @@ public partial class BotMessage : MetaData<BotMessage>
                 creditAdd = -blockCredit;
 
             creditValue += creditAdd;
-            var sql = UserInfo.SqlAddCredit(SelfId, GroupId, UserId, creditAdd);
-            var sql2 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分");
-            var res = $"{Block.FormatNum(blockNum)} {Block.Sum(blockNum)} {Block.GetBlockRes(blockNum)}\n得分：{creditGet:N0}，累计：{creditValue:N0}";
-            var blockRes = Message + "\n" + res;
-            if (Block.Append(SelfId, GroupId, GroupName, UserId, Name, blockRes, sql, sql2) == -1)
+
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                // 1. 通用加积分函数（含日志记录）
+                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分", trans);
+                if (addRes.Result == -1) throw new Exception("更新积分失败");
+                creditValue = addRes.CreditValue;
+
+                // 2. 记录游戏记录
+                var resStr = $"{Block.FormatNum(blockNum)} {Block.Sum(blockNum)} {Block.GetBlockRes(blockNum)}\n得分：{creditGet:N0}，累计：{creditValue:N0}";
+                var blockRes = Message + "\n" + resStr;
+                var (sql3, sql4) = Block.SqlAppend(SelfId, GroupId, GroupName, UserId, Name, blockRes);
+                await ExecAsync(sql3.sql, trans, sql3.paras);
+                await ExecAsync(sql4.sql, trans, sql4.paras);
+
+                await trans.CommitAsync();
+
+                if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
+                    resStr = $"{resStr}\n{(IsGroup ? "群链" : "私链")}：{Block.GetHash(GroupId, UserId)[7..23]}";
+
+                return resStr;
+            }
+            catch (Exception ex)
+            {
+                await trans.RollbackAsync();
+                Console.WriteLine($"[GetBlockRes Error] {ex.Message}");
                 return RetryMsg;
-
-            if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))                
-                res = $"{res}\n{(IsGroup ? "群链" : "私链")}：{Block.GetHash(GroupId, UserId)[7..23]}";
-
-            return res;
+            }
         }
 
-        public string GetMult()
+        public string GetBlockRes()
+        {
+            return GetBlockResAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task<string> GetMultAsync()
         {
             if (IsTooFast()) return RetryMsgTooFast;
 
@@ -162,16 +186,34 @@ public partial class BotMessage : MetaData<BotMessage>
                     creditAdd -= blockCredit;
             }
             creditValue += creditAdd;
-            var sql = UserInfo.SqlAddCredit(SelfId, GroupId, UserId, creditAdd);
-            var sql2 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分");
-            res = $"{Block.FormatNum(blockNum)} {Block.Sum(blockNum)} {Block.GetBlockRes(blockNum)}\n{res}总得分：{sumCredit:N0} 累计：{creditValue:N0}";
-            string block_res = Message + "\n" + res;
-            if (Block.Append(SelfId, GroupId, GroupName, UserId, Name, block_res, sql, sql2) == -1)
+
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                // 1. 通用加积分函数（含日志记录）
+                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分", trans);
+                if (addRes.Result == -1) throw new Exception("更新积分失败");
+                creditValue = addRes.CreditValue;
+
+                // 2. 记录游戏记录
+                res = $"{Block.FormatNum(blockNum)} {Block.Sum(blockNum)} {Block.GetBlockRes(blockNum)}\n{res}总得分：{sumCredit:N0} 累计：{creditValue:N0}";
+                string block_res = Message + "\n" + res;
+                var (sql3, sql4) = Block.SqlAppend(SelfId, GroupId, GroupName, UserId, Name, block_res);
+                await ExecAsync(sql3.sql, trans, sql3.paras);
+                await ExecAsync(sql4.sql, trans, sql4.paras);
+
+                await trans.CommitAsync();
+
+                if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
+                    res = $"{res}\n{(IsGroup ? "群链" : "私链")}：{Block.GetHash(GroupId, UserId)[7..23]}";
+
+                return res;
+            }
+            catch (Exception ex)
+            {
+                await trans.RollbackAsync();
+                Console.WriteLine($"[GetMult Error] {ex.Message}");
                 return RetryMsg;
-
-            if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
-                res = $"{res}\n{(IsGroup ? "群链" : "私链")}：{Block.GetHash(GroupId, UserId)[7..23]}";
-
-            return res;
+            }
         }
 }

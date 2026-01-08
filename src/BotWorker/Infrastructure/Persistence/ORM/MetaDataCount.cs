@@ -14,39 +14,52 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             => SqlCount(tableFullName, ToDict(keys));
 
         public static long Count()
-        {
-            return CountWhere("");
-        }
+            => CountAsync().GetAwaiter().GetResult();
 
         public static async Task<long> CountAsync()
         {
             var (sql, parameters) = SqlCount(FullName);
-            return (await ExecScalarAsync<long>(sql, parameters)) ?? 0;
+            return (await QueryScalarAsync<long>(sql, null, parameters));
         }
 
         public static long CountWhere(string where)
+            => CountWhereAsync(where).GetAwaiter().GetResult();
+
+        public static async Task<long> CountWhereAsync(string where)
         {
-            return Query($"SELECT COUNT({Key}) FROM {FullName} {where.EnsureStartsWith("WHERE")}").AsInt();
+            return (await QueryScalarAsync<long>($"SELECT COUNT({Key}) FROM {FullName} {where.EnsureStartsWith("WHERE")}", null)).AsLong();
         }
 
         public static long CountByKeyValue(string field, string key, string id)
+            => CountByKeyValueAsync(field, key, id).GetAwaiter().GetResult();
+
+        public static async Task<long> CountByKeyValueAsync(string field, string key, string id)
         {
-            return Query($"SELECT COUNT({field}) FROM {FullName} WHERE {key} = {id.Quotes()}").AsInt();
+            return (await QueryScalarAsync<long>($"SELECT COUNT({field}) FROM {FullName} WHERE {key} = {id.Quotes()}", null)).AsLong();
         }
 
         public static long CountField(string fieldName, string KeyField, long FieldValue)
+            => CountFieldAsync(fieldName, KeyField, FieldValue).GetAwaiter().GetResult();
+
+        public static async Task<long> CountFieldAsync(string fieldName, string KeyField, long FieldValue)
         {
-            return CountByKeyValue(fieldName, KeyField, FieldValue.ToString());
+            return await CountByKeyValueAsync(fieldName, KeyField, FieldValue.ToString());
         }
 
         public static long CountKey(string id)
+            => CountKeyAsync(id).GetAwaiter().GetResult();
+
+        public static async Task<long> CountKeyAsync(string id)
         {
-            return CountByKeyValue(Key, Key2, id);
+            return await CountByKeyValueAsync(Key, Key2, id);
         }
 
         public static long CountKey2(string id)
+            => CountKey2Async(id).GetAwaiter().GetResult();
+
+        public static async Task<long> CountKey2Async(string id)
         {
-            return CountByKeyValue(Key2, Key, id);
+            return await CountByKeyValueAsync(Key2, Key, id);
         }
     }
 }

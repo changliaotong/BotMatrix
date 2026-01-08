@@ -35,11 +35,11 @@ namespace BotWorker.Agents.Entries
             if (!Exists(userId, id)) 
                 i = await AppendAsync(userId, id, isSub);
             else
-                i = await UpdateAsync(new { IsSub = isSub.AsInt(), UnsubDate = DateTime.MinValue }, userId, id);
+                i = await UpdateObjectAsync(new { IsSub = isSub.AsInt(), UnsubDate = DateTime.MinValue }, userId, id);
 
             if (i == 0) return i;
-            var (sql, parameters) = Agent.GetSqlPlusCount(id, isSub ? 1 : -1);
-            return await ExecAsync(sql, parameters);
+            var sqlInfo = Agent.GetSqlPlusCount(id, isSub ? 1 : -1);
+            return await ExecAsync(sqlInfo);
         }
     }
 }

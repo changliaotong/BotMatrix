@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 
 namespace BotWorker.Domain.Entities;
 public class CoinsLog : MetaData<CoinsLog>
@@ -10,11 +10,34 @@ public class CoinsLog : MetaData<CoinsLog>
     public static List<string> conisFields = ["GoldCoins", "BlackCoins", "PurpleCoins", "GameCoins", "GroupCredit"];
     public static List<string> conisNames = ["金币", "黑金币", "紫币", "游戏币", "本群积分"];
 
-    public static (string, SqlParameter[]) SqlCoins(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, ref long coinsValue, string coinsInfo)
+    public static async Task<(string sql, SqlParameter[] parameters, long coinsValue)> SqlCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo)
     {
-        coinsValue = GroupMember.GetCoins(coinsType, groupId, qq);
+        long coinsValue = await GroupMember.GetCoinsAsync(coinsType, groupId, qq) + coinsAdd;
+        var (sql, paras) = SqlInsert([
+            new("BotUin", botUin),
+            new("GroupId", groupId),
+            new("GroupName", groupName),
+            new("UserId", qq),
+            new("UserName", name),
+            new("CoinsType", coinsType),
+            new("CoinsAdd", coinsAdd),
+            new("CoinsValue", coinsValue),
+            new("CoinsInfo", coinsInfo)
+        ]);
+        return (sql, paras, coinsValue);
+    }
+
+    public static (string, SqlParameter[], long) SqlCoins(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo)
+    {
+        var res = SqlCoinsAsync(botUin, groupId, groupName, qq, name, coinsType, coinsAdd, coinsInfo).GetAwaiter().GetResult();
+        return (res.sql, res.parameters, res.coinsValue);
+    }
+
+    public static async Task AddLogAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo, SqlTransaction? trans = null)
+    {
+        long coinsValue = await GroupMember.GetCoinsAsync(coinsType, groupId, qq);
         coinsValue += coinsAdd;
-        return SqlInsert([
+        var (sql, paras) = SqlInsert(new List<Cov> {
                             new Cov("BotUin", botUin),
                                 new Cov("GroupId", groupId),
                                 new Cov("GroupName", groupName),
@@ -24,6 +47,7 @@ public class CoinsLog : MetaData<CoinsLog>
                                 new Cov("CoinsAdd", coinsAdd),
                                 new Cov("CoinsValue", coinsValue),
                                 new Cov("CoinsInfo", coinsInfo)
-                        ]);
+                        });
+        await ExecAsync(sql, trans, paras);
     }
 }

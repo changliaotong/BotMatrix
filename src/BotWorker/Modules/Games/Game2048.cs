@@ -1,4 +1,4 @@
-﻿using BotWorker.Common;
+using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Entities;
@@ -15,24 +15,24 @@ namespace BotWorker.Modules.Games
 
         public static Dictionary<long, bool> dict = new();
 
-        public static string GetGameRes(long groupId, long qq, string cmdPara)
+        public static async Task<string> GetGameResAsync(long groupId, long qq, string cmdPara)
         {
             if (cmdPara.IsNull())
             {
-                int i = UserInfo.SetState(UserInfo.States.G2048, qq);
+                int i = await UserInfo.SetStateAsync(UserInfo.States.G2048, qq);
                 return i == -1
                     ? RetryMsg
                     : "发【开始】，发送【上下左右】或【wsad】控制游戏";
             }
             else if (cmdPara == "结束")
             {
-                int i = UserInfo.SetState(UserInfo.States.Chat, qq);
+                int i = await UserInfo.SetStateAsync(UserInfo.States.Chat, qq);
                 return i == -1
                     ? RetryMsg
                     : "2048游戏结束";
             }
 
-            int[,] tiles = GetTiles(groupId);
+            int[,] tiles = await GetTilesAsync(groupId);
             if (cmdPara.In("上", "w", "8"))
                 TurnTo(tiles, Direct.Left);
 
@@ -67,9 +67,15 @@ namespace BotWorker.Modules.Games
             string res = PrintTiles(groupId, tiles);
             if (IsGameOver(tiles))
                 res += "Game Over!";
-            SaveTiles(groupId, tiles);
+            await SaveTilesAsync(groupId, tiles);
             return res;
         }
+
+        public static string GetGameRes(long groupId, long qq, string cmdPara)
+        {
+            return GetGameResAsync(groupId, qq, cmdPara).GetAwaiter().GetResult();
+        }
+
         public enum Direct
         {
             Up,
@@ -103,7 +109,7 @@ namespace BotWorker.Modules.Games
             }            
         }
 
-        public static void SaveTiles(long groupId, int[,] tiles)
+        public static async Task SaveTilesAsync(long groupId, int[,] tiles)
         {
             string res = "";
             for (int i = 0; i < 4; i++)
@@ -113,13 +119,18 @@ namespace BotWorker.Modules.Games
                     res += $" {tiles[i, j]}";
                 }
             }
-            SetValue("game_2048", res.Trim(), groupId);
+            await SetValueAsync("game_2048", res.Trim(), groupId);
         }
 
-        public static int[,] GetTiles(long groupId)
+        public static void SaveTiles(long groupId, int[,] tiles)
+        {
+            SaveTilesAsync(groupId, tiles).GetAwaiter().GetResult();
+        }
+
+        public static async Task<int[,]> GetTilesAsync(long groupId)
         {
             int[,] tiles = new int[4, 4];
-            string res = GetValue("game_2048", groupId);
+            string res = await GetValueAsync("game_2048", groupId);
             if (res.IsNull())
             {
                 InitTiles(tiles);
@@ -138,6 +149,11 @@ namespace BotWorker.Modules.Games
                 }
             }
             return tiles;
+        }
+
+        public static int[,] GetTiles(long groupId)
+        {
+            return GetTilesAsync(groupId).GetAwaiter().GetResult();
         }
 
         // 最大值

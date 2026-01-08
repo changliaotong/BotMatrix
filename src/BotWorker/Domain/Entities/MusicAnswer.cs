@@ -1,4 +1,4 @@
-﻿
+
 
 namespace BotWorker.Domain.Entities
 {
@@ -26,9 +26,9 @@ namespace BotWorker.Domain.Entities
 
         public static (long, string) RandomMusic()
         {
-            var answerId = Query($"SELECT TOP 1 Id FROM {FullName} WHERE question LIKE '%点歌%' " +
+            var answerId = QueryScalar<long>($"SELECT TOP 1 Id FROM {FullName} WHERE question LIKE '%点歌%' " +
                                  $"AND audit  = 1 AND audit2 > 2 AND UsedTimes > 5 AND GoonTimes > 3 AND len(answer) > 20 " +
-                                 $"ORDER BY NEWID()").AsLong();
+                                 $"ORDER BY NEWID()");
             var answer = GetValue("answer", answerId);
             return (answerId, answer);
         }

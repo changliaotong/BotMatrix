@@ -10,19 +10,28 @@ namespace BotWorker.Modules.Office
         public override string KeyField => "Id";
 
         public static float Total(long userId)
+            => TotalAsync(userId).GetAwaiter().GetResult();
+
+        public static async Task<float> TotalAsync(long userId)
         {
-            return GetWhere("sum(IncomeMoney) as res", $"UserId={userId}").AsFloat();
+            return (await GetWhereAsync("sum(IncomeMoney) as res", $"UserId={userId}")).AsFloat();
         }
 
         public static float TotalLastYear(long userId)
+            => TotalLastYearAsync(userId).GetAwaiter().GetResult();
+
+        public static async Task<float> TotalLastYearAsync(long userId)
         {
-            return GetWhere("sum(IncomeMoney) as res", $"UserId={userId} and abs(datediff(year, getdate(), IncomeDate)) <= 1").AsFloat();
+            return (await GetWhereAsync("sum(IncomeMoney) as res", $"UserId={userId} and abs(datediff(year, getdate(), IncomeDate)) <= 1")).AsFloat();
         }
 
         //曾经
         public static bool IsVipOnce(long groupId)
+            => IsVipOnceAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsVipOnceAsync(long groupId)
         {
-            return ExistsField("GroupId", groupId);
+            return await ExistsFieldAsync("GroupId", groupId);
         }
 
         public static (string, SqlParameter[]) SqlInsert(long groupId, long goodsCount, string goodsName, decimal incomeMoney, string payMethod, string incomeTrade, string incomeInfo,
@@ -43,51 +52,74 @@ namespace BotWorker.Modules.Office
 
         // 荣誉等级
         public static int GetClientLevel(long userId)
+            => GetClientLevelAsync(userId).GetAwaiter().GetResult();
+
+        public static async Task<int> GetClientLevelAsync(long userId)
         {
-            return Query($"select dbo.get_client_level(isnull(sum(IncomeMoney),0)) as res from {FullName} " +
-                         $"where UserId = {userId}").AsInt();
+            return (await QueryAsync($"select dbo.get_client_level(isnull(sum(IncomeMoney),0)) as res from {FullName} " +
+                         $"where UserId = {userId}")).AsInt();
         }
 
         // 荣誉榜
         public static string GetLevelList(long groupId)
+            => GetLevelListAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<string> GetLevelListAsync(long groupId)
         {
-            return QueryRes($"select top 3 UserId, isnull(sum(IncomeMoney) as SIncome, dbo.get_client_level(isnull(sum(IncomeMoney),0) as client_level from {FullName} " +
+            return await QueryResAsync($"select top 3 UserId, isnull(sum(IncomeMoney) as SIncome, dbo.get_client_level(isnull(sum(IncomeMoney),0) as client_level from {FullName} " +
                             $"where UserId in (select UserId from {CreditLog.FullName} where GroupId = {groupId}) group by UserId order by SIncome desc",
                             "【第{i}名】：[@:{0}]   荣誉等级：LV{1}\n");
         }
 
         // 荣誉排名
         public static string GetLeverOrder(long groupId, long userId)
+            => GetLeverOrderAsync(groupId, userId).GetAwaiter().GetResult();
+
+        public static async Task<string> GetLeverOrderAsync(long groupId, long userId)
         {
-            return Query($"select count(UserId) + 1 from (select UserId from {FullName} " +
+            return await QueryAsync($"select count(UserId) + 1 from (select UserId from {FullName} " +
                          $"where UserId in (select UserId from {CreditLog.FullName} where GroupId = {groupId}) " +
                          $"group by UserId having sum(IncomeMoney) > (select sum(IncomeMoney) from {FullName} where UserId = {userId})) a");
         }
 
         public static string Today()
+            => TodayAsync().GetAwaiter().GetResult();
+
+        public static async Task<string> TodayAsync()
         {
-            return GetWhere($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE() ) < 1").AsCurrency();
+            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE() ) < 1")).AsCurrency();
         }
 
         public static string Yesterday()
+            => YesterdayAsync().GetAwaiter().GetResult();
+
+        public static async Task<string> YesterdayAsync()
         {
-            return GetWhere($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE() ) = 1").AsCurrency();
+            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE() ) = 1")).AsCurrency();
         }
 
         public static string ThisMonth()
+            => ThisMonthAsync().GetAwaiter().GetResult();
+
+        public static async Task<string> ThisMonthAsync()
         {
-            return GetWhere($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE()) <= 30").AsCurrency();
+            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE()) <= 30")).AsCurrency();
         }
 
         public static string ThisYear()
+            => ThisYearAsync().GetAwaiter().GetResult();
+
+        public static async Task<string> ThisYearAsync()
         {
-            return GetWhere($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE()) <= 365").AsCurrency();
+            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE()) <= 365")).AsCurrency();
         }
 
         public static string All()
-        {
-            return GetWhere($"SUM(IncomeMoney)", $"").AsCurrency();
-        }
+            => AllAsync().GetAwaiter().GetResult();
 
+        public static async Task<string> AllAsync()
+        {
+            return (await GetWhereAsync($"SUM(IncomeMoney)", $"")).AsCurrency();
+        }
     }
 }

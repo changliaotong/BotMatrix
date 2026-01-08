@@ -108,6 +108,56 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             SyncCacheField(qq, 0, field, value);
         }
 
+        public static string QueryRes(string sql, string format)
+        {
+            return SQLConn.QueryRes(sql, format);
+        }
+
+        public static List<T> Query<T>(string sql, params SqlParameter[] parameters)
+        {
+            return SQLConn.QueryAsync<T>(sql, parameters).GetAwaiter().GetResult();
+        }
+
+        public static T? QueryScalar<T>(string sql, params SqlParameter[] parameters)
+        {
+            return SQLConn.QueryScalar<T>(sql, parameters);
+        }
+
+        public static DataSet QueryDataset(string sql, params SqlParameter[] parameters)
+        {
+            return SQLConn.QueryDataset(sql, parameters);
+        }
+
+        public static DataSet QueryDataset(string sql, SqlTransaction? trans, params SqlParameter[] parameters)
+        {
+            return SQLConn.QueryDataset(sql, trans, parameters);
+        }
+
+        public static async Task<T?> QueryScalarAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        {
+            return await SQLConn.QueryScalarAsync<T>(sql, true, trans, parameters);
+        }
+
+        public static async Task<List<T>> QueryAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        {
+            return await SQLConn.QueryAsync<T>(sql, parameters);
+        }
+
+        public static async Task<T?> QuerySingleAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : class, new()
+        {
+            return await SQLConn.QuerySingleAsync<T>(sql, parameters);
+        }
+
+        public static async Task<List<T>> QueryListAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : new()
+        {
+            return await SQLConn.QueryListAsync<T>(sql, parameters, trans);
+        }
+
+        public static async Task<DataSet> QueryDatasetAsync(string sql, params SqlParameter[] parameters)
+        {
+            return await SQLConn.QueryDatasetAsync(sql, parameters);
+        }
+
         public static async Task<SqlTransaction> BeginTransactionAsync()
         {
             var conn = new SqlConnection(ConnString);
@@ -125,6 +175,11 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> ExecAsync(string sql, params SqlParameter[] parameters)
         {
             return await ExecAsync(sql, null, parameters);
+        }
+
+        public static async Task<int> ExecAsync((string sql, SqlParameter[] parameters) sqlInfo, SqlTransaction? trans = null)
+        {
+            return await ExecAsync(sqlInfo.sql, trans, sqlInfo.parameters);
         }
 
         public static async Task<int> ExecAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)

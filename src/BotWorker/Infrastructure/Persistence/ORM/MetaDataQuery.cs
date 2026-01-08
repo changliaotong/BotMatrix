@@ -39,7 +39,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
             string sql = $"SELECT {topClause} * FROM {GetFullName()} {where} {orderBy} {pagingClause}";
 
-            return await QueryListAsync<TDerived>(sql, options.Parameters);
+            return await QueryListAsync<TDerived>(sql, null, options.Parameters);
         }
 
         public static List<Dictionary<string, object?>> GetDicts(string whereClause, SqlParameter[]? parameters, params string[] fieldNames)
@@ -83,13 +83,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<List<TDerived>> GetListAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) 
         {
-            return await QueryListAsync<TDerived>(sql, parameters, trans);
+            return await QueryListAsync<TDerived>(sql, trans, parameters);
         }            
 
         // 核心 QueryWhere 实现 - 异步返回实体列表
         public static async Task<List<TDerived>> QueryWhere(string where, SqlTransaction? trans = null, params SqlParameter[] parameters)
         {
-            return await QueryListAsync<TDerived>($"SELECT * FROM {FullName} WHERE {where}", parameters, trans);
+            return await QueryListAsync<TDerived>($"SELECT * FROM {FullName} WHERE {where}", trans, parameters);
         }
 
         // 兼容旧的 QueryWhere(where, params parameters)
@@ -118,29 +118,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return res;
         }
 
-        public static string QueryRes(string sql, string format)
+        public static async Task<string> QueryResAsync(string sql, string format)
         {
-            DataSet ds = QueryDataset(sql);
-            if (ds == null || ds.Tables.Count == 0) return string.Empty;
+            return await SQLConn.QueryResAsync(sql, format);
+        }
 
-            var res = string.Empty;
-            int i = 1;
-            foreach (DataRow dr in ds.Tables[0].Rows)
-            {
-                var rowValues = dr.ItemArray;
-                string line = format.Replace("{i}", i.ToString());
-                try
-                {
-                    line = string.Format(line, rowValues);
-                }
-                catch
-                {
-                    // 格式化失败则跳过
-                }
-                res += line;
-                i++;
-            }
-            return res;
+        public static async Task<string> QueryAsync(string sql, params SqlParameter[] parameters)
+        {
+            return await QueryScalarAsync<string>(sql, null, parameters) ?? "";
         }
 
         // 核心泛型 QueryWhere 实现 - 返回指定字段的实体列表
@@ -212,7 +197,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<TDerived?> GetByKeysAsync(object id, object? id2 = null)
         {
             var (sql, parameters) = SqlWhere(id, id2);
-            var entity = await QuerySingleAsync<TDerived>(sql, parameters);
+            var entity = await QuerySingleAsync<TDerived>(sql, null, parameters);
             return entity;
         }
 
@@ -221,7 +206,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var (sql, parameters) = SqlWhere(id, id2);
             try
             {
-                var list = await QueryListAsync<T>(sql, parameters);
+                var list = await QueryListAsync<T>(sql, null, parameters);
                 return list.FirstOrDefault();
             }
             catch

@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -12,12 +12,66 @@ namespace BotWorker.Modules.Games
         public override string TableName => "Block";
         public override string KeyField => "Id";
                 
-        public static int Append(long botUin, long groupId, string groupName, long userId, string name, string prevRes, (string, SqlParameter[]) sqlAddCredit, (string, SqlParameter[]) sqlCreditHis)
+        public static ((string sql, SqlParameter[] paras) sqlInsert, (string sql, SqlParameter[] paras) sqlUpdatePrev) SqlAppend(long botUin, long groupId, string groupName, long userId, string name, string prevRes)
         {
             long prevId = GetId(groupId, userId);
-            string prevHash = prevId == 0 
+            string prevHash = prevId == 0
                 ? groupId == 0 ? UserInfo.GetGuid(userId).AsString().Sha256() : GroupInfo.GetGuid(groupId).AsString().Sha256()
                 : GetHash(prevId);
+            string hashRobot = BotInfo.GetBotGuid(botUin).Sha256();
+            string hashRoom = groupId == 0 ? "" : GroupInfo.GetGuid(groupId).AsString().Sha256();
+            string hashClient = UserInfo.GetGuid(userId).AsString().Sha256();
+            int num = BlockRandom.RandomNum();
+            string blockRes = $"{FormatNum(num)} {Sum(num)} {GetBlockRes(num)}";
+            string blockRand = GetNewId().Sha256();
+            string blockTime = GetTimeStamp();
+
+            string blockInfo = $"上局HASH:{prevHash}\n上局结果:{prevRes}\n时间节点:{blockTime}\n机器HASH:{hashRobot}\n群组HASH:{hashRoom}\n玩家HASH:{hashClient}\n";
+            string blockSecret = $"本局数据:{blockRes}\n随机密码:{blockRand}";
+            string hashBlock = (blockInfo + blockSecret).Sha256();
+
+            var sql1 = SqlInsert(new List<Cov>
+            {
+                new Cov("PrevId", prevId),
+                new Cov("PrevHash", prevHash),
+                new Cov("PrevRes", prevRes),
+                new Cov("BotUin", botUin),
+                new Cov("GroupId", groupId),
+                new Cov("GroupName", groupName),
+                new Cov("UserId", userId),
+                new Cov("UserName", name),
+                new Cov("BlockInfo", blockInfo),
+                new Cov("BlockSecret", blockSecret),
+                new Cov("BlockNum", num),
+                new Cov("BlockRes", blockRes),
+                new Cov("BlockRand", blockRand),
+                new Cov("BlockHash", hashBlock)
+            });
+
+            var sql2 = SqlSetValues($"IsOpen=1, OpenDate=GETDATE(), OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
+            return (sql1, sql2);
+        }
+
+        public static async Task<long> GetIdAsync(long groupId, long userId)
+        {
+            string sql = $"SELECT ISNULL(MAX(Id),0) AS res FROM {FullName} WHERE GroupId = {groupId} AND IsOpen = 0";
+            var res = await ExecScalarAsync<long>(groupId == 0 ? $"{sql} AND UserId = {userId} " : sql);
+            return res ?? 0;
+        }
+
+        public static async Task<string> GetHashAsync(long blockId)
+        {
+            if (blockId == 0) return string.Empty;
+            var res = await QueryScalarAsync<string>($"SELECT BlockHash FROM {FullName} WHERE Id = {blockId}");
+            return res ?? string.Empty;
+        }
+
+        public static async Task<int> AppendAsync(long botUin, long groupId, string groupName, long userId, string name, string prevRes, (string sql, SqlParameter[] paras) sqlAddCredit, (string sql, SqlParameter[] paras) sqlCreditHis)
+        {
+            long prevId = await GetIdAsync(groupId, userId);
+            string prevHash = prevId == 0 
+                ? groupId == 0 ? UserInfo.GetGuid(userId).AsString().Sha256() : GroupInfo.GetGuid(groupId).AsString().Sha256()
+                : await GetHashAsync(prevId);
             string hashRobot = BotInfo.GetBotGuid(botUin).Sha256();
             string hashRoom = groupId == 0 ? "" : GroupInfo.GetGuid(groupId).AsString().Sha256();            
             string hashClient = UserInfo.GetGuid(userId).AsString().Sha256();
@@ -48,8 +102,25 @@ namespace BotWorker.Modules.Games
                                 ]);
 
             var sql2 = SqlSetValues($"IsOpen=1, OpenDate=GETDATE(), OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
-            return ExecTrans(sql, sqlAddCredit, sqlCreditHis, sql2); 
+            
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                await ExecAsync(sql.sql, trans, sql.paras);
+                if (!sqlAddCredit.sql.IsNull()) await ExecAsync(sqlAddCredit.sql, trans, sqlAddCredit.paras);
+                if (!sqlCreditHis.sql.IsNull()) await ExecAsync(sqlCreditHis.sql, trans, sqlCreditHis.paras);
+                await ExecAsync(sql2.sql, trans, sql2.paras);
+                await trans.CommitAsync();
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Block.AppendAsync error: {ex.Message}");
+                await trans.RollbackAsync();
+                return -1;
+            }
         }
+
 
         public static string GetCmd(string cmdName, long qq)
         {
@@ -87,38 +158,44 @@ namespace BotWorker.Modules.Games
         }
 
         public static string GetHash(long groupId, long qq)
+            => GetHashAsync(groupId, qq).GetAwaiter().GetResult();
+
+        public static async Task<string> GetHashAsync(long groupId, long qq)
         {
-            return GetHash(GetId(groupId, qq));
+            return await GetHashAsync(await GetIdAsync(groupId, qq));
         }
 
         public static long GetId(long groupId, long userId)
-        {
-            string sql = $"SELECT ISNULL(MAX(Id),0) AS res FROM {FullName} WHERE GroupId = {groupId} AND IsOpen = 0";
-            return Query(groupId == 0 ? $"{sql} AND UserId = {userId} " : sql).AsLong(); 
-        }
+            => GetIdAsync(groupId, userId).GetAwaiter().GetResult();
 
-        public static long GetBlockId(string hash)
+        public static async Task<long> GetBlockIdAsync(string hash)
         {
-            return GetWhere("Id", $"BlockHash = {hash.Quotes()}").AsLong();
+            return (await GetWhereAsync("Id", $"BlockHash = {hash.Quotes()}")).AsLong();
         }
 
         public static int GetNum(long botUin, long groupId, string groupName, long qq, string name)
+            => GetNumAsync(botUin, groupId, groupName, qq, name).GetAwaiter().GetResult();
+
+        public static async Task<int> GetNumAsync(long botUin, long groupId, string groupName, long qq, string name)
         {
-            long blockId = GetId(groupId, qq);
+            long blockId = await GetIdAsync(groupId, qq);
             if (blockId == 0)
             {
-                if (Append(botUin, groupId, groupName, qq, name, "创世区块", (string.Empty, Array.Empty<SqlParameter>()), (string.Empty, Array.Empty<SqlParameter>())) != -1)
-                    return GetNum(botUin, groupId, groupName, qq, name);
+                if (await AppendAsync(botUin, groupId, groupName, qq, name, "创世区块", (string.Empty, Array.Empty<SqlParameter>()), (string.Empty, Array.Empty<SqlParameter>())) != -1)
+                    return await GetNumAsync(botUin, groupId, groupName, qq, name);
             }
             return GetNum(blockId);
         }
 
         public static int GetOdds(int typeId, string typeName, int blockNum)
+            => GetOddsAsync(typeId, typeName, blockNum).GetAwaiter().GetResult();
+
+        public static async Task<int> GetOddsAsync(int typeId, string typeName, int blockNum)
         {
             if (typeId >= 32 & typeId <= 37)
                 return blockNum.ToString().Split([typeName.Replace("押", "")], StringSplitOptions.None).Length - 1;
             else
-                return int.Parse(Query($"SELECT BlockOdds FROM {BlockType.FullName} WHERE Id = {typeId}"));
+                return int.Parse(await QueryAsync($"SELECT BlockOdds FROM {BlockType.FullName} WHERE Id = {typeId}"));
         }
 
         public static string FormatNum(int Num)
@@ -194,7 +271,7 @@ namespace BotWorker.Modules.Games
                 int i = blockNum.ToString().Split([typeName.Replace("押", "")], StringSplitOptions.None).Length - 1;
                 return i > 0;
             }
-            return Query($"select IsWin from {BlockWin.FullName} where TypeId = {typeId} and BlockNum = {blockNum}").AsBool();
+            return (QueryScalar<string>($"select IsWin from {BlockWin.FullName} where TypeId = {typeId} and BlockNum = {blockNum}") ?? "").AsBool();
         }
     }
 

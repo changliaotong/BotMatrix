@@ -1,4 +1,4 @@
-﻿using BotWorker.Common.Extensions;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
@@ -14,7 +14,7 @@ namespace BotWorker.Domain.Entities
         public static async Task<List<long>> GetSystemBlackListAsync()
         {
             var (sql, parameters) = SqlSelect("BlackId", BotInfo.GroupIdDef);
-            return await QueryListAsync<long>(sql, parameters);
+            return await QueryListAsync<long>(sql, null, parameters);
         }
 
         public static bool IsSystemBlack(long userId)

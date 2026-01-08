@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.SqlClient;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -134,22 +135,31 @@ namespace BotWorker.Modules.Games
         public override string KeyField => "DeckId";
 
         public static void ClearShuffledDeck(long groupId)
+            => ClearShuffledDeckAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task ClearShuffledDeckAsync(long groupId)
         {
             string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId}";
-            Exec(sql);
+            await ExecAsync(sql);
         }
 
         public static void ClearShuffledDeck(long groupId, long id)
+            => ClearShuffledDeckAsync(groupId, id).GetAwaiter().GetResult();
+
+        public static async Task ClearShuffledDeckAsync(long groupId, long id)
         {
             string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId} and Id = {id}";
-            Exec(sql);
+            await ExecAsync(sql);
         }
 
         public static void SaveShuffledDeck(long groupId, List<Card> deck)
+            => SaveShuffledDeckAsync(groupId, deck).GetAwaiter().GetResult();
+
+        public static async Task SaveShuffledDeckAsync(long groupId, List<Card> deck)
         {
-            ClearShuffledDeck(groupId);
+            await ClearShuffledDeckAsync(groupId);
             for (int i = 0; i < deck.Count; i++)
-                Insert([
+                await InsertAsync([
                     new Cov("GroupId", groupId),
                     new Cov("Id", deck[i].Id),
                     new Cov("Rank", deck[i].Rank),
@@ -159,27 +169,34 @@ namespace BotWorker.Modules.Games
         }
 
         public static bool IsShuffledDeckExists(long groupId)
+            => IsShuffledDeckExistsAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsShuffledDeckExistsAsync(long groupId)
         {
-            return CountWhere($"groupId = {groupId}") >= 6;
+            return await CountWhereAsync($"groupId = {groupId}") >= 6;
         }
 
         public static List<Card> ReadShuffledDeck(long groupId)
+            => ReadShuffledDeckAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<List<Card>> ReadShuffledDeckAsync(long groupId)
         {
             List<Card> deck = [];
             string query = $"SELECT Id, Rank, Suit FROM {FullName} WHERE groupId = @groupId ORDER BY DeckOrder";
-            foreach (var reader in QueryReader(query, new SqlParameter("@groupId", groupId)))
+            
+            var ds = await QueryDatasetAsync(query, new SqlParameter("@groupId", groupId));
+            if (ds != null && ds.Tables.Count > 0)
             {
-                while (reader.Read())
+                foreach (DataRow row in ds.Tables[0].Rows)
                 {
                     deck.Add(new Card(
-                        reader.GetInt32(0),
-                        reader.GetString(1),
-                        reader.GetString(2)
+                        Convert.ToInt32(row[0]),
+                        row[1].ToString() ?? "",
+                        row[2].ToString() ?? ""
                     ));
                 }
             }
             return deck;
         }
-
     }
 }

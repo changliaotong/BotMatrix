@@ -1,4 +1,4 @@
-﻿using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.ChatCompletion;
 using Newtonsoft.Json;
 using QQBot4Sharp.Models;
 using BotWorker.Agents.Providers;
@@ -69,4 +69,15 @@ public partial class BotMessage : MetaData<BotMessage>
     public PlaceholderContext Ctx { get; set; } = new(); 
     [JsonIgnore]
     public Stopwatch? CurrentStopwatch { get; set; }
+
+    public async Task<string> GetRecallCountAsync() => (await GroupEvent.GetRecallCountAsync(GroupId)).ToString();
+    public async Task<string> GetEventCountAsync(GroupEventType eventType) => (await GroupEvent.GetEventCountAsync(GroupId, eventType.ToString())).ToString();
+    public async Task<string> GetMenuResAsync() => await Task.FromResult(GetMenuRes());
+    public async Task<string> GetJokeResAsync() => await Task.FromResult(GetJokeRes());
+    public async Task<string> GetRecallMsgResAsync() => await GetRecallMsgRes();
+    public async Task<string> GetTestItAsync() => await Task.FromResult(GetTestIt());
+    public async Task<string> GetShutupResAsync() => await Task.FromResult(GetShutupRes());
+    public async Task<string> GetFreeCreditAsync() { await GetCreditMoreAsync(); return ""; }
+    public async Task<string> GetCreditListAsync() => await Task.FromResult(GetCreditList());
+    public async Task<string> GetCreditListAllAsync(long userId) => await Task.FromResult(GetCreditListAll(userId));
 }

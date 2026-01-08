@@ -13,15 +13,20 @@ public class BalanceLog : MetaData<BalanceLog>
     public static (string, SqlParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string name, decimal balanceAdd, string balanceInfo)
     {
         decimal balance = UserInfo.GetBalance(userId);
+        return SqlLog(botUin, groupId, groupName, userId, name, balanceAdd, balanceInfo, balance + balanceAdd);
+    }
+
+    public static (string, SqlParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string name, decimal balanceAdd, string balanceInfo, decimal balance_last)
+    {
         return SqlInsert([
             new Cov("BotUin", botUin),
-                new Cov("GroupId", groupId),
-                new Cov("GroupName", groupName),
-                new Cov("UserId", userId),
-                new Cov("UserName", name),
-                new Cov("BalanceAdd", balanceAdd),
-                new Cov("BalanceValue", balance + balanceAdd),
-                new Cov("BalanceInfo", balanceInfo),
-                ]);
+            new Cov("GroupId", groupId),
+            new Cov("GroupName", groupName),
+            new Cov("UserId", userId),
+            new Cov("UserName", name),
+            new Cov("BalanceAdd", balanceAdd),
+            new Cov("BalanceValue", balance_last),
+            new Cov("BalanceInfo", balanceInfo),
+        ]);
     }
 }

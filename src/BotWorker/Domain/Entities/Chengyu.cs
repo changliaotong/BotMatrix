@@ -1,4 +1,4 @@
-﻿using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Domain.Entities;
 
 using BotWorker.Infrastructure.Extensions;
@@ -14,7 +14,7 @@ namespace BotWorker.Domain.Entities
 
         public static long GetOid(string text)
         {
-            return Query($"select top 1 {Key} from {FullName} where replace(chengyu, '，', '') = '{text.RemoveBiaodian()}'").AsLong();
+            return QueryScalar<long>($"select top 1 {Key} from {FullName} where replace(chengyu, '，', '') = '{text.RemoveBiaodian()}'");
         }
 
         public static bool Exists(string text)

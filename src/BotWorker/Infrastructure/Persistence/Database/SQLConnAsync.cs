@@ -1,3 +1,4 @@
+using System.Data;
 using System.Diagnostics;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
@@ -61,6 +62,113 @@ namespace BotWorker.Infrastructure.Persistence.Database
         private static bool IsSimpleType(Type type)
         {
             return type.IsPrimitive || SimpleTypes.Contains(type) || type.IsEnum;
+        }
+
+        public static async Task<T?> QueryScalarAsync<T>(string sql, params SqlParameter[] parameters)
+        {
+            return await QueryScalarAsync<T>(sql, true, null, parameters);
+        }
+
+        public static async Task<T?> QueryScalarAsync<T>(string sql, bool isDebug = true, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        {
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+
+            if (conn == null)
+            {
+                conn = new SqlConnection(ConnString);
+                await conn.OpenAsync();
+                isNewConn = true;
+            }
+
+            try
+            {
+                using var cmd = new SqlCommand(sql, conn, trans);
+                if (parameters != null && parameters.Length > 0)
+                {
+                    cmd.Parameters.AddRange(parameters);
+                }
+
+                object? result = await cmd.ExecuteScalarAsync();
+
+                if (result == null || result == DBNull.Value)
+                    return default;
+
+                result = SqlHelper.ConvertValue<T>(result, default!);
+
+                return result != null ? (T)Convert.ChangeType(result, typeof(T)) : default!;
+            }
+            catch (Exception ex)
+            {
+                if (isDebug)
+                    DbDebug($"{ex.Message}\n{sql}", "QueryScalarAsync");
+                return default;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    await conn.DisposeAsync();
+                }
+            }
+        }
+
+        public static async Task<List<T>> QueryListAsync<T>(string sql, params SqlParameter[] parameters) where T : new()
+        {
+            return await QueryListAsync<T>(sql, parameters, null);
+        }
+
+        public static async Task<List<T>> QueryAsync<T>(string sql, SqlParameter[]? parameters = null)
+        {
+            using var conn = new SqlConnection(ConnString);
+            await conn.OpenAsync();
+
+            using var cmd = new SqlCommand(sql, conn);
+            if (parameters != null)
+            {
+                cmd.Parameters.AddRange(parameters);
+            }
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<T>();
+
+            var type = typeof(T);
+            var isSimple = IsSimpleType(type);
+            var isDynamic = type == typeof(object) || type.Name == "Object";
+
+            while (await reader.ReadAsync())
+            {
+                if (isSimple)
+                {
+                    results.Add((T)reader[0]);
+                }
+                else if (isDynamic)
+                {
+                    var expando = new System.Dynamic.ExpandoObject();
+                    var dict = (IDictionary<string, object?>)expando;
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        dict[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    }
+                    results.Add((T)(object)expando);
+                }
+                else
+                {
+                    // Fallback to basic object mapping if T is a class
+                    var item = Activator.CreateInstance<T>();
+                    var props = type.GetProperties();
+                    foreach (var prop in props)
+                    {
+                        if (HasColumn(reader, prop.Name) && !reader.IsDBNull(reader.GetOrdinal(prop.Name)))
+                        {
+                            prop.SetValue(item, reader[prop.Name]);
+                        }
+                    }
+                    results.Add(item);
+                }
+            }
+
+            return results;
         }
 
         public static async Task<List<T>> QueryListAsync<T>(string sql, SqlParameter[]? parameters = null, SqlTransaction? trans = null) where T : new()
@@ -255,6 +363,38 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return JsonConvert.SerializeObject(results);
         }
 
+        public static async Task<string> QueryResAsync(string sql, string format = "{0}", string countFormat = "")
+        {
+            using SqlConnection conn = new(ConnString);
+            try
+            {
+                await conn.OpenAsync();
+                using var cmd = new SqlCommand(sql, conn);
+                using SqlDataReader reader = await cmd.ExecuteReaderAsync();
+                var rows = new List<string>();
+                int k = 1;
+                while (await reader.ReadAsync())
+                {
+                    object[] rowValues = new object[reader.FieldCount];
+                    for (int j = 0; j < reader.FieldCount; j++)
+                    {
+                        rowValues[j] = reader[j] is DBNull ? "" : reader[j];
+                    }
+
+                    string formattedRow = string.Format(format.Replace("{i}", k.ToString()), rowValues);
+                    rows.Add(formattedRow);
+                    k++;
+                }
+                countFormat = countFormat.Replace("{c}", (k - 1).ToString());
+                return string.Join("", rows) + countFormat;
+            }
+            catch (Exception ex)
+            {
+                DbDebug($"Ex.Message:{ex.Message}\nSQL:{sql}", "QueryResAsync");
+                return "";
+            }
+        }
+
         public static async Task<int> ExecAsync(string sql, params SqlParameter[] parameters)
         {
              return await ExecAsync(sql, true, null, parameters);
@@ -295,6 +435,48 @@ namespace BotWorker.Infrastructure.Persistence.Database
                     await conn.DisposeAsync();
                 }
             }
+        }
+
+        public static async Task<DataSet> QueryDatasetAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        {
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+            if (conn == null)
+            {
+                conn = new SqlConnection(ConnString);
+                await conn.OpenAsync();
+                isNewConn = true;
+            }
+
+            try
+            {
+                using SqlCommand command = new(sql, conn, trans);
+                if (parameters != null && parameters.Length > 0)
+                {
+                    command.Parameters.AddRange(parameters);
+                }
+                using SqlDataAdapter adapter = new(command);
+                DataSet dataSet = new();
+                adapter.Fill(dataSet);
+                return dataSet;
+            }
+            catch (Exception ex)
+            {
+                DbDebug($"{ex.Message}\nSQL: {sql}", "QueryDatasetAsync");
+                throw;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    await conn.DisposeAsync();
+                }
+            }
+        }
+
+        public static async Task<DataSet> QueryDatasetAsync(string sql, params SqlParameter[] parameters)
+        {
+            return await QueryDatasetAsync(sql, null, parameters);
         }
 
         /// <summary>

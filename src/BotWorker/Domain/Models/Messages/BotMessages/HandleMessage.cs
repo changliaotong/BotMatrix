@@ -1,4 +1,4 @@
-﻿using BotWorker.Domain.Entities;
+using BotWorker.Domain.Entities;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.Database;
@@ -47,14 +47,14 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (IsBlackSystem)
             {
                 IsSend = IsGuild || IsPublic;
-                Answer = User.Credit > -5000 && (IsAtMe || IsGuild) ? $"你已被列入官方黑名单{(IsPublic ? $"({UserId})" : "")}{MinusCreditRes(200, "官方黑名单")}" : $""; 
+                Answer = User.Credit > -5000 && (IsAtMe || IsGuild) ? $"你已被列入官方黑名单{(IsPublic ? $"({UserId})" : "")}{await MinusCreditResAsync(200, "官方黑名单")}" : $""; 
                 Reason += "[黑名单]";
                 return;
             }
             else if (IsGreySystem)
             {
                 IsSend = IsGuild || IsPublic;
-                Answer = User.Credit > -5000 && (IsAtMe || IsGuild) ? $"你已被列入官方灰名单{(IsPublic ? $"({UserId})" : "")}{MinusCreditRes(200, "官方灰名单")}" : $"";
+                Answer = User.Credit > -5000 && (IsAtMe || IsGuild) ? $"你已被列入官方灰名单{(IsPublic ? $"({UserId})" : "")}{await MinusCreditResAsync(200, "官方灰名单")}" : $"";
                 Reason += "[灰名单]";
                 return;
             }
@@ -312,7 +312,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 var isAuto = CmdName != "签到" && !Message.Contains("签到") && !Message.Contains("打卡");
                 if (isAuto)
                 {
-                    Answer = TrySignIn(isAuto) ?? string.Empty;
+                    Answer = await TrySignInAsync(isAuto) ?? string.Empty;
                     if (!string.IsNullOrWhiteSpace(Answer))
                     {
                         CostTime = CurrentStopwatch == null ? 0 : CurrentStopwatch.Elapsed.TotalSeconds;

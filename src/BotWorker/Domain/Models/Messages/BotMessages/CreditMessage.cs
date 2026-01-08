@@ -55,10 +55,25 @@ public partial class BotMessage : MetaData<BotMessage>
         //取分
         public int WithdrawCredit(long creditOper, ref long creditValue, ref long creditSave, ref string res)
         {
-            return DoSaveCredit(-creditOper, ref creditValue, ref creditSave, ref res);
+            var task = DoSaveCreditAsync(-creditOper);
+            var result = task.GetAwaiter().GetResult();
+            creditValue = result.CreditValue;
+            creditSave = result.CreditSave;
+            res = result.Res;
+            return result.Result;
         }
 
-        public string GetSaveCreditRes()
+        public int DoSaveCredit(long creditOper, ref long creditValue, ref long creditSave, ref string res)
+        {
+            var task = DoSaveCreditAsync(creditOper);
+            var result = task.GetAwaiter().GetResult();
+            creditValue = result.CreditValue;
+            creditSave = result.CreditSave;
+            res = result.Res;
+            return result.Result;
+        }
+
+        public async Task<string> GetSaveCreditResAsync()
         {
             IsCancelProxy = true;
 
@@ -85,36 +100,43 @@ public partial class BotMessage : MetaData<BotMessage>
 
             if (CmdName == "存分")
             {
-                credit_oper = credit_oper == 0 ? UserInfo.GetCredit(GroupId, UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetCreditAsync(GroupId, UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可存";
 
-                DoSaveCredit(credit_oper, ref creditValue, ref saveCredit, ref res);
+                var saveRes = await DoSaveCreditAsync(credit_oper);
+                res = saveRes.Res;
             }
             else if (CmdName == "取分")
             {
-                credit_oper = credit_oper == 0 ? UserInfo.GetSaveCredit(GroupId, UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetSaveCreditAsync(GroupId, UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可取";
 
-                WithdrawCredit(credit_oper, ref creditValue, ref saveCredit, ref res);
+                var saveRes = await DoSaveCreditAsync(-credit_oper);
+                res = saveRes.Res;
             }
             return res;
         }
 
-        //存取分
-        public int DoSaveCredit(long creditOper, ref long creditValue, ref long creditSave, ref string res)
+        public string GetSaveCreditRes()
+        {            return GetSaveCreditResAsync().GetAwaiter().GetResult();
+        }
+
+        //存取分 (异步重构版)
+        public async Task<(int Result, long CreditValue, long CreditSave, string Res)> DoSaveCreditAsync(long creditOper)
         {
-            creditValue = UserInfo.GetCredit(GroupId, UserId);
-            creditSave = UserInfo.GetSaveCredit(GroupId, UserId);
+            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long creditSave = await UserInfo.GetSaveCreditAsync(GroupId, UserId);
             long credit_oper2 = creditOper;
             string cmdName = "存分";
+            string res = "";
             if (creditOper > 0)
             {
                 if (creditValue < credit_oper2)
                 {
                     res = $"您只有{creditValue:N0}分";
-                    return -1;
+                    return (-1, creditValue, creditSave, res);
                 }
             }
             else
@@ -123,25 +145,48 @@ public partial class BotMessage : MetaData<BotMessage>
                 if (creditSave < credit_oper2)
                 {
                     res = $"您已存分只有{creditSave:N0}";
-                    return -1;
+                    return (-1, creditValue, creditSave, res);
                 }
                 cmdName = "取分";
             }
-            creditSave += creditOper;
-            creditValue -= creditOper;
-            var sql = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, -creditOper, cmdName);
-            var sql2 = UserInfo.SqlSaveCredit(SelfId, GroupId, UserId, creditOper);
-            int i = ExecTrans(sql, sql2);
-            if (i == -1)
+
+            using var trans = await BeginTransactionAsync();
+            try
             {
-                res = RetryMsg;
-                return i;
+                // 1. 记录日志 (自动支持事务)
+                await CreditLog.AddLogAsync(SelfId, GroupId, GroupName, UserId, Name, -creditOper, cmdName, trans);
+
+                // 2. 更新存分 (自动支持事务)
+                var (sql, paras) = UserInfo.SqlSaveCredit(SelfId, GroupId, UserId, creditOper);
+                await ExecAsync(sql, trans, paras);
+
+                await trans.CommitAsync();
+
+                creditSave += creditOper;
+                creditValue -= creditOper;
+
+                // 同步缓存
+                UserInfo.SyncCacheField(UserId, GroupId, "Credit", creditValue);
+                UserInfo.SyncCacheField(UserId, GroupId, "SaveCredit", creditSave);
+
+                res = $"✅ {cmdName}：{credit_oper2}\n" +
+                    $"💰 {{积分类型}}：{creditValue:N0}\n" +
+                    $"🏦 已存积分：{creditSave:N0}\n" +
+                    $"📈 积分总额：{creditValue + creditSave:N0}";
+                return (0, creditValue, creditSave, res);
             }
-            res = $"✅ {cmdName}：{credit_oper2}\n" +
-                $"💰 {{积分类型}}：{creditValue:N0}\n" +
-                $"🏦 已存积分：{creditSave:N0}\n" +
-                $"📈 积分总额：{creditValue + creditSave:N0}";
-            return i;
+            catch (Exception ex)
+            {
+                await trans.RollbackAsync();
+                Console.WriteLine($"[DoSaveCredit Error] {ex.Message}");
+                res = RetryMsg;
+                return (-1, creditValue, creditSave, res);
+            }
+        }
+
+        //存取分
+        public (int Result, long CreditValue, long CreditSave, string Res) DoSaveCredit(long creditOper)
+        {            return DoSaveCreditAsync(creditOper).GetAwaiter().GetResult();
         }
 
         public string GetFreeCredit()
@@ -166,9 +211,22 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         //增加积分
+        public async Task<(int, long)> AddCreditAsync(long creditAdd, string creditInfo)
+        {
+            var res = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, creditInfo);
+            return (res.Result, res.CreditValue);
+        }
+
+        //增加积分
         public (int, long) AddCredit(long creditAdd, string creditInfo)
         {
             return UserInfo.AddCredit(SelfId, GroupId, GroupName, UserId, Name, creditAdd, creditInfo);
+        }
+
+        //减少积分
+        public async Task<(int, long)> MinusCreditAsync(long creditMinus, string creditInfo)
+        {
+            return await AddCreditAsync(-creditMinus, creditInfo);
         }
 
         //减少积分
@@ -178,12 +236,12 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         //打赏
-        public string GetRewardCredit()
+        public async Task<string> GetRewardCreditAsync()
         {
             IsCancelProxy = true;
 
             if (!Group.IsCreditSystem)
-                return CreditSystemClosed;            
+                return CreditSystemClosed;
 
             string regex_reward;
             if (CmdPara.IsMatch(Regexs.CreditParaAt))
@@ -208,27 +266,46 @@ public partial class BotMessage : MetaData<BotMessage>
             if (isSuper || isPartner)
                 creditMinus = rewardCredit;
 
-            long creditValue = UserInfo.GetCredit(GroupId, UserId);
-            if (creditValue < creditMinus && !isSell)
-                return $"您的积分{creditValue:N0}不足{creditMinus:N0}。";
+            long senderCredit = UserInfo.GetCredit(GroupId, UserId);
+            if (senderCredit < creditMinus && !isSell)
+                return $"您的积分{senderCredit:N0}不足{creditMinus:N0}。";
 
-            long creditValue2 = UserInfo.GetCredit(GroupId, rewardQQ);
             int i;
+            long receiverCredit = 0;
             if (isSell)
-            {                
-                i = UserInfo.AddCredit(SelfId, GroupId, GroupName, rewardQQ, "", rewardCredit, $"打赏加分:{UserId}").Item1;
-                creditValue2 += rewardCredit;
+            {
+                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, rewardQQ, "", rewardCredit, $"打赏加分:{UserId}");
+                i = addRes.Result;
+                receiverCredit = addRes.CreditValue;
             }
             else if (Group.IsCredit)
-                i = GroupMember.TransferCoins(SelfId, GroupId, GroupName, UserId, Name, rewardQQ, (int)CoinsLog.CoinsType.groupCredit, creditMinus, rewardCredit, ref creditValue, ref creditValue2);
-            else 
-                i = UserInfo.TransferCredit(SelfId, GroupId, GroupName, UserId, Name, rewardQQ, "", creditMinus, rewardCredit, ref creditValue, ref creditValue2, "打赏");
+            {
+                // 使用异步事务版本
+                var res = await GroupMember.TransferCoinsAsync(SelfId, GroupId, GroupName, UserId, Name, rewardQQ, "", (int)CoinsLog.CoinsType.groupCredit, creditMinus, rewardCredit, "打赏");
+                i = res.Result;
+                senderCredit = res.SenderCoins;
+                receiverCredit = res.ReceiverCoins;
+            }
+            else
+            {
+                // 使用我们新重写的异步事务版本！
+                var result = await UserInfo.TransferCreditAsync(SelfId, GroupId, GroupName, UserId, Name, rewardQQ, "", creditMinus, rewardCredit, "打赏");
+                i = result.Result;
+                senderCredit = result.SenderCredit;
+                receiverCredit = result.ReceiverCredit;
+            }
 
             string transferFee = isPartner || isSuper ? "" : $"\n💸 服务费：{rewardCredit * 2 / 10:N0}";
 
             return i == -1
                 ? RetryMsg
-                : $"✅ 打赏成功！\n🎉 打赏积分：{rewardCredit:N0}{transferFee:N0}\n🎯 对方积分：{creditValue2:N0}\n🙋 您的积分：{creditValue:N0}";
+                : $"✅ 打赏成功！\n🎉 打赏积分：{rewardCredit:N0}{transferFee:N0}\n🎯 对方积分：{receiverCredit:N0}\n🙋 您的积分：{senderCredit:N0}";
+        }
+
+        //打赏
+        public string GetRewardCredit()
+        {
+            return GetRewardCreditAsync().GetAwaiter().GetResult();
         }
 
         public long GetCredit()
@@ -236,13 +313,19 @@ public partial class BotMessage : MetaData<BotMessage>
             return UserInfo.GetCredit(GroupId, UserId);
         }
 
-        //游戏扣分
-        public string MinusCreditRes(long creditMinus, string creditInfo)
+        //游戏扣分 (异步重构版)
+        public async Task<string> MinusCreditResAsync(long creditMinus, string creditInfo)
         {
             if (!Group.IsCreditSystem) return "";
             if (!IsBlackSystem && (IsPublic || IsGuild || IsRealProxy)) return "";
-            (int i, long creditValue) = MinusCredit(creditMinus, creditInfo);
-            return i == -1 ? "" : $"\n💎 积分：-{creditMinus}，累计：{creditValue}";
+            
+            var res = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, -creditMinus, creditInfo);
+            return res.Result == -1 ? "" : $"\n💎 积分：-{creditMinus}，累计：{res.CreditValue}";
+        }
+
+        public string MinusCreditRes(long creditMinus, string creditInfo)
+        {
+            return MinusCreditResAsync(creditMinus, creditInfo).GetAwaiter().GetResult();
         }
 
         public async Task GetCreditMoreAsync()

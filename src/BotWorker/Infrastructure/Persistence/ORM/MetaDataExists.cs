@@ -25,17 +25,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static bool Exists(object id, object? id2 = null)
-        {
-            var (sql, parameters) = SqlExists(id, id2);
-            var result = QueryScalar<object>(sql, parameters);
-            return result != null && result != DBNull.Value;
-        }
+            => ExistsAsync(id, id2).GetAwaiter().GetResult();
 
         public static async Task<bool> ExistsAsync(object id, object? id2 = null)
         {
             var (sql, parameters) = SqlExists(id, id2);
-            var result = await ExecScalarAsync<int>(sql, parameters);
-            return result != null && result > 0;
+            var result = await QueryScalarAsync<object>(sql, null, parameters);
+            return result != null && result != DBNull.Value;
         }
 
         public static (string, SqlParameter[]) SqlExistsAandB(string fieldName, object value, string fieldName2, object? value2)
@@ -44,27 +40,29 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static bool ExistsAandB(string fieldName, object value, string fieldName2, object? value2)
-        {
-            var (sql, parameters) = SqlExistsAandB(fieldName, value, fieldName2, value2);
-            var result = QueryScalar<object>(sql, parameters);
-            return result != null && result != DBNull.Value;
-        }
+            => ExistsAsync(fieldName, value, fieldName2, value2).GetAwaiter().GetResult();
 
         public static async Task<bool> ExistsAsync(string fieldName, object value, string fieldName2, object? value2)
         {
             var (sql, parameters) = SqlExists(fieldName, value, fieldName2, value2);
-            var result = await ExecScalarAsync<int>(sql, parameters);
-            return result != null && result > 0;
+            var result = await QueryScalarAsync<object>(sql, null, parameters);
+            return result != null && result != DBNull.Value;
         }
 
         public static bool ExistsField(string fieldName, object value)
+            => ExistsFieldAsync(fieldName, value).GetAwaiter().GetResult();
+
+        public static async Task<bool> ExistsFieldAsync(string fieldName, object value)
         {
-            return GetWhere(Key, $"{fieldName} = {value.AsString().Quotes()}").AsBool();
+            return (await GetWhereAsync(Key, $"{fieldName} = {value.AsString().Quotes()}")).AsBool();
         }
 
         public static bool ExistsWhere(string sWhere)
+            => ExistsWhereAsync(sWhere).GetAwaiter().GetResult();
+
+        public static async Task<bool> ExistsWhereAsync(string sWhere)
         {
-            var result = QueryScalar<object>($"SELECT TOP 1 1 FROM {FullName} {sWhere.EnsureStartsWith("WHERE")}");
+            var result = await QueryScalarAsync<object>($"SELECT TOP 1 1 FROM {FullName} {sWhere.EnsureStartsWith("WHERE")}", null);
             return result != null && result != DBNull.Value;
         }
 

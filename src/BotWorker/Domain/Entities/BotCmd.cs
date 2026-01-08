@@ -19,7 +19,7 @@ namespace BotWorker.Domain.Entities
 
         public static string GetCmdName(string cmdText)
         {
-            return Query($"SELECT CmdName FROM {FullName} WHERE CmdText LIKE '%|{cmdText}|%' OR CmdText LIKE '{cmdText}|%' OR CmdText LIKE '%|{cmdText}'");
+            return QueryScalar<string>($"SELECT CmdName FROM {FullName} WHERE CmdText LIKE '%|{cmdText}|%' OR CmdText LIKE '{cmdText}|%' OR CmdText LIKE '%|{cmdText}'") ?? "";
         }
 
         public static string GetClosedCmd()

@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Modules.Games
+namespace BotWorker.Modules.Games
 {
     public class Fortune
     {
@@ -7,6 +7,11 @@
         private static readonly string[] Directions = { "正东", "正西", "正南", "正北", "东南", "西北", "东北", "西南" };
         private static readonly string[] Taboos = {"避免与上级争论", "避免久坐久看手机", "切忌冲动消费", "勿轻信他人承诺", "忌讳外出远行", "今日不宜开始新计划", 
                                                    "避免熬夜", "小心交通安全", "远离是非之地", "少说多做"};
+
+        public static async Task<DailyFortune> GenerateFortuneAsync(string qq)
+        {
+            return await Task.Run(() => GenerateFortune(qq));
+        }
 
         public static DailyFortune GenerateFortune(string qq)
         {

@@ -176,39 +176,49 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     int j = UserInfo.AppendUser(SelfId, GroupId, InvitorQQ, InvitorName);
                     if (i >= 0 && j >= 0)
                     {
-                        var sql = GroupMember.SqlUpdate("InvitorUserId", InvitorQQ, GroupId, UserId);
-                        var sql2 = GroupMember.SqlPlus("InviteCount", 1, GroupId, InvitorQQ);
-
-                        (string, SqlParameter[]) sql3 = ("", []);
-                        (string, SqlParameter[]) sql4 = ("", []);
-
-                        if (Group.InviteCredit > 50)
+                        using var trans = await BeginTransactionAsync();
+                        try
                         {
-                            long minusCredit = Group.InviteCredit - 50;
-                            long ownerCredit = UserInfo.GetCredit(GroupId, Group.RobotOwner);
-                            if (ownerCredit >= minusCredit)
+                            // 1. 更新邀请信息
+                            var (sql1, paras1) = GroupMember.SqlUpdate("InvitorUserId", InvitorQQ, GroupId, UserId);
+                            await ExecAsync(sql1, trans, paras1);
+
+                            var (sql2, paras2) = GroupMember.SqlPlus("InviteCount", 1, GroupId, InvitorQQ);
+                            await ExecAsync(sql2, trans, paras2);
+
+                            // 2. 扣除群主积分 (邀人奖励由群主支付)
+                            if (Group.InviteCredit > 50)
                             {
-                                sql3 = UserInfo.SqlAddCredit(SelfId, GroupId, Group.RobotOwner, -minusCredit);
-                                sql4 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, Group.RobotOwner, Group.RobotOwnerName, -minusCredit, $"邀人送分:{InvitorQQ}邀请{UserId}");
+                                long minusCredit = Group.InviteCredit - 50;
+                                long ownerCredit = UserInfo.GetCredit(GroupId, Group.RobotOwner);
+                                if (ownerCredit >= minusCredit)
+                                {
+                                    var resOwner = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, Group.RobotOwner, Group.RobotOwnerName, -minusCredit, $"邀人送分:{InvitorQQ}邀请{UserId}", trans);
+                                    if (resOwner.Result == -1) throw new Exception("扣除群主积分失败");
+                                }
+                                else
+                                    Group.InviteCredit = 50;
                             }
-                            else
-                                Group.InviteCredit = 50;
-                        }
-                        long creditInvitor = UserInfo.GetCredit(GroupId, InvitorQQ);
-                        var sql5 = UserInfo.SqlAddCredit(SelfId, GroupId, InvitorQQ, Group.InviteCredit);
-                        var sql6 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, Group.InviteCredit, $"邀人送分:邀请{UserId}进群{GroupId}");                                              
 
-                        i = ExecTrans(sql, sql2, sql3, sql4, sql5, sql6);
-                        if (i != -1)
-                        {
-                            Answer = $"[@:{InvitorQQ}] 邀请 [@:{UserId}]进群\n累计已邀请{GroupMember.GetInt("InviteCount", GroupId, InvitorQQ)+1}人";
-                            Answer += $"\n积分：+{Group.InviteCredit}，累计：{creditInvitor + Group.InviteCredit}";
+                            // 3. 给邀请人加分
+                            var resInvitor = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, InvitorQQ, InvitorName, Group.InviteCredit, $"邀人送分:邀请{UserId}进群{GroupId}", trans);
+                            if (resInvitor.Result == -1) throw new Exception("增加邀请人积分失败");
+
+                            await trans.CommitAsync();
+
+                            Answer = $"[@:{InvitorQQ}] 邀请 [@:{UserId}]进群\n累计已邀请{GroupMember.GetInt("InviteCount", GroupId, InvitorQQ)}人";
+                            Answer += $"\n积分：+{Group.InviteCredit}，累计：{resInvitor.CreditValue}";
+
+                            IsSend = Group.IsInvite;
+                            IsCancelProxy = true;
+                            await SendMessageAsync();
+                            Answer = "";
                         }
-                        
-                        IsSend = Group.IsInvite;
-                        IsCancelProxy = true;
-                        await SendMessageAsync();
-                        Answer = "";                        
+                        catch (Exception ex)
+                        {
+                            await trans.RollbackAsync();
+                            Console.WriteLine($"[InviteGetCredit Error] {ex.Message}");
+                        }
                     }
                 }
                 catch (Exception ex)

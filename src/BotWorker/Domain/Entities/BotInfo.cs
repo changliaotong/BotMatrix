@@ -75,8 +75,11 @@ namespace BotWorker.Domain.Entities
 
 
         public static bool GetIsCredit(long botUin)
+            => GetIsCreditAsync(botUin).GetAwaiter().GetResult();
+
+        public static async Task<bool> GetIsCreditAsync(long botUin)
         {
-            return GetBool("IsCredit", botUin);
+            return await GetBoolAsync("IsCredit", botUin);
         }
 
         // 超级管理员
@@ -87,14 +90,20 @@ namespace BotWorker.Domain.Entities
 
         // 是否机器人管理员
         public static bool IsAdmin(long botUin, long userId)
+            => IsAdminAsync(botUin, userId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsAdminAsync(long botUin, long userId)
         {
-            return IsSuperAdmin(userId) || GetRobotAdmin(botUin) == userId;
+            return IsSuperAdmin(userId) || await GetRobotAdminAsync(botUin) == userId;
         }
 
         // 小号机器人 同主人并且使用该小号的群 可以使用终极模式。
         public static long GetRobotAdmin(long botUin)
+            => GetRobotAdminAsync(botUin).GetAwaiter().GetResult();
+
+        public static async Task<long> GetRobotAdminAsync(long botUin)
         {
-            return GetLong("AdminId", botUin);
+            return await GetLongAsync("AdminId", botUin);
         }
 
         public static string GetBotGuid(long botUin)

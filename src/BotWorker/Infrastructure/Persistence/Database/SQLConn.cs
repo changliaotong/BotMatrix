@@ -579,7 +579,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static long GetAutoId(string tableName)
         {
-            return Query($"SELECT IDENT_CURRENT({tableName.Quotes()})").AsLong();
+            return QueryScalar<long>($"SELECT IDENT_CURRENT({tableName.Quotes()})");
         }
 
         public static string QueryRes(string sql, string format = "{0}", string countFormat = "")

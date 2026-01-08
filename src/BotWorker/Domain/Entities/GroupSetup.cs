@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Entities
+namespace BotWorker.Domain.Entities
 {
     public partial class GroupInfo : MetaDataGuid<GroupInfo>
     {
@@ -185,7 +185,7 @@
                 : "✅ 设置成功，测试请发 欢迎语";
         }
 
-        public static string GetSystemPrompt(long groupId)
+        public static string GetSystemPromptStatus(long groupId)
         {
             var systemPrompt = GetValue("SystemPrompt", groupId);
             bool isCustom = !string.IsNullOrEmpty(systemPrompt);
@@ -221,7 +221,7 @@
             //设置系统提示词
             if (cmdPara == "")
             {
-                return GetSystemPrompt(groupId);
+                return GetSystemPromptStatus(groupId);
             }
 
             return SetValue("SystemPrompt", cmdPara, groupId) == -1
@@ -263,7 +263,7 @@
             if (cmdPara.In("开启", "关闭")) return "此功能不允许关闭";
 
             string res = "";
-            string cmdText = Query($"SELECT TOP 1 CmdText FROM {BotCmd.FullName} WHERE CmdName = {cmdPara.Quotes()}");
+            string cmdText = QueryScalar<string>($"SELECT TOP 1 CmdText FROM {BotCmd.FullName} WHERE CmdName = {cmdPara.Quotes()}") ?? "";
             if (cmdText != "" | cmdPara == "所有功能")
             {
                 cmdText = cmdText.Replace("|", " ");

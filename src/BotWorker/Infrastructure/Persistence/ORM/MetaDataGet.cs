@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Extensions;
@@ -7,59 +7,103 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
+        public static T Get<T>(string fieldName, object id, object? id2 = null)
+            => GetAsync<T>(fieldName, id, id2).GetAwaiter().GetResult();
+
+        public static async Task<T> GetAsync<T>(string fieldName, object id, object? id2 = null)
+        {
+            var (sql, parameters) = SqlGet(fieldName, id, id2);
+            var res = await QueryScalarAsync<T>(sql, null, parameters);
+            return res ?? default!;
+        }
+
         public static T GetDef<T>(string fieldName, object id, T def)
-            => Get(fieldName, id, null, def);
+            => GetDefAsync(fieldName, id, def).GetAwaiter().GetResult();
+
+        public static async Task<T> GetDefAsync<T>(string fieldName, object id, T def)
+            => await GetDefAsync(fieldName, id, null, def);
 
         public static T GetDef<T>(string fieldName, object id, object? id2, T def)
-            => Get(fieldName, id, id2, def);
+            => GetDefAsync(fieldName, id, id2, def).GetAwaiter().GetResult();
+
+        public static async Task<T> GetDefAsync<T>(string fieldName, object id, object? id2, T def)
+        {
+            var res = await GetAsync<T>(fieldName, id, id2);
+            return res == null || res.Equals(default(T)) ? def : res;
+        }
 
         public static int GetInt(string fieldName, object id, object? id2 = null)
-            => Get<int>(fieldName, id, id2);
+            => GetIntAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
-        public static short GetShort(string fieldName, object id, object? id2 = null)
-            => Get<short>(fieldName, id, id2);
+        public static async Task<int> GetIntAsync(string fieldName, object id, object? id2 = null)
+            => await GetAsync<int>(fieldName, id, id2);
 
         public static long GetLong(string fieldName, object id, object? id2 = null)
-            => Get<long>(fieldName, id, id2);
+            => GetLongAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
-        public static float GetFloat(string fieldName, object id, object? id2 = null)
-            => Get<float>(fieldName, id, id2);
-
-        public static double GetDouble(string fieldName, object id, object? id2 = null)
-            => Get<double>(fieldName, id, id2);
-
-        public static byte GetByte(string fieldName, object id, object? id2 = null)
-            => Get<byte>(fieldName, id, id2);
-
-        public static decimal GetDecimal(string fieldName, object id, object? id2 = null)
-            => Get<decimal>(fieldName, id, id2);
+        public static async Task<long> GetLongAsync(string fieldName, object id, object? id2 = null)
+            => await GetAsync<long>(fieldName, id, id2);
 
         public static bool GetBool(string fieldName, object id, object? id2 = null)
-            => Get<bool>(fieldName, id, id2);
+            => GetBoolAsync(fieldName, id, id2).GetAwaiter().GetResult();
+
+        public static async Task<bool> GetBoolAsync(string fieldName, object id, object? id2 = null)
+            => await GetAsync<bool>(fieldName, id, id2);
+
+        public static Dictionary<string, object?>? GetDict(object id, object? id2 = null, params string[] fieldNames)
+            => GetDictAsync(id, id2, fieldNames).GetAwaiter().GetResult();
+
+        public static async Task<Dictionary<string, object?>?> GetDictAsync(object id, object? id2 = null, params string[] fieldNames)
+        {
+            var (where, parameters) = SqlWhere(id, id2);
+            return await GetDictAsync(where, parameters, fieldNames);
+        }
+
+        public static Dictionary<string, object?>? GetDict(object id, params string[] fieldNames)
+            => GetDictAsync(id, fieldNames).GetAwaiter().GetResult();
+
+        public static async Task<Dictionary<string, object?>?> GetDictAsync(object id, params string[] fieldNames)
+        {
+            return await GetDictAsync(id, null, fieldNames);
+        }
+
+        public static Dictionary<string, object?>? GetDict(string where, SqlParameter[]? parameters, params string[] fieldNames)
+            => GetDictAsync(where, parameters, fieldNames).GetAwaiter().GetResult();
+
+        public static async Task<Dictionary<string, object?>?> GetDictAsync(string where, SqlParameter[]? parameters, params string[] fieldNames)
+        {
+            if (fieldNames == null || fieldNames.Length == 0)
+                throw new ArgumentException("必须指定要查询的字段", nameof(fieldNames));
+
+            var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {where}";
+            var results = await QueryAsync<dynamic>(sql, null, parameters);
+            var row = results.FirstOrDefault();
+            if (row == null) return null;
+
+            var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            var rowDict = (IDictionary<string, object>)row;
+            foreach (var field in fieldNames)
+            {
+                dict[field] = rowDict.ContainsKey(field) ? rowDict[field] : null;
+            }
+            return dict;
+        }
 
         public static string GetValue(string fieldName, object id, object? id2 = null)
-            => Get<string>(fieldName, id, id2) ?? string.Empty;
+            => GetValueAsync(fieldName, id, id2).GetAwaiter().GetResult();
+
+        public static async Task<string> GetValueAsync(string fieldName, object id, object? id2 = null)
+        {
+            var (sql, parameters) = SqlGetStr(fieldName, id, id2);
+            var res = await QueryScalarAsync<string>(sql, null, parameters);
+            return res ?? "";
+        }
 
         //public static DateTime GetDateTime(string fieldName, object id, object? id2 = null)
         //    => Get<DateTime>(fieldName, id, id2);
 
         public static Guid GetGuid(string fieldName, object id, object? id2 = null)
             => Get<Guid>(fieldName, id, id2);
-
-        public static Dictionary<string, object?>? GetDict(object id, object? id2 = null, params string[] fieldNames)
-        {
-            return GetDicts(id, id2, fieldNames).FirstOrDefault();
-        }
-
-        public static Dictionary<string, object?>? GetDict(object id, params string[] fieldNames)
-        {
-            return GetDicts(id, fieldNames).FirstOrDefault();
-        }
-
-        public static Dictionary<string, object?>? GetDict(string where, SqlParameter[]? parameters, params string[] fieldNames)
-        {
-            return GetDicts(where, parameters, fieldNames).FirstOrDefault();
-        }
 
         // get bytes
         public static async Task<byte[]?> GetBytes(string fieldName, object id, object? id2 = null)
@@ -77,7 +121,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<TDerived?> GetSingleAsync(string columns, object id, object? id2 = null)
         {
             var (sql, parameters) = SqlSelect(columns, id, id2);
-            return await QuerySingleAsync<TDerived>($"{sql}", parameters);
+            return await QuerySingleAsync<TDerived>($"{sql}", null, parameters);
         }
 
         public static async Task<TDerived> GetSingleAsync(object id, object? id2 = null)
@@ -154,11 +198,11 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         //    return QueryScalar<string>(sql, parameters) ?? "";
         //}
 
-        public static object GetObject<T>(string fieldName, object id, object? id2 = null)
+        public static object? GetObject<T>(string fieldName, object id, object? id2 = null)
         {
             var (sql, parameters) = SqlGet(fieldName, id, id2);
             var result = Query<T>(sql, parameters);
-            return result ?? default!;
+            return result.FirstOrDefault();
         }
 
         public static string SqlGetWhere(string fieldName, string where, string sOrderby = "")
@@ -169,7 +213,19 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static string GetWhere(string fieldName, string where, string sOrderby = "")
         {
             var sql = SqlGetWhere(fieldName, where, sOrderby);
-            return Query<string>(sql);
+            return Query<string>(sql).FirstOrDefault() ?? "";
+        }
+
+        public static async Task<string> GetWhereAsync(string fieldName, string where, string sOrderby = "")
+        {
+            var sql = SqlGetWhere(fieldName, where, sOrderby);
+            return (await QueryAsync<string>(sql)).FirstOrDefault() ?? "";
+        }
+
+        public static async Task<T?> GetWhereAsync<T>(string fieldName, string where, string sOrderby = "")
+        {
+            var res = await QueryScalarAsync<T>(SqlGetWhere(fieldName, where, sOrderby));
+            return res;
         }
 
         public static T? GetWhere<T>(string fieldName, string where, string sOrderby = "")
@@ -189,7 +245,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static string GetDate(string format = "yyyy-MM-dd HH:mm:ss")
         {
-            return Query(SqlDate()).AsDateTimeFormat(format);
+            return (Query<string>(SqlDate()).FirstOrDefault() ?? "").AsDateTimeFormat(format);
         }
 
         public static DateTime GetDateTime()
@@ -204,12 +260,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static string GetNewId()
         {
-            return Query("SELECT NEWID()");
+            return Query<string>("SELECT NEWID()").FirstOrDefault() ?? "";
         }
 
         public static string MaxId()
         {
-            return Query($"SELECT MAX({Key}) FROM {FullName}");
+            return Query<string>($"SELECT MAX({Key}) FROM {FullName}").FirstOrDefault() ?? "";
         }
     }
 }

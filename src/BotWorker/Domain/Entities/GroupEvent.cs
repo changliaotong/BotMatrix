@@ -23,5 +23,15 @@ namespace BotWorker.Domain.Entities
                 new Cov("EventInfo", eventInfo),
             ]);
         }
+
+        public static async Task<long> GetRecallCountAsync(long groupId)
+        {
+            return await CountWhereAsync($"GroupId = {groupId} AND EventType = '撤回'");
+        }
+
+        public static async Task<long> GetEventCountAsync(long groupId, string eventType)
+        {
+            return await CountWhereAsync($"GroupId = {groupId} AND EventType = {eventType.Quotes()}");
+        }
     }
 }

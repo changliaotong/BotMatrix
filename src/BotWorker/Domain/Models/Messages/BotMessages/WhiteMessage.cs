@@ -18,10 +18,12 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         // 白名单人数
-        public long CountWhiteList()
+        public async Task<long> CountWhiteListAsync()
         {
-            return WhiteList.CountWhere($"GroupId = {GroupId}");
+            return await WhiteList.CountWhereAsync($"GroupId = {GroupId}");
         }
+
+        public long CountWhiteList() => CountWhiteListAsync().GetAwaiter().GetResult();
 
         // 管理员是否有白名单权限
         public string IsWhiteListRes()
@@ -30,17 +32,19 @@ public partial class BotMessage : MetaData<BotMessage>
         }    
 
         // 白名单列表
-        public string GetGroupWhiteList()
+        public async Task<string> GetGroupWhiteListAsync()
         {
-            string res = QueryRes($"select top 9 WhiteId from {WhiteList.FullName} where GroupId = {GroupId} order by Id desc", "{i}    [@:{0}]\n");
-            return $"{(res.IsNull() ? "" : $"{res}\n")}白名单人数：{CountWhiteList()}\n白名单 + QQ\n取消白名单 + QQ{IsWhiteListRes()}";
+            string res = await QueryResAsync($"select top 9 WhiteId from {WhiteList.FullName} where GroupId = {GroupId} order by Id desc", "{i}    [@:{0}]\n");
+            return $"{(res.IsNull() ? "" : $"{res}\n")}白名单人数：{await CountWhiteListAsync()}\n白名单 + QQ\n取消白名单 + QQ{IsWhiteListRes()}";
         }
+
+        public string GetGroupWhiteList() => GetGroupWhiteListAsync().GetAwaiter().GetResult();
 
         public int AddWhite(long userId)
         {
             return WhiteList.AppendWhiteList(SelfId, GroupId, GroupName, UserId, Name, userId);
         }
-        public string GetWhiteRes()
+        public async Task<string> GetWhiteResAsync()
         {
             IsCancelProxy = true;
 
@@ -51,7 +55,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return GetClearWhite();
 
             if (CmdPara == "")
-                return GetGroupWhiteList();
+                return await GetGroupWhiteListAsync();
 
             string res = "";
             if (CmdPara == "管理员")
@@ -99,7 +103,9 @@ public partial class BotMessage : MetaData<BotMessage>
                 }
             }
             return res;
-        } 
+        }
+
+        public string GetWhiteRes() => GetWhiteResAsync().GetAwaiter().GetResult(); 
 
         // 清空白名单
         public string GetClearWhite()

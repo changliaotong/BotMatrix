@@ -48,21 +48,19 @@ namespace BotWorker.Modules.Buses
 
         public static string GetBusCount(int stopId)
         {
-            var res = Query<string>($"select count(bus_id) as res from bus where bus_type = 1 and bus_name not like '%换乘%' and bus_id in (select bus_id from bus_stops where stop_id = {stopId})");
-            return res == "" ? "0" : res;
+            return QueryScalar<string>($"select count(bus_id) as res from bus where bus_type = 1 and bus_name not like '%换乘%' and bus_id in (select bus_id from bus_stops where stop_id = {stopId})") ?? "0";
         }
 
         public static string GetBusCountAll()
         {
-            var res = Query<string>($"select count(bus_id) as res from bus where bus_type = 1 and bus_name not like '%换乘%'");
-            return res == "" ? "0" : res;
+            return QueryScalar<string>($"select count(bus_id) as res from bus where bus_type = 1 and bus_name not like '%换乘%'") ?? "0";
         }
 
 
         //由线路编号得到线路名称
         public static string GetBusName(int busId)
         {
-            return Query<string>($"select bus_name from bus where bus_id = {busId}");
+            return QueryScalar<string>($"select bus_name from bus where bus_id = {busId}") ?? "";
         }
 
         //线路名称 如果线路名称中包含“线”、“路”等，例如 机场快线，高峰专线，区间线、环线、快线等时，不再添加“路”
@@ -134,12 +132,12 @@ namespace BotWorker.Modules.Buses
         public static string GetBusIDByKey(string keyword)
         {
             keyword = Search.GetBusNameKeyword(keyword);
-            return Query("select top 1 bus_id as res from bus where bus_type=1 and bus_name like '%" + keyword + "%' or bus_name2 like '%" + keyword + "%'");
+            return QueryScalar<string>("select top 1 bus_id as res from bus where bus_type=1 and bus_name like '%" + keyword + "%' or bus_name2 like '%" + keyword + "%'") ?? "";
         }
 
         public static int GetBusCount(string keyword)
         {
-            return Convert.ToInt32(Query("select count(bus_id) as res from bus where bus_type=1 and (bus_name like '%" + keyword + "%' or bus_name2 like '%" + keyword + "%')"));
+            return Convert.ToInt32(QueryScalar<string>("select count(bus_id) as res from bus where bus_type=1 and (bus_name like '%" + keyword + "%' or bus_name2 like '%" + keyword + "%')") ?? "0");
         }
 
         //得到包含城市信息的线路名称
@@ -160,19 +158,19 @@ namespace BotWorker.Modules.Buses
             if (place_id == 0 | place_id2 == 0)
                 return "";
             else
-                return "乘车<strong><font color=\"red\">" + Query("select dbo.getStopCount2(" + bus_id.ToString() + "," + place_id.ToString() + "," + place_id2.ToString() + ") as res") + "</font></strong>站 共" + GetStopCount(bus_id) + "站";
+                return "乘车<strong><font color=\"red\">" + QueryScalar<string>("select dbo.getStopCount2(" + bus_id.ToString() + "," + place_id.ToString() + "," + place_id2.ToString() + ") as res") + "</font></strong>站 共" + GetStopCount(bus_id) + "站";
         }
 
         //取得线路站点数
         public static int GetStopCount(int bus_id)
         {
-            return Convert.ToInt32(Query("select count(stop_id) as res from bus_stops where bus_id = " + bus_id.ToString()));
+            return Convert.ToInt32(QueryScalar<string>("select count(stop_id) as res from bus_stops where bus_id = " + bus_id.ToString()));
         }
 
         //取得往程站点数
         public static int getStopCountA(int bus_id)
         {
-            return Convert.ToInt32(Query("select isnull(max(stop_order),0) as res from bus_stops where bus_id = " + bus_id.ToString()));
+            return Convert.ToInt32(QueryScalar<string>("select isnull(max(stop_order),0) as res from bus_stops where bus_id = " + bus_id.ToString()));
         }
 
         //取得返程站点数
@@ -184,7 +182,7 @@ namespace BotWorker.Modules.Buses
         //is tag in bus
         public static bool isTagInBus(int tag_id, int bus_id)
         {
-            return Query<string>($"select 1 from bus_tags where bus_id = {bus_id} and tag_id = {tag_id}") != "";
+            return (QueryScalar<string>($"select 1 from bus_tags where bus_id = {bus_id} and tag_id = {tag_id}") ?? "") != "";
         }
 
         //加标签
@@ -208,23 +206,23 @@ namespace BotWorker.Modules.Buses
         //获得线路上行信息 不含超链接 
         public static string GetBusStopsA2(string bus_id)
         {
-            return Query("select dbo.getBusStopsA2(" + bus_id + ") as res");
+            return QueryScalar<string>("select dbo.getBusStopsA2(" + bus_id + ") as res") ?? "";
         }
 
         //获得线路下行信息 不含超链接
         public static string getBusStopsB2(string bus_id)
         {
-            return Query("select dbo.getBusStopsB2(" + bus_id + ") as res");
+            return QueryScalar<string>("select dbo.getBusStopsB2(" + bus_id + ") as res") ?? "";
         }
 
         //获得线路信息，上行下行合并，不带超链接
         public static string getBusStopsC2(string bus_id)
         {
-            return Query($"select dbo.getBusStopsC2({bus_id}) as res");
+            return QueryScalar<string>($"select dbo.getBusStopsC2({bus_id}) as res") ?? "";
         }
 
         //获得线路下行信息 站点反转 不含超链接
-        public static string GetBusStopsB22(string bus_id) => Query($"select dbo.getBusStopsB22({bus_id}) as res");
+        public static string GetBusStopsB22(string bus_id) => QueryScalar<string>($"select dbo.getBusStopsB22({bus_id}) as res") ?? "";
 
 
         public static int updateStopBusMap(int stop_id)
@@ -239,7 +237,7 @@ namespace BotWorker.Modules.Buses
 
         public static string getBusMap(int bus_id)
         {
-            string res = Query($"select bus_map from bus where bus_id = {bus_id} and update_map = 0");
+            string res = QueryScalar<string>($"select bus_map from bus where bus_id = {bus_id} and update_map = 0") ?? "";
             if (res == "")
             {
                 res = GetBusMapAll(bus_id);
@@ -293,7 +291,7 @@ namespace BotWorker.Modules.Buses
         //取得线路价格信息
         public static string getBusPrice(string bus_id, int place_id, int place_id2)
         {
-            return Query(string.Format("select dbo.getBusPrice2({0},{1},{2}) as res", bus_id, place_id, place_id2));
+            return QueryScalar<string>(string.Format("select dbo.getBusPrice2({0},{1},{2}) as res", bus_id, place_id, place_id2)) ?? "";
         }
 
         //取得线路价格信息
@@ -304,7 +302,7 @@ namespace BotWorker.Modules.Buses
 
         //得到线路价格（站到站）
         public static string getBusStopPrice(string bus_id, string stop_id, string stop_id2)
-            => Query($"select price from bus_price where bus_id = {bus_id} and ((stop_id = {stop_id} and stop_id2={stop_id2}) or (stop_id = {stop_id2} and stop_id2={stop_id}))");
+            => QueryScalar<string>($"select price from bus_price where bus_id = {bus_id} and ((stop_id = {stop_id} and stop_id2={stop_id2}) or (stop_id = {stop_id2} and stop_id2={stop_id}))") ?? "";
 
         //更新线路价格（站到站）
         public static int updateBusStopPrice(string bus_id, string stop_id, string stop_id2, string price)
@@ -549,7 +547,7 @@ namespace BotWorker.Modules.Buses
                 while (reader.Read())
                 {
                     stop_id = Convert.ToInt32(reader[0]);
-                    stop_buses = Query($"select dbo.getStopBus({stop_id})");
+                    stop_buses = QueryScalar<string>($"select dbo.getStopBus({stop_id})") ?? "";
                     if (stop_buses != "")
                     {
                         stop_buses = "\"" + stop_buses + "\"";
@@ -593,7 +591,7 @@ namespace BotWorker.Modules.Buses
                 while (reader.Read())
                 {
                     stop_id = Convert.ToInt32(reader[0]);
-                    stop_buses = Query($"select dbo.getStopBus({stop_id})");
+                    stop_buses = QueryScalar<string>($"select dbo.getStopBus({stop_id})") ?? "";
                     if (stop_buses != "")
                     {
                         stop_buses = "\"" + stop_buses + "\"";

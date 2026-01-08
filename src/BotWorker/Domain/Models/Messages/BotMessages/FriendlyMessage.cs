@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages;
 
@@ -45,7 +45,7 @@ public partial class BotMessage : MetaData<BotMessage>
             //兼容旧格式
             Answer = ReplacePlaceholders(Answer);
             
-            DoRegister();
+            await DoRegisterAsync();
             await Ctx.ReplaceAsync(this);            
             Answer = ReplaceDateTime(Answer);
             
@@ -64,7 +64,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             bool hasUrl = urls.Any();
             bool onlyWhiteListUrls = hasUrl && urls.All(IsUrlWhiteListed);
-            bool isNotVip = !GroupVip.IsYearVIP(GroupId);
+            bool isNotVip = !await GroupVip.IsYearVIPAsync(GroupId);
 
             // 原来的问题：只要有一个非白名单就调用无差别的 BlockUrl()
             // 改成调用带回调的版本（或使用无参重载也行）
@@ -136,7 +136,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
         }
 
-        public void DoRegister()
+        public async Task DoRegisterAsync()
         {
             // 同步注册（自动包装为异步）
             Ctx.Register("群号", GroupId.ToString);            
@@ -149,78 +149,78 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("Name", Name.ToString);
             Ctx.Register("BotUin", SelfId.ToString);
             Ctx.Register("BotName", SelfName.ToString); 
-            Ctx.Register("SystemPrompt", () => GroupInfo.GetSystemPrompt(GroupId));
-            Ctx.Register("系统提示词", () => GroupInfo.GetSystemPrompt(GroupId));
+            Ctx.Register("SystemPrompt", () => GroupInfo.GetSystemPromptAsync(GroupId));
+            Ctx.Register("系统提示词", () => GroupInfo.GetSystemPromptAsync(GroupId));
 
             /*=========================================执行命令支持======================================================*/
 
             Ctx.Register("知识库开关", () => Group.IsUseKnowledgebase ? "开启" : "关闭");
-            Ctx.Register("知识库文件数", () => KnowledgeVectors.CountField("FileId", "GroupId", GroupId).AsString());
-            Ctx.Register("知识库字数", () => KnowledgeVectors.GetWhere("sum(len(content))", $"GroupId={GroupId}"));
+            Ctx.Register("知识库文件数", async () => (await KnowledgeVectors.CountFieldAsync("FileId", "GroupId", GroupId)).AsString());
+            Ctx.Register("知识库字数", async () => await KnowledgeVectors.GetWhereAsync("sum(len(content))", $"GroupId={GroupId}"));
 
-            Ctx.Register("撤回计数", GetRecallCount);
+            Ctx.Register("撤回计数", GetRecallCountAsync);
 
             foreach (GroupEventType evt in Enum.GetValues(typeof(GroupEventType)))
             {
                 if (evt != GroupEventType.撤回)
-                    Ctx.Register($"{evt}计数", () => GetEventCount(evt));
+                    Ctx.Register($"{evt}计数", () => GetEventCountAsync(evt));
             }
 
-            Ctx.Register("菜单", GetMenuRes);
+            Ctx.Register("菜单", GetMenuResAsync);
             Ctx.Register("后台", GetSetupUrlAsync);
-            Ctx.Register("签到", () => TrySignIn(false));
+            Ctx.Register("签到", () => TrySignInAsync(false));
             Ctx.Register("客服QQ", () => IsGuild || IsProxy ? "1653346663" : "1653346663");
-            Ctx.Register("笑话", GetJokeRes);
+            Ctx.Register("笑话", GetJokeResAsync);
             Ctx.Register("欢迎语", () => Group.WelcomeMessage);
             Ctx.Register("禁言我", GetMuteMeAsync);
             Ctx.Register("踢我", GetKickmeAsync);
-            Ctx.Register("撤回", GetRecallMsgRes);
-            Ctx.Register("测试", GetTestIt);
-            Ctx.Register("闭嘴", GetShutupRes);
+            Ctx.Register("撤回", GetRecallMsgResAsync);
+            Ctx.Register("测试", GetTestItAsync);
+            Ctx.Register("闭嘴", GetShutupResAsync);
 
             // ====== 敏感词设置注册简化 ======
             foreach (var key in new[] { "刷屏", "图片", "网址", "脏话", "广告", "推荐群", "推荐好友", "合并转发" })
             {
-                Ctx.Register($"{key}设置", () => GroupWarn.GetKeysSet(GroupId, key));
+                Ctx.Register($"{key}设置", () => GroupWarn.GetKeysSetAsync(GroupId, key));
             }
-            Ctx.Register("内置词设置", () => GroupWarn.GetKeysSet(GroupId));
+            Ctx.Register("内置词设置", () => GroupWarn.GetKeysSetAsync(GroupId));
 
-            Ctx.Register("随机礼物", () => Gift.GetGiftList(GroupId, UserId));
-            Ctx.Register("今日发言榜", () => GroupMsgCount.GetCountList(SelfId, GroupId, UserId, 8).ToString());
-            Ctx.Register("昨日发言榜", () => GroupMsgCount.GetCountListY(SelfId, GroupId, UserId, 8).ToString());
-            Ctx.Register("今日发言次数", () => GroupMsgCount.GetMsgCount(GroupId, UserId).ToString());
-            Ctx.Register("今日发言排名", () => GroupMsgCount.GetCountOrder(GroupId, UserId).ToString());
-            Ctx.Register("昨日发言次数", () => GroupMsgCount.GetMsgCountY(GroupId, UserId).ToString());
-            Ctx.Register("昨日发言排名", () => GroupMsgCount.GetCountOrderY(GroupId, UserId).ToString());
-            Ctx.Register("粉丝团", () => GroupGift.GetFansList(GroupId, UserId));
-            Ctx.Register("亲密度值", () => GroupGift.GetFansValue(GroupId, UserId).ToString("N0"));
-            Ctx.Register("粉丝排名", () => GroupGift.GetFansOrder(GroupId, UserId).ToString());
-            Ctx.Register("粉丝等级", () => GroupGift.GetFansLevel(GroupId, UserId).ToString());
-            Ctx.Register("荣誉等级", () => Income.GetClientLevel(UserId).ToString());
-            Ctx.Register("荣誉榜", () => Income.GetLevelList(GroupId));
-            Ctx.Register("荣誉排名", () => Income.GetLeverOrder(GroupId, UserId));
+            Ctx.Register("随机礼物", () => Gift.GetGiftListAsync(GroupId, UserId));
+            Ctx.Register("今日发言榜", async () => (await GroupMsgCount.GetCountListAsync(SelfId, GroupId, UserId, 8)).ToString());
+            Ctx.Register("昨日发言榜", async () => (await GroupMsgCount.GetCountListYAsync(SelfId, GroupId, UserId, 8)).ToString());
+            Ctx.Register("今日发言次数", async () => (await GroupMsgCount.GetMsgCountAsync(GroupId, UserId)).ToString());
+            Ctx.Register("今日发言排名", async () => (await GroupMsgCount.GetCountOrderAsync(GroupId, UserId)).ToString());
+            Ctx.Register("昨日发言次数", async () => (await GroupMsgCount.GetMsgCountYAsync(GroupId, UserId)).ToString());
+            Ctx.Register("昨日发言排名", async () => (await GroupMsgCount.GetCountOrderYAsync(GroupId, UserId)).ToString());
+            Ctx.Register("粉丝团", () => GroupGift.GetFansListAsync(GroupId, UserId));
+            Ctx.Register("亲密度值", async () => (await GroupGift.GetFansValueAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("粉丝排名", async () => (await GroupGift.GetFansOrderAsync(GroupId, UserId)).ToString());
+            Ctx.Register("粉丝等级", async () => (await GroupGift.GetFansLevelAsync(GroupId, UserId)).ToString());
+            Ctx.Register("荣誉等级", async () => (await Income.GetClientLevelAsync(UserId)).ToString());
+            Ctx.Register("荣誉榜", () => Income.GetLevelListAsync(GroupId));
+            Ctx.Register("荣誉排名", () => Income.GetLeverOrderAsync(GroupId, UserId));
 
             // 注册积分类占位符
-            Ctx.Register("领积分", () => GetFreeCredit());
-            Ctx.Register("积分榜", () => GetCreditList());
-            Ctx.Register("积分总榜", () => GetCreditListAll(UserId));
-            Ctx.Register("积分类型", () => UserInfo.GetCreditType(GroupId, UserId));
-            Ctx.Register("积分排名", () => UserInfo.GetCreditRanking(SelfId, GroupId, UserId).ToString());
-            Ctx.Register("积分总排名", () => UserInfo.GetCreditRankingAll(UserId).ToString("N0"));
-            Ctx.Register("本群积分", () => UserInfo.GetCredit(GroupId, UserId).ToString("N0"));
-            Ctx.Register("本机积分", () => Friend.GetCredit(SelfId, UserId).ToString("N0"));
-            Ctx.Register("通用积分", () => UserInfo.GetCredit(UserId).ToString("N0"));
-            Ctx.Register("已存积分", () => UserInfo.GetSaveCredit(GroupId, UserId).ToString("N0"));
-            Ctx.Register("储存积分", () => UserInfo.GetSaveCredit(GroupId, UserId).ToString("N0"));
-            Ctx.Register("积分总额", () => UserInfo.GetTotalCredit(GroupId, UserId).ToString("N0"));
-            Ctx.Register("冻结积分", () => UserInfo.GetFreezeCredit(UserId).ToString("N0"));
-            Ctx.Register("余额", () => UserInfo.GetBalance(UserId).ToString("N"));
-            Ctx.Register("冻结余额", () => UserInfo.GetFreezeBalance(UserId).ToString("N"));
+            Ctx.Register("领积分", () => GetFreeCreditAsync());
+            Ctx.Register("积分榜", () => GetCreditListAsync());
+            Ctx.Register("积分总榜", () => GetCreditListAllAsync(UserId));
+            Ctx.Register("积分类型", () => UserInfo.GetCreditTypeAsync(GroupId, UserId));
+            Ctx.Register("积分排名", async () => (await UserInfo.GetCreditRankingAsync(SelfId, GroupId, UserId)).ToString());
+            Ctx.Register("积分总排名", async () => (await UserInfo.GetCreditRankingAllAsync(UserId)).ToString("N0"));
+            Ctx.Register("本群积分", async () => (await UserInfo.GetCreditAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("本机积分", async () => (await Friend.GetCreditAsync(SelfId, UserId)).ToString("N0"));
+            Ctx.Register("通用积分", async () => (await UserInfo.GetCreditAsync(UserId)).ToString("N0"));
+            Ctx.Register("已存积分", async () => (await UserInfo.GetSaveCreditAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("储存积分", async () => (await UserInfo.GetSaveCreditAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("积分总额", async () => (await UserInfo.GetTotalCreditAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("冻结积分", async () => (await UserInfo.GetFreezeCreditAsync(UserId)).ToString("N0"));
+            Ctx.Register("余额", async () => (await UserInfo.GetBalanceAsync(UserId)).ToString("N"));
+            Ctx.Register("冻结余额", async () => (await UserInfo.GetFreezeBalanceAsync(UserId)).ToString("N"));
 
             // 特殊处理积分（判断负分情况）
-            Ctx.Register("积分", () =>
+            Ctx.Register("积分", async () =>
             {
-                long credit_value = UserInfo.GetCredit(GroupId, UserId);
+                long credit_value = await UserInfo.GetCreditAsync(GroupId, UserId);
                 var baseValue = credit_value.ToString("N0");
                 if (credit_value < 0)
                     return $"{baseValue}\n您已负分{credit_value}，低于-50分后将不能使用机器人";
@@ -228,11 +228,11 @@ public partial class BotMessage : MetaData<BotMessage>
             });
 
             // 注册金币类
-            Ctx.Register("金币", () => GroupMember.GetCoins((int)CoinsLog.CoinsType.goldCoins, GroupId, UserId).AsString("N0"));
-            Ctx.Register("金币榜", () => GetCoinsList());
-            Ctx.Register("金币总榜", () => GetCoinsListAll(UserId));
-            Ctx.Register("金币排名", () => GetCoinsRanking(GroupId, UserId).ToString());
-            Ctx.Register("金币总排名", () => GetCoinsRankingAll(UserId).ToString());
+            Ctx.Register("金币", async () => (await GroupMember.GetCoinsAsync((int)CoinsLog.CoinsType.goldCoins, GroupId, UserId)).AsString("N0"));
+            Ctx.Register("金币榜", () => GetCoinsListAsync());
+            Ctx.Register("金币总榜", () => GetCoinsListAllAsync(UserId));
+            Ctx.Register("金币排名", async () => (await GetCoinsRankingAsync(GroupId, UserId)).ToString());
+            Ctx.Register("金币总排名", async () => (await GetCoinsRankingAllAsync(UserId)).ToString());
 
             // 你 你2（依赖 RealGroupId 和权限判断）
             Ctx.Register("你", () =>
@@ -284,21 +284,21 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("天气预报", () => GetWeatherResAsync(User.CityName ?? ""));
             Ctx.Register("默认城市", () => User.CityName);
             Ctx.Register("默认群",  User.DefaultGroup.ToString);
-            Ctx.Register("默认功能", () => UserInfo.GetStateRes(User.State));
+            Ctx.Register("默认功能", () => UserInfo.GetStateResAsync(User.State));
             Ctx.Register("默认提示", () => User.IsDefaultHint ? "提示" : "不提示");
             Ctx.Register("闭嘴模式开关", () => User.IsShutup ? "已开启" : "已关闭");
-            Ctx.Register("聊天模式", () => GroupInfo.CloudAnswerRes(GroupId));
+            Ctx.Register("聊天模式", () => GroupInfo.CloudAnswerResAsync(GroupId));
             Ctx.Register("最低积分", Group.BlockMin.ToString);
 
             // 权限相关
-            Ctx.Register("管理权限", () => GroupInfo.GetAdminRightRes(GroupId));
-            Ctx.Register("使用权限", () => GroupInfo.GetRightRes(GroupId));
-            Ctx.Register("调教权限", () => GroupInfo.GetTeachRightRes(GroupId));
-            Ctx.Register("调校权限", () => GroupInfo.GetTeachRightRes(GroupId));
-            Ctx.Register("教学权限", () => GroupInfo.GetTeachRightRes(GroupId));
+            Ctx.Register("管理权限", () => GroupInfo.GetAdminRightResAsync(GroupId));
+            Ctx.Register("使用权限", () => GroupInfo.GetRightResAsync(GroupId));
+            Ctx.Register("调教权限", () => GroupInfo.GetTeachRightResAsync(GroupId));
+            Ctx.Register("调校权限", () => GroupInfo.GetTeachRightResAsync(GroupId));
+            Ctx.Register("教学权限", () => GroupInfo.GetTeachRightResAsync(GroupId));
 
             // 群加入退出
-            Ctx.Register("加群", () => GroupInfo.GetJoinRes(GroupId));
+            Ctx.Register("加群", () => GroupInfo.GetJoinResAsync(GroupId));
 
             // ====== 快捷方法：提示/开关类注册 ======
             void RegisterHintSwitch(string name, Func<bool> state)
@@ -322,73 +322,73 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("命令加#", () => Group.IsRequirePrefix ? "加#" : "不加#");
 
             // 黑白名单
-            Ctx.Register("黑名单列表", GetGroupBlackList);
-            Ctx.Register("白名单列表", GetGroupWhiteList);
-            Ctx.Register("黑名单人数", () => BlackList.CountWhere($"group_id = {GroupId}").ToString());
-            Ctx.Register("白名单人数", () => WhiteList.CountWhere($"group_id = {GroupId}").ToString());
+            Ctx.Register("黑名单列表", GetGroupBlackListAsync);
+            Ctx.Register("白名单列表", GetGroupWhiteListAsync);
+            Ctx.Register("黑名单人数", async () => (await BlackList.CountWhereAsync($"group_id = {GroupId}")).ToString());
+            Ctx.Register("白名单人数", async () => (await WhiteList.CountWhereAsync($"group_id = {GroupId}")).ToString());
 
-            Ctx.Register("VIP", () => GetVipRes());
+            Ctx.Register("VIP", () => GetVipResAsync());
 
             // 签到相关
-            Ctx.Register("今日签到人数", () => GroupSignIn.SignCount(GroupId).AsString());
-            Ctx.Register("昨日签到人数", () => GroupSignIn.SignCountY(GroupId).AsString());
-            Ctx.Register("连续签到天数", () => GroupMember.GetSignTimes(GroupId, UserId).ToString());
-            Ctx.Register("连续签到等级", () => GroupMember.GetValue("SignLevel", GroupId, UserId));
-            Ctx.Register("本月签到次数", () => GroupSignIn.SignCountThisMonth(GroupId, UserId).AsString());
-            Ctx.Register("签到榜", () => GroupMember.GetSignList(GroupId, 3));
+            Ctx.Register("今日签到人数", async () => (await GroupSignIn.SignCountAsync(GroupId)).AsString());
+            Ctx.Register("昨日签到人数", async () => (await GroupSignIn.SignCountYAsync(GroupId)).AsString());
+            Ctx.Register("连续签到天数", async () => (await GroupMember.GetSignTimesAsync(GroupId, UserId)).ToString());
+            Ctx.Register("连续签到等级", () => GroupMember.GetValueAsync("SignLevel", GroupId, UserId));
+            Ctx.Register("本月签到次数", async () => (await GroupSignIn.SignCountThisMonthAsync(GroupId, UserId)).AsString());
+            Ctx.Register("签到榜", () => GroupMember.GetSignListAsync(GroupId, 3));
             Ctx.Register("自动签到开关", () => Group.IsAutoSignin ? "已开启" : "已关闭");
 
             // 群链 & 区块链
             Ctx.Register("群链开关", () => Group.IsBlock ? "已开启" : "已关闭");
             Ctx.Register("私链开关", () => User.IsBlack ? "已开启" : "已关闭");
             Ctx.Register("区块链开关", () => (IsGroup ? Group.IsBlock : User.IsBlock) ? "已开启" : "已关闭");
-            Ctx.Register("block_hash16", () =>
+            Ctx.Register("block_hash16", async () =>
             {
-                long blockId = Block.GetId(GroupId, UserId);
-                return blockId == 0 ? "游戏尚未开始" : Block.GetHash(blockId).Substring(7, 16);
+                long blockId = await Block.GetIdAsync(GroupId, UserId);
+                return blockId == 0 ? "游戏尚未开始" : (await Block.GetHashAsync(blockId)).Substring(7, 16);
             });
-            Ctx.Register("block_hash", () => Block.GetHash(Block.GetId(GroupId, UserId)));
+            Ctx.Register("block_hash", async () => await Block.GetHashAsync(await Block.GetIdAsync(GroupId, UserId)));
             Ctx.Register("block_type", () => IsGroup ? "群链" : "私链");
 
             // 宠物系统
-            Ctx.Register("身价榜", () => PetOld.GetPriceList(GroupId, GroupId, UserId));
-            Ctx.Register("身价", () =>
+            Ctx.Register("身价榜", () => PetOld.GetPriceListAsync(GroupId, GroupId, UserId));
+            Ctx.Register("身价", async () =>
             {
                 if ((GroupId != 0) && !Group.IsPet)
                     return "宠物系统已关闭";
-                return PetOld.GetSellPrice(GroupId, UserId).ToString();
+                return (await PetOld.GetSellPriceAsync(GroupId, UserId)).ToString();
             });
-            Ctx.Register("身价排名", () => PetOld.GetMyPriceList(GroupId, GroupId, UserId));
-            Ctx.Register("我的宠物", () =>
+            Ctx.Register("身价排名", () => PetOld.GetMyPriceListAsync(GroupId, GroupId, UserId));
+            Ctx.Register("我的宠物", async () =>
             {
                 if ((GroupId != 0) && !Group.IsPet)
                     return "宠物系统已关闭";
-                return PetOld.GetMyPetList(GroupId, GroupId, UserId);
+                return await PetOld.GetMyPetListAsync(GroupId, GroupId, UserId);
             });
-            Ctx.Register("赎身", () => GetFreeMe());
+            Ctx.Register("赎身", () => GetFreeMeAsync());
 
             // 积分系统
-            Ctx.Register("积分流水", () => Partner.GetCreditList(UserId));
-            Ctx.Register("今日积分流水", () => Partner.GetCreditToday(UserId));
+            Ctx.Register("积分流水", () => Partner.GetCreditListAsync(UserId));
+            Ctx.Register("今日积分流水", () => Partner.GetCreditTodayAsync(UserId));
 
             // 金融/余额
-            Ctx.Register("余额榜", () => UserInfo.GetBalanceList(GroupId, UserId).ToString());
-            Ctx.Register("余额排名", () => UserInfo.GetMyBalanceList(GroupId, UserId).ToString());
+            Ctx.Register("余额榜", async () => (await UserInfo.GetBalanceListAsync(GroupId, UserId)).ToString());
+            Ctx.Register("余额排名", async () => (await UserInfo.GetMyBalanceListAsync(GroupId, UserId)).ToString());
 
             // Tokens / 算力
-            Ctx.Register("TOKENS", () => $"{UserInfo.GetTokens(UserId):N0}");
-            Ctx.Register("算力", () => $"{UserInfo.GetTokens(UserId):N0}");
-            Ctx.Register("算力榜", () => UserInfo.GetTokensList(GroupId, UserId, 3));
-            Ctx.Register("算力排名", () => UserInfo.GetTokensRanking(GroupId, UserId).AsString());
+            Ctx.Register("TOKENS", async () => $"{(await UserInfo.GetTokensAsync(UserId)):N0}");
+            Ctx.Register("算力", async () => $"{(await UserInfo.GetTokensAsync(UserId)):N0}");
+            Ctx.Register("算力榜", () => UserInfo.GetTokensListAsync(GroupId, UserId, 3));
+            Ctx.Register("算力排名", async () => (await UserInfo.GetTokensRankingAsync(GroupId, UserId)).AsString());
 
             // 合伙人
-            Ctx.Register("成为合伙人", () => Partner.BecomePartner(UserId));
+            Ctx.Register("成为合伙人", () => Partner.BecomePartnerAsync(UserId));
 
             // 运势
-            Ctx.Register("今日运势", () => Fortune.Format(Fortune.GenerateFortune(UserId.AsString())));
+            Ctx.Register("今日运势", async () => Fortune.Format(await Fortune.GenerateFortuneAsync(UserId.AsString())));
 
             // 其他
-            Ctx.Register("倒计时", () => CountDown.GetCountDown());
+            Ctx.Register("倒计时", () => CountDown.GetCountDownAsync());
             Ctx.Register("segment", () => "\n");
         }
 

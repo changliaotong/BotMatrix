@@ -136,7 +136,7 @@ namespace BotWorker.Application.Services
 
         #region 积分逻辑 (复刻自 CreditMessage.cs)
 
-        public string GetSaveCreditRes(BotMessage botMsg)
+        public async Task<string> GetSaveCreditResAsync(BotMessage botMsg)
         {
             botMsg.IsCancelProxy = true;
 
@@ -163,35 +163,48 @@ namespace BotWorker.Application.Services
 
             if (cmdName == "存分")
             {
-                credit_oper = credit_oper == 0 ? UserInfo.GetCredit(botMsg.GroupId, botMsg.UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetCreditAsync(botMsg.GroupId, botMsg.UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可存";
 
-                DoSaveCredit(botMsg, credit_oper, ref creditValue, ref saveCredit, ref res);
+                var saveRes = await DoSaveCreditAsync(botMsg, credit_oper);
+                res = saveRes.Res;
             }
             else if (cmdName == "取分")
             {
-                credit_oper = credit_oper == 0 ? UserInfo.GetSaveCredit(botMsg.GroupId, botMsg.UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetSaveCreditAsync(botMsg.GroupId, botMsg.UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可取";
 
-                DoSaveCredit(botMsg, -credit_oper, ref creditValue, ref saveCredit, ref res);
+                var saveRes = await DoSaveCreditAsync(botMsg, -credit_oper);
+                res = saveRes.Res;
             }
             return res;
         }
 
-        private int DoSaveCredit(BotMessage botMsg, long creditOper, ref long creditValue, ref long creditSave, ref string res)
+        public string GetSaveCreditRes(BotMessage botMsg)
         {
-            creditValue = UserInfo.GetCredit(botMsg.GroupId, botMsg.UserId);
-            creditSave = UserInfo.GetSaveCredit(botMsg.GroupId, botMsg.UserId);
+            return GetSaveCreditResAsync(botMsg).GetAwaiter().GetResult();
+        }
+
+        private (int Result, long CreditValue, long CreditSave, string Res) DoSaveCredit(BotMessage botMsg, long creditOper)
+        {
+            return DoSaveCreditAsync(botMsg, creditOper).GetAwaiter().GetResult();
+        }
+
+        private async Task<(int Result, long CreditValue, long CreditSave, string Res)> DoSaveCreditAsync(BotMessage botMsg, long creditOper)
+        {
+            long creditValue = await UserInfo.GetCreditAsync(botMsg.GroupId, botMsg.UserId);
+            long creditSave = await UserInfo.GetSaveCreditAsync(botMsg.GroupId, botMsg.UserId);
             long credit_oper2 = creditOper;
             string cmdName = "存分";
+            string res = "";
             if (creditOper > 0)
             {
                 if (creditValue < credit_oper2)
                 {
                     res = $"您只有{creditValue:N0}分";
-                    return -1;
+                    return (-1, creditValue, creditSave, res);
                 }
             }
             else
@@ -200,32 +213,48 @@ namespace BotWorker.Application.Services
                 if (creditSave < credit_oper2)
                 {
                     res = $"您已存分只有{creditSave:N0}";
-                    return -1;
+                    return (-1, creditValue, creditSave, res);
                 }
                 cmdName = "取分";
             }
-            creditSave += creditOper;
-            creditValue -= creditOper;
-            var sql = CreditLog.SqlHistory(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, -creditOper, cmdName);
-            var sql2 = UserInfo.SqlSaveCredit(botMsg.SelfId, botMsg.GroupId, botMsg.UserId, creditOper);
-            int i = SQLConn.ExecTrans(sql, sql2);
-            if (i == -1)
+
+            using var trans = await UserInfo.BeginTransactionAsync();
+            try
             {
-                res = C.RetryMsg;
-                return i;
+                // 1. 记录日志 (自动支持事务)
+                await CreditLog.AddLogAsync(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, -creditOper, cmdName, trans);
+
+                // 2. 更新存分 (自动支持事务)
+                var (sql, paras) = UserInfo.SqlSaveCredit(botMsg.SelfId, botMsg.GroupId, botMsg.UserId, creditOper);
+                await UserInfo.ExecAsync(sql, trans, paras);
+
+                await trans.CommitAsync();
+
+                creditSave += creditOper;
+                creditValue -= creditOper;
+
+                // 同步缓存
+                UserInfo.SyncCacheField(botMsg.UserId, botMsg.GroupId, "Credit", creditValue);
+                UserInfo.SyncCacheField(botMsg.UserId, botMsg.GroupId, "SaveCredit", creditSave);
+
+                res = $"✅ {cmdName}：{credit_oper2}\n" +
+                    $"💰 {{积分类型}}：{creditValue:N0}\n" +
+                    $"🏦 已存积分：{creditSave:N0}\n" +
+                    $"📈 积分总额：{creditValue + creditSave:N0}";
+
+                res = res.Replace("{积分类型}", await UserInfo.GetCreditTypeAsync(botMsg.GroupId, botMsg.UserId));
+                return (0, creditValue, creditSave, res);
             }
-            res = $"✅ {cmdName}：{credit_oper2}\n" +
-                $"💰 {{积分类型}}：{creditValue:N0}\n" +
-                $"🏦 已存积分：{creditSave:N0}\n" +
-                $"📈 积分总额：{creditValue + creditSave:N0}";
-            
-            // 原始代码中这里会替换 {积分类型}，在 BotWorker 中可能通过 Replace 逻辑处理
-            res = res.Replace("{积分类型}", UserInfo.GetCreditType(botMsg.GroupId, botMsg.UserId));
-            
-            return i;
+            catch (Exception ex)
+            {
+                await trans.RollbackAsync();
+                Console.WriteLine($"[DoSaveCredit Error] {ex.Message}");
+                res = C.RetryMsg;
+                return (-1, creditValue, creditSave, res);
+            }
         }
 
-        public string GetRewardCredit(BotMessage botMsg)
+        public async Task<string> GetRewardCreditAsync(BotMessage botMsg)
         {
             botMsg.IsCancelProxy = true;
 
@@ -263,19 +292,35 @@ namespace BotWorker.Application.Services
             int i;
             if (isSell)
             {
-                i = UserInfo.AddCredit(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, rewardQQ, "", rewardCredit, $"打赏加分:{botMsg.UserId}").Item1;
-                creditValue2 += rewardCredit;
+                var addRes = await UserInfo.AddCreditAsync(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, rewardQQ, "", rewardCredit, $"打赏加分:{botMsg.UserId}");
+                i = addRes.Result;
+                creditValue2 = addRes.CreditValue;
             }
             else if (botMsg.Group.IsCredit)
-                i = GroupMember.TransferCoins(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, rewardQQ, (int)CoinsLog.CoinsType.groupCredit, creditMinus, rewardCredit, ref creditValue, ref creditValue2);
+            {
+                var res = await GroupMember.TransferCoinsAsync(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, rewardQQ, "", (int)CoinsLog.CoinsType.groupCredit, creditMinus, rewardCredit, "打赏");
+                i = res.Result;
+                creditValue = res.SenderCoins;
+                creditValue2 = res.ReceiverCoins;
+            }
             else
-                i = UserInfo.TransferCredit(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, rewardQQ, "", creditMinus, rewardCredit, ref creditValue, ref creditValue2, "打赏");
+            {
+                var res = await UserInfo.TransferCreditAsync(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, rewardQQ, "", creditMinus, rewardCredit, "打赏");
+                i = res.Result;
+                creditValue = res.SenderCredit;
+                creditValue2 = res.ReceiverCredit;
+            }
 
             string transferFee = isPartner || isSuper ? "" : $"\n💸 服务费：{rewardCredit * 2 / 10:N0}";
 
             return i == -1
                 ? C.RetryMsg
                 : $"✅ 打赏成功！\n🎉 打赏积分：{rewardCredit:N0}{transferFee:N0}\n🎯 对方积分：{creditValue2:N0}\n🙋 您的积分：{creditValue:N0}";
+        }
+
+        public string GetRewardCredit(BotMessage botMsg)
+        {
+            return GetRewardCreditAsync(botMsg).GetAwaiter().GetResult();
         }
 
         public string GetCreditList(BotMessage botMsg, long top = 10)
@@ -354,12 +399,12 @@ namespace BotWorker.Application.Services
 
         public async Task<string> HandleSaveCreditAsync(BotMessage botMsg)
         {
-            return await Task.Run(() => GetSaveCreditRes(botMsg));
+            return await GetSaveCreditResAsync(botMsg);
         }
 
         public async Task<string> HandleRewardCreditAsync(BotMessage botMsg)
         {
-            return await Task.Run(() => GetRewardCredit(botMsg));
+            return await GetRewardCreditAsync(botMsg);
         }
 
         public async Task<string> GetCreditRankAsync(BotMessage botMsg)

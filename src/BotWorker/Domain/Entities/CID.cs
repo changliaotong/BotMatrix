@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
@@ -131,7 +131,7 @@ namespace BotWorker.Domain.Entities
         public static string GenerateRandomID(string dq = "")
         {
             string sql = $"SELECT TOP 1 bm FROM {FullName} {(dq.IsNullOrEmpty() ? "" : $"WHERE DQ LIKE '%{dq}%'")} ORDER BY NEWID()";
-            dq = Query(sql);
+            dq = QueryScalar<string>(sql) ?? "";
             if (dq.IsNullOrEmpty())
                 return GenerateRandomID("");
 

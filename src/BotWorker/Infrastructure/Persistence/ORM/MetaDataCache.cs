@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Persistence.Database;
 using BotWorker.Infrastructure.Caching;
 
@@ -26,7 +26,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             }
 
             var (sql, parameters) = SqlSelect("*", key1, key2);
-            var result = await QuerySingleAsync<TDerived>(sql, parameters);
+            var result = await QuerySingleAsync<TDerived>(sql, null, parameters);
 
             if (result != null && CacheService != null)
                 await CacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
@@ -34,7 +34,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return result;
         }
 
-        public static T Get<T>(string fieldName, object id, object? id2 = null, T? defaultValue = default)
+        public static T GetCached<T>(string fieldName, object id, object? id2 = null, T? defaultValue = default)
         {
             T LoadFromDb()
             {

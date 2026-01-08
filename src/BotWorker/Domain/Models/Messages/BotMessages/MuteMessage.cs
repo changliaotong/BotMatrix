@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -27,7 +27,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 if (Group.IsProp)
                     return "您无权使用此命令";
 
-                if (!GroupProps.HaveProp(GroupId, UserId, 1))
+                if (!await GroupProps.HavePropAsync(GroupId, UserId, 1))
                     return "您没有【禁言卡】无权禁言";
                 else
                     isUseProp = true;
@@ -52,7 +52,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     if (isUseProp)
                     {
                         dissayTime = 10 * 60;
-                        int i = GroupProps.UseProp(GroupId, UserId, 1, targetUin);
+                        int i = await GroupProps.UsePropAsync(GroupId, UserId, 1, targetUin);
                         if (i == -1)
                             return "使用【禁言卡】道具失败，请稍后重试";
                         else

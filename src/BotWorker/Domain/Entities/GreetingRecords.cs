@@ -1,4 +1,4 @@
-﻿
+
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
@@ -17,14 +17,14 @@ namespace BotWorker.Domain.Entities
                             new Cov("QQ", qq),
                             new Cov("Name", name),
                             new Cov("GreetingType", greetingType),
-                            new Cov("LogicalDate", Query($"SELECT CONVERT(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))").AsDateTime()),
+                            new Cov("LogicalDate", QueryScalar<DateTime>($"SELECT CONVERT(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))")),
                         ]);
         }
 
         public static bool Exists(long groupId, long qq, int greetingType = 0)
         {
             var sql = $"SELECT TOP 1 1 FROM {FullName} WHERE GroupId = {groupId} AND QQ = {qq} AND GreetingType = {greetingType} AND LogicalDate = Convert(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))";
-            return Query<int>(sql).AsBool();
+            return QueryScalar<int>(sql).AsBool();
         }
 
         //全服第x位起床用户
@@ -32,14 +32,14 @@ namespace BotWorker.Domain.Entities
         {
             var minus = greetingType == 0 ? -3 : -5;
             var sql = $"SELECT COUNT(Id)+1 FROM {FullName} WHERE GreetingType = {greetingType} AND LogicalDate = Convert(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))";
-            return Query<int>(sql);
+            return QueryScalar<int>(sql);
         }
 
         //本群第x位起床用户
         public static int GetCount(long groupId, int greetingType = 0)
         {
             var sql = $"SELECT COUNT(Id)+1 FROM {FullName} WHERE GroupId = {groupId} AND GreetingType = {greetingType} AND LogicalDate = Convert(date, DATEADD(HOUR,{(greetingType == 0 ? -3 : -5)}, GETDATE()))";
-            return Query<int>(sql);
+            return QueryScalar<int>(sql);
         }
     }
 }

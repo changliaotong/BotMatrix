@@ -63,7 +63,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 regexCmd = Regexs.Study2;
 
             foreach (Match match in CurrentMessage.Matches(regexCmd))
-                Answer = AppendAnswer(match.Groups["question"].Value, match.Groups["answer"].Value);
+                Answer = await AppendAnswerAsync(match.Groups["question"].Value, match.Groups["answer"].Value);
 
             if (Answer != "")
                 return;
@@ -79,7 +79,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             //宠物
             regexCmd = Regexs.BuyBet;
             if (Regex.IsMatch(CurrentMessage, regexCmd))
-                Answer += PetOld.GetBuyPet(SelfId, GroupId, GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(regexCmd, "UserId"));
+                Answer += await PetOld.GetBuyPetAsync(SelfId, GroupId, GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(regexCmd, "UserId"));
 
             //需要@机器人参数的放在前面，不需要的放后面 ===============================================================================================================
             CurrentMessage = CurrentMessage.RemoveUserId(SelfId);
@@ -90,7 +90,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 CmdName = CurrentMessage.RegexGetValue(Regexs.SaveCredit, "CmdName");
                 CmdPara = CurrentMessage.RegexGetValue(Regexs.SaveCredit, "credit_value");
-                Answer = GetSaveCreditRes();
+                Answer = await GetSaveCreditResAsync();
             }
 
             // 数学表达式
@@ -128,14 +128,14 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     CurrentMessage.RegexGetValue(Regexs.FishingBuy, "cmdPara2"));
 
             else if (Message.IsMatch(Regexs.AddMinus)) //充值 扣除 积分、金币/紫币/游戏币等
-                Answer = GroupMember.AddCoinsRes(SelfId, GroupId, GroupName, UserId, Name,
+                Answer = await GroupMember.AddCoinsResAsync(SelfId, GroupId, GroupName, UserId, Name,
                     CurrentMessage.RegexGetValue(Regexs.AddMinus, "CmdName"),
                     CurrentMessage.RegexGetValue(Regexs.AddMinus, "cmdPara"),
                     CurrentMessage.RegexGetValue(Regexs.AddMinus, "cmdPara2"),
                     CurrentMessage.RegexGetValue(Regexs.AddMinus, "cmdPara3"));
 
             else if (CurrentMessage.IsMatch(Regexs.ExchangeCoins)) //兑换/购买 金币/紫币/游戏币等
-                Answer = ExchangeCoins(CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara"), CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara2"));
+                Answer = await ExchangeCoinsAsync(CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara"), CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara2"));
             
             else if (CurrentMessage.IsMatch(Regexs.Caiquan))//猜拳
             {
@@ -181,13 +181,13 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 CmdName = $"{Block.GetCmd(CurrentMessage.RegexGetValue(Regexs.BlockCmd, "CmdName"), UserId)}";
                 CmdPara = $"{CurrentMessage.RegexGetValue(Regexs.BlockCmd, "cmdPara")}";
-                Answer = GetBlockRes();
+                Answer = await GetBlockResAsync();
             }
 
             else if (CurrentMessage.IsMatch(Regexs.BlockCmdMult))
             {
                 if (CurrentMessage.RegexReplace(Regexs.BlockCmdMult, "") == "")
-                    Answer = GetMult();
+                    Answer = await GetMultAsync();
             }
 
             //购买积分
@@ -198,7 +198,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     Answer = "请私聊使用此功能";
                     return;
                 }
-                Answer = UserInfo.GetBuyCredit(SelfId, GroupId, GroupName, UserId, Name,
+                Answer = await UserInfo.GetBuyCreditAsync(SelfId, GroupId, GroupName, UserId, Name,
                     CurrentMessage.RegexGetValue(Regexs.BuyCredit, "buy_qq").AsLong(),
                     CurrentMessage.RegexGetValue(Regexs.BuyCredit, "income_money").AsDecimal(),
                     CurrentMessage.RegexGetValue(Regexs.BuyCredit, "pay_method"));

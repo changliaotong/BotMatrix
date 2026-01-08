@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Data;
 
 /// <summary>
@@ -72,12 +72,12 @@ namespace BotWorker.Modules.Buses
 
         public static bool IsOtherCity(string place_id)
         {
-            return Query<string>($"select top 1 1 from place_stops where place_id = {place_id} and stop_id in (select stop_id from bus_stops where bus_id in (select bus_id from bus_tags where tag_id = 16)) and stop_id not in (select stop_id from bus_stops where bus_id not in (select bus_id from bus_tags where tag_id = 16))") != "";
+            return (QueryScalar<string>($"select top 1 1 from place_stops where place_id = {place_id} and stop_id in (select stop_id from bus_stops where bus_id in (select bus_id from bus_tags where tag_id = 16)) and stop_id not in (select stop_id from bus_stops where bus_id not in (select bus_id from bus_tags where tag_id = 16))") ?? "") != "";
         }
 
         public static string GetPlaceStops2(string place_id)
         {
-            return Query<string>($"select dbo.getPlaceStops2({place_id}) as res");
+            return QueryScalar<string>($"select dbo.getPlaceStops2({place_id}) as res") ?? "";
         }
 
         //得到更短的地名 去掉地名中的区和路名信息 递归调用
@@ -121,20 +121,20 @@ namespace BotWorker.Modules.Buses
         //取得与目的地同名的站台的编号
         public static string GetSameNameStop(string place_id)
         {
-            return Query("select stop_id from bus_stop a inner join place b on a.stop_name = b.place_name where place_id = " + place_id);
+            return QueryScalar<string>("select stop_id from bus_stop a inner join place b on a.stop_name = b.place_name where place_id = " + place_id) ?? "";
         }
 
         //是否设定附近站台信息 返回站台数
         public static string IsHaveStop(string place_id)
         {
-            return Query("select count(stop_id) from place_stops where place_id = " + place_id);
+            return QueryScalar<string>("select count(stop_id) from place_stops where place_id = " + place_id) ?? "0";
         }
 
         //由 place_name 得到  place_id （递归）
         public static int GetPlaceID(string place_name)
         {
             if (place_name == null) return 0;
-            string res = Query(string.Format("select dbo.GetMasterPlace(place_id) from place where place_name = '{0}'", place_name));
+            string res = QueryScalar<string>(string.Format("select dbo.GetMasterPlace(place_id) from place where place_name = '{0}'", place_name)) ?? "";
             if (res == "")
                 return 0;
             else
@@ -156,18 +156,18 @@ namespace BotWorker.Modules.Buses
         //由 place_id 获得目的地名称 （递归）
         public static long GetMasterPlace(long placeId)
         {
-            return Query("select dbo.getMasterPlace(" + placeId.ToString() + ") as res").AsLong();            
+            return QueryScalar<long>("select dbo.getMasterPlace(" + placeId.ToString() + ") as res");            
         }
 
         public static long GetMasterID(long placeId)
         {
-            return GetMasterID(placeId);
+            return GetMasterID(placeId.ToString()).AsLong();
         }
 
         //由 place_id 得到上级 place_id
         public static string GetMasterID(string place_id)
         {
-            string res = Query("select master_id from place where place_id = " + place_id);
+            string res = QueryScalar<string>("select master_id from place where place_id = " + place_id);
             if (res == "")
                 return "0";
             else
@@ -179,7 +179,7 @@ namespace BotWorker.Modules.Buses
         {
             return Insert([
                 new Cov("place_name", placeName),
-                new Cov("place_py", Query($"dbo.getPY({placeName})")),
+                new Cov("place_py", QueryScalar<string>($"select dbo.getPY({placeName.Quotes()})")),
                 new Cov("place_info", placeInfo),
                 new Cov("client_id", clientId),
                 new Cov("client_ip", clientIP),
@@ -224,22 +224,40 @@ namespace BotWorker.Modules.Buses
 
         public static int GetStopCountByPlace(string place_id)
         {
-            return Convert.ToInt32(Query("select count(stop_id) as res from place_stops where place_id = " + place_id));
+            return Convert.ToInt32(QueryScalar<string>("select count(stop_id) as res from place_stops where place_id = " + place_id));
         }
 
         public static string GetPlaceUrl(string place_id)
         {
-            return Query($"select place_url from place where place_id = {place_id}");
+            return QueryScalar<string>($"select place_url from place where place_id = {place_id}") ?? "";
+        }
+
+        //删除目的地
+        public static async Task<int> DeleteAsync(string place_id)
+        {
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                await ExecAsync($"delete from bus_search where keyword = (select place_name from place where place_id = {place_id})", trans);
+                await ExecAsync($"delete from place_stops where place_id = {place_id}", trans);
+                await ExecAsync($"delete from place_tags where place_id = {place_id}", trans);
+                await ExecAsync($"update place set master_id = null where master_id = {place_id}", trans);
+                await ExecAsync($"delete from place where place_id = {place_id}", trans);
+                await trans.CommitAsync();
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Place.DeleteAsync error: {ex.Message}");
+                await trans.RollbackAsync();
+                return -1;
+            }
         }
 
         //删除目的地
         public static int Delete(string place_id)
         {
-            return ExecTrans($"delete from bus_search where keyword = (select place_name from place where place_id = {place_id})",
-                             $"delete from place_stops where place_id = {place_id}",
-                             $"delete from place_tags where place_id = {place_id}",
-                             $"update place set master_id = null where master_id = {place_id}",
-                             $"delete from place where place_id = {place_id}");
+            return DeleteAsync(place_id).GetAwaiter().GetResult();
         }
 
         //更新目的地名称

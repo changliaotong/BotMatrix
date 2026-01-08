@@ -285,8 +285,8 @@ public partial class BotMessage : MetaData<BotMessage>
             (NewQuestionId, Similarity, NewQuestion) = await qaService.GetTargetQuestionAsync(CmdPara);
         }
 
-        // 新增答案
-        public string AppendAnswer(string que, string ans)
+        // 新增答案 (异步事务重构版)
+        public async Task<string> AppendAnswerAsync(string que, string ans)
         {
             string res = SetupPrivate(teachRight: true);
             if (res != "")
@@ -339,20 +339,39 @@ public partial class BotMessage : MetaData<BotMessage>
             if (AnswerInfo.Exists(questionId, ans, GroupId))
                 return AnswerExists;
 
-            (int audit, int audit2, int minus, res) = GetAudit(questionId, que, ans);            
-            var sql = AnswerInfo.SqlAppend(SelfId, RealGroupId, UserId, GroupId, questionId, que, ans, audit, -minus, audit2, "");
-            var sql2 = UserInfo.SqlAddCredit(SelfId, GroupId, UserId, -minus);
-            var sql3 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, -minus, minus < 0 ? "教学加分" : "教学扣分");
-            if (ExecTrans([sql, sql2, sql3]) == -1)
+            (int audit, int audit2, int minus, res) = GetAudit(questionId, que, ans);
+
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                // 1. 添加答案记录
+                var (sql1, paras1) = AnswerInfo.SqlAppend(SelfId, RealGroupId, UserId, GroupId, questionId, que, ans, audit, -minus, audit2, "");
+                await ExecAsync(sql1, trans, paras1);
+
+                // 2. 通用加积分函数 (含日志记录)
+                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, -minus, minus < 0 ? "教学加分" : "教学扣分", trans);
+                if (addRes.Result == -1) throw new Exception("更新积分失败");
+                creditValue = addRes.CreditValue;
+
+                await trans.CommitAsync();
+
+                if (!IsGroup)
+                    res += $"\n默认群：{GroupId}";
+
+                QuestionInfo.Update($"CAnswer = CAnswer + 1, CAnswerAll = CAnswerAll + 1", questionId);
+
+                return $"{res}\n💎 积分：{-minus}, 累计：{creditValue}\n{refInfo}";
+            }
+            catch (Exception ex)
+            {
+                await trans.RollbackAsync();
+                Console.WriteLine($"[AppendAnswer Error] {ex.Message}");
                 return RetryMsg;
-
-            if (!IsGroup)
-                res += $"\n默认群：{GroupId}";
-
-            QuestionInfo.Update($"CAnswer = CAnswer + 1, CAnswerAll = CAnswerAll + 1", questionId);
-
-            return $"{res}\n💎 积分：{-minus}, 累计：{creditValue - minus}\n{refInfo}";
+            }
         }
+
+        // 新增答案
+        public string AppendAnswer(string que, string ans) => AppendAnswerAsync(que, ans).GetAwaiter().GetResult();
 
         // 判断用户提交问题 审核广告/脏话/说话语气等
 
@@ -485,7 +504,7 @@ public partial class BotMessage : MetaData<BotMessage>
         {
             var sql = $"SELECT TOP 1 Id FROM {AnswerInfo.FullName} WHERE RobotId = 286946883 and QuestionId = 225781 AND AUDIT2 > 0" +
                       $"ORDER BY NEWID()";
-            AnswerId = Query(sql).AsLong();
+            AnswerId = QueryScalar<long>(sql);
             GetAnswer();
             Answer = $"✅ {Answer}\n✨ 古签藏玄意，早喵见真机。\n发送【解签】为你精准解读";
         }
@@ -497,7 +516,7 @@ public partial class BotMessage : MetaData<BotMessage>
                       $"WHERE GroupId = {GroupId} AND UserId = {UserId} " +
                       $"AND AnswerId IN (SELECT Id FROM {AnswerInfo.FullName} WHERE RobotId = 286946883 and QuestionId = 225781)" +
                       $"ORDER BY Id DESC";
-            var answerId = Query(sql).AsLong();
+            var answerId = QueryScalar<long>(sql);
             if (answerId != 0)
             {
                 AnswerId = AnswerInfo.GetWhere("Id", $"parentanswer = {answerId}").AsLong();

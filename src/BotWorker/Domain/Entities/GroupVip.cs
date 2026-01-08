@@ -9,20 +9,47 @@ namespace BotWorker.Domain.Entities
         public override string KeyField => "GroupId";
 
         // 购买机器人
+        public static async Task<int> BuyRobotAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy)
+        {
+            await GroupInfo.AppendAsync(groupId, groupName, BotInfo.BotUinDef, BotInfo.BotNameDef);
+            await UserInfo.AppendUserAsync(botUin, groupId, qqBuyer, buyerName);
+            var sqlIncome = Income.SqlInsert(groupId, month, "机器人", payMoney, payMethod, trade, memo, qqBuyer, insertBy);
+            var sqlBuyVip = await SqlBuyVipAsync(groupId, groupName, qqBuyer, month, payMoney, memo);
+
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                var (sql1, paras1) = sqlIncome;
+                await ExecAsync(sql1, trans, paras1);
+                
+                var (sql2, paras2) = sqlBuyVip;
+                await ExecAsync(sql2, trans, paras2);
+                
+                await trans.CommitAsync();
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"BuyRobotAsync error: {ex.Message}");
+                await trans.RollbackAsync();
+                return -1;
+            }
+        }
+
+        // 购买机器人
         public static int BuyRobot(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy)
         {
-            GroupInfo.Append(groupId, groupName, BotInfo.BotUinDef, BotInfo.BotNameDef);
-            UserInfo.AppendUser(botUin, groupId, qqBuyer, buyerName);
-            var sqlIncome = Income.SqlInsert(groupId, month, "机器人", payMoney, payMethod, trade, memo, qqBuyer, insertBy);
-            var sqlBuyVip = SqlBuyVip(groupId, groupName, qqBuyer, month, payMoney, memo);
-            return ExecTrans(sqlIncome, sqlBuyVip);
+            return BuyRobotAsync(botUin, groupId, groupName, qqBuyer, buyerName, month, payMoney, payMethod, trade, memo, insertBy).GetAwaiter().GetResult();
         }
 
         // 购买、续费机器人
         public static (string, SqlParameter[]) SqlBuyVip(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
+            => SqlBuyVipAsync(groupId, groupName, userId, month, payMoney, vipInfo, insertBy).GetAwaiter().GetResult();
+
+        public static async Task<(string, SqlParameter[])> SqlBuyVipAsync(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
         {
-            int is_year_vip = IsYearVIP(groupId) || RestMonths(groupId) + month >= 12 ? 1 : 0;       
-            return IsVip(groupId)
+            int is_year_vip = await IsYearVIPAsync(groupId) || await RestMonthsAsync(groupId) + month >= 12 ? 1 : 0;       
+            return await IsVipAsync(groupId)
                 ? ($"update {FullName} set EndDate = dateadd(month, {month}, EndDate), UserId = {userId}, " +
                   $"IncomeDay = (IncomeDay * DATEDIFF(MONTH,GETDATE(),EndDate) + {payMoney}) /((DATEDIFF(MONTH,GETDATE(),EndDate) + {month} + 0.0000001)*1.0)," +
                   $"IsYearVip = {is_year_vip}, InsertBy = {insertBy}, IsGoon = null where GroupId = {groupId}" , [])
@@ -44,45 +71,69 @@ namespace BotWorker.Domain.Entities
 
         // 换群
         public static int ChangeGroup(long groupId, long newGroupId, long qq)
+            => ChangeGroupAsync(groupId, newGroupId, qq).GetAwaiter().GetResult();
+
+        public static async Task<int> ChangeGroupAsync(long groupId, long newGroupId, long qq)
         {
-            return Exec($"exec sz84_robot..sp_ChangeVIP {groupId}, {newGroupId}, {qq}, {BotInfo.SystemUid}");
+            return await ExecAsync($"exec sz84_robot..sp_ChangeVIP {groupId}, {newGroupId}, {qq}, {BotInfo.SystemUid}");
         }
 
         public static int RestDays(long groupId)
+            => RestDaysAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<int> RestDaysAsync(long groupId)
         {
-            return GetInt("datediff(day,getdate(),EndDate)", groupId);
+            return await GetIntAsync("datediff(day,getdate(),EndDate)", groupId);
         }
  
         // 是否年费版
         public static bool IsYearVIP(long groupId)
+            => IsYearVIPAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsYearVIPAsync(long groupId)
         {
-            return GetBool("IsYearVip", groupId);
+            return await GetBoolAsync("IsYearVip", groupId);
         }
 
         public static bool IsVip(long groupId)
+            => IsVipAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsVipAsync(long groupId)
         {
-            return Exists(groupId);
+            return await ExistsAsync(groupId);
         }
 
         public static bool IsForever(long groupId)
+            => IsForeverAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsForeverAsync(long groupId)
         {
-            return RestDays(groupId) > 3650;
+            return await RestDaysAsync(groupId) > 3650;
         }
 
         //是否开通过VIP
         public static bool IsVipOnce(long groupId)
+            => IsVipOnceAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsVipOnceAsync(long groupId)
         {
-            return Income.IsVipOnce(groupId);
+            return await Income.IsVipOnceAsync(groupId);
         }
 
         public static bool IsClientVip(long qq)
+            => IsClientVipAsync(qq).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsClientVipAsync(long qq)
         {
-            return ExistsField("UserId", qq.ToString());
+            return await ExistsFieldAsync("UserId", qq.ToString());
         }
 
         public static int RestMonths(long groupId)
+            => RestMonthsAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<int> RestMonthsAsync(long groupId)
         {
-            return GetInt("DATEDIFF(MONTH,GETDATE(), EndDate)", groupId);
+            return await GetIntAsync("DATEDIFF(MONTH,GETDATE(), EndDate)", groupId);
         }
     }
 }

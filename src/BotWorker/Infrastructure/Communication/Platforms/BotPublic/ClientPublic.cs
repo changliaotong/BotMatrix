@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Domain.Entities;
 using BotWorker.Infrastructure.Extensions;
@@ -74,54 +74,84 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
         public static string InviteCode(string botKey, string UserKey)
         {
             string sql = $"select BindToken from {FullName} where BotKey = {botKey.Quotes()} and UserKey = {UserKey.Quotes()}";
-            return Query(sql);
+            return QueryScalar<string>(sql) ?? "";
         }
 
         // 推荐人积分处理
         public static string GetRecRes(long botUin, long groupId, string groupName, long userId, string name, string botKey, string clientKey, string message)
         {
+            return GetRecResAsync(botUin, groupId, groupName, userId, name, botKey, clientKey, message).GetAwaiter().GetResult();
+        }
+
+        public static async Task<string> GetRecResAsync(long botUin, long groupId, string groupName, long userId, string name, string botKey, string clientKey, string message)
+        {
             if (!IsBind(userId))
                 return "请先发送【领积分】完成积分任务";
 
             long clientOid = GetId(botKey, clientKey);
-            string recUserId = GetValue("RecUserId", clientOid);
-            if (recUserId != "")
-                return $"推荐人已登记为：{recUserId}\n{format}";
+            string recUserIdStr = GetValue("RecUserId", clientOid);
+            if (recUserIdStr != "")
+                return $"推荐人已登记为：{recUserIdStr}\n{format}";
 
-            recUserId = message.RegexGetValue(regexRec, "RecUserId");
+            string recUserIdInput = message.RegexGetValue(regexRec, "RecUserId");
 
-            if (recUserId.IsNull())
+            if (recUserIdInput.IsNull())
                 return format;
 
-            if (recUserId == userId.ToString())
+            if (recUserIdInput == userId.ToString())
                 return "推荐人不能是自己";
 
-            if (!ExistsQQ(botKey, recUserId.AsLong()))
+            long recUserId = recUserIdInput.AsLong();
+            if (!ExistsQQ(botKey, recUserId))
                 return "此号码未登记，请确认号码正确";
 
-            if (BlackList.IsSystemBlack(recUserId.AsLong()))
+            if (BlackList.IsSystemBlack(recUserId))
                 return "此号码已被列入官方黑名单";
 
-            int i = UserInfo.Append(botUin, groupId, userId, name, GroupInfo.GetRobotOwner(groupId));
-            if (i == -1)
+            if (await UserInfo.AppendAsync(botUin, groupId, userId, name, GroupInfo.GetRobotOwner(groupId)) == -1)
                 return RetryMsg;
 
             long creditAdd = 5000;
             long creditValue = UserInfo.GetCredit(userId);
-            long creditValue2 = UserInfo.GetCredit(recUserId.AsLong());
-            //更新推荐人
-            var sql = SqlUpdateWhere($"RecUserId = {recUserId}, BindCredit = BindCredit + 5000 ", $"Id = {clientOid}");
-            var sql2 = UserInfo.SqlPlus("credit", creditAdd, userId);
-            var sql3 = CreditLog.SqlHistory(botUin, groupId, groupName, userId, name, creditAdd, "推荐关注");
-            var sql4 = UserInfo.SqlPlus("credit", creditAdd, long.Parse(recUserId));
-            var sql5 = CreditLog.SqlHistory(botUin, groupId, groupName, long.Parse(recUserId), "", creditAdd, $"推荐关注:{userId}");
-            i = ExecTrans(sql, sql2, sql3, sql4, sql5);
-            return i == -1
-                ? RetryMsg
-                : $"推荐人登记为：\n{recUserId} +{creditAdd}分，累计：{creditValue2 + creditAdd}\n您的积分：{creditAdd}，累计：{creditValue + creditAdd}";
+            long creditValue2 = UserInfo.GetCredit(recUserId);
+
+            using var trans = await BeginTransactionAsync();
+            try
+            {
+                // 1. 更新推荐人
+                var (sqlRec, parasRec) = SqlUpdateWhere($"RecUserId = {recUserId}, BindCredit = BindCredit + 5000 ", $"Id = {clientOid}");
+                await ExecAsync(sqlRec, trans, parasRec);
+
+                // 2. 自己加分
+                var addResSelf = await UserInfo.AddCreditAsync(botUin, groupId, groupName, userId, name, creditAdd, "推荐关注", trans);
+                if (addResSelf.Result == -1) throw new Exception("自己加分失败");
+
+                // 3. 推荐人加分
+                var addResRec = await UserInfo.AddCreditAsync(botUin, groupId, groupName, recUserId, "", creditAdd, $"推荐关注:{userId}", trans);
+                if (addResRec.Result == -1) throw new Exception("推荐人加分失败");
+
+                await trans.CommitAsync();
+
+                // 同步缓存
+                UserInfo.SyncCacheField(userId, groupId, "Credit", addResSelf.CreditValue);
+                UserInfo.SyncCacheField(recUserId, groupId, "Credit", addResRec.CreditValue);
+
+                return $"推荐人登记为：\n{recUserId} +{creditAdd}分，累计：{addResRec.CreditValue}\n您的积分：{creditAdd}，累计：{addResSelf.CreditValue}";
+            }
+            catch (Exception ex)
+            {
+                await trans.RollbackAsync();
+                Console.WriteLine($"[GetRecRes Error] {ex.Message}");
+                return RetryMsg;
+            }
         }
 
         public static string GetBindToken(BotMessage bm, string tokenType, string bindToken)
+        {
+            return GetBindTokenAsync(bm, tokenType, bindToken).GetAwaiter().GetResult();
+        }
+
+        public static async Task<string> GetBindTokenAsync(BotMessage bm, string tokenType, string bindToken)
         {
             string res = "";
             long creditAdd = 5000;
@@ -137,11 +167,11 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
                 if (bm.IsPublic)
                     return "请用QQ发消息领取，体验群：6433316";
 
-                res = Query($"select top 1 1 from {FullName} where BotKey = (select top 1 BotKey from {FullName} where BindToken = {bindToken.Quotes()}) and UserId = {UserId}");
-                if (!res.IsNull())
+                var resObj = QueryScalar<object>($"select top 1 1 from {FullName} where BotKey = (select top 1 BotKey from {FullName} where BindToken = {bindToken.Quotes()}) and UserId = {UserId}");
+                if (resObj != null && resObj != DBNull.Value)
                     return "您已领过积分，不能再次领取";
 
-                res = Query($"select UserId from {FullName} where BindToken = {bindToken.Quotes()}");
+                res = QueryScalar<string>($"select UserId from {FullName} where BindToken = {bindToken.Quotes()}") ?? "";
                 if (res.IsNull())
                     return "此TOKEN无效，请确认后再试";
 
@@ -153,18 +183,47 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
 
                 //更新绑定信息，加入事务运行 更新积分记录 发送消息记录
                 long creditValue = UserInfo.GetCredit(groupId, UserId);
-                var sql = SqlUpdateWhere($"UserId = {UserId}, IsBind = 1, BindDate = getdate(), BindCredit = {creditAdd}", $"BindToken = {bindToken.Quotes()}");
-                var sql2 = ($"UPDATE {CreditLog.FullName} SET UserId = {UserId} WHERE UserId = {bindUserId}", Array.Empty<SqlParameter>());
-                var sql3 = ($"UPDATE {GroupSendMessage.FullName} SET UserId = {UserId} WHERE UserId = {bindUserId}", Array.Empty<SqlParameter>());
-                var sql4 = Token.Exists(UserId)
-                    ? ($"DELETE FROM {Token.FullName} WHERE UserId = {bindUserId}", Array.Empty<SqlParameter>())
-                    : ($"UPDATE {Token.FullName} SET UserId = {UserId} WHERE UserId = {bindUserId}", []);
-                var sql5 = UserInfo.SqlAddCredit(botUin, groupId, UserId, creditAdd);
-                var sql6 = CreditLog.SqlHistory(botUin, groupId, groupName, UserId, name, creditAdd, "关注公众号领积分");
-                int i = ExecTrans(sql, sql2, sql3, sql4, sql5, sql6);
-                return i == -1
-                    ? RetryMsg
-                    : $"得分：{creditAdd}，累计：{creditValue + creditAdd}";
+
+                using var trans = await BeginTransactionAsync();
+                try
+                {
+                    // 1. 更新绑定信息
+                    var (sqlBind, parasBind) = SqlUpdateWhere($"UserId = {UserId}, IsBind = 1, BindDate = getdate(), BindCredit = {creditAdd}", $"BindToken = {bindToken.Quotes()}");
+                    await ExecAsync(sqlBind, trans, parasBind);
+
+                    // 2. 更新积分记录关联
+                    await ExecAsync($"UPDATE {CreditLog.FullName} SET UserId = {UserId} WHERE UserId = {bindUserId}", trans);
+
+                    // 3. 更新发送消息记录关联
+                    await ExecAsync($"UPDATE {GroupSendMessage.FullName} SET UserId = {UserId} WHERE UserId = {bindUserId}", trans);
+
+                    // 4. 处理 Token 表
+                    if (Token.Exists(UserId))
+                    {
+                        await ExecAsync($"DELETE FROM {Token.FullName} WHERE UserId = {bindUserId}", trans);
+                    }
+                    else
+                    {
+                        await ExecAsync($"UPDATE {Token.FullName} SET UserId = {UserId} WHERE UserId = {bindUserId}", trans);
+                    }
+
+                    // 5. 增加积分
+                    var addRes = await UserInfo.AddCreditAsync(botUin, groupId, groupName, UserId, name, creditAdd, "关注公众号领积分", trans);
+                    if (addRes.Result == -1) throw new Exception("增加积分失败");
+
+                    await trans.CommitAsync();
+
+                    // 同步缓存
+                    UserInfo.SyncCacheField(UserId, groupId, "Credit", addRes.CreditValue);
+
+                    return $"得分：{creditAdd}，累计：{addRes.CreditValue}";
+                }
+                catch (Exception ex)
+                {
+                    await trans.RollbackAsync();
+                    Console.WriteLine($"[GetBindToken Error] {ex.Message}");
+                    return RetryMsg;
+                }
             }
             else if (tokenType == "WX")
             {

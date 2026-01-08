@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using BotWorker.Common;
 
 namespace BotWorker.Domain.Entities
@@ -262,6 +262,11 @@ namespace BotWorker.Domain.Entities
 
         public static string GetKeysSet(long group_id, string cmdName = "")
         {
+            return GetKeysSetAsync(group_id, cmdName).GetAwaiter().GetResult();
+        }
+
+        public static async Task<string> GetKeysSetAsync(long group_id, string cmdName = "")
+        {
             string res = "";
             string[] cmdParas = { "刷屏", "图片", "网址", "脏话", "广告", "推荐群", "推荐好友", "合并转发" };
             string[] cmdParas2 = { "撤回", "扣分", "警告", "禁言", "踢出", "拉黑" };
@@ -272,12 +277,22 @@ namespace BotWorker.Domain.Entities
                     res += cmdName == "" ? $"\n{cmdPara}:" : $"开启 {cmdPara}";
                     foreach (string cmdPara2 in cmdParas2)
                     {
-                        if (ExistsKey(group_id, cmdPara, cmdPara2))
+                        if (await ExistsKeyAsync(group_id, cmdPara, cmdPara2))
                             res = cmdName == "" ? $" {cmdPara2}" : $"{cmdPara2}";
                     }
                 }
             }
             return cmdName == "" ? $"群管功能设置：{res}" : res;
+        }
+
+        public static async Task<bool> ExistsKeyAsync(long group_id, string cmdPara, string cmdPara2)
+        {
+            cmdPara = GetCmdPara(cmdPara);
+            cmdPara2 = GetCmdPara(cmdPara2);
+            string key_field = GetFieldName(cmdPara2);
+            string keyword = await GroupInfo.GetValueAsync(key_field, group_id);
+            List<string> keys = [.. keyword.Split('|')];
+            return keys.Contains(cmdPara);
         }
 
         // 清除警告

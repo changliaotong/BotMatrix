@@ -23,13 +23,15 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         // 黑名单列表
-        public string GetGroupBlackList()
+        public async Task<string> GetGroupBlackListAsync()
         {
-            return QueryRes($"SELECT TOP 10 BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC",
+            return await QueryResAsync($"SELECT TOP 10 BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC",
                             "{i} {0}\n") +
-                   "已拉黑人数：" + BlackList.CountWhere($"GroupId = {GroupId}") +
+                   "已拉黑人数：" + await BlackList.CountWhereAsync($"GroupId = {GroupId}") +
                    "\n拉黑 + QQ\n删黑 + QQ";
         }
+
+        public string GetGroupBlackList() => GetGroupBlackListAsync().GetAwaiter().GetResult();
 
         //拉黑
         public async Task<string> GetBlackRes()        
@@ -40,7 +42,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return GetClearBlack();
 
             if (CmdPara.IsNull())                            
-                return GetGroupBlackList();            
+                return await GetGroupBlackListAsync();            
 
             //一次加多个号码进入黑名单
             string res = "";

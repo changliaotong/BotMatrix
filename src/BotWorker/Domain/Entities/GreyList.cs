@@ -16,7 +16,7 @@ namespace BotWorker.Domain.Entities
         public static async Task<List<long>> GetSystemGreyListAsync()
         {
             var (sql, parameters) = SqlSelect("GreyId", BotInfo.GroupIdDef);
-            return await QueryListAsync<long>(sql, parameters);
+            return await QueryListAsync<long>(sql, null, parameters);
         }
 
         public static bool IsSystemGrey(long userId)
