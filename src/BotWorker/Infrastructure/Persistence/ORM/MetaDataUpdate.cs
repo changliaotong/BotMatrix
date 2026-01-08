@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Extensions;
 
@@ -8,7 +8,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
 
-        public virtual async Task<int> UpdateAsync(params string[] excludeFields)
+        public virtual async Task<int> UpdateAsync(SqlTransaction? trans = null, params string[] excludeFields)
         {
             var data = ToDictionary();
 
@@ -40,7 +40,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
             var (sql, paras) = SqlUpdate(setData, whereData);
 
-            return await ExecAsync(sql, paras);
+            return await ExecAsync(sql, trans, paras);
         }
 
 
@@ -91,27 +91,34 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static int Update(List<Cov> columns, object id, object? id2 = null)
+            => Update(columns, id, id2, null);
+
+        public static int Update(List<Cov> columns, object id, object? id2, SqlTransaction? trans)
         {
             var (sql, paras) = SqlUpdate(columns, ToDict(id, id2));
-            return Exec(sql, paras);
+            return Exec(sql, trans, paras);
         }
 
         public static int Update(string sqlSet, object id, object? id2 = null)
+            => Update(sqlSet, id, id2, null);
+
+        public static int Update(string sqlSet, object id, object? id2, SqlTransaction? trans)
         {
-            var (where, parameters) = SqlWhere(id, id2);
-            return Exec($"UPDATE {FullName} SET {sqlSet} {where}", parameters);
+            var dict = ToDict(id, id2);
+            var (where, paras) = SqlWhere(dict, allowEmpty: false);
+            return Exec($"UPDATE {FullName} SET {sqlSet} {where}", trans, paras);
         }
 
-        public static async Task<int> UpdateAsync(List<Cov> columns, object id, object? id2 = null)
+        public static async Task<int> UpdateAsync(List<Cov> columns, object id, object? id2 = null, SqlTransaction? trans = null)
         {
             var (sql, paras) = SqlUpdate(columns, ToDict(id, id2));
-            return await ExecAsync(sql, paras);
+            return await ExecAsync(sql, trans, paras);
         }
 
-        public static async Task<int> UpdateAsync(object obj, object id, object? id2 = null)
+        public static async Task<int> UpdateAsync(object obj, object id, object? id2 = null, SqlTransaction? trans = null)
         {
             var (sql, paras) = SqlUpdate(obj.ToFields(), ToDict(id, id2));
-            return await ExecAsync(sql, paras);
+            return await ExecAsync(sql, trans, paras);
         }
 
         public static (string, SqlParameter[]) SqlUpdate((string, object?)[] setValues, (string, object?)[] whereKeys)
@@ -143,15 +150,21 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
 
         public static int SetValue(string fieldName, object value, object id, object? id2 = null)
+            => SetValue(fieldName, value, id, id2, null);
+
+        public static int SetValue(string fieldName, object value, object id, object? id2, SqlTransaction? trans)
         {
             var (sql, parameters) = SqlSetValue(fieldName, value, id, id2);
-            return Exec(sql, parameters);
+            return Exec(sql, trans, parameters);
         }
 
         public static int SetValues(string set, object id, object? id2 = null)
+            => SetValues(set, id, id2, null);
+
+        public static int SetValues(string set, object id, object? id2, SqlTransaction? trans)
         {
             var (sql, parameters) = SqlSetValues(set, id, id2);
-            return Exec(sql, parameters);
+            return Exec(sql, trans, parameters);
         }
 
         public static (string, SqlParameter[]) SqlUpdateWhere(string sSet, string sWhere)
@@ -160,8 +173,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static int UpdateWhere(string sqlSet, string sqlWhere)
+            => UpdateWhere(sqlSet, sqlWhere, null);
+
+        public static int UpdateWhere(string sqlSet, string sqlWhere, SqlTransaction? trans)
         {
-            return Exec(SqlUpdateWhere(sqlSet, sqlWhere));
+            var (sql, paras) = SqlUpdateWhere(sqlSet, sqlWhere);
+            return Exec(sql, trans, paras);
         }
 
         public static int SetValueOther(string fieldName, object otherValue, object id, object? id2 = null)

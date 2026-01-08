@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
 using BotWorker.Common.Extensions;
@@ -47,18 +47,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return GetDictsInternal(whereClause, parameters ?? [], fieldNames);
         }
 
-        public static List<Dictionary<string, object?>> GetDicts(object id, params string[] fieldNames)
-        {
-            return GetDicts(id, null, fieldNames);
-        }
-
-        public static List<Dictionary<string, object?>> GetDicts(object id, object? id2 = null, params string[] fieldNames)
+        public static List<Dictionary<string, object?>> GetDicts(object id, object? id2, SqlTransaction? trans, params string[] fieldNames)
         {
             var (where, paras) = SqlWhere(id, id2);
             var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {where}";
 
             var result = new List<Dictionary<string, object?>>();
-            var ds = QueryDataset(sql, paras);
+            var ds = QueryDataset(sql, trans, paras);
 
             if (ds != null && ds.Tables.Count > 0)
             {
@@ -76,18 +71,86 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return result;
         }
 
-        public static async Task<List<TDerived>> GetListAsync(string sql, params SqlParameter[] parameters) 
+        public static List<Dictionary<string, object?>> GetDicts(object id, params string[] fieldNames)
         {
-            return await QueryListAsync<TDerived>(sql, parameters);
+            return GetDicts(id, null, null, fieldNames);
+        }
+
+        public static List<Dictionary<string, object?>> GetDicts(object id, object? id2, params string[] fieldNames)
+        {
+            return GetDicts(id, id2, null, fieldNames);
+        }
+
+        public static async Task<List<TDerived>> GetListAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) 
+        {
+            return await QueryListAsync<TDerived>(sql, parameters, trans);
         }            
 
-        public static List<T> GetList<T>(object id, object? id2 = null, params string[] fieldNames) where T : new()
+        // 核心 QueryWhere 实现 - 异步返回实体列表
+        public static async Task<List<TDerived>> QueryWhere(string where, SqlTransaction? trans = null, params SqlParameter[] parameters)
         {
-            var (where, paras) = SqlWhere(id, id2);
-            var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {where}";
+            return await QueryListAsync<TDerived>($"SELECT * FROM {FullName} WHERE {where}", parameters, trans);
+        }
+
+        // 兼容旧的 QueryWhere(where, params parameters)
+        public static async Task<List<TDerived>> QueryWhere(string where, params SqlParameter[] parameters)
+        {
+            return await QueryWhere(where, null, parameters);
+        }
+
+        // 返回字符串的 QueryWhere，用于排行榜等场景
+        public static string QueryWhere(string select, string where, string orderBy, string format)
+        {
+            string sql = $"SELECT {select} FROM {FullName} WHERE {where} ORDER BY {orderBy}";
+            return QueryRes(sql, format);
+        }
+
+        // 返回字符串的 QueryWhere，包含总数格式化
+        public static string QueryWhere(string select, string where, string orderBy, string format, string totalFormat)
+        {
+            string sql = $"SELECT {select} FROM {FullName} WHERE {where} ORDER BY {orderBy}";
+            string res = QueryRes(sql, format);
+            if (!string.IsNullOrEmpty(res) && !string.IsNullOrEmpty(totalFormat))
+            {
+                long count = CountWhere(where);
+                res += totalFormat.Replace("{c}", count.ToString());
+            }
+            return res;
+        }
+
+        public static string QueryRes(string sql, string format)
+        {
+            DataSet ds = QueryDataset(sql);
+            if (ds == null || ds.Tables.Count == 0) return string.Empty;
+
+            var res = string.Empty;
+            int i = 1;
+            foreach (DataRow dr in ds.Tables[0].Rows)
+            {
+                var rowValues = dr.ItemArray;
+                string line = format.Replace("{i}", i.ToString());
+                try
+                {
+                    line = string.Format(line, rowValues);
+                }
+                catch
+                {
+                    // 格式化失败则跳过
+                }
+                res += line;
+                i++;
+            }
+            return res;
+        }
+
+        // 核心泛型 QueryWhere 实现 - 返回指定字段的实体列表
+        public static List<T> QueryWhere<T>(string where, SqlParameter[]? parameters, SqlTransaction? trans, params string[] fieldNames) where T : new()
+        {
+            string fields = fieldNames == null || fieldNames.Length == 0 ? "*" : string.Join(", ", fieldNames);
+            string sql = $"SELECT {fields} FROM {FullName} WHERE {where}";
 
             var list = new List<T>();
-            var ds = QueryDataset(sql, paras);
+            var ds = QueryDataset(sql, trans, parameters ?? []);
 
             if (ds != null && ds.Tables.Count > 0)
             {
@@ -99,7 +162,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                     var obj = new T();
                     foreach (var prop in props)
                     {
-                        if (fieldNames.Contains(prop.Name, StringComparer.OrdinalIgnoreCase) &&
+                        if ((fieldNames == null || fieldNames.Length == 0 || fieldNames.Contains(prop.Name, StringComparer.OrdinalIgnoreCase)) &&
                             table.Columns.Contains(prop.Name) &&
                             row[prop.Name] is not DBNull)
                         {
@@ -109,16 +172,41 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                                 var value = Convert.ChangeType(row[prop.Name], targetType);
                                 prop.SetValue(obj, value);
                             }
-                            catch
-                            {
-                                // 转换失败就跳过
-                            }
+                            catch { }
                         }
                     }
                     list.Add(obj);
                 }
             }
             return list;
+        }
+
+        // 兼容 QueryWhere<T>(where, params fieldNames) 
+        public static List<T> QueryWhere<T>(string where, params string[] fieldNames) where T : new()
+        {
+            return QueryWhere<T>(where, null, null, fieldNames);
+        }
+
+        // 兼容 QueryWhere<T>(where, parameters, params fieldNames)
+        public static List<T> QueryWhere<T>(string where, SqlParameter[]? parameters, params string[] fieldNames) where T : new()
+        {
+            return QueryWhere<T>(where, parameters, null, fieldNames);
+        }
+
+        public static List<T> GetList<T>(object id, object? id2, SqlTransaction? trans, params string[] fieldNames) where T : new()
+        {
+            var (where, paras) = SqlWhere(id, id2);
+            return QueryWhere<T>(where.Replace("WHERE ", ""), paras, trans, fieldNames);
+        }
+
+        public static List<T> GetList<T>(object id, object? id2, params string[] fieldNames) where T : new()
+        {
+            return GetList<T>(id, id2, null, fieldNames);
+        }
+
+        public static List<T> GetList<T>(object id, params string[] fieldNames) where T : new()
+        {
+            return GetList<T>(id, null, null, fieldNames);
         }
 
         public static async Task<TDerived?> GetByKeysAsync(object id, object? id2 = null)
@@ -133,37 +221,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var (sql, parameters) = SqlWhere(id, id2);
             try
             {
-                await using var reader = await ExecuteReaderAsync(sql, parameters);
-                if (await reader.ReadAsync())
-                    return EntityMapper.MapDataReaderToEntity<T>(reader);
+                var list = await QueryListAsync<T>(sql, parameters);
+                return list.FirstOrDefault();
+            }
+            catch
+            {
                 return default;
             }
-            catch (Exception ex)
-            {
-                Error($"查询 {typeof(T).Name} 失败", ex, new { id });
-                throw;
-            }
-        }
-
-        public static string Query(string sql)
-        {
-            return SQLConn.Query(sql);
-        }
-
-        public static DataSet QueryPage(int page, int pageSize, string sWhere)
-        {
-            return SQLConn.QueryPage(FullName, Key, $"{Key} DESC", page, pageSize, sWhere);
-        }
-
-        public static string SqlQueryWhere(string sSelect, string where, string sOrderby)
-        {
-            return $"SELECT {sSelect} FROM {FullName} {where.EnsureStartsWith("WHERE")} {sOrderby.EnsureStartsWith("ORDER BY")}";
-        }
-
-        public static string QueryWhere(string select, string where, string orderby, string format, string countFormat = "")
-        {
-            return QueryRes(SqlQueryWhere(select, where, orderby), format, countFormat);
         }
     }
 }
-

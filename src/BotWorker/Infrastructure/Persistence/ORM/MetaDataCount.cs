@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
@@ -21,7 +21,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<long> CountAsync()
         {
             var (sql, parameters) = SqlCount(FullName);
-            return await ExecScalarAsync<long>(sql, parameters);
+            return (await ExecScalarAsync<long>(sql, parameters)) ?? 0;
         }
 
         public static long CountWhere(string where)

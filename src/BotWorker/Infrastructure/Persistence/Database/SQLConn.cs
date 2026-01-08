@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using BotWorker.Common;
@@ -219,30 +219,47 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return param;
         }
 
-        public static DataSet QueryDataset(string sql, params SqlParameter[] parameters)
+        public static DataSet QueryDataset(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+            if (conn == null)
+            {
+                conn = new SqlConnection(GetConn());
+                conn.Open();
+                isNewConn = true;
+            }
+
             try
             {
-                conn.Open();
-
-                using SqlCommand command = new(sql, conn);
-                if (parameters != null)
+                using SqlCommand command = new(sql, conn, trans);
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
                 {
-                    parameters = ProcessParameters(parameters);
-                    command.Parameters.AddRange(parameters);
+                    command.Parameters.AddRange(processedParameters);
                 }
-
                 using SqlDataAdapter adapter = new(command);
-                DataSet ds = new();
-                adapter.Fill(ds);
-                return ds;
+                DataSet dataSet = new();
+                adapter.Fill(dataSet);
+                return dataSet;
             }
             catch (Exception ex)
             {                
                 DbDebug($"{ex.Message}\nSQL: {sql}", "QueryDataset");
                 throw;
             }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    conn.Dispose();
+                }
+            }
+        }
+
+        public static DataSet QueryDataset(string sql, params SqlParameter[] parameters)
+        {
+            return QueryDataset(sql, null, parameters);
         }
 
         public static IEnumerable<SqlDataReader> QueryReader(string query, params SqlParameter[] parameters)
@@ -254,17 +271,24 @@ namespace BotWorker.Infrastructure.Persistence.Database
             yield return command.ExecuteReader();
         }
 
-        public static DataTable ExecuteQuery(string sql, params SqlParameter[] parameters)
+        public static DataTable ExecuteQuery(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+            if (conn == null)
+            {
+                conn = new SqlConnection(GetConn());
+                conn.Open();
+                isNewConn = true;
+            }
+
             try
             {
-                conn.Open();
-                using SqlCommand command = new(sql, conn);
-                parameters = ProcessParameters(parameters);
-                if (parameters != null)
+                using SqlCommand command = new(sql, conn, trans);
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
                 {
-                    command.Parameters.AddRange(parameters);
+                    command.Parameters.AddRange(processedParameters);
                 }
                 using SqlDataAdapter adapter = new(command);
                 DataTable dataTable = new();
@@ -273,10 +297,21 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
             catch (Exception ex)
             {
-                DbDebug($"Error:{ex.Message}", "ExecuteQuery");
+                DbDebug($"Error:{ex.Message}\nSQL: {sql}", "ExecuteQuery");
                 throw;
             }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    conn.Dispose();
+                }
+            }
+        }
 
+        public static DataTable ExecuteQuery(string sql, params SqlParameter[] parameters)
+        {
+            return ExecuteQuery(sql, null, parameters);
         }
 
         // 取得服务器当前时间
@@ -368,34 +403,51 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static int Exec(string sql, params SqlParameter[] parameters)
         {
-            return Exec(sql, true, parameters);
+            return Exec(sql, true, null, parameters);
+        }
+
+        public static int Exec(string sql, bool isDebug, params SqlParameter[] parameters)
+        {
+            return Exec(sql, isDebug, null, parameters);
         }
 
         // 执行sql命令
-        public static int Exec(string sql, bool isDebug, params SqlParameter[] parameters)
+        public static int Exec(string sql, bool isDebug = true, SqlTransaction? trans = null, params SqlParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
-            SqlCommand command = new(sql, conn);
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+
+            if (conn == null)
+            {
+                conn = new SqlConnection(GetConn());
+                conn.Open();
+                isNewConn = true;
+            }
 
             try
             {
-                conn.Open();
-                SqlParameter[] processedParameters = ProcessParameters(parameters);
+                using var command = new SqlCommand(sql, conn, trans);
                 if (parameters != null)
                 {
-                    command.Parameters.AddRange(parameters);
+                    var processedParameters = ProcessParameters(parameters);
+                    command.Parameters.AddRange(processedParameters);
                 }
-
-                int rowsAffected = command.ExecuteNonQuery();
-                return rowsAffected;
+                return command.ExecuteNonQuery();
             }
             catch (Exception ex)
             {
                 if (isDebug)
-                    DbDebug($"{ex.Message}\n{sql}");
-                else 
-                    Debug($"{ex.Message}\n{sql}");
+                    DbDebug($"{ex.Message}\nSQL: {sql}", "Exec");
+                else
+                    Logger.Error($"{ex.Message}\nSQL: {sql}", ex);
                 return -1;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    conn.Dispose();
+                }
             }
         }
 

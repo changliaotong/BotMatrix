@@ -1,27 +1,27 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
-        public virtual async Task<int> InsertAsync()
+        public virtual async Task<int> InsertAsync(SqlTransaction? trans = null)
         {
             var (sql, paras) = SqlInsertDict(ToDictionary(), [], ["Id", "Guid"]);
-            return await ExecAsync(sql, false, paras);
+            return await ExecAsync(sql, trans, paras);
         }
 
-        public virtual async Task<T?> InsertAsync<T>(string field) where T : struct
+        public virtual async Task<T?> InsertAsync<T>(string field, SqlTransaction? trans = null) where T : struct
         {
             var (sql, paras) = SqlInsertDict(ToDictionary(), [field], ["Id", "Guid"]);
-            var dict = await ExecWithOutputAsync(sql, paras, [field]);
+            var dict = await Database.SQLConn.ExecWithOutputAsync(sql, paras, [field], trans);
             return dict.TryGetValue(field, out var val) ? (T?)Convert.ChangeType(val, typeof(T)) : null;
         }
 
-        public virtual async Task<(T1?, T2?)> InsertAsync<T1, T2>(string field1, string field2) where T1 : struct where T2 : struct
+        public virtual async Task<(T1?, T2?)> InsertAsync<T1, T2>(string field1, string field2, SqlTransaction? trans = null) where T1 : struct where T2 : struct
         {
             var (sql, paras) = SqlInsertDict(ToDictionary(), [field1, field2], ["Id", "Guid"]);
-            var dict = await ExecWithOutputAsync(sql, paras, [field1, field2]);
+            var dict = await Database.SQLConn.ExecWithOutputAsync(sql, paras, [field1, field2], trans);
 
             var val1 = dict.TryGetValue(field1, out var v1) ? (T1?)Convert.ChangeType(v1, typeof(T1)) : null;
             var val2 = dict.TryGetValue(field2, out var v2) ? (T2?)Convert.ChangeType(v2, typeof(T2)) : null;
@@ -30,22 +30,28 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         public static async Task<int> InsertObjectAsync(object obj)
+            => await InsertObjectAsync(obj, null);
+
+        public static async Task<int> InsertObjectAsync(object obj, SqlTransaction? trans)
         {
             var (sql, paras) = SqlInsertDict(obj.ToFields());
-            return await ExecScalarAsync<int>(sql, paras);
+            return (await ExecScalarAsync<int>(sql, trans, paras)) ?? 0;
         }
 
         public static async Task<Dictionary<string, object>> InsertReturnFieldsAsync(object obj, params string[] outputFields)
+            => await InsertReturnFieldsAsync(obj, null, outputFields);
+
+        public static async Task<Dictionary<string, object>> InsertReturnFieldsAsync(object obj, SqlTransaction? trans, params string[] outputFields)
         {
             var (sql, paras) = SqlInsertDict(obj.ToFields(), outputFields);
-            return await ExecWithOutputAsync(sql, paras, outputFields);
-        }     
+            return await ExecWithOutputAsync(sql, paras, outputFields, trans);
+        }
 
-        public static int Insert(List<Cov> columns)
+        public static int Insert(List<Cov> columns, SqlTransaction? trans = null)
         {
             var data = CovToParams(columns);
             var (sql, paras) = SqlInsertDict(data);
-            return Exec(sql, paras);
+            return Exec(sql, trans, paras);
         }
 
         public static (string, SqlParameter[]) SqlInsert(List<Cov> columns)

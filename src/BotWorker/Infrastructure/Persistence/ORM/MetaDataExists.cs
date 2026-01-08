@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
@@ -34,7 +34,8 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<bool> ExistsAsync(object id, object? id2 = null)
         {
             var (sql, parameters) = SqlExists(id, id2);
-            return await ExecScalarAsync<bool>(sql, parameters);
+            var result = await ExecScalarAsync<int>(sql, parameters);
+            return result != null && result > 0;
         }
 
         public static (string, SqlParameter[]) SqlExistsAandB(string fieldName, object value, string fieldName2, object? value2)
@@ -52,7 +53,8 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<bool> ExistsAsync(string fieldName, object value, string fieldName2, object? value2)
         {
             var (sql, parameters) = SqlExists(fieldName, value, fieldName2, value2);
-            return await ExecScalarAsync<bool>(sql, parameters);            
+            var result = await ExecScalarAsync<int>(sql, parameters);
+            return result != null && result > 0;
         }
 
         public static bool ExistsField(string fieldName, object value)

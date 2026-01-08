@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 
@@ -6,28 +6,45 @@ namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static partial class SQLConn
     {
-        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, SqlParameter[] parameters, params string[] outputFields)
+        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, SqlParameter[] parameters, string[] outputFields, SqlTransaction? trans = null)
         {
-            using var conn = new SqlConnection(ConnString);
-            await conn.OpenAsync();
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
 
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddRange(parameters);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-
-            var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-
-            if (await reader.ReadAsync())
+            if (conn == null)
             {
-                foreach (var field in outputFields)
-                {
-                    var value = reader[field];
-                    result[field] = value == DBNull.Value ? null! : value;
-                }
+                conn = new SqlConnection(ConnString);
+                await conn.OpenAsync();
+                isNewConn = true;
             }
 
-            return result;
+            try
+            {
+                using var cmd = new SqlCommand(sql, conn, trans);
+                cmd.Parameters.AddRange(parameters);
+
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+                if (await reader.ReadAsync())
+                {
+                    foreach (var field in outputFields)
+                    {
+                        var value = reader[field];
+                        result[field] = value == DBNull.Value ? null! : value;
+                    }
+                }
+
+                return result;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    await conn.DisposeAsync();
+                }
+            }
         }
 
         private static readonly HashSet<Type> SimpleTypes = new()
@@ -46,28 +63,52 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return type.IsPrimitive || SimpleTypes.Contains(type) || type.IsEnum;
         }
 
-        public static async Task<List<T>> QueryListAsync<T>(string sql, SqlParameter[]? parameters = null)
+        public static async Task<List<T>> QueryListAsync<T>(string sql, SqlParameter[]? parameters = null, SqlTransaction? trans = null) where T : new()
         {
-            var json = await QueryAsJsonAsync(sql, parameters ?? Array.Empty<SqlParameter>());
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
 
-            if (string.IsNullOrWhiteSpace(json) || json == "null")
-                return [];
-
-            var type = typeof(T);
-
-            if (IsSimpleType(type) || type.IsClass)
+            if (conn == null)
             {
-                try
-                {
-                    return JsonConvert.DeserializeObject<List<T>>(json) ?? [];
-                }
-                catch (JsonException ex)
-                {
-                    throw new InvalidOperationException($"反序列化为 List<{type.Name}> 失败，JSON: {json}", ex);
-                }
+                conn = new SqlConnection(ConnString);
+                await conn.OpenAsync();
+                isNewConn = true;
             }
 
-            throw new NotSupportedException($"类型 {type.FullName} 不支持反序列化");
+            try
+            {
+                using var cmd = new SqlCommand(sql, conn, trans);
+                if (parameters != null)
+                {
+                    cmd.Parameters.AddRange(parameters);
+                }
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                var result = new List<T>();
+                var properties = typeof(T).GetProperties();
+
+                while (await reader.ReadAsync())
+                {
+                    var item = new T();
+                    foreach (var prop in properties)
+                    {
+                        if (HasColumn(reader, prop.Name) && !reader.IsDBNull(reader.GetOrdinal(prop.Name)))
+                        {
+                            prop.SetValue(item, reader[prop.Name]);
+                        }
+                    }
+                    result.Add(item);
+                }
+
+                return result;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    await conn.DisposeAsync();
+                }
+            }
         }
 
         public static async Task<T?> QuerySingleAsync<T>(string sql, params  SqlParameter[] parameters) where T : class, new()
@@ -107,18 +148,26 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<T> ExecScalarAsync<T>(string sql, params SqlParameter[] parameters) where T : struct
         {
-            return await ExecScalarAsync<T>(sql, true, parameters);
+            return await ExecScalarAsync<T>(sql, true, null, parameters);
         }
 
-        public static async Task<T> ExecScalarAsync<T>(string sql, bool isDebug, params SqlParameter[] parameters) where T : struct
+        public static async Task<T> ExecScalarAsync<T>(string sql, bool isDebug = false, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : struct
         {
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+
+            if (conn == null)
+            {
+                conn = new SqlConnection(ConnString);
+                await conn.OpenAsync();
+                isNewConn = true;
+            }
+
             try
             {
-                await using var conn = new SqlConnection(ConnString);
-                await using var cmd = new SqlCommand(sql, conn);
-                cmd.Parameters.AddRange([.. parameters]);
-
-                await conn.OpenAsync();
+                using var cmd = new SqlCommand(sql, conn, trans);
+                if (parameters != null && parameters.Length > 0)
+                    cmd.Parameters.AddRange(parameters);
 
                 var result = await cmd.ExecuteScalarAsync();
 
@@ -136,6 +185,13 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 else
                     Debug($"{ex.Message}\n{sql}");
                 return default!;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    await conn.DisposeAsync();
+                }
             }
         }
 
@@ -201,17 +257,24 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<int> ExecAsync(string sql, params SqlParameter[] parameters)
         {
-             return await ExecAsync(sql, true, parameters);
+             return await ExecAsync(sql, true, null, parameters);
         }
 
-        public static async Task<int> ExecAsync(string sql, bool isDebug = false, params SqlParameter[] parameters)
+        public static async Task<int> ExecAsync(string sql, bool isDebug = false, SqlTransaction? trans = null, params SqlParameter[] parameters)
         {
-            using var conn = new SqlConnection(ConnString);
+            SqlConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+
+            if (conn == null)
+            {
+                conn = new SqlConnection(ConnString);
+                await conn.OpenAsync();
+                isNewConn = true;
+            }
+
             try
             {
-                await conn.OpenAsync();
-
-                using var cmd = new SqlCommand(sql, conn);
+                using var cmd = new SqlCommand(sql, conn, trans);
                 if (parameters != null && parameters.Length > 0)
                     cmd.Parameters.AddRange(parameters);
 
@@ -222,8 +285,15 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 if (isDebug)
                     DbDebug($"{ex.Message}\n{sql}", "ExecAsync");
                 else
-                    Debug($"{ex.Message}\n{sql}");
+                    Logger.Error($"{ex.Message}\n{sql}", ex);
                 return -1;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    await conn.DisposeAsync();
+                }
             }
         }
 

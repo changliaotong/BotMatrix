@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
@@ -106,6 +106,60 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static void SyncCacheField(long qq, string field, object value)
         {
             SyncCacheField(qq, 0, field, value);
+        }
+
+        public static async Task<SqlTransaction> BeginTransactionAsync()
+        {
+            var conn = new SqlConnection(ConnString);
+            await conn.OpenAsync();
+            return (SqlTransaction)await conn.BeginTransactionAsync();
+        }
+
+        public static SqlTransaction BeginTransaction()
+        {
+            var conn = new SqlConnection(ConnString);
+            conn.Open();
+            return conn.BeginTransaction();
+        }
+
+        public static async Task<int> ExecAsync(string sql, params SqlParameter[] parameters)
+        {
+            return await ExecAsync(sql, null, parameters);
+        }
+
+        public static async Task<int> ExecAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        {
+            return await SQLConn.ExecAsync(sql, false, trans, parameters);
+        }
+
+        public static async Task<T?> ExecScalarAsync<T>(string sql, params SqlParameter[] parameters) where T : struct
+        {
+            return await ExecScalarAsync<T>(sql, null, parameters);
+        }
+
+        public static async Task<T?> ExecScalarAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : struct
+        {
+            return await SQLConn.ExecScalarAsync<T>(sql, false, trans, parameters);
+        }
+
+        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, SqlParameter[] parameters, string[] outputFields, SqlTransaction? trans = null)
+        {
+            return await SQLConn.ExecWithOutputAsync(sql, parameters, outputFields, trans);
+        }
+
+        public static int Exec(string sql, params SqlParameter[] parameters)
+        {
+            return Exec(sql, null, parameters);
+        }
+
+        public static int Exec(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        {
+            return SQLConn.Exec(sql, false, trans, parameters);
+        }
+
+        public static int Exec((string sql, SqlParameter[] parameters) sqlInfo, SqlTransaction? trans = null)
+        {
+            return SQLConn.Exec(sqlInfo.sql, false, trans, sqlInfo.parameters);
         }
 
         // 返回主键列表，保持顺序，方便生成SQL和参数绑定
