@@ -1,0 +1,16 @@
+﻿using sz84.Core;
+using BotWorker.Infrastructure.Persistence.ORM;
+
+namespace BotWorker.Domain.Entities
+{
+    /// <summary>
+    /// 中国城市数据
+    /// </summary>
+    public class Cities : MetaData<Cities>
+    {
+        public override string DataBase => "baseinfo";
+        public override string TableName => "cities";
+        public override string KeyField => "city_name";
+    }
+}
+

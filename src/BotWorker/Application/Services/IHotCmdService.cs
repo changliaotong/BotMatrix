@@ -1,0 +1,19 @@
+﻿using System.Threading.Tasks;
+using BotWorker.Bots.BotMessages;
+using BotWorker.Core.Commands;
+
+namespace BotWorker.Core.Services
+{
+    public interface IHotCmdService
+    {
+        /// <summary>
+        /// 判定是否为热门指�?        /// </summary>
+        bool IsHot(BotMessage botMsg);
+
+        /// <summary>
+        /// 处理热门指令并返回结�?        /// </summary>
+        Task<CommandResult> HandleHotCmdAsync(BotMessage botMsg);
+    }
+}
+
+
