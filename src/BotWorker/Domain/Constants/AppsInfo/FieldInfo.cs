@@ -1,6 +1,4 @@
-﻿using BotWorker.Core.MetaDatas;
-
-namespace BotWorker.Core.Data.AppsInfo
+﻿namespace BotWorker.Domain.Constants.AppsInfo
 {
     public class FieldInfo : MetaData<FieldInfo>
     {

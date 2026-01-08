@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Bots.Models.Gacha
+﻿namespace BotWorker.Modules.Gacha
 {
     public class GachaCollection
     {

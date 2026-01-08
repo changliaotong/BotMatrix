@@ -1,4 +1,4 @@
-﻿using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Agents.Entries
 {

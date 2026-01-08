@@ -1,10 +1,8 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Text.RegularExpressions;
-using sz84.common.Exts;
-using BotWorker.Domain.MetaDatas;
 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Modules.Buses
 {
 
     public class Bus : MetaData<Bus>

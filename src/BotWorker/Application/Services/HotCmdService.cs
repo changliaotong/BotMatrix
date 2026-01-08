@@ -1,21 +1,20 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Bots.Extensions;
-using BotWorker.Bots.Games;
-using BotWorker.Bots.Groups;
-using BotWorker.Bots.Platform;
-using BotWorker.Bots.Public;
-using BotWorker.Bots.Users;
-using BotWorker.Common;
-using BotWorker.BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.Commands;
-using BotWorker.Groups;
+using System.Linq;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Entities;
 using BotWorker.Infrastructure.Tools;
+using BotWorker.Application.Messaging.Handlers;
+using BotWorker.Infrastructure.Utils;
+using BotWorker.Modules.Games;
+using BotWorker.Modules.Office;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
+using BotWorker.Common;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public class HotCmdService : IHotCmdService
     {
@@ -76,9 +75,9 @@ namespace BotWorker.Core.Services
             string answer = string.Empty;
             string currentMessage = botMsg.CurrentMessage;
 
-            // 1. 学习功能 (不移除表�?
+            // 1. 学习功能 (不移除表情)
             string regexCmd = Regexs.Study;
-            int c_da = currentMessage.Split('�?).Length - 1;
+            int c_da = currentMessage.Split('答').Length - 1;
             if (c_da > 1) regexCmd = Regexs.Study2;
 
             foreach (Match match in currentMessage.Matches(regexCmd))
@@ -89,7 +88,7 @@ namespace BotWorker.Core.Services
             if (!string.IsNullOrEmpty(answer))
                 return CommandResult.Intercepted(answer);
 
-            // 2. 预处理消�?(移除表情和机器人QQ�?
+            // 2. 预处理消息 (移除表情和机器人QQ号)
             currentMessage = currentMessage.RemoveQqFace();
             
             // 微信公众号绑定QQ
@@ -108,7 +107,8 @@ namespace BotWorker.Core.Services
                 return CommandResult.Intercepted(answer);
             }
 
-            // 移除机器人QQ�?            currentMessage = currentMessage.RemoveUserId(botMsg.SelfId);
+            // 移除机器人QQ号
+            currentMessage = currentMessage.RemoveUserId(botMsg.SelfId);
 
             // 3. 核心快捷指令逻辑
             
@@ -125,11 +125,13 @@ namespace BotWorker.Core.Services
             {
                 answer = await _userService.GetCreditRankAsync(botMsg);
             }
-            // 数学表达�?            else if (currentMessage.IsMatch(Regexs.Formula))
+            // 数学表达式
+            else if (currentMessage.IsMatch(Regexs.Formula))
             {
                 answer = Calc.GetJsRes(currentMessage.RegexGetValue(Regexs.Formula, "formula"));
             }
-            // 敏感词设�?            else if (currentMessage.IsMatch(Regexs.WarnCmd))
+            // 敏感词设置
+            else if (currentMessage.IsMatch(Regexs.WarnCmd))
             {
                 botMsg.GetWarnSetup(Regexs.WarnCmd); // 暂时保留
                 answer = botMsg.Answer;
@@ -141,7 +143,7 @@ namespace BotWorker.Core.Services
                 string cmdPara = currentMessage.RegexGetValue(Regexs.Todo, "cmdPara");
                 answer = Todo.GetTodoRes(botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, cmdName, cmdPara);
             }
-            // 退�?(超级管理员权�?
+            // 退出(超级管理员权限)
             else if (currentMessage.IsMatch(Regexs.LeaveGroup) && botMsg.IsSuperAdmin)
             {
                 long targetUin = currentMessage.RegexGetValue(Regexs.LeaveGroup, "GroupId").AsLong();
@@ -160,14 +162,16 @@ namespace BotWorker.Core.Services
             {
                 answer = Fishing.GetFishing(botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, currentMessage.RegexGetValue(Regexs.Fishing, "CmdName"), "");
             }
-            // 买渔�?            else if (currentMessage.IsMatch(Regexs.FishingBuy))
+            // 买渔具
+            else if (currentMessage.IsMatch(Regexs.FishingBuy))
             {
                 answer = Fishing.GetBuyTools(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name,
                     currentMessage.RegexGetValue(Regexs.FishingBuy, "CmdName"),
                     currentMessage.RegexGetValue(Regexs.FishingBuy, "cmdPara"),
                     currentMessage.RegexGetValue(Regexs.FishingBuy, "cmdPara2"));
             }
-            // 积分金币充值扣�?            else if (botMsg.Message.IsMatch(Regexs.AddMinus))
+            // 积分金币充值扣除
+            else if (botMsg.Message.IsMatch(Regexs.AddMinus))
             {
                 answer = GroupMember.AddCoinsRes(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name,
                     currentMessage.RegexGetValue(Regexs.AddMinus, "CmdName"),
@@ -211,7 +215,8 @@ namespace BotWorker.Core.Services
                 answer = $"[@:{coins_qq}]的金币：{GroupMember.GetCoins((int)CoinsLog.CoinsType.goldCoins, botMsg.GroupId, botMsg.UserId):#0.00}";
                 if (BlackList.IsSystemBlack(coins_qq)) answer += "\n{BlackListMsg}";
             }
-            // 猜大�?            else if (currentMessage.IsMatch(Regexs.BlockCmd))
+            // 猜大小
+            else if (currentMessage.IsMatch(Regexs.BlockCmd))
             {
                 botMsg.CmdName = $"{Block.GetCmd(currentMessage.RegexGetValue(Regexs.BlockCmd, "CmdName"), botMsg.UserId)}";
                 botMsg.CmdPara = $"{currentMessage.RegexGetValue(Regexs.BlockCmd, "cmdPara")}";
@@ -239,5 +244,3 @@ namespace BotWorker.Core.Services
         }
     }
 }
-
-

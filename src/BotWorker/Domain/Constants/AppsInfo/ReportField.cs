@@ -1,7 +1,4 @@
-﻿using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
-
-namespace BotWorker.Core.Data.AppsInfo
+﻿namespace BotWorker.Domain.Constants.AppsInfo
 {
     public class ReportField : MetaData<ReportField>
     {

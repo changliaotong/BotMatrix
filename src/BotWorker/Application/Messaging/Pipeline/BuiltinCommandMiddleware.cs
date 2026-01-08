@@ -3,55 +3,60 @@ using System.Threading.Tasks;
 using BotWorker.Domain.Interfaces;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
+using BotWorker.Modules.Plugins;
+
+using BotWorker.Infrastructure.Communication.OneBot;
 
 namespace BotWorker.Application.Messaging.Pipeline
 {
     /// <summary>
-    /// 内置指令中间件：作为指令路由器，调度各个逻辑分支
+    /// 内置命令中间件：处理一些不属于插件系统的内置命令（如：菜单、状态等）
     /// </summary>
     public class BuiltinCommandMiddleware : IMiddleware
     {
-        public async Task InvokeAsync(IMessageContext context, MessageDelegate next)
+        public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
-            var botMsg = context.Message;
-
-            // 1. 核心正则指令解析与判定
-            var isCmdMsg = botMsg.CurrentMessage.IsMatch(botMsg.GetRegexCmd());
-            botMsg.IsCmd = isCmdMsg;
-
-            if (botMsg.IsCmd)
+            if (context is PluginContext pluginCtx && pluginCtx.Event is BotMessageEvent botMsgEvent)
             {
-                (botMsg.CmdName, botMsg.CmdPara) = botMsg.GetCmdPara(botMsg.CurrentMessage, botMsg.GetRegexCmd());
+                var botMsg = botMsgEvent.BotMessage;
+                
+                // 处理内置指令 (复刻自 CommandMessage.cs)
+                var isCmdMsg = botMsg.CurrentMessage.IsMatch(BotCmd.GetRegexCmd());
+                botMsg.IsCmd = isCmdMsg;
 
-                // 指令有效性检查
-                if (IsInvalidCommand(botMsg))
+                if (botMsg.IsCmd)
                 {
-                    botMsg.IsCmd = false;
-                    botMsg.CmdName = "闲聊";
-                    botMsg.CmdPara = botMsg.CurrentMessage;
+                    (botMsg.CmdName, botMsg.CmdPara) = BotMessage.GetCmdPara(botMsg.CurrentMessage, BotCmd.GetRegexCmd());
+
+                    // 指令有效性检查
+                    if (IsInvalidCommand(botMsg))
+                    {
+                        botMsg.IsCmd = false;
+                        botMsg.CmdName = "闲聊";
+                        botMsg.CmdPara = botMsg.CurrentMessage;
+                    }
+                    else
+                    {
+                        if (botMsg.IsRefresh) botMsg.HandleRefresh();
+                        else await botMsg.GetCmdResAsync();
+
+                        if (!string.IsNullOrEmpty(botMsg.Answer)) return;
+                    }
                 }
-                else
-                {
-                    if (botMsg.IsRefresh) botMsg.HandleRefresh();
-                    else await botMsg.GetCmdResAsync();
 
-                    if (!string.IsNullOrEmpty(botMsg.Answer)) return;
+                // 2. 确认指令状态
+                await botMsg.ConfirmCmdAsync();
+                if (!string.IsNullOrEmpty(botMsg.Answer)) return;
+
+                // 3. 默认降级处理
+                botMsg.CmdPara = botMsg.CurrentMessage;
+                await botMsg.GetCmdResAsync();
+
+                if (botMsg.IsRefresh && !string.IsNullOrEmpty(botMsg.Answer))
+                {
+                    return;
                 }
             }
-
-            // 2. 确认指令状态
-            await botMsg.ConfirmCmdAsync();
-            if (!string.IsNullOrEmpty(botMsg.Answer)) return;
-
-            // 3. 默认降级处理
-            botMsg.CmdPara = botMsg.CurrentMessage; 
-            await botMsg.GetCmdResAsync();
-
-            if (botMsg.IsRefresh && !string.IsNullOrEmpty(botMsg.Answer))
-                botMsg.HandleRefresh();
-
-            if (!string.IsNullOrEmpty(botMsg.Answer))
-                return;
 
             await next(context);
         }

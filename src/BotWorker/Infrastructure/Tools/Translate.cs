@@ -1,6 +1,5 @@
 ﻿using System.Text;
 using Newtonsoft.Json;
-using BotWorker.Core.MetaDatas;
 
 namespace BotWorker.Infrastructure.Tools
 {

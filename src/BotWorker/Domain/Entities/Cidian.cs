@@ -1,5 +1,6 @@
-﻿using BotWorker.Infrastructure.Extensions;
-using sz84.Core;
+﻿using System;
+using System.Linq;
+using BotWorker.Infrastructure.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
@@ -27,10 +28,9 @@ namespace BotWorker.Domain.Entities
             if (res == "")
             {
                 if (text.Trim().Contains(' '))
-                    res = GetCiba(text.Trim().Split(['\u002C', ' ', '，', '、', '\n'], StringSplitOptions.RemoveEmptyEntries).Last());
+                    res = GetCiba(text.Trim().Split(new char[] { '\u002C', ' ', '，', '、', '\n' }, StringSplitOptions.RemoveEmptyEntries).Last());
             }
             return res;
         }
     }
 }
-

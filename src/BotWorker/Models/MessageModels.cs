@@ -11,6 +11,20 @@ namespace BotWorker.Models
         [JsonProperty("pictureUrl")] public string PictureUrl { get; set; } = string.Empty;
         [JsonProperty("musicUrl")] public string MusicUrl { get; set; } = string.Empty;
         [JsonProperty("brief")] public string Brief { get; set; } = string.Empty;
+
+        public static MusicShareMessage FromMirai(Mirai.Net.Data.Messages.Concretes.MusicShareMessage m)
+        {
+            return new MusicShareMessage
+            {
+                Kind = m.Kind,
+                Title = m.Title,
+                Summary = m.Summary,
+                JumpUrl = m.JumpUrl,
+                PictureUrl = m.PictureUrl,
+                MusicUrl = m.MusicUrl,
+                Brief = m.Brief
+            };
+        }
     }
 
     public record AppMessage

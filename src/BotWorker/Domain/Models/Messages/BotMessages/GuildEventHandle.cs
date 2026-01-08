@@ -1,12 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
-using BotWorker.Infrastructure.Persistence.ORM;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         private async Task LogGuildEventAsync(string eventName)
         {
             var guildEvent = new GuildEvent
@@ -105,5 +100,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             Answer += "\n注意：退出频道会收回赠送的积分算力哦";
         }
-    }
 }

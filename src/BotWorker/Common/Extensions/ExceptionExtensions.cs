@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class ExceptionExtensions
     {

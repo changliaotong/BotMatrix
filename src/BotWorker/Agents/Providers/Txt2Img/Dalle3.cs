@@ -1,9 +1,6 @@
 ﻿using Azure.AI.OpenAI;
 using Azure;
 using OpenAI.Images;
-using BotWorker.Core;
-using BotWorker.Agents.Entries;
-using BotWorker.Core.MetaDatas;
 
 namespace BotWorker.Agents.Providers.Txt2Img
 {

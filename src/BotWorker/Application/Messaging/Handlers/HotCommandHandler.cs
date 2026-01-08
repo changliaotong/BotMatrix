@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Application.Services;
 
-namespace BotWorker.Core.Commands
+namespace BotWorker.Application.Messaging.Handlers
 {
     /// <summary>
     /// 热门指令处理器：处理菜单、签到、积分、笑话等常用业务指令

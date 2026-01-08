@@ -1,13 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Users;
-using BotWorker.Common.Exts;
-using sz84.Core;
-using BotWorker.Infrastructure.Persistence.ORM;
+﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
 
         public async Task GetGreetingAsync()
         {
@@ -126,5 +120,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             //CmdPara = CmdName;
             //await GetAnswerAsync();
         }
-    }
 }

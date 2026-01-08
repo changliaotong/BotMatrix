@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.Interfaces;
+﻿using BotWorker.Domain.Interfaces;
 
-namespace sz84.Bots.Models.Story
+namespace BotWorker.Modules.Story
 {
     public class StoryMetadata : IModuleMetadata
     {

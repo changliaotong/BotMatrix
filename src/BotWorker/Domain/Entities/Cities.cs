@@ -1,5 +1,4 @@
-﻿using sz84.Core;
-using BotWorker.Infrastructure.Persistence.ORM;
+﻿using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {

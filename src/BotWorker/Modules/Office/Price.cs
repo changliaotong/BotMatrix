@@ -1,8 +1,7 @@
-﻿using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
+using BotWorker.Common.Extensions;
+using BotWorker.Domain.Entities;
 
-namespace BotWorker.Domain.Entities.Office
+namespace BotWorker.Modules.Office
 {
     public class Price : MetaData<Price>
     {

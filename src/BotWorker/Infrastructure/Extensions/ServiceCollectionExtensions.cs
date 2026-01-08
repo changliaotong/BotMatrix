@@ -9,9 +9,10 @@ namespace BotWorker.Infrastructure.Extensions
     {
         public static IServiceCollection AddGameModules(this IServiceCollection services)
         {
-            // Infrastructure（内存实现版本）
-            services.AddSingleton<IAchievementService, AchievementService>();
-            // 排行榜系�?            services.AddSingleton<IRankingService, RankingManager>(); 
+            // Achievement Service
+            services.AddSingleton<BotWorker.Modules.Achievement.IAchievementService, BotWorker.Modules.Achievement.AchievementService>();
+            // 排行榜系统
+            services.AddSingleton<IRankingService, RankingManager>(); 
 
             // 注册预设成就（可拆到成就系统内）
             services.PostConfigure<AchievementManager>(manager =>

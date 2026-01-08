@@ -1,9 +1,8 @@
-﻿using Microsoft.Data.SqlClient;
-using BotWorker.Bots.Entries;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
+using Microsoft.Data.SqlClient;
+using BotWorker.Common.Extensions;
+using BotWorker.Domain.Entities;
 
-namespace BotWorker.Domain.Entities.Office
+namespace BotWorker.Modules.Office
 {
     public class Income : MetaData<Income>
     {

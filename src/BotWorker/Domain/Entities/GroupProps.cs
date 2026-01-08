@@ -1,8 +1,3 @@
-using BotWorker.Bots.Entries;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
-using BotWorker.Bots.Users;
-
 namespace BotWorker.Domain.Entities
 {
     class GroupProps : MetaData<GroupProps>

@@ -1,14 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Games;
-using sz84.Bots.Users;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage :MetaData<BotMessage>
-    {
         public const string ErrorFormat = "命令格式：开盲盒 + 数字1-6\n例如：\n开盲盒 3\nKMH 6";
 
         // 暗恋系统
@@ -68,7 +61,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (creditValue < blockCredit)
                 return $"您的积分{creditValue}不足{blockCredit}";
 
-            int iRobot = Common.RandomInt(1, 3);
+            int iRobot = C.RandomInt(1, 3);
             long bonus = blockCredit;
             string strRobot = iRobot switch
             {
@@ -132,7 +125,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     return $"您的积分{creditValue}不足{blockCredit}";
 
                 //生成随机数，保存积分以及猜测次数
-                resCsz = Common.RandomInt(1, 13);
+                resCsz = C.RandomInt(1, 13);
                 cszCredit = blockCredit;
 
                 if (UserInfo.NewGuessNumGame(resCsz, cszCredit, UserId) != -1)
@@ -354,5 +347,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             return res + GetHintInfo();
         }
-    }
 }

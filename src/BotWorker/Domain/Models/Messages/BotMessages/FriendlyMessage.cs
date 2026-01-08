@@ -1,22 +1,9 @@
-﻿using sz84.Groups;
-using System.Text.RegularExpressions;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using sz84.Core.Database;
-using sz84.Infrastructure.Tools;
-using sz84.Bots.Entries;
-using sz84.Bots.Games;
-using sz84.Bots.Games.Gift;
-using sz84.Bots.Models.Office;
-using sz84.Bots.Groups;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Users;
-using sz84.Agents.Entries;
+﻿using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public static bool IsUrlWhiteListed(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
@@ -526,5 +513,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             }
             return value;
         }
-    }
 }

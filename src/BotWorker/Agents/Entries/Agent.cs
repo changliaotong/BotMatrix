@@ -1,6 +1,6 @@
 using Microsoft.Data.SqlClient;
-using BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Agents.Entries
 {

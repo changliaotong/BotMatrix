@@ -1,8 +1,8 @@
-﻿namespace BotWorker.BotWorker.BotWorker.Common.Exts
+﻿namespace BotWorker.Common.Extensions
 {
     public static class TypeExtensions
     {
-        // �ж϶����Ƿ��ת��Ϊ����
+        // 判断对象是否可转换为数字
         public static bool IsNumeric(this object value)
         {
             return double.TryParse(value?.ToString(), out _);

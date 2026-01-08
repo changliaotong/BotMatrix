@@ -1,21 +1,18 @@
 ﻿using System;
 using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Core.Pipeline
+namespace BotWorker.Application.Messaging.Pipeline
 {
+    public delegate Task RequestDelegate(IPluginContext context);
+
     /// <summary>
     /// 机器人消息处理中间件接口
     /// </summary>
     public interface IMiddleware
     {
-        /// <summary>
-        /// 执行中间件逻辑
-        /// </summary>
-        /// <param name="context">BotMessage 上下�?/param>
-        /// <param name="next">指向下一个中间件的委�?/param>
-        /// <returns>返回 true 表示管道继续，false 表示中断</returns>
-        Task<bool> InvokeAsync(BotMessage context, Func<Task<bool>> next);
+        Task InvokeAsync(IPluginContext context, RequestDelegate next);
     }
 }
 

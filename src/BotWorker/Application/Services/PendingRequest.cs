@@ -1,6 +1,6 @@
-﻿using BotWorker.Bots.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public class PendingRequest(string requestId, string methodName, BotMessage context, object[] args)
     {

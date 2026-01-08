@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
-
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface ISkillManager
     {

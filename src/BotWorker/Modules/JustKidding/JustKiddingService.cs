@@ -1,11 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using BotWorker.Bots.Models.Limiter;
-using BotWorker.Core.Interfaces;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Domain.Entities.JustKidding
+namespace BotWorker.Modules.JustKidding
 {
     public class JustKiddingService(ILimiter dailyLimiter) : IBotModule
     {

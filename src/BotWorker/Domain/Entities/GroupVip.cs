@@ -1,9 +1,4 @@
 using Microsoft.Data.SqlClient;
-using BotWorker.Bots.Entries;
-using BotWorker.Bots.Models.Office;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Bots.Users;
 
 namespace BotWorker.Domain.Entities
 {

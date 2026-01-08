@@ -1,11 +1,7 @@
-﻿using sz84.Bots.Groups;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public string GetRecallCount()
         {
             return GroupEvent.CountWhere($"GroupId = {GroupId}").AsString();
@@ -23,6 +19,5 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
         public string GetEventCount(GroupEventType eventType)
         {
             return GroupEvent.CountWhere($"GroupId = {GroupId} AND EventType = {eventType.ToString().Quotes()}").AsString();
-        }
     }
 }

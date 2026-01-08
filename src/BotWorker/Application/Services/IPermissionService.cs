@@ -1,6 +1,6 @@
-﻿using BotWorker.Bots.BotMessages;
+﻿using BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     /// <summary>
     /// 权限校验服务：统一管理机器人系统内的各类权限判�?    /// </summary>

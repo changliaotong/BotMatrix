@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using BotWorker.Core.OneBot;
-using BotWorker.Services;
-using BotWorker.Bots.Entries;
-using BotWorker.Bots.Groups;
-using BotWorker.Bots.Users;
+using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Application.Services;
+using BotWorker.Domain.Entities;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Core.Plugin
+namespace BotWorker.Modules.Plugins
 {
     public class PluginManager : IRobot
     {

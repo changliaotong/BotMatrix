@@ -1,12 +1,9 @@
-﻿using System.Text.RegularExpressions;
-using sz84.Bots.Extensions;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         /*
         {+credit(10)}：加积分
         {-credit(5)}：扣积分
@@ -83,6 +80,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (input.EndsWith('h')) return TimeSpan.FromHours(int.Parse(input.TrimEnd('h')));
             return TimeSpan.Zero;
         }
-    }
-
 }

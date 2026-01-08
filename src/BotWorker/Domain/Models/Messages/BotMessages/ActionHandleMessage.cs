@@ -1,12 +1,9 @@
-﻿using Newtonsoft.Json;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using BotWorker.Infrastructure.Persistence.ORM;
+using Newtonsoft.Json;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         [JsonIgnore]
         public override string TableName => "SendMessage";
         [JsonIgnore]
@@ -163,5 +160,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             GroupInfo.Append(GroupId, GroupName, SelfId, SelfName, UserId);
             Accept = 2;
         }
-    }
 }

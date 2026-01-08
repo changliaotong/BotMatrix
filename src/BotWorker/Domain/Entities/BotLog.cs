@@ -1,6 +1,6 @@
-﻿using sz84.Bots.BotMessages;
-using sz84.Bots.Platform;
-using BotWorker.Common.Exts;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Constants;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities

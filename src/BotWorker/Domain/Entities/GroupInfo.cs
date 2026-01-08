@@ -1,8 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using BotWorker.Bots.Groups;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {
@@ -376,7 +373,7 @@ namespace BotWorker.Domain.Entities
         }
 
         // 机器人主人名称
-        public static string GetRobotOwnerName(long groupId, BotWorker.BotWorker.Common.Data.BotData.Platform botType = BotWorker.BotWorker.Common.Data.BotData.Platform.NapCat)
+        public static string GetRobotOwnerName(long groupId, BotData.Platform botType = BotData.Platform.NapCat)
         {
             string res = GetValue("isnull(RobotOwnerName,'')", groupId);
             if (res == "")

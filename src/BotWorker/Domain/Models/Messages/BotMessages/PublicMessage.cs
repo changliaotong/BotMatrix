@@ -1,13 +1,10 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Public;
+using BotWorker.Domain.Entities;
+using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
-using sz84.Groups;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Users;
 using System.Diagnostics;
-using sz84.Bots.Platform;
+using BotWorker.Domain.Constants;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages
 {
@@ -27,7 +24,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 if (MsgId == lastMsgId)
                 {
                     var token = Token.GetToken(UserId);
-                    var url = $"{Common.url}/ai?t={token}&gid={GroupId}msgid={MsgId}";
+                    var url = $"{C.url}/ai?t={token}&gid={GroupId}msgid={MsgId}";
                     Answer = $"已超时请前往\n<a href=\"{url}\">网站后台</a>查看结果\n你的TOKEN：{token}";
                 }
                 else

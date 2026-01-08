@@ -1,7 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
-
 namespace BotWorker.Plugins
 {
     public class DebugPlugin : IPlugin
@@ -32,7 +28,7 @@ namespace BotWorker.Plugins
         {
             var userStr = ctx.User != null ? $"{ctx.User.Name}({ctx.User.Id}, 积分:{ctx.User.Credit})" : "null";
             var groupStr = ctx.Group != null ? $"{ctx.Group.GroupName}({ctx.Group.Id})" : "私聊";
-            var memberStr = ctx.Member != null ? $"角色:{ctx.Member.Role}" : "n/a";
+            var memberStr = ctx.User != null ? $"用户名:{ctx.User.Name}" : "n/a";
             var botStr = ctx.Bot != null ? $"{ctx.Bot.BotName}({ctx.Bot.BotUin})" : "null";
 
             // 测试 AI 服务

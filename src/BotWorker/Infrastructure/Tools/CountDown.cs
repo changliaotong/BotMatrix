@@ -1,7 +1,4 @@
-﻿using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
-
-namespace BotWorker.Infrastructure.Tools
+﻿namespace BotWorker.Infrastructure.Tools
 {
     public class CountDown : MetaData<CountDown>
     {

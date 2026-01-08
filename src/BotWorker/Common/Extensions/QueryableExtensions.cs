@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class QueryableExtensions
     {

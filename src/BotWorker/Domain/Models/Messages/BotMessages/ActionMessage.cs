@@ -1,13 +1,10 @@
 ﻿using Newtonsoft.Json;
-using sz84.Bots.Platform;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Core.Services;
+using BotWorker.Infrastructure.Communication;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public async Task<bool> IsInGroupAsync(long selfId, long group, long target)
         {
             var client = RobotClientFactory.Get(Platform == Platforms.Mirai ? Platforms.Mirai : Platforms.Worker);
@@ -129,5 +126,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 Console.WriteLine($"[{Platform}] 不支持退群");
             }
         }
-    }
 }

@@ -1,4 +1,4 @@
-﻿namespace BotWorker.BotWorker.BotWorker.Common.Exts
+﻿namespace BotWorker.Common.Extensions
 {
     static class FileIOExtensions
     {

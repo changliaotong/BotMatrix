@@ -1,7 +1,6 @@
 ﻿using System.Text.RegularExpressions;
-using sz84.Bots.Groups;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages

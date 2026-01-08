@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Entities.Limiter
+namespace BotWorker.Domain.Entities
 {
     public class LimiterLog
     {

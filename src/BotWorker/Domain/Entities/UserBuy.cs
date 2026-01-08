@@ -1,10 +1,10 @@
-﻿using sz84.Bots.BotMessages;
-using sz84.Bots.Entries;
-using sz84.Bots.Models.Office;
-using BotWorker.Common.Exts;
+﻿using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Entities;
+using BotWorker.Modules.Office;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
-namespace sz84.Bots.Users
+namespace BotWorker.Domain.Entities
 {
     public partial class UserInfo : MetaDataGuid<UserInfo>
     {

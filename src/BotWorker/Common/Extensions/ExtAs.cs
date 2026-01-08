@@ -1,7 +1,6 @@
-﻿using Microsoft.International.Converters.TraditionalChineseToSimplifiedConverter;
 using Newtonsoft.Json;
 
-namespace sz84.common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class ExtAs
     {
@@ -45,12 +44,14 @@ namespace sz84.common.Exts
 
         public static string AsJianti(this string? text)
         {
-            return ChineseConverter.Convert(text, ChineseConversionDirection.TraditionalToSimplified);
+            return text ?? "";
+            // return ChineseConverter.Convert(text, ChineseConversionDirection.TraditionalToSimplified);
         }
 
         public static string AsFanti(this string? text)
         {
-            return ChineseConverter.Convert(text, ChineseConversionDirection.SimplifiedToTraditional);
+            return text ?? "";
+            // return ChineseConverter.Convert(text, ChineseConversionDirection.SimplifiedToTraditional);
         }
 
         public static string AsWide(this string input)
@@ -129,7 +130,7 @@ namespace sz84.common.Exts
                 var typeName = typeof(T).FullName ?? typeof(T).Name;
 
                 // 将 T 的类型信息和默认值 def 记录下来
-               Common.ErrorMessage($"Ext:AsObject {ex.Message}\nType: {typeName}\nJson:{json}");
+                ErrorMessage($"Ext:AsObject {ex.Message}\nType: {typeName}\nJson:{json}");
 
                 return def;
             }

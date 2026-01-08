@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface II18nService
     {

@@ -33,7 +33,8 @@ namespace BotWorker.Application.Services
             }
             else
             {
-                //其它�?获取所有知识库答案供参�?                var res = string.Empty;
+                //其它�?获取所有知识库答案供参�?
+                var res = string.Empty;
                 foreach ( var k in knowledges) 
                 {
                     res += k.Content;

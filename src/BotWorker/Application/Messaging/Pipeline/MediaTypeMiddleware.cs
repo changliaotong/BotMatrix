@@ -1,15 +1,18 @@
-﻿using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
+using System.Threading.Tasks;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Modules.Plugins;
+using BotWorker.Infrastructure.Communication.OneBot;
 
-namespace BotWorker.Core.Pipeline
+namespace BotWorker.Application.Messaging.Pipeline
 {
     /// <summary>
-    /// 媒体类型中间件：处理图片、文件、视频等非文本消�?    /// </summary>
+    /// 媒体类型中间件：处理图片、文件、视频等非文本消息
+    /// </summary>
     public class MediaTypeMiddleware : IMiddleware
     {
         public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
-            if (context is PluginContext pluginCtx && pluginCtx.Event is Core.OneBot.BotMessageEvent botMsgEvent)
+            if (context is PluginContext pluginCtx && pluginCtx.Event is BotMessageEvent botMsgEvent)
             {
                 var botMsg = botMsgEvent.BotMessage;
 
@@ -20,12 +23,11 @@ namespace BotWorker.Core.Pipeline
                 {
                     botMsg.Answer = botMsg.HandleOtherMessage();
                     botMsg.Reason += "[非文本]";
-                    return; // 处理完毕，不再向下传�?                }
+                    return; // 处理完毕，不再向下传递
+                }
             }
 
             await next(context);
         }
     }
 }
-
-

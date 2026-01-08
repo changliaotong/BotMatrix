@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface ITaskEngineService
     {

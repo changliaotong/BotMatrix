@@ -1,6 +1,6 @@
-using BotWorker.Bots.BotMessages;
-using BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Infrastructure.Extensions.Text;
 
 namespace BotWorker.Agents.Entries

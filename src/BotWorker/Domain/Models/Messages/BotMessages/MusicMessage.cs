@@ -1,17 +1,5 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Mirai.Net.Data.Messages.Concretes;
-using Newtonsoft.Json;
-using OneBotSharp.Objs.Message;
+﻿using OneBotSharp.Objs.Message;
 using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Platform;
-using sz84.Bots.Services;
-using sz84.Bots.Users;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using sz84.Core.Data;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Models.Messages.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
@@ -19,7 +7,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
 
         //收到音乐分享消息时添加到音乐库
-        public void HandleMusic(MusicShareMessage message, string payload, bool isForce = false)
+        public void HandleMusic(BotWorker.Models.MusicShareMessage message, string payload, bool isForce = false)
         {
             ShowMessage($"kind:{message.Kind}\n Title:{message.Title}\n Summary:{message.Summary}\n JumpUrl:{message.JumpUrl}\n PictureUrl:{message.PictureUrl}\n MusicUrl:{message.MusicUrl}\n Brief:{message.Brief}");
             Song song = Music.GetSong(message.JumpUrl, message.MusicUrl);

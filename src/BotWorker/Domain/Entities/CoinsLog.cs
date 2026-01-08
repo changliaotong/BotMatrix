@@ -1,7 +1,4 @@
 ﻿using Microsoft.Data.SqlClient;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
 
 namespace BotWorker.Domain.Entities;
 public class CoinsLog : MetaData<CoinsLog>

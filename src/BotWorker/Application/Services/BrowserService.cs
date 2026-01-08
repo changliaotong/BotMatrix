@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.Playwright;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface IBrowserService
     {

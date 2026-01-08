@@ -1,6 +1,4 @@
 ﻿using System.Threading.Channels;
-using BotWorker.Core.Interfaces;
-
 
 namespace BotWorker.Infrastructure.Background
 {

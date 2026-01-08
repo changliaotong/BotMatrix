@@ -1,6 +1,6 @@
-﻿using System.Reflection;
+using System.Reflection;
 
-namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class ReflectionExtensions
     {

@@ -1,13 +1,12 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
+using BotWorker.Domain.Entities;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Users;
 
 namespace BotWorker.Modules.Games
 {
-    class PetOld : MetaData<PetOld>
+    public class PetOld : MetaData<PetOld>
     {
         public override string TableName => "BuyFriends";
         public override string KeyField => "Id";

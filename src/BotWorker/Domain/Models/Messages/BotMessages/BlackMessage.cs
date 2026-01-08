@@ -1,15 +1,10 @@
-﻿using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
-{
-    //黑名单 blacklist
-    public partial class BotMessage : MetaData<BotMessage>
-    {        
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+//黑名单 blacklist
+public partial class BotMessage : MetaData<BotMessage>
+{        
         // 解除黑名单
         public string GetCancelBlack(long userId)
         {
@@ -119,5 +114,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
         {
             return BlackList.AddBlackList(SelfId, GroupId, GroupName, UserId, Name, blackQQ, blackInfo);
         }
-    }
 }

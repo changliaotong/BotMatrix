@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
-using BotWorker.BotWorker.BotWorker.Common.Exts;
-using BotWorker.Bots.Public;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
 
-namespace BotWorker.Core.Commands
+namespace BotWorker.Application.Messaging.Handlers
 {
     public class SetupCommandHandler
     {
@@ -21,37 +21,40 @@ namespace BotWorker.Core.Commands
         {
             var message = botMsg.CurrentMessage;
             
-            bool isCmdOpen = message.ToLower().In("开�?, "#开�?, "kq", "#kq");
+            bool isCmdOpen = message.ToLower().In("开启", "#开启", "kq", "#kq");
             bool isCmdBlack = message.IsMatch(BlackList.regexBlack);
             bool isCmdKeyword = message.IsMatch(GroupWarn.RegexCmdWarn);
 
             if (!isCmdOpen && !isCmdBlack && !isCmdKeyword)
                 return CommandResult.Continue();
 
-            // 基础配置检�?            var answer = botMsg.SetupPrivate(true, false);
+            // 基础配置检查
+            var answer = botMsg.SetupPrivate(true, false);
             if (!string.IsNullOrEmpty(answer))
                 return CommandResult.Intercepted(answer);
 
             // 1. 开启机器人
             if (isCmdOpen && !botMsg.Group.IsOpen)
             {
-                answer = await _groupService.SetRobotOpenStatusAsync(botMsg, "开�?);
+                answer = await _groupService.SetRobotOpenStatusAsync(botMsg, "开启");
                 return CommandResult.Intercepted(answer);
             }
 
-            // 2. 黑名单管�?            if (isCmdBlack)
+            // 2. 黑名单管理
+            if (isCmdBlack)
             {
-                (botMsg.CmdName, botMsg.CmdPara) = botMsg.GetCmdPara(message, BlackList.regexBlack);
-                botMsg.CmdName = botMsg.CmdName.Replace("黑名�?, "拉黑").Replace("加黑", "拉黑").Replace("删黑", "取消拉黑");
+                (botMsg.CmdName, botMsg.CmdPara) = BotMessage.GetCmdPara(message, BlackList.regexBlack);
+                botMsg.CmdName = botMsg.CmdName.Replace("黑名单", "拉黑").Replace("加黑", "拉黑").Replace("删黑", "取消拉黑");
                 answer = await _userService.HandleBlacklistAsync(botMsg);
-                answer += botMsg.GroupId == 0 ? "\n设置�?{默认群}" : "";
+                answer += botMsg.GroupId == 0 ? "\n设置到{默认群}" : "";
                 return CommandResult.Intercepted(answer);
             }
 
-            // 3. 敏感词管�?            if (isCmdKeyword)
+            // 3. 敏感词管理
+            if (isCmdKeyword)
             {
                 answer = GroupWarn.GetEditKeyword(botMsg.GroupId, message);
-                answer += !botMsg.IsGroup ? "\n设置�?{默认群}" : "";
+                answer += !botMsg.IsGroup ? "\n设置到{默认群}" : "";
                 return CommandResult.Intercepted(answer);
             }
 

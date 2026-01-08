@@ -1,6 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Core.Database;
-using sz84.Infrastructure.Caching;
+using BotWorker.Infrastructure.Persistence.Database;
+using BotWorker.Infrastructure.Caching;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {

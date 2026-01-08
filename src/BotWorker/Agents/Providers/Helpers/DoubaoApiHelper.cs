@@ -2,7 +2,7 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using BotWorker.Agents.Interfaces;
 using BotWorker.Agents.Providers.Configs;
-using BotWorker.Bots.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
 
 namespace BotWorker.Agents.Providers.Helpers
 {

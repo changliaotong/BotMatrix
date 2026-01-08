@@ -1,9 +1,9 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
-namespace sz84.common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class AdvancedExtensions
     {

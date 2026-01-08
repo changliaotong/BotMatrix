@@ -1,8 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using BotWorker.Core.Interfaces;
-
-namespace BotWorker.Infrastructure.Background
+﻿namespace BotWorker.Infrastructure.Background
 {
     public class QueuedHostedService(IBackgroundTaskQueue taskQueue, ILogger<QueuedHostedService> logger) : BackgroundService
     {

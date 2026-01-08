@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json;
-using BotWorker.Bots.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public class RemoteCall(IHubContext<ChatHub> hubContext, RemoteRequest req)
     {

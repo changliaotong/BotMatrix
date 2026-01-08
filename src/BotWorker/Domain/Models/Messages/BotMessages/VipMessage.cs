@@ -1,15 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Games;
-using sz84.Bots.Groups;
-using sz84.Bots.Models.Office;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Users;
+﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         // 换群
         public string GetChangeGroup()
         {
@@ -232,5 +224,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             return res;
         }
-    }
 }

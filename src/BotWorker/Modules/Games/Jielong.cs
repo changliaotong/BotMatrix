@@ -1,8 +1,7 @@
-﻿using sz84.Bots.BotMessages;
-using sz84.Bots.Entries;
-using BotWorker.Common.Exts;
+﻿using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Entities;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Core.Data;
 
 namespace BotWorker.Modules.Games
 {

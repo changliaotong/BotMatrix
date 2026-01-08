@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface ISensitiveWordService
     {

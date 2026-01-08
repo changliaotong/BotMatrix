@@ -1,7 +1,7 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text;
 using BotWorker.Agents.Interfaces;
-using BotWorker.Bots.Entries;
+using BotWorker.Domain.Entities;
 
 namespace BotWorker.Agents.Plugins
 {

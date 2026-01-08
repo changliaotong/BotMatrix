@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Core.Database.Mapping
+﻿namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public interface IValueConverter
     {

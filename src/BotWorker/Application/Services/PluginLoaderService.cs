@@ -1,14 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
-using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
-using Microsoft.Extensions.Logging;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface IPluginLoaderService
     {

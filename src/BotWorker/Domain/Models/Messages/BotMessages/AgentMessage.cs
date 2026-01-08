@@ -1,18 +1,10 @@
-﻿using System.Data;
-using sz84.Agents.Entries;
-using sz84.Agents.Providers;
-using sz84.Agents.Providers.Txt2Img;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System.Data;
+using BotWorker.Agents.Providers.Txt2Img;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public static long MinTokens => -300000;
         public static long MaxTokensDay => 30000;
         public static long MaxTokens => -1000000;
@@ -221,7 +213,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 if (IsPublic)
                 {
-                    var url = $"< a href =\"{Common.url}/ai?t={Token.GetToken(UserId)}";
+                    var url = $"< a href =\"{C.url}/ai?t={Token.GetToken(UserId)}";
                     Answer = $"以下地址直接<a href=\"{url}\">进入后台</a>使用文生图:\n{url}";
                 }
                 else if (CmdPara.IsNull())
@@ -340,5 +332,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             History.AddUserMessage(CurrentMessage.RemoveUserId(SelfId));
             InputTokens += CurrentMessage.GetTokensCount();
         }
-    }
 }

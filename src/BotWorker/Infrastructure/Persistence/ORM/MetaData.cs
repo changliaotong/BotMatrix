@@ -1,10 +1,8 @@
 ﻿using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Newtonsoft.Json;
 using BotWorker.Infrastructure.Extensions;
-using BotWorker.Infrastructure.Persistence.Database.Mapping;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
@@ -97,6 +95,17 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<TDerived> LoadAsync(object id, object? id2 = null)
         {
             return await GetSingleAsync(id, id2) ?? throw new Exception($"主键属性 {id} {id2}不存在");
+        }
+
+        public static void SyncCacheField(long qq, long groupId, string field, object value)
+        {
+            // TODO: 实现缓存同步逻辑（如 Redis 对应字段更新）
+            Console.WriteLine($"[CacheSync] {FullName}: {qq}-{groupId} {field} = {value}");
+        }
+
+        public static void SyncCacheField(long qq, string field, object value)
+        {
+            SyncCacheField(qq, 0, field, value);
         }
 
         // 返回主键列表，保持顺序，方便生成SQL和参数绑定

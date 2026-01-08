@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public class BrowserMcpHost : IMCPHost
     {

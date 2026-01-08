@@ -1,11 +1,5 @@
 ﻿using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
-using BotWorker.Bots.Entries;
-using BotWorker.Bots.Models.Office;
-using BotWorker.Bots.Users;
-using BotWorker.common;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {

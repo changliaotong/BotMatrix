@@ -1,6 +1,5 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using BotWorker.Bots.BotMessages;
 
 namespace BotWorker.Agents.Interfaces
 {

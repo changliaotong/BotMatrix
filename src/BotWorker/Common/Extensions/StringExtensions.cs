@@ -1,4 +1,4 @@
-﻿namespace BotWorker.BotWorker.BotWorker.Common.Exts
+﻿namespace BotWorker.Common.Extensions
 {
     public static class StringExtensions
     {
@@ -55,8 +55,13 @@
                 return string.Empty;
             }
         }
-    }
 
+        public static long GetQq(this string text)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(text, @"[1-9]\d{4,10}");
+            return match.Success ? long.Parse(match.Value) : 0;
+        }
+    }
 }
 
 

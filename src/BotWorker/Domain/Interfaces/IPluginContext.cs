@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using BotWorker.Domain.Entities;
 
 namespace BotWorker.Domain.Interfaces
@@ -22,8 +22,8 @@ namespace BotWorker.Domain.Interfaces
         BotInfo? Bot { get; }
 
         // 服务接口
-        // IAIService AI { get; }
-        // II18nService I18n { get; }
+        Services.IAIService AI { get; }
+        Application.Services.II18nService I18n { get; }
 
         // 动作
         Task ReplyAsync(string message);

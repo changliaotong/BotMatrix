@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
-namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class DiagnosticsExtensions
     {

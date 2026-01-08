@@ -1,7 +1,7 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.RegularExpressions;
 
-namespace sz84.common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class Extensions
     {

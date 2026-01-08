@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Text;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +24,8 @@ namespace BotWorker.Infrastructure.Extensions
                 .Concat(LoadModulesFromPluginFolder("plugins"))
                 .ToList();
 
-            // 建图、检测依�?            foreach (var module in modules)
+            // 建图、检测依赖
+            foreach (var module in modules)
             {
                 var name = module.Metadata.Name;
                 LoadedModules[name] = module;

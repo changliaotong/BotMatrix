@@ -1,6 +1,8 @@
-﻿using BotWorker.Core.Data;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Constants;
+using BotWorker.Core.Data;
 
-namespace BotWorker.Domain.Entities.Achievement
+namespace BotWorker.Modules.Achievement
 {
     public partial class AchievementService(AppDbContext db) : IAchievementService
     {

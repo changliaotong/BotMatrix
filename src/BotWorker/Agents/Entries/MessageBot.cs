@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
-using BotWorker.Bots.Entries;
-using BotWorker.Common.Exts;
+using BotWorker.Domain.Entities;
+using BotWorker.Common.Extensions;
 
 namespace BotWorker.Agents.Entries
 {

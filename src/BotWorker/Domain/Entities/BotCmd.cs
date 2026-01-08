@@ -1,6 +1,3 @@
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public partial class BotCmd : MetaData<BotCmd>

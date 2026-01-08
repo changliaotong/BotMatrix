@@ -1,8 +1,3 @@
-using BotWorker.Bots.Entries;
-using BotWorker.Common.Exts;
-using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
-
 namespace BotWorker.Agents.Providers.Txt2Img
 {
     public class DalleImages : MetaData<DalleImages>

@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.Data.SqlClient;
-using BotWorker.Core.MetaDatas;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Agents.Entries
 {

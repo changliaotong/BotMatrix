@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.Interfaces;
+﻿using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Domain.Entities.Punch
+namespace BotWorker.Modules.Punch
 {
     public class PunchMetadata : IModuleMetadata
     {

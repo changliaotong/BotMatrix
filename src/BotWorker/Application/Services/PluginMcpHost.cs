@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
-using BotWorker.Core.OneBot;
+using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Infrastructure.Utils;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public class PluginMcpHost : IMCPHost
     {

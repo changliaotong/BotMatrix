@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public static class SignalRClientServiceFactory
     {

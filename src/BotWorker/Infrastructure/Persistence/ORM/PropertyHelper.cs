@@ -2,7 +2,7 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public enum FieldControlType
     {

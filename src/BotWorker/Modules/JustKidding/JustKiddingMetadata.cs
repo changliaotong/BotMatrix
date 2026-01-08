@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.Interfaces;
+﻿using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Domain.Entities.JustKidding
+namespace BotWorker.Modules.JustKidding
 {
     public class JustKiddingMetadata : IModuleMetadata
     {

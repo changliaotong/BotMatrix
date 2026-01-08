@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using BotWorker.Core.Interfaces;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Domain.Entities.Ranking
+namespace BotWorker.Modules.Ranking
 {
     public class RankingModule : IBotModule
     {

@@ -1,14 +1,10 @@
-﻿using sz84.Agents.Entries;
-using BotWorker.Common.Exts;
-using sz84.Bots.Entries;
+﻿using System.Reflection;
 using System.Diagnostics;
-using System.Reflection;
-using sz84.Bots.Platform;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
-{
-    public partial class BotMessage
-    {        
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage
+{        
         public string MsgGuid { get; set; } = Guid.NewGuid().ToString();
         public long SelfId => SelfInfo.BotUin;
         public string SelfName => SelfInfo.BotName;
@@ -208,6 +204,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 // 忽略日志错误，避免影响主流程
             }
         }
-
-    }
 }

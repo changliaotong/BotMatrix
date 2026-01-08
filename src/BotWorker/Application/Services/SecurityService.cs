@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -6,7 +6,7 @@ using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using BCrypt.Net;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface ISecurityService
     {

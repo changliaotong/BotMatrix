@@ -1,14 +1,9 @@
 ﻿using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Groups;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public bool IsWhiteList(long userId)
         {
             return WhiteList.Exists(GroupId, userId)
@@ -119,5 +114,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 ? RetryMsg
                 : "✅ 白名单已清空";
         }
-    }
 }

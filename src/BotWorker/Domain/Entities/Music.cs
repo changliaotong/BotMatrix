@@ -4,8 +4,7 @@ using System.Data;
 using System.Text.Json;
 using System.Web;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
-using sz84.Core.Data;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
@@ -107,9 +106,9 @@ namespace BotWorker.Domain.Entities
             return doc.RootElement.GetProperty("url").GetString()!;
         }
 
-        public static MusicShareMessage GetMusicShareMessage(long id)
+        public static BotWorker.Models.MusicShareMessage GetMusicShareMessage(long id)
         {
-            var msm = new MusicShareMessage();
+            var msm = new BotWorker.Models.MusicShareMessage();
             using (var dt = QueryDataset($"select top 1 * from {FullName} where Id = {id}"))
             {
                 foreach (DataRow dr in dt.Tables[0].Rows)
@@ -138,12 +137,12 @@ namespace BotWorker.Domain.Entities
             }
         }
 
-        public static MusicShareMessage ParseMusicPayload(string payloadJson)
+        public static BotWorker.Models.MusicShareMessage ParseMusicPayload(string payloadJson)
         {
             dynamic? data = JsonConvert.DeserializeObject(payloadJson);
-            if (data == null) return new MusicShareMessage();
+            if (data == null) return new BotWorker.Models.MusicShareMessage();
 
-            return new MusicShareMessage
+            return new BotWorker.Models.MusicShareMessage
             {
                 Kind = GetString(data.meta.music.tag).Replace("QQ音乐", "QQMusic").Replace("网易云音乐", "NeteaseCloudMusic").Replace("酷狗音乐", "KugouMusic"),
                 Title = data.meta.music.title,
@@ -283,5 +282,19 @@ namespace BotWorker.Domain.Entities
         public string Artist { get; set; } = "";
         public string Cover { get; set; } = "";
         public string AudioUrl { get; set; } = "";
+
+        public BotWorker.Models.MusicShareMessage ToMusicShareMessage()
+        {
+            return new BotWorker.Models.MusicShareMessage
+            {
+                Title = Name,
+                Summary = Artist,
+                PictureUrl = Cover,
+                JumpUrl = AudioUrl,
+                MusicUrl = AudioUrl,
+                Brief = $"[分享]{Name}",
+                Kind = "QQMusic"
+            };
+        }
     }
 }

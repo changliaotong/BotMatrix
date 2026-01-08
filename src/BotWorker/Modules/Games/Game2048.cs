@@ -1,7 +1,7 @@
 ﻿using BotWorker.Common;
-using BotWorker.Common.Exts;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Users;
+using BotWorker.Domain.Entities;
 
 namespace BotWorker.Modules.Games
 {

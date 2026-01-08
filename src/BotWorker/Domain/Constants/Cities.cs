@@ -1,7 +1,4 @@
-﻿using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
-
-namespace BotWorker.Core.Data
+﻿namespace BotWorker.Domain.Constants
 {
     /// <summary>
     /// �й���������

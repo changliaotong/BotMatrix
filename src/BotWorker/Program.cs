@@ -1,17 +1,14 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using System.Linq;
-using BotWorker.Services;
-using BotWorker.Core.Plugin;
-using BotWorker.Core.Services;
-using BotWorker.Infrastructure.Caching;
 using Serilog;
 using Microsoft.EntityFrameworkCore;
-using BotWorker.Infrastructure.Background;
-using BotWorker.Core.Pipeline;
-
-using BotWorker.Core.Configurations;
+using BotWorker.Application.Messaging.Pipeline;
+using BotWorker.Common.Config;
+using BotWorker.Application.Messaging.Handlers;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Modules.Plugins;
+using BotWorker.Application.Services;
+using BotWorker.Infrastructure.Persistence.Database;
+using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Infrastructure.Utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,19 +60,6 @@ builder.Services.AddTransient<BuiltinCommandMiddleware>();
 builder.Services.AddSingleton<AiMiddleware>();
 builder.Services.AddTransient<AutoSignInMiddleware>();
 
-// 注册底层数据访问层
-builder.Services.AddSingleton<Core.Repositories.IGroupRepository, Core.Repositories.GroupRepository>();
-builder.Services.AddSingleton<Core.Repositories.IUserRepository, Core.Repositories.UserRepository>();
-
-// 注册底层服务
-builder.Services.AddSingleton<Core.Services.IBotApiService, Core.Services.BotApiService>();
-builder.Services.AddSingleton<Core.Services.IPermissionService, Core.Services.PermissionService>();
-
-// 注册业务服务
-builder.Services.AddSingleton<Core.Services.IGroupService, Core.Services.GroupService>();
-builder.Services.AddSingleton<Core.Services.IUserService, Core.Services.UserService>();
-builder.Services.AddSingleton<Core.Services.IHotCmdService, Core.Services.HotCmdService>();
-
   // 注册指令处理器
    builder.Services.AddSingleton<AdminCommandHandler>();
    builder.Services.AddSingleton<SetupCommandHandler>();
@@ -85,7 +69,7 @@ builder.Services.AddSingleton<Core.Services.IHotCmdService, Core.Services.HotCmd
   // 注册并配置 Pipeline
 builder.Services.AddSingleton<MessagePipeline>(sp => 
 {
-    var pipeline = new MessagePipeline();
+    var pipeline = new MessagePipeline(sp);
     // 1. 全局异常处理
     pipeline.Use(sp.GetRequiredService<ExceptionMiddleware>());
     // 2. 最终消息加工
@@ -125,8 +109,8 @@ builder.Services.AddHostedService<StartupPluginLoader>();
 var app = builder.Build();
 
 // 注入插件管理器到 BotMessage
-BotWorker.Bots.BotMessages.BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
-BotWorker.Bots.BotMessages.BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
+BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
+BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
 
 // 检查是否为测试模式
 if (args.Contains("--test"))

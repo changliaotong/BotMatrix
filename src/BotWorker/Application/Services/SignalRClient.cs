@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using BotWorker.Bots.Entries;
+using Microsoft.AspNetCore.SignalR.Client;
+using BotWorker.Domain.Entities;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public class SignalRClient
     {

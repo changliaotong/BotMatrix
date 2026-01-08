@@ -1,6 +1,6 @@
 ﻿using BotWorker.Infrastructure.Persistence.ORM;
 
-namespace sz84.Bots.Users
+namespace BotWorker.Domain.Entities
 {
     public partial class UserInfo : MetaDataGuid<UserInfo>
     {

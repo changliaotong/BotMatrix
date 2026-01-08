@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface IDatabaseService
     {

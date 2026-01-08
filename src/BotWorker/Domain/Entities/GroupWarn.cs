@@ -1,8 +1,5 @@
 ﻿using System.Text.RegularExpressions;
-using BotWorker.Bots.Entries;
-using BotWorker.common;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
+using BotWorker.Common;
 
 namespace BotWorker.Domain.Entities
 {

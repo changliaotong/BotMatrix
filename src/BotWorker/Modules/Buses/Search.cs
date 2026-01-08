@@ -1,10 +1,10 @@
-﻿using System.Text.RegularExpressions;
-using sz84.common;
-using sz84.common.Exts;
-using BotWorker.Domain.MetaDatas;
-using BotWorker.Domain.Database;
+using System.Text.RegularExpressions;
+using BotWorker.Common;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Infrastructure.Persistence.Database;
 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Modules.Buses
 {
     public class Search : MetaData<Search>
     {
@@ -44,7 +44,7 @@ namespace sz84.Bots.Models.Buses
             string answer = "BBS";
             string url = GetKeywordURL(client_id, client_ip, keyword, ref answer, false);
             if (answer != "")
-                return answer + $"\n{Common.url}" + url;
+                return answer + $"\n{C.url}" + url;
             else
                 return "";
         }

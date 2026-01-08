@@ -1,9 +1,8 @@
 ﻿using Microsoft.Data.SqlClient;
-using sz84.Bots.Entries;
-using BotWorker.Common.Exts;
+using BotWorker.Domain.Entities;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Infrastructure.Utils;
-using sz84.Bots.Users;
+using BotWorker.Infrastructure.Utils;
 
 namespace BotWorker.Modules.Games
 {

@@ -1,15 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Games.Gift;
-using sz84.Bots.Users;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         // 兑换本群积分/金币/紫币等
         public string ExchangeCoins(string cmdPara, string cmdPara2)
         {
@@ -188,4 +180,3 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             return $"早喵也爱你，么么哒";
         }
     }
-}

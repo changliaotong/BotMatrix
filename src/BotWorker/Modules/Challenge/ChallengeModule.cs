@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using BotWorker.Domain.Interfaces;
 
-namespace sz84.Bots.Models.Challenge
+namespace BotWorker.Modules.Challenge
 {
     public class ChallengeModule : IBotModule
     {

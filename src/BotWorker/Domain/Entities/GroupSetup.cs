@@ -1,9 +1,4 @@
-﻿using BotWorker.Bots.Users;
-using BotWorker.common;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
-
-namespace BotWorker.Domain.Entities
+﻿namespace BotWorker.Domain.Entities
 {
     public partial class GroupInfo : MetaDataGuid<GroupInfo>
     {

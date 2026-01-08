@@ -1,6 +1,4 @@
 ﻿using Microsoft.Data.SqlClient;
-using BotWorker.Infrastructure.Extensions;
-using BotWorker.Infrastructure.Persistence.Database.Mapping;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {

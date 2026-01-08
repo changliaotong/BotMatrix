@@ -1,22 +1,22 @@
-﻿using System.Diagnostics;
-using Microsoft.SemanticKernel.ChatCompletion;
+﻿using Microsoft.SemanticKernel.ChatCompletion;
 using Newtonsoft.Json;
 using QQBot4Sharp.Models;
-using sz84.Agents.Entries;
-using sz84.Agents.Plugins;
-using sz84.Agents.Providers;
-using sz84.Bots.Entries;
-using sz84.Bots.Platform;
-using sz84.Bots.Users;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Core.Services;
-using sz84.Infrastructure.Utils;
+using BotWorker.Agents.Providers;
+using BotWorker.Infrastructure.Utils;
+using System.Diagnostics;
+using BotWorker.Agents.Plugins;
+using BotWorker.Modules.Plugins;
+using BotWorker.Application.Messaging.Pipeline;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages;
 
 public partial class BotMessage : MetaData<BotMessage>
 {
+    [JsonIgnore]
+    public static PluginManager? PluginManager { get; set; }
+    [JsonIgnore]
+    public static MessagePipeline? Pipeline { get; set; }
+
     [JsonIgnore]
     public KnowledgeBaseService? KbService;
     public GroupInfo Group { get; set; } = new();

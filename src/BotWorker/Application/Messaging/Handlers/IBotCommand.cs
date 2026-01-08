@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
+using BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Core.Commands
+namespace BotWorker.Application.Messaging.Handlers
 {
     /// <summary>
     /// 指令执行结果

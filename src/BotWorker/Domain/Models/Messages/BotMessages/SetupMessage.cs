@@ -1,10 +1,7 @@
-﻿using System.Text.RegularExpressions;
-using sz84.Agents.Entries;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
+using System.Text.RegularExpressions;
+using BotWorker.Domain.Entities;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages
@@ -537,6 +534,19 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 4 => IsRobotOwner(),
                 _ => false
             };
+        }
+
+        public async Task<string> GetOpenAsync(bool open)
+        {
+            if (!HaveSetupRight()) return "您无权修改本群设置！";
+            Group.IsPowerOn = open;
+            await Group.UpdateAsync();
+            return open ? "机器人已开机" : "机器人已关机";
+        }
+
+        public async Task<string> HandleSetupAsync()
+        {
+            return await SetupResAsync();
         }
     }
 }

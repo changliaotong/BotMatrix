@@ -1,11 +1,7 @@
 ﻿using System.Data;
 using Microsoft.Data.SqlClient;
-using sz84.common.Exts;
-using sz84.Core;
-using BotWorker.Domain.Database;
-using BotWorker.Domain.MetaDatas;
 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Modules.Buses
 {
     public class BusStops : MetaData<BusStops>
     {

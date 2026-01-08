@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Entities.Achievement
+﻿namespace BotWorker.Modules.Achievement
 {
     public interface IAchievementService
     {

@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using BotWorker.Domain.Interfaces;
+using BotWorker.Modules.Plugins;
 
 namespace BotWorker.Application.Messaging.Pipeline
 {
@@ -8,31 +9,34 @@ namespace BotWorker.Application.Messaging.Pipeline
     /// </summary>
     public class SetupMiddleware : IMiddleware
     {
-        public async Task InvokeAsync(IMessageContext context, MessageDelegate next)
+        public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
-            var botMsg = context.Message;
-            var message = botMsg.CurrentMessage.Trim();
+            if (context is PluginContext pluginCtx && pluginCtx.Event is Infrastructure.Communication.OneBot.BotMessageEvent botMsgEvent)
+            {
+                var botMsg = botMsgEvent.BotMessage;
+                var message = botMsg.CurrentMessage.Trim();
 
-            // 处理 开机/关闭 指令
-            if (message == "开机" || message == "#开机")
-            {
-                botMsg.Answer = await botMsg.GetOpenAsync(true);
-                return;
-            }
-            if (message == "关闭" || message == "#关闭")
-            {
-                botMsg.Answer = await botMsg.GetOpenAsync(false);
-                return;
-            }
-
-            // 处理 拉黑/敏感词等管理逻辑
-            if (botMsg.IsAtMe || botMsg.IsCmd)
-            {
-                var res = await botMsg.HandleSetupAsync();
-                if (!string.IsNullOrEmpty(res))
+                // 处理 开机/关闭 指令
+                if (message == "开机" || message == "#开机")
                 {
-                    botMsg.Answer = res;
+                    botMsg.Answer = await botMsg.GetOpenAsync(true);
                     return;
+                }
+                if (message == "关闭" || message == "#关闭")
+                {
+                    botMsg.Answer = await botMsg.GetOpenAsync(false);
+                    return;
+                }
+
+                // 处理 拉黑/敏感词等管理逻辑
+                if (botMsg.IsAtMe || botMsg.IsCmd)
+                {
+                    var res = await botMsg.HandleSetupAsync();
+                    if (!string.IsNullOrEmpty(res))
+                    {
+                        botMsg.Answer = res;
+                        return;
+                    }
                 }
             }
 

@@ -1,10 +1,10 @@
-﻿using System.Data;
+using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace sz84.common.Exts
+namespace BotWorker.Common.Extensions
 {
     public class Cov(string Name, object? value)
     {
@@ -345,7 +345,7 @@ namespace sz84.common.Exts
             }
             catch (Exception e)
             {
-                Common.ErrorMessage($"\nException Caught!\nMessage :{e.Message}");
+                C.ErrorMessage($"\nException Caught!\nMessage :{e.Message}");
                 return "";
             }
         }

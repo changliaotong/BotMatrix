@@ -1,15 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Models.Office;
-using sz84.Bots.Users;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         //卖出积分
         public string GetSellCredit()
         {
@@ -309,5 +301,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 return icon;
             });
         }
-    }
 }

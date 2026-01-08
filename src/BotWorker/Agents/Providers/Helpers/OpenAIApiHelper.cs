@@ -3,8 +3,8 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using BotWorker.Agents.Interfaces;
 using BotWorker.Agents.Plugins;
 using BotWorker.Agents.Providers.Configs;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Common.Exts;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Logging;
 
 namespace BotWorker.Agents.Providers.Helpers

@@ -1,24 +1,25 @@
-﻿using System;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Entities;
-using BotWorker.Infrastructure.Extensions;
-using BotWorker.Infrastructure.Utils;
-using BotWorker.Core.MetaDatas;
-using BotWorker.Core.Database;
 using BotWorker.Modules.Office;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Infrastructure.Persistence.Database;
+using BotWorker.Infrastructure.Utils;
+using BotWorker.Domain.Entities;
+using BotWorker.Common;
 
 namespace BotWorker.Application.Services
 {
     public interface IUserService
     {
-        Task<string> GetBlackRes(BotMessage botMsg);
+        Task<string> HandleBlacklistAsync(BotMessage botMsg);
         string GetSaveCreditRes(BotMessage botMsg);
         string GetRewardCredit(BotMessage botMsg);
         string GetCreditList(BotMessage botMsg, long top = 10);
         string GetSellCredit(BotMessage botMsg);
+        Task<string> HandleSaveCreditAsync(BotMessage botMsg);
+        Task<string> HandleRewardCreditAsync(BotMessage botMsg);
+        Task<string> GetCreditRankAsync(BotMessage botMsg);
+        Task<string> ExchangeCoinsAsync(BotMessage botMsg);
+        Task<string> ExchangeCoinsAsync(BotMessage botMsg, string cmdPara, string cmdPara2);
     }
 
     public class UserService : IUserService
@@ -32,7 +33,7 @@ namespace BotWorker.Application.Services
 
         #region 黑名单逻辑 (复刻自 BlackMessage.cs)
 
-        public async Task<string> GetBlackRes(BotMessage botMsg)
+        public async Task<string> HandleBlacklistAsync(BotMessage botMsg)
         {
             botMsg.IsCancelProxy = true;
 
@@ -61,7 +62,7 @@ namespace BotWorker.Application.Services
 
         private string GetGroupBlackList(BotMessage botMsg)
         {
-            return botMsg.QueryRes($"SELECT TOP 10 BlackId FROM {BlackList.FullName} WHERE GroupId = {botMsg.GroupId} ORDER BY Id DESC",
+            return SQLConn.QueryRes($"SELECT TOP 10 BlackId FROM {BlackList.FullName} WHERE GroupId = {botMsg.GroupId} ORDER BY Id DESC",
                             "{i} {0}\n") +
                    "已拉黑人数：" + BlackList.CountWhere($"GroupId = {botMsg.GroupId}") +
                    "\n拉黑 + QQ\n删黑 + QQ";
@@ -70,7 +71,7 @@ namespace BotWorker.Application.Services
         private string GetClearBlack(BotMessage botMsg)
         {
             if (!botMsg.IsRobotOwner())
-                return botMsg.OwnerOnlyMsg;
+                return C.OwnerOnlyMsg;
 
             long blackCount = BlackList.CountKey2(botMsg.GroupId.ToString());
             if (blackCount == 0)
@@ -80,7 +81,7 @@ namespace BotWorker.Application.Services
                 return botMsg.ConfirmMessage($"清空黑名单 人数{blackCount}");
 
             return BlackList.DeleteAll(botMsg.GroupId) == -1
-                ? botMsg.RetryMsg
+                ? C.RetryMsg
                 : "✅ 黑名单已清空";
         }
 
@@ -110,7 +111,7 @@ namespace BotWorker.Application.Services
                     : $"✅ 已将[@:{qqBlack}]从白名单删除！\n";
             }
             res += BlackList.AddBlackList(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, qqBlack, "") == -1
-                ? $"[@:{qqBlack}]{botMsg.RetryMsg}"
+                ? $"[@:{qqBlack}]{C.RetryMsg}"
                 : $"✅ 已拉黑！";
             return res;
         }
@@ -121,7 +122,7 @@ namespace BotWorker.Application.Services
 
             if (BlackList.Exists(botMsg.GroupId, userId))
                 res = BlackList.Delete(botMsg.GroupId, userId) == -1
-                    ? $"[@:{userId}]{botMsg.RetryMsg}\n"
+                    ? $"[@:{userId}]{C.RetryMsg}\n"
                     : $"[@:{userId}]已解除拉黑\n";
             else
                 res = $"[@:{userId}]不在黑名单，无需解除\n";
@@ -140,7 +141,7 @@ namespace BotWorker.Application.Services
             botMsg.IsCancelProxy = true;
 
             if (!botMsg.Group.IsCreditSystem)
-                return botMsg.CreditSystemClosed;
+                return C.CreditSystemClosed;
 
             if (botMsg.CmdPara == "")
                 return "格式:存分 + 积分数\n取分 + 积分数\n例如：存分 100";
@@ -207,10 +208,10 @@ namespace BotWorker.Application.Services
             creditValue -= creditOper;
             var sql = CreditLog.SqlHistory(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, -creditOper, cmdName);
             var sql2 = UserInfo.SqlSaveCredit(botMsg.SelfId, botMsg.GroupId, botMsg.UserId, creditOper);
-            int i = botMsg.ExecTrans(sql, sql2);
+            int i = SQLConn.ExecTrans(sql, sql2);
             if (i == -1)
             {
-                res = botMsg.RetryMsg;
+                res = C.RetryMsg;
                 return i;
             }
             res = $"✅ {cmdName}：{credit_oper2}\n" +
@@ -229,7 +230,7 @@ namespace BotWorker.Application.Services
             botMsg.IsCancelProxy = true;
 
             if (!botMsg.Group.IsCreditSystem)
-                return botMsg.CreditSystemClosed;
+                return C.CreditSystemClosed;
 
             string regex_reward;
             if (botMsg.CmdPara.IsMatch(Regexs.CreditParaAt))
@@ -273,7 +274,7 @@ namespace BotWorker.Application.Services
             string transferFee = isPartner || isSuper ? "" : $"\n💸 服务费：{rewardCredit * 2 / 10:N0}";
 
             return i == -1
-                ? botMsg.RetryMsg
+                ? C.RetryMsg
                 : $"✅ 打赏成功！\n🎉 打赏积分：{rewardCredit:N0}{transferFee:N0}\n🎯 对方积分：{creditValue2:N0}\n🙋 您的积分：{creditValue:N0}";
         }
 
@@ -326,7 +327,7 @@ namespace BotWorker.Application.Services
             botMsg.IsCancelProxy = true;
 
             if (!botMsg.Group.IsCreditSystem)
-                return botMsg.CreditSystemClosed;
+                return C.CreditSystemClosed;
 
             if (botMsg.CmdPara == "")
                 return "📄 命令格式：卖分 + 数值\n📌 使用示例：卖分 1000\n💎 超级积分：10,000→4R\n🎁 普通积分：10,000→1R\n📦 您的{积分类型}：{积分}";
@@ -349,6 +350,33 @@ namespace BotWorker.Application.Services
                 return $"您只有{creditValue}分";
 
             return "您无权使用此命令";
+        }
+
+        public async Task<string> HandleSaveCreditAsync(BotMessage botMsg)
+        {
+            return await Task.Run(() => GetSaveCreditRes(botMsg));
+        }
+
+        public async Task<string> HandleRewardCreditAsync(BotMessage botMsg)
+        {
+            return await Task.Run(() => GetRewardCredit(botMsg));
+        }
+
+        public async Task<string> GetCreditRankAsync(BotMessage botMsg)
+        {
+            return await Task.Run(() => GetCreditList(botMsg));
+        }
+
+        public async Task<string> ExchangeCoinsAsync(BotMessage botMsg)
+        {
+            // 这里可以根据 CmdPara 决定逻辑
+            return "暂不支持";
+        }
+
+        public async Task<string> ExchangeCoinsAsync(BotMessage botMsg, string cmdPara, string cmdPara2)
+        {
+            botMsg.CmdPara = $"{cmdPara} {cmdPara2}";
+            return await ExchangeCoinsAsync(botMsg);
         }
 
         #endregion

@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Core.Interfaces;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Interfaces;
 
 namespace BotWorker.Infrastructure.Background
 {

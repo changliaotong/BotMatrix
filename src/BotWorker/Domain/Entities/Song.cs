@@ -1,6 +1,4 @@
-﻿using sz84.Core.Data;
-
-namespace BotWorker.Domain.Entities
+﻿namespace BotWorker.Domain.Entities
 {
     public class Song
     {

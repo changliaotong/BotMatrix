@@ -1,7 +1,6 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Text;
-using BotWorker.Core.Database;
 
 namespace BotWorker.Infrastructure.Utils
 {

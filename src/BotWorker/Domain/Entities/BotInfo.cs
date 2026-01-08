@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using Newtonsoft.Json;
 using OneBotSharp.Objs.Event;
-using sz84.Bots.Platform;
-using BotWorker.Common.Exts;
+using BotWorker.Domain.Constants;
+using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities

@@ -1,7 +1,5 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
-using BotWorker.Core.MetaDatas;
-using BotWorker.Core.Database;
 
 namespace BotWorker.Infrastructure.Tools
 {

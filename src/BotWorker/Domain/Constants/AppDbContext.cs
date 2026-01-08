@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using BotWorker.Bots.Models.Achievement;
-using BotWorker.Bots.Models.Limiter;
+using BotWorker.Modules.Achievement;
+using BotWorker.Models;
 
 namespace BotWorker.Core.Data
 {
@@ -10,7 +10,6 @@ namespace BotWorker.Core.Data
         public DbSet<Achievement> Achievements => Set<Achievement>();
         public DbSet<UserAchievement> UserAchievement => Set<UserAchievement>();
 
-        // ��ѡ�����ñ�����������
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

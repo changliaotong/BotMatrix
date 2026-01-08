@@ -1,16 +1,9 @@
 ﻿using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
-using sz84.Bots.Users;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public async Task<bool> HandleBlackWarnAsync()
         {
             //黑名单、敏感词系统
@@ -318,5 +311,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             else
                 return $"警告{countWarn}次！{Group.KickCount}次T飞，{Group.BlackCount}次拉黑";
         }
-    }
 }

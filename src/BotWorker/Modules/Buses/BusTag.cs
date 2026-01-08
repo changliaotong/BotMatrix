@@ -1,8 +1,7 @@
-﻿using BotWorker.common.Exts;
-using sz84.Core;
-using BotWorker.Domain.MetaDatas;
+﻿using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.ORM;
 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Modules.Buses
 {
     public class BusTag : MetaData<BusTag>
     {

@@ -1,8 +1,11 @@
-﻿using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
-using BotWorker.BotWorker.BotWorker.Common.Exts;
+using System.Threading.Tasks;
+using BotWorker.Common.Extensions;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Modules.Plugins;
+using BotWorker.Infrastructure.Utils;
 
-namespace BotWorker.Core.Pipeline
+namespace BotWorker.Application.Messaging.Pipeline
 {
     /// <summary>
     /// 预处理中间件：清洗消息（移除广告、繁转简、处理@me等）
@@ -11,12 +14,12 @@ namespace BotWorker.Core.Pipeline
     {
         public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
-            if (context is PluginContext pluginCtx && pluginCtx.Event is Core.OneBot.BotMessageEvent botMsgEvent)
+            if (context is PluginContext pluginCtx && pluginCtx.Event is BotMessageEvent botMsgEvent)
             {
                 var botMsg = botMsgEvent.BotMessage;
 
                 // 1. 同行过滤
-                if (botMsg.UserInfo.StartWith285or300(botMsg.UserId))
+                if (UserInfo.StartWith285or300(botMsg.UserId))
                 {
                     botMsg.Reason += "[同行]";
                     return; // 彻底拦截
@@ -30,9 +33,9 @@ namespace BotWorker.Core.Pipeline
 
                 // 3. 识别是否 @ 其它�?                botMsg.IsAtOthers = botMsg.IsGroup && botMsg.CurrentMessage.RemoveQqImage().IsHaveUserId();
 
-                // 4. 强制前缀检�?                if (botMsg.Group.IsRequirePrefix)
+                // 4. 强制前缀检?                if (botMsg.Group.IsRequirePrefix)
                 {
-                    if (!botMsg.CurrentMessage.IsMatch(Common.Regexs.Prefix))
+                    if (!botMsg.CurrentMessage.IsMatch(Regexs.Prefix))
                     {
                         botMsg.Reason += "[前缀]";
                         return; // 拦截

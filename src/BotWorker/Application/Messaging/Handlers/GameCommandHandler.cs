@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
-using BotWorker.BotWorker.BotWorker.Common.Exts;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Common.Extensions;
 
-namespace BotWorker.Core.Commands
+namespace BotWorker.Application.Messaging.Handlers
 {
     public class GameCommandHandler
     {

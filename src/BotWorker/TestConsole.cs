@@ -1,13 +1,4 @@
-using System;
-using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Bots.Entries;
-using BotWorker.Bots.Users;
-using BotWorker.Core.Configurations;
 using BotWorker.Common;
-using Microsoft.Extensions.Configuration;
-using BotWorker.Bots.Platform;
-using Internal;
 
 namespace BotWorker
 {

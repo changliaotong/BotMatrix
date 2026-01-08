@@ -16,7 +16,6 @@ namespace BotWorker.Core.Configurations
         internal static string _apiKey => _configuration?["sz84:api_key"] ?? "AFCDE195E9EE00DCFCB5E0ED44D129EB";
 
         public static string RetryMsgTooFast => _configuration?["Messages:RetryMsgTooFast"] ?? "速度太快了，请稍后再试";
-        public static string OwnerOnlyMsg => _configuration?["Messages:OwnerOnlyMsg"] ?? "此命令仅机器人主人可用";
         public static string YearOnlyMsg => _configuration?["Messages:YearOnlyMsg"] ?? "非年费版不能使用此功能";
         public static long[] OfficalBots { get; set; } = [3889418604, 3889420782, 3889411042, 3889610970, 3889535978, 3889494926, 3889699720, 3889699721, 3889699722, 3889699723];
     }
@@ -34,6 +33,7 @@ namespace BotWorker.Common
         public const string BlackListMsg = "该号码已被官方拉黑";
         public const string CreditSystemClosed = "积分系统已关闭";
         public const string RetryMsg = "操作失败，请稍后重试";
+        public static string OwnerOnlyMsg => "此命令仅机器人主人可用";
         public const long SystemPromptGroup = 320;
         public const long C2CMessageGroupId = 990000000003;
 

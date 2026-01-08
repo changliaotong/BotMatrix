@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using sz84.Bots.Models.Limiter;
+using BotWorker.Application.Services;
 
-namespace sz84.Bots.Models.Challenge
+namespace BotWorker.Modules.Challenge
 {
     public class ChallengeService
     {

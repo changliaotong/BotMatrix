@@ -1,6 +1,4 @@
 ﻿using System.Reflection;
-using BotWorker.Infrastructure.Persistence.Database.Mapping;
-using sz84.Core.MetaDatas;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {

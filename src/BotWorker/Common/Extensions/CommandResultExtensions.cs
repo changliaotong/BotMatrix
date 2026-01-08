@@ -1,96 +1,56 @@
-﻿namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
-    public class CommandResult
+    public class OperationResult
     {
         public bool Success { get; set; }
-        public string? Message { get; set; } // ��ѡ��ʧ�ܻ���ʾ��Ϣ
-        public Exception? Exception { get; set; } // ������쳣
-        public static CommandResult Fail(string? message = null, Exception? ex = null)
+        public string? Message { get; set; } 
+        public Exception? Exception { get; set; } 
+        public static OperationResult Fail(string? message = null, Exception? ex = null)
         {
-            return new CommandResult
+            return new OperationResult
             {
                 Success = false,
-                Message = message ?? ex?.Message ?? "����ʧ��",
+                Message = message ?? ex?.Message ?? "操作失败",
                 Exception = ex
             };
         }
 
-        public static CommandResult Ok(string? message = null)
+        public static OperationResult Ok(string? message = null)
         {
-            return new CommandResult
+            return new OperationResult
             {
                 Success = true,
-                Message = message ?? "�����ɹ�",
+                Message = message ?? "操作成功",
                 Exception = null
             };
         }
 
-        // ʵ��������ʽ�޸�
-        public CommandResult SetSuccess(string? message = null)
+        public OperationResult SetSuccess(string? message = null)
         {
             Success = true;
-            Message = message ?? "�����ɹ�";
+            Message = message ?? "操作成功";
             Exception = null;
             return this;
         }
 
-        public CommandResult SetFail(string? message = null, Exception? ex = null)
+        public OperationResult SetFail(string? message = null, Exception? ex = null)
         {
             Success = false;
-            Message = message ?? ex?.Message ?? "����ʧ��";
+            Message = message ?? ex?.Message ?? "操作失败";
             Exception = ex;
             return this;
         }
     }
-    public static class CommandResultExtensions
+    public static class OperationResultExtensions
     {
-        /// <summary>
-        /// �����ж��Ƿ�ʧ��
-        /// </summary>
-        public static bool IsFail(this CommandResult? result)
+        public static bool IsFail(this OperationResult? result)
         {
             return result == null || !result.Success;
         }
 
-        /// <summary>
-        /// �����ж��Ƿ�ɹ�
-        /// </summary>
-        public static bool IsSuccess(this CommandResult? result)
+        public static bool IsOk(this OperationResult? result)
         {
             return result != null && result.Success;
         }
-
-        /// <summary>
-        /// ʧ��ʱ������Ϣ���쳣������������
-        /// </summary>
-        public static CommandResult Fail(this CommandResult result, string? message = null, Exception? ex = null)
-        {
-            result.Success = false;
-            result.Message = message ?? ex?.Message ?? "����ʧ��";
-            result.Exception = ex;
-            return result;
-        }
-
-        /// <summary>
-        /// �ɹ�ʱ������Ϣ������������
-        /// </summary>
-        public static CommandResult Ok(this CommandResult result, string? message = null)
-        {
-            result.Success = true;
-            result.Message = message ?? "�����ɹ�";
-            result.Exception = null;
-            return result;
-        }
-
-        /// <summary>
-        /// ת��Ϊ��ʽ���ַ���
-        /// </summary>
-        public static string ToFormattedString(this CommandResult result)
-        {
-            return result.Success ? $"? �ɹ���{result.Message}" : $"? ʧ�ܣ�{result.Message ?? result.Exception?.Message}";
-        }
     }
-
 }
-
-

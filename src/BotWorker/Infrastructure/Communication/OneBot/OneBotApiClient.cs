@@ -17,14 +17,15 @@ namespace BotWorker.Infrastructure.Communication.OneBot
 
         public async Task<T?> SendActionAsync<T>(string action, object? @params = null) where T : class
         {
-            var response = await SendActionAsync(action, @params);
+            var response = await ((IOneBotApiClient)this).SendActionAsync(action, @params);
             if (response == null) return null;
             return JsonSerializer.Deserialize<T>(response.ToString() ?? "");
         }
 
-        public Task<object?> SendActionAsync(string action, object? @params = null)
+        public async Task<object?> SendActionAsync(string action, object? @params = null)
         {
-            // TODO: 实现通过 WebSocket �?HTTP 发�?            return Task.FromResult<object?>(null);
+            // TODO: 实现通过 WebSocket 或 HTTP 发送
+            return await Task.FromResult<object?>(null);
         }
 
         public void HandleApiResponse(string rawJson)

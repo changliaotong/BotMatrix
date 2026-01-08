@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class JsonExtensions
     {

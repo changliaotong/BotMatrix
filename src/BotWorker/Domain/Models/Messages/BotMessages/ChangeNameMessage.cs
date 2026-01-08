@@ -1,14 +1,9 @@
-﻿using System.Text.RegularExpressions;
-using BotWorker.Common.Exts;
-using BotWorker.Common;
-using sz84.Bots.Groups;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Entries;
+using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
 
         // 改名
         public async Task<string> GetChangeName()
@@ -97,5 +92,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             return Answer;
         }
-    }
 }

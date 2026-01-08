@@ -1,8 +1,4 @@
-﻿using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
-using BotWorker.Bots.Entries;
-
-namespace BotWorker.Domain.Entities;
+﻿namespace BotWorker.Domain.Entities;
 public partial class GroupOffical : MetaData<GroupOffical>
 {
     public override string TableName => "Group";

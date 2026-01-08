@@ -17,5 +17,26 @@ namespace BotWorker.Models
             [JsonProperty("content")] public string Content { get; set; } = string.Empty;
             [JsonProperty("image")] public string Image { get; set; } = string.Empty;
         }
+
+        public static MsgMusic BuildCustom(string url, string audio, string title, string content, string image, string type = "custom")
+        {
+            return new MsgMusic
+            {
+                Data = new MsgData
+                {
+                    Type = type,
+                    Url = url,
+                    Audio = audio,
+                    Title = title,
+                    Content = content,
+                    Image = image
+                }
+            };
+        }
+
+        public string BuildSendCq()
+        {
+            return $"[CQ:music,type={Data.Type},url={Data.Url},audio={Data.Audio},title={Data.Title},content={Data.Content},image={Data.Image}]";
+        }
     }
 }

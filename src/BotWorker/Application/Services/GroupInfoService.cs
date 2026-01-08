@@ -1,7 +1,7 @@
-﻿using BotWorker.Bots.Entries;
+﻿using BotWorker.Domain.Entities;
 using BotWorker.Infrastructure.Caching;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public class GroupInfoService(ICacheRepository<GroupInfo> cache)
     {

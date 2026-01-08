@@ -1,13 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Users;
-using sz84.Core;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public string GetCoinsListAll(long qq, long top = 10)
         {
             var format = !IsRealProxy && (IsMirai || IsNapCat) ? "{i} [@:{0}]：{1}\n" : "{i} {0} {1}\n";
@@ -38,5 +32,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
         {
             return UserInfo.CountWhere($"Coins > {UserInfo.GetCoins(qq)}") + 1;
         }
-    }
 }

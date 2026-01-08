@@ -1,15 +1,9 @@
-﻿using sz84.Agents.Entries;
-using sz84.Agents.Plugins;
-using sz84.Agents.Providers;
-using sz84.Bots.Groups;
-using sz84.Bots.Users;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Agents.Plugins;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         // 接收客户端的问题并处理
         public async Task StartStreamChatAsync(CancellationToken cts)
         {
@@ -38,15 +32,15 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 Answer = $"✅ 已结束与智能体【{CurrentAgent.Name}】的对话";
                 UserInfo.SetValue("AgentId", AgentInfos.DefaultAgent.Id, UserId);
-                await SendMessage();
+                await SendMessageAsync();
                 return;
             }
 
             // 2. 算力检测
             if (!IsEnough())
             {
-                Answer = $"您的算力已用完。请每日签到获取算力或联系客服购买。客服QQ:{{客服QQ}}。"; 
-                await SendMessage();
+                Answer = $"您的算力已用完。请每日签到获取算力或联系客服购买。客服QQ:{BotInfo.CrmUin}。"; 
+                await SendMessageAsync();
                 return;
             }
 
@@ -62,7 +56,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 if (provider == null)
                 {
                     Answer = "模型提供者不存在";
-                    await SendMessage();
+                    await SendMessageAsync();
                     ErrorMessage(Answer);
                     return;
                 }
@@ -80,7 +74,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 if (Group.IsUseKnowledgebase && KbService != null)
                 {
                     var pluginKnowledge = new KnowledgeBasePlugin(KbService, GroupId);
-                    var plugins = new[] { pluginKnowledge };
+                    var plugins = new Microsoft.SemanticKernel.KernelPlugin[] { pluginKnowledge };
 
                     await provider.StreamExecuteAsync(History, modelId, async (data, isStreaming, token) =>
                     {
@@ -100,14 +94,21 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                         Answer += data;
                     }, cts);
                 }
+                await StreamEnd(cts);
+                await SendMessageAsync();
             }
             catch (OperationCanceledException)
             {
                 await Stream("[已取消]", cts);
-            }
-            finally
-            {
                 await StreamEnd(cts);
+                await SendMessageAsync();
+            }
+            catch (Exception ex)
+            {                
+                LogX.Error($"智能体聊天异常: {ex.Message}");
+                await Stream($"\n⚠️ 出错了: {ex.Message}", cts);
+                await StreamEnd(cts);
+                await SendMessageAsync();
             }
 
             // 6. 保存数据
@@ -120,7 +121,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             GroupSendMessage.Append(this);
         }
 
-        private async Task SendMessage()
+        private async Task SendMessageAsync()
         {
             if (Answer.IsNull()) return;         
             await GetFriendlyResAsync();
@@ -146,5 +147,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (ReplyStreamEndMessageAsync == null) return;
             await ReplyStreamEndMessageAsync(cts);
         }
-    }
 }

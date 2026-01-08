@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.Interfaces;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Domain.Entities.Achievement
+namespace BotWorker.Modules.Achievement
 {
     public class AchievementMetadata : IModuleMetadata
     {

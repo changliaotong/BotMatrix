@@ -1,6 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public static class SqlDataReaderExtensions
     {

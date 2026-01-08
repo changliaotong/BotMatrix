@@ -1,5 +1,5 @@
 ﻿using BotWorker.Common;
-using BotWorker.Common.Exts;
+
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities

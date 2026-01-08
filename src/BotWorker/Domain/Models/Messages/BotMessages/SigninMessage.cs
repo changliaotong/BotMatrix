@@ -1,13 +1,7 @@
-﻿using sz84.Groups;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Bots.Users;
-using sz84.Bots.Entries;
+﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
-{
-    public partial class BotMessage : MetaData<BotMessage>
-    { 
+public partial class BotMessage : MetaData<BotMessage>
+{ 
 
         public string TrySignIn(bool isAuto = false)
         {
@@ -134,6 +128,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             return res;
         }
-    }
-
 }

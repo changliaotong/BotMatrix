@@ -52,6 +52,8 @@ namespace BotWorker.Infrastructure.Utils
         public static string CreditParaAt => @"^[\s]*\[@:(?<UserId>[1-9]\d{4,10})][\s+]*(?<credit>\d{1,})[\s]*$";
         public static string CreditParaAt2 => @"^[\s]*(?<credit>\d{1,})[\s+]*\[@:(?<UserId>[1-9]\d{4,10})][\s]*$";
         public static string CreditPara => @"^(?<UserId>[1-9]\d{4,10})[\s+]+(?<credit>\d{1,}$)";
+        public static string RewardCredit => @"^\s*(?<CmdName>打赏)\s*(\[@:)?(?<UserId>[1-9]\d{4,10})]?\s*(?<credit>\d+)\s*$";
+        public static string CreditList => @"^\s*(?<CmdName>积分排行|积分排行榜|排行榜)\s*(?<top>\d*)\s*$";
 
         // group manager
         public static string KickCommandPrefixPattern => @"^[# ]*(踢|t|踢出|踢飞|tc|tf)\b";

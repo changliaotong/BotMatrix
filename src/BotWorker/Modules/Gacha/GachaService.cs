@@ -2,10 +2,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using sz84.Bots.Models.Limiter;
 using BotWorker.Domain.Interfaces;
 
-namespace sz84.Bots.Models.Gacha
+namespace BotWorker.Modules.Gacha
 {
     public class GachaService(ILimiter dailyLimiter) : IBotModule
     {

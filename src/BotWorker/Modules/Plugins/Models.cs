@@ -1,12 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using BotWorker.Core.OneBot;
+using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Application.Services;
 using BotWorker.Services;
-using BotWorker.Bots.Entries;
-using BotWorker.Bots.Groups;
+using BotWorker.Domain.Entities;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Core.Plugin
+namespace BotWorker.Modules.Plugins
 {
     public class SkillCapability
     {

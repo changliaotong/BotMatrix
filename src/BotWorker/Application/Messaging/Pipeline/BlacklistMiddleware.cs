@@ -1,7 +1,6 @@
-﻿using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
+using BotWorker.Infrastructure.Communication.OneBot;
 
-namespace BotWorker.Core.Pipeline
+namespace BotWorker.Application.Messaging.Pipeline
 {
     /// <summary>
     /// 黑名单中间件：拦截处于黑名单中的用户
@@ -10,11 +9,11 @@ namespace BotWorker.Core.Pipeline
     {
         public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
-            if (context is PluginContext pluginCtx && pluginCtx.Event is Core.OneBot.BotMessageEvent botMsgEvent)
+            if (context is PluginContext pluginCtx && pluginCtx.Event is BotMessageEvent botMsgEvent)
             {
                 var botMsg = botMsgEvent.BotMessage;
 
-                // 用户黑名单拦�?(参考原 HandleBlackWarnAsync)
+                // 用户黑名单拦截(参考原 HandleBlackWarnAsync)
                 if (botMsg.IsBlack)
                 {
                     if (botMsg.IsGroup)
@@ -22,7 +21,7 @@ namespace BotWorker.Core.Pipeline
                         // 群聊：如果权限足够则踢人
                         if (botMsg.SelfPerm < botMsg.UserPerm && botMsg.SelfPerm < 2)
                         {
-                            botMsg.Answer = $"黑名单成�?{botMsg.UserId} 将被T出群";
+                            botMsg.Answer = $"黑名单成员 {botMsg.UserId} 将被踢出群";
                             await botMsg.KickOutAsync(botMsg.SelfId, botMsg.RealGroupId, botMsg.UserId);
                             botMsg.IsRecall = botMsg.Group.IsRecall;
                             botMsg.RecallAfterMs = botMsg.Group.RecallTime * 1000;
@@ -31,8 +30,9 @@ namespace BotWorker.Core.Pipeline
                     }
                     else
                     {
-                        // 私聊：返回拉黑提�?                        botMsg.Answer = $"您已被群({botMsg.GroupId})拉黑";
-                        if (botMsg.GroupId != botMsg.BotInfo.GroupCrm)
+                        // 私聊：返回拉黑提示
+                        botMsg.Answer = $"您已被群({botMsg.GroupId})拉黑";
+                        if (botMsg.GroupId != BotInfo.GroupCrm)
                         {
                             // 这里可以根据需要保留或简化逻辑
                             botMsg.Answer += UserInfo.GetResetDefaultGroup(botMsg.UserId);
@@ -41,11 +41,13 @@ namespace BotWorker.Core.Pipeline
                     }
                 }
 
-                // 3. 用户灰名单拦�?                if (botMsg.IsGrey)
+                // 3. 用户灰名单拦截
+                if (botMsg.IsGrey)
                 {
-                    return; // 灰名单静默拦�?                }
+                    return; // 灰名单静默拦截
+                }
 
-                // 4. 敏感词告�?(参考原 HandleBlackWarnAsync 中的 Group.IsWarn 分支)
+                // 4. 敏感词告警(参考原 HandleBlackWarnAsync 中的 Group.IsWarn 分支)
                 if (botMsg.IsGroup && botMsg.Group.IsWarn)
                 {
                     await botMsg.GetKeywordWarnAsync();
@@ -53,7 +55,8 @@ namespace BotWorker.Core.Pipeline
                     {
                         botMsg.IsRecall = botMsg.Group.IsRecall;
                         botMsg.RecallAfterMs = botMsg.Group.RecallTime * 1000;
-                        return; // 命中了敏感词拦截，停止后续插件执�?                    }
+                        return; // 命中了敏感词拦截，停止后续插件执行
+                    }
                 }
             }
 
@@ -61,5 +64,3 @@ namespace BotWorker.Core.Pipeline
         }
     }
 }
-
-

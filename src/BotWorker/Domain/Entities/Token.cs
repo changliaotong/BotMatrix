@@ -1,8 +1,4 @@
-﻿using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Infrastructure.Utils;
-
-namespace BotWorker.Domain.Entities
+﻿namespace BotWorker.Domain.Entities
 {
     public class Token : MetaData<Token>
     {

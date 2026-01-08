@@ -1,15 +1,10 @@
-﻿using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+// 灰名单 greylist
+public partial class BotMessage : MetaData<BotMessage>
 {
-    // 灰名单 greylist
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         // 解除灰名单
         public string GetCancelGrey(long userId)
         {
@@ -124,5 +119,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
         {
             return GreyList.AddGreyList(SelfId, GroupId, GroupName, UserId, Name, greyQQ, greyInfo);
         }
-    }
 }

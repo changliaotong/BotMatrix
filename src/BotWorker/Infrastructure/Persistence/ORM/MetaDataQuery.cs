@@ -1,9 +1,9 @@
 ﻿using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
-using BotWorker.Infrastructure.Extensions;
-using sz84.Core.Database;
-using BotWorker.Infrastructure.Persistence.Database.Mapping;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.Database;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {

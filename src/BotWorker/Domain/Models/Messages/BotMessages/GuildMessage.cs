@@ -1,14 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Groups;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
-using sz84.Bots.Users;
+﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public async Task<(bool, bool)> HandleGuildMessageAsync()
         {
             var isNewGroup = false;
@@ -100,5 +93,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             }
             return false;
         }
-    }
 }

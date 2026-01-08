@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.MetaDatas;
+﻿using BotWorker.Infrastructure.Persistence.ORM;
 
-namespace BotWorker.Bots.Public
+namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
 {
     public class BotPublic : MetaData<BotPublic>
     {
@@ -13,26 +13,25 @@ namespace BotWorker.Bots.Public
         public long BotUin { get; set; }
         public long AdminId { get; set; }
 
-        //�û�����ʼ��
+        //用户号起始段
         public static readonly long UinStart = 4104967295;
 
-        //ͨ�� key ��û�����qq
+        //通过 key 获得机器人qq
         public static long GetRobotQQ(string botKey)
         {
             return GetLong("BotUin", botKey);
         }
 
-        // ���ں��Ա�Ⱥ��
+        // 公众号自编群号
         public static long GetGroupId(string botKey)
         {
             return GetLong("GroupId", botKey);
         }
 
-        // ���ں�����
+        // 公众号名称
         public static string GetBotName(string botKey)
         {
-            return GetDef("PublicName", botKey, "[δ֪���ں�]");
+            return GetDef("PublicName", botKey, "[未知公众号]");
         }
     }
 }
-

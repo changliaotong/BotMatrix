@@ -5,8 +5,8 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using Codeblaze.SemanticKernel.Connectors.Ollama;
 using BotWorker.Agents.Interfaces;
 using BotWorker.Agents.Providers.Configs;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Common.Exts;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Common.Extensions;
 
 namespace BotWorker.Agents.Providers.Helpers
 {

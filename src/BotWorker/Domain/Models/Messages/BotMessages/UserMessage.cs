@@ -1,12 +1,7 @@
-﻿using sz84.Bots.Entries;
-using sz84.Bots.Users;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage: MetaData<BotMessage>
 {
-    public partial class BotMessage: MetaData<BotMessage>
-    {
         public string GetHeadCQ() => IsNapCat && IsGroup ? UserInfo.GetHeadCQ(UserId) : "";
 
         public string GetHintInfo()
@@ -55,6 +50,5 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             }
 
             return i;
-        }
     }
 }

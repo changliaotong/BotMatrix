@@ -1,10 +1,6 @@
 ﻿using System.Drawing.Imaging;
 using System.Drawing;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Core.Database;
-using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
 
 namespace BotWorker.Infrastructure.Tools
 {

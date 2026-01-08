@@ -1,7 +1,7 @@
 ﻿using Mirai.Net.Data.Messages.Concretes;
 using System.Text.RegularExpressions;
 using BotWorker.Common;
-using BotWorker.Common.Exts;
+
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities

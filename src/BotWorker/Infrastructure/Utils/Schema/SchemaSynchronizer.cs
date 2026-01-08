@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Text;
 using BotWorker.Infrastructure.Utils.Schema.Attributes;
 
@@ -22,7 +22,7 @@ public static class SchemaSynchronizer
             if (prop.GetCustomAttribute<IgnoreColumnAttribute>() != null)
                 continue;
 
-            var colAttr = prop.GetCustomAttribute<ColumnAttribute>();
+            var colAttr = prop.GetCustomAttribute<BotWorker.Infrastructure.Utils.Schema.Attributes.ColumnAttribute>();
             var columnName = colAttr?.Name ?? prop.Name.ToLower();
             var sqlType = SqlTypeMapper.Map(prop.PropertyType);
 

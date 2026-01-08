@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.Interfaces;
+using BotWorker.Domain.Interfaces;
 
-namespace sz84.Bots.Models.Challenge
+namespace BotWorker.Modules.Challenge
 {
     public class ChallengeMetadata : IModuleMetadata
     {

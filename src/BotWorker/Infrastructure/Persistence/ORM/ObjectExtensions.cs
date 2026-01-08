@@ -1,7 +1,5 @@
 ﻿using Microsoft.Data.SqlClient;
-using BotWorker.Domain.Database.Mapping;
-
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public static class ObjectExtensions
     {

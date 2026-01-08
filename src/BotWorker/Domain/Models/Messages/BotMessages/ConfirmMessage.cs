@@ -1,13 +1,7 @@
-﻿using sz84.Bots.Entries;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
-using sz84.Groups;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+public partial class BotMessage : MetaData<BotMessage>
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public async Task<string> GetConfirmNew()
         {
             string res = "";
@@ -18,7 +12,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 string confirmCode = GroupMember.GetValue("ConfirmCode", RealGroupId, UserId);
                 if (confirmCode.IsNull())
                 {
-                    confirmCode = Common.RandomInt(100, 999).ToString();
+                    confirmCode = C.RandomInt(100, 999).ToString();
                     int i = AddGroupMember(50, confirmCode);
                     if (i == -1)
                         return res;
@@ -101,5 +95,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     return;
             }
         }
-    }
 }

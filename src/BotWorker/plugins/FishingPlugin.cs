@@ -1,6 +1,3 @@
-using System.Threading.Tasks;
-using BotWorker.Core.Plugin;
-
 namespace BotWorker.Plugins
 {
     public class FishingPlugin : IPlugin

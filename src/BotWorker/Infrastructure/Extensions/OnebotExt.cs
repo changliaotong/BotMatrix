@@ -1,7 +1,7 @@
 ﻿using OneBotSharp.Objs.Event;
 using BotWorker.Domain.Entities;
 using BotWorker.Domain.Constants;
-using BotWorker.BotWorker.BotWorker.Common.Exts;
+using BotWorker.Common.Extensions;
 
 namespace BotWorker.Infrastructure.Extensions
 {

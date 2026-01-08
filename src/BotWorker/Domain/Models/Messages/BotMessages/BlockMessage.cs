@@ -1,16 +1,10 @@
-﻿using System.Text.RegularExpressions;
-using sz84.Bots.Entries;
-using sz84.Bots.Games;
-using sz84.Bots.Users;
-using BotWorker.Common;
-using BotWorker.Common.Exts;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.Messages.BotMessages
+namespace BotWorker.Domain.Models.Messages.BotMessages;
+
+//猜大小
+public partial class BotMessage : MetaData<BotMessage>
 {
-    //猜大小
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public string GetAllIn()
         {
             if (!Group.IsCreditSystem)
@@ -180,5 +174,4 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             return res;
         }
-    }
 }

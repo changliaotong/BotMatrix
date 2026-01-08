@@ -1,15 +1,11 @@
 ﻿using Microsoft.Data.SqlClient;
 using System.Data;
-using sz84.common.Exts;
-using sz84.Core;
-using BotWorker.Domain.Database;
-using BotWorker.Domain.MetaDatas;
 
 /// <summary>
 ///Class1 的摘要说明
 /// </summary>
 /// 
-namespace sz84.Bots.Models.Buses
+namespace BotWorker.Modules.Buses
 {
     public class PlaceStops : MetaData<PlaceStops>
     {

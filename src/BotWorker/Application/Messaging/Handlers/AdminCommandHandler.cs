@@ -1,10 +1,7 @@
-﻿using System;
-using System.Threading.Tasks;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Common;
-using BotWorker.BotWorker.BotWorker.Common.Exts;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Utils;
 
-namespace BotWorker.Core.Commands
+namespace BotWorker.Application.Messaging.Handlers
 {
     public class AdminCommandHandler
     {
@@ -17,7 +14,7 @@ namespace BotWorker.Core.Commands
 
         public async Task<CommandResult> HandleAsync(BotMessage botMsg)
         {
-            if (botMsg.CmdName.In("�?, "T", "t", "剔除", "移除"))
+            if (botMsg.CmdName.In("踢", "T", "t", "剔除", "移除"))
             {
                 var answer = await _groupService.KickMemberAsync(botMsg);
                 return CommandResult.Intercepted(answer);
@@ -32,8 +29,8 @@ namespace BotWorker.Core.Commands
 
             if (botMsg.CmdName.In("设置头衔", "头衔"))
             {
-                var targetUserId = botMsg.CurrentMessage.BotWorker.BotWorker.Common.Exts.GetQq();
-                var title = botMsg.CurrentMessage.BotWorker.BotWorker.Common.Exts.RegexGetValue(Common.Regexs.SetTitle, "title");
+                var targetUserId = botMsg.CurrentMessage.GetQq();
+                var title = botMsg.CurrentMessage.RegexGetValue(Regexs.SetTitle, "title");
                 var answer = await _groupService.SetMemberTitleAsync(botMsg, targetUserId, title);
                 return CommandResult.Intercepted(answer);
             }
@@ -42,5 +39,3 @@ namespace BotWorker.Core.Commands
         }
     }
 }
-
-

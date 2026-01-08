@@ -1,11 +1,9 @@
 ﻿using System.Text;
 using System.Text.Json;
-using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
 
 namespace BotWorker.Agents.Providers.Txt2Img
 {
-    internal class Doubao :MetaData<Doubao>
+    public class Doubao :MetaData<Doubao>
     {
         public override string TableName => throw new NotImplementedException();
 

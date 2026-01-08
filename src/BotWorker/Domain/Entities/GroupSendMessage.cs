@@ -1,9 +1,3 @@
-﻿using BotWorker.Bots.BotMessages;
-using BotWorker.Bots.Entries;
-using BotWorker.common;
-using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
-
 namespace BotWorker.Domain.Entities
 {
     public class GroupSendMessage : MetaData<GroupSendMessage>

@@ -1,7 +1,7 @@
-﻿using System.Collections.Concurrent;
-using BotWorker.Core.Interfaces;
+using System.Collections.Concurrent;
+using BotWorker.Domain.Interfaces;
 
-namespace BotWorker.Domain.Entities.Ranking
+namespace BotWorker.Modules.Ranking
 {
     public class RankingManager : IRankingService
     {

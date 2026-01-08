@@ -1,11 +1,9 @@
 ﻿using System.Data;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using BotWorker.Common;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
-using sz84.Bots.Entries;
-using sz84.common;
-using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {

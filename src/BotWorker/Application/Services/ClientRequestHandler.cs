@@ -3,7 +3,7 @@ using System;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 
-namespace BotWorker.Core.Services
+namespace BotWorker.Application.Services
 {
     public static class ClientRequestHandler
     {

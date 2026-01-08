@@ -1,8 +1,7 @@
 ﻿using System.Reflection;
 using System.Text.RegularExpressions;
-using BotWorker.Bots.BotMessages;
-using BotWorker.Core;
-using BotWorker.Core.MetaDatas;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Infrastructure.Utils
 {

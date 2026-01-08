@@ -1,8 +1,8 @@
 ﻿using System.Data;
 using System.Reflection;
-using BotWorker.Domain.MetaDatas;
+using BotWorker.Infrastructure.Persistence.Database;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public static class EntityMapper
     {

@@ -1,6 +1,6 @@
-﻿using BotWorker.Core.Interfaces;
+using BotWorker.Domain.Interfaces;
 
-namespace sz84.Bots.Models.Gacha
+namespace BotWorker.Modules.Gacha
 {
     public class GachaMetadata : IModuleMetadata
     {

@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
-namespace BotWorker.Services
+namespace BotWorker.Application.Services
 {
     public interface IGlobalCacheService
     {

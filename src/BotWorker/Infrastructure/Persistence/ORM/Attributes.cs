@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Infrastructure.Persistence.ORM
 {
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
     public class DisplayInListAttribute(bool show) : Attribute

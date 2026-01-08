@@ -1,7 +1,5 @@
-﻿using BotWorker.BotWorker.Common.Exts;
-using BotWorker.Core.MetaDatas;
-using BotWorker.Bots.Entries;
-using BotWorker.Bots.Users;
+﻿using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {

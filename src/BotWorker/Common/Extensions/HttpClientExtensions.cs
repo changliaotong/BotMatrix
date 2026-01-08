@@ -1,6 +1,6 @@
 ﻿using System.Net.Http.Headers;
 
-namespace BotWorker.BotWorker.BotWorker.Common.Exts
+namespace BotWorker.Common.Extensions
 {
     public static class HttpClientExtensions
     {

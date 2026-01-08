@@ -1,6 +1,6 @@
-﻿using BotWorker.common.Exts;
+﻿using BotWorker.Common.Extensions;
 
-namespace sz84.Core.Database.Mapping
+namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public class EnumValueConverter<TEnum> : IValueConverter where TEnum : struct, Enum
     {

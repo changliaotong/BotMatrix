@@ -1,7 +1,5 @@
 using Newtonsoft.Json.Linq;
 using System.Net;
-using BotWorker.Core.MetaDatas;
-using BotWorker.Infrastructure.Utils;
 
 namespace BotWorker.Infrastructure.Tools
 {
