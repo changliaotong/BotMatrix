@@ -70,10 +70,8 @@ namespace BotWorker.Modules.Games
         // 宠物主人
         public static async Task<long> GetCurrMasterAsync(long group_id, long friend_qq)
         {
-            string res = await GetValueAsync("UserId", $"GroupId = {group_id} and FriendId = {friend_qq} and IsValid = 1");
-            return res == ""
-                ? friend_qq
-                : res.AsLong();
+            string res = await GetWhereAsync<string>("UserId", $"GroupId = {group_id} and FriendId = {friend_qq} and IsValid = 1") ?? "";
+            return res.AsLong();
         }
 
         public static long GetCurrMaster(long group_id, long friend_qq)
@@ -86,7 +84,7 @@ namespace BotWorker.Modules.Games
         {
             long minPrice = 100;
             string res = await QueryScalarAsync<string>($"SELECT sz84_robot.dbo.get_sell_price(SellPrice, InsertDate) AS res FROM {FullName} " +
-                               $"WHERE GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1");
+                               $"WHERE GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1") ?? "";
             long sellPrice = res == "" ? minPrice : res.AsLong();
             return sellPrice < minPrice ? minPrice : sellPrice;
         }
@@ -99,7 +97,7 @@ namespace BotWorker.Modules.Games
         // 得到某人购买价格
         public static async Task<long> GetBuyPriceAsync(long groupId, long friendId)
         {
-            return (await GetValueAsync("BuyPrice", $"GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1")).AsLong();
+            return (await GetWhereAsync<string>("BuyPrice", $"GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1")).AsLong();
         }
 
         public static long GetBuyPrice(long groupId, long friendId)
@@ -110,7 +108,7 @@ namespace BotWorker.Modules.Games
         // 得到buyid
         public static async Task<int> GetBuyIdAsync(long groupId, long friendQQ)
         {
-            return (await GetValueAsync("ISNULL(Id, 0)", $"GroupId = {groupId} AND FriendId = {friendQQ} AND IsValid = 1")).AsInt();
+            return (await GetWhereAsync<string>("ISNULL(Id, 0)", $"GroupId = {groupId} AND FriendId = {friendQQ} AND IsValid = 1")).AsInt();
         }
 
         public static int GetBuyId(long groupId, long friendQQ)

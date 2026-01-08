@@ -19,13 +19,14 @@ namespace BotWorker.Application.Messaging.Handlers
 
         public async Task<CommandResult> HandleAsync(BotMessage botMsg)
         {
-            // 1. 判定是否为热门指�?            if (_hotCmdService.IsHot(botMsg))
+            // 1. 判定是否为热门指令
+            if (_hotCmdService.IsHot(botMsg))
             {
                 // 2. 执行热门指令逻辑
                 return await _hotCmdService.HandleHotCmdAsync(botMsg);
             }
 
-            return CommandResult.Continue();
+            return await Task.FromResult(CommandResult.Continue());
         }
     }
 }

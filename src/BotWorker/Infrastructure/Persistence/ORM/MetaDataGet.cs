@@ -76,7 +76,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 throw new ArgumentException("必须指定要查询的字段", nameof(fieldNames));
 
             var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {where}";
-            var results = await QueryAsync<dynamic>(sql, null, parameters);
+            var results = await QueryAsync<dynamic>(sql, null, parameters ?? Array.Empty<SqlParameter>());
             var row = results.FirstOrDefault();
             if (row == null) return null;
 
@@ -124,9 +124,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await QuerySingleAsync<TDerived>($"{sql}", null, parameters);
         }
 
-        public static async Task<TDerived> GetSingleAsync(object id, object? id2 = null)
+        public static async Task<TDerived?> GetSingleAsync(object id, object? id2 = null)
         {
-            return await GetSingleAsync("*", id, id2) ?? throw new InvalidOperationException($"Failed to load entity by id {id} {id2}");
+            return await GetSingleAsync("*", id, id2);
         }
 
         public static T? GetSingle<T>(object id, object? id2 = null, params string[] fieldNames) where T : new()

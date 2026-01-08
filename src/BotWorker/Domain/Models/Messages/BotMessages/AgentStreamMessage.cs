@@ -24,7 +24,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
 
             if (!IsCallAgent)
-                CurrentAgent = await Agent.LoadAsync(AgentId);
+                CurrentAgent = await Agent.LoadAsync(AgentId) ?? new();
 
             CmdPara = Message;
 

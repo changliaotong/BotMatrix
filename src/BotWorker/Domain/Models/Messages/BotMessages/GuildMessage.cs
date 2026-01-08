@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
 public partial class BotMessage : MetaData<BotMessage>
 {
@@ -10,15 +10,15 @@ public partial class BotMessage : MetaData<BotMessage>
             if (IsGuild)
             {
                 if (SelfInfo.BotUin == 0)
-                    SelfInfo = await BotInfo.LoadAsync(UserGuild.GetUserId(SelfId, SelfId.ToString(), GroupOpenid));
+                    SelfInfo = await BotInfo.LoadAsync(UserGuild.GetUserId(SelfId, SelfId.ToString(), GroupOpenid)) ?? new();
                 else
-                    SelfInfo = await BotInfo.LoadAsync(SelfInfo.BotUin);
-                User = await UserInfo.LoadAsync(UserGuild.GetUserId(SelfId, UserOpenId, GroupOpenid));
+                    SelfInfo = await BotInfo.LoadAsync(SelfInfo.BotUin) ?? new();
+                User = await UserInfo.LoadAsync(UserGuild.GetUserId(SelfId, UserOpenId, GroupOpenid)) ?? new();
                 if (!GroupOpenid.IsNull())
                 {
                     (RealGroupId, isNewGroup) = GroupOffical.GetGroupId(GroupOpenid, GroupName, UserId, SelfId, SelfName);
                     GroupMember.Append(RealGroupId, UserId, Name);
-                    Group = await GroupInfo.LoadAsync(RealGroupId);
+                    Group = await GroupInfo.LoadAsync(RealGroupId) ?? new();
                 }
                 if (GuildId.IsNull()) 
                     Group.GroupName = GroupOpenid.MaskNo();

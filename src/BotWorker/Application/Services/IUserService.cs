@@ -158,8 +158,6 @@ namespace BotWorker.Application.Services
                 cmdName = "取分";
 
             string res = "";
-            long creditValue = 0;
-            long saveCredit = 0;
 
             if (cmdName == "存分")
             {

@@ -16,9 +16,9 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             var botPublic = await BotPublic.LoadAsync(robotKey);  
             if (botPublic != null)
             {
-                SelfInfo = await BotInfo.LoadAsync(botPublic.BotUin);                
-                Group = await GroupInfo.LoadAsync(botPublic.GroupId);
-                User = await UserInfo.LoadAsync(ClientPublic.GetUserId(robotKey, clientKey));
+                SelfInfo = await BotInfo.LoadAsync(botPublic.BotUin) ?? new();                
+                Group = await GroupInfo.LoadAsync(botPublic.GroupId) ?? new();
+                User = await UserInfo.LoadAsync(ClientPublic.GetUserId(robotKey, clientKey)) ?? new();
                 RealGroupId = Group.Id;
                 var lastMsgId = GroupMember.Get<string>("LastMsgId", GroupId, UserId);
                 if (MsgId == lastMsgId)

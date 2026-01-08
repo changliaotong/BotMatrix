@@ -1,4 +1,4 @@
-﻿using Mirai.Net.Data.Messages.Concretes;
+using Mirai.Net.Data.Messages.Concretes;
 using Newtonsoft.Json;
 using System.Data;
 using System.Text.Json;
@@ -113,13 +113,13 @@ namespace BotWorker.Domain.Entities
             {
                 foreach (DataRow dr in dt.Tables[0].Rows)
                 {
-                    msm.Title = dr["Title"].ToString();
-                    msm.Brief = dr["Brief"].ToString();
-                    msm.Summary = dr["Summary"].ToString();
-                    msm.PictureUrl = dr["PictureUrl"].ToString();
-                    msm.MusicUrl = dr["IsVIP"].AsBool() ? dr["MusicUrl2"].ToString() : dr["MusicUrl"].ToString();
-                    msm.JumpUrl = dr["JumpUrl"].ToString();
-                    msm.Kind = dr["Kind"].ToString();
+                    msm.Title = dr["Title"]?.ToString() ?? "";
+                    msm.Brief = dr["Brief"]?.ToString() ?? "";
+                    msm.Summary = dr["Summary"]?.ToString() ?? "";
+                    msm.PictureUrl = dr["PictureUrl"]?.ToString() ?? "";
+                    msm.MusicUrl = (dr["IsVIP"].AsBool() ? dr["MusicUrl2"] : dr["MusicUrl"])?.ToString() ?? "";
+                    msm.JumpUrl = dr["JumpUrl"]?.ToString() ?? "";
+                    msm.Kind = dr["Kind"]?.ToString() ?? "";
                 }
             }
             return msm;

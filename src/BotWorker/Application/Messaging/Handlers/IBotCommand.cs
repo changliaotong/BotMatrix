@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using BotWorker.Domain.Models.Messages.BotMessages;
 
@@ -10,7 +10,7 @@ namespace BotWorker.Application.Messaging.Handlers
     public class CommandResult
     {
         public bool Success { get; set; }
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
         public bool Intercept { get; set; } = true; // 是否拦截后续处理
 
         public static CommandResult Intercepted(string message = "") => new() { Success = true, Message = message, Intercept = true };

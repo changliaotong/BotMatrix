@@ -95,8 +95,6 @@ public partial class BotMessage : MetaData<BotMessage>
                 CmdName = "取分";
 
             string res = "";
-            long creditValue = 0;
-            long saveCredit = 0;
 
             if (CmdName == "存分")
             {

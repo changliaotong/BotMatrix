@@ -150,7 +150,7 @@ namespace BotWorker.Modules.Buses
         //通过ID取得目的地名称
         public static string GetPlaceName(string placeId)
         {
-            return Get<string>("place_name", placeId);
+            return Get<string>("place_name", placeId) ?? "";
         }
 
         //由 place_id 获得目的地名称 （递归）
@@ -167,7 +167,7 @@ namespace BotWorker.Modules.Buses
         //由 place_id 得到上级 place_id
         public static string GetMasterID(string place_id)
         {
-            string res = QueryScalar<string>("select master_id from place where place_id = " + place_id);
+            string res = QueryScalar<string>("select master_id from place where place_id = " + place_id) ?? "";
             if (res == "")
                 return "0";
             else
@@ -179,7 +179,7 @@ namespace BotWorker.Modules.Buses
         {
             return Insert([
                 new Cov("place_name", placeName),
-                new Cov("place_py", QueryScalar<string>($"select dbo.getPY({placeName.Quotes()})")),
+                new Cov("place_py", QueryScalar<string>($"select dbo.getPY({placeName.Quotes()})") ?? ""),
                 new Cov("place_info", placeInfo),
                 new Cov("client_id", clientId),
                 new Cov("client_ip", clientIP),

@@ -257,11 +257,11 @@ public partial class BotMessage : MetaData<BotMessage>
 
             // 机器人自己
             Ctx.Register("我", () => $"『{Group.BotName}』");
-            Ctx.Register("我2", () => GroupId != 0 && IsVoiceReply ? Group.BotName : $"『{Group.BotName}({SelfId})』");
+            Ctx.Register("我2", () => GroupId != 0 && IsVoiceReply ? Group.BotName : $"『{Group.BotName}(SelfId)』");
 
             // 群信息
-            Ctx.Register("群", () => GroupName);
-            Ctx.Register("群2", () => $"{GroupName}({GroupId})");
+            Ctx.Register("群", () => GroupName ?? "");
+            Ctx.Register("群2", () => $"{GroupName ?? ""}({GroupId})");
             Ctx.Register("群号", () => GroupId == 0  ? $"{GroupId}（默认群）" : $"{GroupId}");
 
             var groupOwner = "辉辉";
@@ -446,8 +446,8 @@ public partial class BotMessage : MetaData<BotMessage>
                 var inner = bm.DeepCopy();
                 inner.Message = innerContent;
                 inner.CurrentMessage = innerContent;
-                inner.Group = await GroupInfo.LoadAsync(inner.GroupId);
-                inner.User = await UserInfo.LoadAsync(inner.UserId);
+                inner.Group = await GroupInfo.LoadAsync(inner.GroupId) ?? new();
+                inner.User = await UserInfo.LoadAsync(inner.UserId) ?? new();
                 inner.Answer = "";
 
                 // 递归处理内层结构

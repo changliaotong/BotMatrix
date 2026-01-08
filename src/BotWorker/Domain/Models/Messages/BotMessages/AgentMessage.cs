@@ -36,7 +36,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (agentGuid == Guid.Empty)
                 return false;
 
-            CurrentAgent = await Agent.LoadAsync(agentGuid);
+            CurrentAgent = await Agent.LoadAsync(agentGuid) ?? new();
             IsCallAgent = true;        
             CmdPara = cmdPara;
             return true;
@@ -46,7 +46,7 @@ public partial class BotMessage : MetaData<BotMessage>
         public async Task<string> ChangeAgentAsync()
         {
             IsCancelProxy = true;
-            CurrentAgent = await Agent.LoadAsync(User.AgentId);            
+            CurrentAgent = await Agent.LoadAsync(User.AgentId) ?? new();            
             var agentName = CurrentAgent.Name == "早喵" ? "" : $"【{CurrentAgent.Name}】";
             if (CmdPara == "")            
                 return $"🤖 {agentName}可变身的智能体有:\n{Agent.QueryWhere("Name", $"Id in (select AgentId from {AgentTags.FullName} WHERE TagId = 1)", "usedtimes desc", " {0}")}";
@@ -55,7 +55,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (agentId != 0)
             {
                 IsCallAgent = true;               
-                CurrentAgent = await Agent.LoadAsync(agentId);                
+                CurrentAgent = await Agent.LoadAsync(agentId) ?? new();                
                 return UserInfo.SetValue("AgentId", agentId, UserId) == -1 
                     ? $"变身{RetryMsg}" 
                     : $"🤖【{CurrentAgent.Name}】{CurrentAgent.Info}\n退出与智能体{CurrentAgent.Name}对话请发送【结束】";
@@ -145,7 +145,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return;
             }
             
-            CurrentAgent = await Agent.LoadAsync(User.AgentId == 0 ? AgentInfos.DefaultAgent.Id : User.AgentId);
+            CurrentAgent = await Agent.LoadAsync(User.AgentId == 0 ? AgentInfos.DefaultAgent.Id : User.AgentId) ?? new();
 
             if (IsAgent && CmdPara == "结束")
             {               

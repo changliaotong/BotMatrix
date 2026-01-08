@@ -29,14 +29,14 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 }
             }
 
-            User = await UserInfo.LoadAsync(UserId);
+            User = await UserInfo.LoadAsync(UserId) ?? new();
             
             if (IsGroup)
                 GroupInfo.Append(GroupId, GroupName, SelfId, SelfName, UserId, UserId);
 
             RealGroupId = Group.Id;
             RealGroupName = Group.GroupName;
-            Group = await GroupInfo.LoadAsync(!IsGroup ? User.DefaultGroup : GroupId);
+            Group = await GroupInfo.LoadAsync(!IsGroup ? User.DefaultGroup : GroupId) ?? new();
             if (Group.ParentGroup != 0)            
                 ParentGroup = await GroupInfo.LoadAsync(Group.ParentGroup);            
 

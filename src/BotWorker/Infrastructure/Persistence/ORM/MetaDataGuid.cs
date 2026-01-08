@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
@@ -21,7 +21,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             IdField = instance.IdFieldName;
         }
 
-        public static async Task<TDerived> LoadAsync(Guid guid)
+        public static async Task<TDerived?> LoadAsync(Guid guid)
         {
             if (Key.Equals(GuidField, StringComparison.OrdinalIgnoreCase))
                 return await GetSingleAsync(guid);
@@ -29,7 +29,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 return await GetSingleAsync(GetId(guid));
         }
 
-        public static async Task<TDerived> LoadAsync(long Id)
+        public static async Task<TDerived?> LoadAsync(long Id)
         {
             if (Key.Equals(IdField, StringComparison.OrdinalIgnoreCase))            
                 return await GetSingleAsync(Id);            
