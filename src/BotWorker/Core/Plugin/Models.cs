@@ -19,6 +19,7 @@ namespace BotWorker.Core.Plugin
     public class PluginContext : IPluginContext
     {
         private readonly EventBase _ev;
+        public EventBase Event => _ev;
         private readonly Func<string, Task>? _replyDelegate;
 
         // 基础信息

@@ -72,6 +72,7 @@ namespace BotWorker.Core.OneBot
     public class BotMessageEvent : EventBase
     {
         private readonly Bots.BotMessages.BotMessage _msg;
+        public Bots.BotMessages.BotMessage BotMessage => _msg;
 
         public BotMessageEvent(Bots.BotMessages.BotMessage msg)
         {

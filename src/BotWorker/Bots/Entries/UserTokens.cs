@@ -11,14 +11,13 @@ namespace BotWorker.Bots.Users;
 
 public partial class UserInfo : MetaDataGuid<UserInfo>
 {
-    public static (string, SqlParameter[]) SqlAddTokens(long userId, float tokens)
+    public static SqlTask TaskAddTokens(long userId, long tokensAdd)
     {
-        return Exists(userId)
-            ? SqlPlus("Tokens", tokens, userId)
-            : SqlInsert([
-                            new Cov("UserId", userId),
-                                new Cov("Tokens", tokens),
-                        ]);
+        if (Exists(userId))
+            return TaskPlus("tokens", tokensAdd, userId);
+
+        // 如果用户不存在，则插入（这里通常逻辑应该先 AppendUser，但作为兜底）
+        return TaskSetValue("tokens", tokensAdd, userId);
     }
 
     public static string GetTokensList(long groupId, long qq, long top, BotWorker.Common.Data.BotData.Platform botType = BotWorker.Common.Data.BotData.Platform.NapCat)

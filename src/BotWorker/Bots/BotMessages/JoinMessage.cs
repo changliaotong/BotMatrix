@@ -192,14 +192,14 @@ namespace BotWorker.Bots.BotMessages
                             long ownerCredit = UserInfo.GetCredit(GroupId, Group.RobotOwner);
                             if (ownerCredit >= minusCredit)
                             {
-                                sql3 = UserInfo.SqlAddCredit(SelfId, GroupId, Group.RobotOwner, -minusCredit);
+                                sql3 = UserInfo.TaskAddCredit(SelfId, GroupId, Group.RobotOwner, -minusCredit);
                                 sql4 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, Group.RobotOwner, Group.RobotOwnerName, -minusCredit, $"邀人送分:{InvitorQQ}邀请{UserId}");
                             }
                             else
                                 Group.InviteCredit = 50;
                         }
                         long creditInvitor = UserInfo.GetCredit(GroupId, InvitorQQ);
-                        var sql5 = UserInfo.SqlAddCredit(SelfId, GroupId, InvitorQQ, Group.InviteCredit);
+                        var sql5 = UserInfo.TaskAddCredit(SelfId, GroupId, InvitorQQ, Group.InviteCredit);
                         var sql6 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, Group.InviteCredit, $"邀人送分:邀请{UserId}进群{GroupId}");                                              
 
                         i = ExecTrans(sql, sql2, sql3, sql4, sql5, sql6);

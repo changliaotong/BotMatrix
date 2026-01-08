@@ -21,6 +21,9 @@ namespace BotWorker.Core.Plugin
         public IReadOnlyList<Skill> Skills => _skills;
         public IReadOnlyList<IPlugin> Plugins => _plugins;
 
+        public IAIService AI => _aiService;
+        public II18nService I18n => _i18nService;
+
         public PluginManager(IAIService aiService, II18nService i18nService)
         {
             _aiService = aiService;
@@ -85,8 +88,13 @@ namespace BotWorker.Core.Plugin
                 RawMessage = ev.RawMessage
             };
 
-            // 2. 处理通用事件分发
-            if (_eventHandlers.TryGetValue(ev.PostType, out var handlers))
+            return await DispatchAsync(ctx);
+        }
+
+        public async Task<string> DispatchAsync(IPluginContext ctx)
+        {
+            // 1. 处理通用事件分发
+            if (_eventHandlers.TryGetValue(ctx.EventType, out var handlers))
             {
                 foreach (var handler in handlers)
                 {
@@ -94,10 +102,10 @@ namespace BotWorker.Core.Plugin
                 }
             }
 
-            // 3. 处理消息指令 (仅限 PostType 为 message 的情况)
-            if (ev.PostType == "message")
+            // 2. 处理消息指令 (仅限 PostType 为 message 的情况)
+            if (ctx.IsMessage)
             {
-                var message = ev.RawMessage.Trim();
+                var message = ctx.RawMessage.Trim();
                 if (string.IsNullOrEmpty(message)) return string.Empty;
 
                 foreach (var skill in _skills)

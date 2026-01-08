@@ -12,6 +12,35 @@ namespace BotWorker.Bots.BotMessages
         public static Core.Plugin.PluginManager? PluginManager { get; set; }
         public static Core.Pipeline.MessagePipeline? Pipeline { get; set; }
 
+        public async Task<string> ExecutePipelineAsync()
+        {
+            if (Pipeline == null || PluginManager == null) return string.Empty;
+
+            // 构造 Event 包装
+            var ev = new Core.OneBot.BotMessageEvent(this);
+            
+            // 构造上下文，复用当前 BotMessage 已加载的实体
+            var ctx = new Core.Plugin.PluginContext(
+                ev,
+                Platform,
+                SelfId.ToString(),
+                PluginManager.AI,
+                PluginManager.I18n,
+                User,
+                Group,
+                Member,
+                Bot,
+                async (msg) => {
+                    Answer = msg;
+                    await SendMessageAsync();
+                });
+
+            // 执行管道
+            await Pipeline.ExecuteAsync(ctx);
+
+            return Answer;
+        }
+
         public string MsgGuid { get; set; } = Guid.NewGuid().ToString();
         public long SelfId => SelfInfo.BotUin;
         public string SelfName => SelfInfo.BotName;

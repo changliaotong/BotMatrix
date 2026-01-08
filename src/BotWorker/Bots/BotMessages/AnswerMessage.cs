@@ -349,7 +349,7 @@ namespace BotWorker.Bots.BotMessages
 
             (int audit, int audit2, int minus, res) = GetAudit(questionId, que, ans);            
             var sql = AnswerInfo.SqlAppend(SelfId, RealGroupId, UserId, GroupId, questionId, que, ans, audit, -minus, audit2, "");
-            var sql2 = UserInfo.SqlAddCredit(SelfId, GroupId, UserId, -minus);
+            var sql2 = UserInfo.TaskAddCredit(SelfId, GroupId, UserId, -minus);
             var sql3 = CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, -minus, minus < 0 ? "教学加分" : "教学扣分");
             if (ExecTrans([sql, sql2, sql3]) == -1)
                 return RetryMsg;
@@ -432,7 +432,8 @@ namespace BotWorker.Bots.BotMessages
                 if (UserInfo.GetInt("ABS(DATEDIFF(MINUTE, GETDATE(), AnswerDate))", UserId) <= 5)
                     AnswerInfo.Plus("GoonTimes", 1, lastId);
 
-                UserInfo.Update($"AnswerId = {AnswerId}, AnswerDate = GETDATE()", UserId);
+                UserInfo.SetValueSync("AnswerId", AnswerId, UserId);
+                UserInfo.SetValueSync("AnswerDate", DateTime.Now, UserId);
             }
 
             lastId = GroupInfo.GetLong("LastAnswerId", UserId);
@@ -444,7 +445,9 @@ namespace BotWorker.Bots.BotMessages
                 if (GroupInfo.GetInt("ABS(DATEDIFF(MINUTE, GETDATE(), LastAnswerDate))", GroupId) <= 5)
                     AnswerInfo.Plus("GoonTimesGroup", 1, lastId);
 
-                GroupInfo.Update($"LastAnswerId = {AnswerId}, LastAnswer = {Answer.Quotes()}, LastAnswerDate = GETDATE()", GroupId);
+                GroupInfo.SetValueSync("LastAnswerId", AnswerId, GroupId);
+                GroupInfo.SetValueSync("LastAnswer", Answer, GroupId);
+                GroupInfo.SetValueSync("LastAnswerDate", DateTime.Now, GroupId);
             }
         }
 

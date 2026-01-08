@@ -1,4 +1,4 @@
-﻿using BotWorker.Groups;
+using BotWorker.Groups;
 using BotWorker.Common.Exts;
 using BotWorker.Core.MetaDatas;
 using BotWorker.Bots.Users;
@@ -91,7 +91,7 @@ namespace BotWorker.Bots.BotMessages
                 var sqls = new[]
                 {
                     GroupMember.SqlUpdateSignInfo(GroupId, UserId, signTimes, signLevel),
-                    Group.IsCreditSystem ? UserInfo.SqlAddCredit(SelfId, GroupId, UserId, creditAdd): ("", []),
+                    Group.IsCreditSystem ? UserInfo.TaskAddCredit(SelfId, GroupId, UserId, creditAdd): ("", []),
                     Group.IsCreditSystem ? CreditLog.SqlHistory(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "签到加分") : ("", []),
                     UserInfo.SqlPlus("tokens", tokensAdd, UserId),
                     TokensLog.SqlLog(SelfId, GroupId, GroupName, UserId, Name, tokensAdd, "签到加算力")

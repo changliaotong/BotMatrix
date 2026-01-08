@@ -10,67 +10,7 @@ namespace BotWorker.Bots.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {
-        // 兑换本群积分/金币/紫币等
-        public string ExchangeCoins(string cmdPara, string cmdPara2)
-        {
-            if (!cmdPara2.IsNum())
-                return "数量不正确";
-
-            long coinsValue = cmdPara2.AsLong();
-            if (coinsValue < 10)
-                return "数量最少为10";
-
-            if ((cmdPara == "积分") | (cmdPara == "群积分"))
-                cmdPara = "本群积分";
-
-            int coinsType = CoinsLog.conisNames.IndexOf(cmdPara);
-            long minusCredit = coinsValue * 120 / 100;
-
-            long creditGroup = GroupId;
-
-            if (coinsType == (int)CoinsLog.CoinsType.groupCredit)
-            {
-                if (!GroupInfo.GetIsCredit(GroupId))
-                    return "未开启本群积分，无法兑换";
-                creditGroup = 0;
-            }
-
-            long creditValue = UserInfo.GetCredit(creditGroup, UserId);
-
-            if (UserInfo.GetIsSuper(UserId))
-                minusCredit = coinsValue;
-
-            string res = "";
-            string saveRes = "";
-
-            if (creditValue < minusCredit)
-            {
-                //兑换本群积分时，可直接扣已存积分
-                long creditSave = UserInfo.GetSaveCredit(UserId);
-                if ((cmdPara == "本群积分") & (creditSave >= minusCredit - creditValue))
-                {
-                    int i = WithdrawCredit(minusCredit - creditValue, ref creditValue, ref creditSave, ref res);
-                    if (i == -1)
-                        return res;
-                    else
-                        saveRes = $"\n取分：{minusCredit - creditValue}，累计：{creditSave}";
-                }
-                else
-                    return $"您的积分{creditValue}不足{minusCredit}";
-            }
-            creditValue -= minusCredit;
-            //扣分 记录积分记录 增加金币 记录金币变化记录
-            var sqlAddCredit = UserInfo.SqlAddCredit(SelfId, creditGroup, UserId, -minusCredit);
-            var sqlCreditHis = CreditLog.SqlHistory(SelfId, creditGroup, GroupName, UserId, Name, -minusCredit, $"兑换{cmdPara}*{coinsValue}");
-            var sqlPlusCoins = GroupMember.SqlPlus(CoinsLog.conisFields[coinsType], coinsValue, GroupId, UserId);
-            long coinsValue2 = 0;
-            var sqlCoinsHis = CoinsLog.SqlCoins(SelfId, GroupId, GroupName, UserId, Name, coinsType, coinsValue, ref coinsValue2, $"兑换{cmdPara}*{coinsValue}");
-            if (ExecTrans(sqlAddCredit, sqlCreditHis, sqlPlusCoins, sqlCoinsHis) == -1)
-                res = RetryMsg;
-            else
-                res = $"兑换{cmdPara}：{coinsValue}，累计：{coinsValue2}{saveRes}\n{UserInfo.GetCreditType(creditGroup, UserId)}：-{minusCredit}，累计：{creditValue}";
-            return res;
-        }
+        // 兑换逻辑已迁移至 UserService.ExchangeCoinsAsync
 
         public string GetGiftRes(long userGift, string giftName, int giftCount = 1)
         {

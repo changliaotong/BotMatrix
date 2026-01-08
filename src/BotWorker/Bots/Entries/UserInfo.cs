@@ -1,4 +1,4 @@
-﻿using BotWorker.Bots.Entries;
+using BotWorker.Bots.Entries;
 using BotWorker.Bots.Models.Office;
 using BotWorker.Bots.Public;
 using BotWorker.Common.Exts;
@@ -154,9 +154,9 @@ public enum States
 }
 
 public static int SetState(States funcDefault, long qq)
-{
-    return SetValue("state", (int)funcDefault, qq);
-}
+    {
+        return SetValueSync("state", (int)funcDefault, qq);
+    }
 
 public static int Append(long botQQ, long groupId, long userId, string name, long userRef, string userOpenid = "", string groupOpenid = "")
 {

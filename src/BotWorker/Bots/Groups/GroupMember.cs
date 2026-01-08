@@ -140,20 +140,27 @@ namespace BotWorker.Groups
                 CoinsLog.SqlCoins(botUin, groupId, groupName, qqTo, "", coinsType, coinsAdd, ref coinsValue2, $"{CoinsLog.conisNames[coinsType]}转入：{qq}"));
         }
 
-        public static (string, SqlParameter[]) SqlSaveCredit(long groupId, long userId, long creditSave)
+        public static SqlTask TaskSaveCredit(long groupId, long userId, long creditSave)
         {
-            return SqlSetValues($"GroupCredit = GroupCredit - ({creditSave}), SaveCredit = ISNULL(SaveCredit, 0) + ({creditSave})", groupId, userId);
+            var (sql, parameters) = SqlSetValues($"GroupCredit = GroupCredit - @creditSave, SaveCredit = ISNULL(SaveCredit, 0) + @creditSave", groupId, userId);
+            var paramList = parameters.ToList();
+            paramList.Add(new SqlParameter("@creditSave", creditSave));
+
+            // 同样标记 NeedsReSync = true，由基类 ExecTrans 负责重读和局部缓存更新
+            return new SqlTask(sql, [.. paramList], groupId, userId, "GroupCredit", true);
         }
 
-        public static (string, SqlParameter[]) SqlAddCredit(long groupId, long userId, long creditAdd)
+        public static SqlTask TaskAddCredit(long groupId, long userId, long creditAdd)
         {
-            return Exists(groupId, userId)
-                ? SqlPlus("GroupCredit", creditAdd, groupId, userId)
-                : SqlInsert([
+            if (Exists(groupId, userId))
+                return TaskPlus("GroupCredit", creditAdd, groupId, userId);
+            
+            var (sql, parameters) = SqlInsert([
                                 new Cov("GroupId", groupId),
                                 new Cov("UserId", userId),
                                 new Cov("GroupCredit", creditAdd),
                             ]);
+            return new SqlTask(sql, parameters, groupId, userId, "GroupCredit", true);
         }
 
         // 添加群成员
@@ -218,9 +225,16 @@ namespace BotWorker.Groups
                     creditAdd = -creditAdd;
                 }
 
-                var sql = UserInfo.SqlAddCredit(botUin, groupId, creditQQ, creditAdd);
-                var sql2 = CreditLog.SqlHistory(botUin, groupId, groupName, creditQQ, "", creditAdd, cmdName);
-                int i = ExecTrans(sql, sql2);
+                // 从根本上解决：使用 TaskPlus 代替 SqlPlus，ExecTrans 会自动处理缓存
+                int i = ExecTrans(
+                    UserInfo.TaskPlus("Credit", creditAdd, creditQQ),
+                    CreditLog.SqlHistory(botUin, groupId, groupName, creditQQ, "", creditAdd, cmdName)
+                );
+
+                // 如果是本群积分，额外处理
+                if (i != -1 && GroupInfo.GetIsCredit(groupId))
+                    TaskPlus("GroupCredit", creditAdd, groupId, creditQQ); 
+
                 return i == -1
                     ? RetryMsg
                     : $"[@:{creditQQ}] {cmdName}成功！\n积分：{creditAdd}，累计：{creditValue + creditAdd}";

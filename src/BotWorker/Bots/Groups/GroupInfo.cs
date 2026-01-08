@@ -400,8 +400,8 @@ namespace BotWorker.Bots.Entries
 
         public static int SetInGame(int isInGame, long groupId)
         {
-            return SetValue("IsInGame", isInGame, groupId);
-        } 
+            return SetValueSync("IsInGame", isInGame, groupId);
+        }
 
         //是否群机器人主人
         public static bool IsOwner(long groupId, long userId)
@@ -412,7 +412,8 @@ namespace BotWorker.Bots.Entries
         // 开始成语接龙游戏
         public static int StartCyGame(int isInGame, string lastCy, long groupId)
         {
-            return Update($"IsInGame = {isInGame}, LastChengyu = {lastCy.Quotes()}, LastChengyuDate = GETDATE()", groupId);
+            SetValueSync("IsInGame", isInGame, groupId);
+            return SetValueSync("LastChengyu", lastCy, groupId);
         }
 
         public static bool GetIsValid(long groupId)
@@ -447,7 +448,7 @@ namespace BotWorker.Bots.Entries
             string udpGroupOwner = groupOwner == 0 || GetGroupOwner(group) != 0 || GroupVip.IsVip(group) ? "" : $"GroupOwner = {groupOwner},";
             string udpRobotOwner = robotOwner == 0 || GetRobotOwner(group) != 0 || GroupVip.IsVip(group) ? "" : $"RobotOwner = {robotOwner},";
             string udpRobot = $"BotUin = {selfId},";
-            return Update($"{udpName} {udpGroupOwner} {udpRobotOwner} {udpRobot} LastDate = GETDATE() ", group);            
+            return UpdateNoCache($"{udpName} {udpGroupOwner} {udpRobotOwner} {udpRobot} LastDate = GETDATE() ", group);            
         }
 
         public static int SetRobotOwner(long groupId, long groupOwner)

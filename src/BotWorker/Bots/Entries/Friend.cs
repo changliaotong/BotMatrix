@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using BotWorker.Core.MetaDatas;
 
 namespace BotWorker.Bots.Entries;
@@ -42,8 +42,12 @@ public class Friend : MetaData<Friend>
     }
 
 
-    public static (string, SqlParameter[]) SqlSaveCredit(long botUin, long userId, long creditSave)
+    public static SqlTask TaskSaveCredit(long botUin, long userId, long creditSave)
     {
-        return SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = isnull(SaveCredit, 0) + ({creditSave})", botUin, userId);
+        var (sql, parameters) = SqlSetValues($"Credit = Credit - @creditSave, SaveCredit = isnull(SaveCredit, 0) + @creditSave", botUin, userId);
+        var paramList = parameters.ToList();
+        paramList.Add(new SqlParameter("@creditSave", creditSave));
+
+        return new SqlTask(sql, [.. paramList], botUin, userId, "Credit", true);
     }
 }

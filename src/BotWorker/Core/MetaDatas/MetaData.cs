@@ -12,7 +12,9 @@ namespace BotWorker.Core.MetaDatas
         [JsonIgnore]
         public virtual string DataBase { get; } = "sz84_robot";
         [JsonIgnore]
-        public abstract string TableName { get; }
+        public virtual string TableName { get; }
+        [JsonIgnore]
+        public virtual TimeSpan CacheTime { get; } = TimeSpan.FromMinutes(30);
         [JsonIgnore]
         public abstract string KeyField { get; }
         [JsonIgnore]

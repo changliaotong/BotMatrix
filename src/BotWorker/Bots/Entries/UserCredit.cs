@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Reflection;
 using BotWorker.Bots.BotMessages;
 using BotWorker.Bots.Entries;
@@ -9,16 +9,40 @@ namespace BotWorker.Bots.Users
 {
     public partial class UserInfo : MetaDataGuid<UserInfo>
     {
+        //读取积分（直读数据库，用于逻辑判断）
+        public static long GetCreditNoCache(long botUin, long groupId, long qq)
+        {
+            if (groupId != 0 && GroupInfo.GetIsCredit(groupId))
+                return GroupMember.GetFieldNoCache<long>("GroupCredit", groupId, qq);
+            
+            return GetFieldNoCache<long>("Credit", qq);
+        }
+
         //增加积分
         public static (int, long) AddCredit(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
         {
-            var creditValue = GetCredit(groupId, qq);
+            // 1. 使用直读数据库获取当前余额，确保准确
+            var creditValue = GetCreditNoCache(botUin, groupId, qq);
+            
             if (Append(botUin, groupId, qq, name, GroupInfo.GetGroupOwner(groupId)) == -1)
                 return (-1, creditValue);
 
             var sql = SqlAddCredit(botUin, groupId, qq, creditAdd);
             var sql2 = CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, creditAdd, creditInfo);
-            return (ExecTrans(sql, sql2), creditValue + creditAdd);
+            
+            int result = ExecTrans(sql, sql2);
+            
+            // 2. 写入成功后，立即同步缓存
+            if (result != -1)
+            {
+                var newValue = creditValue + creditAdd;
+                if (groupId != 0 && GroupInfo.GetIsCredit(groupId))
+                    GroupMember.SyncCacheField(groupId, qq, "GroupCredit", newValue);
+                else
+                    SyncCacheField(qq, "Credit", newValue);
+            }
+
+            return (result, creditValue + creditAdd);
         }
 
         public static (int, long) MinusCredit(long botUin, long groupId, string groupName, long qq, string name, long creditMinus, string creditInfo)
@@ -26,28 +50,24 @@ namespace BotWorker.Bots.Users
 
 
         //增加积分sql
-        public static (string, SqlParameter[]) SqlAddCredit(long botUin, long groupId, long userId, long creditPlus)
+        public static SqlTask TaskAddCredit(long botUin, long groupId, long userId, long creditPlus)
         {
             if (GroupInfo.GetIsCredit(groupId))
             {
-                return GroupMember.SqlAddCredit(groupId, userId, creditPlus);
+                return GroupMember.TaskAddCredit(groupId, userId, creditPlus);
             }
-            else if (BotInfo.GetIsCredit(botUin))
-            {
-                return Friend.SqlAddCredit(botUin, userId, creditPlus);
-            }
-            else
-            {
-                if (Exists(userId))
-                    return SqlPlus("Credit", creditPlus, userId);
-                else
-                    return SqlInsert([
-                        new Cov("BotUin", botUin),
-                        new Cov("GroupId", groupId),
-                        new Cov("Id", userId),
-                        new Cov("Credit", creditPlus),
-                    ]);
-            }
+            
+            if (Exists(userId))
+                return TaskPlus("Credit", creditPlus, userId);
+            
+            var (sql, parameters) = SqlInsert([
+                new Cov("BotUin", botUin),
+                new Cov("GroupId", groupId),
+                new Cov("Id", userId),
+                new Cov("Credit", creditPlus),
+            ]);
+            // 插入操作也可以利用 ReSync 确保缓存被填充
+            return new SqlTask(sql, parameters, userId, "Credit", true);
         }
 
         //转账积分
@@ -57,19 +77,18 @@ namespace BotWorker.Bots.Users
             if (i == -1)
                 return i;
 
-            creditValue = GetCredit(groupId, qq);
+            creditValue = GetCreditNoCache(botUin, groupId, qq);
             if (creditValue < creditMinus)
                 return -1;
 
-            creditValue -= creditMinus;
-            creditValue2 = GetCredit(groupId, qqTo) + creditAdd;
+            creditValue2 = GetCreditNoCache(botUin, groupId, qqTo) + creditAdd;
 
-            var sql = SqlAddCredit(botUin, groupId, qq, -creditMinus);
-            var sql2 = SqlAddCredit(botUin, groupId, qqTo, creditAdd);
-            var sql3 = CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, -creditMinus, $"{transferInfo}扣分：{qqTo}");
-            var sql4 = CreditLog.SqlHistory(botUin, groupId, groupName, qqTo, nameTo, creditAdd, $"{transferInfo}加分：{qq}");
-
-            return ExecTrans(sql, sql3, sql2, sql4);
+            return ExecTrans(
+                TaskAddCredit(botUin, groupId, qq, -creditMinus),
+                TaskAddCredit(botUin, groupId, qqTo, creditAdd),
+                CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, -creditMinus, $"{transferInfo}扣分：{qqTo}"),
+                CreditLog.SqlHistory(botUin, groupId, groupName, qqTo, nameTo, creditAdd, $"{transferInfo}加分：{qq}")
+            );
         }
 
 
@@ -116,28 +135,42 @@ namespace BotWorker.Bots.Users
             return GetLong("SaveCredit", userId);
         }
 
-        public static (string, SqlParameter[]) SqlSaveCredit(long botUin, long groupId, long userId, long creditSave)
+        public static SqlTask TaskSaveCredit(long botUin, long groupId, long userId, long creditSave)
         {
-            return GroupInfo.GetIsCredit(groupId)
-                ? GroupMember.SqlSaveCredit(groupId, userId, creditSave)
-                : BotInfo.GetIsCredit(botUin) ? Friend.SqlSaveCredit(botUin, userId, creditSave)
-                                 : SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = isnull(SaveCredit, 0) + ({creditSave})", userId);
+            if (GroupInfo.GetIsCredit(groupId))
+                return GroupMember.TaskSaveCredit(groupId, userId, creditSave);
+            
+            if (BotInfo.GetIsCredit(botUin))
+                return Friend.TaskSaveCredit(botUin, userId, creditSave);
+
+            var (sql, parameters) = SqlSetValues($"Credit = Credit - @creditSave, SaveCredit = isnull(SaveCredit, 0) + @creditSave", userId);
+            var paramList = parameters.ToList();
+            paramList.Add(new SqlParameter("@creditSave", creditSave));
+
+            // 因为一次更新了两个字段，且是原子计算，所以标记 NeedsReSync = true
+            // 在 ExecTrans 中，我们会自动重新从数据库读取这两个字段并同步到缓存
+            return new SqlTask(sql, [.. paramList], userId, null, "Credit", true);
         }
 
-        public static (string, SqlParameter[]) SqlFreezeCredit(long userId, long creditFreeze)
+        public static SqlTask TaskFreezeCredit(long userId, long creditFreeze)
         {
-            return SqlSetValues($"Credit = Credit - ({creditFreeze}), FreezeCredit = isnull(FreezeCredit, 0) + ({creditFreeze})", userId);
+            var (sql, parameters) = SqlSetValues($"Credit = Credit - @creditFreeze, FreezeCredit = isnull(FreezeCredit, 0) + @creditFreeze", userId);
+            var paramList = parameters.ToList();
+            paramList.Add(new SqlParameter("@creditFreeze", creditFreeze));
+
+            return new SqlTask(sql, [.. paramList], userId, null, "Credit", true);
         }
 
         public static int DoFreezeCredit(long botUin, long groupId, string groupName, long qq, string name, long creditFreeze)
         {
-            long creditValue = GetCredit(groupId, qq);
+            long creditValue = GetCreditNoCache(botUin, groupId, qq);
             if (creditValue < creditFreeze)
                 return -1;
 
-            var sql = SqlFreezeCredit(qq, creditFreeze);
-            var sql2 = CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, -creditFreeze, "冻结积分");
-            return ExecTrans(sql, sql2);
+            return ExecTrans(
+                TaskFreezeCredit(qq, creditFreeze),
+                CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, -creditFreeze, "冻结积分")
+            );
         }
 
         public static long GetFreezeCredit(long qq) => GetLong("FreezeCredit", qq);
@@ -148,9 +181,10 @@ namespace BotWorker.Bots.Users
             if (creditValue < creditUnfreeze)
                 return -1;
 
-            var sql = SqlFreezeCredit(qq, -creditUnfreeze);
-            var sql2 = CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, creditUnfreeze, "解冻积分");
-            return ExecTrans(sql, sql2);
+            return ExecTrans(
+                TaskFreezeCredit(qq, -creditUnfreeze),
+                CreditLog.SqlHistory(botUin, groupId, groupName, qq, name, creditUnfreeze, "解冻积分")
+            );
         }
 
         public static long GetCreditRanking(long botUin, long groupId, long qq)
