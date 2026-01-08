@@ -125,7 +125,17 @@ namespace BotWorker.Modules.Games
                 ActionSkill = "menu.rankings"
             });
 
-            // 4. 添加退出选项
+            // 4. 添加系统脉动 (Audit Log)
+            newRoot.Children.Add(new MenuNode 
+            { 
+                Id = "monitor", 
+                Title = "💓 系统脉动", 
+                Description = "实时观察系统的事件流与审计日志", 
+                Type = MenuNodeType.Command,
+                ActionSkill = "menu.monitor"
+            });
+
+            // 5. 添加退出选项
             newRoot.Children.Add(new MenuNode { Id = "exit", Title = "🚪 退出系统", Type = MenuNodeType.Command, ActionSkill = "menu.exit" });
 
             _rootMenu = newRoot;
@@ -186,7 +196,7 @@ namespace BotWorker.Modules.Games
                 return await HandleMenuChoiceAsync(ctx, session, choice);
             }
 
-            return RenderMenu(session);
+            return await RenderMenuAsync(session);
         }
 
         private async Task<string> HandleMenuChoiceAsync(IPluginContext ctx, MenuSession session, int choice)
@@ -203,11 +213,11 @@ namespace BotWorker.Modules.Games
             {
                 case MenuNodeType.Container:
                     session.Path.Add(selected.Id);
-                    return RenderMenu(session);
+                    return await RenderMenuAsync(session);
 
                 case MenuNodeType.Back:
                     if (session.Path.Count > 1) session.Path.RemoveAt(session.Path.Count - 1);
-                    return RenderMenu(session);
+                    return await RenderMenuAsync(session);
 
                 case MenuNodeType.Command:
                     if (selected.Id == "exit")
@@ -218,6 +228,10 @@ namespace BotWorker.Modules.Games
                     if (selected.Id == "rankings")
                     {
                         return await GetRankingsDisplayAsync();
+                    }
+                    if (selected.Id == "monitor")
+                    {
+                        return GetMonitorDisplay();
                     }
                     return $"🚀 正在为您启动：{selected.Title}...\n(描述: {selected.Description})\n\n💡 请直接输入该功能的指令。";
 
@@ -257,11 +271,11 @@ namespace BotWorker.Modules.Games
             session.CurrentQuestionIndex = -1;
             session.Path.RemoveAt(session.Path.Count - 1);
             
-            sb.AppendLine("\n" + RenderMenu(session));
+            sb.AppendLine("\n" + await RenderMenuAsync(session));
             return sb.ToString();
         }
 
-        private string RenderMenu(MenuSession session)
+        private async Task<string> RenderMenuAsync(MenuSession session)
         {
             var node = FindNodeById(_rootMenu, session.CurrentMenuId);
             if (node == null) return "❌ 菜单节点丢失，请尝试回复【刷新菜单】。";
@@ -272,8 +286,19 @@ namespace BotWorker.Modules.Games
             
             if (session.CurrentMenuId == "root")
             {
+                var userLevel = await UserLevel.GetByUserIdAsync(session.UserId);
+                string plane = "原质";
+                int level = 1;
+                if (userLevel != null)
+                {
+                    level = userLevel.Level;
+                    plane = GetPlaneName(level);
+                }
+
                 sb.AppendLine("╟────────────────────────────╢");
                 sb.AppendLine($"║ 👤 用户: {session.UserId.PadRight(18)}║");
+                sb.AppendLine($"║ 🆙 等级: Lv.{level.ToString().PadRight(15)}║");
+                sb.AppendLine($"║ ✨ 位面: {plane.PadRight(18)}║");
             }
 
             sb.AppendLine("╟────────────────────────────╢");
@@ -301,6 +326,16 @@ namespace BotWorker.Modules.Games
             return sb.ToString();
         }
 
+        private string GetPlaneName(int level)
+        {
+            if (level < 10) return "⚪ 原质";
+            if (level < 30) return "🟢 构件";
+            if (level < 60) return "🔵 逻辑";
+            if (level < 90) return "🟣 协议";
+            if (level < 120) return "🟡 矩阵";
+            return "🔴 奇点";
+        }
+
         private async Task<string> GetRankingsDisplayAsync()
         {
             var topList = await UserLevel.GetTopRankingsAsync(10);
@@ -323,6 +358,39 @@ namespace BotWorker.Modules.Games
             }
             
             sb.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            sb.AppendLine("💡 回复任意数字返回主菜单");
+            return sb.ToString();
+        }
+
+        private string GetMonitorDisplay()
+        {
+            if (_robot == null) return "❌ 系统未就绪";
+            
+            var audits = _robot.Events.GetRecentAudits();
+            var sb = new StringBuilder();
+            sb.AppendLine("💓 【BotMatrix 系统脉动监控】 💓");
+            sb.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            
+            if (audits.Count == 0)
+            {
+                sb.AppendLine("  [静默] 系统目前运行平稳，无关键事件。");
+            }
+            else
+            {
+                foreach (var log in audits.Take(15)) // 只显示最近 15 条
+                {
+                    string icon = log.Level switch {
+                        "Success" => "✅",
+                        "Warning" => "⚠️",
+                        "Critical" => "🚨",
+                        _ => "ℹ️"
+                    };
+                    sb.AppendLine($"{icon} [{log.Timestamp:HH:mm:ss}] {log.Message}");
+                }
+            }
+            
+            sb.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            sb.AppendLine("💡 自动追踪最新 50 条关键审计日志");
             sb.AppendLine("💡 回复任意数字返回主菜单");
             return sb.ToString();
         }

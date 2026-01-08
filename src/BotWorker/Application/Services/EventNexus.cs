@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Models;
 
 namespace BotWorker.Application.Services
 {
@@ -14,6 +15,26 @@ namespace BotWorker.Application.Services
     public class EventNexus : IEventNexus
     {
         private readonly ConcurrentDictionary<Type, List<Delegate>> _subscriptions = new();
+        private readonly ConcurrentQueue<SystemAuditEvent> _auditLog = new();
+        private const int MaxAuditLogSize = 50;
+
+        public EventNexus()
+        {
+            // 自动订阅审计事件，记录到内存队列
+            Subscribe<SystemAuditEvent>(ev => {
+                _auditLog.Enqueue(ev);
+                while (_auditLog.Count > MaxAuditLogSize)
+                {
+                    _auditLog.TryDequeue(out _);
+                }
+                return Task.CompletedTask;
+            });
+        }
+
+        public List<SystemAuditEvent> GetRecentAudits()
+        {
+            return _auditLog.Reverse().ToList();
+        }
 
         public async Task PublishAsync<T>(T eventData) where T : class
         {

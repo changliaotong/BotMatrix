@@ -12,6 +12,18 @@ namespace BotWorker.Domain.Models
     }
 
     /// <summary>
+    /// 系统审计日志事件
+    /// 用于记录系统内部的关键变更，可用于实时监控看板
+    /// </summary>
+    public class SystemAuditEvent : BaseEvent
+    {
+        public string Level { get; set; } = "Info"; // Info, Warning, Success, Critical
+        public string Source { get; set; } = string.Empty; // 来源插件
+        public string Message { get; set; } = string.Empty;
+        public string TargetUser { get; set; } = string.Empty;
+    }
+
+    /// <summary>
     /// 积分交易事件
     /// 当 PointsService 发生任何资金变动时触发
     /// </summary>

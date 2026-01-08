@@ -145,6 +145,17 @@ namespace BotWorker.Modules.Games
                 // 发布交易事件
                 if (_robot != null)
                 {
+                    // 如果是大额交易（大于 1000），发布审计事件
+                    if (amount >= 1000)
+                    {
+                        _ = _robot.Events.PublishAsync(new SystemAuditEvent {
+                            Level = "Warning",
+                            Source = "Points",
+                            Message = $"检测到大额交易: {creditAccount.AccountName} -> {debitAccount.AccountName} | 金额: {amount}",
+                            TargetUser = debitId
+                        });
+                    }
+
                     _ = _robot.Events.PublishAsync(new PointTransactionEvent
                     {
                         UserId = debitId,
@@ -186,15 +197,38 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> SignMsgAsync(IPluginContext ctx)
         {
-            long reward = 100;
-            bool success = await TransferAsync(ctx.UserId, SYSTEM_RESERVE, reward, "每日签到奖励");
+            // 获取用户等级以计算加成
+            var userLevel = await UserLevel.GetByUserIdAsync(ctx.UserId);
+            int level = userLevel?.Level ?? 1;
+            
+            // 基础奖励 100
+            long baseReward = 100;
+            // 等级加成：每级增加 2%
+            double multiplier = 1.0 + (level * 0.02);
+            long finalReward = (long)(baseReward * multiplier);
+
+            bool success = await TransferAsync(ctx.UserId, SYSTEM_RESERVE, finalReward, $"每日签到奖励 (等级加成 x{multiplier:F2})");
             
             if (success)
             {
                 var account = await GetOrCreateAccountAsync(ctx.UserId);
-                return $"✅ 签到成功！\n获得奖励：{reward} 积分\n当前总额：{account.Balance}\n[分录：系统储备 -> 用户账户]";
+                string planeInfo = userLevel != null ? $" [{GetPlaneName(level)}]" : "";
+                return $"✅ 签到成功！\n" +
+                       $"您的等级：Lv.{level}{planeInfo}\n" +
+                       $"获得奖励：{finalReward} 积分 (含 {((multiplier - 1) * 100):F0}% 进化加成)\n" +
+                       $"当前总额：{account.Balance}";
             }
             return "❌ 签到失败，请稍后再试。";
+        }
+
+        private string GetPlaneName(int level)
+        {
+            if (level < 10) return "原质";
+            if (level < 30) return "构件";
+            if (level < 60) return "逻辑";
+            if (level < 90) return "协议";
+            if (level < 120) return "矩阵";
+            return "奇点";
         }
 
         private async Task<string> GetSystemReportMsgAsync(IPluginContext ctx)

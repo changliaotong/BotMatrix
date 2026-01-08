@@ -82,59 +82,61 @@ namespace BotWorker.Modules.Games
 
         private async Task OnPointTransactionAsync(PointTransactionEvent ev)
         {
-            // 只有正向收入才增加经验 (Income)
-            if (ev.TransactionType != "Income" || ev.Amount <= 0) return;
-
             try
             {
                 var userLevel = await GetOrCreateLevelAsync(ev.UserId);
                 
-                // 经验算法：1 积分 = 1 经验 (可调)
-                long expGain = (long)ev.Amount;
+                // 天才数值模型：收入 0.8 倍经验，支出 1.2 倍经验 (鼓励流动)
+                double weight = ev.TransactionType == "Income" ? 0.8 : 1.2;
+                long expGain = (long)(Math.Abs(ev.Amount) * weight);
+                
+                if (expGain <= 0) return;
+
                 userLevel.Experience += expGain;
                 userLevel.LastUpdateTime = DateTime.Now;
+                
+                // 详细日志记录
+                _logger?.LogInformation($"[进化] 用户 {ev.UserId} 产生行为({ev.TransactionType})，获得经验: {expGain}");
 
                 // 检查是否升级
                 int oldLevel = userLevel.Level;
                 int newLevel = CalculateLevel(userLevel.Experience);
+                
+                bool medalsChanged = CheckAndAwardMedals(userLevel);
 
-                bool isLevelUp = newLevel > oldLevel;
-                bool isMedalAwarded = CheckAndAwardMedals(userLevel);
-
-                if (isLevelUp)
+                if (newLevel > oldLevel || medalsChanged)
                 {
                     userLevel.Level = newLevel;
-                    _logger?.LogInformation($"[进化] 用户 {ev.UserId} 升级了！ {oldLevel} -> {newLevel}");
-
-                    // 触发升级事件
-                    if (_robot != null)
+                    await userLevel.UpdateAsync();
+                    
+                    if (newLevel > oldLevel)
                     {
-                        await _robot.Events.PublishAsync(new LevelUpEvent
+                        _logger?.LogInformation($"[进化] 用户 {ev.UserId} 升级至 Lv.{newLevel} ({GetRankName(newLevel)})");
+                        
+                        // 发布审计事件
+                        if (_robot != null)
                         {
-                            UserId = ev.UserId,
-                            OldLevel = oldLevel,
-                            NewLevel = newLevel,
-                            RankName = GetRankName(newLevel)
-                        });
+                            await _robot.Events.PublishAsync(new SystemAuditEvent {
+                                Level = "Success",
+                                Source = "Evolution",
+                                Message = $"用户 {ev.UserId} 晋升位面: {GetRankName(newLevel)} (Lv.{newLevel})",
+                                TargetUser = ev.UserId
+                            });
 
-                        // 升级奖励：赠送等级*100的积分
-                        await _robot.CallSkillAsync("points.transfer", null!, new string[] { 
-                            ev.UserId, 
-                            "SYSTEM_RESERVE", 
-                            (newLevel * 100).ToString(), 
-                            $"等级提升至 Lv.{newLevel} 奖励" 
-                        });
+                            // 发送升级通知
+                            await _robot.SendMessageAsync("system", "bot", null, ev.UserId, 
+                                $"🎊 恭喜！您已进化至位面：{GetRankName(newLevel)} (Lv.{newLevel})！\n解锁了更多系统特权，请前往超级菜单查看。");
+                        }
                     }
                 }
-
-                if (isLevelUp || isMedalAwarded)
+                else
                 {
                     await userLevel.UpdateAsync();
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "处理经验增长时发生异常");
+                _logger?.LogError(ex, $"处理积分经验转化失败: {ev.UserId}");
             }
         }
 
@@ -200,18 +202,21 @@ namespace BotWorker.Modules.Games
 
         private int CalculateLevel(long exp)
         {
-            // 简单等级算法：Level = sqrt(exp / 100)
             if (exp <= 0) return 1;
-            return (int)Math.Floor(Math.Sqrt(exp / 100.0)) + 1;
+            // 对应公式 Exp = 50L^2 + 150L - 200
+            // 反函数 L = (-150 + sqrt(22500 + 200 * (200 + exp))) / 100
+            double l = (-150.0 + Math.Sqrt(22500.0 + 200.0 * (200.0 + exp))) / 100.0;
+            return (int)Math.Max(1, Math.Floor(l));
         }
 
         private string GetRankName(int level)
         {
-            if (level < 5) return "萌新机器人";
-            if (level < 10) return "初级助理";
-            if (level < 20) return "高级特工";
-            if (level < 50) return "矩阵专家";
-            return "进化终结者";
+            if (level < 10) return "原质";
+            if (level < 30) return "构件";
+            if (level < 60) return "逻辑";
+            if (level < 90) return "协议";
+            if (level < 120) return "矩阵";
+            return "奇点";
         }
 
         private async Task<UserLevel> GetOrCreateLevelAsync(string userId)
