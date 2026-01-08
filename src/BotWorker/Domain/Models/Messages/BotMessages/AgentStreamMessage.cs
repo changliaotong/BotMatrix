@@ -57,7 +57,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 {
                     Answer = "模型提供者不存在";
                     await SendMessageAsync();
-                    ErrorMessage(Answer);
+                    Logger.Error(Answer);
                     return;
                 }
 
@@ -105,7 +105,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
             catch (Exception ex)
             {                
-                LogX.Error($"智能体聊天异常: {ex.Message}");
+                Logger.Error($"智能体聊天异常: {ex.Message}");
                 await Stream($"\n⚠️ 出错了: {ex.Message}", cts);
                 await StreamEnd(cts);
                 await SendMessageAsync();

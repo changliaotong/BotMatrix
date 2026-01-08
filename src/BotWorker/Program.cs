@@ -24,6 +24,7 @@ builder.Host.UseSerilog();
 // 添加基础服务
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker.Infrastructure.SignalR.HubLoggingFilter>();
 builder.Services.AddHttpClient();
 
 // 注册数据库

@@ -5,7 +5,6 @@ using BotWorker.Agents.Plugins;
 using BotWorker.Agents.Providers.Configs;
 using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Logging;
 
 namespace BotWorker.Agents.Providers.Helpers
 {
@@ -19,7 +18,7 @@ namespace BotWorker.Agents.Providers.Helpers
                 var provider = KernelManager.GetProviderFromUrl(url);
                 if (!KernelManager._httpClients.TryGetValue(provider, out var client))
                 {
-                    ErrorMessage($"未识别的模型服务地址: {url}");
+                    Logger.Error($"未识别的模型服务地址: {url}");
                     return RetryMsg;
                 }
 
@@ -34,7 +33,7 @@ namespace BotWorker.Agents.Providers.Helpers
             }
             catch (Exception ex)
             {
-                ErrorMessage($"[CallOpenAIAsync] {ex.GetType().Name}: {ex.Message}");
+                Logger.Error($"[CallOpenAIAsync] {ex.GetType().Name}: {ex.Message}");
                 return RetryMsg;
             }
         }
@@ -56,7 +55,7 @@ namespace BotWorker.Agents.Providers.Helpers
             }
             catch (Exception ex)
             {
-                ErrorMessage($"OpenAIApiHelper.CallOpenAIWithFunctionAsync\n{ex.Message}");
+                Logger.Error($"OpenAIApiHelper.CallOpenAIWithFunctionAsync\n{ex.Message}");
                 return RetryMsg;
             }
         }
@@ -82,7 +81,7 @@ namespace BotWorker.Agents.Providers.Helpers
             }
             catch (Exception ex)
             {
-                Debug(ex.Message, "OpenAIApiHelper.CallStreamOpenAIAsync");
+                Logger.Debug(ex.Message, "OpenAIApiHelper.CallStreamOpenAIAsync");
                 await onUpdate("=".Times(30) + $"\n{RetryMsg}", false, cts);
             }
             await onUpdate(string.Empty, false, cts);
@@ -163,7 +162,7 @@ namespace BotWorker.Agents.Providers.Helpers
                                 var plugin = new KnowledgeBasePlugin(context.KbService, context.GroupId);                                
                                 var kbResult = await plugin.GetKnowledgeAsync(question);
 
-                                InfoMessage($"KB Result: {kbResult}");
+                                Logger.Info($"KB Result: {kbResult}");
 
                                 // 把结果加进聊天记录
                                 history.AddAssistantMessage(kbResult);

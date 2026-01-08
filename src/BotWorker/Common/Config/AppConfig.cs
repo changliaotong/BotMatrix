@@ -11,8 +11,8 @@ namespace BotWorker.Common.Config
             _configuration = configuration;
         }
 
-        internal static string _url => _configuration?["sz84:url"] ?? "https://sz84.com";
-        internal static string _apiKey => _configuration?["sz84:api_key"] ?? "AFCDE195E9EE00DCFCB5E0ED44D129EB";
+        internal static string _url => _configuration?["BotWorker:url"] ?? "https://sz84.com";
+        internal static string _apiKey => _configuration?["BotWorker:api_key"] ?? "AFCDE195E9EE00DCFCB5E0ED44D129EB";
 
         public static string RetryMsgTooFast => _configuration?["Messages:RetryMsgTooFast"] ?? "速度太快了，请稍后再试";
         public static string OwnerOnlyMsg => _configuration?["Messages:OwnerOnlyMsg"] ?? "此命令仅机器人主人可用";

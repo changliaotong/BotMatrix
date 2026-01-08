@@ -1,7 +1,5 @@
 using System.Net;
 using System.Text;
-using BotWorker.Common;
-using BotWorker.Core.Logging;
 
 namespace BotWorker.Infrastructure.Utils
 {

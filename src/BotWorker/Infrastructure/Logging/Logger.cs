@@ -1,8 +1,8 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Serilog;
 
-namespace BotWorker.Core.Logging
+namespace BotWorker.Infrastructure.Logging
 {
     /// <summary>
     /// 基于 Serilog 的统一日志管理�?    /// </summary>

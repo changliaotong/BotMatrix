@@ -1,5 +1,4 @@
 using BotWorker.Infrastructure.Communication.OneBot;
-using BotWorker.Infrastructure.Communication.OneBot;
 
 namespace BotWorker.Application.Messaging.Pipeline
 {

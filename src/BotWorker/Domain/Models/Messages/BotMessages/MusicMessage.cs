@@ -1,4 +1,4 @@
-﻿using OneBotSharp.Objs.Message;
+using OneBotSharp.Objs.Message;
 using System.Text.RegularExpressions;
 namespace BotWorker.Domain.Models.Messages.BotMessages
 {

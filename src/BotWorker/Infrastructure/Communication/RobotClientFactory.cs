@@ -13,10 +13,10 @@ public static class RobotClientFactory
 
     public static IRobotClient Get(string platform)
     {
-        BotWorker.Common.C.ShowMessage($"获取平台 {platform} 的 IRobotClient");
+        Logger.Info($"获取平台 {platform} 的 IRobotClient");
         foreach (var c in clients)
         {
-            BotWorker.Common.C.ShowMessage($"{c.Key} => {c.Value}");
+            Logger.Info($"{c.Key} => {c.Value}");
         }
         if (clients.TryGetValue(platform, out var client))
             return client;

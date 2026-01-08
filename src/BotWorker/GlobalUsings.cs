@@ -23,6 +23,7 @@ global using BotWorker.Infrastructure.Persistence.Database;
 global using BotWorker.Infrastructure.Tools;
 global using BotWorker.Modules.Games.Gift;
 global using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
+global using BotWorker.Infrastructure.Logging;
 global using static BotWorker.Common.C;
 global using BotWorker.Common;
 global using static BotWorker.Core.Configurations.AppConfig;

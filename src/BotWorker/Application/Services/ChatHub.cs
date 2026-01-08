@@ -3,20 +3,10 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Mirai.Net.Data.Messages.Concretes;
 using Newtonsoft.Json;
 using BotWorker.Agents.Plugins;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Entities;
-using BotWorker.Common.Extensions;
-using BotWorker.Models;
 using BotWorker.Infrastructure.Background;
-using BotWorker.Infrastructure.Caching;
 using BotWorker.Infrastructure.SignalR;
-
-using BotWorker.Core.Logging;
 
 namespace BotWorker.Application.Services
 {
@@ -31,13 +21,13 @@ namespace BotWorker.Application.Services
         {
             try
             {
-                Core.Logging.Logger.Show($"[SignalR] 客户端响应：{requestId} {resultJson} {StaticMessage}");
+                Logger.Show($"[SignalR] 客户端响应：{requestId} {resultJson} {StaticMessage}");
                 remoteRequest.Complete(requestId, resultJson);
                 return true;
             }
             catch (Exception ex)
             {
-                Core.Logging.Logger.Show($"[SignalR] 客户端响应失败：{requestId} {resultJson} {StaticMessage} {ex.Message}");
+                Logger.Show($"[SignalR] 客户端响应失败：{requestId} {resultJson} {StaticMessage} {ex.Message}");
             }
 
             return false;
@@ -45,7 +35,7 @@ namespace BotWorker.Application.Services
 
         public Task CancelStream(string msgGuid)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             if (_streamCtsMap.TryRemove(msgGuid, out var cts))
             {
                 cts.Cancel();
@@ -82,11 +72,11 @@ namespace BotWorker.Application.Services
                 BotMessage? context = JsonConvert.DeserializeObject<BotMessage>(message);
                 if (context == null)
                 {
-                    Core.Logging.Logger.Show("[SignalR] [错误] 反序列化结果为空");
+                    Logger.Show("[SignalR] [错误] 反序列化结果为空");
                     return;
                 }              
                 context.KbService = knowledgeBaseService;
-                Core.Logging.Logger.Show($"{Context.ConnectionId} {context.MsgGuid}");
+                Logger.Show($"{Context.ConnectionId} {context.MsgGuid}");
                 context.ReplyMessageAsync = () => ReplyBotMessage(context);
                 context.ReplyStreamBeginMessageAsync = token => ReplyStreamBegin(context, token);
                 context.ReplyStreamMessageAsync = (json, token) => ReplyStream(context, json, token);
@@ -98,7 +88,7 @@ namespace BotWorker.Application.Services
             }
             catch (Exception ex)
             {
-                Core.Logging.Logger.Show($"[SignalR] 服务端异常：{ex}");
+                Logger.Show($"[SignalR] 服务端异常：{ex}");
                 throw new HubException("[SignalR] SendStreamUserMessage 服务端异常：" + ex.Message);
             }
         }
@@ -109,7 +99,7 @@ namespace BotWorker.Application.Services
             [FromServices] KnowledgeBaseService knowledgeBaseService,
             [FromServices] IHubContext<ChatHub> hubContext)
         {
-            Core.Logging.Logger.Show($"[SignalR] [收到消息] {guid}");
+            Logger.Show($"[SignalR] [收到消息] {guid}");
 
             BotMessage? context = JsonConvert.DeserializeObject<BotMessage>(message);
             if (context == null) return true;
@@ -127,13 +117,13 @@ namespace BotWorker.Application.Services
             BotTaskHelper.EnqueueBotTask(provider, context, async ctx =>
             {
                 ctx.CurrentStopwatch = Stopwatch.StartNew();
-                Core.Logging.Logger.Show($"[Event] {ctx.EventMessage}");
-                Core.Logging.Logger.Show($"[Event] 处理中...", ConsoleColor.White);
+                Logger.Show($"[Event] {ctx.EventMessage}");
+                Logger.Show($"[Event] 处理中...", ConsoleColor.White);
                 await handler.HandleBotMessageAsync(ctx);
                 ctx.CurrentStopwatch.Stop();
                 ctx.CostTime = ctx.CurrentStopwatch.Elapsed.TotalSeconds;
-                Core.Logging.Logger.Show($"[Event] 完成，用时 {ctx.CurrentStopwatch.Elapsed.TotalSeconds:F3} 秒");
-                Core.Logging.Logger.Show($"{ctx.Reason} {ctx.Answer}", ConsoleColor.Green);
+                Logger.Show($"[Event] 完成，用时 {ctx.CurrentStopwatch.Elapsed.TotalSeconds:F3} 秒");
+                Logger.Show($"{ctx.Reason} {ctx.Answer}", ConsoleColor.Green);
                 await ctx.SendMessageAsync();
 
             }, logger, "处理Bot消息");
@@ -145,7 +135,7 @@ namespace BotWorker.Application.Services
         {                    
             try
             {
-                Core.Logging.Logger.Show($"{StaticMessage}");
+                Logger.Show($"{StaticMessage}");
                 await Clients.All.SendAsync("ReceiveMessage", guid, message);
                 return true;
             }
@@ -161,7 +151,7 @@ namespace BotWorker.Application.Services
         {
             try
             {
-                Core.Logging.Logger.Show($"{StaticMessage} {json}");
+                Logger.Show($"{StaticMessage} {json}");
                 await Clients.User(userId).SendAsync("ReceiveProxyMessage", guid, json);
                 return true;
             }
@@ -184,7 +174,7 @@ namespace BotWorker.Application.Services
             }
             catch (Exception ex)
             { 
-                Console.WriteLine(ex); 
+                Logger.Show(ex.Message); 
             }
 
             return false;
@@ -205,12 +195,13 @@ namespace BotWorker.Application.Services
         {
             try
             {
+                Logger.Show($"{StaticMessage}");
                 await Clients.All.SendAsync("ReceiveMessage", guid, message);
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                Logger.Show(ex.Message); 
             }
 
             return false;
@@ -218,44 +209,44 @@ namespace BotWorker.Application.Services
 
         public long GetQQByOpenid(string MemberOpenId)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             return UserInfo.GetWhere("isnull(TargetUserId, Id)", $"UserOpenid = {MemberOpenId.Quotes()}").AsLong();
         }
 
         public long GetGroupByOpenid(string GroupOpenid)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             return GroupInfo.GetWhere("isnull(TargetGroup, 0)", $"GroupOpenid = {GroupOpenid.Quotes()}").AsLong();
         }
 
         public string GetValue(string field, long id)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             return BotInfo.GetValue(field, id);
         }
 
         public int SetValue(string field, string value, long id)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             return BotInfo.SetValue(field, value, id);
         }
 
         public int SetIsSend(string msgGuid, int isSend)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             var sql = $"update {GroupSendMessage.FullName} set is_send = {isSend} where msg_guid = {msgGuid.Quotes()}";
             return Exec(sql);
         }
 
         public int Debug(string message, string group = "")
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             return DbDebug(message, group);
         }
 
         public int AppendSendMessage(string message)
         {
-            Core.Logging.Logger.Show($"{StaticMessage}");
+            Logger.Show($"{StaticMessage}");
             BotMessage? context = JsonConvert.DeserializeObject<BotMessage>(message);
             if (context == null) return -1;
             return GroupSendMessage.Append(context);
