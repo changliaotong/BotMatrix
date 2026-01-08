@@ -1,4 +1,3 @@
-using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Persistence.Database;
 using BotWorker.Infrastructure.Caching;
 

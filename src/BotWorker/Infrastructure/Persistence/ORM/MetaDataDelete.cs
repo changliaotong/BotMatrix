@@ -1,11 +1,11 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
-        public virtual async Task<int> DeleteAsync(SqlTransaction? trans = null)
+        public virtual async Task<int> DeleteAsync(IDbTransaction? trans = null)
         {
             var where = new Dictionary<string, object?>();
 
@@ -27,27 +27,27 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await ExecAsync(sql, trans, parameters);
         }
 
-        public static (string, SqlParameter[]) SqlDelete(object id, object? id2 = null)
+        public static (string, IDataParameter[]) SqlDelete(object id, object? id2 = null)
         {
             var dict = ToDict(id, id2);
             return SqlDelete(FullName, dict);
         }
 
-        public static (string, SqlParameter[]) SqlDelete(string tableFullName, Dictionary<string, object?> keys)
+        public static (string, IDataParameter[]) SqlDelete(string tableFullName, Dictionary<string, object?> keys)
         {
             var (where, parameters) = SqlWhere(keys, allowEmpty: false);
             return ($"DELETE FROM {tableFullName} {where}", parameters);
         }
 
-        public static (string, SqlParameter[]) SqlDelete(string tableFullName, params (string, object?)[] keys)
+        public static (string, IDataParameter[]) SqlDelete(string tableFullName, params (string, object?)[] keys)
             => SqlDelete(tableFullName, ToDict(keys));
 
 
-        public static int Delete(object id, object? id2 = null, SqlTransaction? trans = null)
+        public static int Delete(object id, object? id2 = null, IDbTransaction? trans = null)
             => DeleteAsync(id, id2, trans).GetAwaiter().GetResult();
 
         //delete async
-        public static async Task<int> DeleteAsync(object id, object? id2 = null, SqlTransaction? trans = null)
+        public static async Task<int> DeleteAsync(object id, object? id2 = null, IDbTransaction? trans = null)
         {
             var (sql, paras) = SqlDelete(id, id2);
             return await ExecAsync(sql, trans, paras);
@@ -58,10 +58,10 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return $"DELETE FROM {FullName} WHERE {Key} = {value.AsString().Quotes()}";
         }
 
-        public static int DeleteAll(object value, SqlTransaction? trans = null)
+        public static int DeleteAll(object value, IDbTransaction? trans = null)
             => DeleteAllAsync(value, trans).GetAwaiter().GetResult();
 
-        public static async Task<int> DeleteAllAsync(object value, SqlTransaction? trans = null)
+        public static async Task<int> DeleteAllAsync(object value, IDbTransaction? trans = null)
         {
             return await ExecAsync(SqlDeleteAll(value), trans);
         }
@@ -71,18 +71,18 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return $"DELETE FROM {FullName} WHERE {Key2} = {value.AsString().Quotes()}";
         }
 
-        public static int DeleteAll2(object value, SqlTransaction? trans = null)
+        public static int DeleteAll2(object value, IDbTransaction? trans = null)
             => DeleteAll2Async(value, trans).GetAwaiter().GetResult();
 
-        public static async Task<int> DeleteAll2Async(object value, SqlTransaction? trans = null)
+        public static async Task<int> DeleteAll2Async(object value, IDbTransaction? trans = null)
         {
             return await ExecAsync(SqlDeleteAll2(value), trans);
         }
 
-        public static int DeleteWhere(string sWhere, SqlTransaction? trans = null)
+        public static int DeleteWhere(string sWhere, IDbTransaction? trans = null)
             => DeleteWhereAsync(sWhere, trans).GetAwaiter().GetResult();
 
-        public static async Task<int> DeleteWhereAsync(string sWhere, SqlTransaction? trans = null)
+        public static async Task<int> DeleteWhereAsync(string sWhere, IDbTransaction? trans = null)
         {
             return await ExecAsync($"DELETE FROM {FullName} {sWhere.EnsureStartsWith("WHERE")}", trans);
         }

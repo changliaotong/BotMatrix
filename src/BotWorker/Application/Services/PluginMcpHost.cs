@@ -8,12 +8,18 @@ namespace BotWorker.Application.Services
         private readonly PluginManager _pluginManager;
         private readonly IAIService _aiService;
         private readonly II18nService _i18nService;
+        private readonly Microsoft.Extensions.Logging.ILogger<PluginMcpHost> _logger;
 
-        public PluginMcpHost(PluginManager pluginManager, IAIService aiService, II18nService i18nService)
+        public PluginMcpHost(
+            PluginManager pluginManager, 
+            IAIService aiService, 
+            II18nService i18nService,
+            Microsoft.Extensions.Logging.ILogger<PluginMcpHost> logger)
         {
             _pluginManager = pluginManager;
             _aiService = aiService;
             _i18nService = i18nService;
+            _logger = logger;
         }
 
         public Task<IEnumerable<MCPTool>> ListToolsAsync(string serverId, CancellationToken ct = default)
@@ -85,7 +91,8 @@ namespace BotWorker.Application.Services
                     "mcp", 
                     "system", 
                     _aiService, 
-                    _i18nService);
+                    _i18nService,
+                    _logger);
                 
                 string result = await skill.Handler(ctx, args);
 

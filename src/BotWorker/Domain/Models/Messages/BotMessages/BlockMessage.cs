@@ -123,25 +123,20 @@ public partial class BotMessage : MetaData<BotMessage>
 
                 await trans.CommitAsync();
 
-                if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
-                    resStr = $"{resStr}\n{(IsGroup ? "群链" : "私链")}：{Block.GetHash(GroupId, UserId)[7..23]}";
+            if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
+                resStr = $"{resStr}\n{(IsGroup ? "群链" : "私链")}：{Block.GetHash(GroupId, UserId)[7..23]}";
 
-                return resStr;
-            }
-            catch (Exception ex)
-            {
-                await trans.RollbackAsync();
-                Console.WriteLine($"[GetBlockRes Error] {ex.Message}");
-                return RetryMsg;
-            }
+            return resStr;
         }
-
-        public string GetBlockRes()
+        catch (Exception ex)
         {
-            return GetBlockResAsync().GetAwaiter().GetResult();
+            await trans.RollbackAsync();
+            Console.WriteLine($"[GetBlockRes Error] {ex.Message}");
+            return RetryMsg;
         }
+    }
 
-        public async Task<string> GetMultAsync()
+    public async Task<string> GetMultAsync()
         {
             if (IsTooFast()) return RetryMsgTooFast;
 

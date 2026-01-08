@@ -1,5 +1,5 @@
-﻿using System.Collections.Concurrent;
-using Microsoft.Data.SqlClient;
+using System.Collections.Concurrent;
+using System.Data;
 using System.Reflection;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
@@ -9,7 +9,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         // 缓存实体属性信息，避免反射重复获取
         private static readonly ConcurrentDictionary<Type, PropertyInfo[]> PropertyCache = new();
 
-        public static T MapToEntity<T>(SqlDataReader reader) where T : new()
+        public static T MapToEntity<T>(IDataReader reader) where T : new()
         {
             var type = typeof(T);
             var props = PropertyCache.GetOrAdd(type, t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance));

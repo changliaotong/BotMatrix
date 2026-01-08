@@ -80,7 +80,7 @@ namespace BotWorker.Application.Services
             {
                 if (Activator.CreateInstance(type) is IPlugin plugin)
                 {
-                    _logger.LogInformation("加载插件: {Name} ({Description})", plugin.Name, plugin.Description);
+                    _logger.LogInformation("加载插件: {Name} ({Description})", plugin.Metadata.Name, plugin.Metadata.Description);
                     await _pluginManager.LoadPluginAsync(plugin);
                 }
             }

@@ -1,56 +1,66 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using BotWorker.Domain.Entities;
 using BotWorker.Domain.Interfaces;
-using BotWorker.Infrastructure.Persistence;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Application.Services
 {
-    public class LimiterService(AppDbContext db) : ILimiter
+    public class LimiterService : ILimiter
     {
-        private readonly AppDbContext _db = db;
-
         public async Task<bool> HasUsedAsync(long? groupId, long userId, string actionKey)
         {
-            var record = await _db.DailyLimitLogs
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.GroupId == groupId && x.UserId == userId && x.ActionKey == actionKey);
+            var sql = "SELECT UsedAt FROM LimiterLogs WHERE (GroupId = @GroupId OR (@GroupId IS NULL AND GroupId IS NULL)) AND UserId = @UserId AND ActionKey = @ActionKey";
+            var usedAt = await SQLConn.QueryScalarAsync<DateTime?>(sql, 
+                SQLConn.CreateParameters(
+                    ("@GroupId", (object?)groupId ?? DBNull.Value),
+                    ("@UserId", userId),
+                    ("@ActionKey", actionKey)
+                ));
 
-            return record != null && record.UsedAt.Date == DateTime.Today;
+            return usedAt != null && usedAt.Value.Date == DateTime.Today;
         }
 
         public async Task MarkUsedAsync(long? groupId, long userId, string actionKey)
         {
-            var record = await _db.DailyLimitLogs
-                .FirstOrDefaultAsync(x => x.GroupId == groupId && x.UserId == userId && x.ActionKey == actionKey);
+            var checkSql = "SELECT Id FROM LimiterLogs WHERE (GroupId = @GroupId OR (@GroupId IS NULL AND GroupId IS NULL)) AND UserId = @UserId AND ActionKey = @ActionKey";
+            var id = await SQLConn.QueryScalarAsync<int?>(checkSql,
+                SQLConn.CreateParameters(
+                    ("@GroupId", (object?)groupId ?? DBNull.Value),
+                    ("@UserId", userId),
+                    ("@ActionKey", actionKey)
+                ));
 
-            if (record == null)
+            if (id == null)
             {
-                await _db.DailyLimitLogs.AddAsync(new LimiterLog
-                {
-                    GroupId = groupId,
-                    UserId = userId,
-                    ActionKey = actionKey,
-                    UsedAt = DateTime.Now
-                });
+                var insertSql = "INSERT INTO LimiterLogs (GroupId, UserId, ActionKey, UsedAt) VALUES (@GroupId, @UserId, @ActionKey, @UsedAt)";
+                await SQLConn.ExecAsync(insertSql,
+                    SQLConn.CreateParameters(
+                        ("@GroupId", (object?)groupId ?? DBNull.Value),
+                        ("@UserId", userId),
+                        ("@ActionKey", actionKey),
+                        ("@UsedAt", DateTime.Now)
+                    ));
             }
             else
             {
-                record.UsedAt = DateTime.Now;
+                var updateSql = "UPDATE LimiterLogs SET UsedAt = @UsedAt WHERE Id = @Id";
+                await SQLConn.ExecAsync(updateSql,
+                    SQLConn.CreateParameters(
+                        ("@UsedAt", DateTime.Now),
+                        ("@Id", id.Value)
+                    ));
             }
-
-            await _db.SaveChangesAsync();
         }
 
         public async Task<DateTime?> GetLastUsedAsync(long? groupId, long userId, string actionKey)
         {
-            return await _db.DailyLimitLogs
-                .AsNoTracking()
-                .Where(x => x.GroupId == groupId && x.UserId == userId && x.ActionKey == actionKey)
-                .Select(x => (DateTime?)x.UsedAt)
-                .FirstOrDefaultAsync();
+            var sql = "SELECT UsedAt FROM LimiterLogs WHERE (GroupId = @GroupId OR (@GroupId IS NULL AND GroupId IS NULL)) AND UserId = @UserId AND ActionKey = @ActionKey";
+            return await SQLConn.QueryScalarAsync<DateTime?>(sql,
+                SQLConn.CreateParameters(
+                    ("@GroupId", (object?)groupId ?? DBNull.Value),
+                    ("@UserId", userId),
+                    ("@ActionKey", actionKey)
+                ));
         }
 
         public async Task<bool> TryUseAsync(long? groupId, long userId, string actionKey)

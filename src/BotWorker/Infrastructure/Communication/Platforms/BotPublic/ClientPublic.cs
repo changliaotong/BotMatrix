@@ -1,4 +1,3 @@
-using Microsoft.Data.SqlClient;
 using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Domain.Entities;
 using BotWorker.Infrastructure.Extensions;

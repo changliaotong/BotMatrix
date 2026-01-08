@@ -1,12 +1,4 @@
 using System.Text.RegularExpressions;
-using BotWorker.Domain.Entities;
-using BotWorker.Common.Extensions;
-using BotWorker.Modules.Games;
-using BotWorker.Domain.Constants;
-using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
-using BotWorker.Common;
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Infrastructure.Tools;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages
 {
@@ -127,12 +119,8 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                     CurrentMessage.RegexGetValue(Regexs.FishingBuy, "cmdPara"),
                     CurrentMessage.RegexGetValue(Regexs.FishingBuy, "cmdPara2"));
 
-            else if (Message.IsMatch(Regexs.AddMinus)) //充值 扣除 积分、金币/紫币/游戏币等
-                Answer = await GroupMember.AddCoinsResAsync(SelfId, GroupId, GroupName, UserId, Name,
-                    CurrentMessage.RegexGetValue(Regexs.AddMinus, "CmdName"),
-                    CurrentMessage.RegexGetValue(Regexs.AddMinus, "cmdPara"),
-                    CurrentMessage.RegexGetValue(Regexs.AddMinus, "cmdPara2"),
-                    CurrentMessage.RegexGetValue(Regexs.AddMinus, "cmdPara3"));
+            else if (CurrentMessage.IsMatch(Regexs.AddMinus)) //充值 扣除 积分、金币/紫币/游戏币等
+                Answer = await GroupMember.AddCoinsResAsync(this);
 
             else if (CurrentMessage.IsMatch(Regexs.ExchangeCoins)) //兑换/购买 金币/紫币/游戏币等
                 Answer = await ExchangeCoinsAsync(CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara"), CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara2"));

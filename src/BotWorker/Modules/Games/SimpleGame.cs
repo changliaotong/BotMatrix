@@ -1,8 +1,50 @@
 ﻿using BotWorker.Common;
 using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Modules.Plugins;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.Games
 {
+    [BotPlugin(
+        Id = "game.simple",
+        Name = "基础游戏集",
+        Version = "1.0.0",
+        Author = "Matrix",
+        Description = "包含抢楼、打飞机、打地鼠、打群主等基础趣味互动游戏",
+        Category = "Games"
+    )]
+    public class SimpleGamePlugin : IPlugin
+    {
+        public async Task InitAsync(IRobot robot)
+        {
+            await robot.RegisterSkillAsync(new SkillCapability
+            {
+                Name = "基础互动游戏",
+                Commands = new[] { "抢楼", "打飞机", "打地鼠", "打群主", "抢救群主", "爱群主", "群主最伟大", "群主最伟大了", "我爱群主" },
+                Description = "包含抢楼、打飞机、打地鼠、打群主、抢救群主、爱群主等趣味互动"
+            }, HandleSimpleGameAsync);
+        }
+
+        public Task StopAsync() => Task.CompletedTask;
+
+        private async Task<string> HandleSimpleGameAsync(IPluginContext ctx, string[] args)
+        {
+            var userId = long.Parse(ctx.UserId);
+            var cmd = ctx.RawMessage.Trim();
+
+            if (cmd.Contains("抢楼")) return SimpleGame.RobBuilding(userId);
+            if (cmd.Contains("打飞机")) return SimpleGame.DaFeiji(userId);
+            if (cmd.Contains("打地鼠")) return SimpleGame.DaDishu(userId);
+            if (cmd.Contains("打群主")) return SimpleGame.DaQunzhu(userId);
+            if (cmd.Contains("抢救群主")) return SimpleGame.QiangjiuQunzhu(userId);
+            if (cmd.Contains("爱群主") || cmd.Contains("群主最伟大") || cmd.Contains("我爱群主"))
+                return SimpleGame.AiQunzhu(userId);
+
+            return string.Empty;
+        }
+    }
+
     internal class SimpleGame : MetaData<SimpleGame>
     {
         public override string TableName => throw new NotImplementedException();

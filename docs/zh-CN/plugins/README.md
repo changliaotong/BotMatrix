@@ -8,10 +8,16 @@
 
 ## 插件列表
 
-### 核心插件
-- **admin.md** - 管理员命令文档
-- **super_group_manager.md** - 超级群管系统 (C# SDK v3.0)
-- **moderation.md** - 群管系统文档
+### 核心系统 (新架构)
+- **ADMIN_SYSTEM_V2.md** - 超级群管系统 V2 (管理、黑名单、高级治理)
+- **BABY_SYSTEM.md** - 育儿系统 (领养、成长、打工、商城)
+- **MARRIAGE_SYSTEM.md** - 婚姻系统 (求婚结婚、甜蜜爱心、伴侣互动)
+- **PET_SYSTEM_V2.md** - 宠物系统 V2 (捕捉、培养、进化)
+- **FISHING_SYSTEM_V2.md** - 钓鱼系统 V2 (收集、交易、图鉴)
+- **ACHIEVEMENT_SYSTEM_V1.md** - 成就系统 (里程碑、勋章)
+
+### 基础功能
+- **CORE_PLUGIN.md** - 核心插件基础功能
 - **points.md** - 积分系统文档
 - **sign_in.md** - 签到系统文档
 - **menu.md** - 菜单系统文档
@@ -23,21 +29,17 @@
 - **system_info.md** - 系统信息查询文档
 
 ### 游戏娱乐
-- **games.md** - 游戏插件文档
+- **games.md** - 游戏插件概览
 - **lottery.md** - 抽奖功能文档
 
 ### 社交互动
 - **social.md** - 社交功能文档
 - **greetings.md** - 问候语文档
 
-### 高级功能
-- **achievement.md** - 成就系统文档
-- **pets.md** - 宠物系统文档
-- **mount.md** - 坐骑系统文档
-
 ### 开发相关
-- **development.md** - 开发指南文档
-- **dialog_demo.md** - 多级菜单示例文档
+- **architecture_and_split.md** - 插件架构与拆分最佳实践 (必读)
+- **PLUGIN_DEVELOPMENT.md** - 插件开发指南
+- **development.md** - 通用开发指南
 
 ## 使用说明
 

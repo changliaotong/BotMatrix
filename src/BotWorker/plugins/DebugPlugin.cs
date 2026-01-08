@@ -19,6 +19,8 @@ namespace BotWorker.Plugins
             await robot.RegisterEventAsync("MemberJoinedEvent", HandleMemberIncrease);
         }
 
+        public async Task StopAsync() => await Task.CompletedTask;
+
         private async Task HandleMemberIncrease(IPluginContext ctx)
         {
             await ctx.ReplyAsync($"[Debug] 欢迎新成员 {ctx.UserId} 加入群组 {ctx.GroupId}！");

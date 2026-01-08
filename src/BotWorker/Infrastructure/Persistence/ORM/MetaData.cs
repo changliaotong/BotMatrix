@@ -1,11 +1,40 @@
 using System.Data;
+using System.Data.Common;
 using System.Reflection;
-using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
+    public static class MetaData
+    {
+        public static IDataParameter CreateParameter(string parameterName, object? value)
+        {
+            if (value is byte[] byteValue)
+            {
+                var param = Persistence.Database.DbProviderFactory.CreateParameter(parameterName, byteValue);
+                if (param is DbParameter dbParam) dbParam.DbType = DbType.Binary;
+                return param;
+            }
+            else if (value is bool boolValue)
+            {
+                return Persistence.Database.DbProviderFactory.CreateParameter(parameterName, boolValue ? 1 : 0);
+            }
+            else if (value is Enum enumValue)
+            {
+                return Persistence.Database.DbProviderFactory.CreateParameter(parameterName, Convert.ToInt32(enumValue));
+            }
+            else if (value is string strValue)
+            {
+                return Persistence.Database.DbProviderFactory.CreateParameter(parameterName, string.IsNullOrEmpty(strValue) ? "" : strValue);
+            }
+            else
+            {
+                return Persistence.Database.DbProviderFactory.CreateParameter(parameterName, value ?? DBNull.Value);
+            }
+        }
+    }
+
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
         [JsonIgnore]
@@ -113,106 +142,106 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return SQLConn.QueryRes(sql, format);
         }
 
-        public static List<T> Query<T>(string sql, params SqlParameter[] parameters)
+        public static List<T> Query<T>(string sql, params IDataParameter[] parameters)
         {
             return SQLConn.QueryAsync<T>(sql, parameters).GetAwaiter().GetResult();
         }
 
-        public static T? QueryScalar<T>(string sql, params SqlParameter[] parameters)
+        public static T? QueryScalar<T>(string sql, params IDataParameter[] parameters)
         {
             return SQLConn.QueryScalar<T>(sql, parameters);
         }
 
-        public static DataSet QueryDataset(string sql, params SqlParameter[] parameters)
+        public static DataSet QueryDataset(string sql, params IDataParameter[] parameters)
         {
             return SQLConn.QueryDataset(sql, parameters);
         }
 
-        public static DataSet QueryDataset(string sql, SqlTransaction? trans, params SqlParameter[] parameters)
+        public static DataSet QueryDataset(string sql, IDbTransaction? trans, params IDataParameter[] parameters)
         {
             return SQLConn.QueryDataset(sql, trans, parameters);
         }
 
-        public static async Task<T?> QueryScalarAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<T?> QueryScalarAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             return await SQLConn.QueryScalarAsync<T>(sql, true, trans, parameters);
         }
 
-        public static async Task<List<T>> QueryAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<List<T>> QueryAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             return await SQLConn.QueryAsync<T>(sql, parameters);
         }
 
-        public static async Task<T?> QuerySingleAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : class, new()
+        public static async Task<T?> QuerySingleAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : class, new()
         {
             return await SQLConn.QuerySingleAsync<T>(sql, parameters);
         }
 
-        public static async Task<List<T>> QueryListAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : new()
+        public static async Task<List<T>> QueryListAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : new()
         {
             return await SQLConn.QueryListAsync<T>(sql, parameters, trans);
         }
 
-        public static async Task<DataSet> QueryDatasetAsync(string sql, params SqlParameter[] parameters)
+        public static async Task<DataSet> QueryDatasetAsync(string sql, params IDataParameter[] parameters)
         {
             return await SQLConn.QueryDatasetAsync(sql, parameters);
         }
 
-        public static async Task<SqlTransaction> BeginTransactionAsync()
+        public static async Task<IDbTransaction> BeginTransactionAsync()
         {
-            var conn = new SqlConnection(ConnString);
-            await conn.OpenAsync();
-            return (SqlTransaction)await conn.BeginTransactionAsync();
+            var conn = Persistence.Database.DbProviderFactory.CreateConnection();
+            if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
+            return conn.BeginTransaction();
         }
 
-        public static SqlTransaction BeginTransaction()
+        public static IDbTransaction BeginTransaction()
         {
-            var conn = new SqlConnection(ConnString);
+            var conn = Persistence.Database.DbProviderFactory.CreateConnection();
             conn.Open();
             return conn.BeginTransaction();
         }
 
-        public static async Task<int> ExecAsync(string sql, params SqlParameter[] parameters)
+        public static async Task<int> ExecAsync(string sql, params IDataParameter[] parameters)
         {
             return await ExecAsync(sql, null, parameters);
         }
 
-        public static async Task<int> ExecAsync((string sql, SqlParameter[] parameters) sqlInfo, SqlTransaction? trans = null)
+        public static async Task<int> ExecAsync((string sql, IDataParameter[] parameters) sqlInfo, IDbTransaction? trans = null)
         {
             return await ExecAsync(sqlInfo.sql, trans, sqlInfo.parameters);
         }
 
-        public static async Task<int> ExecAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<int> ExecAsync(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             return await SQLConn.ExecAsync(sql, false, trans, parameters);
         }
 
-        public static async Task<T?> ExecScalarAsync<T>(string sql, params SqlParameter[] parameters) where T : struct
+        public static async Task<T?> ExecScalarAsync<T>(string sql, params IDataParameter[] parameters) where T : struct
         {
             return await ExecScalarAsync<T>(sql, null, parameters);
         }
 
-        public static async Task<T?> ExecScalarAsync<T>(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : struct
+        public static async Task<T?> ExecScalarAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : struct
         {
             return await SQLConn.ExecScalarAsync<T>(sql, false, trans, parameters);
         }
 
-        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, SqlParameter[] parameters, string[] outputFields, SqlTransaction? trans = null)
+        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, IDataParameter[] parameters, string[] outputFields, IDbTransaction? trans = null)
         {
             return await SQLConn.ExecWithOutputAsync(sql, parameters, outputFields, trans);
         }
 
-        public static int Exec(string sql, params SqlParameter[] parameters)
+        public static int Exec(string sql, params IDataParameter[] parameters)
         {
             return Exec(sql, null, parameters);
         }
 
-        public static int Exec(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static int Exec(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             return SQLConn.Exec(sql, false, trans, parameters);
         }
 
-        public static int Exec((string sql, SqlParameter[] parameters) sqlInfo, SqlTransaction? trans = null)
+        public static int Exec((string sql, IDataParameter[] parameters) sqlInfo, IDbTransaction? trans = null)
         {
             return SQLConn.Exec(sqlInfo.sql, false, trans, sqlInfo.parameters);
         }
@@ -259,29 +288,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             }
         }
 
-        public static SqlParameter GetSqlParameter(string parameterName, object value)
-        {
-            if (value is byte[] byteValue)
-            {
-                return new SqlParameter(parameterName, SqlDbType.VarBinary) { Value = byteValue };
-            }
-            else if (value is bool boolValue)
-            {
-                return new SqlParameter(parameterName, boolValue ? 1 : 0);
-            }
-            else if (value is Enum enumValue)
-            {
-                return new SqlParameter(parameterName, Convert.ToInt32(enumValue));
-            }
-            else if (value is string strValue)
-            {
-                return new SqlParameter(parameterName, string.IsNullOrEmpty(strValue) ? "" : strValue);
-            }
-            else
-            {
-                return new SqlParameter(parameterName, value ?? DBNull.Value);
-            }
-        } 
+        public static IDataParameter CreateParameter(string parameterName, object? value) => MetaData.CreateParameter(parameterName, value);
 
         public static string FormatValue(object value)
         {

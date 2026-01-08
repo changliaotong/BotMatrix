@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.Database
@@ -16,16 +15,16 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return ExecTrans(true, sqls);
         }
 
-        public static int ExecTrans(params (string Sql, SqlParameter[] Parameters)[] sqls)
+        public static int ExecTrans(params (string Sql, IDataParameter[] Parameters)[] sqls)
         {
             return ExecTrans(true, sqls);
         }
 
-        public static int ExecTrans(bool isDebug, params (string Sql, SqlParameter[] Parameters)[] sqls)
+        public static int ExecTrans(bool isDebug, params (string Sql, IDataParameter[] Parameters)[] sqls)
         {
-            using SqlConnection conn = new(GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
             conn.Open();
-            SqlTransaction trans = conn.BeginTransaction();
+            using var trans = conn.BeginTransaction();
 
             try
             {
@@ -33,14 +32,14 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 {
                     if (sql.IsNull()) continue;
 
-                    using SqlCommand cmd = new(sql, conn, trans)
-                    {
-                        CommandType = CommandType.Text
-                    };
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = sql;
+                    cmd.Transaction = trans;
 
                     if (parameters != null)
                     {
-                        cmd.Parameters.AddRange(parameters);
+                        var processedParameters = ProcessParameters(parameters);
+                        foreach (var p in processedParameters) cmd.Parameters.Add(p);
                     }
 
                     try
@@ -76,20 +75,18 @@ namespace BotWorker.Infrastructure.Persistence.Database
         // 批量执行sql命令 事务提交
         public static int ExecTrans(bool isDebug, params string[] sqls)
         {
-            using SqlConnection conn = new(GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
             conn.Open();
-            SqlTransaction trans = conn.BeginTransaction();
-            SqlCommand cmd = new(sqls[0], conn, trans)
-            {
-                CommandType = CommandType.Text
-            };
+            using var trans = conn.BeginTransaction();
             try
             {
                 foreach (string sql in sqls)
                 {
                     if (!sql.IsNull())
                     {
+                        using var cmd = conn.CreateCommand();
                         cmd.CommandText = sql;
+                        cmd.Transaction = trans;
                         cmd.ExecuteNonQuery();
                     }
                 }
@@ -98,34 +95,35 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
                 if (isDebug)
-                    DbDebug($"{ex.Message}\n{cmd.CommandText}", "ExecTrans");
-
+                    DbDebug($"{ex.Message}\nTransaction failed.", "ExecTrans");
+                else
+                    Debug($"ExecTrans:{ex.Message}\nTransaction failed.");
                 trans.Rollback();
                 return -1;
             }
         }
 
-        public static int ExecTrans(List<(string sql, SqlParameter[] parameters)> sqls, bool isDebug = true)
+        public static int ExecTrans(List<(string sql, IDataParameter[] parameters)> sqls, bool isDebug = true)
         {
-            using SqlConnection conn = new(GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
             conn.Open();
-            using SqlTransaction trans = conn.BeginTransaction();
+            using var trans = conn.BeginTransaction();
 
             try
             {
                 foreach (var (sql, parameters) in sqls)
                 {
-                    using SqlCommand cmd = new(sql, conn, trans)
-                    {
-                        CommandType = CommandType.Text
-                    };
+                    if (sql.IsNull()) continue;
+
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = sql;
+                    cmd.Transaction = trans;
 
                     if (parameters != null)
                     {
-                        var paras = ProcessParameters(parameters);
-                        cmd.Parameters.AddRange(paras);
+                        var processedParameters = ProcessParameters(parameters);
+                        foreach (var p in processedParameters) cmd.Parameters.Add(p);
                     }
 
                     cmd.ExecuteNonQuery();
@@ -139,21 +137,21 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 if (isDebug)
                     DbDebug($"{ex.Message}\n{ex.StackTrace}", "ExecTrans");
                 else
-                    Debug($"ExecTrans:{ex.Message}\n{ex.StackTrace}", "ExecTrans");
+                    DbDebug($"ExecTrans:{ex.Message}\n{ex.StackTrace}", "ExecTrans");
                 trans.Rollback();
                 return -1;
             }
         }
 
         // 事务封装，避免共享静态变量，避免并发问题
-        public static SqlTransaction BeginTransaction(SqlConnection conn)
+        public static IDbTransaction BeginTransaction(IDbConnection conn)
         {
             if (conn.State != ConnectionState.Open)
                 conn.Open();
             return conn.BeginTransaction();
         }
 
-        public static void CommitTransaction(SqlTransaction trans)
+        public static void CommitTransaction(IDbTransaction trans)
         {
             if (trans == null) return;
             try
@@ -173,7 +171,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static void RollbackTransaction(SqlTransaction trans)
+        public static void RollbackTransaction(IDbTransaction trans)
         {
             if (trans == null) return;
             try

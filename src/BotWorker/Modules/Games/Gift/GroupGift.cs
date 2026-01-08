@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -118,10 +118,10 @@ namespace BotWorker.Modules.Games.Gift
         }
 
         // 加入粉丝团
-        public static (string, SqlParameter[]) SqlBingFans(long groupId, long UserId)
+        public static (string, IDataParameter[]) SqlBingFans(long groupId, long UserId)
             => SqlBingFansAsync(groupId, UserId).GetAwaiter().GetResult();
 
-        public static async Task<(string, SqlParameter[])> SqlBingFansAsync(long groupId, long UserId)
+        public static async Task<(string, IDataParameter[])> SqlBingFansAsync(long groupId, long UserId)
         {
             return await ExistsAsync(groupId, UserId)
                 ? SqlUpdateWhere($"IsFans=1, FansDate=GETDATE(), FansLevel=1, FansValue=100", $"GroupID = {groupId} and UserId = {UserId}")
@@ -136,7 +136,7 @@ namespace BotWorker.Modules.Games.Gift
         }
 
         // 点亮灯牌sql
-        public static (string, SqlParameter[]) SqlLightLamp(long groupId, long UserId)
+        public static (string, IDataParameter[]) SqlLightLamp(long groupId, long UserId)
         {
             return SqlUpdateWhere($"LampDate=GETDATE(), FansValue = FansValue + 10", $"GroupId = {groupId} and UserId = {UserId}");
         }

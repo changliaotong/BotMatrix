@@ -1,6 +1,5 @@
 using System.Data;
 using System.Reflection;
-using Microsoft.Data.SqlClient;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.Database;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -42,12 +41,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await QueryListAsync<TDerived>(sql, null, options.Parameters);
         }
 
-        public static List<Dictionary<string, object?>> GetDicts(string whereClause, SqlParameter[]? parameters, params string[] fieldNames)
+        public static List<Dictionary<string, object?>> GetDicts(string whereClause, IDataParameter[]? parameters, params string[] fieldNames)
         {
             return GetDictsInternal(whereClause, parameters ?? [], fieldNames);
         }
 
-        public static List<Dictionary<string, object?>> GetDicts(object id, object? id2, SqlTransaction? trans, params string[] fieldNames)
+        public static List<Dictionary<string, object?>> GetDicts(object id, object? id2, IDbTransaction? trans, params string[] fieldNames)
         {
             var (where, paras) = SqlWhere(id, id2);
             var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {where}";
@@ -81,19 +80,19 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return GetDicts(id, id2, null, fieldNames);
         }
 
-        public static async Task<List<TDerived>> GetListAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters) 
+        public static async Task<List<TDerived>> GetListAsync(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) 
         {
             return await QueryListAsync<TDerived>(sql, trans, parameters);
         }            
 
         // 核心 QueryWhere 实现 - 异步返回实体列表
-        public static async Task<List<TDerived>> QueryWhere(string where, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<List<TDerived>> QueryWhere(string where, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             return await QueryListAsync<TDerived>($"SELECT * FROM {FullName} WHERE {where}", trans, parameters);
         }
 
         // 兼容旧的 QueryWhere(where, params parameters)
-        public static async Task<List<TDerived>> QueryWhere(string where, params SqlParameter[] parameters)
+        public static async Task<List<TDerived>> QueryWhere(string where, params IDataParameter[] parameters)
         {
             return await QueryWhere(where, null, parameters);
         }
@@ -123,13 +122,21 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await SQLConn.QueryResAsync(sql, format);
         }
 
-        public static async Task<string> QueryAsync(string sql, params SqlParameter[] parameters)
+        public static async Task<List<TDerived>> QueryAsync(string where, object? param = null)
+        {
+            if (param is IDataParameter[] paras)
+                return await QueryWhere(where.Replace("WHERE ", ""), null, paras);
+            
+            return await QueryWhere(where.Replace("WHERE ", ""), null, param.ToParameters());
+        }
+
+        public static async Task<string> QueryScalarAsync(string sql, params IDataParameter[] parameters)
         {
             return await QueryScalarAsync<string>(sql, null, parameters) ?? "";
         }
 
         // 核心泛型 QueryWhere 实现 - 返回指定字段的实体列表
-        public static List<T> QueryWhere<T>(string where, SqlParameter[]? parameters, SqlTransaction? trans, params string[] fieldNames) where T : new()
+        public static List<T> QueryWhere<T>(string where, IDataParameter[]? parameters, IDbTransaction? trans, params string[] fieldNames) where T : new()
         {
             string fields = fieldNames == null || fieldNames.Length == 0 ? "*" : string.Join(", ", fieldNames);
             string sql = $"SELECT {fields} FROM {FullName} WHERE {where}";
@@ -173,12 +180,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
 
         // 兼容 QueryWhere<T>(where, parameters, params fieldNames)
-        public static List<T> QueryWhere<T>(string where, SqlParameter[]? parameters, params string[] fieldNames) where T : new()
+        public static List<T> QueryWhere<T>(string where, IDataParameter[]? parameters, params string[] fieldNames) where T : new()
         {
             return QueryWhere<T>(where, parameters, null, fieldNames);
         }
 
-        public static List<T> GetList<T>(object id, object? id2, SqlTransaction? trans, params string[] fieldNames) where T : new()
+        public static List<T> GetList<T>(object id, object? id2, IDbTransaction? trans, params string[] fieldNames) where T : new()
         {
             var (where, paras) = SqlWhere(id, id2);
             return QueryWhere<T>(where.Replace("WHERE ", ""), paras, trans, fieldNames);

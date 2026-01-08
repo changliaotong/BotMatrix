@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -12,7 +12,7 @@ namespace BotWorker.Modules.Games
         public override string TableName => "Block";
         public override string KeyField => "Id";
                 
-        public static ((string sql, SqlParameter[] paras) sqlInsert, (string sql, SqlParameter[] paras) sqlUpdatePrev) SqlAppend(long botUin, long groupId, string groupName, long userId, string name, string prevRes)
+        public static ((string sql, IDataParameter[] paras) sqlInsert, (string sql, IDataParameter[] paras) sqlUpdatePrev) SqlAppend(long botUin, long groupId, string groupName, long userId, string name, string prevRes)
         {
             long prevId = GetId(groupId, userId);
             string prevHash = prevId == 0
@@ -66,7 +66,7 @@ namespace BotWorker.Modules.Games
             return res ?? string.Empty;
         }
 
-        public static async Task<int> AppendAsync(long botUin, long groupId, string groupName, long userId, string name, string prevRes, (string sql, SqlParameter[] paras) sqlAddCredit, (string sql, SqlParameter[] paras) sqlCreditHis)
+        public static async Task<int> AppendAsync(long botUin, long groupId, string groupName, long userId, string name, string prevRes, (string sql, IDataParameter[] paras) sqlAddCredit, (string sql, IDataParameter[] paras) sqlCreditHis)
         {
             long prevId = await GetIdAsync(groupId, userId);
             string prevHash = prevId == 0 
@@ -181,7 +181,7 @@ namespace BotWorker.Modules.Games
             long blockId = await GetIdAsync(groupId, qq);
             if (blockId == 0)
             {
-                if (await AppendAsync(botUin, groupId, groupName, qq, name, "创世区块", (string.Empty, Array.Empty<SqlParameter>()), (string.Empty, Array.Empty<SqlParameter>())) != -1)
+                if (await AppendAsync(botUin, groupId, groupName, qq, name, "创世区块", (string.Empty, Array.Empty<IDataParameter>()), (string.Empty, Array.Empty<IDataParameter>())) != -1)
                     return await GetNumAsync(botUin, groupId, groupName, qq, name);
             }
             return GetNum(blockId);
@@ -195,7 +195,7 @@ namespace BotWorker.Modules.Games
             if (typeId >= 32 & typeId <= 37)
                 return blockNum.ToString().Split([typeName.Replace("押", "")], StringSplitOptions.None).Length - 1;
             else
-                return int.Parse(await QueryAsync($"SELECT BlockOdds FROM {BlockType.FullName} WHERE Id = {typeId}"));
+                return await QueryScalarAsync<int>($"SELECT BlockOdds FROM {BlockType.FullName} WHERE Id = {typeId}");
         }
 
         public static string FormatNum(int Num)

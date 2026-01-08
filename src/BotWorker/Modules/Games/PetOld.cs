@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
@@ -255,7 +255,7 @@ namespace BotWorker.Modules.Games
         }
 
         // 宠物his sql
-        public static (string, SqlParameter[]) SqlPetHis(long botUin, long prevId, long groupId, long qq, long friendQQ, long fromQQ, long buyPrice, long sellPrice = 0, int isValid = 0)
+        public static (string, IDataParameter[]) SqlPetHis(long botUin, long prevId, long groupId, long qq, long friendQQ, long fromQQ, long buyPrice, long sellPrice = 0, int isValid = 0)
         {
             return SqlInsert([
                 new Cov("PrevId", prevId),
@@ -271,7 +271,7 @@ namespace BotWorker.Modules.Games
         }
 
         // 更新卖出信息
-        public static (string, SqlParameter[]) SqlUpdSellInfo(long sellTO, long sellPrice, long buyId)
+        public static (string, IDataParameter[]) SqlUpdSellInfo(long sellTO, long sellPrice, long buyId)
         {
             return SqlSetValues($"SellDate = GETDATE(), SellTo = {sellTO}, SellPrice = {sellPrice}, IsValid = 0", buyId);
         }

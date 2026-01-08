@@ -1,6 +1,5 @@
 using System.Data;
 using System.Reflection;
-using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
@@ -67,16 +66,16 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await GetDictAsync(id, null, fieldNames);
         }
 
-        public static Dictionary<string, object?>? GetDict(string where, SqlParameter[]? parameters, params string[] fieldNames)
+        public static Dictionary<string, object?>? GetDict(string where, IDataParameter[]? parameters, params string[] fieldNames)
             => GetDictAsync(where, parameters, fieldNames).GetAwaiter().GetResult();
 
-        public static async Task<Dictionary<string, object?>?> GetDictAsync(string where, SqlParameter[]? parameters, params string[] fieldNames)
+        public static async Task<Dictionary<string, object?>?> GetDictAsync(string where, IDataParameter[]? parameters, params string[] fieldNames)
         {
             if (fieldNames == null || fieldNames.Length == 0)
                 throw new ArgumentException("必须指定要查询的字段", nameof(fieldNames));
 
             var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {where}";
-            var results = await QueryAsync<dynamic>(sql, null, parameters ?? Array.Empty<SqlParameter>());
+            var results = await QueryAsync<dynamic>(sql, null, parameters ?? Array.Empty<IDataParameter>());
             var row = results.FirstOrDefault();
             if (row == null) return null;
 
@@ -153,7 +152,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return GetRandom(fieldName, 1).FirstOrDefault().AsString();
         }
 
-        private static List<Dictionary<string, object?>> GetDictsInternal(string whereClause, SqlParameter[] parameters, string[] fieldNames)
+        private static List<Dictionary<string, object?>> GetDictsInternal(string whereClause, IDataParameter[] parameters, string[] fieldNames)
         {
             if (fieldNames == null || fieldNames.Length == 0)
                 throw new ArgumentException("必须指定要查询的字段", nameof(fieldNames));
@@ -179,13 +178,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return result;
         }
 
-        public static (string, SqlParameter[]) SqlGetStr(string fieldName, object id, object? id2 = null)
+        public static (string, IDataParameter[]) SqlGetStr(string fieldName, object id, object? id2 = null)
         {
             var (where, parameters) = SqlWhere(id, id2);
             return ($"SELECT ISNULL(CONVERT(NVARCHAR(MAX), {fieldName}), '') as res FROM {FullName} {where}", parameters);
         }
 
-        public static (string, SqlParameter[]) SqlGet(string fieldName, object id, object? id2 = null)
+        public static (string, IDataParameter[]) SqlGet(string fieldName, object id, object? id2 = null)
         {
             var (where, parameters) = SqlWhere(id, id2);
             string sql = $"SELECT {fieldName} AS res FROM {FullName} {where}";

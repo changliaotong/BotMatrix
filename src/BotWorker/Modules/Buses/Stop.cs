@@ -1,5 +1,5 @@
 using System.Data;
-using Microsoft.Data.SqlClient;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Modules.Buses
 {
@@ -199,7 +199,7 @@ namespace BotWorker.Modules.Buses
 
             //更新线路图
             int i = Convert.ToInt32(bus_id);
-            Bus.updateBusMap(i, Bus.getBusMap(i));
+            Bus.UpdateBusMap(i, Bus.GetBusMap(i));
 
             //如果站点信息有变化，则需要更新线路价格表
             Bus.UpdateBusPriceTable(bus_id);
@@ -208,13 +208,13 @@ namespace BotWorker.Modules.Buses
         //得到经过某站点的所有线路 默认空格隔开
         public static string GetStopBuses(string stop_id)
         {
-            return Bus.getStopBuses(stop_id);
+            return Bus.GetStopBuses(stop_id);
         }
 
         //从站点1到站点2的所有线路名称 用 / 隔开
         public static string GetStopBuses(string stop_id, string stop_id2)
         {
-            return Bus.getStopBuses(stop_id, stop_id2, "/");
+            return Bus.GetStopBuses(stop_id, stop_id2, "/");
         }
 
         //获得站点ID
@@ -274,11 +274,12 @@ namespace BotWorker.Modules.Buses
         public static string MarkStops(string stops, string bus_name, string place_id)
         {
             string connString = ConnString;
-            SqlConnection myConnection = new SqlConnection(connString);
+            using var myConnection = DbProviderFactory.CreateConnection();
             string sql = "select * from bus_stop where stop_id in (select stop_id from place_stops where place_id = " + place_id + ") order by len(stop_name) desc";
-            SqlCommand myCommand = new(sql, myConnection);
+            using var myCommand = myConnection.CreateCommand();
+            myCommand.CommandText = sql;
             myConnection.Open();
-            SqlDataReader reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
+            using var reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
             while (reader.Read())
             {
                 int idCol = reader.GetOrdinal("stop_name");

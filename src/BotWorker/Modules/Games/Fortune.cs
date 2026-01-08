@@ -1,5 +1,38 @@
+using BotWorker.Domain.Interfaces;
+using System.Text;
+
 namespace BotWorker.Modules.Games
 {
+    [BotPlugin(
+        Id = "game.fortune",
+        Name = "今日运势",
+        Version = "1.1.0",
+        Author = "Matrix",
+        Description = "查看今日运势、幸运色和幸运数字",
+        Category = "Games"
+    )]
+    public class FortunePlugin : IPlugin
+    {
+        public async Task InitAsync(IRobot robot)
+        {
+            // 注册技能
+            await robot.RegisterSkillAsync(new SkillCapability
+            {
+                Name = "今日运势",
+                Commands = ["运势", "今日运势", "fortune"],
+                Description = "查看今日运势、幸运色和幸运数字"
+            }, HandleFortuneAsync);
+        }
+
+        public Task StopAsync() => Task.CompletedTask;
+
+        private async Task<string> HandleFortuneAsync(IPluginContext ctx, string[] args)
+        {
+            var fortune = Fortune.GenerateFortune(ctx.UserId);
+            return await Task.FromResult(Fortune.Format(fortune));
+        }
+    }
+
     public class Fortune
     {
         private static readonly string[] Colors = { "珊瑚红", "天空蓝", "墨绿色", "靛青", "浅紫", "鹅黄", "藏青", "象牙白", "奶油色", "玫瑰金" };
@@ -48,7 +81,7 @@ namespace BotWorker.Modules.Games
 
         public static string Format(DailyFortune fortune)
         {
-            return $"🔮 今日运势（{{农历月}}月{{农历日}}）\n" +
+            return $"🔮 今日运势（{fortune.Date:MM月dd日}）\n" +
                 $"🌟 综合运势：{fortune.Overall} / 100\n" +
                 $"✨ 福运评价：{fortune.Comment}\n" +
                 $"❤️ 爱情运势：{fortune.Love}\n" +

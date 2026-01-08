@@ -8,18 +8,18 @@ public partial class BotMessage : MetaData<BotMessage>
         // 解除黑名单
         public string GetCancelBlack(long userId)
         {
-            string res;
-
             if (BlackList.Exists(GroupId, userId))
-                res = BlackList.Delete(GroupId, userId) == -1
+            {
+                var res = BlackList.Delete(GroupId, userId) == -1
                     ? $"[@:{userId}]{RetryMsg}\n"
                     : $"[@:{userId}]已解除拉黑\n";
-            else
-                res = $"[@:{userId}]不在黑名单，无需解除\n";
 
-            if (BlackList.IsSystemBlack(userId))
-                res += $"[@:{userId}]已被列入官方黑名单\n";
-            return res;
+                if (BlackList.IsSystemBlack(userId))
+                    res += $"[@:{userId}]已被列入官方黑名单\n";
+                return res;
+            }
+
+            return $"[@:{userId}]不在黑名单，无需解除\n";
         }
 
         // 黑名单列表
@@ -46,16 +46,17 @@ public partial class BotMessage : MetaData<BotMessage>
 
             //一次加多个号码进入黑名单
             string res = "";
-            CmdName = CmdName.Replace("解除", "取消").Replace("删除", "取消");
+            var isAdd = !CmdName.Contains("取消") && !CmdName.Contains("删除") && !CmdName.Contains("解除");
+            
             foreach (Match match in CmdPara.Matches(Regexs.Users))
             {                
                 long blackUserId = match.Groups["UserId"].Value.AsLong();
-                if (CmdName == "拉黑")
+                if (isAdd)
                 {
                     res += GetAddBlack(blackUserId);
                     await KickOutAsync(SelfId, GroupId, blackUserId);
                 }
-                else if (CmdName == "取消拉黑")
+                else
                     res += GetCancelBlack(blackUserId);
             }            
             return res;
@@ -82,8 +83,6 @@ public partial class BotMessage : MetaData<BotMessage>
         // 拉黑操作
         public string GetAddBlack(long qqBlack)
         {
-            string res = "";
-
             //加入黑名单
             if (BlackList.Exists(GroupId, qqBlack))           
                 return $"[@:{qqBlack}] 已被拉黑，无需再次加入\n";            
@@ -97,6 +96,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (Group.RobotOwner == qqBlack)
                 return "不能拉黑我主人";
 
+            string res = "";
             if (WhiteList.Exists(GroupId, qqBlack))
             {
                 if (Group.RobotOwner != UserId && !BotInfo.IsAdmin(SelfId, UserId))

@@ -1,110 +1,346 @@
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Domain.Interfaces;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace BotWorker.Modules.Games
 {
-    internal class Fishing : MetaData<Fishing>
+    [BotPlugin(
+        Id = "game.fishing.v2",
+        Name = "新版钓鱼王",
+        Version = "2.0.0",
+        Author = "Matrix",
+        Description = "深度钓鱼模拟：多场景探索、装备强化、鱼种图鉴、实时交易",
+        Category = "Games"
+    )]
+    public class FishingPlugin : IPlugin
     {
-        public override string TableName => "GroupMember";
-        public override string KeyField => "GroupId";
-        public override string KeyField2 => "UserId";
+        public List<Intent> Intents => [
+            new() { Name = "钓鱼", Keywords = ["钓鱼", "钓鱼状态"] },
+            new() { Name = "抛竿", Keywords = ["抛竿"] },
+            new() { Name = "收竿", Keywords = ["收竿"] },
+            new() { Name = "鱼篓", Keywords = ["鱼篓"] },
+            new() { Name = "卖鱼", Keywords = ["卖鱼"] },
+            new() { Name = "钓鱼商店", Keywords = ["钓鱼商店"] },
+            new() { Name = "升级鱼竿", Keywords = ["升级鱼竿"] }
+        ];
 
-        public static List<string> fish_fields = ["yugan", "yugou", "yuer", "yuxian", "shuigui", "jingyu", "zhangyu", "huangyu", "qingwa", "beike", "neiyi", "poxie"];
-        public static List<string> fish_names = ["鱼竿", "鱼钩", "鱼饵", "鱼线", "水鬼", "鲸鱼", "章鱼", "黄鱼", "青蛙", "贝壳", "内衣", "破鞋"];
-        
-        //fish state  0 鱼竿在手上 1 鱼竿在水里
-
-        //todo 钓鱼命令 没有鱼竿鱼线鱼钩的自动购买，积分不足的提示不足。简化游戏流程。
-
-        /// 购买渔具
-        public static async Task<string> GetBuyToolsAsync(long botUin, long groupId, string groupName, long qq, string name, string cmdName, string cmdPara, string cmdPara2)
+        private IRobot? _robot;
+        public async Task InitAsync(IRobot robot)
         {
-            int count = cmdPara2.AsInt();
-            int coins_type = (int)CoinsLog.CoinsType.purpleCoins;
-            long minus_coins = 100 * count;
+            _robot = robot;
+            // 确保数据库表已创建
+            await Fishing.EnsureTablesCreatedAsync();
 
-            long coins_value = await GroupMember.GetCoinsAsync(coins_type, groupId, qq);
-            if (coins_value < minus_coins)
-                return string.Format($"您的紫币{coins_value}不足{minus_coins}");
+            await robot.RegisterSkillAsync(new SkillCapability
+            {
+                Name = "新版钓鱼",
+                Commands = ["钓鱼", "抛竿", "收竿", "鱼篓", "卖鱼", "钓鱼商店", "升级鱼竿", "钓鱼状态"],
+                Description = "【钓鱼】查看当前状态；【抛竿】开始钓鱼；【收竿】看看收获；【鱼篓】查看战利品；【卖鱼】换取金币"
+            }, HandleFishingAsync);
+        }
 
-            //扣除紫币 记录扣币记录 更新数量
-            var sql1 = GroupMember.SqlPlus(CoinsLog.conisFields[coins_type], -minus_coins, groupId, qq);
-            var (sql2_str, sql2_paras, new_coins_value) = await CoinsLog.SqlCoinsAsync(botUin, groupId, groupName, qq, name, coins_type, -minus_coins, $"购买渔具：{cmdPara}*{cmdPara2}");
-            var sql3 = GroupMember.SqlPlus(fish_fields[fish_names.IndexOf(cmdPara)], count, groupId, qq);
+        public async Task StopAsync() => await Task.CompletedTask;
 
-            using var trans = await BeginTransactionAsync();
+        private async Task<string> HandleFishingAsync(IPluginContext ctx, string[] args)
+        {
+            var userId = long.Parse(ctx.UserId);
+            var cmd = ctx.RawMessage.Trim().Split(' ')[0];
+
+            return cmd switch
+            {
+                "钓鱼" or "钓鱼状态" => await Fishing.GetStatusAsync(userId, ctx.User?.Name ?? "钓鱼佬"),
+                "抛竿" => await Fishing.CastAsync(userId),
+                "收竿" => await Fishing.ReelInAsync(userId),
+                "鱼篓" => await Fishing.GetBagAsync(userId),
+                "卖鱼" => await Fishing.SellFishAsync(userId),
+                "钓鱼商店" => await Fishing.GetShopAsync(userId),
+                "升级鱼竿" => await Fishing.UpgradeRodAsync(userId),
+                _ => "未知钓鱼指令"
+            };
+        }
+    }
+
+    #region 数据实体
+
+    public class FishingUser : MetaData<FishingUser>
+    {
+        public override string TableName => "FishingUser";
+        public override string KeyField => "UserId";
+
+        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        public long UserId { get; set; }
+        public int Level { get; set; } = 1;
+        public long Exp { get; set; } = 0;
+        public long Gold { get; set; } = 0;
+        public int RodLevel { get; set; } = 1;
+        public int CurrentLocation { get; set; } = 0; // 0:淡水湖, 1:近海, 2:珊瑚礁, 3:深海
+        public int State { get; set; } = 0; // 0:空闲, 1:钓鱼中
+        public DateTime LastActionTime { get; set; } = DateTime.Now;
+        public int WaitMinutes { get; set; } = 0;
+
+        public static async Task<FishingUser> GetOrCreateAsync(long userId)
+        {
+            var user = await GetSingleAsync(userId);
+            if (user == null)
+            {
+                user = new FishingUser { UserId = userId, Gold = 500, Level = 1, RodLevel = 1 };
+                await InsertAsync([
+                    new Cov("UserId", userId),
+                    new Cov("Level", 1),
+                    new Cov("Exp", 0),
+                    new Cov("Gold", 500), 
+                    new Cov("RodLevel", 1),
+                    new Cov("State", 0),
+                    new Cov("CurrentLocation", 0),
+                    new Cov("LastActionTime", DateTime.Now),
+                    new Cov("WaitMinutes", 0)
+                ]);
+            }
+            return user;
+        }
+    }
+
+    public class FishingBag : MetaData<FishingBag>
+    {
+        public override string TableName => "FishingBag";
+        public override string KeyField => "Id";
+
+        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        public long Id { get; set; }
+        public long UserId { get; set; }
+        public string FishName { get; set; } = "";
+        public double Weight { get; set; }
+        public int Quality { get; set; } // 0:普通, 1:稀有, 2:史诗, 3:传说
+        public long Value { get; set; }
+        public DateTime CatchTime { get; set; } = DateTime.Now;
+
+        public static async Task AddFishAsync(long userId, FishDef fish, double weight, long value)
+        {
+            await InsertAsync([
+                new Cov("UserId", userId),
+                new Cov("FishName", fish.Name),
+                new Cov("Weight", weight),
+                new Cov("Quality", (int)fish.Quality),
+                new Cov("Value", value),
+                new Cov("CatchTime", DateTime.Now)
+            ]);
+        }
+    }
+
+    #endregion
+
+    #region 游戏逻辑引擎
+
+    public enum FishQuality { Common = 0, Rare = 1, Epic = 2, Legendary = 3 }
+
+    public class FishDef
+    {
+        public string Name { get; set; } = "";
+        public FishQuality Quality { get; set; }
+        public double MinWeight { get; set; }
+        public double MaxWeight { get; set; }
+        public long BaseValue { get; set; }
+    }
+
+    public class LocationDef
+    {
+        public string Name { get; set; } = "";
+        public int MinLevel { get; set; }
+        public List<FishDef> FishPool { get; set; } = new();
+    }
+
+    public static class Fishing
+    {
+        private static readonly List<LocationDef> Locations = new()
+        {
+            new LocationDef { Name = "淡水湖", MinLevel = 1, FishPool = new() {
+                new FishDef { Name = "草鱼", Quality = FishQuality.Common, MinWeight = 0.5, MaxWeight = 5.0, BaseValue = 10 },
+                new FishDef { Name = "鲤鱼", Quality = FishQuality.Common, MinWeight = 1.0, MaxWeight = 8.0, BaseValue = 15 },
+                new FishDef { Name = "金色锦鲤", Quality = FishQuality.Rare, MinWeight = 2.0, MaxWeight = 10.0, BaseValue = 100 },
+                new FishDef { Name = "湖中剑", Quality = FishQuality.Epic, MinWeight = 50.0, MaxWeight = 50.0, BaseValue = 1000 }
+            }},
+            new LocationDef { Name = "近海", MinLevel = 5, FishPool = new() {
+                new FishDef { Name = "黄鱼", Quality = FishQuality.Common, MinWeight = 0.3, MaxWeight = 2.0, BaseValue = 30 },
+                new FishDef { Name = "带鱼", Quality = FishQuality.Common, MinWeight = 0.5, MaxWeight = 3.0, BaseValue = 45 },
+                new FishDef { Name = "真鲷", Quality = FishQuality.Rare, MinWeight = 1.0, MaxWeight = 15.0, BaseValue = 200 },
+                new FishDef { Name = "大白鲨", Quality = FishQuality.Legendary, MinWeight = 500.0, MaxWeight = 2000.0, BaseValue = 5000 }
+            }},
+            new LocationDef { Name = "深海", MinLevel = 15, FishPool = new() {
+                new FishDef { Name = "金枪鱼", Quality = FishQuality.Rare, MinWeight = 20.0, MaxWeight = 200.0, BaseValue = 800 },
+                new FishDef { Name = "旗鱼", Quality = FishQuality.Epic, MinWeight = 100.0, MaxWeight = 500.0, BaseValue = 2500 },
+                new FishDef { Name = "克苏鲁之眼", Quality = FishQuality.Legendary, MinWeight = 1000.0, MaxWeight = 1000.0, BaseValue = 50000 }
+            }}
+        };
+
+        // 兼容旧版 HotCmdMessage 调用
+        public static string GetFishing(long groupId, string groupName, long userId, string name, string cmdName, string cmdPara)
+        {
+            return GetStatusAsync(userId, name).GetAwaiter().GetResult();
+        }
+
+        public static string GetBuyTools(long selfId, long groupId, string groupName, long userId, string name, string cmdName, string cmdPara, string cmdPara2)
+        {
+            return GetShopAsync(userId).GetAwaiter().GetResult();
+        }
+
+        public static async Task EnsureTablesCreatedAsync()
+        {
             try
             {
-                var (s1, p1) = sql1;
-                await ExecAsync(s1, trans, p1);
+                // 检查 FishingUser 表
+                var checkUser = await FishingUser.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingUser'");
+                if (checkUser == 0)
+                {
+                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<FishingUser>();
+                    await FishingUser.ExecAsync(sql);
+                    Console.WriteLine("[Fishing] Created table FishingUser");
+                }
 
-                await ExecAsync(sql2_str, trans, sql2_paras);
-
-                var (s3, p3) = sql3;
-                await ExecAsync(s3, trans, p3);
-
-                await trans.CommitAsync();
-
-                return $"✅ 购买渔具：{cmdPara}*{cmdPara2}\n紫币：-{minus_coins}，累计：{new_coins_value}";
+                // 检查 FishingBag 表
+                var checkBag = await FishingBag.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingBag'");
+                if (checkBag == 0)
+                {
+                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<FishingBag>();
+                    await FishingBag.ExecAsync(sql);
+                    Console.WriteLine("[Fishing] Created table FishingBag");
+                }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[Fishing] Error ensuring tables: {ex.Message}");
+            }
+        }
+
+        public static async Task<string> GetStatusAsync(long userId, string nickname)
+        {
+            var user = await FishingUser.GetOrCreateAsync(userId);
+            var loc = Locations[user.CurrentLocation];
+            var stateStr = user.State == 1 ? "🎣 正在垂钓中..." : "💤 闲逛中";
+            
+            return $"【{nickname}的钓鱼执照】\n" +
+                   $"等级：Lv.{user.Level} (XP: {user.Exp})\n" +
+                   $"金币：{user.Gold} 💰\n" +
+                   $"鱼竿：{user.RodLevel}级 (最大承重: {user.RodLevel * 10}kg)\n" +
+                   $"当前位置：{loc.Name}\n" +
+                   $"当前状态：{stateStr}";
+        }
+
+        public static async Task<string> CastAsync(long userId)
+        {
+            var user = await FishingUser.GetOrCreateAsync(userId);
+            if (user.State == 1) return "你已经在钓鱼了，耐心一点！";
+
+            int wait = new Random().Next(1, 4); // 1-3分钟
+            await FishingUser.UpdateAsync($"State = 1, LastActionTime = GETDATE(), WaitMinutes = {wait}", userId);
+            
+            return $"✅ 成功抛竿到 {Locations[user.CurrentLocation].Name}！\n静静等待鱼儿上钩吧...";
+        }
+
+        public static async Task<string> ReelInAsync(long userId)
+        {
+            var user = await FishingUser.GetOrCreateAsync(userId);
+            if (user.State == 0) return "你还没抛竿呢，收什么竿？";
+
+            var diff = (DateTime.Now - user.LastActionTime).TotalMinutes;
+            if (diff < user.WaitMinutes)
+            {
+                await FishingUser.UpdateAsync("State = 0", userId);
+                return "💨 哎呀，收竿太快，鱼被惊走了！";
+            }
+
+            // 成功捕获逻辑
+            var loc = Locations[user.CurrentLocation];
+            var random = new Random();
+            var fish = loc.FishPool[random.Next(loc.FishPool.Count)];
+            
+            // 随机重量
+            double weight = Math.Round(random.NextDouble() * (fish.MaxWeight - fish.MinWeight) + fish.MinWeight, 2);
+            long value = (long)(fish.BaseValue * (weight / fish.MinWeight));
+
+            // 检查鱼竿承重
+            double maxWeight = user.RodLevel * 10.0;
+            if (weight > maxWeight)
+            {
+                await FishingUser.UpdateAsync("State = 0", userId);
+                return $"💔 糟糕！钓到了一头巨物({fish.Name} {weight}kg)，但是鱼竿承受不住，断线了！建议升级鱼竿。";
+            }
+
+            // 保存到鱼篓
+            await FishingBag.AddFishAsync(userId, fish, weight, value);
+            
+            // 上报成就指标
+            _ = AchievementPlugin.ReportMetricAsync(userId.ToString(), "fishing.catch_count", 1);
+
+            // 增加经验
+            int expGained = (int)fish.Quality * 10 + 5;
+            await FishingUser.UpdateAsync($"State = 0, Exp = Exp + {expGained}", userId);
+
+            string qualityStar = new string('⭐', (int)fish.Quality + 1);
+            return $"🎊 恭喜！你收竿成功，钓到了：\n" +
+                   $"🐟 品种：{fish.Name} {qualityStar}\n" +
+                   $"⚖️ 重量：{weight} kg\n" +
+                   $"💰 估值：{value} 金币\n" +
+                   $"已放入鱼篓。经验 +{expGained}";
+        }
+
+        public static async Task<string> GetBagAsync(long userId)
+        {
+            var fishList = await FishingBag.QueryListAsync(new QueryOptions { FilterSql = $"UserId={userId}", OrderBy = "CatchTime DESC" });
+            if (fishList.Count == 0) return "你的鱼篓空空如也，快去抛竿吧！";
+
+            var summary = fishList.Take(10).Select(f => $"{f.FishName} ({f.Weight}kg) - {f.Value}💰");
+            return $"【我的鱼篓 (最近10条)】\n" + string.Join("\n", summary) + $"\n...\n共计 {fishList.Count} 条鱼，总估值：{fishList.Sum(f => f.Value)}💰\n发送【卖鱼】全部变现";
+        }
+
+        public static async Task<string> SellFishAsync(long userId)
+        {
+            var fishList = await FishingBag.QueryListAsync(new QueryOptions { FilterSql = $"UserId={userId}" });
+            if (fishList.Count == 0) return "没什么好卖的。";
+
+            long totalGold = fishList.Sum(f => f.Value);
+            
+            using var trans = await FishingUser.BeginTransactionAsync();
+            try {
+                await FishingUser.ExecAsync($"UPDATE FishingUser SET Gold = Gold + {totalGold} WHERE UserId = {userId}", trans);
+                await FishingBag.ExecAsync($"DELETE FROM FishingBag WHERE UserId = {userId}", trans);
+                await trans.CommitAsync();
+
+                // 上报金币成就指标
+                _ = AchievementPlugin.ReportMetricAsync(userId.ToString(), "fishing.total_gold", totalGold);
+
+                return $"💰 所有的鱼已售出，获得 {totalGold} 金币！";
+            } catch {
                 await trans.RollbackAsync();
-                Console.WriteLine($"Fishing.GetBuyToolsAsync error: {ex.Message}");
-                return RetryMsg;
+                return "交易失败，请稍后再试。";
             }
         }
 
-        /// 购买渔具
-        public static string GetBuyTools(long botUin, long groupId, string groupName, long qq, string name, string cmdName, string cmdPara, string cmdPara2)
+        public static async Task<string> GetShopAsync(long userId)
         {
-            return GetBuyToolsAsync(botUin, groupId, groupName, qq, name, cmdName, cmdPara, cmdPara2).GetAwaiter().GetResult();
+            var user = await FishingUser.GetOrCreateAsync(userId);
+            long upgradeCost = user.RodLevel * 1000;
+            return $"【钓鱼商店】\n" +
+                   $"1. 升级鱼竿 (当前Lv.{user.RodLevel} -> Lv.{user.RodLevel + 1})\n" +
+                   $"   效果：最大承重增加 10kg\n" +
+                   $"   价格：{upgradeCost} 💰\n" +
+                   $"发送【升级鱼竿】进行购买。";
         }
 
-        // 钓鱼
-        public static async Task<string> GetFishingAsync(long groupId, string groupName, long userId, string name, string cmdName, string cmdPara)
+        public static async Task<string> UpgradeRodAsync(long userId)
         {
-            string res = "";
-            if (res != "")
-                return res;
-            if (cmdName == "钓鱼")
-            {
-                return "✅ 开始钓鱼，请 抛竿";
-            }
-            else if (cmdName == "抛竿")
-            {
-                await UpdateAsync("FishDate=GETDATE(), FishState = 1", groupId, userId);
-                return "✅ 抛竿成功，请5分钟后收竿";
-            }
-            else if (cmdName == "收竿")
-            {
-                int s = await GroupMember.GetIntAsync("FishState", groupId, userId);
-                if (s == 0)
-                    return "请先 抛竿";
-                await GroupMember.SetValueAsync("FishState", 0, groupId, userId);
-                int fishTime = await GroupMember.GetIntAsync("ABS(DATEDIFF(MINUTE, GETDATE(), FishDate))", groupId, userId);
-                if (fishTime < 5)
-                    return $"很遗憾，什么都没钓到，重新【抛竿】吧";
-                else
-                {
-                    int i = RandomInt(4, 18);
-                    if (i > 11)
-                        return "很遗憾，什么都没钓到";
-                    else
-                    {
-                        await GroupMember.PlusAsync(fish_fields[i], 1, groupId, userId);
-                        return string.Format("✅ 恭喜你，钓到{0}！", fish_names[i]);
-                    }
+            var user = await FishingUser.GetOrCreateAsync(userId);
+            long upgradeCost = user.RodLevel * 1000;
+            if (user.Gold < upgradeCost) return $"你的金币不足！需要 {upgradeCost} 💰";
 
-                }
-            }
-            return res;
-        }
-
-        public static string GetFishing(long groupId, string groupName, long userId, string name, string cmdName, string cmdPara)
-        {
-            return GetFishingAsync(groupId, groupName, userId, name, cmdName, cmdPara).GetAwaiter().GetResult();
+            await FishingUser.UpdateAsync($"Gold = Gold - {upgradeCost}, RodLevel = RodLevel + 1", userId);
+            return $"✅ 升级成功！当前鱼竿等级：Lv.{user.RodLevel + 1}，最大承重：{(user.RodLevel + 1) * 10}kg";
         }
     }
+
+    #endregion
 }

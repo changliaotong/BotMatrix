@@ -1,8 +1,8 @@
-﻿using System.Data.Common;
+using System.Data.Common;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
-    public static class SqlDataReaderExtensions
+    public static class DbDataReaderExtensions
     {
         public static bool HasColumn(this DbDataReader reader, string columnName)
         {

@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {    public class QueryOptions
@@ -8,7 +8,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public int? Top { get; set; }           // 指定取前几条
         public bool? GetAll { get; set; }       // 是否全部获取
         public string? FilterSql { get; set; }  // 可直接传 SQL WHERE 条件
-        public SqlParameter[] Parameters { get; set; } = [];
+        public IDataParameter[] Parameters { get; set; } = [];
 
         // 可选排序字段和方向
         public string? OrderBy { get; set; }

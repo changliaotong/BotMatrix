@@ -1,4 +1,3 @@
-﻿using Microsoft.Data.SqlClient;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;

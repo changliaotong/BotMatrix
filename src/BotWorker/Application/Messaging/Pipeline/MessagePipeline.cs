@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -41,12 +41,14 @@ namespace BotWorker.Application.Messaging.Pipeline
             var aiService = _serviceProvider.GetRequiredService<IAIService>();
             var i18nService = _serviceProvider.GetRequiredService<II18nService>();
 
+            var logger = _serviceProvider.GetRequiredService<ILogger<MessagePipeline>>();
             var pluginContext = new PluginContext(
                 new BotMessageEvent(context),
                 context.Platform,
                 context.SelfId.ToString(),
                 aiService,
                 i18nService,
+                logger,
                 context.User,
                 context.Group,
                 null, // Member property seems missing in BotMessage

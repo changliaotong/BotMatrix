@@ -1,6 +1,6 @@
-using Microsoft.Data.SqlClient;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
+using System.Data;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Modules.Games.Gift
@@ -10,7 +10,7 @@ namespace BotWorker.Modules.Games.Gift
         public override string TableName => "GiftLog";
         public override string KeyField => "Id";
 
-        public static (string, SqlParameter[]) SqlAppend(long botUin, long groupId, string groupName, long qq, string name, long robotOwner, string ownerName, long qqGift, string giftClientName,
+        public static (string, IDataParameter[]) SqlAppend(long botUin, long groupId, string groupName, long qq, string name, long robotOwner, string ownerName, long qqGift, string giftClientName,
             long giftId, string giftName, int giftCount, long giftCredit)
         {
             return SqlInsert([

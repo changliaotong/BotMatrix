@@ -1,4 +1,5 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {
@@ -43,10 +44,10 @@ namespace BotWorker.Domain.Entities
         }
 
         // 购买、续费机器人
-        public static (string, SqlParameter[]) SqlBuyVip(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
+        public static (string, IDataParameter[]) SqlBuyVip(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
             => SqlBuyVipAsync(groupId, groupName, userId, month, payMoney, vipInfo, insertBy).GetAwaiter().GetResult();
 
-        public static async Task<(string, SqlParameter[])> SqlBuyVipAsync(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
+        public static async Task<(string, IDataParameter[])> SqlBuyVipAsync(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
         {
             int is_year_vip = await IsYearVIPAsync(groupId) || await RestMonthsAsync(groupId) + month >= 12 ? 1 : 0;       
             return await IsVipAsync(groupId)

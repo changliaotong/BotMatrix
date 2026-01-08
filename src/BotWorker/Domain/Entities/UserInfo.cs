@@ -1,4 +1,3 @@
-using Microsoft.Data.SqlClient;
 using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
 
 namespace BotWorker.Domain.Entities;

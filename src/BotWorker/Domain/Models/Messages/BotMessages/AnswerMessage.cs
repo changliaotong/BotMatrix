@@ -194,7 +194,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     Answer = Answer.Replace("??", "  "); //Emoji 表情
             }
 
-            if ((AnswerId != 0) && !IsGuild)
+            if (AnswerId != 0 && !IsGuild)
                 IsCancelProxy = true;
 
             if (!IsDup) UpdateCountUsed();

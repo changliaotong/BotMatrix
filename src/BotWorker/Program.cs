@@ -1,5 +1,4 @@
 using Serilog;
-using Microsoft.EntityFrameworkCore;
 using BotWorker.Application.Messaging.Pipeline;
 using BotWorker.Common.Config;
 using BotWorker.Application.Messaging.Handlers;
@@ -7,7 +6,6 @@ using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Modules.Plugins;
 using BotWorker.Application.Services;
 using BotWorker.Infrastructure.Persistence.Database;
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Infrastructure.Utils;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,15 +24,6 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker.Infrastructure.SignalR.HubLoggingFilter>();
 builder.Services.AddHttpClient();
-
-// 注册数据库
-builder.Services.AddDbContext<BotDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// 注册 Redis
-builder.Services.AddSingleton<EntityCacheHelper>(sp => 
-    new EntityCacheHelper(builder.Configuration.GetConnectionString("Redis") ?? "localhost"));
-builder.Services.AddCacheRepositories();
 
 // 注册核心业务服务
 builder.Services.AddSingleton<IMcpService, MCPManager>();

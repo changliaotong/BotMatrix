@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Agents.Entries
 {
@@ -62,30 +63,30 @@ namespace BotWorker.Agents.Entries
 
         public static void MarkFileEmbedded(string fileId)
         {
-            var sql = $"UPDATE {FullName} SET IsEmbedded = 1, EmbeddedTime = GETDATE() WHREE Id = @fileId";
+            var sql = $"UPDATE {FullName} SET IsEmbedded = 1, EmbeddedTime = GETDATE() WHERE Id = @fileId";
             var parameters = new[]
             {
-                new SqlParameter("@fileId", fileId),
+                DbProviderFactory.CreateParameter("@fileId", fileId),
             };
-            Exec(sql, parameters);
+            Exec(sql, null, parameters);
         }
 
         public static void MarkEmbeddingFailed(long fileId, string error)
         {
-            var sql = $"UPDATE {FullName} SET EmbeddingError = @Error, EmbeddedTime = GETDATE() WHREE Id = @fileId";
+            var sql = $"UPDATE {FullName} SET EmbeddingError = @Error, EmbeddedTime = GETDATE() WHERE Id = @fileId";
             var parameters = new[]
             {
-                new SqlParameter("@error", error),
-                new SqlParameter("@fileId", fileId),
+                DbProviderFactory.CreateParameter("@error", error),
+                DbProviderFactory.CreateParameter("@fileId", fileId),
             };
 
-            Exec(sql, parameters);
+            Exec(sql, null, parameters);
         }
 
         public static async Task<List<KnowledgeFile>> GetPendingEmbeddingFilesAsync(long groupId)
         {
             string sql = $"SELECT * FROM {FullName} WHERE GroupId = @GroupId AND IsEmbedded = 0";
-            SqlParameter[] paras = {  new("@GroupId", groupId) };
+            IDataParameter[] paras = {  DbProviderFactory.CreateParameter("@GroupId", groupId) };
             return await QueryListAsync<KnowledgeFile>(sql, null, paras);
         }
 
@@ -95,10 +96,10 @@ namespace BotWorker.Agents.Entries
             var sql = $"UPDATE {FullName} SET Enabled = @Enabled WHERE Id = @Id";
             var parameters = new[]
             {
-                new SqlParameter("@Enabled", enabled),
-                new SqlParameter("@Id", id),
+                DbProviderFactory.CreateParameter("@Enabled", enabled),
+                DbProviderFactory.CreateParameter("@Id", id),
             };
-            return await ExecAsync(sql, parameters);
+            return await ExecAsync(sql, null, parameters);
         }
     }
 

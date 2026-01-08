@@ -13,6 +13,17 @@ namespace BotWorker.Application.Messaging.Pipeline
             {
                 var botMsg = botMsgEvent.BotMessage;
 
+                // 检查新的全局黑名单表
+                if (Domain.Entities.BlackList.IsSystemBlack(botMsg.UserId))
+                {
+                    botMsg.Answer = $"检测到黑名单用户 {botMsg.UserId}，已拦截其请求。";
+                    if (botMsg.IsGroup)
+                    {
+                         await botMsg.KickOutAsync(botMsg.SelfId, botMsg.RealGroupId, botMsg.UserId);
+                    }
+                    return;
+                }
+
                 // 用户黑名单拦截(参考原 HandleBlackWarnAsync)
                 if (botMsg.IsBlack)
                 {

@@ -50,23 +50,13 @@ public partial class BotMessage : MetaData<BotMessage>
             //: $"✅ 卖出成功！\n💎 积分：-{creditMinus:N0}→{creditValue:N0}\n💳 余额：+{banalceAdd:N}→{balanceNew:N}";
         }
 
-
-
         //取分
         public int WithdrawCredit(long creditOper, ref long creditValue, ref long creditSave, ref string res)
-        {
-            var task = DoSaveCreditAsync(-creditOper);
-            var result = task.GetAwaiter().GetResult();
-            creditValue = result.CreditValue;
-            creditSave = result.CreditSave;
-            res = result.Res;
-            return result.Result;
-        }
+            => DoSaveCreditInternal(-creditOper, ref creditValue, ref creditSave, ref res);
 
-        public int DoSaveCredit(long creditOper, ref long creditValue, ref long creditSave, ref string res)
+        private int DoSaveCreditInternal(long creditOper, ref long creditValue, ref long creditSave, ref string res)
         {
-            var task = DoSaveCreditAsync(creditOper);
-            var result = task.GetAwaiter().GetResult();
+            var result = DoSaveCreditAsync(creditOper).GetAwaiter().GetResult();
             creditValue = result.CreditValue;
             creditSave = result.CreditSave;
             res = result.Res;
@@ -115,10 +105,6 @@ public partial class BotMessage : MetaData<BotMessage>
                 res = saveRes.Res;
             }
             return res;
-        }
-
-        public string GetSaveCreditRes()
-        {            return GetSaveCreditResAsync().GetAwaiter().GetResult();
         }
 
         //存取分 (异步重构版)
@@ -182,20 +168,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
         }
 
-        //存取分
-        public (int Result, long CreditValue, long CreditSave, string Res) DoSaveCredit(long creditOper)
-        {            return DoSaveCreditAsync(creditOper).GetAwaiter().GetResult();
-        }
-
-        public string GetFreeCredit()
-        {
-            //领积分
-            //if (!ClientPublic.IsBind(QQ))
-            //return $"TOKEN:MP{ClientPublic.GetBindToken(robotKey, clientKey)}\n复制此消息发给QQ机器人即可得分";
-            return $"";
-        }
-
-
+        
         //增加算力
         public int AddTokens(long tokensAdd, string tokensInfo)
         {
@@ -298,12 +271,6 @@ public partial class BotMessage : MetaData<BotMessage>
             return i == -1
                 ? RetryMsg
                 : $"✅ 打赏成功！\n🎉 打赏积分：{rewardCredit:N0}{transferFee:N0}\n🎯 对方积分：{receiverCredit:N0}\n🙋 您的积分：{senderCredit:N0}";
-        }
-
-        //打赏
-        public string GetRewardCredit()
-        {
-            return GetRewardCreditAsync().GetAwaiter().GetResult();
         }
 
         public long GetCredit()

@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -10,17 +10,17 @@ public class CreditLog : MetaData<CreditLog>
     public override string KeyField => "Id";
 
     //异步增加日志 (支持事务)
-    public static async Task<int> AddLogAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, SqlTransaction? trans = null)
+    public static async Task<int> AddLogAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
     {
         var (sql, paras) = await SqlHistoryAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo);
-        return await ExecScalarAsync<int>(sql + ";SELECT SCOPE_IDENTITY();", trans, paras) ?? 0;
+        return (await QueryScalarAsync<int>(sql + ";SELECT SCOPE_IDENTITY();", trans, paras));
     }
 
     //积分变动记录
-    public static (string, SqlParameter[]) SqlHistory(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
+    public static (string, IDataParameter[]) SqlHistory(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
         => SqlHistoryAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo).GetAwaiter().GetResult();
 
-    public static async Task<(string, SqlParameter[])> SqlHistoryAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
+    public static async Task<(string, IDataParameter[])> SqlHistoryAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
     {
         long creditValue = await UserInfo.GetCreditAsync(groupId, qq);
         return SqlInsert([

@@ -8,6 +8,20 @@ namespace BotWorker.Infrastructure.Extensions.Text
     /// </summary>
     public static class StringManipulator
     {
+        public static long ExtractAt(this string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            
+            // 匹配 [CQ:at,qq=123456] 或 @123456
+            var match = System.Text.RegularExpressions.Regex.Match(text, @"\[CQ:at,qq=(\d+)\]");
+            if (match.Success) return long.Parse(match.Groups[1].Value);
+
+            match = System.Text.RegularExpressions.Regex.Match(text, @"@(\d+)");
+            if (match.Success) return long.Parse(match.Groups[1].Value);
+
+            return 0;
+        }
+
         #region Json
 
         /// <summary>

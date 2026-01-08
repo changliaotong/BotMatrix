@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
@@ -47,7 +47,7 @@ namespace BotWorker.Agents.Entries
             return GetWhere<long>("Id", $"name = {name.Quotes()} and private = 0", "id desc");
         }
 
-        public static (string, SqlParameter[]) GetSqlPlusCount(long id, int increment = 1)
+        public static (string, IDataParameter[]) GetSqlPlusCount(long id, int increment = 1)
         {
             return SqlPlus("SubscriptionCount", increment, id);
         }

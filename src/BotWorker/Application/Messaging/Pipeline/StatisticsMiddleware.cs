@@ -20,11 +20,20 @@ namespace BotWorker.Application.Messaging.Pipeline
                 // 1. 发言次数统计
                 if (botMsg.GroupId != BotInfo.MonitorGroupUin)
                 {
+                    // 记录基础统计
                     if (GroupMsgCount.Update(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name) == -1)
                     {
                         // 记录日志但不终止管道
-                        // Logger.Error("更新发言统计数据时出错");
                     }
+
+                    // 接入成就系统指标上报
+                    _ = Task.Run(async () => {
+                        var unlocks = await BotWorker.Modules.Games.AchievementPlugin.ReportMetricAsync(botMsg.UserId.ToString(), "sys.msg_count", 1);
+                        if (unlocks.Count > 0)
+                        {
+                            // 这里可以考虑通过 Robot 发送成就解锁通知
+                        }
+                    });
                 }
             }
 

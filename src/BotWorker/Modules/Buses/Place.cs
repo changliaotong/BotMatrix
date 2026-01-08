@@ -1,5 +1,6 @@
-using Microsoft.Data.SqlClient;
 using System.Data;
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.Database;
 
 /// <summary>
 ///Class1 的摘要说明
@@ -269,12 +270,13 @@ namespace BotWorker.Modules.Buses
 
         public static void GetPlaceInfo(string place_id, ref string place_name, ref string place_info, ref string place_url, ref int master_id)
         {
-            SqlConnection myConnection = new(ConnString);
+            using var myConnection = DbProviderFactory.CreateConnection();
             if (!place_id.IsNum()) place_id = "0";
             string sql = $"select * from place where place_id = {place_id}";
-            SqlCommand myCommand = new(sql, myConnection);
+            using var myCommand = myConnection.CreateCommand();
+            myCommand.CommandText = sql;
             myConnection.Open();
-            SqlDataReader reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
+            using var reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
             if (reader.Read())
             {
                 int idCol = reader.GetOrdinal("place_name");

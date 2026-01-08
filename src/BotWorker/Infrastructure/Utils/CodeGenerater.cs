@@ -1,6 +1,6 @@
-using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Text;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Infrastructure.Utils
 {
@@ -9,37 +9,47 @@ namespace BotWorker.Infrastructure.Utils
         public static string GenerateClasses()
         {
             string res = string.Empty;
-            using var connection = new SqlConnection(GetConn());
+            using var connection = DbProviderFactory.CreateConnection();
             connection.Open();
-            var schema = connection.GetSchema("Tables");
-            foreach (DataRow row in schema.Rows)
+            
+            // GetSchema 是 DbConnection 的方法，但在接口 IDbConnection 中没有定义
+            // 需要转换为 DbConnection
+            if (connection is System.Data.Common.DbConnection dbConn)
             {
-                string tableName = row["TABLE_NAME"].AsString();
-                res += GenerateClassForTable(connection, tableName) + "\n";
+                var schema = dbConn.GetSchema("Tables");
+                foreach (DataRow row in schema.Rows)
+                {
+                    string tableName = row["TABLE_NAME"].AsString();
+                    res += GenerateClassForTable(dbConn, tableName) + "\n";
+                }
             }
             return res;
         }
 
-        private static string GenerateClassForTable(SqlConnection connection, string tableName)
+        private static string GenerateClassForTable(IDbConnection connection, string tableName)
         {
             var sb = new StringBuilder();
             sb.AppendLine($"public class {tableName}");
             sb.AppendLine("{");
 
-            var command = new SqlCommand($"SELECT * FROM {tableName} WHERE 1 = 0", connection);
+            using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT * FROM {tableName} WHERE 1 = 0";
             using (var reader = command.ExecuteReader(CommandBehavior.SchemaOnly))
             {
                 var schemaTable = reader.GetSchemaTable();
-                foreach (DataRow row in schemaTable.Rows)
+                if (schemaTable != null)
                 {
-                    string columnName = row["ColumnName"].AsString();
-                    string columnType = GetCSharpType(row["DataType"].AsString());
-                    sb.AppendLine($"    public {columnType} {columnName} {{ get; set; }}");
+                    foreach (DataRow row in schemaTable.Rows)
+                    {
+                        string columnName = row["ColumnName"].AsString();
+                        string columnType = GetCSharpType(row["DataType"].AsString());
+                        sb.AppendLine($"    public {columnType} {columnName} {{ get; set; }}");
+                    }
                 }
             }
 
             sb.AppendLine("}");
-            return sb.AsString();
+            return sb.ToString();
         }
 
         private static string GetCSharpType(string sqlType)

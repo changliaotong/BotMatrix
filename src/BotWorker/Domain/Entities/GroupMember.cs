@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace BotWorker.Domain.Entities
 {
@@ -9,6 +8,16 @@ namespace BotWorker.Domain.Entities
         public override string TableName => "GroupMember";
         public override string KeyField => "GroupId";
         public override string KeyField2 => "UserId";
+
+        public static async Task<string> AddCoinsResAsync(BotMessage botMsg)
+        {
+            var regexCmd = Regexs.AddMinus;
+            return await AddCoinsResAsync(botMsg.SelfId, botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name,
+                botMsg.CurrentMessage.RegexGetValue(regexCmd, "CmdName"),
+                botMsg.CurrentMessage.RegexGetValue(regexCmd, "cmdPara"),
+                botMsg.CurrentMessage.RegexGetValue(regexCmd, "cmdPara2"),
+                botMsg.CurrentMessage.RegexGetValue(regexCmd, "cmdPara3"));
+        }
 
         //充值/扣除 积分 金币 黑金币 紫币 游戏币等 (异步重构版)
         public static async Task<string> AddCoinsResAsync(long botUin, long groupId, string groupName, long qq, string name, string cmdName, string cmdPara, string cmdPara2, string cmdPara3)
@@ -191,7 +200,7 @@ namespace BotWorker.Domain.Entities
         }
 
         // 加金币/黑金币/紫币/游戏币 (异步事务版)
-        public static async Task<(int Result, long CoinsValue)> AddCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo, SqlTransaction? trans = null)
+        public static async Task<(int Result, long CoinsValue)> AddCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo, IDbTransaction? trans = null)
         {
             if (!await ExistsAsync(groupId, qq) && await AppendAsync(groupId, qq, name) == -1)
                 return (-1, 0);
@@ -222,6 +231,14 @@ namespace BotWorker.Domain.Entities
             {
                 if (isNewTrans) await trans.RollbackAsync();
                 return (-1, 0);
+            }
+            finally
+            {
+                if (isNewTrans)
+                {
+                    trans.Connection?.Close();
+                    trans.Dispose();
+                }
             }
         }
 
@@ -262,15 +279,15 @@ namespace BotWorker.Domain.Entities
             return res.Result;
         }
 
-        public static (string, SqlParameter[]) SqlSaveCredit(long groupId, long userId, long creditSave)
+        public static (string, IDataParameter[]) SqlSaveCredit(long groupId, long userId, long creditSave)
         {
             return SqlSetValues($"GroupCredit = GroupCredit - ({creditSave}), SaveCredit = ISNULL(SaveCredit, 0) + ({creditSave})", groupId, userId);
         }
 
-        public static (string, SqlParameter[]) SqlAddCredit(long groupId, long userId, long creditAdd)
+        public static (string, IDataParameter[]) SqlAddCredit(long groupId, long userId, long creditAdd)
             => SqlAddCreditAsync(groupId, userId, creditAdd).GetAwaiter().GetResult();
 
-        public static async Task<(string, SqlParameter[])> SqlAddCreditAsync(long groupId, long userId, long creditAdd)
+        public static async Task<(string, IDataParameter[])> SqlAddCreditAsync(long groupId, long userId, long creditAdd)
         {
             return await MetaData<GroupMember>.ExistsAsync(groupId, userId)
                 ? SqlPlus("GroupCredit", creditAdd, groupId, userId)
@@ -448,7 +465,7 @@ namespace BotWorker.Domain.Entities
             => IsSignInAsync(groupId, userId).GetAwaiter().GetResult();
 
         // 更新签到信息 SQL
-        public static (string sql, SqlParameter[] parameters) SqlUpdateSignInfo(long groupId, long userId, int signTimes, int signLevel)
+        public static (string sql, IDataParameter[] parameters) SqlUpdateSignInfo(long groupId, long userId, int signTimes, int signLevel)
         {
             return SqlUpdateWhere($"SignTimes = {signTimes}, SignLevel = {signLevel}, SignDate = GETDATE(), SignTimesAll = ISNULL(SignTimesAll, 0) + 1", $"GroupId = {groupId} AND UserId = {userId}");
         }

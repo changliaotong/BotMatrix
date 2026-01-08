@@ -2,22 +2,36 @@ using System.Data;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using BotWorker.Common;
-using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
+using System.Data.Common;
+using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static partial class SQLConn
     {        
         public static string ConnString => GlobalConfig.ConnString;
-        public static readonly SqlConnection conn = new(ConnString);
-
-        public static object? ExecScalar(string sql, SqlParameter[]? parameters = null)
+        
+        private static DbDataAdapter CreateDataAdapter(IDbCommand command)
         {
-            using var conn = new SqlConnection(ConnString);
-            using var cmd = new SqlCommand(sql, conn);
+            return DbProviderFactory.CreateDataAdapter(command);
+        }
+
+        private static IDataParameter CreateParameter(string name, object value)
+        {
+            return DbProviderFactory.CreateParameter(name, value);
+        }
+
+        public static object? ExecScalar(string sql, IDataParameter[]? parameters = null)
+        {
+            using var conn = DbProviderFactory.CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
             if (parameters != null)
-                cmd.Parameters.AddRange(parameters);
+            {
+                foreach (var p in parameters) cmd.Parameters.Add(p);
+            }
 
             try
             {
@@ -31,7 +45,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }        
         }
 
-        public static T? ExecScalar<T>(string sql, SqlParameter[]? parameters = null)
+        public static T? ExecScalar<T>(string sql, IDataParameter[]? parameters = null)
         {
             var result = ExecScalar(sql, parameters);
             if (result == null || result == DBNull.Value)
@@ -42,26 +56,26 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return result != null ? (T)Convert.ChangeType(result, typeof(T)) : default!;
         }
 
-        public static T? QueryScalar<T>(string sql, params SqlParameter[] parameters)
+        public static T? QueryScalar<T>(string sql, params IDataParameter[] parameters)
         {
             return QueryScalarInternal<T>(sql, parameters);
         }
 
-        private static T? QueryScalarInternal<T>(string sql, SqlParameter[] parameters,
+        private static T? QueryScalarInternal<T>(string sql, IDataParameter[] parameters,
             [CallerMemberName] string callerName = "",
             [CallerFilePath] string callerFile = "",
             [CallerLineNumber] int callerLine = 0)
         {
-            using var conn = new SqlConnection(ConnString);
-            using var cmd = new SqlCommand(sql, conn);
+            using var conn = DbProviderFactory.CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
             if (parameters != null && parameters.Length > 0)
-                cmd.Parameters.AddRange(parameters);
+            {
+                foreach (var p in parameters) cmd.Parameters.Add(p);
+            }
             try
             {
                 conn.Open();
-
-                //ShowMessage(sql);
-
                 object? result = cmd.ExecuteScalar();
 
                 if (result == null || result == DBNull.Value)
@@ -86,18 +100,18 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static List<T>? QueryList<T>(string sql, params SqlParameter[] parameters)
+        public static List<T>? QueryList<T>(string sql, params IDataParameter[] parameters)
         {
             return QueryList<T>(sql, true, parameters);
         }
 
-        public static List<T>? QueryList<T>(string sql, bool isDebug = true, params SqlParameter[] parameters)
+        public static List<T>? QueryList<T>(string sql, bool isDebug = true, params IDataParameter[] parameters)
         {
             var json = QueryAsJson(sql, isDebug, parameters);
             return JsonConvert.DeserializeObject<List<T>>(json);
         }
 
-        public static string QueryAsJson(string sql, bool isDebug, params SqlParameter[] parameters)
+        public static string QueryAsJson(string sql, bool isDebug, params IDataParameter[] parameters)
         {
             // 如果没有传递参数，则使用一个空数组
             parameters ??= [];
@@ -132,45 +146,72 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return JsonConvert.SerializeObject(results);
         }
 
-        public static SqlDataAdapter QueryDataAdapter(string query, params SqlParameter[] parameters)
+        public static IDataParameter[] CreateParameters(params (string Name, object Value)[] args)
+        {
+            return args.Select(a => DbProviderFactory.CreateParameter(a.Name, a.Value)).ToArray();
+        }
+
+        public static IDataAdapter QueryDataAdapter(string query, params IDataParameter[] parameters)
         { 
-            SqlDataAdapter dataAdapter = new(query, GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = query;
+            foreach (var p in parameters) cmd.Parameters.Add(p);
+            
+            var adapter = CreateDataAdapter(cmd);
             DataSet dataSet = new();
             try
             {
-                dataAdapter.Fill(dataSet);
+                adapter.Fill(dataSet);
             }
             catch (Exception ex)
             {
                 DbDebug(ex.Message, "SQLConn.QueryDataAdapter");
                 throw;
             }
-            return dataAdapter;
+            return adapter;
         }
 
         public static DataSet QueryPage(string tableName, string keyField, string orderBy, int page, int pageSize, string sWhere, string sSelect = "*")
         {
-            page = page <= 0 ? 1 : page;
-            sWhere = sWhere.Trim().StartsWith("and", StringComparison.OrdinalIgnoreCase) ? sWhere : sWhere.IsNull() ? "" : $" and {sWhere}";
-            orderBy = orderBy.IsNull() ? keyField : orderBy;
-            string sql = $"exec sz84_robot..sp_GetPage {tableName.Quotes()}, {keyField.Quotes()}, {orderBy.Quotes()},  {page} , {pageSize} ,{sWhere.Quotes()}, {sSelect.Quotes()}";
-            return QueryDataset(sql);
+            if (GlobalConfig.DbType == DatabaseType.SqlServer)
+            {
+                var parameters = new IDataParameter[]
+                {
+                    CreateParameter("TableName", tableName),
+                    CreateParameter("KeyField", keyField),
+                    CreateParameter("OrderField", orderBy),
+                    CreateParameter("PageIndex", page),
+                    CreateParameter("PageSize", pageSize),
+                    CreateParameter("Where", sWhere),
+                    CreateParameter("SelectField", sSelect)
+                };
+                return QueryDataset("sp_GetPage", null, parameters);
+            }
+            else
+            {
+                int offset = (page - 1) * pageSize;
+                string whereClause = string.IsNullOrWhiteSpace(sWhere) ? "" : $" WHERE {sWhere}";
+                string sql = $"SELECT {sSelect} FROM {tableName}{whereClause} ORDER BY {orderBy} LIMIT {pageSize} OFFSET {offset}";
+                return QueryDataset(sql);
+            }
         }
 
-        public static async Task<byte[]?> ExecuteScalarAsync(string sql, params SqlParameter[] parameters)
+        public static async Task<byte[]?> ExecuteScalarAsync(string sql, params IDataParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
             try
             {
-                conn.Open();
-                SqlCommand command = new(sql, conn);
-                parameters = ProcessParameters(parameters);
-                if (parameters != null)
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
+                using var command = conn.CreateCommand();
+                command.CommandText = sql;
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
                 {
-                    command.Parameters.AddRange(parameters);
+                    foreach (var p in processedParameters) command.Parameters.Add(p);
                 }
 
-                var result = await command.ExecuteScalarAsync();
+                var result = await (command as DbCommand)?.ExecuteScalarAsync()!;
                 return result as byte[];
             }
             catch (Exception ex)
@@ -180,16 +221,16 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        private static SqlParameter[] ProcessParameters(SqlParameter[] parameters)
+        private static IDataParameter[] ProcessParameters(IDataParameter[] parameters)
         {
-            var processedParameters = new List<SqlParameter>();
+            var processedParameters = new List<IDataParameter>();
 
             foreach (var param in parameters)
             {
                 if (param.Value is JsonElement jsonElement)
                 {
                     // 仅处理符合特定格式的 JsonElement
-                    SqlParameter processedParam = ProcessJsonElement(param);
+                    IDataParameter processedParam = ProcessJsonElement(param);
                     processedParameters.Add(processedParam);
                 }
                 else
@@ -201,7 +242,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return [.. processedParameters];
         }
 
-        private static SqlParameter ProcessJsonElement(SqlParameter param)
+        private static IDataParameter ProcessJsonElement(IDataParameter param)
         {
             if (param.Value is JsonElement jsonElement)
             {
@@ -219,26 +260,28 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return param;
         }
 
-        public static DataSet QueryDataset(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static DataSet QueryDataset(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
             if (conn == null)
             {
-                conn = new SqlConnection(GetConn());
+                conn = DbProviderFactory.CreateConnection();
                 conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using SqlCommand command = new(sql, conn, trans);
+                using var command = conn.CreateCommand();
+                command.CommandText = sql;
+                command.Transaction = trans;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
-                    command.Parameters.AddRange(processedParameters);
+                    foreach (var p in processedParameters) command.Parameters.Add(p);
                 }
-                using SqlDataAdapter adapter = new(command);
+                var adapter = CreateDataAdapter(command);
                 DataSet dataSet = new();
                 adapter.Fill(dataSet);
                 return dataSet;
@@ -257,40 +300,33 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static DataSet QueryDataset(string sql, params SqlParameter[] parameters)
+        public static DataSet QueryDataset(string sql, params IDataParameter[] parameters)
         {
             return QueryDataset(sql, null, parameters);
         }
 
-        public static IEnumerable<SqlDataReader> QueryReader(string query, params SqlParameter[] parameters)
+        public static DataTable ExecuteQuery(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
-            conn.Open();
-            using SqlCommand command = new(query, conn);
-            if (parameters != null) command.Parameters.AddRange(parameters);
-            yield return command.ExecuteReader();
-        }
-
-        public static DataTable ExecuteQuery(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
-        {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
             if (conn == null)
             {
-                conn = new SqlConnection(GetConn());
+                conn = DbProviderFactory.CreateConnection();
                 conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using SqlCommand command = new(sql, conn, trans);
+                using var command = conn.CreateCommand();
+                command.CommandText = sql;
+                command.Transaction = trans;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
-                    command.Parameters.AddRange(processedParameters);
+                    foreach (var p in processedParameters) command.Parameters.Add(p);
                 }
-                using SqlDataAdapter adapter = new(command);
+                var adapter = CreateDataAdapter(command);
                 DataTable dataTable = new();
                 adapter.Fill(dataTable);
                 return dataTable;
@@ -309,7 +345,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static DataTable ExecuteQuery(string sql, params SqlParameter[] parameters)
+        public static DataTable ExecuteQuery(string sql, params IDataParameter[] parameters)
         {
             return ExecuteQuery(sql, null, parameters);
         }
@@ -323,17 +359,18 @@ namespace BotWorker.Infrastructure.Persistence.Database
         // 取得服务器当前时间
         public static string GetTimeStamp()
         {
-            return Query("select convert(varchar(19), GETDATE(), 120)");
+            string sql = GlobalConfig.DbType == DatabaseType.SqlServer ? "select getdate()" : "select to_char(now(), 'YYYY-MM-DD HH24:MI:SS')";
+            return Query(sql);
         }
 
-        public static (DataSet? ds, int i) QueryOrExec(string sql, params SqlParameter[] parameters)
+        public static (DataSet? ds, int i) QueryOrExec(string sql, params IDataParameter[] parameters)
         {
             return QueryOrExec(sql, true, parameters);
         }
 
-        public static (DataSet? ds, int i) QueryOrExec(string sql, bool isDebug, params SqlParameter[] parameters)
+        public static (DataSet? ds, int i) QueryOrExec(string sql, bool isDebug, params IDataParameter[] parameters)
         {
-            if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+            if (sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
             {
                 using DataSet? ds = QueryDataset(sql, parameters);
                 if (ds != null && ds.Tables.Count > 0)
@@ -347,7 +384,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static string Query(string sql, params SqlParameter[] parameters)
+        public static string Query(string sql, params IDataParameter[] parameters)
         {
             return QueryScalar<string>(sql, parameters) ?? "";
         }
@@ -357,12 +394,12 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return Query<T>(sql, true, []);
         }
 
-        public static T Query<T>(string sql, params SqlParameter[] parameters)
+        public static T Query<T>(string sql, params IDataParameter[] parameters)
         {
             return Query<T>(sql, true, parameters);
         }
 
-        public static T Query<T>(string sql, bool isDebug = true, params SqlParameter[] parameters)
+        public static T Query<T>(string sql, bool isDebug = true, params IDataParameter[] parameters)
         {
             try
             {
@@ -386,51 +423,53 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 if (isDebug)
                     DbDebug($"{ex.Message}\n{sql}");
                 else
-                    Debug($"{ex.Message}\n{sql}");
+                    Logger.Error($"{ex.Message}\n{sql}");
                 return default!;
             }
         }
 
         public static int Exec(string sql)
         {
-            return Exec(sql, []);
+            return Exec(sql, Array.Empty<IDataParameter>());
         }
 
-        public static int Exec(params (string sql, SqlParameter[] parameters)[] sqlAndParameters)
+        public static int Exec(params (string sql, IDataParameter[] parameters)[] sqlAndParameters)
         {
             return ExecTrans(sqlAndParameters);
         }
 
-        public static int Exec(string sql, params SqlParameter[] parameters)
+        public static int Exec(string sql, params IDataParameter[] parameters)
         {
             return Exec(sql, true, null, parameters);
         }
 
-        public static int Exec(string sql, bool isDebug, params SqlParameter[] parameters)
+        public static int Exec(string sql, bool isDebug, params IDataParameter[] parameters)
         {
             return Exec(sql, isDebug, null, parameters);
         }
 
         // 执行sql命令
-        public static int Exec(string sql, bool isDebug = true, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static int Exec(string sql, bool isDebug = true, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
             if (conn == null)
             {
-                conn = new SqlConnection(GetConn());
+                conn = DbProviderFactory.CreateConnection();
                 conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using var command = new SqlCommand(sql, conn, trans);
+                using var command = conn.CreateCommand();
+                command.CommandText = sql;
+                command.Transaction = trans;
                 if (parameters != null)
                 {
                     var processedParameters = ProcessParameters(parameters);
-                    command.Parameters.AddRange(processedParameters);
+                    foreach (var p in processedParameters) command.Parameters.Add(p);
                 }
                 return command.ExecuteNonQuery();
             }
@@ -451,144 +490,103 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static object ExecuteScalar(string query, params SqlParameter[] parameters)
+        public static object? ExecuteScalar(string query, params IDataParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
             conn.Open();
-            using SqlCommand command = new(query, conn);
+            using var command = conn.CreateCommand();
+            command.CommandText = query;
             if (parameters != null)
             {
-                command.Parameters.AddRange(parameters);
+                foreach (var p in parameters) command.Parameters.Add(p);
             }
 
             return command.ExecuteScalar();
         }
 
-        public static void ExecSP(string spName, params SqlParameter[] parameters)
+        public static IDataReader QueryDataReader(string sql, params IDataParameter[] parameters)
         {
-            using SqlConnection conn = new(GetConn());
-            conn.Open();
-            using SqlCommand command = new(spName, conn);
-            command.CommandType = CommandType.StoredProcedure;
-            if (parameters != null)
-            {
-                command.Parameters.AddRange(parameters);
-            }
-
-            command.ExecuteNonQuery();
-        }
-
-        public static SqlDataReader QueryDataReaderPage(string sql, SqlParameter[] parameters, int page, int size)
-        {
-            int offset = (page - 1) * size;
-            sql = sql + " OFFSET " + offset + " ROWS FETCH NEXT " + size + " ROWS ONLY";
-
-            return QueryDataReader(sql, parameters);
-        }
-
-        public static SqlDataReader QueryDataReader(string sql, params SqlParameter[] parameters)
-        {
-            using SqlConnection conn = new(GetConn());
+            var conn = DbProviderFactory.CreateConnection();
             try
             {
                 conn.Open();
 
-                using SqlCommand command = new(sql, conn);
+                using var command = conn.CreateCommand();
+                command.CommandText = sql;
                 if (parameters != null)
                 {
-                    command.Parameters.AddRange(parameters);
+                    foreach (var p in parameters) command.Parameters.Add(p);
                 }
 
-                return command.ExecuteReader();
-            }
-            catch (SqlException sqlEx)
-            { 
-                DbDebug($"{sqlEx.Message}\nSQL: {sql}", "QueryDataReader - SQL Exception");
-                throw;
+                return command.ExecuteReader(CommandBehavior.CloseConnection);
             }
             catch (Exception ex)
             {                
-                DbDebug($"{ex.Message}\nSQL: {sql}", "QueryDataReader - General Exception");
+                DbDebug($"{ex.Message}\nSQL: {sql}", "QueryDataReader");
+                conn.Dispose();
                 throw;
             }
-        }
-
-        public static DataSet QueryDatasetPage(string sql, int page, int size)
-        {
-            int offset = (page - 1) * size;
-            sql += " OFFSET " + offset + " ROWS FETCH NEXT " + size + " ROWS ONLY";
-            return QueryDataset(sql);
         }
 
         public static void BulkInsert(string tableName, DataTable dataTable)
         {
-            try
+            if (GlobalConfig.DbType == DatabaseType.SqlServer)
             {
-                using SqlConnection connection = new(GetConn());
-                connection.Open();
-
-                using SqlBulkCopy bulkCopy = new(connection)
-                {
-                    DestinationTableName = tableName,
-                    BatchSize = 1000,       // 可根据需要调整
-                    BulkCopyTimeout = 60    // 秒，默认30秒，有时大数据需要调大
-                };
-
-                // 如果 DataTable 列名和数据库表列名不完全对应，这里可以添加 ColumnMappings
-                // 例如:
-                // bulkCopy.ColumnMappings.Add("SourceColumnName", "DestinationColumnName");
-
-                bulkCopy.WriteToServer(dataTable);
-            }
-            catch (Exception ex)
-            {
-                DbDebug($"BulkInsert Error: {ex.Message}", "BulkInsert");
-                throw;
-            }
-        }
-
-        public static void BulkUpdate(string tableName, List<DataRow> rowsToUpdate)
-        {
-            // 打开数据库连接
-            OpenConnection();
-
-            // 使用 SqlBulkCopy 执行批量更新
-            using (SqlBulkCopy bulkCopy = new(conn))
-            {
+                using var bulkCopy = new SqlBulkCopy(ConnString);
                 bulkCopy.DestinationTableName = tableName;
-                bulkCopy.ColumnMappings.Clear();
-                foreach (DataColumn column in rowsToUpdate[0].Table.Columns)
+                try
                 {
-                    bulkCopy.ColumnMappings.Add(column.ColumnName, column.ColumnName);
+                    bulkCopy.WriteToServer(dataTable);
                 }
-
-                // 创建临时表，用于存储更新的数据
-                DataTable tempTable = rowsToUpdate[0].Table.Clone();
-                foreach (DataRow row in rowsToUpdate)
+                catch (Exception ex)
                 {
-                    tempTable.ImportRow(row);
+                    DbDebug($"BulkInsert Error: {ex.Message}", "BulkInsert");
+                    throw;
                 }
-
-                // 将临时表写入数据库
-                bulkCopy.WriteToServer(tempTable);
             }
+            else if (GlobalConfig.DbType == DatabaseType.PostgreSql)
+            {
+                try
+                {
+                    using var conn = new NpgsqlConnection(ConnString);
+                    conn.Open();
+                    
+                    var columns = string.Join(", ", dataTable.Columns.Cast<DataColumn>().Select(c => $"\"{c.ColumnName}\""));
+                    using var writer = conn.BeginBinaryImport($"COPY \"{tableName}\" ({columns}) FROM STDIN (FORMAT BINARY)");
 
-            // 关闭数据库连接
-            CloseConnection();
+                    foreach (DataRow row in dataTable.Rows)
+                    {
+                        writer.StartRow();
+                        foreach (DataColumn col in dataTable.Columns)
+                        {
+                            writer.Write(row[col]);
+                        }
+                    }
+                    writer.Complete();
+                }
+                catch (Exception ex)
+                {
+                    DbDebug($"BulkInsert Error: {ex.Message}", "BulkInsert");
+                    throw;
+                }
+            }
         }
 
         public static long GetAutoId(string tableName)
         {
-            return QueryScalar<long>($"SELECT IDENT_CURRENT({tableName.Quotes()})");
+            string sql = GlobalConfig.DbType == DatabaseType.SqlServer ? "SELECT SCOPE_IDENTITY()" : "SELECT lastval()"; 
+            return QueryScalar<long>(sql);
         }
 
         public static string QueryRes(string sql, string format = "{0}", string countFormat = "")
         {
-            using SqlConnection conn = new(GetConn());
+            using var conn = DbProviderFactory.CreateConnection();
             try
             {
                 conn.Open();
-                using SqlDataReader reader = new SqlCommand(sql, conn).ExecuteReader();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                using var reader = cmd.ExecuteReader();
                 var rows = new List<string>();
                 int k = 1;
                 while (reader.Read())
@@ -613,14 +611,16 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-
         // 调试信息 红字显示 并写入数据库
         public static int DbDebug(object bugInfo, string? bugGroup = null)
         {
             Debug(bugInfo.AsString());
-            return Bug.Insert(bugInfo, bugGroup);
+            return 1;
         }
 
+        private static void Debug(string message)
+        {
+             Logger.Debug(message);
+        }
     }
 }
-

@@ -1,5 +1,4 @@
-using Microsoft.Data.SqlClient;
-
+using System.Data;
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities;
@@ -31,7 +30,7 @@ public class Friend : MetaData<Friend>
             });
     }
 
-    public static (string, SqlParameter[]) SqlAddCredit(long botUin, long userId, long creditPlus)
+    public static (string, IDataParameter[]) SqlAddCredit(long botUin, long userId, long creditPlus)
     {
         if (Exists(botUin, userId))
             return SqlPlus("Credit", creditPlus, botUin, userId);
@@ -64,7 +63,7 @@ public class Friend : MetaData<Friend>
     }
 
 
-    public static (string, SqlParameter[]) SqlSaveCredit(long botUin, long userId, long creditSave)
+    public static (string, IDataParameter[]) SqlSaveCredit(long botUin, long userId, long creditSave)
     {
         return SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = isnull(SaveCredit, 0) + ({creditSave})", botUin, userId);
     }

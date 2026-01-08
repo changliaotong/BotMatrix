@@ -1,20 +1,20 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Infrastructure.Extensions;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
-        public static (string, SqlParameter[]) SqlExists(object id, object? id2 = null)
+        public static (string, IDataParameter[]) SqlExists(object id, object? id2 = null)
         {
             var (where, parameters) = SqlWhere(id, id2);
             return ($"SELECT TOP 1 1 FROM {FullName} {where}", parameters);
         }
 
-        public static (string, SqlParameter[]) SqlExists(params (string, object?)[] keys)
+        public static (string, IDataParameter[]) SqlExists(params (string, object?)[] keys)
             => SqlExists(ToDict(keys));
 
-        public static (string, SqlParameter[]) SqlExists(string fieldName, object value, string fieldName2, object? value2)
+        public static (string, IDataParameter[]) SqlExists(string fieldName, object value, string fieldName2, object? value2)
         {
             var keys = new Dictionary<string, object?>
             {
@@ -22,6 +22,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 { fieldName2, value2 ?? DBNull.Value}
             };
             return SqlExists(FullName, keys);
+        }
+
+        public static (string, IDataParameter[]) SqlExists(string tableFullName, Dictionary<string, object?> keys)
+        {
+            var (where, parameters) = SqlWhere(keys, allowEmpty: false);
+            return ($"SELECT TOP 1 1 FROM {tableFullName} {where}", parameters);
         }
 
         public static bool Exists(object id, object? id2 = null)
@@ -34,7 +40,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return result != null && result != DBNull.Value;
         }
 
-        public static (string, SqlParameter[]) SqlExistsAandB(string fieldName, object value, string fieldName2, object? value2)
+        public static (string, IDataParameter[]) SqlExistsAandB(string fieldName, object value, string fieldName2, object? value2)
         {
             return ($"SELECT TOP 1 1 FROM {FullName} WHERE {fieldName} = @p1 AND {fieldName2} = @p2", SqlParams(("@p1", value), ("@p2", value2)));
         }

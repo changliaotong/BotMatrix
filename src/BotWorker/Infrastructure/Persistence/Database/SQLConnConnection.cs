@@ -1,11 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Data.SqlClient;
-
 namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static partial class SQLConn
@@ -16,18 +14,12 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return ConnString;
         }
 
-        // 打开连接时返回 SqlConnection，方便使用 using
-        public static SqlConnection OpenConnection()
+        // 打开连接时返回 IDbConnection，方便使用 using
+        public static IDbConnection OpenConnection()
         {
-            var connection = new SqlConnection(ConnString);
+            var connection = DbProviderFactory.CreateConnection();
             connection.Open();
             return connection;
-        }
-
-        public static void CloseConnection()
-        {
-            if (conn.State != ConnectionState.Closed)
-                conn.Close();
         }
     }
 }

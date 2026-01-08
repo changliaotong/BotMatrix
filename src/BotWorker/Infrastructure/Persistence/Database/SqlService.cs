@@ -1,15 +1,14 @@
-﻿using Newtonsoft.Json;
+using System.Data;
+using Newtonsoft.Json;
 using System.Text;
-using Microsoft.Data.SqlClient;
 using BotWorker.Common.Extensions;
 using BotWorker.Common;
-using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static class SqlService
     {
-        public static async Task<int> ExecTransAsyncAPI(bool isDebug = true, params (string, SqlParameter[])[] sqls)
+        public static async Task<int> ExecTransAsyncAPI(bool isDebug = true, params (string, IDataParameter[])[] sqls)
         {
             var request = new ExecTransRequest
             {
@@ -21,17 +20,17 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return json?.AsObject<int>() ?? -1;
         }
 
-        public static List<SqlParameterDTO> ToDTOs(this SqlParameter[] sqlParameters)
+        public static List<DbParameterDTO> ToDTOs(this IDataParameter[] sqlParameters)
         {
-            return sqlParameters?.Select(p => new SqlParameterDTO
+            return sqlParameters?.Select(p => new DbParameterDTO
             {
                 Name = p.ParameterName,
                 Value = p.Value,
-                DbType = p.SqlDbType.ToString()
+                DbType = p.DbType.ToString()
             }).ToList() ?? [];
         }
 
-        public static async Task<List<T>> QueryAsyncAPI<T>(string sql, bool isDebug, params SqlParameter[] parameters)
+        public static async Task<List<T>> QueryAsyncAPI<T>(string sql, bool isDebug, params IDataParameter[] parameters)
         {
             var request = new SqlRequest
             {

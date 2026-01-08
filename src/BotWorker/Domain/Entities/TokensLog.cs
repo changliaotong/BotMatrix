@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
@@ -10,7 +10,7 @@ public class TokensLog : MetaData<TokensLog>
     public override string KeyField => "Id";
 
 
-    public static (string, SqlParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string userName, long tokensAdd, string tokensInfo)
+    public static (string, IDataParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string userName, long tokensAdd, string tokensInfo)
     {
         long tokensValue = UserInfo.GetTokens(userId);
         return SqlInsert(new List<Cov> {
@@ -25,7 +25,7 @@ public class TokensLog : MetaData<TokensLog>
                         });
     }
 
-    public static async Task AddLogAsync(long botUin, long groupId, string groupName, long userId, string userName, long tokensAdd, string tokensInfo, SqlTransaction? trans = null)
+    public static async Task AddLogAsync(long botUin, long groupId, string groupName, long userId, string userName, long tokensAdd, string tokensInfo, IDbTransaction? trans = null)
     {
         var (sql, paras) = SqlLog(botUin, groupId, groupName, userId, userName, tokensAdd, tokensInfo);
         await ExecAsync(sql, trans, paras);

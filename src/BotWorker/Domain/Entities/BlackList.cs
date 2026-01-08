@@ -37,5 +37,13 @@ namespace BotWorker.Domain.Entities
                             new Cov("BlackInfo", blackInfo),
                         ]);
         }
+
+        /// <summary>
+        /// 清空指定群组的黑名单
+        /// </summary>
+        public static int ClearGroupBlacklist(long groupId)
+        {
+            return Exec($"DELETE FROM BlackList WHERE GroupId = {groupId}");
+        }
     }
 }

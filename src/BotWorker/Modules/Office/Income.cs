@@ -1,6 +1,7 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Common.Extensions;
 using BotWorker.Domain.Entities;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Modules.Office
 {
@@ -34,7 +35,7 @@ namespace BotWorker.Modules.Office
             return await ExistsFieldAsync("GroupId", groupId);
         }
 
-        public static (string, SqlParameter[]) SqlInsert(long groupId, long goodsCount, string goodsName, decimal incomeMoney, string payMethod, string incomeTrade, string incomeInfo,
+        public static (string, IDataParameter[]) SqlInsert(long groupId, long goodsCount, string goodsName, decimal incomeMoney, string payMethod, string incomeTrade, string incomeInfo,
             long qqBuy, int insertBy)
         {
             return SqlInsert([
@@ -77,7 +78,7 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> GetLeverOrderAsync(long groupId, long userId)
         {
-            return await QueryAsync($"select count(UserId) + 1 from (select UserId from {FullName} " +
+            return await QueryScalarAsync($"select count(UserId) + 1 from (select UserId from {FullName} " +
                          $"where UserId in (select UserId from {CreditLog.FullName} where GroupId = {groupId}) " +
                          $"group by UserId having sum(IncomeMoney) > (select sum(IncomeMoney) from {FullName} where UserId = {userId})) a");
         }

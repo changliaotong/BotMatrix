@@ -12,7 +12,7 @@ namespace BotWorker.Infrastructure.Extensions
 {
     public static class PluginExtensions
     {
-        private static readonly Dictionary<string, IBotModule> LoadedModules = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, IPlugin> LoadedModules = new(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, List<string>> DependencyGraph = new();
 
         public static IServiceCollection AddGameModules(this IServiceCollection services, IConfiguration config)
@@ -29,7 +29,7 @@ namespace BotWorker.Infrastructure.Extensions
             {
                 var name = module.Metadata.Name;
                 LoadedModules[name] = module;
-                DependencyGraph[name] = module.Metadata.RequiredModules.ToList();
+                DependencyGraph[name] = module.Metadata.Dependencies.ToList();
             }
 
             DetectCycles();
@@ -50,13 +50,14 @@ namespace BotWorker.Infrastructure.Extensions
                 throw new Exception($"模块 {name} 未找到！");
 
             stack.Push(name);
-            foreach (var dep in LoadedModules[name].Metadata.RequiredModules)
+            foreach (var dep in LoadedModules[name].Metadata.Dependencies)
                 ResolveModule(dep, services, resolved, stack);
             stack.Pop();
 
-            LoadedModules[name].RegisterServices(services, null!);
+            // 注意：IPlugin 目前没有 RegisterServices 接口，原逻辑已注释
+            // LoadedModules[name].RegisterServices(services, null!);
             resolved.Add(name);
-            Console.WriteLine($"�?注册模块: {name}");
+            Console.WriteLine($"已加载模块: {name}");
         }
 
         private static void DetectCycles()
@@ -93,18 +94,19 @@ namespace BotWorker.Infrastructure.Extensions
             File.WriteAllText(filePath, sb.ToString());
         }
 
-        private static IEnumerable<IBotModule> LoadModulesFromAppDomain()
+        private static IEnumerable<IPlugin> LoadModulesFromAppDomain()
         {
             return AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(a => a.GetTypes())
-                .Where(t => typeof(IBotModule).IsAssignableFrom(t) && !t.IsAbstract)
-                .Select(t => (IBotModule)Activator.CreateInstance(t)!);
+                .Where(t => typeof(IPlugin).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
+                .Select(t => (IPlugin)Activator.CreateInstance(t)!);
         }
 
-        private static IEnumerable<IBotModule> LoadModulesFromPluginFolder(string path)
+        private static IEnumerable<IPlugin> LoadModulesFromPluginFolder(string path)
         {
+            if (!Directory.Exists(path)) return Enumerable.Empty<IPlugin>();
             // todo: 实现插件文件夹加载逻辑
-            return Enumerable.Empty<IBotModule>();
+            return Enumerable.Empty<IPlugin>();
         }
     }
 }

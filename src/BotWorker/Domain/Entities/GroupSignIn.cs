@@ -1,5 +1,3 @@
-using Microsoft.Data.SqlClient;
-
 namespace BotWorker.Domain.Entities
 {
     public class GroupSignIn : MetaData<GroupSignIn>

@@ -67,7 +67,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 Console.Error.WriteLine($"[SendMessage] Not Worker/Web. ReplyBotMessageAsync is null? {ReplyBotMessageAsync == null}");
                 if (IsRealProxy || ((IsMusic || IsAI) && IsGuild))               
-                    SelfInfo = await BotInfo.LoadAsync(ProxyBotUin);
+                    SelfInfo = await BotInfo.LoadAsync(ProxyBotUin) ?? new();
 
                 var json = JsonConvert.SerializeObject(this);
                 if (ReplyBotMessageAsync == null) return;

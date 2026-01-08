@@ -1,15 +1,16 @@
-using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Text;
 using System.Text.RegularExpressions;
+
+using BotWorker.Common.Extensions;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Modules.Buses
 {
-
     public class Bus : MetaData<Bus>
     {
-        public override string DataBase => "sz84";
-        public override string TableName => "bus";
-        public override string KeyField => "bus_id";
+        public override string TableName => "Bus";
+        public override string KeyField => "Bus_Id";
 
         #region 线路操作
 
@@ -235,18 +236,18 @@ namespace BotWorker.Modules.Buses
             return Exec($"update bus set update_map = 1 where bus_id  = {bus_id}");
         }
 
-        public static string getBusMap(int bus_id)
+        public static string GetBusMap(int bus_id)
         {
             string res = QueryScalar<string>($"select bus_map from bus where bus_id = {bus_id} and update_map = 0") ?? "";
             if (res == "")
             {
                 res = GetBusMapAll(bus_id);
-                updateBusMap(bus_id, res);
+                UpdateBusMap(bus_id, res);
             }
             return res;
         }
 
-        public static int updateBusMap(int bus_id, string bus_map)
+        public static int UpdateBusMap(int bus_id, string bus_map)
         {
             return Exec($"update bus set bus_map ='{bus_map}', update_map = 0, update_map_date=getdate() where bus_id = {bus_id}");
         }
@@ -316,12 +317,13 @@ namespace BotWorker.Modules.Buses
             ref string price, ref string bus_price, ref string bus_price2, ref string bus_stops_a, ref string bus_stops_b, ref string bus_stops_c, ref string bus_info,
             ref string bus_pic, ref string pay_method, ref string sztong, ref string bus_price_type, ref string update_date)
         {
-            SqlConnection myConnection = new SqlConnection(ConnString);
+            using var myConnection = DbProviderFactory.CreateConnection();
             if (!bus_id.IsNum()) bus_id = "0";
             string sql = $"select bus_id,bus_name,bus_name2,bus_order,bus_type,bus_info,bus_stops_a,bus_stops_b,bus_stops_c,start_stop,end_stop,price,pay_method,bus_price_type,sztong,bus_price,bus_price2,update_date,bus_pic from bus where bus_id = {bus_id}";
-            SqlCommand myCommand = new(sql, myConnection);
+            using var myCommand = myConnection.CreateCommand();
+            myCommand.CommandText = sql;
             myConnection.Open();
-            SqlDataReader reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
+            using var reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
             if (reader.Read())
             {
                 int idCol = reader.GetOrdinal("bus_name");
@@ -393,12 +395,12 @@ namespace BotWorker.Modules.Buses
                     sztong = true.ToString();
                 idCol = reader.GetOrdinal("bus_price");
                 if (!reader.IsDBNull(idCol))
-                    bus_price = reader.GetSqlMoney(idCol).ToString();
+                    bus_price = reader.GetDecimal(idCol).ToString();
                 else
                     bus_price = "";
                 idCol = reader.GetOrdinal("bus_price2");
                 if (!reader.IsDBNull(idCol))
-                    bus_price2 = reader.GetSqlMoney(idCol).ToString();
+                    bus_price2 = reader.GetDecimal(idCol).ToString();
                 else
                     bus_price2 = "";
                 idCol = reader.GetOrdinal("update_date");
@@ -417,16 +419,46 @@ namespace BotWorker.Modules.Buses
             }
         }
 
+        public static void GetBusStops(string bus_id, ref string bus_stops_a, ref string bus_stops_b, ref string bus_stops_c)
+        {
+            using var myConnection = DbProviderFactory.CreateConnection();
+            if (!bus_id.IsNum()) bus_id = "0";
+            string sql = $"select bus_stops_a,bus_stops_b,bus_stops_c from bus where bus_id = {bus_id}";
+            using var myCommand = myConnection.CreateCommand();
+            myCommand.CommandText = sql;
+            myConnection.Open();
+            using var reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
+            if (reader.Read())
+            {
+                int idCol = reader.GetOrdinal("bus_stops_a");
+                if (!reader.IsDBNull(idCol))
+                    bus_stops_a = reader.GetString(idCol);
+                else
+                    bus_stops_a = "";
+                idCol = reader.GetOrdinal("bus_stops_b");
+                if (!reader.IsDBNull(idCol))
+                    bus_stops_b = reader.GetString(idCol);
+                else
+                    bus_stops_b = "";
+                idCol = reader.GetOrdinal("bus_stops_c");
+                if (!reader.IsDBNull(idCol))
+                    bus_stops_c = reader.GetString(idCol);
+                else
+                    bus_stops_c = "";
+            }
+        }
+
         public static void GetBusInfoHis(string his_id, ref string bus_id, ref string bus_order, ref string bus_name, ref string bus_name2, ref string bus_type, ref string start_stop, ref string end_stop,
             ref string price, ref string bus_price, ref string bus_price2, ref string bus_stops_a, ref string bus_stops_b, ref string bus_stops_c, ref string bus_info,
             ref string bus_pic, ref string pay_method, ref string sztong, ref string bus_price_type, ref string update_date)
         {
-            SqlConnection myConnection = new SqlConnection(ConnString);
+            using var myConnection = DbProviderFactory.CreateConnection();
             if (!his_id.IsNum()) his_id = "0";
             string sql = $"select bus_id,bus_name,bus_name2,bus_order,bus_type,bus_info,bus_stops_a,bus_stops_b,bus_stops_c,start_stop,end_stop,price,pay_method,bus_price_type,sztong,bus_price,bus_price2,update_date,bus_pic from bus_his where his_id = {his_id}";
-            SqlCommand myCommand = new(sql, myConnection);
+            using var myCommand = myConnection.CreateCommand();
+            myCommand.CommandText = sql;
             myConnection.Open();
-            SqlDataReader reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
+            using var reader = myCommand.ExecuteReader(CommandBehavior.CloseConnection);
             if (reader.Read())
             {
                 int idCol = reader.GetOrdinal("bus_name");
@@ -503,12 +535,12 @@ namespace BotWorker.Modules.Buses
                     sztong = "";
                 idCol = reader.GetOrdinal("bus_price");
                 if (!reader.IsDBNull(idCol))
-                    bus_price = reader.GetSqlMoney(idCol).ToString();
+                    bus_price = reader.GetDecimal(idCol).ToString();
                 else
                     bus_price = "";
                 idCol = reader.GetOrdinal("bus_price2");
                 if (!reader.IsDBNull(idCol))
-                    bus_price2 = reader.GetSqlMoney(idCol).ToString();
+                    bus_price2 = reader.GetDecimal(idCol).ToString();
                 else
                     bus_price2 = "";
                 idCol = reader.GetOrdinal("update_date");
@@ -533,13 +565,14 @@ namespace BotWorker.Modules.Buses
         //因数据长度超过8000，不能使用SQL函数或存储过程处理
         public static string GetBusMapA(int bus_id)
         {
-            SqlConnection MyConn = new(ConnString);
+            using var MyConn = DbProviderFactory.CreateConnection();
             string strSQL = $"select stop_id,stop_order from bus_stops where bus_id = {bus_id} and stop_order is not null order by stop_order";
-            SqlCommand MyComm = new(strSQL, MyConn);
+            using var MyComm = MyConn.CreateCommand();
+            MyComm.CommandText = strSQL;
             try
             {
                 MyConn.Open();
-                SqlDataReader reader = MyComm.ExecuteReader();
+                using var reader = MyComm.ExecuteReader();
                 string res = "";
                 string stop_buses = "";
                 int stop_id;
@@ -560,30 +593,24 @@ namespace BotWorker.Modules.Buses
                         }
                     }
                 }
-                reader.Close();
                 return res;
             }
             catch (Exception e)
             {
                 throw new Exception(e.Message);
-            }
-            finally
-            {
-                MyComm.Dispose();
-                MyConn.Close();
-                MyConn.Dispose();
             }
         }
 
         public static string GetBusMapB(int bus_id)
         {
-            SqlConnection MyConn = new(ConnString);
+            using var MyConn = DbProviderFactory.CreateConnection();
             string strSQL = $"select stop_id,stop_order2 from bus_stops where bus_id = {bus_id} and stop_order2 is not null order by stop_order2";
-            SqlCommand MyComm = new(strSQL, MyConn);
+            using var MyComm = MyConn.CreateCommand();
+            MyComm.CommandText = strSQL;
             try
             {
                 MyConn.Open();
-                SqlDataReader reader = MyComm.ExecuteReader();
+                using var reader = MyComm.ExecuteReader();
                 string res = "";
                 string stop_buses = "";
                 int stop_id;
@@ -604,153 +631,100 @@ namespace BotWorker.Modules.Buses
                         }
                     }
                 }
-                reader.Close();
                 return res;
             }
             catch (Exception e)
             {
                 throw new Exception(e.Message);
             }
-            finally
-            {
-                MyComm.Dispose();
-                MyConn.Close();
-                MyConn.Dispose();
-            }
         }
 
         public static string GetPlaceBuses(string place_id)
         {
-            SqlConnection MyConn = new(ConnString);
+            using var MyConn = DbProviderFactory.CreateConnection();
             string strSQL = $"select bus_id,bus_name from bus where bus_id in (select bus_id from bus_stops where stop_id in (select stop_id from place_stops where place_id = {place_id})) order by bus_order";
-            SqlCommand MyComm = new SqlCommand(strSQL, MyConn);
+            using var MyComm = MyConn.CreateCommand();
+            MyComm.CommandText = strSQL;
             try
             {
                 MyConn.Open();
-                SqlDataReader reader = MyComm.ExecuteReader();
+                using var reader = MyComm.ExecuteReader();
                 string buses = "";
                 while (reader.Read())
                 {
                     buses += $"{GetBusName($"{reader[1]}")}  ";
                 }
 
-                // Call Close when done reading.
-                reader.Close();
-
                 return buses;
             }
             catch (Exception e)
             {
                 throw new Exception(e.Message);
             }
-            finally
-            {
-                MyComm.Dispose();
-                MyConn.Close();
-                MyConn.Dispose();
-            }
         }
 
         public static string GetPlaceBuses(string place_id, string place_id2)
         {
-            SqlConnection MyConn = new SqlConnection(ConnString);
+            using var MyConn = DbProviderFactory.CreateConnection();
             string strSQL = "select bus_id,bus_name from bus where exists (select 1 from bus_stops where stop_id in (select stop_id from place_stops where place_id = " + place_id + ") and bus_id = bus.bus_id) and exists (select 1 from bus_stops where stop_id in (select stop_id from place_stops where place_id = " + place_id2 + ") and bus_id = bus.bus_id) order by bus_order,bus_name";
-            SqlCommand MyComm = new SqlCommand(strSQL, MyConn);
+            using var MyComm = MyConn.CreateCommand();
+            MyComm.CommandText = strSQL;
             try
             {
                 MyConn.Open();
-                SqlDataReader reader = MyComm.ExecuteReader();
+                using var reader = MyComm.ExecuteReader();
                 string buses = "";// String.Format("共有{0}个", reader.RecordsAffected);
                 while (reader.Read())
                 {
                     buses += GetBusName($"{reader[1]}") + "  ";
                 }
 
-                // Call Close when done reading.
-                reader.Close();
-
                 return buses;
             }
             catch (Exception e)
             {
                 throw new Exception(e.Message);
-            }
-            finally
-            {
-                MyComm.Dispose();
-                MyConn.Close();
-                MyConn.Dispose();
-            }
-
-        }
-
-        public static string getStopBuses(string stop_id)
-        {
-            SqlConnection MyConn = new SqlConnection(ConnString);
-            string strSQL = $"select bus_id,bus_name from bus where bus_type = 1 and bus_id in (select bus_id from bus_stops where stop_id = {stop_id}) order by bus_order";
-            SqlCommand MyComm = new SqlCommand(strSQL, MyConn);
-            try
-            {
-                MyConn.Open();
-                SqlDataReader reader = MyComm.ExecuteReader();
-                string buses = "";
-                while (reader.Read())
-                {
-                    buses += GetBusName($"{reader[1]}") + "  ";
-                }
-
-                // Call Close when done reading.
-                reader.Close();
-
-                return buses;
-            }
-            catch (Exception e)
-            {
-                throw new Exception(e.Message);
-            }
-            finally
-            {
-                MyComm.Dispose();
-                MyConn.Close();
-                MyConn.Dispose();
             }
         }
 
-        public static string getStopBuses(string stop_id, string stop_id2, string s_split)
+        public static string GetStopBuses(string stop_id)
         {
-            SqlConnection MyConn = new SqlConnection(ConnString);
-            string strSQL = "select bus_id,bus_name from bus where bus_id in (select bus_id from bus_stops where stop_id = " + stop_id + ") and bus_id in (select bus_id from bus_stops where stop_id = " + stop_id2 + ") order by bus_order";
-            SqlCommand MyComm = new SqlCommand(strSQL, MyConn);
-            try
+            using var MyConn = DbProviderFactory.CreateConnection();
+            string strSQL = $"select bus_id,bus_name from bus where bus_id in (select bus_id from bus_stops where stop_id = {stop_id}) order by bus_order";
+            using var MyComm = MyConn.CreateCommand();
+            MyComm.CommandText = strSQL;
+            MyConn.Open();
+            using var MyReader = MyComm.ExecuteReader(CommandBehavior.CloseConnection);
+            var sb = new StringBuilder();
+            while (MyReader.Read())
             {
-                MyConn.Open();
-                SqlDataReader reader = MyComm.ExecuteReader();
-                string buses = "";
-                int i = 1;
-                while (reader.Read())
-                {
-                    if (i > 1)
-                        buses += s_split;
-                    i++;
-                    buses += string.Format("{1}", reader[0], reader[1]);
-                }
-
-                // Call Close when done reading.
-                reader.Close();
-
-                return buses;
-            }
-            catch (Exception e)
-            {
-                throw new Exception(e.Message);
-            }
-            finally
-            {
-                MyComm.Dispose();
-                MyConn.Close();
-                MyConn.Dispose();
+                sb.Append($"{MyReader.GetString(1)},");
             }
 
+            return sb.ToString().Trim(',');
+        }
+
+        public static string GetStopBuses(string stop_id, string stop_id2)
+        {
+            using var MyConn = DbProviderFactory.CreateConnection();
+            string strSQL = "select bus_id,bus_name from bus where exists (select 1 from bus_stops where stop_id = " + stop_id + " and bus_id = bus.bus_id) and exists (select 1 from bus_stops where stop_id = " + stop_id2 + " and bus_id = bus.bus_id) order by bus_order,bus_name";
+            using var MyComm = MyConn.CreateCommand();
+            MyComm.CommandText = strSQL;
+            MyConn.Open();
+            using var MyReader = MyComm.ExecuteReader(CommandBehavior.CloseConnection);
+            var sb = new StringBuilder();
+            while (MyReader.Read())
+            {
+                sb.Append($"{MyReader.GetString(1)},");
+            }
+
+            return sb.ToString().Trim(',');
+        }
+
+        public static string GetStopBuses(string stop_id, string stop_id2, string type)
+        {
+            // 这里的 type 可能是为了扩展，暂时调用两个参数的版本
+            return GetStopBuses(stop_id, stop_id2);
         }
 
     }

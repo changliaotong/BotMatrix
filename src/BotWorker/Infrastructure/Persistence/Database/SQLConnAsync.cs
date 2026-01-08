@@ -1,30 +1,37 @@
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics;
-using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static partial class SQLConn
     {
-        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, SqlParameter[] parameters, string[] outputFields, SqlTransaction? trans = null)
+        public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, IDataParameter[] parameters, string[] outputFields, IDbTransaction? trans = null)
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
             if (conn == null)
             {
-                conn = new SqlConnection(ConnString);
-                await conn.OpenAsync();
+                conn = DbProviderFactory.CreateConnection();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using var cmd = new SqlCommand(sql, conn, trans);
-                cmd.Parameters.AddRange(parameters);
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Transaction = trans;
+                
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
+                {
+                    foreach (var p in processedParameters) cmd.Parameters.Add(p);
+                }
 
-                using var reader = await cmd.ExecuteReaderAsync();
+                using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
 
                 var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
@@ -43,7 +50,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             {
                 if (isNewConn && conn != null)
                 {
-                    await conn.DisposeAsync();
+                    conn.Dispose();
                 }
             }
         }
@@ -64,32 +71,36 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return type.IsPrimitive || SimpleTypes.Contains(type) || type.IsEnum;
         }
 
-        public static async Task<T?> QueryScalarAsync<T>(string sql, params SqlParameter[] parameters)
+        public static async Task<T?> QueryScalarAsync<T>(string sql, params IDataParameter[] parameters)
         {
             return await QueryScalarAsync<T>(sql, true, null, parameters);
         }
 
-        public static async Task<T?> QueryScalarAsync<T>(string sql, bool isDebug = true, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<T?> QueryScalarAsync<T>(string sql, bool isDebug = true, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
             if (conn == null)
             {
-                conn = new SqlConnection(ConnString);
-                await conn.OpenAsync();
+                conn = DbProviderFactory.CreateConnection();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using var cmd = new SqlCommand(sql, conn, trans);
-                if (parameters != null && parameters.Length > 0)
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Transaction = trans;
+                
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
                 {
-                    cmd.Parameters.AddRange(parameters);
+                    foreach (var p in processedParameters) cmd.Parameters.Add(p);
                 }
 
-                object? result = await cmd.ExecuteScalarAsync();
+                object? result = await (cmd as DbCommand)?.ExecuteScalarAsync()!;
 
                 if (result == null || result == DBNull.Value)
                     return default;
@@ -108,28 +119,30 @@ namespace BotWorker.Infrastructure.Persistence.Database
             {
                 if (isNewConn && conn != null)
                 {
-                    await conn.DisposeAsync();
+                    conn.Dispose();
                 }
             }
         }
 
-        public static async Task<List<T>> QueryListAsync<T>(string sql, params SqlParameter[] parameters) where T : new()
+        public static async Task<List<T>> QueryListAsync<T>(string sql, params IDataParameter[] parameters) where T : new()
         {
             return await QueryListAsync<T>(sql, parameters, null);
         }
 
-        public static async Task<List<T>> QueryAsync<T>(string sql, SqlParameter[]? parameters = null)
+        public static async Task<List<T>> QueryAsync<T>(string sql, IDataParameter[]? parameters = null)
         {
-            using var conn = new SqlConnection(ConnString);
-            await conn.OpenAsync();
+            using var conn = DbProviderFactory.CreateConnection();
+            if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
 
-            using var cmd = new SqlCommand(sql, conn);
-            if (parameters != null)
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            var processedParameters = ProcessParameters(parameters ?? Array.Empty<IDataParameter>());
+            if (processedParameters != null)
             {
-                cmd.Parameters.AddRange(parameters);
+                foreach (var p in processedParameters) cmd.Parameters.Add(p);
             }
 
-            using var reader = await cmd.ExecuteReaderAsync();
+            using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
             var results = new List<T>();
 
             var type = typeof(T);
@@ -171,27 +184,30 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return results;
         }
 
-        public static async Task<List<T>> QueryListAsync<T>(string sql, SqlParameter[]? parameters = null, SqlTransaction? trans = null) where T : new()
+        public static async Task<List<T>> QueryListAsync<T>(string sql, IDataParameter[]? parameters = null, IDbTransaction? trans = null) where T : new()
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
             if (conn == null)
             {
-                conn = new SqlConnection(ConnString);
-                await conn.OpenAsync();
+                conn = DbProviderFactory.CreateConnection();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using var cmd = new SqlCommand(sql, conn, trans);
-                if (parameters != null)
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Transaction = trans;
+                var processedParameters = ProcessParameters(parameters ?? Array.Empty<IDataParameter>());
+                if (processedParameters != null)
                 {
-                    cmd.Parameters.AddRange(parameters);
+                    foreach (var p in processedParameters) cmd.Parameters.Add(p);
                 }
 
-                using var reader = await cmd.ExecuteReaderAsync();
+                using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
                 var result = new List<T>();
                 var properties = typeof(T).GetProperties();
 
@@ -214,19 +230,25 @@ namespace BotWorker.Infrastructure.Persistence.Database
             {
                 if (isNewConn && conn != null)
                 {
-                    await conn.DisposeAsync();
+                    conn.Dispose();
                 }
             }
         }
 
-        public static async Task<T?> QuerySingleAsync<T>(string sql, params  SqlParameter[] parameters) where T : class, new()
+        public static async Task<T?> QuerySingleAsync<T>(string sql, params IDataParameter[] parameters) where T : class, new()
         {
-            using var conn = new SqlConnection(ConnString);
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddRange(parameters);
-            await conn.OpenAsync();
+            using var conn = DbProviderFactory.CreateConnection();
+            if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
 
-            using var reader = await cmd.ExecuteReaderAsync();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            var processedParameters = ProcessParameters(parameters);
+            if (processedParameters != null)
+            {
+                foreach (var p in processedParameters) cmd.Parameters.Add(p);
+            }
+
+            using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
             if (!await reader.ReadAsync()) return null;
 
             var entity = new T();
@@ -254,30 +276,35 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return entity;
         }
 
-        public static async Task<T> ExecScalarAsync<T>(string sql, params SqlParameter[] parameters) where T : struct
+        public static async Task<T> ExecScalarAsync<T>(string sql, params IDataParameter[] parameters) where T : struct
         {
             return await ExecScalarAsync<T>(sql, true, null, parameters);
         }
 
-        public static async Task<T> ExecScalarAsync<T>(string sql, bool isDebug = false, SqlTransaction? trans = null, params SqlParameter[] parameters) where T : struct
+        public static async Task<T> ExecScalarAsync<T>(string sql, bool isDebug = false, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : struct
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
             if (conn == null)
             {
-                conn = new SqlConnection(ConnString);
-                await conn.OpenAsync();
+                conn = DbProviderFactory.CreateConnection();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using var cmd = new SqlCommand(sql, conn, trans);
-                if (parameters != null && parameters.Length > 0)
-                    cmd.Parameters.AddRange(parameters);
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Transaction = trans;
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
+                {
+                    foreach (var p in processedParameters) cmd.Parameters.Add(p);
+                }
 
-                var result = await cmd.ExecuteScalarAsync();
+                var result = await (cmd as DbCommand)?.ExecuteScalarAsync()!;
 
                 if (result == null || result == DBNull.Value)
                     return default!;
@@ -298,39 +325,46 @@ namespace BotWorker.Infrastructure.Persistence.Database
             {
                 if (isNewConn && conn != null)
                 {
-                    await conn.DisposeAsync();
+                    conn.Dispose();
                 }
             }
         }
 
-        // 传入SQL和参数，返回执行后的 SqlDataReader
-        public static async Task<SqlDataReader> ExecuteReaderAsync(string sql, params SqlParameter[] parameters)
+        // 传入SQL和参数，返回执行后的 IDataReader
+        public static async Task<IDataReader> ExecuteReaderAsync(string sql, params IDataParameter[] parameters)
         {
-            var conn = new SqlConnection(ConnString);
-            var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddRange([.. parameters]);
+            var conn = DbProviderFactory.CreateConnection();
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            var processedParameters = ProcessParameters(parameters);
+            if (processedParameters != null)
+            {
+                foreach (var p in processedParameters) cmd.Parameters.Add(p);
+            }
 
-            await conn.OpenAsync();
+            if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
             // 注意这里不使用 using，调用方负责关闭 reader 和连接
-            return await cmd.ExecuteReaderAsync(System.Data.CommandBehavior.CloseConnection);
+            return await (cmd as DbCommand)?.ExecuteReaderAsync(System.Data.CommandBehavior.CloseConnection)!;
         }      
 
-        public static async Task<string> QueryAsJsonAsync(string sql, params SqlParameter[]? parameters)
+        public static async Task<string> QueryAsJsonAsync(string sql, params IDataParameter[]? parameters)
         {
             parameters ??= [];
 
             var results = new List<object>();
 
-            using var conn = new SqlConnection(ConnString);
-            await conn.OpenAsync();
+            using var conn = DbProviderFactory.CreateConnection();
+            if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
 
-            using var cmd = new SqlCommand(sql, conn);
-            if (parameters.Length > 0)
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            var processedParameters = ProcessParameters(parameters);
+            if (processedParameters != null)
             {
-                cmd.Parameters.AddRange(parameters);
+                foreach (var p in processedParameters) cmd.Parameters.Add(p);
             }
 
-            using var reader = await cmd.ExecuteReaderAsync();
+            using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
 
             if (reader.HasRows)
             {
@@ -365,12 +399,13 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<string> QueryResAsync(string sql, string format = "{0}", string countFormat = "")
         {
-            using SqlConnection conn = new(ConnString);
+            using var conn = DbProviderFactory.CreateConnection();
             try
             {
-                await conn.OpenAsync();
-                using var cmd = new SqlCommand(sql, conn);
-                using SqlDataReader reader = await cmd.ExecuteReaderAsync();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
                 var rows = new List<string>();
                 int k = 1;
                 while (await reader.ReadAsync())
@@ -395,30 +430,35 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static async Task<int> ExecAsync(string sql, params SqlParameter[] parameters)
+        public static async Task<int> ExecAsync(string sql, params IDataParameter[] parameters)
         {
              return await ExecAsync(sql, true, null, parameters);
         }
 
-        public static async Task<int> ExecAsync(string sql, bool isDebug = false, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<int> ExecAsync(string sql, bool isDebug = false, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
             if (conn == null)
             {
-                conn = new SqlConnection(ConnString);
-                await conn.OpenAsync();
+                conn = DbProviderFactory.CreateConnection();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using var cmd = new SqlCommand(sql, conn, trans);
-                if (parameters != null && parameters.Length > 0)
-                    cmd.Parameters.AddRange(parameters);
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Transaction = trans;
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
+                {
+                    foreach (var p in processedParameters) cmd.Parameters.Add(p);
+                }
 
-                return await cmd.ExecuteNonQueryAsync();
+                return await (cmd as DbCommand)?.ExecuteNonQueryAsync()!;
             }
             catch (Exception ex)
             {
@@ -432,30 +472,33 @@ namespace BotWorker.Infrastructure.Persistence.Database
             {
                 if (isNewConn && conn != null)
                 {
-                    await conn.DisposeAsync();
+                    conn.Dispose();
                 }
             }
         }
 
-        public static async Task<DataSet> QueryDatasetAsync(string sql, SqlTransaction? trans = null, params SqlParameter[] parameters)
+        public static async Task<DataSet> QueryDatasetAsync(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            SqlConnection? conn = trans?.Connection;
+            IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
             if (conn == null)
             {
-                conn = new SqlConnection(ConnString);
-                await conn.OpenAsync();
+                conn = DbProviderFactory.CreateConnection();
+                if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 isNewConn = true;
             }
 
             try
             {
-                using SqlCommand command = new(sql, conn, trans);
-                if (parameters != null && parameters.Length > 0)
+                using var command = conn.CreateCommand();
+                command.CommandText = sql;
+                command.Transaction = trans;
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
                 {
-                    command.Parameters.AddRange(parameters);
+                    foreach (var p in processedParameters) command.Parameters.Add(p);
                 }
-                using SqlDataAdapter adapter = new(command);
+                var adapter = CreateDataAdapter(command);
                 DataSet dataSet = new();
                 adapter.Fill(dataSet);
                 return dataSet;
@@ -469,12 +512,12 @@ namespace BotWorker.Infrastructure.Persistence.Database
             {
                 if (isNewConn && conn != null)
                 {
-                    await conn.DisposeAsync();
+                    conn.Dispose();
                 }
             }
         }
 
-        public static async Task<DataSet> QueryDatasetAsync(string sql, params SqlParameter[] parameters)
+        public static async Task<DataSet> QueryDatasetAsync(string sql, params IDataParameter[] parameters)
         {
             return await QueryDatasetAsync(sql, null, parameters);
         }
@@ -482,7 +525,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
         /// <summary>
         /// 判断DataReader是否包含指定列名
         /// </summary>
-        public static bool HasColumn(SqlDataReader reader, string columnName)
+        public static bool HasColumn(IDataReader reader, string columnName)
         {
             for (int i = 0; i < reader.FieldCount; i++)
             {

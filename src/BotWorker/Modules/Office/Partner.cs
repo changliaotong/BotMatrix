@@ -1,6 +1,7 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Common.Extensions;
 using BotWorker.Domain.Entities;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Modules.Office
 {
@@ -95,12 +96,12 @@ namespace BotWorker.Modules.Office
             }
         }
 
-        public static (string, SqlParameter[]) GetSettleSql(long qq, int settle_id = 0)
+        public static (string, IDataParameter[]) GetSettleSql(long qq, int settle_id = 0)
         {
             string sql = $"update sz84_robot..robot_credit_day set settle_date = getdate(), is_settle = 1, settle_id = @settle_id where is_settle = 0 and partner_qq = @qq";
-            SqlParameter[] parameters = [
-                new("@qq", qq),
-                new("@settle_id", settle_id == 0 ? (object)qq : settle_id)
+            IDataParameter[] parameters = [
+                DbProviderFactory.CreateParameter("@qq", qq),
+                DbProviderFactory.CreateParameter("@settle_id", settle_id == 0 ? (object)qq : settle_id)
             ];
             return (sql, parameters);
         }

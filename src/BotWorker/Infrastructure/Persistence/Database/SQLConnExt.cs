@@ -1,26 +1,31 @@
-﻿using Microsoft.Data.SqlClient;
+using System.Data;
+using System.Data.Common;
 using Newtonsoft.Json;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static partial class SQLConn
     {
-
-
         /// <summary>
         /// 执行插入SQL，返回long和Guid两个主键
         /// </summary>
-        public static async Task<(long Id, Guid Guid)> ExecuteInsertReturnKeysAsync(string sql, SqlParameter[] parameters)
+        public static async Task<(long Id, Guid Guid)> ExecuteInsertReturnKeysAsync(string sql, IDataParameter[] parameters)
         {
-            await using var conn = new SqlConnection(ConnString);
-            await conn.OpenAsync();
-            await using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddRange([.. parameters]);
+            using var conn = DbProviderFactory.CreateConnection();
+            if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
 
-            await using var reader = await cmd.ExecuteReaderAsync();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            var processedParameters = ProcessParameters(parameters);
+            if (processedParameters != null)
+            {
+                foreach (var p in processedParameters) cmd.Parameters.Add(p);
+            }
+
+            using var reader = await (cmd as DbCommand)?.ExecuteReaderAsync()!;
             if (await reader.ReadAsync())
             {
-                long id = reader.GetInt64(0);
+                long id = Convert.ToInt64(reader.GetValue(0));
                 Guid guid = reader.GetGuid(1);
                 return (id, guid);
             }

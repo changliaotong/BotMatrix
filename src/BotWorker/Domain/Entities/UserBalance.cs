@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
@@ -23,7 +23,7 @@ namespace BotWorker.Domain.Entities
             return AddBalanceAsync(botUin, groupId, groupName, qq, name, balanceAdd, balanceInfo).GetAwaiter().GetResult().Result;
         }
 
-        public static async Task<AddBalanceResult> AddBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceAdd, string balanceInfo, SqlTransaction? trans = null)
+        public static async Task<AddBalanceResult> AddBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceAdd, string balanceInfo, IDbTransaction? trans = null)
         {
             // 如果没有传入事务，则创建一个新事务
             bool isNewTrans = false;
@@ -63,7 +63,7 @@ namespace BotWorker.Domain.Entities
                 if (isNewTrans)
                 {
                     trans.Connection?.Close();
-                    await trans.DisposeAsync();
+                    trans.Dispose();
                 }
             }
         }
@@ -74,7 +74,7 @@ namespace BotWorker.Domain.Entities
             return MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, balanceInfo).GetAwaiter().GetResult().Result;
         }
 
-        public static async Task<AddBalanceResult> MinusBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceMinus, string balanceInfo, SqlTransaction? trans = null)
+        public static async Task<AddBalanceResult> MinusBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceMinus, string balanceInfo, IDbTransaction? trans = null)
         {
             return await AddBalanceAsync(botUin, groupId, groupName, qq, name, -balanceMinus, balanceInfo, trans);
         }
@@ -215,7 +215,7 @@ namespace BotWorker.Domain.Entities
         }
 
         //增加余额sql
-        public static (string, SqlParameter[]) SqlAddBalance(long userId, decimal balancePlus)
+        public static (string, IDataParameter[]) SqlAddBalance(long userId, decimal balancePlus)
         {
             return Exists(userId)
                 ? SqlPlus("Balance", balancePlus, userId)
@@ -240,7 +240,7 @@ namespace BotWorker.Domain.Entities
         public static async Task<string> GetMyBalanceListAsync(long groupId, long qq)
         {
             decimal balance = await GetBalanceAsync(qq);
-            string res = await QueryAsync($"select count(*)+1 as res from {FullName} where balance > {balance} and UserId in " +
+            long res = await QueryScalarAsync<long>($"select count(*)+1 as res from {FullName} where balance > {balance} and UserId in " +
                                $"(select UserId from {CreditLog.FullName} where GroupId = {groupId})");
             return $"【第{res}名】 [@:{qq}] 余额：{balance:N}";
         }

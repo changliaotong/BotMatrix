@@ -20,5 +20,7 @@ namespace BotWorker.Plugins
                 return "🐟 恭喜你钓到了一条小金鱼！";
             });
         }
+
+        public async Task StopAsync() => await Task.CompletedTask;
     }
 }

@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace BotWorker.Domain.Entities
 {
@@ -11,7 +11,7 @@ namespace BotWorker.Domain.Entities
             return Exec(sql, parameters);
         }
 
-        public static (string, SqlParameter[]) SqlAppend(long botUin, long groupId, long qq, long robotId, long questionId, string textQuestion, string textAnswer,
+        public static (string, IDataParameter[]) SqlAppend(long botUin, long groupId, long qq, long robotId, long questionId, string textQuestion, string textAnswer,
             int audit, long credit, int audit2, string audit2Info)
         {
             return SqlInsert([

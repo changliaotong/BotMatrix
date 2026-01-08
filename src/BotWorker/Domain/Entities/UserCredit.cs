@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 using System.Reflection;
 using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Domain.Entities;
@@ -10,7 +10,7 @@ namespace BotWorker.Domain.Entities
     public partial class UserInfo : MetaDataGuid<UserInfo>
     {
         //增加积分 (支持事务)
-        public static async Task<(int Result, long CreditValue, int LogId)> AddCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, SqlTransaction? trans = null)
+        public static async Task<(int Result, long CreditValue, int LogId)> AddCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
         {
             var creditValue = await GetCreditAsync(groupId, qq);
             
@@ -52,7 +52,7 @@ namespace BotWorker.Domain.Entities
                 if (isNewTrans)
                 {
                     trans.Connection?.Close();
-                    await trans.DisposeAsync();
+                    trans.Dispose();
                 }
             }
         }
@@ -69,10 +69,10 @@ namespace BotWorker.Domain.Entities
 
 
         //增加积分sql
-        public static (string, SqlParameter[]) SqlAddCredit(long botUin, long groupId, long userId, long creditPlus)
+        public static (string, IDataParameter[]) SqlAddCredit(long botUin, long groupId, long userId, long creditPlus)
             => SqlAddCreditAsync(botUin, groupId, userId, creditPlus).GetAwaiter().GetResult();
 
-        public static async Task<(string, SqlParameter[])> SqlAddCreditAsync(long botUin, long groupId, long userId, long creditPlus)
+        public static async Task<(string, IDataParameter[])> SqlAddCreditAsync(long botUin, long groupId, long userId, long creditPlus)
         {
             if (await GroupInfo.GetIsCreditAsync(groupId))
             {
@@ -147,7 +147,11 @@ namespace BotWorker.Domain.Entities
         }
 
 
-        //读取积分
+        public static long GetCredit(long groupId, long qq)
+        {
+            return GetCreditAsync(BotInfo.BotUinDef, groupId, qq).GetAwaiter().GetResult();
+        }
+
         public static async Task<long> GetCreditAsync(long botUin, long groupId, long qq)
         {
             return groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId)
@@ -170,15 +174,11 @@ namespace BotWorker.Domain.Entities
             return GetCreditAsync(userId).GetAwaiter().GetResult();
         }
 
+
         //读取积分
         public static async Task<long> GetCreditAsync(long botUin, long userId)
         {
             return await BotInfo.GetIsCreditAsync(botUin) ? await Friend.GetCreditAsync(botUin, userId) : await GetLongAsync("credit", userId);
-        }
-
-        public static long GetCredit(long botUin, long userId)
-        {
-            return GetCreditAsync(botUin, userId).GetAwaiter().GetResult();
         }
 
         //积分总额
@@ -222,10 +222,10 @@ namespace BotWorker.Domain.Entities
             return GetSaveCreditAsync(userId).GetAwaiter().GetResult();
         }
 
-        public static (string, SqlParameter[]) SqlSaveCredit(long botUin, long groupId, long userId, long creditSave)
+        public static (string, IDataParameter[]) SqlSaveCredit(long botUin, long groupId, long userId, long creditSave)
             => SqlSaveCreditAsync(botUin, groupId, userId, creditSave).GetAwaiter().GetResult();
 
-        public static async Task<(string, SqlParameter[])> SqlSaveCreditAsync(long botUin, long groupId, long userId, long creditSave)
+        public static async Task<(string, IDataParameter[])> SqlSaveCreditAsync(long botUin, long groupId, long userId, long creditSave)
         {
             return await GroupInfo.GetIsCreditAsync(groupId)
                 ? GroupMember.SqlSaveCredit(groupId, userId, creditSave)
@@ -233,7 +233,7 @@ namespace BotWorker.Domain.Entities
                                  : SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = isnull(SaveCredit, 0) + ({creditSave})", userId);
         }
 
-        public static (string, SqlParameter[]) SqlFreezeCredit(long userId, long creditFreeze)
+        public static (string, IDataParameter[]) SqlFreezeCredit(long userId, long creditFreeze)
         {
             return SqlSetValues($"Credit = Credit - ({creditFreeze}), FreezeCredit = isnull(FreezeCredit, 0) + ({creditFreeze})", userId);
         }

@@ -1,169 +1,151 @@
-﻿using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Modules.Plugins;
+using Microsoft.Extensions.Logging;
+using System.Text;
+using System.Reflection;
+using System.Text.Json;
 
 namespace BotWorker.Modules.Games
 {
-    // 基础宠物类
-    public class Pet : MetaData<Pet>
+    [BotPlugin(
+        Id = "game.pet",
+        Name = "宠物养成",
+        Version = "2.1.0",
+        Author = "Matrix",
+        Description = "超越市面水平的宠物系统：性格差异、随机事件、打工冒险、道具背包、ASCII艺术与深度互动",
+        Category = "Games"
+    )]
+    public class PetPlugin : IPlugin
     {
-        public Guid Id { get; set; } = Guid.NewGuid();   // 宠物唯一ID
-        public string Name { get; set; } = string.Empty; // 宠物名字
-        public PetType Type { get; set; }                // 宠物类型
-        public int Age { get; set; }                     // 宠物年龄（天）
+        private readonly ILogger<PetPlugin> _logger;
+        private readonly IServiceProvider _serviceProvider;
+        private PetService? _service;
+        private PetConfig? _config;
 
-        // 基础状态
-        public double Health { get; private set; } = 100;    // 健康值0~100
-        public double Hunger { get; private set; } = 0;      // 饥饿值0~100，越高越饿
-        public double Happiness { get; private set; } = 100; // 快乐值0~100
-        public double Energy { get; private set; } = 100;    // 精力值0~100
-        public int Level { get; private set; } = 1;          // 等级
-        public double Experience { get; private set; } = 0;  // 当前经验值
-        public double ExperienceToNextLevel => 100 * Level;  // 升级所需经验
+        public IModuleMetadata Metadata => typeof(PetPlugin).GetCustomAttribute<BotPluginAttribute>()!;
 
-        public List<Skill> Skills { get; private set; } = new List<Skill>(); // 技能列表
-
-        public override string TableName => throw new NotImplementedException();
-
-        public override string KeyField => throw new NotImplementedException();
-
-        public Pet()
-        { 
-
+        public PetPlugin(ILogger<PetPlugin> logger, IServiceProvider serviceProvider)
+        {
+            _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
+        public async Task StopAsync() => await Task.CompletedTask;
 
-        // 构造函数
-        public Pet(string name, PetType type, int age)
+        public async Task InitAsync(IRobot robot)
         {
-            Name = name;
-            Type = type;
-            Age = age;
+            // 1. 加载配置
+            _config = await LoadConfigAsync();
+
+            // 2. 初始化服务
+            _service = new PetService(robot, _logger, _config);
+
+            // 3. 注册指令
+            robot.RegisterSkill(new SkillCapability("宠物系统", GetCommandAliases()), DispatchCommandAsync);
+
+            // 4. 注册通用事件钩子：用户发言增加亲密度
+            await robot.RegisterEventAsync("message", HandleUserMessageAsync);
+
+            _logger.LogInformation("{PluginName} v{Version} 已启动。", Metadata.Name, Metadata.Version);
         }
 
-        // 喂食
-        public void Feed(double foodValue)
+        private async Task HandleUserMessageAsync(IPluginContext ctx)
         {
-            Hunger = Math.Max(Hunger - foodValue, 0);
-            Health = Math.Min(Health + foodValue * 0.5, 100);
-            Happiness = Math.Min(Happiness + foodValue * 0.3, 100);
-            Console.WriteLine($"{Name} 被喂食了。健康值：{Health:F1}, 快乐值：{Happiness:F1}, 饥饿值：{Hunger:F1}");
-        }
-
-        // 玩耍
-        public void Play(double funValue)
-        {
-            if (Energy <= 0)
-            {
-                Console.WriteLine($"{Name} 太累了，无法玩耍。");
+            // 过滤掉指令消息
+            if (GetCommandAliases().Any(a => ctx.RawMessage.StartsWith(a, StringComparison.OrdinalIgnoreCase)))
                 return;
-            }
 
-            Happiness = Math.Min(Happiness + funValue, 100);
-            Energy = Math.Max(Energy - funValue * 0.5, 0);
-            Hunger = Math.Min(Hunger + funValue * 0.3, 100);
-            GainExperience(funValue * 2); // 玩耍增加经验
-            Console.WriteLine($"{Name} 玩耍了。快乐值：{Happiness:F1}, 精力值：{Energy:F1}, 饥饿值：{Hunger:F1}");
-        }
+            var pet = await Pet.GetByUserIdAsync(ctx.UserId);
+            if (pet == null) return;
 
-        // 宠物休息
-        public void Rest(double hours)
-        {
-            Energy = Math.Min(Energy + hours * 10, 100);
-            Health = Math.Min(Health + hours * 5, 100);
-            Hunger = Math.Min(Hunger + hours * 2, 100);
-            Console.WriteLine($"{Name} 休息了 {hours} 小时。精力值：{Energy:F1}, 健康值：{Health:F1}");
-        }
-
-        // 学习技能
-        public void LearnSkill(Skill skill)
-        {
-            if (Skills.Any(s => s.Name == skill.Name))
+            // 只有闲逛状态且精力充足才增加亲密度
+            if (pet.CurrentState == PetState.Idle && pet.Energy > 10)
             {
-                Console.WriteLine($"{Name} 已经掌握技能 {skill.Name}。");
-                return;
+                pet.Intimacy += 0.1 * _config!.IntimacyGainRate;
+                pet.Experience += 0.5;
+                await pet.UpdateAsync();
             }
-            Skills.Add(skill);
-            Console.WriteLine($"{Name} 学会了技能：{skill.Name}");
         }
 
-        // 使用技能
-        public void UseSkill(string skillName)
+        private string[] GetCommandAliases()
         {
-            var skill = Skills.FirstOrDefault(s => s.Name == skillName);
-            if (skill == null)
+            return typeof(PetService)
+                .GetMethods()
+                .SelectMany(m => m.GetCustomAttributes<PetCommandAttribute>())
+                .SelectMany(a => a.Aliases)
+                .Concat(new[] { "宠物帮助", "pet" })
+                .Distinct()
+                .ToArray();
+        }
+
+        private async Task<string> DispatchCommandAsync(IPluginContext ctx, string[] args)
+        {
+            var rawCmd = ctx.RawMessage.Trim().Split(' ')[0];
+            
+            var method = typeof(PetService).GetMethods()
+                .FirstOrDefault(m => m.GetCustomAttributes<PetCommandAttribute>()
+                    .Any(a => a.Aliases.Contains(rawCmd, StringComparer.OrdinalIgnoreCase)));
+
+            if (method == null) return GetHelpInfo();
+
+            try
             {
-                Console.WriteLine($"{Name} 不会技能 {skillName}。");
-                return;
+                var task = method.Invoke(_service!, new object[] { ctx, args }) as Task<string>;
+                return await (task ?? Task.FromResult("指令执行未返回结果"));
             }
-
-            Happiness = Math.Min(Happiness + skill.Fun, 100);
-            Energy = Math.Max(Energy - skill.EnergyCost, 0);
-            Hunger = Math.Min(Hunger + skill.HungerCost, 100);
-            GainExperience(skill.ExpGain);
-            Console.WriteLine($"{Name} 使用技能 {skill.Name}。快乐值：{Happiness:F1}, 精力值：{Energy:F1}");
-        }
-
-        // 增加经验并升级
-        private void GainExperience(double exp)
-        {
-            Experience += exp;
-            while (Experience >= ExperienceToNextLevel)
+            catch (TargetInvocationException ex)
             {
-                Experience -= ExperienceToNextLevel;
-                Level++;
-                Health = 100;
-                Energy = 100;
-                Happiness = 100;
-                Console.WriteLine($"{Name} 升级了！当前等级：{Level}");
+                _logger.LogError(ex.InnerException, "执行宠物指令 {Command} 时出错", rawCmd);
+                return $"❌ 指令执行失败: {ex.InnerException?.Message}";
             }
         }
 
-        // 打印状态面板
-        public void ShowStatus()
+        private async Task<PetConfig> LoadConfigAsync()
         {
-            Console.WriteLine("===== 宠物状态面板 =====");
-            Console.WriteLine($"名字: {Name}  类型: {Type}  等级: {Level}  经验: {Experience:F1}/{ExperienceToNextLevel}");
-            Console.WriteLine($"年龄: {Age} 天");
-            Console.WriteLine($"健康: {Health:F1}  饥饿: {Hunger:F1}  快乐: {Happiness:F1}  精力: {Energy:F1}");
-            Console.WriteLine("技能列表:");
-            if (Skills.Count == 0)
-                Console.WriteLine("无技能");
-            else
-                foreach (var s in Skills)
-                    Console.WriteLine($"- {s.Name} (Lv{s.Level})");
-            Console.WriteLine("========================");
+            var configDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plugins", "configs");
+            if (!Directory.Exists(configDir)) Directory.CreateDirectory(configDir);
+
+            var configFile = Path.Combine(configDir, "game.pet.json");
+            if (!File.Exists(configFile))
+            {
+                var defaultConfig = new PetConfig();
+                var json = JsonSerializer.Serialize(defaultConfig, new JsonSerializerOptions { WriteIndented = true });
+                await File.WriteAllTextAsync(configFile, json);
+                return defaultConfig;
+            }
+
+            try
+            {
+                var json = await File.ReadAllTextAsync(configFile);
+                return JsonSerializer.Deserialize<PetConfig>(json) ?? new PetConfig();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "加载宠物系统配置失败，使用默认配置");
+                return new PetConfig();
+            }
         }
-    }
 
-    // 宠物类型
-    public enum PetType
-    {
-        Cat,
-        Dog,
-        Bird,
-        Fish,
-        Hamster,
-        Dragon
-    }
-
-    // 宠物技能
-    public class Skill
-    {
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public int Level { get; set; } = 1;
-        public double Fun { get; set; }         // 快乐增益
-        public double EnergyCost { get; set; }  // 精力消耗
-        public double HungerCost { get; set; }  // 玩技能饥饿增加
-        public double ExpGain { get; set; }     // 使用技能获得经验
-
-        public Skill(string name, string description, double fun = 10, double energyCost = 5, double hungerCost = 3, double expGain = 15)
+        private string GetHelpInfo()
         {
-            Name = name;
-            Description = description;
-            Fun = fun;
-            EnergyCost = energyCost;
-            HungerCost = hungerCost;
-            ExpGain = expGain;
+            var sb = new StringBuilder();
+            sb.AppendLine("🐾 【宠物系统 - 工业级插件模板】");
+            sb.AppendLine("----------------------------");
+            
+            var commands = typeof(PetService).GetMethods()
+                .Select(m => new { 
+                    Method = m, 
+                    Attr = m.GetCustomAttribute<PetCommandAttribute>() 
+                })
+                .Where(x => x.Attr != null)
+                .OrderBy(x => x.Attr!.Order);
+
+            foreach (var cmd in commands)
+            {
+                sb.AppendLine($"{cmd.Attr!.Order}. {string.Join("/", cmd.Attr.Aliases)} - {cmd.Attr.Description}");
+            }
+
+            return sb.ToString();
         }
     }
 }

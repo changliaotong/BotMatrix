@@ -220,7 +220,7 @@ namespace BotWorker.Application.Services
             {
                 botMsg.CmdName = $"{Block.GetCmd(currentMessage.RegexGetValue(Regexs.BlockCmd, "CmdName"), botMsg.UserId)}";
                 botMsg.CmdPara = $"{currentMessage.RegexGetValue(Regexs.BlockCmd, "cmdPara")}";
-                answer = botMsg.GetBlockRes();
+                answer = await botMsg.GetBlockResAsync();
             }
             // 身份证号
             else if (currentMessage.IsMatch(Regexs.Cid))

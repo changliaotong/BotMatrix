@@ -1,4 +1,6 @@
-﻿using Microsoft.Data.SqlClient;
+using System.Data;
+using BotWorker.Infrastructure.Persistence.Database;
+
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public static class ObjectExtensions
@@ -16,16 +18,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 );
         }
 
-        // 加一个辅助扩展方法：判断列是否存在
-        public static bool HasColumn(this SqlDataReader reader, string columnName)
+        public static IDataParameter[] ToParameters(this object? anonymous)
         {
-            for (int i = 0; i < reader.FieldCount; i++)
-            {
-                if (reader.GetName(i).Equals(columnName, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            return false;
+            if (anonymous == null) return Array.Empty<IDataParameter>();
+            if (anonymous is IDataParameter[] paras) return paras;
+            if (anonymous is IEnumerable<IDataParameter> enumerable) return enumerable.ToArray();
+
+            var dict = ToDictionary(anonymous);
+            return dict.Select(kv => MetaData.CreateParameter($"@{kv.Key}", kv.Value ?? DBNull.Value)).ToArray();
         }
     }
-
 }

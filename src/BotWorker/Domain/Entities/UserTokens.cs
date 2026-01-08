@@ -1,10 +1,10 @@
-using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace BotWorker.Domain.Entities;
 
 public partial class UserInfo : MetaDataGuid<UserInfo>
 {
-    public static (string, SqlParameter[]) SqlAddTokens(long userId, float tokens)
+    public static (string, IDataParameter[]) SqlAddTokens(long userId, float tokens)
     {
         return Exists(userId)
             ? SqlPlus("Tokens", tokens, userId)
@@ -14,7 +14,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
                         });
     }
 
-    public static async Task<(int Result, long TokensValue)> AddTokensAsync(long botUin, long groupId, string groupName, long qq, string name, long tokensAdd, string tokensInfo, SqlTransaction? trans = null)
+    public static async Task<(int Result, long TokensValue)> AddTokensAsync(long botUin, long groupId, string groupName, long qq, string name, long tokensAdd, string tokensInfo, IDbTransaction? trans = null)
     {
         await AppendAsync(botUin, groupId, qq, name, GroupInfo.GetGroupOwner(groupId));
         
@@ -43,6 +43,14 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
         {
             if (isNewTrans) await trans.RollbackAsync();
             return (-1, 0);
+        }
+        finally
+        {
+            if (isNewTrans)
+            {
+                trans.Connection?.Close();
+                trans.Dispose();
+            }
         }
     }
 

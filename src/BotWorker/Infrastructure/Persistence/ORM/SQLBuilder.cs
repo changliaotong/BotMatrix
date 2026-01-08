@@ -1,6 +1,7 @@
-﻿using System.Text;
-using Microsoft.Data.SqlClient;
+using System.Data;
+using System.Text;
 using BotWorker.Infrastructure.Extensions;
+using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
@@ -19,14 +20,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static Dictionary<string, object?> ToDict(params (string, object?)[] items)
             => items.ToDictionary(t => t.Item1, t => t.Item2);
 
-        // ----------- 通用构造 SqlParameter[] -----------
+        // ----------- 通用构造 IDataParameter[] -----------
 
-        public static SqlParameter[] SqlParams(params (string Name, object? Value)[] pairs)
-            => [.. pairs.Select(p => new SqlParameter(p.Name, p.Value ?? DBNull.Value))];
+        public static IDataParameter[] SqlParams(params (string Name, object? Value)[] pairs)
+            => [.. pairs.Select(p => CreateParameter(p.Name, p.Value))];
 
         // ----------- WHERE 构建 -----------
 
-        public static (string whereClause, SqlParameter[] parameters) SqlWhere(Dictionary<string, object?> keys, bool allowEmpty = true)
+        public static (string whereClause, IDataParameter[] parameters) SqlWhere(Dictionary<string, object?> keys, bool allowEmpty = true)
         {
             if (keys == null || keys.Count == 0)
             {
@@ -36,7 +37,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             }
 
             var sb = new StringBuilder("WHERE ");
-            var parameters = new List<SqlParameter>();
+            var parameters = new List<IDataParameter>();
             int i = 0;
 
             foreach (var kvp in keys)
@@ -44,16 +45,16 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 if (i++ > 0) sb.Append(" AND ");
                 var paramName = $"@k{i}";
                 sb.Append($"[{kvp.Key}] = {paramName}");
-                parameters.Add(new SqlParameter(paramName, kvp.Value ?? DBNull.Value));
+                parameters.Add(CreateParameter(paramName, kvp.Value));
             }
 
             return (sb.ToString(), [.. parameters]);
         }
 
-        protected static (string, SqlParameter[]) SqlWhere(object id, object? id2 = null, bool allowEmpty = false)
+        protected static (string, IDataParameter[]) SqlWhere(object id, object? id2 = null, bool allowEmpty = false)
             => SqlWhere(ToDict(id, id2), allowEmpty);        
 
-  
+
         public static Dictionary<string, object?> CovToParams(List<Cov> columns)
         {
             return columns.Select(c => (c.Name, c.Value)).ToDictionary();

@@ -2,9 +2,48 @@ using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Entities;
+using BotWorker.Domain.Interfaces;
+using System.Reflection;
 
 namespace BotWorker.Modules.Games
 {
+    [BotPlugin(
+        Id = "game.2048",
+        Name = "2048游戏",
+        Version = "1.0.0",
+        Author = "Matrix",
+        Description = "经典的2048数字合并游戏",
+        Category = "Games"
+    )]
+    public class Game2048Plugin : IPlugin
+    {
+        public async Task InitAsync(IRobot robot)
+        {
+            await robot.RegisterSkillAsync(new SkillCapability
+            {
+                Name = "2048游戏",
+                Commands = ["2048", "w", "a", "s", "d", "上", "下", "左", "右", "开始", "结束"],
+                Description = "发送【2048】进入游戏，发送【wsad】或【上下左右】控制"
+            }, HandleGameAsync);
+        }
+
+        public Task StopAsync() => Task.CompletedTask;
+
+        private async Task<string> HandleGameAsync(IPluginContext ctx, string[] args)
+        {
+            var userId = long.Parse(ctx.UserId);
+            var groupId = long.Parse(ctx.GroupId ?? "0");
+            var cmdPara = ctx.RawMessage.Trim();
+
+            if (cmdPara.Equals("2048", StringComparison.OrdinalIgnoreCase))
+            {
+                cmdPara = ""; // 触发进入游戏
+            }
+
+            return await Game2048.GetGameResAsync(groupId, userId, cmdPara);
+        }
+    }
+
     /// <summary>
     /// 2048游戏
     /// </summary>

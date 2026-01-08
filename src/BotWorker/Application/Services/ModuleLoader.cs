@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,14 +11,14 @@ namespace BotWorker.Application.Services
 {
     public class ModuleLoader
     {
-        private readonly List<IBotModule> _modules = [];
+        private readonly List<IPlugin> _modules = [];
 
-        public IReadOnlyList<IBotModule> Modules => _modules;
+        public IReadOnlyList<IPlugin> Modules => _modules;
 
-        public static IEnumerable<IBotModule> LoadFromFolder(string pluginFolder, IEnumerable<string>? disabledModules = null)
+        public static IEnumerable<IPlugin> LoadFromFolder(string pluginFolder, IEnumerable<string>? disabledModules = null)
         {
             disabledModules ??= [];
-            var modules = new List<IBotModule>();
+            var modules = new List<IPlugin>();
 
             if (!Directory.Exists(pluginFolder))
                 return modules;
@@ -31,10 +31,10 @@ namespace BotWorker.Application.Services
                     using var fs = File.OpenRead(dll);
                     var assembly = alc.LoadFromStream(fs);
 
-                    var types = assembly.GetTypes().Where(t => typeof(IBotModule).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
+                    var types = assembly.GetTypes().Where(t => typeof(IPlugin).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
                     foreach (var type in types)
                     {
-                        var instance = (IBotModule)Activator.CreateInstance(type)!;
+                        var instance = (IPlugin)Activator.CreateInstance(type)!;
                         if (disabledModules.Contains(instance.Metadata.Name, StringComparer.OrdinalIgnoreCase))
                             continue;
 
@@ -55,7 +55,9 @@ namespace BotWorker.Application.Services
         {
             foreach (var module in _modules)
             {
-                module.RegisterServices(services, configuration);
+                // 注意：这里需要 IRobot 实例，或者我们将 RegisterServices 移出接口
+                // 暂时注释掉，等待接口对齐
+                // module.InitAsync(robot); 
             }
         }
     }
