@@ -7,6 +7,7 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Plugins;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.AI.Providers.Helpers
 {
@@ -96,6 +97,14 @@ namespace BotWorker.Modules.AI.Providers.Helpers
                 foreach (var plugin in options.Plugins)
                 {
                     builder.Plugins.Add(plugin);
+                }
+            }
+
+            if (options.Filters != null)
+            {
+                foreach (var filter in options.Filters)
+                {
+                    builder.Services.AddSingleton(filter);
                 }
             }
 

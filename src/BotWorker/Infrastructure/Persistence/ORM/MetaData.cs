@@ -254,6 +254,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         }
     }
 
+    /// <summary>
+    /// 标记高频更新字段。
+    /// 当更新标记了此属性的字段时，ORM 不会自动失效行级缓存，仅失效该字段的列级缓存。
+    /// 建议同时配合 [JsonIgnore] 使用，使行级对象不包含该高频变动字段。
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property)]
+    public class HighFrequencyAttribute : Attribute { }
+
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
         private static bool _isTableChecked = false;
@@ -1506,10 +1514,25 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static int SetNow(string fieldName, object id, object? id2 = null)
             => SetNowAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
+        private static bool IsHighFrequency(string fieldName)
+        {
+            var prop = GetProperties().FirstOrDefault(p => string.Equals(p.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+            return prop?.GetCustomAttribute<HighFrequencyAttribute>() != null;
+        }
+
         public static async Task<int> PlusAsync(string fieldName, object plusValue, object id, object? id2 = null, IDbTransaction? trans = null)
         {
             var (sql, paras) = SqlPlus(fieldName, plusValue, id, id2);
-            return await ExecAsync(sql, trans, paras);
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0)
+            {
+                if (!IsHighFrequency(fieldName))
+                {
+                    await InvalidateCacheAsync(id, id2);
+                }
+                await InvalidateFieldCacheAsync(fieldName, id, id2);
+            }
+            return result;
         }
 
         public static int Plus(string fieldName, object plusValue, object id, object? id2 = null)
@@ -1521,7 +1544,16 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> SetValueAsync(string fieldName, object value, object id, object? id2 = null, IDbTransaction? trans = null)
         {
             var (sql, parameters) = SqlUpdate(fieldName, value, id, id2);
-            return await ExecAsync(sql, trans, parameters);
+            var result = await ExecAsync(sql, parameters, trans);
+            if (result > 0)
+            {
+                if (!IsHighFrequency(fieldName))
+                {
+                    await InvalidateCacheAsync(id, id2);
+                }
+                await InvalidateFieldCacheAsync(fieldName, id, id2);
+            }
+            return result;
         }
 
         // ----------- Update 更新 -----------
@@ -1544,7 +1576,26 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             if (whereData.Count == 0) throw new InvalidOperationException("主键字段未赋值，无法更新");
 
             var (sql, paras) = SqlUpdate(setData, whereData);
-            return await ExecAsync(sql, trans, paras);
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0)
+            {
+                var id1 = whereData.Values.First();
+                var id2 = whereData.Count > 1 ? whereData.Values.ElementAt(1) : null;
+
+                // 检查 setData 中是否包含非高频字段。
+                // 如果全是高频字段，则不失效行缓存。
+                bool hasNormalField = setData.Keys.Any(f => !IsHighFrequency(f));
+                if (hasNormalField)
+                {
+                    await InvalidateCacheAsync(id1!, id2);
+                }
+
+                foreach (var kv in setData)
+                {
+                    await InvalidateFieldCacheAsync(kv.Key, id1!, id2);
+                }
+            }
+            return result;
         }
 
         public static (string sql, IDataParameter[] paras) SqlUpdate<T>(T entity, object id, object? id2 = null) where T : class
@@ -1608,13 +1659,32 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> UpdateAsync(List<Cov> columns, object id, object? id2 = null, IDbTransaction? trans = null)
         {
             var (sql, paras) = SqlUpdate(columns, ToDict(id, id2));
-            return await ExecAsync(sql, trans, paras);
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0)
+            {
+                await InvalidateCacheAsync(id, id2);
+                foreach (var col in columns)
+                {
+                    await InvalidateFieldCacheAsync(col.Name, id, id2);
+                }
+            }
+            return result;
         }
 
         public static async Task<int> UpdateObjectAsync(object obj, object id, object? id2 = null, IDbTransaction? trans = null)
         {
-            var (sql, paras) = SqlUpdate(obj.ToFields(), ToDict(id, id2));
-            return await ExecAsync(sql, trans, paras);
+            var fields = obj.ToFields();
+            var (sql, paras) = SqlUpdate(fields, ToDict(id, id2));
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0)
+            {
+                await InvalidateCacheAsync(id, id2);
+                foreach (var kv in fields)
+                {
+                    await InvalidateFieldCacheAsync(kv.Key, id, id2);
+                }
+            }
+            return result;
         }
 
         public static int Update(string sSet, object id, object? id2 = null, IDbTransaction? trans = null)
@@ -1624,7 +1694,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         {
             var (sqlWhere, parameters) = SqlWhere(id, id2);
             var sql = $"UPDATE {FullName} SET {sSet} {sqlWhere}";
-            return await ExecAsync(sql, trans, parameters);
+            var result = await ExecAsync(sql, trans, parameters);
+            if (result > 0) await InvalidateAllCachesAsync(id, id2);
+            return result;
         }
 
         public static int UpdateWhere(string sSet, string sWhere, IDbTransaction? trans = null)
@@ -1652,7 +1724,24 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             parameters.AddRange(whereParams);
 
             var sql = $"UPDATE {FullName} SET {string.Join(", ", setList)} {sqlWhere}";
-            return await ExecAsync(sql, trans, [.. parameters]);
+            var result = await ExecAsync(sql, trans, [.. parameters]);
+            if (result > 0)
+            {
+                // 尝试解析简单的 ID = {0}
+                if (sWhere.IndexOf("id", StringComparison.OrdinalIgnoreCase) >= 0 && args.Length > 0)
+                {
+                    var id = args[0];
+                    if (id != null)
+                    {
+                        await InvalidateCacheAsync(id);
+                        foreach (var col in data)
+                        {
+                            await InvalidateFieldCacheAsync(col.Name, id);
+                        }
+                    }
+                }
+            }
+            return result;
         }
 
         public static int UpdateWhere(object columns, string sWhere, IDbTransaction? trans = null, params object?[] args)
@@ -1678,7 +1767,31 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             parameters.AddRange(whereParams);
 
             var sql = $"UPDATE {FullName} SET {string.Join(", ", setList)} {sqlWhere}";
-            return await ExecAsync(sql, trans, [.. parameters]);
+            var result = await ExecAsync(sql, trans, [.. parameters]);
+            
+            // 如果 sWhere 是简单的 ID 匹配，我们需要失效缓存
+            // 为简单起见，如果 sWhere 包含 "=" 且 args 中有值，我们尝试解析
+            // 但 Increment 通常用于统计，可能并发很高，全量失效字段缓存是必须的
+            if (result > 0)
+            {
+                // 这是一个痛点：sWhere 可能不是简单的 ID。
+                // 如果是按 ID 更新，我们需要提取 ID。
+                // 如果无法提取，则只能等待缓存过期，或者由调用者手动失效。
+                // 这里我们尝试解析简单的 ID = {0}
+                if (sWhere.IndexOf("id", StringComparison.OrdinalIgnoreCase) >= 0 && args.Length > 0)
+                {
+                    var id = args[0];
+                    if (id != null)
+                    {
+                        await InvalidateCacheAsync(id);
+                        foreach (var col in data)
+                        {
+                            await InvalidateFieldCacheAsync(col.Name, id);
+                        }
+                    }
+                }
+            }
+            return result;
         }
 
         public static int Increment(object increments, string sWhere, IDbTransaction? trans = null, params object?[] args)
@@ -1722,7 +1835,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
             var (whereSql, parameters) = SqlWhere(where, allowEmpty: false);
             var sql = $"DELETE FROM {GetFullName()} {whereSql}";
-            return await ExecAsync(sql, trans, parameters);
+            var result = await ExecAsync(sql, trans, parameters);
+            if (result > 0)
+            {
+                var id1 = where[KeyField];
+                var id2 = where.ContainsKey(KeyField2) ? where[KeyField2] : null;
+                await InvalidateCacheAsync(id1!, id2);
+            }
+            return result;
         }
 
         public static (string, IDataParameter[]) SqlDelete(object id, object? id2 = null)
@@ -1746,7 +1866,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> DeleteAsync(object id, object? id2 = null, IDbTransaction? trans = null)
         {
             var (sql, paras) = SqlDelete(id, id2);
-            return await ExecAsync(sql, trans, paras);
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0) await InvalidateAllCachesAsync(id, id2);
+            return result;
         }
 
         public static string SqlDeleteAll(object value)
@@ -1830,7 +1952,18 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                     .Select(k => $"{MetaData.SqlQuote(k)} = EXCLUDED.{MetaData.SqlQuote(k)}");
 
                 var upsertSql = $"{insertSql} ON CONFLICT ({conflictFields}) DO UPDATE SET {string.Join(", ", updateFields)}";
-                return await ExecAsync(upsertSql, trans, paras);
+                var result = await ExecAsync(upsertSql, trans, paras);
+                if (result > 0)
+                {
+                    var id1 = data[keys[0]];
+                    var id2 = keys.Length > 1 ? data[keys[1]] : null;
+                    await InvalidateCacheAsync(id1!, id2);
+                    foreach (var kv in data)
+                    {
+                        await InvalidateFieldCacheAsync(kv.Key, id1!, id2);
+                    }
+                }
+                return result;
             }
             else
             {
@@ -1863,7 +1996,18 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
     INSERT ({string.Join(", ", insertFields)}) VALUES ({string.Join(", ", insertValues)});";
 
-                return await ExecAsync(mergeSql, trans, [.. parameters]);
+                var result = await ExecAsync(mergeSql, trans, [.. parameters]);
+                if (result > 0)
+                {
+                    var id1 = data[keys[0]];
+                    var id2 = keys.Length > 1 ? data[keys[1]] : null;
+                    await InvalidateCacheAsync(id1!, id2);
+                    foreach (var kv in data)
+                    {
+                        await InvalidateFieldCacheAsync(kv.Key, id1!, id2);
+                    }
+                }
+                return result;
             }
         }
 
@@ -1944,6 +2088,20 @@ WHEN NOT MATCHED THEN
             if (MetaData.CacheService == null) return;
             var cacheKey = key2 == null ? GetCacheKey(key1) : GetCacheKey(key1, key2);
             await MetaData.CacheService.RemoveAsync(cacheKey);
+        }
+
+        /// <summary>
+        /// 失效指定 ID 的行级缓存和所有列级缓存
+        /// </summary>
+        public static async Task InvalidateAllCachesAsync(object id, object? id2 = null)
+        {
+            if (MetaData.CacheService == null) return;
+            await InvalidateCacheAsync(id, id2);
+            var props = GetProperties();
+            foreach (var prop in props)
+            {
+                await InvalidateFieldCacheAsync(prop.Name, id, id2);
+            }
         }
 
         public static void InvalidateFieldCache(string fieldName, object key1, object? key2 = null)

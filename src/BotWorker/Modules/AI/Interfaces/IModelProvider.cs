@@ -1,4 +1,4 @@
-﻿using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
 namespace BotWorker.Modules.AI.Interfaces
@@ -15,6 +15,7 @@ namespace BotWorker.Modules.AI.Interfaces
     {
         public string? ModelId { get; set; }
         public IEnumerable<KernelPlugin>? Plugins { get; set; }
+        public IEnumerable<IFunctionInvocationFilter>? Filters { get; set; }
         public CancellationToken CancellationToken { get; set; } = default;
         
         // 允许传递额外参数

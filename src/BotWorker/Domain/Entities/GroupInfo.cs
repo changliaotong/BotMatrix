@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using BotWorker.Common.Data;
 
 namespace BotWorker.Domain.Entities
@@ -33,8 +34,12 @@ namespace BotWorker.Domain.Entities
         [DbIgnore]
         public long BotUin { get; set; }
         public string BotName { get; set; } = string.Empty;
+        [JsonIgnore]
+        [HighFrequency]
         public DateTime LastDate { get; set; }
         [DbIgnore]
+        [JsonIgnore]
+        [HighFrequency]
         public int IsInGame { get; set; }
         public bool IsOpen { get; set; }
         public int UseRight { get; set; }
@@ -82,16 +87,24 @@ namespace BotWorker.Domain.Entities
         public string CardNamePrefixGirl { get; set; } = string.Empty;
         public string CardNamePrefixManager { get; set; } = string.Empty;
         [DbIgnore]
+        [JsonIgnore]
+        [HighFrequency]
         public string LastAnswer { get; set; } = string.Empty;
         [DbIgnore]
+        [JsonIgnore]
+        [HighFrequency]
         public string LastChengyu { get; set; } = string.Empty;
         [DbIgnore]
+        [JsonIgnore]
+        [HighFrequency]
         public DateTime LastChengyuDate { get; set; }
         [DbIgnore]
         public DateTime TrialStartDate { get; set; }
         [DbIgnore]
         public DateTime TrialEndDate { get; set; }
         [DbIgnore]
+        [JsonIgnore]
+        [HighFrequency]
         public DateTime LastExitHintDate { get; set; }
         [DbIgnore]
         public string BlockRes { get; set; } = string.Empty;

@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 using System.Data;
+using Newtonsoft.Json;
+using BotWorker.Common.Data;
 
 namespace BotWorker.Domain.Entities
 {
@@ -8,6 +10,34 @@ namespace BotWorker.Domain.Entities
         public override string TableName => "GroupMember";
         public override string KeyField => "GroupId";
         public override string KeyField2 => "UserId";
+
+        [JsonIgnore]
+        [HighFrequency]
+        public long GroupCredit { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public long GoldCoins { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public long BlackCoins { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public long PurpleCoins { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public long GameCoins { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public int SignTimes { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public int SignLevel { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public DateTime SignDate { get; set; }
+        [JsonIgnore]
+        [HighFrequency]
+        public int SignTimesAll { get; set; }
 
         public static async Task<string> AddCoinsResAsync(BotMessage botMsg)
         {

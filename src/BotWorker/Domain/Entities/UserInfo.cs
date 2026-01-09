@@ -1,4 +1,5 @@
 using System.Data;
+using Newtonsoft.Json;
 using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
 
 namespace BotWorker.Domain.Entities;
@@ -11,10 +12,18 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public string Name { get; set; } = string.Empty;
     public string UserOpenId { get; set; } = string.Empty;
     public DateTime InsertDate { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public long Credit { get; set; }
     public long CreditTotal => Credit + SaveCredit;
+    [JsonIgnore]
+    [HighFrequency]
     public long CreditFreeze { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public long Coins { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public long CoinsFreeze { get; set; }
     public int Sz84Uid { get; set; }
     public string Sz84UserName { get; set; } = string.Empty;
@@ -38,17 +47,29 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public long RefUserId { get; set; }
     public Guid UserGuid { get; set; }
     public bool IsBlock { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public long SaveCredit { get; set; }
     public DateTime UpgradeDate { get; set; }
     public long PartnerUserId { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public long FreezeCredit { get; set; }
     public DateTime VipStart { get; set; }
     public DateTime VipEnd { get; set; }
     public string LastChengyu { get; set; } = string.Empty;
+    [JsonIgnore]
+    [HighFrequency]
     public decimal Balance { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public decimal BalanceFreeze { get; set; }
     public long CreditGiving { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public int LvValue { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public decimal SumIncome { get; set; }
     public DateTime SuperDate { get; set; }
     public bool IsSuper { get; set; }
@@ -56,11 +77,17 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public long GroupId { get; set; }
     public bool IsSz84 { get; set; }
     public DateTime Sz84Date { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public long AnswerId { get; set; }
+    [JsonIgnore]
+    [HighFrequency]
     public DateTime AnswerDate { get; set; }
     public bool IsTeach { get; set; }
     public bool IsShutup { get; set; }
     public string SystemPrompt { get; set; } = string.Empty;
+    [JsonIgnore]
+    [HighFrequency]
     public long Tokens { get; set; }
     public bool IsAgent { get; set; }
     public bool IsAI { get; set; }

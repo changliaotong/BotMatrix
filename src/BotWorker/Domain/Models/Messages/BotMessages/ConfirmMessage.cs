@@ -38,61 +38,58 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         // 询问确认执行重要指令，例如删除数据，清空数据等，或者确认扣分
-        public string ConfirmMessage(string confirmInfo)
+        public async Task<string> ConfirmMessage(string confirmInfo)
         {
             IsCancelProxy = true;
 
-            int confirmPassword = RandomInt(100, 499);
-            int cancelPassword = confirmPassword + 499;
+            var sessionManager = PluginManager.Sessions;
+            if (sessionManager == null) return RetryMsg;
 
-            return Confirm.Insert([
-                new Cov("GroupId", RealGroupId),
-                new Cov("GroupName", GroupName),
-                new Cov("UserId", UserId),
-                new Cov("Username", Name),
-                new Cov("CmdName", CmdName),
-                new Cov("CmdPara", CmdPara),
-                new Cov("ConfirmInfo", confirmInfo),
-                new Cov("ConfirmPassword", confirmPassword),
-                new Cov("CancelPassword", cancelPassword),
-            ]) == -1
-                ? RetryMsg
-                : $"{confirmInfo}\n回【{confirmPassword}】确认，回【{cancelPassword}】取消";
+            // 使用 SessionManager 生成验证码并存储会话
+            var code = await sessionManager.StartConfirmationAsync(UserId.ToString(), RealGroupId.ToString(), "system", CmdName, new
+            {
+                CmdName,
+                CmdPara,
+                ConfirmInfo = confirmInfo
+            });
+
+            return $"{confirmInfo}\n请输入验证码【{code}】以确认，或发送“取消”退出。";
         }
 
         // 确认执行命令
         public async Task ConfirmCmdAsync()
         {
-            string id = Confirm.GetWhere($"Id", $"GroupId = {RealGroupId} AND UserId = {UserId}", $"Id DESC");
-            if (id == "")
+            var sessionManager = PluginManager.Sessions;
+            if (sessionManager == null) return;
+
+            var session = await sessionManager.GetSessionAsync(UserId.ToString(), RealGroupId.ToString());
+            if (session == null || string.IsNullOrEmpty(session.ConfirmationCode))
                 return;
 
-            string confirmPassword = Confirm.GetValue("ConfirmPassword", id);
-            string cancelPassword = Confirm.GetValue("CancelPassword", id);
+            if (Message == "取消")
+            {
+                await sessionManager.ClearSessionAsync(UserId.ToString(), RealGroupId.ToString());
+                Answer = "✅ 已取消当前操作。";
+                IsCancelProxy = true;
+                return;
+            }
 
-            if (!Message.In(confirmPassword, cancelPassword))
+            if (Message != session.ConfirmationCode)
                 return;
 
             IsCancelProxy = true;
 
-            CmdName = Confirm.GetValue("CmdName", id);
-            CmdPara = Confirm.GetValue("CmdPara", id);
-
-            switch (Confirm.Delete(id))
+            var data = session.GetData<dynamic>();
+            if (data != null)
             {
-                case -1:
-                    Answer = RetryMsg;
-                    return;
-                default:
-                    if (Message == confirmPassword)
-                    {                        
-                        Message = $"{CmdName}{CmdPara}";
-                        IsConfirm = true;
-                        await GetCmdResAsync();
-                    }
-                    else
-                        Answer = "✅ 命令取消成功";
-                    return;
+                CmdName = data.GetProperty("CmdName").GetString();
+                CmdPara = data.GetProperty("CmdPara").GetString();
             }
+
+            await sessionManager.ClearSessionAsync(UserId.ToString(), RealGroupId.ToString());
+            
+            Message = $"{CmdName}{CmdPara}";
+            IsConfirm = true;
+            await GetCmdResAsync();
         }
 }

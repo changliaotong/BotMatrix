@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using BotWorker.Modules.AI.Providers;
 using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Tools;
+using BotWorker.Modules.AI.Filters;
 using BotWorker.Modules.AI.Plugins;
 using BotWorker.Domain.Interfaces;
 using Microsoft.SemanticKernel;
@@ -31,6 +33,7 @@ namespace BotWorker.Modules.AI.Services
     {
         private readonly IMcpService _mcpService;
         private readonly IRagService _ragService;
+        private readonly IToolAuditService _auditService;
         private readonly LLMApp _llmApp;
         private readonly ILogger<AIService> _logger;
         private readonly IServiceProvider _serviceProvider;
@@ -39,12 +42,14 @@ namespace BotWorker.Modules.AI.Services
         public AIService(
             IMcpService mcpService, 
             IRagService ragService,
+            IToolAuditService auditService,
             LLMApp llmApp, 
             ILogger<AIService> logger,
             IServiceProvider serviceProvider)
         {
             _mcpService = mcpService;
             _ragService = ragService;
+            _auditService = auditService;
             _llmApp = llmApp;
             _logger = logger;
             _serviceProvider = serviceProvider;
@@ -160,6 +165,7 @@ namespace BotWorker.Modules.AI.Services
                 {
                     ModelId = null, // 使用 Provider 默认模型
                     Plugins = plugins,
+                    Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null,
                     CancellationToken = default
                 };
 
@@ -199,6 +205,7 @@ namespace BotWorker.Modules.AI.Services
                 plugins.Add(KernelPluginFactory.CreateFromObject(new BotSkillPlugin(robot, context), "BotSkills"));
             }
             plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
+            plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
             var mcpPlugins = await GetMcpPluginsAsync(context);
             if (mcpPlugins != null) plugins.AddRange(mcpPlugins);
 
@@ -221,7 +228,8 @@ namespace BotWorker.Modules.AI.Services
             // 3. 执行流式调用
             var options = new ModelExecutionOptions
             {
-                Plugins = plugins
+                Plugins = plugins,
+                Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null
             };
 
             await foreach (var chunk in provider.StreamExecuteAsync(history, options))
@@ -276,8 +284,9 @@ namespace BotWorker.Modules.AI.Services
             _groupId = groupId;
         }
 
-        [KernelFunction(name: "get_knowledge")]
+        [KernelFunction(name: "knowledge_search")]
         [Description("当用户的问题与本群所配置的知识库内容有关时，调用此函数（如学校政策、公司制度等）")]
+        [ToolRisk(ToolRiskLevel.Low, "检索知识库中的文档内容")]
         public async Task<string> SearchKnowledge([Description("搜索关键词或问题")] string query)
         {
             // 对齐逻辑：使用统一的格式化输出

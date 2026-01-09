@@ -11,7 +11,7 @@ using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Providers;
 using BotWorker.Infrastructure.Persistence.Database;
 using BotWorker.Infrastructure.Utils;
-
+using BotWorker.Modules.AI.Tools;
 using BotWorker.Infrastructure.Caching;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -48,6 +48,7 @@ builder.Services.AddSingleton<IKnowledgeBaseService, BotWorker.Modules.AI.Plugin
 
 // 注册核心业务服务
 builder.Services.AddSingleton<IEventNexus, EventNexus>();
+builder.Services.AddSingleton<IToolAuditService, ToolAuditService>();
 builder.Services.AddSingleton<LLMApp>();
 builder.Services.AddSingleton<IMcpService, MCPManager>();
 builder.Services.AddSingleton<IRagService, RagService>();
