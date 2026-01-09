@@ -66,19 +66,7 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                var checkTable = await UserLevel.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserLevel.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserLevels'");
-                if (checkTable == 0)
-                {
-                    await UserLevel.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<UserLevel>());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "EvolutionService 数据库初始化失败");
-                throw;
-            }
+            await UserLevel.EnsureTableCreatedAsync();
         }
 
         private async Task OnPointTransactionAsync(PointTransactionEvent ev)

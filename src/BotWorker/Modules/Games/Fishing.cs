@@ -51,17 +51,24 @@ namespace BotWorker.Modules.Games
             var userId = long.Parse(ctx.UserId);
             var cmd = ctx.RawMessage.Trim().Split(' ')[0];
 
-            return cmd switch
+            try
             {
-                "钓鱼" or "钓鱼状态" => await Fishing.GetStatusAsync(userId, ctx.User?.Name ?? "钓鱼佬"),
-                "抛竿" => await Fishing.CastAsync(userId),
-                "收竿" => await Fishing.ReelInAsync(userId),
-                "鱼篓" => await Fishing.GetBagAsync(userId),
-                "卖鱼" => await Fishing.SellFishAsync(userId),
-                "钓鱼商店" => await Fishing.GetShopAsync(userId),
-                "升级鱼竿" => await Fishing.UpgradeRodAsync(userId),
-                _ => "未知钓鱼指令"
-            };
+                return cmd switch
+                {
+                    "钓鱼" or "钓鱼状态" => await Fishing.GetStatusAsync(userId, ctx.User?.Name ?? "钓鱼佬"),
+                    "抛竿" => await Fishing.CastAsync(userId),
+                    "收竿" => await Fishing.ReelInAsync(userId),
+                    "鱼篓" => await Fishing.GetBagAsync(userId),
+                    "卖鱼" => await Fishing.SellFishAsync(userId),
+                    "钓鱼商店" => await Fishing.GetShopAsync(userId),
+                    "升级鱼竿" => await Fishing.UpgradeRodAsync(userId),
+                    _ => "未知钓鱼指令"
+                };
+            }
+            catch (Exception ex)
+            {
+                return $"❌ 钓鱼组件故障：{ex.Message}";
+            }
         }
     }
 
@@ -190,31 +197,8 @@ namespace BotWorker.Modules.Games
 
         public static async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                // 检查 FishingUser 表
-                var checkUser = await FishingUser.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {FishingUser.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingUser'");
-                if (checkUser == 0)
-                {
-                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<FishingUser>();
-                    await FishingUser.ExecAsync(sql);
-                    Console.WriteLine("[Fishing] Created table FishingUser");
-                }
-
-                // 检查 FishingBag 表
-                var checkBag = await FishingBag.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {FishingBag.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingBag'");
-                if (checkBag == 0)
-                {
-                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<FishingBag>();
-                    await FishingBag.ExecAsync(sql);
-                    Console.WriteLine("[Fishing] Created table FishingBag");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Fishing] Error ensuring tables: {ex.Message}");
-                throw;
-            }
+            await FishingUser.EnsureTableCreatedAsync();
+            await FishingBag.EnsureTableCreatedAsync();
         }
 
         public static async Task<string> GetStatusAsync(long userId, string nickname)

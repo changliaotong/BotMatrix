@@ -9,10 +9,19 @@ public static class SchemaSynchronizer
     public static string GenerateCreateTableSql<T>() where T : class
     {
         var type = typeof(T);
-        var tableName = TableNameHelper.GetTableName<T>();
+        
+        // 尝试获取 FullName (针对 MetaData 子类)
+        string? fullName = null;
+        var fullNameField = type.GetField("FullName", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+        if (fullNameField != null)
+        {
+            fullName = fullNameField.GetValue(null)?.ToString();
+        }
+
+        var tableName = fullName ?? $"[{TableNameHelper.GetTableName<T>()}]";
 
         var sb = new StringBuilder();
-        sb.AppendLine($"CREATE TABLE [{tableName}] (");
+        sb.AppendLine($"CREATE TABLE {tableName} (");
 
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var primaryKeyColumn = "";
@@ -24,13 +33,16 @@ public static class SchemaSynchronizer
 
             var colAttr = prop.GetCustomAttribute<BotWorker.Infrastructure.Utils.Schema.Attributes.ColumnAttribute>();
             var columnName = colAttr?.Name ?? prop.Name.ToLower();
-            var sqlType = SqlTypeMapper.Map(prop.PropertyType);
+            
+            bool isPrimaryKey = prop.Name.Equals("Id", StringComparison.OrdinalIgnoreCase) ||
+                                prop.GetCustomAttribute<PrimaryKeyAttribute>() != null;
+
+            var sqlType = SqlTypeMapper.Map(prop.PropertyType, isPrimaryKey);
 
             sb.Append($"  [{columnName}] {sqlType}");
 
             // 主键
-            if (prop.Name.Equals("Id", StringComparison.OrdinalIgnoreCase) ||
-                prop.GetCustomAttribute<PrimaryKeyAttribute>() != null)
+            if (isPrimaryKey)
             {
                 sb.Append(" PRIMARY KEY");
                 primaryKeyColumn = columnName;

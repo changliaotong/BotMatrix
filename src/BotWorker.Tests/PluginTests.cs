@@ -28,6 +28,7 @@ namespace BotWorker.Tests
         public PluginTests(ITestOutputHelper output)
         {
             _output = output;
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
             _mockRobot = new Mock<IRobot>();
             _mockAI = new Mock<IAIService>();
             _mockContext = new Mock<IPluginContext>();
@@ -91,7 +92,7 @@ namespace BotWorker.Tests
         {
             _output.WriteLine($"[冒烟测试] 正在验证插件加载: {pluginType.Name}");
             // Arrange
-            IPlugin plugin = null;
+            IPlugin? plugin = null;
             var constructors = pluginType.GetConstructors();
             
             foreach (var ctor in constructors.OrderByDescending(c => c.GetParameters().Length))
@@ -99,7 +100,7 @@ namespace BotWorker.Tests
                 try
                 {
                     var parameters = ctor.GetParameters();
-                    var args = new object[parameters.Length];
+                    var args = new object?[parameters.Length];
                     for (int i = 0; i < parameters.Length; i++)
                     {
                         var paramType = parameters[i].ParameterType;
@@ -134,8 +135,8 @@ namespace BotWorker.Tests
             _output.WriteLine($"  -> 实例创建成功，准备执行 InitAsync...");
 
             // Act
-            var initException = await Record.ExceptionAsync(() => plugin.InitAsync(_mockRobot.Object));
-            var stopException = await Record.ExceptionAsync(() => plugin.StopAsync());
+            var initException = await Record.ExceptionAsync(() => plugin!.InitAsync(_mockRobot.Object));
+            var stopException = await Record.ExceptionAsync(() => plugin!.StopAsync());
 
             // Assert
             if (initException != null)
@@ -168,14 +169,14 @@ namespace BotWorker.Tests
         {
             _output.WriteLine("[功能测试] 正在验证数字员工 - 雇佣指令...");
             // Arrange
-            Func<IPluginContext, string[], Task<string>> capturedHandler = null;
+            Func<IPluginContext, string[], Task<string>>? capturedHandler = null;
             _mockRobot.Setup(r => r.RegisterSkillAsync(It.IsAny<SkillCapability>(), It.IsAny<Func<IPluginContext, string[], Task<string>>>()))
                 .Callback<SkillCapability, Func<IPluginContext, string[], Task<string>>>((cap, handler) => {
                     if (cap.Name.Contains("人才") || cap.Name.Contains("员工")) capturedHandler = handler;
                 })
                 .Returns(Task.CompletedTask);
 
-            var service = new DigitalStaffService(null);
+            var service = new DigitalStaffService();
             await service.InitAsync(_mockRobot.Object);
 
             Assert.NotNull(capturedHandler);
@@ -183,12 +184,14 @@ namespace BotWorker.Tests
 
             // Act
             _mockContext.Setup(c => c.RawMessage).Returns("!雇佣 鲁班 开发");
-            var exception = await Record.ExceptionAsync(() => capturedHandler(_mockContext.Object, new[] { "鲁班", "开发" }));
+            _mockContext.Setup(c => c.UserId).Returns("123456");
+            string? result = null;
+            var exception = await Record.ExceptionAsync(async () => result = await capturedHandler!(_mockContext.Object, new[] { "鲁班", "开发" }));
 
             // Assert
-            _output.WriteLine(exception != null ? $"  -> 逻辑执行成功 (已到达数据库层: {exception.Message})" : "  -> 逻辑执行成功");
-            // 如果是因为数据库连接失败抛出的异常，说明逻辑已经走到了 InsertAsync()，即功能逻辑（参数解析等）是正确的
-            Assert.True(exception == null || IsDatabaseException(exception), $"DigitalStaff logic failed with non-DB error: {exception?.Message}");
+            if (result != null) Console.WriteLine($"[TEST] 指令返回结果: \n{result}");
+            Console.WriteLine(exception != null ? $"[TEST] 逻辑执行成功 (已到达数据库层: {exception.Message})" : "[TEST] 逻辑执行成功");
+            Assert.True(exception == null || IsDatabaseException(exception));
         }
 
         [Fact]
@@ -196,7 +199,7 @@ namespace BotWorker.Tests
         {
             _output.WriteLine("[功能测试] 正在验证成就系统 - 查看成就指令...");
             // Arrange
-            Func<IPluginContext, string[], Task<string>> capturedHandler = null;
+            Func<IPluginContext, string[], Task<string>>? capturedHandler = null;
             _mockRobot.Setup(r => r.RegisterSkillAsync(It.Is<SkillCapability>(s => s.Name == "我的成就"), It.IsAny<Func<IPluginContext, string[], Task<string>>>()))
                 .Callback<SkillCapability, Func<IPluginContext, string[], Task<string>>>((cap, handler) => capturedHandler = handler)
                 .Returns(Task.CompletedTask);
@@ -210,10 +213,12 @@ namespace BotWorker.Tests
             // Act
             _mockContext.Setup(c => c.RawMessage).Returns("我的成就");
             _mockContext.Setup(c => c.UserId).Returns("123456");
-            var exception = await Record.ExceptionAsync(() => capturedHandler(_mockContext.Object, Array.Empty<string>()));
+            string? result = null;
+            var exception = await Record.ExceptionAsync(async () => result = await capturedHandler!(_mockContext.Object, Array.Empty<string>()));
 
             // Assert
-            _output.WriteLine(exception != null ? $"  -> 逻辑执行成功 (已到达数据库层: {exception.Message})" : "  -> 逻辑执行成功");
+            if (result != null) Console.WriteLine($"[TEST] 指令返回结果: \n{result}");
+            Console.WriteLine(exception != null ? $"[TEST] 逻辑执行成功 (已到达数据库层: {exception.Message})" : "[TEST] 逻辑执行成功");
             Assert.True(exception == null || IsDatabaseException(exception));
         }
 
@@ -232,7 +237,7 @@ namespace BotWorker.Tests
         {
             _output.WriteLine("[功能测试] 正在验证婚姻系统 - 求婚指令...");
             // Arrange
-            Func<IPluginContext, string[], Task<string>> capturedHandler = null;
+            Func<IPluginContext, string[], Task<string>>? capturedHandler = null;
             _mockRobot.Setup(r => r.RegisterSkillAsync(It.Is<SkillCapability>(s => s.Name == "婚姻系统"), It.IsAny<Func<IPluginContext, string[], Task<string>>>()))
                 .Callback<SkillCapability, Func<IPluginContext, string[], Task<string>>>((cap, handler) => capturedHandler = handler)
                 .Returns(Task.CompletedTask);
@@ -246,10 +251,12 @@ namespace BotWorker.Tests
             // Act
             _mockContext.Setup(c => c.RawMessage).Returns("求婚 @小红");
             _mockContext.Setup(c => c.UserId).Returns("123456");
-            var exception = await Record.ExceptionAsync(() => capturedHandler(_mockContext.Object, new[] { "@小红" }));
+            string? result = null;
+            var exception = await Record.ExceptionAsync(async () => result = await capturedHandler!(_mockContext.Object, new[] { "@小红" }));
 
             // Assert
-            _output.WriteLine(exception != null ? $"  -> 逻辑执行成功 (已到达数据库层: {exception.Message})" : "  -> 逻辑执行成功");
+            if (result != null) Console.WriteLine($"[TEST] 指令返回结果: \n{result}");
+            Console.WriteLine(exception != null ? $"[TEST] 逻辑执行成功 (已到达数据库层: {exception.Message})" : "[TEST] 逻辑执行成功");
             Assert.True(exception == null || IsDatabaseException(exception));
         }
 
@@ -258,7 +265,7 @@ namespace BotWorker.Tests
         {
             _output.WriteLine("[功能测试] 正在验证宠物系统 - 领养指令...");
             // Arrange
-            Func<IPluginContext, string[], Task<string>> capturedHandler = null;
+            Func<IPluginContext, string[], Task<string>>? capturedHandler = null;
             _mockRobot.Setup(r => r.RegisterSkillAsync(It.Is<SkillCapability>(s => s.Name == "宠物养成"), It.IsAny<Func<IPluginContext, string[], Task<string>>>()))
                 .Callback<SkillCapability, Func<IPluginContext, string[], Task<string>>>((cap, handler) => capturedHandler = handler)
                 .Returns(Task.CompletedTask);
@@ -272,10 +279,12 @@ namespace BotWorker.Tests
             // Act
             _mockContext.Setup(c => c.RawMessage).Returns("领养宠物 旺财");
             _mockContext.Setup(c => c.UserId).Returns("123456");
-            var exception = await Record.ExceptionAsync(() => capturedHandler(_mockContext.Object, new[] { "旺财" }));
+            string? result = null;
+            var exception = await Record.ExceptionAsync(async () => result = await capturedHandler!(_mockContext.Object, new[] { "旺财" }));
 
             // Assert
-            _output.WriteLine(exception != null ? $"  -> 逻辑执行成功 (已到达数据库层: {exception.Message})" : "  -> 逻辑执行成功");
+            if (result != null) Console.WriteLine($"[TEST] 指令返回结果: \n{result}");
+            Console.WriteLine(exception != null ? $"[TEST] 逻辑执行成功 (已到达数据库层: {exception.Message})" : "[TEST] 逻辑执行成功");
             Assert.True(exception == null || IsDatabaseException(exception));
         }
 
@@ -284,7 +293,7 @@ namespace BotWorker.Tests
         {
             _output.WriteLine("[功能测试] 正在验证钓鱼系统 - 抛竿指令...");
             // Arrange
-            Func<IPluginContext, string[], Task<string>> capturedHandler = null;
+            Func<IPluginContext, string[], Task<string>>? capturedHandler = null;
             _mockRobot.Setup(r => r.RegisterSkillAsync(It.Is<SkillCapability>(s => s.Name == "新版钓鱼"), It.IsAny<Func<IPluginContext, string[], Task<string>>>()))
                 .Callback<SkillCapability, Func<IPluginContext, string[], Task<string>>>((cap, handler) => capturedHandler = handler)
                 .Returns(Task.CompletedTask);
@@ -298,10 +307,12 @@ namespace BotWorker.Tests
             // Act
             _mockContext.Setup(c => c.RawMessage).Returns("抛竿");
             _mockContext.Setup(c => c.UserId).Returns("123456");
-            var exception = await Record.ExceptionAsync(() => capturedHandler(_mockContext.Object, Array.Empty<string>()));
+            string? result = null;
+            var exception = await Record.ExceptionAsync(async () => result = await capturedHandler!(_mockContext.Object, Array.Empty<string>()));
 
             // Assert
-            _output.WriteLine(exception != null ? $"  -> 逻辑执行成功 (已到达数据库层: {exception.Message})" : "  -> 逻辑执行成功");
+            if (result != null) Console.WriteLine($"[TEST] 指令返回结果: \n{result}");
+            Console.WriteLine(exception != null ? $"[TEST] 逻辑执行成功 (已到达数据库层: {exception.Message})" : "[TEST] 逻辑执行成功");
             Assert.True(exception == null || IsDatabaseException(exception));
         }
     }

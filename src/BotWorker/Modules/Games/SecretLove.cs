@@ -18,12 +18,18 @@ namespace BotWorker.Modules.Games
     {
         public async Task InitAsync(IRobot robot)
         {
+            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "暗恋系统",
                 Commands = ["暗恋", "我的暗恋", "谁暗恋我"],
                 Description = "登记：暗恋 @某人；查询：我的暗恋 / 谁暗恋我"
             }, HandleLoveAsync);
+        }
+
+        private async Task EnsureTablesCreatedAsync()
+        {
+            await SecretLove.EnsureTableCreatedAsync();
         }
 
         public Task StopAsync() => Task.CompletedTask;

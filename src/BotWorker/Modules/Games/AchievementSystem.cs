@@ -111,25 +111,8 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                var checkMetric = await UserMetric.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserMetric.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserMetrics'");
-                if (checkMetric == 0)
-                {
-                    await UserMetric.ExecAsync(BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<UserMetric>());
-                }
-
-                var checkAch = await UserAchievement.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserAchievement.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserAchievements'");
-                if (checkAch == 0)
-                {
-                    await UserAchievement.ExecAsync(BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<UserAchievement>());
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Achievement] Table init failed: {ex.Message}");
-                throw;
-            }
+            await UserMetric.EnsureTableCreatedAsync();
+            await UserAchievement.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)

@@ -32,27 +32,9 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                var tables = new[] { "Babies", "BabyEvents", "BabyConfig" };
-                foreach (var table in tables)
-                {
-                    var count = await Baby.QueryScalarAsync<int>($"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{table}'");
-                    if (count == 0)
-                    {
-                        string sql = table switch
-                        {
-                            "Babies" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<Baby>(),
-                            "BabyEvents" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<BabyEvent>(),
-                            "BabyConfig" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<BabyConfig>(),
-                            _ => ""
-                        };
-                        if (!string.IsNullOrEmpty(sql)) await Baby.ExecAsync(sql);
-                        Console.WriteLine($"[Baby] Created table {table}");
-                    }
-                }
-            }
-            catch (Exception ex) { Console.WriteLine($"[Baby] Init error: {ex.Message}"); }
+            await Baby.EnsureTableCreatedAsync();
+            await BabyEvent.EnsureTableCreatedAsync();
+            await BabyConfig.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)

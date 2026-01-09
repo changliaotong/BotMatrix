@@ -90,18 +90,7 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                var checkTable = await UserModuleAccess.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserModuleAccess'");
-                if (checkTable == 0)
-                {
-                    await UserModuleAccess.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<UserModuleAccess>());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "MatrixMarketService 数据库初始化失败");
-            }
+            await UserModuleAccess.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)

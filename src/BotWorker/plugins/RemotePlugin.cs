@@ -27,10 +27,17 @@ namespace BotWorker.Modules.Plugins
 
         public async Task InitAsync(IRobot robot)
         {
+            if (string.IsNullOrEmpty(_endpoint))
+            {
+                var name = _metadata?.Name ?? "Unknown Remote Plugin";
+                Console.WriteLine($"[RemotePlugin] Skipped initialization for {name}: No endpoint provided.");
+                return;
+            }
+
             // 1. 尝试从远程获取该插件定义的技能
             try
             {
-                var capabilities = await _httpClient.GetFromJsonAsync<SkillCapability[]>(_endpoint + "/capabilities");
+                var capabilities = await _httpClient.GetFromJsonAsync<SkillCapability[]>(_endpoint.TrimEnd('/') + "/capabilities");
                 if (capabilities != null)
                 {
                     foreach (var cap in capabilities)

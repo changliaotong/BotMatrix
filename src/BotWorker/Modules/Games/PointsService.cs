@@ -80,32 +80,8 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                // 使用带数据库限定名的查询，确保在正确的数据库中检查
-                var sqlCheck = $"SELECT COUNT(*) FROM {PointAccount.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PointAccounts'";
-                var checkTable = await PointAccount.QueryScalarAsync<int>(sqlCheck);
-                if (checkTable == 0)
-                {
-                    var sql = SchemaSynchronizer.GenerateCreateTableSql<PointAccount>();
-                    await PointAccount.ExecAsync(sql);
-                    _logger?.LogInformation("Created table PointAccounts");
-                }
-
-                var sqlCheckLedger = $"SELECT COUNT(*) FROM {PointLedger.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PointLedgers'";
-                var checkLedger = await PointLedger.QueryScalarAsync<int>(sqlCheckLedger);
-                if (checkLedger == 0)
-                {
-                    var sql = SchemaSynchronizer.GenerateCreateTableSql<PointLedger>();
-                    await PointLedger.ExecAsync(sql);
-                    _logger?.LogInformation("Created table PointLedgers");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "PointsService 数据库初始化失败");
-                throw; // 重新抛出，让初始化失败可见
-            }
+            await PointAccount.EnsureTableCreatedAsync();
+            await PointLedger.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)

@@ -21,7 +21,13 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
+            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability("成语接龙", ["接龙"]), HandleJielongAsync);
+        }
+
+        private async Task EnsureTablesCreatedAsync()
+        {
+            await Jielong.EnsureTableCreatedAsync();
         }
 
         public Task StopAsync() => Task.CompletedTask;

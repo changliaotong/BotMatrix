@@ -53,19 +53,7 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                var checkTable = await SongOrder.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserSongOrders'");
-                if (checkTable == 0)
-                {
-                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<SongOrder>();
-                    await SongOrder.ExecAsync(sql);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "MusicService 数据库初始化失败");
-            }
+            await SongOrder.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleMusicCommandAsync(IPluginContext ctx, string[] args)

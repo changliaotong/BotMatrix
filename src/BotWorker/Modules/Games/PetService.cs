@@ -51,52 +51,36 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                // 检查 UserPets 表
-                var checkPet = await Pet.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {Pet.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserPets'");
-                if (checkPet == 0)
-                {
-                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<Pet>();
-                    await Pet.ExecAsync(sql);
-                    Console.WriteLine("[Pet] Created table UserPets");
-                }
-
-                // 检查 PetInventory 表
-                var checkInv = await PetInventory.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {PetInventory.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserPetInventory'");
-                if (checkInv == 0)
-                {
-                    var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<PetInventory>();
-                    await PetInventory.ExecAsync(sql);
-                    Console.WriteLine("[Pet] Created table UserPetInventory");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[PetService] 数据库表初始化失败: {ex.Message}");
-                throw;
-            }
+            await Pet.EnsureTableCreatedAsync();
+            await PetInventory.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandlePetCommandAsync(IPluginContext ctx, string[] args)
         {
             var cmd = ctx.RawMessage.Trim().Split(' ')[0];
-            return cmd switch
+            try
             {
-                "领养宠物" or "adopt" => await AdoptAsync(ctx, args),
-                "我的宠物" or "status" or "pet" or "宠物状态" => await GetStatusAsync(ctx, args),
-                "喂食" or "feed" => await FeedAsync(ctx, args),
-                "宠物商店" or "shop" => await ShopAsync(ctx, args),
-                "购买" or "buy" => await BuyAsync(ctx, args),
-                "宠物背包" or "bag" => await BagAsync(ctx, args),
-                "打工" or "work" or "宠物打工" => await WorkAsync(ctx, args),
-                "冒险" or "adventure" or "宠物冒险" => await AdventureAsync(ctx, args),
-                "休息" or "rest" or "宠物休息" => await RestAsync(ctx, args),
-                "互动" or "play" or "宠物互动" => await InteractAsync(ctx, args),
-                "改名" or "rename" or "宠物改名" => await RenameAsync(ctx, args),
-                "宠物排行" or "top" or "宠物排行榜" => await GetTopAsync(ctx, args),
-                _ => "未知宠物指令"
-            };
+                return cmd switch
+                {
+                    "领养宠物" or "adopt" => await AdoptAsync(ctx, args),
+                    "我的宠物" or "status" or "pet" or "宠物状态" => await GetStatusAsync(ctx, args),
+                    "喂食" or "feed" => await FeedAsync(ctx, args),
+                    "宠物商店" or "shop" => await ShopAsync(ctx, args),
+                    "购买" or "buy" => await BuyAsync(ctx, args),
+                    "宠物背包" or "bag" => await BagAsync(ctx, args),
+                    "打工" or "work" or "宠物打工" => await WorkAsync(ctx, args),
+                    "冒险" or "adventure" or "宠物冒险" => await AdventureAsync(ctx, args),
+                    "休息" or "rest" or "宠物休息" => await RestAsync(ctx, args),
+                    "互动" or "play" or "宠物互动" => await InteractAsync(ctx, args),
+                    "改名" or "rename" or "宠物改名" => await RenameAsync(ctx, args),
+                    "宠物排行" or "top" or "宠物排行榜" => await GetTopAsync(ctx, args),
+                    _ => "未知宠物指令"
+                };
+            }
+            catch (Exception ex)
+            {
+                return $"❌ 宠物中心系统故障：{ex.Message}";
+            }
         }
 
         [PetCommand(["领养宠物", "adopt"], "开始领养你的第一个伙伴", 1)]

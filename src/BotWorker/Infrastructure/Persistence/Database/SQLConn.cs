@@ -614,7 +614,9 @@ namespace BotWorker.Infrastructure.Persistence.Database
         // 调试信息 红字显示 并写入数据库
         public static int DbDebug(object bugInfo, string? bugGroup = null)
         {
-            Debug(bugInfo.AsString());
+            var msg = bugInfo.AsString();
+            Debug(msg);
+            Console.WriteLine($"[DB DEBUG][{bugGroup}] {msg}");
             return 1;
         }
 

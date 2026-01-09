@@ -147,37 +147,10 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                var checkStaff = await DigitalStaff.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {DigitalStaff.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'DigitalStaff'");
-                if (checkStaff == 0)
-                {
-                    await DigitalStaff.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<DigitalStaff>());
-                }
-
-                var checkTask = await StaffTask.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {StaffTask.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'StaffTasks'");
-                if (checkTask == 0)
-                {
-                    await StaffTask.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<StaffTask>());
-                }
-
-                var checkMemory = await CognitiveMemory.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {CognitiveMemory.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'CognitiveMemories'");
-                if (checkMemory == 0)
-                {
-                    await CognitiveMemory.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<CognitiveMemory>());
-                }
-
-                var checkKpi = await StaffKpi.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {StaffKpi.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'StaffKpis'");
-                if (checkKpi == 0)
-                {
-                    await StaffKpi.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<StaffKpi>());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "DigitalStaffService 数据库初始化失败");
-                throw;
-            }
+            await DigitalStaff.EnsureTableCreatedAsync();
+            await StaffTask.EnsureTableCreatedAsync();
+            await CognitiveMemory.EnsureTableCreatedAsync();
+            await StaffKpi.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HireStaffAsync(IPluginContext ctx, string[] args)
@@ -206,8 +179,15 @@ namespace BotWorker.Modules.Games
                 CurrentStatus = "Idle"
             };
 
-            await staff.InsertAsync();
-            return $"🎉 恭喜！您已成功雇佣【{name}】（职位：{role}）。现在可以尝试【派单】了。";
+            try
+            {
+                await staff.InsertAsync();
+                return $"🎉 恭喜！您已成功雇佣【{name}】（职位：{role}）。现在可以尝试【派单】了。";
+            }
+            catch (Exception ex)
+            {
+                return $"❌ 雇佣失败：{ex.Message}";
+            }
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)

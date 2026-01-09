@@ -35,61 +35,45 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            try
-            {
-                // 检查并创建表
-                var tables = new[] { "UserMarriages", "MarriageProposals", "WeddingItems", "SweetHearts" };
-                foreach (var table in tables)
-                {
-                    var count = await UserMarriage.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserMarriage.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{table}'");
-                    if (count == 0)
-                    {
-                        string sql = table switch
-                        {
-                            "UserMarriages" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<UserMarriage>(),
-                            "MarriageProposals" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<MarriageProposal>(),
-                            "WeddingItems" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<WeddingItem>(),
-                            "SweetHearts" => BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<SweetHeart>(),
-                            _ => ""
-                        };
-                        if (!string.IsNullOrEmpty(sql)) await UserMarriage.ExecAsync(sql);
-                        Console.WriteLine($"[Marriage] Created table {table}");
-                    }
-                }
-            }
-            catch (Exception ex) 
-            { 
-                Console.WriteLine($"[Marriage] Init error: {ex.Message}"); 
-                throw;
-            }
+            await UserMarriage.EnsureTableCreatedAsync();
+            await MarriageProposal.EnsureTableCreatedAsync();
+            await WeddingItem.EnsureTableCreatedAsync();
+            await SweetHeart.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
         {
             var cmd = ctx.RawMessage.Trim().Split(' ')[0];
-            return cmd switch
+            try
             {
-                "求婚" => await ProposeAsync(ctx, args),
-                "接受求婚" or "办理结婚证" => await AcceptProposalAsync(ctx),
-                "拒绝求婚" => await RejectProposalAsync(ctx),
-                "我要离婚" or "办理离婚证" => await DivorceAsync(ctx),
-                "我的婚姻" or "婚姻面板" => await GetMarriageStatusAsync(ctx),
-                "发喜糖" => await SendSweetsAsync(ctx),
-                "发红包" => await SendRedPacketAsync(ctx),
-                "吃喜糖" => await EatSweetsAsync(ctx),
-                "购买婚纱" => await BuyWeddingItemAsync(ctx, "dress"),
-                "购买婚戒" => await BuyWeddingItemAsync(ctx, "ring"),
-                "我的对象" => await GetSpouseInfoAsync(ctx),
-                "另一半签到" => await SpouseActionAsync(ctx, "签到"),
-                "另一半抢楼" => await SpouseActionAsync(ctx, "抢楼"),
-                "另一半抢红包" => await SpouseActionAsync(ctx, "抢红包"),
-                "领取结婚福利" => await GetMarriageWelfareAsync(ctx),
-                "我的甜蜜爱心" => await GetSweetHeartsAsync(ctx),
-                "赠送甜蜜爱心" => await GiftSweetHeartsAsync(ctx, args),
-                "使用甜蜜抽奖" => await SweetHeartLuckyDrawAsync(ctx),
-                "甜蜜爱心说明" => GetSweetHeartHelp(),
-                _ => "未知婚姻指令"
-            };
+                return cmd switch
+                {
+                    "求婚" => await ProposeAsync(ctx, args),
+                    "接受求婚" or "办理结婚证" => await AcceptProposalAsync(ctx),
+                    "拒绝求婚" => await RejectProposalAsync(ctx),
+                    "我要离婚" or "办理离婚证" => await DivorceAsync(ctx),
+                    "我的婚姻" or "婚姻面板" => await GetMarriageStatusAsync(ctx),
+                    "发喜糖" => await SendSweetsAsync(ctx),
+                    "发红包" => await SendRedPacketAsync(ctx),
+                    "吃喜糖" => await EatSweetsAsync(ctx),
+                    "购买婚纱" => await BuyWeddingItemAsync(ctx, "dress"),
+                    "购买婚戒" => await BuyWeddingItemAsync(ctx, "ring"),
+                    "我的对象" => await GetSpouseInfoAsync(ctx),
+                    "另一半签到" => await SpouseActionAsync(ctx, "签到"),
+                    "另一半抢楼" => await SpouseActionAsync(ctx, "抢楼"),
+                    "另一半抢红包" => await SpouseActionAsync(ctx, "抢红包"),
+                    "领取结婚福利" => await GetMarriageWelfareAsync(ctx),
+                    "我的甜蜜爱心" => await GetSweetHeartsAsync(ctx),
+                    "赠送甜蜜爱心" => await GiftSweetHeartsAsync(ctx, args),
+                    "使用甜蜜抽奖" => await SweetHeartLuckyDrawAsync(ctx),
+                    "甜蜜爱心说明" => GetSweetHeartHelp(),
+                    _ => "未知婚姻指令"
+                };
+            }
+            catch (Exception ex)
+            {
+                return $"❌ 婚姻登记处系统故障：{ex.Message}";
+            }
         }
 
         #region 婚姻核心逻辑

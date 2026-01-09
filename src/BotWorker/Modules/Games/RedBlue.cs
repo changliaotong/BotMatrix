@@ -22,13 +22,18 @@ namespace BotWorker.Modules.Games
     {
         public BotPluginAttribute Metadata => GetType().GetCustomAttribute<BotPluginAttribute>()!;
 
-        public Task InitAsync(IRobot robot)
+        public async Task InitAsync(IRobot robot)
         {
-            robot.RegisterSkill(
+            await EnsureTablesCreatedAsync();
+            await robot.RegisterSkillAsync(
                 new SkillCapability("红蓝博弈", ["红", "蓝", "和"]),
                 HandleRedBlueAsync
             );
-            return Task.CompletedTask;
+        }
+
+        private async Task EnsureTablesCreatedAsync()
+        {
+            await ShuffledDeck.EnsureTableCreatedAsync();
         }
 
         public Task StopAsync() => Task.CompletedTask;

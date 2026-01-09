@@ -246,6 +246,43 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return SQLConn.Exec(sqlInfo.sql, false, trans, sqlInfo.parameters);
         }
 
+        public static async Task EnsureTableCreatedAsync()
+        {
+            try
+            {
+                var dbName = DbName;
+                var tableName = _instance.TableName;
+                
+                // 使用 INFORMATION_SCHEMA 检查表是否存在
+                var sqlCheck = $@"
+                    SELECT COUNT(*) 
+                    FROM {dbName}.INFORMATION_SCHEMA.TABLES 
+                    WHERE TABLE_CATALOG = '{dbName}' 
+                    AND TABLE_NAME = '{tableName}'";
+                
+                var count = await QueryScalarAsync<int>(sqlCheck);
+                if (count == 0)
+                {
+                    // 生成并执行建表语句
+                    var sqlCreate = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<TDerived>();
+                    var result = await SQLConn.ExecAsync(sqlCreate, isDebug: true);
+                    if (result >= 0)
+                    {
+                        Console.WriteLine($"[ORM] Created table: {FullName}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[ORM] Failed to create table: {FullName}. result={result}. Please check database permissions and connectivity.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ORM] Error ensuring table {FullName} exists: {ex.Message}");
+                // 不抛出异常，让程序继续运行，但记录错误
+            }
+        }
+
         // 返回主键列表，保持顺序，方便生成SQL和参数绑定
         public List<(string Name, object Value)> GetKeyValues()
         {
