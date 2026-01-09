@@ -15,12 +15,14 @@ namespace BotWorker.Modules.AI.Providers.Helpers
         protected readonly string _apiKey;
         protected readonly string _url;
         protected readonly string _defaultModelId;
+        protected readonly string _providerName;
         protected readonly ILogger? _logger;
 
-        public abstract string ProviderName { get; }
+        public virtual string ProviderName => _providerName;
 
-        protected OpenAIBaseProvider(string apiKey, string url, string defaultModelId, ILogger? logger = null)
+        protected OpenAIBaseProvider(string providerName, string apiKey, string url, string defaultModelId, ILogger? logger = null)
         {
+            _providerName = providerName;
             _apiKey = apiKey;
             _url = url;
             _defaultModelId = defaultModelId;

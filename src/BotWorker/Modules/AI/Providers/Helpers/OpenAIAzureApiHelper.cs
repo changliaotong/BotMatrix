@@ -8,19 +8,15 @@ namespace BotWorker.Modules.AI.Providers.Helpers
 {
     public class OpenAIAzureApiHelper : OpenAIBaseProvider
     {
-        private readonly OpenAIAzureConfig _azureConfig;
-        public override string ProviderName => "Azure OpenAI";
-
-        public OpenAIAzureApiHelper(OpenAIAzureConfig config) 
-            : base(config.ApiKey, config.Endpoint, config.DeploymentName)
+        public OpenAIAzureApiHelper(string deploymentName, string endpoint, string apiKey) 
+            : base("Azure OpenAI", apiKey, endpoint, deploymentName)
         {
-            _azureConfig = config;
         }
 
         protected override Kernel BuildKernel(ModelExecutionOptions options)
         {
             var builder = Kernel.CreateBuilder()
-                .AddAzureOpenAIChatCompletion(_azureConfig.DeploymentName, _azureConfig.Endpoint, _azureConfig.ApiKey);
+                .AddAzureOpenAIChatCompletion(_defaultModelId, _url, _apiKey);
 
             if (options.Plugins != null)
             {
