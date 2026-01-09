@@ -12,7 +12,7 @@ namespace BotWorker.Modules.Games
 {
     [BotPlugin(
         Id = "game.redblue",
-        Name = "红蓝博弈",
+        Name = "红蓝战士",
         Version = "1.0.0",
         Author = "Matrix",
         Description = "经典的红蓝点数博弈游戏，支持押红、押蓝、押和",
@@ -338,7 +338,7 @@ namespace BotWorker.Modules.Games
             List<Card> deck = [];
             string query = $"SELECT Id, Rank, Suit FROM {FullName} WHERE groupId = @groupId ORDER BY DeckOrder";
             
-            var ds = await QueryDatasetAsync(query, null, CreateParameter("@groupId", groupId));
+            var ds = await QueryDatasetAsync(query, [CreateParameter("@groupId", groupId)]);
             if (ds != null && ds.Tables.Count > 0)
             {
                 foreach (DataRow row in ds.Tables[0].Rows)

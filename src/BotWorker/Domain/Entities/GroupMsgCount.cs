@@ -66,7 +66,7 @@ namespace BotWorker.Domain.Entities
             return await QueryScalarAsync<int>($"select count(Id)+1 as res  from {FullName} " +
                             $"where GroupId = {groupId} and CDate = {SqlDate} " +
                             $"and CMsg > (select {SqlTop(1)}CMsg from {FullName} " +
-                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlDate}{SqlLimit(1)})", null);
+                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlDate}{SqlLimit(1)})");
         }
 
         /// 昨日发言排名
@@ -77,7 +77,7 @@ namespace BotWorker.Domain.Entities
             return await QueryScalarAsync<int>($"select count(Id)+1 from {FullName} " +
                             $"where GroupId = {groupId} and CDate = {SqlYesterday} " +
                             $"and CMsg > (select {SqlTop(1)}CMsg from {FullName} " +
-                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlYesterday}{SqlLimit(1)})", null);
+                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlYesterday}{SqlLimit(1)})");
         }
 
         // 今日发言榜前N名

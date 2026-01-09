@@ -9,7 +9,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
     {
         public static async Task<Dictionary<string, object>> ExecWithOutputAsync(string sql, IDataParameter[] parameters, string[] outputFields, IDbTransaction? trans = null)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+            
+            if (trans != null && conn == null) trans = null; // 事务已失效
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -21,15 +25,13 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 isNewConn = true;
             }
 
-            Console.WriteLine($"[DB SQL] {sql}");
-
-
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60; // 增加超时时间到60秒
                 
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
@@ -84,7 +86,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<T?> QueryScalarAsync<T>(string sql, bool isDebug = true, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -96,10 +102,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
@@ -118,7 +125,9 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DB ERROR] Async operation failed: {ex.Message}");
+                var errorMsg = $"[DB ERROR] Async operation failed: {ex.Message}\nSQL: {sql}";
+                Console.WriteLine(errorMsg);
+                System.Diagnostics.Debug.WriteLine(errorMsg);
                 if (isDebug)
                     DbDebug($"{ex.Message}\n{sql}", "QueryScalarAsync");
                 return default;
@@ -139,7 +148,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<List<T>> QueryAsync<T>(string sql, IDataParameter[]? parameters = null, IDbTransaction? trans = null)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -151,10 +164,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters ?? Array.Empty<IDataParameter>());
                 if (processedParameters != null)
                 {
@@ -219,7 +233,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<List<T>> QueryListAsync<T>(string sql, IDataParameter[]? parameters = null, IDbTransaction? trans = null) where T : new()
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -231,10 +249,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters ?? Array.Empty<IDataParameter>());
                 if (processedParameters != null)
                 {
@@ -279,7 +298,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<T?> QuerySingleAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : class, new()
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -291,10 +314,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
@@ -354,7 +378,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<T?> ExecScalarAsync<T>(string sql, bool isDebug = false, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -369,6 +397,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
@@ -407,6 +436,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             var conn = DbProviderFactory.CreateConnection();
             var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
+            cmd.CommandTimeout = 60;
             var processedParameters = ProcessParameters(parameters);
             if (processedParameters != null)
             {
@@ -420,10 +450,14 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<string> QueryAsJsonAsync(string sql, IDataParameter[]? parameters = null, IDbTransaction? trans = null)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             parameters ??= [];
             var results = new List<object>();
 
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -438,6 +472,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
@@ -490,9 +525,9 @@ namespace BotWorker.Infrastructure.Persistence.Database
             }
         }
 
-        public static async Task<string> QueryResAsync(string sql, string format = "{0}", string countFormat = "", IDbTransaction? trans = null)
+        public static async Task<string> QueryResAsync(string sql, string format = "{0}", string countFormat = "", IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            DataSet ds = await QueryDatasetAsync(sql, trans);
+            DataSet ds = await QueryDatasetAsync(sql, trans, parameters);
             if (ds == null || ds.Tables.Count == 0)
                 return "";
 
@@ -522,7 +557,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static async Task<int> ExecAsync(string sql, bool isDebug = false, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
 
             if (conn == null)
@@ -534,19 +573,23 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
                     foreach (var p in processedParameters) cmd.Parameters.Add(p);
                 }
 
-                return await (cmd as DbCommand)?.ExecuteNonQueryAsync()!;
+                int result = await (cmd as DbCommand)?.ExecuteNonQueryAsync()!;
+                return result;
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[DB ERROR] ExecAsync failed: {ex.Message}\nSQL: {sql}");
                 if (isDebug)
                     DbDebug($"{ex.Message}\n{sql}", "ExecAsync");
                 else
@@ -575,6 +618,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
                 command.Transaction = trans;

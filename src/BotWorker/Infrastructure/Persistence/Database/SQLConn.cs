@@ -1,4 +1,5 @@
 using System.Data;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using BotWorker.Common;
@@ -12,6 +13,18 @@ namespace BotWorker.Infrastructure.Persistence.Database
     public static partial class SQLConn
     {        
         public static string ConnString => GlobalConfig.ConnString;
+
+        private static void LogSql(string sql, IDataParameter[]? parameters)
+        {
+            if (parameters == null || parameters.Length == 0)
+            {
+                Console.WriteLine($"[DB SQL] {sql}");
+                return;
+            }
+
+            var paramStrings = parameters.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}");
+            Console.WriteLine($"[DB SQL] {sql} | {string.Join(", ", paramStrings)}");
+        }
         
         private static DbDataAdapter CreateDataAdapter(IDbCommand command)
         {
@@ -28,6 +41,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             using var conn = DbProviderFactory.CreateConnection();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
+            cmd.CommandTimeout = 60;
             if (parameters != null)
             {
                 foreach (var p in parameters) cmd.Parameters.Add(p);
@@ -35,7 +49,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 Console.WriteLine($"[DB INFO] Opening connection to: {GlobalConfig.DbType} (ConnString length: {ConnString?.Length ?? 0})");
                 conn.Open();
                 Console.WriteLine("[DB INFO] Connection opened successfully.");
@@ -70,7 +84,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
             [CallerFilePath] string callerFile = "",
             [CallerLineNumber] int callerLine = 0)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
             if (conn == null)
             {
@@ -81,9 +99,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 cmd.Transaction = trans;
+                cmd.CommandTimeout = 60;
                 if (parameters != null && parameters.Length > 0)
                 {
                     foreach (var p in parameters) cmd.Parameters.Add(p);
@@ -222,7 +242,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             using var conn = DbProviderFactory.CreateConnection();
             try
             {
-                Console.WriteLine($"[DB SQL] {sql}");
+                LogSql(sql, parameters);
                 Console.WriteLine($"[DB INFO] Opening async connection (ExecuteScalarAsync) to: {GlobalConfig.DbType}");
                 if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
                 Console.WriteLine("[DB INFO] Async connection opened successfully.");
@@ -285,12 +305,15 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static DataSet QueryDataset(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
+
+            if (trans != null && conn == null) trans = null;
+
             bool isNewConn = false;
             if (conn == null)
             {
                 conn = DbProviderFactory.CreateConnection();
-                Console.WriteLine($"[DB SQL] {sql}");
                 Console.WriteLine($"[DB INFO] Opening connection (QueryDataset) to: {GlobalConfig.DbType}");
                 conn.Open();
                 Console.WriteLine("[DB INFO] Connection opened successfully.");
@@ -299,9 +322,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
                 command.Transaction = trans;
+                command.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
@@ -333,6 +358,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static DataTable ExecuteQuery(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
             if (conn == null)
@@ -344,9 +370,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
                 command.Transaction = trans;
+                command.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
                 {
@@ -427,6 +455,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static T Query<T>(string sql, bool isDebug = true, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             try
             {
                 using DataSet ds = QueryDataset(sql, trans, parameters);
@@ -477,6 +506,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
         // 执行sql命令
         public static int Exec(string sql, bool isDebug = true, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
+            trans ??= ORM.MetaData.CurrentTransaction.Value;
             IDbConnection? conn = trans?.Connection;
             bool isNewConn = false;
 
@@ -489,9 +519,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
                 command.Transaction = trans;
+                command.CommandTimeout = 60;
                 if (parameters != null)
                 {
                     var processedParameters = ProcessParameters(parameters);
@@ -518,10 +550,12 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static object? ExecuteScalar(string query, params IDataParameter[] parameters)
         {
+            LogSql(query, parameters);
             using var conn = DbProviderFactory.CreateConnection();
             conn.Open();
             using var command = conn.CreateCommand();
             command.CommandText = query;
+            command.CommandTimeout = 60;
             if (parameters != null)
             {
                 foreach (var p in parameters) command.Parameters.Add(p);
@@ -532,6 +566,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static IDataReader QueryDataReader(string sql, params IDataParameter[] parameters)
         {
+            LogSql(sql, parameters);
             var conn = DbProviderFactory.CreateConnection();
             try
             {
@@ -539,6 +574,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
+                command.CommandTimeout = 60;
                 if (parameters != null)
                 {
                     foreach (var p in parameters) command.Parameters.Add(p);

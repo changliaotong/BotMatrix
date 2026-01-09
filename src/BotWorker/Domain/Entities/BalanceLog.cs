@@ -18,15 +18,16 @@ public class BalanceLog : MetaData<BalanceLog>
 
     public static (string, IDataParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string name, decimal balanceAdd, string balanceInfo, decimal balance_last)
     {
-        return SqlInsert([
-            new Cov("BotUin", botUin),
-            new Cov("GroupId", groupId),
-            new Cov("GroupName", groupName),
-            new Cov("UserId", userId),
-            new Cov("UserName", name),
-            new Cov("BalanceAdd", balanceAdd),
-            new Cov("BalanceValue", balance_last),
-            new Cov("BalanceInfo", balanceInfo),
-        ]);
+        return SqlInsert(new
+        {
+            BotUin = botUin,
+            GroupId = groupId,
+            GroupName = groupName,
+            UserId = userId,
+            UserName = name,
+            BalanceAdd = balanceAdd,
+            BalanceValue = balance_last,
+            BalanceInfo = balanceInfo
+        });
     }
 }

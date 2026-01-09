@@ -24,16 +24,17 @@ public class CreditLog : MetaData<CreditLog>
     public static async Task<(string, IDataParameter[])> SqlHistoryAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
     {
         long creditValue = await UserInfo.GetCreditAsync(groupId, qq);
-        return SqlInsert([
-                            new Cov("BotUin", botUin),
-                                new Cov("GroupId", groupId),
-                                new Cov("GroupName", groupName),
-                                new Cov("UserId", qq),
-                                new Cov("UserName", name),
-                                new Cov("CreditAdd", creditAdd),
-                                new Cov("CreditValue", creditValue + creditAdd),
-                                new Cov("CreditInfo", creditInfo)
-                    ]);
+        return SqlInsert(new
+        {
+            BotUin = botUin,
+            GroupId = groupId,
+            GroupName = groupName,
+            UserId = qq,
+            UserName = name,
+            CreditAdd = creditAdd,
+            CreditValue = creditValue + creditAdd,
+            CreditInfo = creditInfo
+        });
     }
 
     //积分变动次数（一段时间内） 例如：抽奖等
@@ -42,8 +43,7 @@ public class CreditLog : MetaData<CreditLog>
 
     public static async Task<int> CreditCountAsync(long userId, string creditInfo, int second = 60)
     {
-        string sql = $"select count(Id) from {FullName} where UserId = {userId} and CreditInfo like '%{creditInfo}%' and abs({SqlDateDiff("second", SqlDateTime, "InsertDate")}) <= {second}";
-        return (await QueryAsync(sql)).AsInt();
+        return await QueryScalarAsync<int>($"select count(Id) from {FullName} where UserId = {{0}} and CreditInfo like {{1}} and abs({SqlDateDiff("second", SqlDateTime, "InsertDate")}) <= {{2}}", userId, $"%{creditInfo}%", second);
     }
 
 }

@@ -108,18 +108,20 @@ namespace BotWorker.Modules.Games
 
             if (me.Status == "married" || spouse.Status == "married") return "由于某些原因，求婚失效了（某方已婚）。";
 
-            using var trans = await UserMarriage.BeginTransactionAsync();
+            using var trans = await MetaData.BeginTransactionAsync();
             try
             {
                 var now = DateTime.Now;
+                string nowStr = now.ToString("yyyy-MM-dd HH:mm:ss");
+
                 // 更新双方状态
-                await UserMarriage.ExecAsync($"UPDATE UserMarriages SET Status='married', SpouseId='{spouse.UserId}', MarriageDate='{now:yyyy-MM-dd HH:mm:ss}', UpdatedAt='{now:yyyy-MM-dd HH:mm:ss}' WHERE UserId='{me.UserId}'", trans);
-                await UserMarriage.ExecAsync($"UPDATE UserMarriages SET Status='married', SpouseId='{me.UserId}', MarriageDate='{now:yyyy-MM-dd HH:mm:ss}', UpdatedAt='{now:yyyy-MM-dd HH:mm:ss}' WHERE UserId='{spouse.UserId}'", trans);
-                
+                await UserMarriage.UpdateWhereAsync(new { Status = "married", SpouseId = spouse.UserId, MarriageDate = now, UpdatedAt = now }, "UserId = {0}", trans, me.UserId);
+                await UserMarriage.UpdateWhereAsync(new { Status = "married", SpouseId = me.UserId, MarriageDate = now, UpdatedAt = now }, "UserId = {0}", trans, spouse.UserId);
+
                 // 更新求婚记录
-                await MarriageProposal.ExecAsync($"UPDATE MarriageProposals SET Status='accepted', UpdatedAt='{now:yyyy-MM-dd HH:mm:ss}' WHERE Id='{proposal.Id}'", trans);
+                await MarriageProposal.UpdateAsync(new { Status = "accepted", UpdatedAt = now }, proposal.Id, null, trans);
                 
-                await trans.CommitAsync();
+                MetaData.CommitTransaction(trans);
 
                 // 上报成就
                 _ = AchievementPlugin.ReportMetricAsync(ctx.UserId, "marriage.count", 1);
@@ -129,7 +131,7 @@ namespace BotWorker.Modules.Games
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                MetaData.RollbackTransaction(trans);
                 return $"出错了: {ex.Message}";
             }
         }
@@ -152,17 +154,17 @@ namespace BotWorker.Modules.Games
             var spouseId = me.SpouseId;
             var now = DateTime.Now;
 
-            using var trans = await UserMarriage.BeginTransactionAsync();
+            using var trans = await MetaData.BeginTransactionAsync();
             try
             {
-                await UserMarriage.ExecAsync($"UPDATE UserMarriages SET Status='divorced', SpouseId='', DivorceDate='{now:yyyy-MM-dd HH:mm:ss}', UpdatedAt='{now:yyyy-MM-dd HH:mm:ss}' WHERE UserId='{ctx.UserId}'", trans);
-                await UserMarriage.ExecAsync($"UPDATE UserMarriages SET Status='divorced', SpouseId='', DivorceDate='{now:yyyy-MM-dd HH:mm:ss}', UpdatedAt='{now:yyyy-MM-dd HH:mm:ss}' WHERE UserId='{spouseId}'", trans);
-                await trans.CommitAsync();
+                await UserMarriage.UpdateWhereAsync(new { Status = "divorced", SpouseId = "", DivorceDate = now, UpdatedAt = now }, "UserId = {0}", trans, ctx.UserId);
+                await UserMarriage.UpdateWhereAsync(new { Status = "divorced", SpouseId = "", DivorceDate = now, UpdatedAt = now }, "UserId = {0}", trans, spouseId);
+                MetaData.CommitTransaction(trans);
                 return $"🥀 缘尽于此。【{ctx.UserId}】 与 【{spouseId}】 已办理离婚手续。";
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                MetaData.RollbackTransaction(trans);
                 return $"出错了: {ex.Message}";
             }
         }
@@ -226,7 +228,7 @@ namespace BotWorker.Modules.Games
             var price = type == "dress" ? 500 : 1000;
 
             // 检查是否已购买
-            var existing = (await WeddingItem.QueryWhere("UserId = @p1 AND ItemType = @p2", WeddingItem.SqlParams(("@p1", ctx.UserId), ("@p2", type)))).FirstOrDefault();
+            var existing = (await WeddingItem.QueryWhere("UserId = {0} AND ItemType = {1}", ctx.UserId, type)).FirstOrDefault();
             if (existing != null) return $"你已经拥有【{(type == "dress" ? "婚纱" : "婚戒")}】了。";
 
             var item = new WeddingItem { UserId = ctx.UserId, ItemType = type, Name = itemName, Price = price };

@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static BotWorker.Infrastructure.Persistence.ORM.MetaData;
+
 namespace BotWorker.Modules.Games
 {
     [BotPlugin(
@@ -234,7 +236,7 @@ namespace BotWorker.Modules.Games
             var diff = (DateTime.Now - user.LastActionTime).TotalMinutes;
             if (diff < user.WaitMinutes)
             {
-                await FishingUser.UpdateAsync("State = 0", userId);
+                await FishingUser.UpdateAsync($"State = 0", userId);
                 return "💨 哎呀，收竿太快，鱼被惊走了！";
             }
 
@@ -251,7 +253,7 @@ namespace BotWorker.Modules.Games
             double maxWeight = user.RodLevel * 10.0;
             if (weight > maxWeight)
             {
-                await FishingUser.UpdateAsync("State = 0", userId);
+                await FishingUser.UpdateAsync($"State = 0", userId);
                 return $"💔 糟糕！钓到了一头巨物({fish.Name} {weight}kg)，但是鱼竿承受不住，断线了！建议升级鱼竿。";
             }
 
@@ -276,10 +278,20 @@ namespace BotWorker.Modules.Games
         public static async Task<string> GetBagAsync(long userId)
         {
             var fishList = await FishingBag.QueryListAsync(new QueryOptions { FilterSql = $"UserId={userId}", OrderBy = "CatchTime DESC" });
-            if (fishList.Count == 0) return "你的鱼篓空空如也，快去抛竿吧！";
+            if (fishList.Count == 0) return "你的鱼篓空空如也。";
 
-            var summary = fishList.Take(10).Select(f => $"{f.FishName} ({f.Weight}kg) - {f.Value}💰");
-            return $"【我的鱼篓 (最近10条)】\n" + string.Join("\n", summary) + $"\n...\n共计 {fishList.Count} 条鱼，总估值：{fishList.Sum(f => f.Value)}💰\n发送【卖鱼】全部变现";
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"🎒 {userId} 的鱼篓 ({fishList.Count} 条鱼)：");
+            foreach (var f in fishList.Take(15))
+            {
+                string qualityIcon = new string('⭐', f.Quality + 1);
+                sb.AppendLine($"{qualityIcon} {f.FishName} ({f.Weight:F1}kg) - {f.Value}金币 [{f.CatchTime:HH:mm}]");
+            }
+            if (fishList.Count > 15) sb.AppendLine($"... 还有 {fishList.Count - 15} 条鱼");
+
+            long totalValue = fishList.Sum(f => f.Value);
+            sb.AppendLine($"\n💰 总价值：{totalValue} 金币");
+            return sb.ToString();
         }
 
         public static async Task<string> SellFishAsync(long userId)
@@ -289,18 +301,18 @@ namespace BotWorker.Modules.Games
 
             long totalGold = fishList.Sum(f => f.Value);
             
-            using var trans = await FishingUser.BeginTransactionAsync();
+            using var trans = await MetaData.BeginTransactionAsync();
             try {
-                await FishingUser.ExecAsync($"UPDATE FishingUser SET Gold = Gold + {totalGold} WHERE UserId = {userId}", trans);
-                await FishingBag.ExecAsync($"DELETE FROM FishingBag WHERE UserId = {userId}", trans);
-                await trans.CommitAsync();
+                await FishingUser.ExecAsync($"UPDATE {FishingUser.FullName} SET Gold = Gold + {totalGold} WHERE UserId = {userId}", trans);
+                await FishingBag.ExecAsync($"DELETE FROM {FishingBag.FullName} WHERE UserId = {userId}", trans);
+                MetaData.CommitTransaction(trans);
 
                 // 上报金币成就指标
                 _ = AchievementPlugin.ReportMetricAsync(userId.ToString(), "fishing.total_gold", totalGold);
 
                 return $"💰 所有的鱼已售出，获得 {totalGold} 金币！";
             } catch {
-                await trans.RollbackAsync();
+                MetaData.RollbackTransaction(trans);
                 return "交易失败，请稍后再试。";
             }
         }

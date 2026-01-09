@@ -35,13 +35,6 @@ namespace BotWorker.Domain.Entities
             }
         }
 
-        // 购买积分
-        public static int BuyCredit(long botUin, long groupId, string groupName, long buyerQQ, string buyerName, decimal payMoney, long creditAdd, string payMethod, string trade, string memo, int insertBy)
-        {
-            // 为了安全，同步版本也应该使用事务。这里使用 Wait() 简化重构。
-            return BuyCreditAsync(botUin, groupId, groupName, buyerQQ, buyerName, payMoney, creditAdd, payMethod, trade, memo, insertBy).GetAwaiter().GetResult();
-        }
-
         // 充值余额 (异步事务版)
         public static async Task<int> BuyBalanceAsync(long botUin, long groupId, string groupName, long buyerQQ, string buyerName, decimal payMoney, decimal balanceAdd, string payMethod, string trade, string memo, int insertBy)
         {

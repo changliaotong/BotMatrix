@@ -46,7 +46,7 @@ namespace BotWorker.Domain.Entities
             while (!isFinish)
             {
                 bool isSell = orderType == 0;
-                string id2 = await QueryScalarAsync<string>($"select top 1 orderId from {GoodsOrder.FullName} where GoodsID = {goodsId} and orderType != {orderType} and price {(isSell ? ">=" : "<=")} {price} order by price {(isSell ? "desc" : "")}", null) ?? "";
+                string id2 = await QueryScalarAsync<string>($"select {SqlTop(1)} orderId from {GoodsOrder.FullName} where GoodsID = {goodsId} and orderType != {orderType} and price {(isSell ? ">=" : "<=")} {price} order by price {(isSell ? "desc" : "")}{SqlLimit(1)}") ?? "";
                 if (!id2.IsNull())
                 {
                     long orderId2 = id2.AsLong();

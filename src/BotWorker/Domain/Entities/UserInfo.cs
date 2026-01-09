@@ -1,3 +1,4 @@
+using System.Data;
 using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
 
 namespace BotWorker.Domain.Entities;
@@ -68,6 +69,11 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public bool IsSendHelpInfo { get; set; }
     public bool IsLog { get; set; }
     public bool IsMusicLogo { get; set; }
+
+    public static async Task<UserInfo?> GetByOpenIdAsync(string openId, long botUin)
+    {
+        return (await QueryWhere("UserOpenId = {0} AND BotUin = {1}", openId, botUin)).FirstOrDefault();
+    }
 
     //用户头像CQ
     public static string GetHeadCQ(long user, int size = 100)
@@ -145,11 +151,12 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
 
     public static int UpdateCszGame(int csz_res, long csz_credit, int csz_times, long qq)
     {
-        return Update([
-            new Cov("CszRes", csz_res),
-                new Cov("CszCredit", csz_credit),
-                new Cov("CszTimes", csz_times),
-        ], qq);
+        return Update(new
+        {
+            CszRes = csz_res,
+            CszCredit = csz_credit,
+            CszTimes = csz_times,
+        }, qq);
     }
 
     public static bool IsOwner(long groupId, long qq)
@@ -192,20 +199,21 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
         return await SetValueAsync("state", (int)funcDefault, qq);
     }
 
-    public static async Task<int> AppendAsync(long botQQ, long groupId, long userId, string name, long userRef, string userOpenid = "", string groupOpenid = "")
+    public static async Task<int> AppendAsync(long botQQ, long groupId, long userId, string name, long userRef, string userOpenid = "", string groupOpenid = "", IDbTransaction? trans = null)
     {
-        return await ExistsAsync(userId)
+        return await ExistsAsync(userId, null, trans)
             ? 0
-            : await InsertAsync(new List<Cov> {
-                new Cov("BotUin", botQQ),
-                    new Cov("UserOpenid", userOpenid),
-                    new Cov("GroupOpenid", groupOpenid),
-                    new Cov("GroupId", groupId),
-                    new Cov("Id", userId),
-                    new Cov("Credit", userOpenid.IsNull() ? 50 : 5000),
-                    new Cov("Name", name),
-                    new Cov("RefUserId", userRef),
-            });
+            : await InsertAsync(new
+            {
+                BotUin = botQQ,
+                UserOpenid = userOpenid,
+                GroupOpenid = groupOpenid,
+                GroupId = groupId,
+                Id = userId,
+                Credit = userOpenid.IsNull() ? 50 : 5000,
+                Name = name,
+                RefUserId = userRef,
+            }, trans);
     }
 
     public static async Task<int> AppendUserAsync(long botUin, long groupId, long userId, string name, string userOpenid = "", string groupOpenid = "")
@@ -232,15 +240,16 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     {
         return Exists(userId)
             ? 0
-            : Insert(new List<Cov> {
-                new Cov("BotUin", botQQ),
-                    new Cov("UserOpenid", userOpenid),
-                    new Cov("GroupOpenid", groupOpenid),
-                    new Cov("GroupId", groupId),
-                    new Cov("Id", userId),
-                    new Cov("Credit", userOpenid.IsNull() ? 50 : 5000),
-                    new Cov("Name", name),
-                    new Cov("RefUserId", userRef),
+            : Insert(new
+            {
+                BotUin = botQQ,
+                UserOpenid = userOpenid,
+                GroupOpenid = groupOpenid,
+                GroupId = groupId,
+                Id = userId,
+                Credit = userOpenid.IsNull() ? 50 : 5000,
+                Name = name,
+                RefUserId = userRef,
             });
     }
 

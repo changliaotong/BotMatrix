@@ -26,12 +26,8 @@ namespace BotWorker.Domain.Entities
         public static async Task<AddBalanceResult> AddBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceAdd, string balanceInfo, IDbTransaction? trans = null)
         {
             // 如果没有传入事务，则创建一个新事务
-            bool isNewTrans = false;
-            if (trans == null)
-            {
-                trans = await BeginTransactionAsync();
-                isNewTrans = true;
-            }
+            bool isNewTrans = trans == null && MetaData.CurrentTransaction.Value == null;
+            if (isNewTrans) trans = await BeginTransactionAsync();
 
             try
             {
@@ -45,22 +41,22 @@ namespace BotWorker.Domain.Entities
                 await ExecAsync(sql, trans, paras);
                 await ExecAsync(sql2, trans, paras2);
 
-                if (isNewTrans)
-                    await trans.CommitAsync();
+                if (isNewTrans && trans != null)
+                    CommitTransaction(trans);
 
                 SyncCacheField(qq, "Balance", balanceValue);
                 return new AddBalanceResult(0, balanceValue);
             }
             catch (Exception ex)
             {
-                if (isNewTrans)
-                    await trans.RollbackAsync();
+                if (isNewTrans && trans != null)
+                    RollbackTransaction(trans);
                 Console.WriteLine($"[AddBalance Error] {ex.Message}");
                 return new AddBalanceResult(-1, GetBalance(qq));
             }
             finally
             {
-                if (isNewTrans)
+                if (isNewTrans && trans != null)
                 {
                     trans.Connection?.Close();
                     trans.Dispose();
@@ -82,20 +78,25 @@ namespace BotWorker.Domain.Entities
         //转账 (异步事务版)
         public static async Task<(int Result, decimal SenderBalance, decimal ReceiverBalance)> TransferAsync(long botUin, long groupId, string groupName, long qq, string name, long qqTo, string nameTo, decimal balanceMinus, decimal balanceAdd)
         {
-            using var trans = await BeginTransactionAsync();
+            var trans = await BeginTransactionAsync();
             try
             {
-                var res1 = await MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, $"转账给：{qqTo}", trans);
-                var res2 = await AddBalanceAsync(botUin, groupId, groupName, qqTo, nameTo, balanceAdd, $"转账来自：{qq}", trans);
+                var res1 = await MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, $"转账给：{qqTo}");
+                var res2 = await AddBalanceAsync(botUin, groupId, groupName, qqTo, nameTo, balanceAdd, $"转账来自：{qq}");
 
-                await trans.CommitAsync();
+                CommitTransaction(trans);
                 return (0, res1.BalanceValue, res2.BalanceValue);
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                RollbackTransaction(trans);
                 Console.WriteLine($"[Transfer Error] {ex.Message}");
                 return (-1, 0, 0);
+            }
+            finally
+            {
+                trans.Connection?.Close();
+                trans.Dispose();
             }
         }
 
@@ -219,17 +220,15 @@ namespace BotWorker.Domain.Entities
         {
             return Exists(userId)
                 ? SqlPlus("Balance", balancePlus, userId)
-                : SqlInsert([
-                                new Cov("UserId", userId),
-                                new Cov("Balance", balancePlus),
-                            ]);
+                : SqlInsert(new { UserId = userId, Balance = balancePlus });
         }
 
         public static async Task<string> GetBalanceListAsync(long groupId, long qq)
         {
-            string res = await QueryResAsync($"select {SqlTop(10)} Id, balance from {FullName} where UserId in " +
-                                  $"(select UserId from {CreditLog.FullName} where GroupId = {groupId}) order by balance desc{SqlLimit(10)}",
-                                  "【第{i}名】 [@:{0}] 余额：{1:N}\n");
+            string res = await QueryResAsync($"select {SqlTop(10)} [Id], [balance] from {FullName} where [UserId] in " +
+                                  $"(select [UserId] from {CreditLog.FullName} where [GroupId] = {{0}}) order by [balance] desc {SqlLimit(10)}",
+                                  "【第{i}名】 [@:{0}] 余额：{1:N}\n",
+                                  groupId);
             return res.Contains(qq.ToString())
                 ? res
                 : $"{res}{await GetMyBalanceListAsync(groupId, qq)}";
@@ -240,8 +239,9 @@ namespace BotWorker.Domain.Entities
         public static async Task<string> GetMyBalanceListAsync(long groupId, long qq)
         {
             decimal balance = await GetBalanceAsync(qq);
-            long res = await QueryScalarAsync<long>($"select count(*)+1 as res from {FullName} where balance > {balance} and UserId in " +
-                               $"(select UserId from {CreditLog.FullName} where GroupId = {groupId})");
+            long res = await QueryScalarAsync<long>($"select count(*)+1 as res from {FullName} where [balance] > {{0}} and [UserId] in " +
+                               $"(select [UserId] from {CreditLog.FullName} where [GroupId] = {{1}})",
+                               balance, groupId);
             return $"【第{res}名】 [@:{qq}] 余额：{balance:N}";
         }
 

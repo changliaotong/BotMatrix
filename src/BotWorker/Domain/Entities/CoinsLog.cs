@@ -10,9 +10,9 @@ public class CoinsLog : MetaData<CoinsLog>
     public static List<string> conisFields = ["GoldCoins", "BlackCoins", "PurpleCoins", "GameCoins", "GroupCredit"];
     public static List<string> conisNames = ["金币", "黑金币", "紫币", "游戏币", "本群积分"];
 
-    public static async Task<(string sql, IDataParameter[] parameters, long coinsValue)> SqlCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo)
+    public static async Task<(string sql, IDataParameter[] parameters, long coinsValue)> SqlCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo, IDbTransaction? trans = null)
     {
-        long coinsValue = await GroupMember.GetCoinsAsync(coinsType, groupId, qq) + coinsAdd;
+        long coinsValue = await GroupMember.GetCoinsAsync(coinsType, groupId, qq, trans) + coinsAdd;
         var (sql, paras) = SqlInsert([
             new("BotUin", botUin),
             new("GroupId", groupId),
@@ -27,10 +27,9 @@ public class CoinsLog : MetaData<CoinsLog>
         return (sql, paras, coinsValue);
     }
 
-    public static (string, IDataParameter[], long) SqlCoins(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo)
+    public static (string sql, IDataParameter[] parameters, long coinsValue) SqlCoins(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo, IDbTransaction? trans = null)
     {
-        var res = SqlCoinsAsync(botUin, groupId, groupName, qq, name, coinsType, coinsAdd, coinsInfo).GetAwaiter().GetResult();
-        return (res.sql, res.parameters, res.coinsValue);
+        return SqlCoinsAsync(botUin, groupId, groupName, qq, name, coinsType, coinsAdd, coinsInfo, trans).GetAwaiter().GetResult();
     }
 
     public static async Task AddLogAsync(long botUin, long groupId, string groupName, long qq, string name, int coinsType, long coinsAdd, string coinsInfo, IDbTransaction? trans = null)

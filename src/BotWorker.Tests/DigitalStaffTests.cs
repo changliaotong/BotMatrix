@@ -4,7 +4,7 @@ using Xunit;
 using Moq;
 using BotWorker.Domain.Interfaces;
 using BotWorker.Modules.Games;
-using BotWorker.Services;
+using BotWorker.Modules.AI.Services;
 using Microsoft.Extensions.Logging;
 
 namespace BotWorker.Tests

@@ -463,7 +463,12 @@ namespace BotWorker.Domain.Entities
         // 开始成语接龙 game
         public static int StartCyGame(int isInGame, string lastCy, long groupId)
         {
-            return Update($"IsInGame = {isInGame}, LastChengyu = {lastCy.Quotes()}, LastChengyuDate = {SqlDateTime}", groupId);
+            return Update(new
+            {
+                IsInGame = isInGame,
+                LastChengyu = lastCy,
+                LastChengyuDate = DateTime.MinValue
+            }, groupId);
         }
 
         public static bool GetIsValid(long groupId)
@@ -535,23 +540,33 @@ namespace BotWorker.Domain.Entities
         {
             return await ExistsAsync(group)
                 ? await UpdateGroupAsync(group, name, selfId, groupOwner, robotOwner)
-                : await InsertAsync([
-                            new Cov("Id", group),
-                            new Cov("GroupOpenid", openid),
-                            new Cov("GroupName", name),
-                            new Cov("GroupOwner", groupOwner),
-                            new Cov("RobotOwner", robotOwner),
-                            new Cov("BotUin", selfId),
-                        ]);
+                : await InsertAsync(new
+                {
+                    Id = group,
+                    GroupOpenid = openid,
+                    GroupName = name,
+                    GroupOwner = groupOwner,
+                    RobotOwner = robotOwner,
+                    BotUin = selfId,
+                });
         }
 
         public static async Task<int> UpdateGroupAsync(long group, string name, long selfId, long groupOwner = 0, long robotOwner = 0)
         {
-            string udpName = name.IsNull() ? "" : $"GroupName = {name.Quotes()}, ";
-            string udpGroupOwner = groupOwner == 0 || GetGroupOwner(group) != 0 || GroupVip.IsVip(group) ? "" : $"GroupOwner = {groupOwner},";
-            string udpRobotOwner = robotOwner == 0 || GetRobotOwner(group) != 0 || GroupVip.IsVip(group) ? "" : $"RobotOwner = {robotOwner},";
-            string udpRobot = $"BotUin = {selfId},";
-            return await UpdateAsync($"{udpName} {udpGroupOwner} {udpRobotOwner} {udpRobot} LastDate = GETDATE() ", group);
+            var updateFields = new Dictionary<string, object?>();
+
+            if (!name.IsNull()) updateFields["GroupName"] = name;
+
+            if (groupOwner != 0 && GetGroupOwner(group) == 0 && !GroupVip.IsVip(group))
+                updateFields["GroupOwner"] = groupOwner;
+
+            if (robotOwner != 0 && GetRobotOwner(group) == 0 && !GroupVip.IsVip(group))
+                updateFields["RobotOwner"] = robotOwner;
+
+            updateFields["BotUin"] = selfId;
+            updateFields["LastDate"] = DateTime.MinValue; // 自动处理为数据库当前时间
+
+            return await UpdateAsync(updateFields, group);
         }
 
         // 添加新群

@@ -109,7 +109,7 @@ namespace BotWorker.Modules.Games
                 await ExecAsync(sql.sql, trans, sql.paras);
                 if (!sqlAddCredit.sql.IsNull()) await ExecAsync(sqlAddCredit.sql, trans, sqlAddCredit.paras);
                 if (!sqlCreditHis.sql.IsNull()) await ExecAsync(sqlCreditHis.sql, trans, sqlCreditHis.paras);
-                await ExecAsync(sql2.sql, trans, sql2.paras);
+                await ExecAsync(sql2.sql, trans, sql2.parameters);
                 await trans.CommitAsync();
                 return 0;
             }

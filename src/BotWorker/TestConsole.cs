@@ -70,6 +70,15 @@ namespace BotWorker
             Console.WriteLine(">>> 自动运行测试命令: 菜单");
             await ProcessInput("菜单", selfInfo, groupInfo, userInfo);
 
+            Console.WriteLine(">>> 自动运行礼物系统测试: 礼物商店");
+            await ProcessInput("礼物商店", selfInfo, groupInfo, userInfo);
+
+            Console.WriteLine(">>> 自动运行礼物系统测试: 购买礼物 鲜花 1");
+            await ProcessInput("购买礼物 鲜花 1", selfInfo, groupInfo, userInfo);
+
+            Console.WriteLine(">>> 自动运行礼物系统测试: 我的背包");
+            await ProcessInput("我的背包", selfInfo, groupInfo, userInfo);
+
             Console.WriteLine(">>> 自动运行 RAG 测试: 什么是知识库？");
             await ProcessInput("什么是知识库？", selfInfo, groupInfo, userInfo);
 

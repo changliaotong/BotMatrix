@@ -43,9 +43,9 @@ namespace BotWorker.Infrastructure.Persistence.Database
             if (string.IsNullOrEmpty(name)) return name;
             
             // Normalize parameter name prefix
-            if (name.StartsWith("@") || name.StartsWith(":") || name.StartsWith("?"))
+            if (name.StartsWith('@') || name.StartsWith(':') || name.StartsWith('?'))
             {
-                name = name.Substring(1);
+                name = name[1..];
             }
 
             return "@" + name;

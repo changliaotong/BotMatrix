@@ -12,10 +12,11 @@ public class Friend : MetaData<Friend>
     {
         return await ExistsAsync(botUin, userId)
             ? 0
-            : await InsertAsync(new List<Cov> {
-                new Cov("BotUin", botUin),
-                    new Cov("UserId", userId),
-                    new Cov("UserName", nickName)
+            : await InsertAsync(new
+            {
+                BotUin = botUin,
+                UserId = userId,
+                UserName = nickName
             });
     }
 
@@ -23,10 +24,11 @@ public class Friend : MetaData<Friend>
     {
         return Exists(botUin, userId)
             ? 0
-            : Insert(new List<Cov> {
-                new Cov("BotUin", botUin),
-                    new Cov("UserId", userId),
-                    new Cov("UserName", nickName)
+            : Insert(new
+            {
+                BotUin = botUin,
+                UserId = userId,
+                UserName = nickName
             });
     }
 
@@ -35,16 +37,17 @@ public class Friend : MetaData<Friend>
         if (Exists(botUin, userId))
             return SqlPlus("Credit", creditPlus, botUin, userId);
         else
-            return SqlInsert(new List<Cov> {
-                new Cov("BotUin", botUin),
-                    new Cov("UserId", userId),
-                    new Cov("Credit", creditPlus),
-                });
+            return SqlInsert(new
+            {
+                BotUin = botUin,
+                UserId = userId,
+                Credit = creditPlus,
+            });
     }
 
-    public static async Task<long> GetCreditAsync(long botUin, long userId)
+    public static async Task<long> GetCreditAsync(long botUin, long userId, IDbTransaction? trans = null)
     {
-        return await GetLongAsync("Credit", botUin, userId);
+        return await GetLongAsync("Credit", botUin, userId, trans);
     }
 
     public static long GetCredit(long botUin, long userId)
@@ -52,9 +55,9 @@ public class Friend : MetaData<Friend>
         return GetCreditAsync(botUin, userId).GetAwaiter().GetResult();
     }
 
-    public static async Task<long> GetSaveCreditAsync(long botUin, long userId)
+    public static async Task<long> GetSaveCreditAsync(long botUin, long userId, IDbTransaction? trans = null)
     {
-        return await GetLongAsync("SaveCredit", botUin, userId);
+        return await GetLongAsync("SaveCredit", botUin, userId, trans);
     }
 
     public static long GetSaveCredit(long botUin, long userId)

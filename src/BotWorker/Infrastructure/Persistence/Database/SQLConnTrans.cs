@@ -32,6 +32,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 {
                     if (sql.IsNull()) continue;
 
+                    LogSql(sql, parameters);
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = sql;
                     cmd.Transaction = trans;
@@ -84,6 +85,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 {
                     if (!sql.IsNull())
                     {
+                        LogSql(sql, null);
                         using var cmd = conn.CreateCommand();
                         cmd.CommandText = sql;
                         cmd.Transaction = trans;

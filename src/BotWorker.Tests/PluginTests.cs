@@ -6,7 +6,7 @@ using Moq;
 using BotWorker.Domain.Interfaces;
 using BotWorker.Common;
 using BotWorker.Modules.Games;
-using BotWorker.Services;
+using BotWorker.Modules.AI.Services;
 using BotWorker.Modules.Plugins;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;

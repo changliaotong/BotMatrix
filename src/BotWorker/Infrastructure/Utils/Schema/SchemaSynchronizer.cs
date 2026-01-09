@@ -32,7 +32,7 @@ public static class SchemaSynchronizer
                 continue;
 
             var colAttr = prop.GetCustomAttribute<BotWorker.Infrastructure.Utils.Schema.Attributes.ColumnAttribute>();
-            var columnName = colAttr?.Name ?? prop.Name.ToLower();
+            var columnName = colAttr?.Name ?? prop.Name;
             
             bool isPrimaryKey = prop.Name.Equals("Id", StringComparison.OrdinalIgnoreCase) ||
                                 prop.GetCustomAttribute<PrimaryKeyAttribute>() != null;
@@ -44,6 +44,18 @@ public static class SchemaSynchronizer
             // 主键
             if (isPrimaryKey)
             {
+                // 如果是 SQL Server 且是数字类型，添加 IDENTITY
+                var isSqlServer = !BotWorker.Infrastructure.Persistence.ORM.MetaData.IsPostgreSql;
+                var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                if (isSqlServer && (propType == typeof(int) || propType == typeof(long)))
+                {
+                    sb.Append(" IDENTITY(1,1)");
+                }
+                else if (isSqlServer && propType == typeof(Guid))
+                {
+                    sb.Append(" DEFAULT NEWID()");
+                }
+
                 sb.Append(" PRIMARY KEY");
                 primaryKeyColumn = columnName;
             }

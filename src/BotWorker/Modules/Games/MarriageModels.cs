@@ -25,7 +25,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<UserMarriage?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return (await QueryWhere($"{Quote("UserId")} = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
         }
 
         public static async Task<UserMarriage> GetOrCreateAsync(string userId)
@@ -55,7 +55,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<MarriageProposal?> GetPendingAsync(string recipientId)
         {
-            return (await QueryWhere("RecipientId = @p1 AND Status = 'pending' ORDER BY CreatedAt DESC", SqlParams(("@p1", recipientId)))).FirstOrDefault();
+            return (await QueryWhere($"{Quote("RecipientId")} = @p1 AND {Quote("Status")} = 'pending' ORDER BY {Quote("CreatedAt")} DESC", SqlParams(("@p1", recipientId)))).FirstOrDefault();
         }
     }
 

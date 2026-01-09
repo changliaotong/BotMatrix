@@ -65,18 +65,18 @@ namespace BotWorker.Domain.Entities
             try
             {
                 // 1. 扣除/增加发送者积分
-                var res1 = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", trans);
+                var res1 = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}");
                 
                 // 2. 增加/扣除目标用户金币
-                var res2 = await AddCoinsAsync(botUin, groupId, groupName, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}", trans);
+                var res2 = await AddCoinsAsync(botUin, groupId, groupName, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}");
 
-                await trans.CommitAsync();
+                CommitTransaction(trans);
 
                 return $"{cmdName}{cmdPara}：{Math.Abs(coins_oper)}成功！\n[@:{coins_qq}]{cmdPara}:{res2.CoinsValue}\n您：{-minus_credit}分，累计：{res1.CreditValue}";
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                RollbackTransaction(trans);
                 Console.WriteLine($"[AddCoinsRes Error] {ex.Message}");
                 return RetryMsg;
             }
@@ -115,22 +115,22 @@ namespace BotWorker.Domain.Entities
             }
             credit_value -= minus_credit;
 
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
                 // 1. 处理积分
-                var addRes = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", trans);
+                var addRes = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
                 if (addRes.Result == -1) throw new Exception("积分操作失败");
 
                 // 2. 处理金币
                 var (sqlPlusCoins, parasPlus) = SqlPlus(CoinsLog.conisFields[coins_type], coins_oper, groupId, coins_qq);
-                await ExecAsync((sqlPlusCoins, parasPlus), trans);
+                await ExecAsync((sqlPlusCoins, parasPlus), wrapper.Transaction);
 
                 // 3. 金币日志
-                var (sqlCoinsHis, parasHis, coins_last) = CoinsLog.SqlCoins(botUin, groupId, groupName, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}");
-                await ExecAsync((sqlCoinsHis, parasHis), trans);
+                var (sqlCoinsHis, parasHis, coins_last) = await CoinsLog.SqlCoinsAsync(botUin, groupId, groupName, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
+                await ExecAsync((sqlCoinsHis, parasHis), wrapper.Transaction);
 
-                await trans.CommitAsync();
+                wrapper.Commit();
 
                 // 同步更新缓存中的积分和对应金币字段
                 UserInfo.SyncCacheField(qq, groupId, "Credit", addRes.CreditValue);
@@ -140,22 +140,22 @@ namespace BotWorker.Domain.Entities
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                wrapper.Rollback();
                 Console.WriteLine($"[ExchangeCoins Error] {ex.Message}");
                 return RetryMsg;
             }
         }
 
         // 本群积分
-        public static async Task<long> GetGroupCreditAsync(long groupId, long qq)
+        public static async Task<long> GetGroupCreditAsync(long groupId, long qq, IDbTransaction? trans = null)
         {
-            return await GetCoinsAsync((int)CoinsLog.CoinsType.groupCredit, groupId, qq);
+            return await GetCoinsAsync((int)CoinsLog.CoinsType.groupCredit, groupId, qq, trans);
         }
 
         // 金币余额
-        public static async Task<long> GetCoinsAsync(int coinsType, long groupId, long qq)
+        public static async Task<long> GetCoinsAsync(int coinsType, long groupId, long qq, IDbTransaction? trans = null)
         {
-            return await GetLongAsync(CoinsLog.conisFields[coinsType], groupId, qq);
+            return await GetLongAsync(CoinsLog.conisFields[coinsType], groupId, qq, trans);
         }
 
         public static long GetCoins(int coinsType, long groupId, long qq)
@@ -248,15 +248,15 @@ namespace BotWorker.Domain.Entities
             using var trans = await BeginTransactionAsync();
             try
             {
-                var res1 = await AddCoinsAsync(botUin, groupId, groupName, qq, name, coinsType, -coinsMinus, $"{transferInfo}转出:{qqTo}", trans);
-                var res2 = await AddCoinsAsync(botUin, groupId, groupName, qqTo, nameTo, coinsType, coinsAdd, $"{transferInfo}转入:{qq}", trans);
+                var res1 = await AddCoinsAsync(botUin, groupId, groupName, qq, name, coinsType, -coinsMinus, $"{transferInfo}转出:{qqTo}");
+                var res2 = await AddCoinsAsync(botUin, groupId, groupName, qqTo, nameTo, coinsType, coinsAdd, $"{transferInfo}转入:{qq}");
 
-                await trans.CommitAsync();
+                CommitTransaction(trans);
                 return (0, res1.CoinsValue, res2.CoinsValue);
             }
             catch
             {
-                await trans.RollbackAsync();
+                RollbackTransaction(trans);
                 return (-1, 0, 0);
             }
         }
@@ -385,9 +385,12 @@ namespace BotWorker.Domain.Entities
         // 获取签到列表
         public static async Task<string> GetSignListAsync(long groupId, int topN = 10)
         {
-            return await QueryResAsync($"select {SqlTop(topN)}UserId, SignTimes, SignLevel from {FullName} " +
-                                     $"where GroupId = {groupId} and SignTimes > 0 order by SignTimes desc, SignLevel desc{SqlLimit(topN)}",
-                                     "【第{i}名】 [@:{0}] 连续签到：{1}天(LV{2})\n");
+            return await QueryResAsync(
+                $"SELECT {SqlTop(topN)} [UserId], [SignTimes], [SignLevel] FROM {FullName} " +
+                $"WHERE [GroupId] = {0} AND [SignTimes] > 0 " +
+                $"ORDER BY [SignTimes] DESC, [SignLevel] DESC {SqlLimit(topN)}",
+                "【第{i}名】 [@:{0}] 连续签到：{1}天(LV{2})\n",
+                groupId);
         }
 
         public static string GetSignList(long groupId, int topN = 10)
@@ -401,27 +404,25 @@ namespace BotWorker.Domain.Entities
             long creditValue = await UserInfo.GetCreditAsync(groupId, userId);
             if (creditValue < withdrawAmount) return $"您的积分{creditValue}不足{withdrawAmount}";
 
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
                 // 1. 扣除积分
-                var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, userId, name, -withdrawAmount, "积分提现", trans);
+                var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, userId, name, -withdrawAmount, "积分提现", wrapper.Transaction);
                 if (res.Result == -1) throw new Exception("扣除积分失败");
 
-                // 2. 增加余额 (此处假设 UserInfo.AddBalanceAsync 已存在或通过 SqlPlus 处理)
+                // 2. 增加余额
                 var (sqlBalance, parasBalance) = UserInfo.SqlPlus("Balance", (decimal)withdrawAmount / 100, userId);
-                await ExecAsync(sqlBalance, trans, parasBalance);
+                await ExecAsync(sqlBalance, wrapper.Transaction, parasBalance);
 
-                await trans.CommitAsync();
+                wrapper.Commit();
 
                 UserInfo.SyncCacheField(userId, groupId, "Credit", res.CreditValue);
-                // UserInfo.SyncCacheField(userId, "Balance", ...); // 余额同步
-
                 return $"✅ 提现成功！\n提现积分：{withdrawAmount}\n到账余额：{(decimal)withdrawAmount / 100:N2}\n剩余积分：{res.CreditValue}";
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                wrapper.Rollback();
                 Console.WriteLine($"[WithdrawCredit Error] {ex.Message}");
                 return RetryMsg;
             }
@@ -430,7 +431,9 @@ namespace BotWorker.Domain.Entities
         // 金币排行榜
         public static async Task<string> GetCoinsRankingAsync(long groupId, long userId)
         {
-            long order = await CountWhereAsync($"GroupId = {groupId} AND GoldCoins > (select GoldCoins from {FullName} where GroupId = {groupId} and UserId = {userId})") + 1;
+            long order = await CountWhereAsync(
+                "[GroupId] = {0} AND [GoldCoins] > (SELECT [GoldCoins] FROM " + FullName + " WHERE [GroupId] = {0} AND [UserId] = {1})",
+                groupId, userId) + 1;
             return order.ToString();
         }
 
@@ -439,7 +442,9 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<string> GetCoinsRankingAllAsync(long userId)
         {
-            long order = await CountWhereAsync($"GoldCoins > (select sum(GoldCoins) from {FullName} where UserId = {userId})") + 1;
+            long order = await CountWhereAsync(
+                "[GoldCoins] > (SELECT SUM([GoldCoins]) FROM " + FullName + " WHERE [UserId] = {0})",
+                userId) + 1;
             return order.ToString();
         }
 
@@ -458,7 +463,10 @@ namespace BotWorker.Domain.Entities
         // 是否签到 (异步版)
         public static async Task<bool> IsSignInAsync(long groupId, long userId)
         {
-            return await GetBoolAsync($"CASE WHEN {SqlDateDiff("day", SqlIsNull("SignDate", "'2000-01-01'"), SqlDateTime)} = 0 THEN 1 ELSE 0 END", groupId, userId);
+            return await QueryScalarAsync<bool>(
+                "SELECT CASE WHEN " + SqlDateDiff("day", SqlIsNull("[SignDate]", "'2000-01-01'"), SqlDateTime) + " = 0 THEN 1 ELSE 0 END " +
+                "FROM " + FullName + " WHERE [GroupId] = {0} AND [UserId] = {1}",
+                groupId, userId);
         }
 
         public static bool IsSignIn(long groupId, long userId)
@@ -467,7 +475,10 @@ namespace BotWorker.Domain.Entities
         // 更新签到信息 SQL
         public static (string sql, IDataParameter[] parameters) SqlUpdateSignInfo(long groupId, long userId, int signTimes, int signLevel)
         {
-            return SqlUpdateWhere($"SignTimes = {signTimes}, SignLevel = {signLevel}, SignDate = {SqlDateTime}, SignTimesAll = {SqlIsNull("SignTimesAll", "0")} + 1", $"GroupId = {groupId} AND UserId = {userId}");
+            return ResolveSql(
+                "UPDATE " + FullName + " SET [SignTimes] = {0}, [SignLevel] = {1}, [SignDate] = " + SqlDateTime + ", [SignTimesAll] = " + SqlIsNull("[SignTimesAll]", "0") + " + 1 " +
+                "WHERE [GroupId] = {2} AND [UserId] = {3}",
+                signTimes, signLevel, groupId, userId);
         }
     }
 }
