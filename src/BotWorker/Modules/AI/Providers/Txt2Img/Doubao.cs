@@ -1,24 +1,25 @@
 using System.Text;
 using System.Text.Json;
+using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Providers.Configs;
 
 namespace BotWorker.Modules.AI.Providers.Txt2Img
 {
-    public class Doubao :MetaData<Doubao>
+    public class Doubao : MetaData<Doubao>, ITxt2ImgProvider
     {
-        public override string TableName => throw new NotImplementedException();
+        public override string TableName => "robot_doubao_img";
+        public override string KeyField => "id";
 
-        public override string KeyField => throw new NotImplementedException();
+        public string ProviderName => "Doubao Txt2Img";
 
-
-        public static async Task<string> GenerateImageDoubaoAsync(string text)
+        public async Task<string> GenerateImageAsync(string prompt, BotWorker.Modules.AI.Interfaces.ImageGenerationOptions options)
         {
-            var apiUrl = "https://visual.volcengineapi.com?Action=CVProcess&Version=2022-08-31";
+            var apiUrl = DoubaoTxt2Img.Url;
 
-            // 创建请求数据
             var requestData = new
             {
                 req_key = "high_aes_general_v21_L",
-                prompt = text,
+                prompt = prompt,
                 model_version = "general_v2.1_L",
                 req_schedule_conf = "general_v20_9B_pe",
                 seed = -1,
@@ -35,53 +36,38 @@ namespace BotWorker.Modules.AI.Providers.Txt2Img
                     position = 0,
                     language = 0,
                     opacity = 0.3,
-                    logo_text_content = "这里是明水印内容"
+                    logo_text_content = ""
                 }
             };
 
-            // 转换请求数据为 JSON
             var jsonRequest = JsonSerializer.Serialize(requestData);
 
             using var httpClient = new HttpClient();
             try
             {
-                // 设置请求头                
-                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {Configs.Doubao.Secret}");
+                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {DoubaoTxt2Img.Secret}");
 
-                // 发送 POST 请求
                 var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
                 var response = await httpClient.PostAsync(apiUrl, content);                
 
-                // 读取响应数据
                 var responseContent = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine("请求成功，响应内容如下：");
-                    Console.WriteLine(responseContent);
-
-                    // 解析返回 JSON 数据
                     var responseData = JsonSerializer.Deserialize<ResponseData>(responseContent);
                     if (responseData?.data?.image_urls != null && responseData.data.image_urls.Count > 0)
                     {
-                        Console.WriteLine("生成的图片 URL：" + responseData.data.image_urls[0]);
                         return responseData.data.image_urls[0];
                     }
-                }
-                else
-                {
-                    Console.WriteLine("请求失败，状态码：" + response.StatusCode);
-                    Console.WriteLine("响应内容：" + responseContent);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("发生错误：" + ex.Message);
+                Debug($"An error occurred while generating image with Doubao: {ex.Message}");
             }
-            return "";
+            return string.Empty;
         }
 
-        // 定义返回数据结构
         public class ResponseData
         {
             public int code { get; set; }

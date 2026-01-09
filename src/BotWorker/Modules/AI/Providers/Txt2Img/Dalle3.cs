@@ -1,54 +1,47 @@
 using Azure.AI.OpenAI;
 using Azure;
 using OpenAI.Images;
+using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Providers.Configs;
+using System.ClientModel;
 
 namespace BotWorker.Modules.AI.Providers.Txt2Img
 {
-    public class Dalle3 : MetaData<Dalle3>
+    public class Dalle3 : MetaData<Dalle3>, ITxt2ImgProvider
     {
         public override string TableName => "robot_dalle";
         public override string KeyField => "dalle_id";
 
-        public static string GenerateImage(long qq, string prompt)
+        public string ProviderName => "Dall-E 3";
+
+        public async Task<string> GenerateImageAsync(string prompt, BotWorker.Modules.AI.Interfaces.ImageGenerationOptions options)
         {
-            var res = "";
+            var imageSize = options.Size switch
+            {
+                "1024x1024" => GeneratedImageSize.W1024xH1024,
+                "1024x1792" => GeneratedImageSize.W1024xH1792,
+                "1792x1024" => GeneratedImageSize.W1792xH1024,
+                _ => GeneratedImageSize.W1024xH1024
+            };
 
-            //if (IsPublic)
-            //{
-            //    var url = $"< a href =\"http://robot.pengguanghui.com/ai?t={Token.GetToken(qq)}";
-            //    return $"以下地址直接<a href=\"{url}\">进入后台</a>使用文生图:\n{url}";
-            //}
-            //else if (prompt.IsNull())
-            //    return $"命令格式：生图 + 提示词\n生图模型：DallE-3";
-            //else
-            //{
-            //    //用ai来生成提示词：
-            //    string prompt_gpt = prompt; //await Ai.GetResAsync(prompt, Ai.DellE3AgentId);                                         
-            //    _ = Tokens.MinusTokensRes(bm, "使用生图模型 DallE-3");
-            //    res = await GenerateImageAsync(prompt_gpt, GeneratedImageSize.W1024xH1024, GeneratedImageQuality.Standard, GeneratedImageStyle.Natural);
-            //    res = res.IsNull() ? RetryMsg : res;
-            //    //IsAI = res.IsNull() ? 0 : 1;
+            var quality = options.Quality?.ToLower() == "hd" ? GeneratedImageQuality.High : GeneratedImageQuality.Standard;
+            var style = options.Style?.ToLower() == "vivid" ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural;
 
-            //    //保存到数据库
-            //    if (res != RetryMsg)
-            //        _ = DalleImages.SaveImageAsync(qq, prompt, prompt_gpt, res);
-            //}
-            return res;
+            return await GenerateImageInternalAsync(prompt, imageSize, quality, style);
         }
 
-        public static async Task<string> GenerateImageAsync(string prompt, GeneratedImageSize imageSize, GeneratedImageQuality quality, GeneratedImageStyle style)
+        private static async Task<string> GenerateImageInternalAsync(string prompt, GeneratedImageSize imageSize, GeneratedImageQuality quality, GeneratedImageStyle style)
         {
-            string endpoint = "https://australia-east-derlin.openai.azure.com/";
-            string key = "190629909e64471f927ab52a1c3d6e76";
+            string endpoint = AzureDalle.Endpoint;
+            string key = AzureDalle.ApiKey;
 
-            //AzureOpenAIClient client = new(new Uri(endpoint), new AzureKeyCredential(key));
-            AzureOpenAIClient client = new(new Uri(endpoint), new System.ClientModel.ApiKeyCredential(key));
+            AzureOpenAIClient client = new(new Uri(endpoint), new ApiKeyCredential(key));
 
             try
             {
-                var imageClient = client.GetImageClient("Dalle3");
+                var imageClient = client.GetImageClient(AzureDalle.DeploymentName);
 
-                var res = await imageClient.GenerateImageAsync(prompt, new ImageGenerationOptions
+                var res = await imageClient.GenerateImageAsync(prompt, new OpenAI.Images.ImageGenerationOptions
                 {
                     Size = imageSize,
                     Quality = quality,
@@ -56,22 +49,13 @@ namespace BotWorker.Modules.AI.Providers.Txt2Img
                     ResponseFormat = GeneratedImageFormat.Uri
                 });
 
-                // Image Generations responses provide URLs you can use to retrieve requested images
-
-                // 返回图片 URI
                 return res.Value.ImageUri.ToString();
-            }
-            catch (RequestFailedException ex) when (ex.Status == 429)
-            {
-                Debug($"Error:{ex.Message}", "Dall-E 3 被限制调用频率，可能欠费");
-                return RetryMsg;
             }
             catch (Exception ex)
             {
-                Debug($"Error:{ex.Message}", "Dall-E 3");
-                return RetryMsg;
+                Debug($"Error: {ex.Message}", "Dall-E 3");
+                return string.Empty;
             }
         }
-
     }
 }

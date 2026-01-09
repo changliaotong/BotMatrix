@@ -223,7 +223,8 @@ public partial class BotMessage : MetaData<BotMessage>
                 {
                     TokensMinus = 12000;
                     _ = MinusTokensRes("使用生图模型 豆包");
-                    Answer = await Doubao.GenerateImageDoubaoAsync(CmdPara);
+                    var doubao = new Doubao();
+                    Answer = await doubao.GenerateImageAsync(CmdPara, new BotWorker.Modules.AI.Interfaces.ImageGenerationOptions());
                     Answer = Answer.IsNull() ? RetryMsg : Answer;
                     IsAI = !Answer.IsNull();
 

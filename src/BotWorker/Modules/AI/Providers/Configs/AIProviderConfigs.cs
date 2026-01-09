@@ -99,8 +99,22 @@ namespace BotWorker.Modules.AI.Providers.Configs
 
     public static class AzureOpenAI
     {
-        public static string DeploymentName { get { return "gpt-4o-mini"; } }
-        public static string Endpoint { get { return "https://east-us-derlin.openai.azure.com"; } }
-        public static string ApiKey { get { return "sk-..."; } }
+        public static string DeploymentName => "gpt-4o-mini";
+        public static string Endpoint => "https://east-us-derlin.openai.azure.com";
+        public static string ApiKey => "sk-...";
+    }
+
+    public static class AzureDalle
+    {
+        public static string Endpoint => "https://australia-east-derlin.openai.azure.com/";
+        public static string ApiKey => "190629909e64471f927ab52a1c3d6e76";
+        public static string DeploymentName => "Dalle3";
+    }
+
+    public static class DoubaoTxt2Img
+    {
+        public static string Url => "https://visual.volcengineapi.com?Action=CVProcess&Version=2022-08-31";
+        public static string Key => Doubao.Key;
+        public static string Secret => Doubao.Secret;
     }
 }
