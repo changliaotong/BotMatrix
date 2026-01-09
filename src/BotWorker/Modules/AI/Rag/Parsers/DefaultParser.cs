@@ -1,7 +1,7 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading.Tasks;
 
-namespace BotWorker.Services.Rag.Parsers
+namespace BotWorker.Modules.AI.Rag.Parsers
 {
     public class DefaultParser : IContentParser
     {

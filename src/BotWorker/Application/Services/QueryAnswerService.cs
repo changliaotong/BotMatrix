@@ -1,4 +1,4 @@
-﻿using BotWorker.Agents.Plugins;
+using BotWorker.Modules.AI.Plugins;
 
 namespace BotWorker.Application.Services
 {

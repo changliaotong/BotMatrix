@@ -1,5 +1,6 @@
 using System.Data;
-using BotWorker.Agents.Providers.Txt2Img;
+using BotWorker.Modules.AI.Providers.Txt2Img;
+using BotWorker.Modules.AI.Interfaces;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages;
 
@@ -162,7 +163,7 @@ public partial class BotMessage : MetaData<BotMessage>
             var provider = LLMApp._manager.GetProvider(providerName ?? "Doubao");
             if (provider != null)
             {
-                AnswerAI = await provider.ExecuteAsync(History, modelName);
+                AnswerAI = await provider.ExecuteAsync(History, new ModelExecutionOptions { ModelId = modelName });
                 AnswerAI = AnswerAI.Trim();
 
                 bool ContainsImpatientWord(string input) =>

@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
-namespace BotWorker.Services.Rag
+namespace BotWorker.Modules.AI.Rag
 {
     public class TextSplitter
     {

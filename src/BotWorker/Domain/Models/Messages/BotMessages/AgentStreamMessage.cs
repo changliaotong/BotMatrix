@@ -1,4 +1,5 @@
-using BotWorker.Agents.Plugins;
+using BotWorker.Modules.AI.Plugins;
+using BotWorker.Modules.AI.Interfaces;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages;
 
@@ -76,23 +77,34 @@ public partial class BotMessage : MetaData<BotMessage>
                     var pluginKnowledge = new KnowledgeBasePlugin(KbService, GroupId);
                     var plugins = new Microsoft.SemanticKernel.KernelPlugin[] { pluginKnowledge };
 
-                    await provider.StreamExecuteAsync(History, modelId, async (data, isStreaming, token) =>
+                    var options = new ModelExecutionOptions 
+                    { 
+                        ModelId = modelId, 
+                        Plugins = plugins,
+                        CancellationToken = cts 
+                    };
+
+                    await foreach (var data in provider.StreamExecuteAsync(History, options).WithCancellation(cts))
                     {
-                        token.ThrowIfCancellationRequested();
-                        await Stream(data, token);
+                        await Stream(data, cts);
                         AnswerAI += data;
                         Answer += data;
-                    }, plugins, this, cts);
+                    }
                 }
                 else
                 {
-                    await provider.StreamExecuteAsync(History, modelId, async (data, isStreaming, token) =>
+                    var options = new ModelExecutionOptions 
+                    { 
+                        ModelId = modelId, 
+                        CancellationToken = cts 
+                    };
+
+                    await foreach (var data in provider.StreamExecuteAsync(History, options).WithCancellation(cts))
                     {
-                        token.ThrowIfCancellationRequested();
-                        await Stream(data, token);
+                        await Stream(data, cts);
                         AnswerAI += data;
                         Answer += data;
-                    }, cts);
+                    }
                 }
                 await StreamEnd(cts);
                 await SendMessageAsync();

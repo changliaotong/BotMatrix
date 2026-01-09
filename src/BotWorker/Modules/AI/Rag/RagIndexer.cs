@@ -1,7 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 
-namespace BotWorker.Services.Rag
+namespace BotWorker.Modules.AI.Rag
 {
     public interface IRagIndexer
     {

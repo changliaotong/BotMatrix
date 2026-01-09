@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace BotWorker.Services.Rag
+namespace BotWorker.Modules.AI.Rag
 {
     public class Chunk
     {

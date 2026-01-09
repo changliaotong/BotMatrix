@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Newtonsoft.Json;
-using BotWorker.Agents.Plugins;
+using BotWorker.Modules.AI.Plugins;
 using BotWorker.Infrastructure.Background;
 using BotWorker.Infrastructure.SignalR;
 

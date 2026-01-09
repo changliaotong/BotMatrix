@@ -10,6 +10,9 @@ using BotWorker.Application.Services;
 using BotWorker.Domain.Entities;
 using BotWorker.Domain.Interfaces;
 
+using BotWorker.Modules.AI.Services;
+using BotWorker.Modules.AI.Interfaces;
+
 namespace BotWorker.Modules.Plugins
 {
     public class PluginManager : IRobot
@@ -20,7 +23,7 @@ namespace BotWorker.Modules.Plugins
         private readonly IAIService _aiService;
         private readonly IAgentExecutor _agentExecutor;
         private readonly II18nService _i18nService;
-        private readonly BotWorker.Services.Rag.IRagService _ragService;
+        private readonly IRagService _ragService;
         private readonly ILogger<PluginManager> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly SessionManager _sessionManager;
@@ -38,7 +41,7 @@ namespace BotWorker.Modules.Plugins
         public IAIService AI => _aiService;
         public IAgentExecutor Agent => _agentExecutor;
         public II18nService I18n => _i18nService;
-        public BotWorker.Services.Rag.IRagService Rag => _ragService;
+        public IRagService Rag => _ragService;
         public SessionManager Sessions => _sessionManager;
         public IEventNexus Events => _eventNexus;
 
@@ -46,7 +49,7 @@ namespace BotWorker.Modules.Plugins
             IAIService aiService, 
             IAgentExecutor agentExecutor,
             II18nService i18nService, 
-            BotWorker.Services.Rag.IRagService ragService,
+            IRagService ragService,
             ILogger<PluginManager> logger,
             IServiceProvider serviceProvider,
             IConnectionMultiplexer redis,
@@ -430,6 +433,10 @@ namespace BotWorker.Modules.Plugins
                         }
                     }
                 }
+
+                // 2.4 AI 兜底 (AI Fallback)
+                _logger.LogInformation("No explicit match found, falling back to AI for: {Message}", message);
+                return await _aiService.ChatWithContextAsync(message, ctx);
             }
 
             return string.Empty;

@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using BotWorker.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using BotWorker.Modules.AI.Services;
 
 namespace BotWorker.Domain.Interfaces
 {
@@ -32,7 +33,7 @@ namespace BotWorker.Domain.Interfaces
         List<MentionedUser> MentionedUsers { get; }
 
         // 服务接口
-        Services.IAIService AI { get; }
+        IAIService AI { get; }
         Application.Services.II18nService I18n { get; }
         ILogger Logger { get; }
 

@@ -4,7 +4,8 @@ using BotWorker.Infrastructure.Communication.OneBot;
 using BotWorker.Modules.Plugins;
 
 using BotWorker.Application.Services;
-using BotWorker.Services;
+using BotWorker.Modules.AI.Services;
+using BotWorker.Modules.AI.Interfaces;
 
 namespace BotWorker.Domain.Interfaces
 {
@@ -62,7 +63,7 @@ namespace BotWorker.Domain.Interfaces
         /// <summary>
         /// RAG 服务
         /// </summary>
-        BotWorker.Services.Rag.IRagService Rag { get; }
+        IRagService Rag { get; }
 
         /// <summary>
         /// 获取所有已注册的技能

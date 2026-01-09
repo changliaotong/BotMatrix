@@ -1,10 +1,10 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using Newtonsoft.Json;
 using QQBot4Sharp.Models;
-using BotWorker.Agents.Providers;
+using BotWorker.Modules.AI.Providers;
 using BotWorker.Infrastructure.Utils;
 using System.Diagnostics;
-using BotWorker.Agents.Plugins;
+using BotWorker.Modules.AI.Plugins;
 using BotWorker.Modules.Plugins;
 using BotWorker.Application.Messaging.Pipeline;
 

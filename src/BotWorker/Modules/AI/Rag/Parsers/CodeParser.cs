@@ -1,9 +1,9 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace BotWorker.Services.Rag.Parsers
+namespace BotWorker.Modules.AI.Rag.Parsers
 {
     public class CodeParser : IContentParser
     {
