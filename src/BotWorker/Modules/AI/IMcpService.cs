@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,6 +41,7 @@ namespace BotWorker.Services
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public Dictionary<string, object> InputSchema { get; set; } = new();
+        public string ServerId { get; set; } = string.Empty;
     }
 
     public class MCPResource

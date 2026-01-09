@@ -3,6 +3,8 @@ using BotWorker.Domain.Models;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace BotWorker.Modules.Games
@@ -10,7 +12,7 @@ namespace BotWorker.Modules.Games
     [BotPlugin(
         Id = "core.oracle",
         Name = "矩阵先知系统",
-        Version = "1.0.0",
+        Version = "1.0.1",
         Author = "BotMatrix AI",
         Description = "基于矩阵知识库的 AI 引导员，能够通过自然语言解答您关于系统的任何疑问。",
         Category = "Core"
@@ -37,7 +39,7 @@ namespace BotWorker.Modules.Games
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "矩阵先知",
-                Commands = ["咨询", "问问", "oracle"],
+                Commands = ["咨询", "问问", "oracle", "帮助", "help"],
                 Description = "【咨询 问题】通过 AI 获取系统运行逻辑与操作指引"
             }, HandleCommandAsync);
 
@@ -45,6 +47,20 @@ namespace BotWorker.Modules.Games
             await robot.RegisterSkillAsync(new SkillCapability { Name = "oracle.query" }, async (ctx, args) => {
                 if (args == null || args.Length == 0) return "❌ 错误：缺少咨询问题。";
                 return await AskOracleAsync(ctx.UserId, args[0]);
+            });
+
+            // 延迟执行系统说明书索引，确保所有插件已加载
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(10000); // 等待 10 秒确保所有插件加载完毕
+                    await IndexSystemManualAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "索引系统说明书失败");
+                }
             });
         }
 
@@ -54,21 +70,68 @@ namespace BotWorker.Modules.Games
         {
             if (args.Length == 0)
             {
-                return "👁️ 矩阵先知正注视着你。请描述您的疑问，例如：【咨询 如何提升位面？】";
+                return "👁️ 矩阵先知正注视着你。请描述您的疑问，例如：【咨询 如何提升位面？】\n\n您也可以直接输入【帮助】查看功能列表。";
             }
 
             string question = string.Join(" ", args);
             return await AskOracleAsync(ctx.UserId, question);
         }
 
+        private async Task<string> IndexSystemManualAsync()
+        {
+            if (_robot == null) return string.Empty;
+
+            var manual = new StringBuilder();
+            manual.AppendLine("# 矩阵机器人系统说明书");
+            manual.AppendLine("本机器人由 BotMatrix 驱动，集成 AI 与 RAG 增强。");
+            manual.AppendLine();
+            manual.AppendLine("## 核心功能清单：");
+
+            foreach (var skill in _robot.Skills)
+            {
+                manual.AppendLine($"### 功能：{skill.Capability.Name}");
+                manual.AppendLine($"- 指令：{string.Join(", ", skill.Capability.Commands)}");
+                manual.AppendLine($"- 说明：{skill.Capability.Description}");
+                manual.AppendLine();
+            }
+
+            // 同时将插件自身的 Metadata 也加入索引
+            if (_robot is PluginManager pm)
+            {
+                // 这里可以通过反射获取所有插件的 BotPluginAttribute
+                // 但为了简单，先用 Skills 里的信息
+            }
+
+            await _robot.Rag.IndexDocumentAsync(manual.ToString(), "system_manual");
+            _logger?.LogInformation("[Oracle] 系统说明书已完成 RAG 索引。");
+
+            return "OK";
+        }
+
         private async Task<string> AskOracleAsync(string userId, string question)
         {
-            // TODO: 接入向量数据库检索与 LLM 生成逻辑
-            // 目前先返回一个基于当前进度的占位回复
-            
-            _logger?.LogInformation($"[Oracle] 用户 {userId} 提问: {question}");
+            if (_robot == null) return "❌ 系统未就绪。";
 
-            return $"🔮 【先知预言】\n关于“{question}”的逻辑正在同步至向量矩阵...\n\n目前我已掌握：\n- 位面进化法则 (Evolution)\n- 积分金融准则 (Points)\n- 资源中心权限 (Market)\n\n请耐心等待 AI 逻辑核心完全启动。";
+            try
+            {
+                // 1. RAG 检索
+                var chunks = await _robot.Rag.SearchAsync(question, 5);
+                var context = string.Join("\n---\n", chunks.Select(c => c.Content));
+
+                // 2. 构造 Prompt
+                var prompt = $"你是一个专业的 AI 助手，名为“矩阵先知”。请根据以下提供的系统功能说明，回答用户关于机器人的提问。\n\n" +
+                             $"【系统参考资料】\n{context}\n\n" +
+                             $"【用户提问】\n{question}\n\n" +
+                             $"请给出简洁明了、友好的回答。如果参考资料中没有相关信息，请告知用户并建议其联系管理员。";
+
+                // 3. AI 生成
+                return await _robot.AI.ChatAsync(prompt);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Oracle 咨询失败");
+                return $"🔮 【先知预言】\n目前位面波纹过于剧烈，我暂时无法看清未来...\n错误原因：{ex.Message}";
+            }
         }
     }
 }

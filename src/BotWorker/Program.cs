@@ -24,11 +24,20 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker.Infrastructure.SignalR.HubLoggingFilter>();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<BotWorker.Agents.Interfaces.IKnowledgeBaseService, BotWorker.Agents.Plugins.KnowledgeBaseService>(sp => 
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+    httpClient.BaseAddress = new Uri(AppConfig.KbApiUrl ?? "http://localhost:5000");
+    return new BotWorker.Agents.Plugins.KnowledgeBaseService(httpClient);
+});
 
 // 注册核心业务服务
 builder.Services.AddSingleton<IEventNexus, EventNexus>();
+builder.Services.AddSingleton<BotWorker.Agents.Providers.LLMApp>();
 builder.Services.AddSingleton<IMcpService, MCPManager>();
+builder.Services.AddSingleton<BotWorker.Services.Rag.IRagService, BotWorker.Services.Rag.RagService>();
 builder.Services.AddSingleton<IAIService, AIService>();
+builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
 builder.Services.AddSingleton<II18nService, I18nService>();
 builder.Services.AddSingleton<PluginManager>();
 builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();

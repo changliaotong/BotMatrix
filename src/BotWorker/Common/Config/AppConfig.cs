@@ -14,6 +14,7 @@ namespace BotWorker.Common.Config
         internal static string _url => _configuration?["BotWorker:url"] ?? "https://sz84.com";
         internal static string _apiKey => _configuration?["BotWorker:api_key"] ?? "AFCDE195E9EE00DCFCB5E0ED44D129EB";
 
+        public static string? KbApiUrl => _configuration?["BotWorker:KbApiUrl"];
         public static string RetryMsgTooFast => _configuration?["Messages:RetryMsgTooFast"] ?? "速度太快了，请稍后再试";
         public static string OwnerOnlyMsg => _configuration?["Messages:OwnerOnlyMsg"] ?? "此命令仅机器人主人可用";
         public static string YearOnlyMsg => _configuration?["Messages:YearOnlyMsg"] ?? "非年费版不能使用此功能";

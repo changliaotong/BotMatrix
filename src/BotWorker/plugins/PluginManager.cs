@@ -18,7 +18,9 @@ namespace BotWorker.Modules.Plugins
         private readonly Dictionary<string, List<Func<IPluginContext, Task>>> _eventHandlers = new();
         private readonly List<IPlugin> _plugins = new();
         private readonly IAIService _aiService;
+        private readonly IAgentExecutor _agentExecutor;
         private readonly II18nService _i18nService;
+        private readonly BotWorker.Services.Rag.IRagService _ragService;
         private readonly ILogger<PluginManager> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly SessionManager _sessionManager;
@@ -34,20 +36,26 @@ namespace BotWorker.Modules.Plugins
         public IReadOnlyList<IPlugin> Plugins => _plugins;
 
         public IAIService AI => _aiService;
+        public IAgentExecutor Agent => _agentExecutor;
         public II18nService I18n => _i18nService;
+        public BotWorker.Services.Rag.IRagService Rag => _ragService;
         public SessionManager Sessions => _sessionManager;
         public IEventNexus Events => _eventNexus;
 
         public PluginManager(
             IAIService aiService, 
+            IAgentExecutor agentExecutor,
             II18nService i18nService, 
+            BotWorker.Services.Rag.IRagService ragService,
             ILogger<PluginManager> logger,
             IServiceProvider serviceProvider,
             IConnectionMultiplexer redis,
             IEventNexus eventNexus)
         {
             _aiService = aiService;
+            _agentExecutor = agentExecutor;
             _i18nService = i18nService;
+            _ragService = ragService;
             _logger = logger;
             _serviceProvider = serviceProvider;
             _eventNexus = eventNexus;

@@ -29,17 +29,27 @@
   - 设置测试输出编码为 UTF-8，解决了控制台中文乱码问题。
   - 增加了对 `RemotePlugin` 初始化路径的安全性检查。
 
-## 3. 测试结果
-执行了完整的功能测试套件：
-- **测试总数**: 37
-- **通过数**: 37
-- **失败数**: 0
-- **通过率**: 100%
+## 🧪 测试覆盖与验证 (Tests & Validation)
 
-### 验证项
-1. **冒烟测试**: 所有插件均能正常加载并执行 `InitAsync`。
-2. **逻辑测试**: 宠物领养、求婚、钓鱼、数字员工雇佣等核心业务逻辑在模拟环境下运行正常。
-3. **容错测试**: 即使数据库连接失败，插件也能优雅处理并继续运行（通过 Mock 验证）。
+### 1. 基础功能测试 (Smoke Tests)
+- **文件**: [PluginTests.cs](file:///d:/projects/BotMatrix/src/BotWorker.Tests/PluginTests.cs)
+- **内容**: 验证所有插件的 `InitAsync` 和 `StopAsync` 生命周期。
+- **状态**: ✅ 全部通过。
 
-## 4. 结论
-重构后的代码更加符合 DRY (Don't Repeat Yourself) 原则，数据库操作更加安全可靠。目前所有功能测试均已通过，建议提交至主分支。
+### 2. 深度功能测试 (Comprehensive Functional Tests)
+- **文件**: [PluginComprehensiveTests.cs](file:///d:/projects/BotMatrix/src/BotWorker.Tests/PluginComprehensiveTests.cs)
+- **内容**: 模拟真实指令调用，验证各插件核心逻辑的正确性（已覆盖 12+ 插件）。
+- **状态**: ✅ 全部通过。
+- **发现并修复的 Bug**:
+  - `Game2048Plugin`: 修复了在未进行方向操作前调用 `PrintTiles` 导致的 `KeyNotFoundException`。
+
+### 3. 数据库兼容性验证
+- 验证了 `EnsureTableCreatedAsync` 在 SQL Server 真实环境下的安全性。
+- 修复了主键映射为 `NVARCHAR(MAX)` 导致 SQL Server 报错的问题（已修正为 `NVARCHAR(255)`）。
+
+---
+
+## 🛠️ 后续建议 (Recommendations)
+1. **持续集成**: 在 CI/CD 中保留 `PluginComprehensiveTests`，确保新插件不会引入回归问题。
+2. **事件驱动逻辑**: 后续可增加针对 `PointsService` 与 `EvolutionService` 联动事件的集成测试。
+3. **API 稳定性**: 定期检查 `MusicService` 使用的外部 API 可用性。

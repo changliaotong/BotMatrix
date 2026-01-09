@@ -38,24 +38,39 @@ namespace BotWorker.Agents.Providers.Helpers
             }
         }
 
-        public static async Task<string> CallOpenAIAsync(ChatHistory history, string modelId, string apiKey, string url, BotMessage context, IEnumerable<object> plugins)
+        public static async Task<string> CallOpenAIAsync(ChatHistory history, string modelId, string apiKey, string url, BotMessage context, IEnumerable<KernelPlugin> plugins)
         {
             try
             {
-                var kernel = KernelManager.GetKernel(modelId, apiKey, url, (IEnumerable<string>)plugins);
-                var chat = kernel.GetRequiredService<IChatCompletionService>();
-
-                var settings = new PromptExecutionSettings
+                var provider = KernelManager.GetProviderFromUrl(url);
+                if (!KernelManager._httpClients.TryGetValue(provider, out var client))
                 {
-                    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+                    Logger.Error($"未识别的模型服务地址: {url}");
+                    return RetryMsg;
+                }
+
+                var builder = Kernel.CreateBuilder()
+                    .AddOpenAIChatCompletion(modelId, apiKey, httpClient: client);
+
+                foreach (var plugin in plugins)
+                {
+                    builder.Plugins.Add(plugin);
+                }
+
+                var kernel = builder.Build();
+                var chatService = kernel.GetRequiredService<IChatCompletionService>();
+
+                var settings = new Microsoft.SemanticKernel.Connectors.OpenAI.OpenAIPromptExecutionSettings
+                {
+                    ToolCallBehavior = Microsoft.SemanticKernel.Connectors.OpenAI.ToolCallBehavior.AutoInvokeKernelFunctions
                 };
 
-                var result = await chat.GetChatMessageContentAsync(history, settings);
+                var result = await chatService.GetChatMessageContentAsync(history, settings, kernel);
                 return result.Content ?? string.Empty;
             }
             catch (Exception ex)
             {
-                Logger.Error($"OpenAIApiHelper.CallOpenAIWithFunctionAsync\n{ex.Message}");
+                Logger.Error($"[CallOpenAIWithPluginsAsync] {ex.GetType().Name}: {ex.Message}");
                 return RetryMsg;
             }
         }

@@ -58,19 +58,9 @@ namespace BotWorker.Agents.Providers.Helpers
             return await CallAzureOpenAIAsync(history, _config.ApiKey, _config.Endpoint, _config.DeploymentName);
         }
 
-        public Task<string> ExecuteAsync(ChatHistory history, string modelId, IEnumerable<object> plugins)
+        public async Task<string> ExecuteAsync(ChatHistory history, string modelId, BotMessage context, IEnumerable<KernelPlugin> plugins)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task<string> ExecuteAsync(ChatHistory history, string modelId, BotMessage context, IEnumerable<object> plugins)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<string> ExecuteAsync(ChatHistory history, string modelId, BotMessage context, IEnumerable<KernelPlugin> plugins)
-        {
-            throw new NotImplementedException();
+            return await OpenAIApiHelper.CallOpenAIAsync(history, _config.DeploymentName, _config.ApiKey, _config.Endpoint, context, plugins);
         }
 
         public async Task StreamExecuteAsync(ChatHistory history, string modelId, Func<string, bool, CancellationToken, Task> onUpdate, CancellationToken cts)
@@ -78,19 +68,9 @@ namespace BotWorker.Agents.Providers.Helpers
             await CallAzureOpenAIStreamAsync(history, onUpdate, _config.ApiKey, _config.Endpoint, _config.DeploymentName, cts);
         }
 
-        public Task StreamExecuteAsync(ChatHistory history, string modelId, Func<string, bool, CancellationToken, Task> onUpdate, IEnumerable<object> plugins, CancellationToken cts)
+        public async Task StreamExecuteAsync(ChatHistory history, string modelId, Func<string, bool, CancellationToken, Task> onUpdate, IEnumerable<KernelPlugin> plugins, BotMessage context, CancellationToken cts)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task StreamExecuteAsync(ChatHistory history, string modelId, Func<string, bool, CancellationToken, Task> onUpdate, IEnumerable<object> plugins, BotMessage context, CancellationToken cts)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task StreamExecuteAsync(ChatHistory history, string modelId, Func<string, bool, CancellationToken, Task> onUpdate, IEnumerable<KernelPlugin> plugins, BotMessage context, CancellationToken cts)
-        {
-            throw new NotImplementedException();
+            await OpenAIApiHelper.CallStreamOpenAIAsync(history, onUpdate, _config.DeploymentName, _config.ApiKey, _config.Endpoint, plugins, context, cts);
         }
     }
 }

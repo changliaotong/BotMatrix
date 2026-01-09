@@ -50,9 +50,19 @@ namespace BotWorker.Domain.Interfaces
         IAIService AI { get; }
 
         /// <summary>
+        /// 智能体执行服务
+        /// </summary>
+        IAgentExecutor Agent { get; }
+
+        /// <summary>
         /// 国际化服务
         /// </summary>
         II18nService I18n { get; }
+
+        /// <summary>
+        /// RAG 服务
+        /// </summary>
+        BotWorker.Services.Rag.IRagService Rag { get; }
 
         /// <summary>
         /// 获取所有已注册的技能

@@ -230,7 +230,13 @@ namespace BotWorker.Modules.Games
                         res += $" ".Times(max.AsString().Length + 1);
                     else
                     {
-                        res += dict[groupId]
+                        bool leftAlign = true;
+                        if (dict.TryGetValue(groupId, out bool val))
+                        {
+                            leftAlign = val;
+                        }
+
+                        res += leftAlign
                             ? $"{value}{" ".Times(max.AsString().Length - value.AsString().Length + 1)}"
                             : $"{" ".Times(max.AsString().Length - value.AsString().Length + 1)}{value}";
                     }

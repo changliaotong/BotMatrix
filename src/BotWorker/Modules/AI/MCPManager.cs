@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,6 +47,10 @@ namespace BotWorker.Services
                 if (allowed)
                 {
                     var tools = await server.Host.ListToolsAsync(server.Info.Id, ct);
+                    foreach (var tool in tools)
+                    {
+                        tool.ServerId = server.Info.Id;
+                    }
                     allTools.AddRange(tools);
                 }
             }

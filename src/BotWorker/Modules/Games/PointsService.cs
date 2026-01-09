@@ -1,3 +1,4 @@
+using BotWorker.Domain.Entities;
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Models;
 using BotWorker.Infrastructure.Utils.Schema;
@@ -21,8 +22,15 @@ namespace BotWorker.Modules.Games
     {
         private readonly ILogger<PointsService>? _logger;
         private IRobot? _robot;
-        private const string SYSTEM_RESERVE = "SYSTEM_RESERVE"; // 系统发行账户
-        private const string SYSTEM_REVENUE = "SYSTEM_REVENUE"; // 系统回收账户
+        private const string SYSTEM_RESERVE = "0"; // 系统发行账户 (使用原有数据库保留ID)
+        private const string SYSTEM_REVENUE = "1"; // 系统回收账户 (使用原有数据库保留ID)
+
+        private string NormalizeAccountId(string accountId)
+        {
+            if (accountId == "SYSTEM_RESERVE") return SYSTEM_RESERVE;
+            if (accountId == "SYSTEM_REVENUE") return SYSTEM_REVENUE;
+            return accountId;
+        }
 
         public PointsService() { }
 
@@ -41,12 +49,12 @@ namespace BotWorker.Modules.Games
         {
             _robot = robot;
 
-            // 自动同步表结构
-            await EnsureTablesCreatedAsync();
+            // 积分系统不再新建表，直接使用原有 User 和 Credit 表
+            // await EnsureTablesCreatedAsync(); 
 
-            // 初始化系统账户
-            await EnsureSystemAccountAsync(SYSTEM_RESERVE, "系统积分发行储备", AccountType.SystemReserve);
-            await EnsureSystemAccountAsync(SYSTEM_REVENUE, "系统积分回收收益", AccountType.SystemRevenue);
+            // 初始化系统账户 (确保 User 表中有这些记录)
+            await EnsureSystemAccountAsync(SYSTEM_RESERVE, "系统积分发行储备");
+            await EnsureSystemAccountAsync(SYSTEM_REVENUE, "系统积分回收收益");
 
             // 注册指令处理
             await robot.RegisterSkillAsync(new SkillCapability
@@ -67,22 +75,18 @@ namespace BotWorker.Modules.Games
 
                 if (string.IsNullOrEmpty(fromId) || string.IsNullOrEmpty(toId) || amount <= 0)
                 {
-                    return "❌ 错误：转账参数不完整或金额错误。";
+                    return "❌ 错误：转账参数 incomplete 或金额错误。";
                 }
 
                 // 执行转账逻辑 (贷记 fromId, 借记 toId)
-                bool success = await TransferAsync(toId, fromId, amount, reason);
+                bool success = await TransferAsync(toId, fromId, amount, reason, ctx);
                 return success ? "✅ 转账成功" : "❌ 转账失败：余额不足或系统错误";
             });
         }
 
         public Task StopAsync() => Task.CompletedTask;
 
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await PointAccount.EnsureTableCreatedAsync();
-            await PointLedger.EnsureTableCreatedAsync();
-        }
+        private Task EnsureTablesCreatedAsync() => Task.CompletedTask;
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
         {
@@ -97,54 +101,55 @@ namespace BotWorker.Modules.Games
             };
         }
 
-        #region 核心账务逻辑 (会计分录)
+        #region 核心账务逻辑 (对接原有数据库)
 
-        public async Task<bool> TransferAsync(string debitId, string creditId, long amount, string description)
+        public async Task<bool> TransferAsync(string debitId, string creditId, long amount, string description, IPluginContext? ctx = null)
         {
             if (amount <= 0) return false;
 
             try
             {
-                var debitAccount = await GetOrCreateAccountAsync(debitId);
-                var creditAccount = await GetOrCreateAccountAsync(creditId);
+                debitId = NormalizeAccountId(debitId);
+                creditId = NormalizeAccountId(creditId);
 
-                if (creditAccount.Type != AccountType.SystemReserve && creditAccount.Balance < amount)
+                long debitQQ = long.Parse(debitId);
+                long creditQQ = long.Parse(creditId);
+
+                long botUin = ctx != null ? long.Parse(ctx.BotId) : 0;
+                long groupId = ctx != null && !string.IsNullOrEmpty(ctx.GroupId) ? long.Parse(ctx.GroupId) : 0;
+                string groupName = ctx?.GroupName ?? "系统";
+                string debitName = (debitId == SYSTEM_RESERVE || debitId == SYSTEM_REVENUE) ? "系统账户" : (ctx?.UserName ?? debitId);
+                string creditName = (creditId == SYSTEM_RESERVE || creditId == SYSTEM_REVENUE) ? "系统账户" : (ctx?.UserName ?? creditId);
+
+                // 1. 检查付款方余额 (系统发行方除外)
+                if (creditId != SYSTEM_RESERVE)
                 {
-                    _logger?.LogWarning($"转账失败：账户 {creditId} 余额不足 ({creditAccount.Balance} < {amount})");
-                    return false;
+                    long currentBalance = await UserInfo.GetCreditAsync(groupId, creditQQ);
+                    if (currentBalance < amount)
+                    {
+                        _logger?.LogWarning($"转账失败：账户 {creditId} 余额不足 ({currentBalance} < {amount})");
+                        return false;
+                    }
                 }
 
-                debitAccount.Balance += amount;
-                creditAccount.Balance -= amount;
-                debitAccount.LastUpdateTime = DateTime.Now;
-                creditAccount.LastUpdateTime = DateTime.Now;
+                // 2. 使用原有事务逻辑执行转账
+                var result = await UserInfo.TransferCreditAsync(
+                    botUin, groupId, groupName,
+                    creditQQ, creditName,
+                    debitQQ, debitName,
+                    amount, amount, description);
 
-                await debitAccount.UpdateAsync();
-                await creditAccount.UpdateAsync();
+                if (result.Result != 0) return false;
 
-                var ledger = new PointLedger
-                {
-                    TransactionId = Guid.NewGuid().ToString("N"),
-                    DebitAccountId = debitId,
-                    DebitAccountName = debitAccount.AccountName,
-                    CreditAccountId = creditId,
-                    CreditAccountName = creditAccount.AccountName,
-                    Amount = amount,
-                    Description = description,
-                    TransactionTime = DateTime.Now
-                };
-                await ledger.InsertAsync();
-
-                // 发布交易事件
+                // 3. 发布交易事件 (保持新系统的事件能力)
                 if (_robot != null)
                 {
-                    // 如果是大额交易（大于 1000），发布审计事件
                     if (amount >= 1000)
                     {
                         _ = _robot.Events.PublishAsync(new SystemAuditEvent {
                             Level = "Warning",
                             Source = "Points",
-                            Message = $"检测到大额交易: {creditAccount.AccountName} -> {debitAccount.AccountName} | 金额: {amount}",
+                            Message = $"检测到大额交易: {creditName} -> {debitName} | 金额: {amount}",
                             TargetUser = debitId
                         });
                     }
@@ -152,7 +157,7 @@ namespace BotWorker.Modules.Games
                     _ = _robot.Events.PublishAsync(new PointTransactionEvent
                     {
                         UserId = debitId,
-                        AccountType = debitAccount.Type.ToString(),
+                        AccountType = (debitId == SYSTEM_RESERVE || debitId == SYSTEM_REVENUE) ? "System" : "User",
                         Amount = amount,
                         Description = description,
                         TransactionType = "Income"
@@ -161,19 +166,19 @@ namespace BotWorker.Modules.Games
                     _ = _robot.Events.PublishAsync(new PointTransactionEvent
                     {
                         UserId = creditId,
-                        AccountType = creditAccount.Type.ToString(),
+                        AccountType = (creditId == SYSTEM_RESERVE || creditId == SYSTEM_REVENUE) ? "System" : "User",
                         Amount = -amount,
                         Description = description,
                         TransactionType = "Expense"
                     });
                 }
 
-                _logger?.LogInformation($"[会计分录] {description}: {creditAccount.AccountName} -> {debitAccount.AccountName} | 金额: {amount}");
+                _logger?.LogInformation($"[原有库转账] {description}: {creditName} -> {debitName} | 金额: {amount}");
                 return true;
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "执行会计转账时发生异常");
+                _logger?.LogError(ex, "执行原有库转账时发生异常");
                 return false;
             }
         }
@@ -184,8 +189,9 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetBalanceMsgAsync(IPluginContext ctx)
         {
-            var account = await GetOrCreateAccountAsync(ctx.UserId, ctx.UserName);
-            return $"💰 您的积分账户：\n余额：{account.Balance}\n账户：{ctx.UserId}";
+            long groupId = !string.IsNullOrEmpty(ctx.GroupId) ? long.Parse(ctx.GroupId) : 0;
+            long balance = await UserInfo.GetCreditAsync(groupId, long.Parse(ctx.UserId));
+            return $"💰 您的积分账户：\n余额：{balance}\n账户：{ctx.UserId}";
         }
 
         private async Task<string> SignMsgAsync(IPluginContext ctx)
@@ -194,28 +200,24 @@ namespace BotWorker.Modules.Games
             var userLevel = await UserLevel.GetByUserIdAsync(ctx.UserId);
             int level = userLevel?.Level ?? 1;
             
-            // 基础奖励 100
             long baseReward = 100;
-            // 等级加成：每级增加 2%
             double multiplier = 1.0 + (level * 0.02);
-            
-            // 全局 Buff 加成
             double globalBuff = _robot?.Events.GetActiveBuff(BuffType.PointsMultiplier) ?? 1.0;
-            
             long finalReward = (long)(baseReward * multiplier * globalBuff);
 
-            bool success = await TransferAsync(ctx.UserId, SYSTEM_RESERVE, finalReward, $"每日签到奖励 (等级加成 x{multiplier:F2}, 全服 Buff x{globalBuff:F2})");
+            bool success = await TransferAsync(ctx.UserId, SYSTEM_RESERVE, finalReward, $"每日签到奖励 (等级加成 x{multiplier:F2}, 全服 Buff x{globalBuff:F2})", ctx);
             
             if (success)
             {
-                var account = await GetOrCreateAccountAsync(ctx.UserId);
+                long groupId = !string.IsNullOrEmpty(ctx.GroupId) ? long.Parse(ctx.GroupId) : 0;
+                long balance = await UserInfo.GetCreditAsync(groupId, long.Parse(ctx.UserId));
                 string planeInfo = userLevel != null ? $" [{GetPlaneName(level)}]" : "";
                 string buffNotice = globalBuff > 1.0 ? $"🔥 全服翻倍 x{globalBuff:F1}\n" : "";
                 return $"✅ 签到成功！\n" +
                        $"{buffNotice}" +
                        $"您的等级：Lv.{level}{planeInfo}\n" +
                        $"获得奖励：{finalReward} 积分 (含 {((multiplier * globalBuff - 1) * 100):F0}% 复合加成)\n" +
-                       $"当前总额：{account.Balance}";
+                       $"当前总额：{balance}";
             }
             return "❌ 签到失败，请稍后再试。";
         }
@@ -232,14 +234,14 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetSystemReportMsgAsync(IPluginContext ctx)
         {
-            var reserve = await PointAccount.GetByAccountIdAsync(SYSTEM_RESERVE);
-            var revenue = await PointAccount.GetByAccountIdAsync(SYSTEM_REVENUE);
+            long reserveBalance = await UserInfo.GetCreditAsync(0, long.Parse(SYSTEM_RESERVE));
+            long revenueBalance = await UserInfo.GetCreditAsync(0, long.Parse(SYSTEM_REVENUE));
             
-            return $"📊 系统财务简报：\n" +
+            return $"📊 系统财务简报 (原有数据库)：\n" +
                    $"----------------\n" +
-                   $"积分发行总量：{-(reserve?.Balance ?? 0)}\n" +
-                   $"系统回收收益：{revenue?.Balance ?? 0}\n" +
-                   $"流通中总量：{(-(reserve?.Balance ?? 0)) - (revenue?.Balance ?? 0)}\n" +
+                   $"积分发行总量：{-reserveBalance}\n" +
+                   $"系统回收收益：{revenueBalance}\n" +
+                   $"流通中总量：{(-reserveBalance) - revenueBalance}\n" +
                    $"----------------\n" +
                    $"会计准则：借贷必相等";
         }
@@ -248,36 +250,19 @@ namespace BotWorker.Modules.Games
 
         #region 私有辅助方法
 
-        private async Task<PointAccount> GetOrCreateAccountAsync(string accountId, string name = "")
+        private async Task EnsureSystemAccountAsync(string accountId, string name)
         {
-            var account = await PointAccount.GetByAccountIdAsync(accountId);
-            if (account == null)
+            long qq = long.Parse(accountId);
+            if (!await UserInfo.ExistsAsync(qq))
             {
-                account = new PointAccount
+                var user = new UserInfo
                 {
-                    AccountId = accountId,
-                    AccountName = string.IsNullOrEmpty(name) ? accountId : name,
-                    Type = AccountType.User,
-                    Balance = 0
+                    Id = qq,
+                    Name = name,
+                    Credit = 0,
+                    InsertDate = DateTime.Now
                 };
-                await account.InsertAsync();
-            }
-            return account;
-        }
-
-        private async Task EnsureSystemAccountAsync(string accountId, string name, AccountType type)
-        {
-            var account = await PointAccount.GetByAccountIdAsync(accountId);
-            if (account == null)
-            {
-                account = new PointAccount
-                {
-                    AccountId = accountId,
-                    AccountName = name,
-                    Type = type,
-                    Balance = 0
-                };
-                await account.InsertAsync();
+                await user.InsertAsync();
             }
         }
 
@@ -300,8 +285,7 @@ namespace BotWorker.Modules.Games
         {
             if (args is string userId)
             {
-                var account = await PointAccount.GetByAccountIdAsync(userId);
-                return account?.Balance ?? 0L;
+                return await UserInfo.GetCreditAsync(long.Parse(userId));
             }
             return 0L;
         }

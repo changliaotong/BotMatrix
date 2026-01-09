@@ -1,8 +1,11 @@
-﻿namespace BotWorker.Agents.Interfaces
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace BotWorker.Agents.Interfaces
 {
-    // 你需要自己实现的知识库服务接口
     public interface IKnowledgeBaseService
     {
         Task<string> BuildPrompt(string query, long groupId);
+        Task<List<BotWorker.Agents.Plugins.KnowledgeBaseService.KnowledgeResult>?> GetKnowledgesAsync(long groupId, string question);
     }
 }
