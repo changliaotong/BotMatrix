@@ -24,7 +24,7 @@ namespace BotWorker.Domain.Entities
         // 今日签到人数
         public static async Task<long> SignCountAsync(long groupId)
         {
-            return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND ABS(DATEDIFF(DAY,insert_date,GETDATE())) = 0");
+            return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND ABS({SqlDateDiff("DAY", "insert_date", SqlDateTime)}) = 0");
         }
 
         public static long SignCount(long groupId)
@@ -35,7 +35,7 @@ namespace BotWorker.Domain.Entities
         // 昨日签到人数
         public static async Task<long> SignCountYAsync(long groupId)
         {
-            return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND ABS(DATEDIFF(DAY,insert_date,GETDATE())) = 1");
+            return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND ABS({SqlDateDiff("DAY", "insert_date", SqlDateTime)}) = 1");
         }
 
         public static long SignCountY(long groupId)
@@ -46,7 +46,7 @@ namespace BotWorker.Domain.Entities
         // 本月签到次数
         public static async Task<long> SignCountThisMonthAsync(long groupId, long qq)
         {
-            return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND weibo_qq = {qq} AND ABS(DATEDIFF(MONTH,insert_date,GETDATE())) = 0");
+            return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND weibo_qq = {qq} AND ABS({SqlDateDiff("MONTH", "insert_date", SqlDateTime)}) = 0");
         }
 
         public static long SignCountThisMonth(long groupId, long qq)

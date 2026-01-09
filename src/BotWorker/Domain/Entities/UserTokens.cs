@@ -66,7 +66,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public static async Task<string> GetTokensListAsync(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.NapCat)
     {
         var format = ((int)botType).In(0, 1) ? "{i} [@:{0}]：{1}\n" : "{i} {0} {1}\n";
-        var res = await QueryResAsync($"select TOP {top} UserId, Tokens from {FullName} WHERE UserId IN (SELECT UserId FROM {GroupMember.FullName} WHERE GroupId = {groupId}) order by Tokens desc", format);
+        var res = await QueryResAsync($"select {SqlTop(top)} UserId, Tokens from {FullName} WHERE UserId IN (SELECT UserId FROM {GroupMember.FullName} WHERE GroupId = {groupId}) order by Tokens desc {SqlLimit(top)}", format);
         if (!res.Contains(qq.ToString()))
             res += $"{await GetTokensRankingAsync(groupId, qq)} [@:{qq}]：{await GetTokensAsync(qq)}\n";
         return res;
@@ -85,7 +85,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public static long GetDayTokensGroup(long groupId, long userId)
     {
         var sql = $"SELECT SUM(TokensAdd) FROM {TokensLog.FullName} WHERE GroupId = {groupId} AND UserId = {userId} " +
-                  $"AND ABS(DATEDIFF(DAY, InsertDate, GETDATE())) = 0 AND TokensAdd < 0";
+                  $"AND ABS({SqlDateDiff("DAY", "InsertDate", SqlDateTime)}) = 0 AND TokensAdd < 0";
         return QueryScalar<long>(sql);
     }
 
@@ -93,7 +93,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public static long GetDayTokens(long userId)
     {
         var sql = $"SELECT SUM(TokensAdd) FROM {TokensLog.FullName} WHERE UserId = {userId} " +
-                  $"AND ABS(DATEDIFF(DAY, InsertDate, GETDATE())) = 0 AND TokensAdd < 0";
+                  $"AND ABS({SqlDateDiff("DAY", "InsertDate", SqlDateTime)}) = 0 AND TokensAdd < 0";
         return QueryScalar<long>(sql);
     }
 

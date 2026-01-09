@@ -23,7 +23,7 @@ namespace BotWorker.Modules.Office
 
         public static async Task<float> TotalLastYearAsync(long userId)
         {
-            return (await GetWhereAsync("sum(IncomeMoney) as res", $"UserId={userId} and abs(datediff(year, getdate(), IncomeDate)) <= 1")).AsFloat();
+            return (await GetWhereAsync("sum(IncomeMoney) as res", $"UserId={userId} and abs({SqlDateDiff("year", SqlDateTime, "IncomeDate")}) <= 1")).AsFloat();
         }
 
         //曾经
@@ -57,7 +57,8 @@ namespace BotWorker.Modules.Office
 
         public static async Task<int> GetClientLevelAsync(long userId)
         {
-            return (await QueryAsync($"select dbo.get_client_level(isnull(sum(IncomeMoney),0)) as res from {FullName} " +
+            string func = IsPostgreSql ? "get_client_level" : $"{DbName}.dbo.get_client_level";
+            return (await QueryAsync($"select {func}({SqlIsNull("sum(IncomeMoney)", "0")}) as res from {FullName} " +
                          $"where UserId = {userId}")).AsInt();
         }
 
@@ -67,8 +68,9 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> GetLevelListAsync(long groupId)
         {
-            return await QueryResAsync($"select top 3 UserId, isnull(sum(IncomeMoney) as SIncome, dbo.get_client_level(isnull(sum(IncomeMoney),0) as client_level from {FullName} " +
-                            $"where UserId in (select UserId from {CreditLog.FullName} where GroupId = {groupId}) group by UserId order by SIncome desc",
+            string func = IsPostgreSql ? "get_client_level" : $"{DbName}.dbo.get_client_level";
+            return await QueryResAsync($"select {SqlTop(3)} UserId, {SqlIsNull("sum(IncomeMoney)", "0")} as SIncome, {func}({SqlIsNull("sum(IncomeMoney)", "0")}) as client_level from {FullName} " +
+                            $"where UserId in (select UserId from {CreditLog.FullName} where GroupId = {groupId}) group by UserId order by SIncome desc {SqlLimit(3)}",
                             "【第{i}名】：[@:{0}]   荣誉等级：LV{1}\n");
         }
 
@@ -88,7 +90,7 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> TodayAsync()
         {
-            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE() ) < 1")).AsCurrency();
+            return (await GetWhereAsync(SqlIsNull("SUM(IncomeMoney)", "0"), $"{SqlDateDiff("DAY", SqlDateAdd("hour", -5, "IncomeDate"), SqlDateTime)} < 1")).AsCurrency();
         }
 
         public static string Yesterday()
@@ -96,7 +98,7 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> YesterdayAsync()
         {
-            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE() ) = 1")).AsCurrency();
+            return (await GetWhereAsync(SqlIsNull("SUM(IncomeMoney)", "0"), $"{SqlDateDiff("DAY", SqlDateAdd("hour", -5, "IncomeDate"), SqlDateTime)} = 1")).AsCurrency();
         }
 
         public static string ThisMonth()
@@ -104,7 +106,7 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> ThisMonthAsync()
         {
-            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE()) <= 30")).AsCurrency();
+            return (await GetWhereAsync(SqlIsNull("SUM(IncomeMoney)", "0"), $"{SqlDateDiff("DAY", SqlDateAdd("hour", -5, "IncomeDate"), SqlDateTime)} <= 30")).AsCurrency();
         }
 
         public static string ThisYear()
@@ -112,7 +114,7 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> ThisYearAsync()
         {
-            return (await GetWhereAsync($"ISNULL(SUM(IncomeMoney),0)", $"DATEDIFF(DAY, IncomeDate - 5/24.0, GETDATE()) <= 365")).AsCurrency();
+            return (await GetWhereAsync(SqlIsNull("SUM(IncomeMoney)", "0"), $"{SqlDateDiff("DAY", SqlDateAdd("hour", -5, "IncomeDate"), SqlDateTime)} <= 365")).AsCurrency();
         }
 
         public static string All()

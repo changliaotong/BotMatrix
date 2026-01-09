@@ -25,7 +25,7 @@ public partial class BotMessage : MetaData<BotMessage>
         // 黑名单列表
         public async Task<string> GetGroupBlackListAsync()
         {
-            return await QueryResAsync($"SELECT TOP 10 BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC",
+            return await QueryResAsync($"SELECT {SqlTop(10)} BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC {SqlLimit(10)}",
                             "{i} {0}\n") +
                    "已拉黑人数：" + await BlackList.CountWhereAsync($"GroupId = {GroupId}") +
                    "\n拉黑 + QQ\n删黑 + QQ";

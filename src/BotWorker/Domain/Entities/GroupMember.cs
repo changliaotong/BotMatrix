@@ -281,7 +281,7 @@ namespace BotWorker.Domain.Entities
 
         public static (string, IDataParameter[]) SqlSaveCredit(long groupId, long userId, long creditSave)
         {
-            return SqlSetValues($"GroupCredit = GroupCredit - ({creditSave}), SaveCredit = ISNULL(SaveCredit, 0) + ({creditSave})", groupId, userId);
+            return SqlSetValues($"GroupCredit = GroupCredit - ({creditSave}), SaveCredit = {SqlIsNull("SaveCredit", "0")} + ({creditSave})", groupId, userId);
         }
 
         public static (string, IDataParameter[]) SqlAddCredit(long groupId, long userId, long creditAdd)
@@ -385,8 +385,8 @@ namespace BotWorker.Domain.Entities
         // 获取签到列表
         public static async Task<string> GetSignListAsync(long groupId, int topN = 10)
         {
-            return await QueryResAsync($"select top {topN} UserId, SignTimes, SignLevel from {FullName} " +
-                                     $"where GroupId = {groupId} and SignTimes > 0 order by SignTimes desc, SignLevel desc",
+            return await QueryResAsync($"select {SqlTop(topN)}UserId, SignTimes, SignLevel from {FullName} " +
+                                     $"where GroupId = {groupId} and SignTimes > 0 order by SignTimes desc, SignLevel desc{SqlLimit(topN)}",
                                      "【第{i}名】 [@:{0}] 连续签到：{1}天(LV{2})\n");
         }
 
@@ -449,7 +449,7 @@ namespace BotWorker.Domain.Entities
         // 获取签到日期差 (异步版)
         public static async Task<int> GetSignDateDiffAsync(long groupId, long userId)
         {
-            return await GetIntAsync("DATEDIFF(day, ISNULL(SignDate, '2000-01-01'), GETDATE())", groupId, userId);
+            return await GetIntAsync(SqlDateDiff("day", SqlIsNull("SignDate", "'2000-01-01'"), SqlDateTime), groupId, userId);
         }
 
         public static int GetSignDateDiff(long groupId, long userId)
@@ -458,7 +458,7 @@ namespace BotWorker.Domain.Entities
         // 是否签到 (异步版)
         public static async Task<bool> IsSignInAsync(long groupId, long userId)
         {
-            return await GetBoolAsync("DATEDIFF(day, ISNULL(SignDate, '2000-01-01'), GETDATE()) = 0", groupId, userId);
+            return await GetBoolAsync($"CASE WHEN {SqlDateDiff("day", SqlIsNull("SignDate", "'2000-01-01'"), SqlDateTime)} = 0 THEN 1 ELSE 0 END", groupId, userId);
         }
 
         public static bool IsSignIn(long groupId, long userId)
@@ -467,7 +467,7 @@ namespace BotWorker.Domain.Entities
         // 更新签到信息 SQL
         public static (string sql, IDataParameter[] parameters) SqlUpdateSignInfo(long groupId, long userId, int signTimes, int signLevel)
         {
-            return SqlUpdateWhere($"SignTimes = {signTimes}, SignLevel = {signLevel}, SignDate = GETDATE(), SignTimesAll = ISNULL(SignTimesAll, 0) + 1", $"GroupId = {groupId} AND UserId = {userId}");
+            return SqlUpdateWhere($"SignTimes = {signTimes}, SignLevel = {signLevel}, SignDate = {SqlDateTime}, SignTimesAll = {SqlIsNull("SignTimesAll", "0")} + 1", $"GroupId = {groupId} AND UserId = {userId}");
         }
     }
 }

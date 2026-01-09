@@ -14,7 +14,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<bool> ExistTodayAsync(long groupId, long userId)
         {
-            return await ExistsWhereAsync($"GroupId = {groupId} AND UserId = {userId} AND CDate = CONVERT(DATE, GETDATE())");
+            return await ExistsWhereAsync($"GroupId = {groupId} AND UserId = {userId} AND CDate = {SqlDate}");
         }
 
         public static int Append(long botUin, long groupId, string groupName, long userId, string name) => AppendAsync(botUin, groupId, groupName, userId, name).GetAwaiter().GetResult();
@@ -27,6 +27,8 @@ namespace BotWorker.Domain.Entities
                             new Cov("GroupName", groupName),
                             new Cov("UserId", userId),
                             new Cov("UserName", name),
+                            new Cov("CDate", DateTime.Today),
+                            new Cov("MsgDate", DateTime.Now),
                         ]);
         }
 
@@ -37,7 +39,7 @@ namespace BotWorker.Domain.Entities
             if (!await ExistTodayAsync(groupId, userId))
                 return await AppendAsync(botUin, groupId, groupName, userId, name);
             else
-                return await UpdateWhereAsync($"MsgDate = GETDATE(), CMsg = CMsg+1", $"GroupId = {groupId} AND UserId = {userId} AND CDate = CONVERT(DATE, GETDATE())");
+                return await UpdateWhereAsync($"MsgDate = {SqlDateTime}, CMsg = CMsg+1", $"GroupId = {groupId} AND UserId = {userId} AND CDate = {SqlDate}");
         }
 
         // 今日发言次数
@@ -45,7 +47,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> GetMsgCountAsync(long groupId, long qq)
         {
-            return (await GetWhereAsync("CMsg", $"GroupId = {groupId} and UserId = {qq} and CDate = CONVERT(DATE, GETDATE())")).AsInt();
+            return (await GetWhereAsync("CMsg", $"GroupId = {groupId} and UserId = {qq} and CDate = {SqlDate}")).AsInt();
         }
 
         // 昨日发言次数
@@ -53,7 +55,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> GetMsgCountYAsync(long groupId, long qq)
         {
-            return (await GetWhereAsync("CMsg", $"GroupId = {groupId} and UserId = {qq} and CDate = CONVERT(DATE, GETDATE()-1)")).AsInt();
+            return (await GetWhereAsync("CMsg", $"GroupId = {groupId} and UserId = {qq} and CDate = {SqlYesterday}")).AsInt();
         }
 
         // 今日发言排名
@@ -62,9 +64,9 @@ namespace BotWorker.Domain.Entities
         public static async Task<int> GetCountOrderAsync(long groupId, long userId)
         {
             return await QueryScalarAsync<int>($"select count(Id)+1 as res  from {FullName} " +
-                            $"where GroupId = {groupId} and CDate = Convert(date, GETDATE()) " +
-                            $"and CMsg > (select top 1 CMsg from sz84_robot..MsgCount " +
-                            $"where GroupId = {groupId} and UserId = {userId} and CDate = CONVERT(DATE, GETDATE()))", null);
+                            $"where GroupId = {groupId} and CDate = {SqlDate} " +
+                            $"and CMsg > (select {SqlTop(1)}CMsg from {FullName} " +
+                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlDate}{SqlLimit(1)})", null);
         }
 
         /// 昨日发言排名
@@ -73,9 +75,9 @@ namespace BotWorker.Domain.Entities
         public static async Task<int> GetCountOrderYAsync(long groupId, long userId)
         {
             return await QueryScalarAsync<int>($"select count(Id)+1 from {FullName} " +
-                            $"where GroupId = {groupId} and CDate = Convert(date, GETDATE()-1) " +
-                            $"and CMsg > (select top 1 CMsg from sz84_robot..MsgCount " +
-                            $"where GroupId = {groupId} and UserId = {userId} and CDate = Convert(date, GETDATE()-1))", null);
+                            $"where GroupId = {groupId} and CDate = {SqlYesterday} " +
+                            $"and CMsg > (select {SqlTop(1)}CMsg from {FullName} " +
+                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlYesterday}{SqlLimit(1)})", null);
         }
 
         // 今日发言榜前N名
@@ -85,8 +87,8 @@ namespace BotWorker.Domain.Entities
         {
             if (!await GroupInfo.IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
                 return OwnerOnlyMsg;
-            string res = await QueryResAsync($"select top {top} UserId, CMsg from {FullName} " +
-                                  $"where GroupId = {groupId} and CDate = Convert(date, GETDATE()) order by CMsg desc",
+            string res = await QueryResAsync($"select {SqlTop(top)}UserId, CMsg from {FullName} " +
+                                  $"where GroupId = {groupId} and CDate = {SqlDate} order by CMsg desc{SqlLimit(top)}",
                                   "【第{i}名】 [@:{0}] 发言：{1}\n");
             if (!res.Contains(userId.ToString()))
                 res += $"【第{{今日发言排名}}名】 {{你2}} 发言：{{今日发言次数}}";
@@ -101,8 +103,8 @@ namespace BotWorker.Domain.Entities
         {
             if (!await GroupInfo.IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
                 return OwnerOnlyMsg;
-            string res = await QueryResAsync($"select top {top} UserId, CMsg from {FullName} " +
-                                  $"where GroupId = {groupId} and CDate = Convert(date, GETDATE()-1) order by CMsg desc",
+            string res = await QueryResAsync($"select {SqlTop(top)}UserId, CMsg from {FullName} " +
+                                  $"where GroupId = {groupId} and CDate = {SqlYesterday} order by CMsg desc{SqlLimit(top)}",
                                   "【第{i}名】 [@:{0}] 发言：{1}\n");
             if (!res.Contains(userId.ToString()))
                 res += "【第{{昨日发言排名}}名】 {{你2}} 发言：{{昨日发言次数}}";

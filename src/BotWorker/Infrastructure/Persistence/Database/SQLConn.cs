@@ -35,11 +35,15 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             try
             {
+                Console.WriteLine($"[DB SQL] {sql}");
+                Console.WriteLine($"[DB INFO] Opening connection to: {GlobalConfig.DbType} (ConnString length: {ConnString?.Length ?? 0})");
                 conn.Open();
+                Console.WriteLine("[DB INFO] Connection opened successfully.");
                 return cmd.ExecuteScalar();
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[DB ERROR] Connection failed: {ex.Message}");
                 DbDebug(ex.Message, "ExecScalar");
                 return null;
             }        
@@ -56,26 +60,35 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return result != null ? (T)Convert.ChangeType(result, typeof(T)) : default!;
         }
 
-        public static T? QueryScalar<T>(string sql, params IDataParameter[] parameters)
+        public static T? QueryScalar<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            return QueryScalarInternal<T>(sql, parameters);
+            return QueryScalarInternal<T>(sql, trans, parameters);
         }
 
-        private static T? QueryScalarInternal<T>(string sql, IDataParameter[] parameters,
+        private static T? QueryScalarInternal<T>(string sql, IDbTransaction? trans, IDataParameter[] parameters,
             [CallerMemberName] string callerName = "",
             [CallerFilePath] string callerFile = "",
             [CallerLineNumber] int callerLine = 0)
         {
-            using var conn = DbProviderFactory.CreateConnection();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = sql;
-            if (parameters != null && parameters.Length > 0)
+            IDbConnection? conn = trans?.Connection;
+            bool isNewConn = false;
+            if (conn == null)
             {
-                foreach (var p in parameters) cmd.Parameters.Add(p);
+                conn = DbProviderFactory.CreateConnection();
+                conn.Open();
+                isNewConn = true;
             }
+
             try
             {
-                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.Transaction = trans;
+                if (parameters != null && parameters.Length > 0)
+                {
+                    foreach (var p in parameters) cmd.Parameters.Add(p);
+                }
+
                 object? result = cmd.ExecuteScalar();
 
                 if (result == null || result == DBNull.Value)
@@ -97,6 +110,13 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
                 DbDebug(debugInfo, "QueryScalar");
                 return default;
+            }
+            finally
+            {
+                if (isNewConn && conn != null)
+                {
+                    conn.Dispose();
+                }
             }
         }
 
@@ -202,7 +222,10 @@ namespace BotWorker.Infrastructure.Persistence.Database
             using var conn = DbProviderFactory.CreateConnection();
             try
             {
+                Console.WriteLine($"[DB SQL] {sql}");
+                Console.WriteLine($"[DB INFO] Opening async connection (ExecuteScalarAsync) to: {GlobalConfig.DbType}");
                 if (conn is DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
+                Console.WriteLine("[DB INFO] Async connection opened successfully.");
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
                 var processedParameters = ProcessParameters(parameters);
@@ -267,7 +290,10 @@ namespace BotWorker.Infrastructure.Persistence.Database
             if (conn == null)
             {
                 conn = DbProviderFactory.CreateConnection();
+                Console.WriteLine($"[DB SQL] {sql}");
+                Console.WriteLine($"[DB INFO] Opening connection (QueryDataset) to: {GlobalConfig.DbType}");
                 conn.Open();
+                Console.WriteLine("[DB INFO] Connection opened successfully.");
                 isNewConn = true;
             }
 
@@ -386,24 +412,24 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
         public static string Query(string sql, params IDataParameter[] parameters)
         {
-            return QueryScalar<string>(sql, parameters) ?? "";
+            return QueryScalar<string>(sql, null, parameters) ?? "";
         }
 
         public static T Query<T>(string sql)
         {
-            return Query<T>(sql, true, []);
+            return Query<T>(sql, true, null, []);
         }
 
         public static T Query<T>(string sql, params IDataParameter[] parameters)
         {
-            return Query<T>(sql, true, parameters);
+            return Query<T>(sql, true, null, parameters);
         }
 
-        public static T Query<T>(string sql, bool isDebug = true, params IDataParameter[] parameters)
+        public static T Query<T>(string sql, bool isDebug = true, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             try
             {
-                using DataSet ds = QueryDataset(sql, parameters);
+                using DataSet ds = QueryDataset(sql, trans, parameters);
                 if (ds != null && ds.Tables.Count > 0 && ds.Tables[0].Rows.Count > 0)
                 {
                     var val = ds.Tables[0].Rows[0][0];
@@ -578,37 +604,28 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return QueryScalar<long>(sql);
         }
 
-        public static string QueryRes(string sql, string format = "{0}", string countFormat = "")
+        public static string QueryRes(string sql, string format = "{0}", string countFormat = "", IDbTransaction? trans = null)
         {
-            using var conn = DbProviderFactory.CreateConnection();
-            try
-            {
-                conn.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = sql;
-                using var reader = cmd.ExecuteReader();
-                var rows = new List<string>();
-                int k = 1;
-                while (reader.Read())
-                {
-                    object[] rowValues = new object[reader.FieldCount];
-                    for (int j = 0; j < reader.FieldCount; j++)
-                    {
-                        rowValues[j] = reader[j] is DBNull ? "" : reader[j];
-                    }
-
-                    string formattedRow = string.Format(format.Replace("{i}", k.ToString()), rowValues);
-                    rows.Add(formattedRow);
-                    k++;
-                }
-                countFormat = countFormat.Replace("{c}", (k - 1).ToString());
-                return string.Join("", rows) + countFormat;
-            }
-            catch (Exception ex)
-            {
-                DbDebug($"Ex.Message:{ex.Message}\nSQL:{sql}", "QueryRes");
+            DataSet ds = QueryDataset(sql, trans);
+            if (ds == null || ds.Tables.Count == 0)
                 return "";
+
+            var rows = new List<string>();
+            int k = 1;
+            foreach (DataRow reader in ds.Tables[0].Rows)
+            {
+                object[] rowValues = new object[ds.Tables[0].Columns.Count];
+                for (int j = 0; j < ds.Tables[0].Columns.Count; j++)
+                {
+                    rowValues[j] = reader[j] is DBNull ? "" : reader[j];
+                }
+
+                string formattedRow = string.Format(format.Replace("{i}", k.ToString()), rowValues);
+                rows.Add(formattedRow);
+                k++;
             }
+            countFormat = countFormat.Replace("{c}", (k - 1).ToString());
+            return string.Join("", rows) + countFormat;
         }
 
         // 调试信息 红字显示 并写入数据库

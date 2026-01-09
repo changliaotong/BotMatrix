@@ -59,7 +59,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 {
                     _ = Task.Run(() =>
                     {
-                        var sql = $"EXEC sz84_robot.DBO.sp_UpdateUserIds";
+                        var sql = IsPostgreSql ? "CALL sp_UpdateUserIds()" : "EXEC sz84_robot.DBO.sp_UpdateUserIds";
                         Exec(sql);
                     });
                 }
@@ -72,12 +72,12 @@ public partial class BotMessage : MetaData<BotMessage>
                         {
                             await Task.Delay(20000).ConfigureAwait(false);
                             Message = Message.RemoveUserId(botUin).Trim();
-                            var sql = $"SELECT TOP 1 GroupId FROM {GroupSendMessage.FullName} WHERE ABS(DATEDIFF(SECOND, InsertDate, GETDATE())) < 40 " +
-                                      $"AND LTRIM(RTRIM(question)) = {Message.Quotes()} AND GroupId > {UserGuild.MIN_USER_ID} AND GroupId != {GroupId} AND UserId = {UserId} ORDER BY Id DESC";
+                            var sql = $"SELECT {SqlTop(1)} GroupId FROM {GroupSendMessage.FullName} WHERE ABS({SqlDateDiff("SECOND", "InsertDate", SqlDateTime)}) < 40 " +
+                                      $"AND LTRIM(RTRIM(question)) = {Message.Quotes()} AND GroupId > {UserGuild.MIN_USER_ID} AND GroupId != {GroupId} AND UserId = {UserId} ORDER BY Id DESC {SqlLimit(1)}";
                             sourceGroupId = QueryScalar<long>(sql);
                             if (sourceGroupId != 0)
                             {
-                                sql = $"EXEC sz84_robot.DBO.sp_UpdateGroupInfo {sourceGroupId}, {GroupId} ";
+                                sql = IsPostgreSql ? $"CALL sp_UpdateGroupInfo({sourceGroupId}, {GroupId})" : $"EXEC sz84_robot.DBO.sp_UpdateGroupInfo {sourceGroupId}, {GroupId} ";
                                 Exec(sql);
                             }
                         });

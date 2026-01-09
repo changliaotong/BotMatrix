@@ -24,16 +24,20 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             }
             else if (options.Top.HasValue)
             {
-                topClause = $"TOP {options.Top.Value}";
+                topClause = SqlTop(options.Top.Value);
+                pagingClause = SqlLimit(options.Top.Value);
             }
             else
             {
-                // 分页（SQL Server 2012+）
+                // 分页
                 int page = Math.Max(options.PageIndex ?? 1, 1);
                 int size = Math.Max(options.PageSize ?? 20, 1);
                 int offset = (page - 1) * size;
 
-                pagingClause = $"OFFSET {offset} ROWS FETCH NEXT {size} ROWS ONLY";
+                if (IsPostgreSql)
+                    pagingClause = $"LIMIT {size} OFFSET {offset}";
+                else
+                    pagingClause = $"OFFSET {offset} ROWS FETCH NEXT {size} ROWS ONLY";
             }
 
             string sql = $"SELECT {topClause} * FROM {GetFullName()} {where} {orderBy} {pagingClause}";
@@ -130,9 +134,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await QueryWhere(where.Replace("WHERE ", ""), null, param.ToParameters());
         }
 
-        public static async Task<string> QueryScalarAsync(string sql, params IDataParameter[] parameters)
+        public static async Task<string> QueryScalarAsync(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            return await QueryScalarAsync<string>(sql, null, parameters) ?? "";
+            return await QueryScalarAsync<string>(sql, trans, parameters) ?? "";
         }
 
         // 核心泛型 QueryWhere 实现 - 返回指定字段的实体列表

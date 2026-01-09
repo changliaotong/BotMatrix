@@ -14,7 +14,6 @@ namespace BotWorker.Modules.AI.Models
         public string ProviderType { get; set; } = "openai";
         public string LogoUrl { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
-        public int Status { get; set; } = 1;
 
         public static async Task<Dictionary<string, object>> AppendAsync(LLMProvider llmProvider, params string[] fields)
         { 
@@ -25,8 +24,7 @@ namespace BotWorker.Modules.AI.Models
                 llmProvider.ApiKey,
                 llmProvider.ProviderType,
                 llmProvider.LogoUrl,
-                llmProvider.Description,
-                llmProvider.Status
+                llmProvider.Description
             }, fields);
         }
 
@@ -40,7 +38,6 @@ namespace BotWorker.Modules.AI.Models
                 llmProvider.ProviderType,
                 llmProvider.LogoUrl,
                 llmProvider.Description,
-                llmProvider.Status,
                 UpdateAt = DateTime.Now,
             }, llmProvider.Id);
         }
@@ -54,6 +51,11 @@ namespace BotWorker.Modules.AI.Models
         {
             var sql = $"SELECT * FROM {FullName}";
             return await QueryListAsync<LLMProvider>(sql);
+        }
+
+        public static async Task<List<LLMProvider>?> GetAllActiveAsync()
+        {
+            return await GetAllAsync();
         }
     }
 }

@@ -7,9 +7,16 @@ namespace BotWorker.Infrastructure.Persistence.ORM
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
         public static T Get<T>(string fieldName, object id, object? id2 = null)
-            => GetAsync<T>(fieldName, id, id2).GetAwaiter().GetResult();
+        {
+            if (typeof(T) == typeof(int)) return (T)(object)GetInt(fieldName, id, id2);
+            if (typeof(T) == typeof(long)) return (T)(object)GetLong(fieldName, id, id2);
+            if (typeof(T) == typeof(bool)) return (T)(object)GetBool(fieldName, id, id2);
+            if (typeof(T) == typeof(string)) return (T)(object)GetValue(fieldName, id, id2);
+            
+            return GetFromDbAsync<T>(fieldName, id, id2).GetAwaiter().GetResult();
+        }
 
-        public static async Task<T> GetAsync<T>(string fieldName, object id, object? id2 = null)
+        public static async Task<T> GetFromDbAsync<T>(string fieldName, object id, object? id2 = null)
         {
             var (sql, parameters) = SqlGet(fieldName, id, id2);
             var res = await QueryScalarAsync<T>(sql, null, parameters);
@@ -27,7 +34,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<T> GetDefAsync<T>(string fieldName, object id, object? id2, T def)
         {
-            var res = await GetAsync<T>(fieldName, id, id2);
+            var res = await GetFromDbAsync<T>(fieldName, id, id2);
             return res == null || res.Equals(default(T)) ? def : res;
         }
 
@@ -35,19 +42,19 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             => GetIntAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
         public static async Task<int> GetIntAsync(string fieldName, object id, object? id2 = null)
-            => await GetAsync<int>(fieldName, id, id2);
+            => await GetAsync<int>(fieldName, id, id2, 0);
 
         public static long GetLong(string fieldName, object id, object? id2 = null)
             => GetLongAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
         public static async Task<long> GetLongAsync(string fieldName, object id, object? id2 = null)
-            => await GetAsync<long>(fieldName, id, id2);
+            => await GetAsync<long>(fieldName, id, id2, 0L);
 
         public static bool GetBool(string fieldName, object id, object? id2 = null)
             => GetBoolAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
         public static async Task<bool> GetBoolAsync(string fieldName, object id, object? id2 = null)
-            => await GetAsync<bool>(fieldName, id, id2);
+            => await GetAsync<bool>(fieldName, id, id2, false);
 
         public static Dictionary<string, object?>? GetDict(object id, object? id2 = null, params string[] fieldNames)
             => GetDictAsync(id, id2, fieldNames).GetAwaiter().GetResult();
@@ -91,16 +98,6 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static string GetValue(string fieldName, object id, object? id2 = null)
             => GetValueAsync(fieldName, id, id2).GetAwaiter().GetResult();
 
-        public static async Task<string> GetValueAsync(string fieldName, object id, object? id2 = null)
-        {
-            var (sql, parameters) = SqlGetStr(fieldName, id, id2);
-            var res = await QueryScalarAsync<string>(sql, null, parameters);
-            return res ?? "";
-        }
-
-        //public static DateTime GetDateTime(string fieldName, object id, object? id2 = null)
-        //    => Get<DateTime>(fieldName, id, id2);
-
         public static Guid GetGuid(string fieldName, object id, object? id2 = null)
             => Get<Guid>(fieldName, id, id2);
 
@@ -108,13 +105,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<byte[]?> GetBytes(string fieldName, object id, object? id2 = null)
         {
             var (where, paras) = SqlWhere(id, id2);
-            var result = await ExecuteScalarAsync($"{$"SELECT {fieldName} FROM {FullName}"} {where}", paras);
+            var result = await ExecScalarAsync<byte[]>($"SELECT {fieldName} FROM {FullName} {where}", null, paras);
             return result;
         }
 
         public static T GetValueAandB<T>(string select, string key, object value, string key2, object? value2)
         {
-            return QueryScalar<T>($"SELECT {select} FROM {FullName} WHERE {key} = @p1 AND {key2} = @p2", SqlParams(("@p1", value), ("@p2", value2))) ?? default!;
+            return QueryScalar<T>($"SELECT {select} FROM {FullName} WHERE {key} = @p1 AND {key2} = @p2", null, SqlParams(("@p1", value), ("@p2", value2))) ?? default!;
         }
 
         public static async Task<TDerived?> GetSingleAsync(string columns, object id, object? id2 = null)
@@ -136,7 +133,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static IEnumerable<string> GetRandom(string[] fieldNames, int top = 1)
         {
             string fields = string.Join(", ", fieldNames.Select(fieldName => fieldName.IsNull() ? Key : fieldName));
-            string sql = $"SELECT TOP {top} {fields} FROM {FullName} ORDER BY NEWID()";
+            string sql = $"SELECT {SqlTop(top)}{fields} FROM {FullName} ORDER BY {SqlRandomOrder}{SqlLimit(top)}";
             DataSet ds = QueryDataset(sql);
             IEnumerable<string> res = ds.Tables[0].AsEnumerable().Select(dr => string.Join(", ", fieldNames.Select(fieldName => dr[fieldName].ToString())));
             return res;
@@ -160,7 +157,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var sql = $"SELECT {string.Join(", ", fieldNames)} FROM {FullName} {whereClause}";
 
             var result = new List<Dictionary<string, object?>>();
-            var ds = QueryDataset(sql, parameters);
+            var ds = QueryDataset(sql, null, parameters);
 
             if (ds != null && ds.Tables.Count > 0)
             {
@@ -181,7 +178,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static (string, IDataParameter[]) SqlGetStr(string fieldName, object id, object? id2 = null)
         {
             var (where, parameters) = SqlWhere(id, id2);
-            return ($"SELECT ISNULL(CONVERT(NVARCHAR(MAX), {fieldName}), '') as res FROM {FullName} {where}", parameters);
+            string convertField = IsPostgreSql ? $"{fieldName}::text" : $"CONVERT(NVARCHAR(MAX), {fieldName})";
+            string sql = $"SELECT {SqlIsNull(convertField, "''")} as res FROM {FullName} {where}";
+            return (sql, parameters);
         }
 
         public static (string, IDataParameter[]) SqlGet(string fieldName, object id, object? id2 = null)
@@ -200,13 +199,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static object? GetObject<T>(string fieldName, object id, object? id2 = null)
         {
             var (sql, parameters) = SqlGet(fieldName, id, id2);
-            var result = Query<T>(sql, parameters);
+            var result = Query<T>(sql, null, parameters);
             return result.FirstOrDefault();
         }
 
         public static string SqlGetWhere(string fieldName, string where, string sOrderby = "")
         {
-            return $"SELECT TOP 1 {fieldName} FROM {FullName} {where.EnsureStartsWith("WHERE")} {sOrderby.EnsureStartsWith("ORDER BY")}";
+            return $"SELECT {SqlTop(1)}{fieldName} FROM {FullName} {where.EnsureStartsWith("WHERE")} {sOrderby.EnsureStartsWith("ORDER BY")} {SqlLimit(1)}";
         }
 
         public static string GetWhere(string fieldName, string where, string sOrderby = "")
@@ -237,14 +236,16 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return res;
         }
 
-        public static string SqlDate()
+        public static string SqlNow()
         {
-            return "SELECT CONVERT(VARCHAR(19), GETDATE(), 120)";
+            return IsPostgreSql 
+                ? $"SELECT to_char({SqlDateTime}, 'YYYY-MM-DD HH24:MI:SS')"
+                : $"SELECT CONVERT(VARCHAR(19), {SqlDateTime}, 120)";
         }
 
         public static string GetDate(string format = "yyyy-MM-dd HH:mm:ss")
         {
-            return (Query<string>(SqlDate()).FirstOrDefault() ?? "").AsDateTimeFormat(format);
+            return (Query<string>(SqlNow()).FirstOrDefault() ?? "").AsDateTimeFormat(format);
         }
 
         public static DateTime GetDateTime()
@@ -254,12 +255,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static string GetDateTime(string fieldName, object value, object? value2 = null, string format = "yyyy-MM-dd HH:mm:ss")
         {
-            return GetValue($"CONVERT(VARCHAR(50), {fieldName}, 120)", value, value2).AsDateTimeFormat(format);
+            string cast = IsPostgreSql ? $"to_char({fieldName}, 'YYYY-MM-DD HH24:MI:SS')" : $"CONVERT(VARCHAR(50), {fieldName}, 120)";
+            return GetValue(cast, value, value2).AsDateTimeFormat(format);
         }
 
         public static string GetNewId()
         {
-            return Query<string>("SELECT NEWID()").FirstOrDefault() ?? "";
+            return Query<string>($"SELECT {SqlRandomId}").FirstOrDefault() ?? "";
         }
 
         public static string MaxId()

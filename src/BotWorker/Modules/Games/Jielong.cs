@@ -58,12 +58,12 @@ namespace BotWorker.Modules.Games
         public static async Task<string> GetJielongAsync(long groupId, long UserId, string currCy)
         {
             string pinyin = Chengyu.PinYinLast(currCy);
-            string sql = $"SELECT TOP 1 chengyu FROM {Chengyu.FullName} " +
+            string sql = $"SELECT {SqlTop(1)} chengyu FROM {Chengyu.FullName} " +
                            $"WHERE pinyin LIKE '{pinyin} %' AND chengyu NOT IN " +
                            $"(SELECT chengyu FROM {FullName} WHERE GroupId = {groupId} AND UserId = {UserId} " +
-                           $"AND Id > (SELECT TOP 1 Id FROM {FullName} WHERE GroupId = {groupId} " +
-                           $"AND UserId = {UserId} AND GameNo = 1 ORDER BY InsertDate DESC)) " +
-                           $"ORDER BY NEWID()";
+                           $"AND Id > (SELECT {SqlTop(1)} Id FROM {FullName} WHERE GroupId = {groupId} " +
+                           $"AND UserId = {UserId} AND GameNo = 1 ORDER BY InsertDate DESC {SqlLimit(1)})) " +
+                           $"ORDER BY {SqlRandomOrder} {SqlLimit(1)}";
 
             return await QueryScalarAsync<string>(sql) ?? "";
         }
@@ -87,7 +87,8 @@ namespace BotWorker.Modules.Games
         // 接龙成功数量
         public static async Task<string> GetGameCountAsync(long groupId, long qq)
         {
-            return await QueryScalarAsync<string>($"SELECT {DbName}.DBO.[getChengyuGameCount]({groupId},{qq})") ?? "0";
+            string func = IsPostgreSql ? "getchengyugamecount" : $"{DbName}.dbo.getchengyugamecount";
+            return await QueryScalarAsync<string>($"SELECT {func}({groupId},{qq})") ?? "0";
         }
 
         public static string GetGameCount(long groupId, long qq)
@@ -98,9 +99,9 @@ namespace BotWorker.Modules.Games
         // 接龙加分总数
         public static async Task<long> GetCreditAddAsync(long userId)
         {
-            string query = $"SELECT ISNULL(SUM(CreditAdd), 0) FROM {CreditLog.FullName} " +
+            string query = $"SELECT {SqlIsNull("SUM(CreditAdd)", "0")} FROM {CreditLog.FullName} " +
                            $"WHERE UserId = {userId} AND CreditInfo = '成语接龙' " +
-                           $"AND ABS(DATEDIFF(DAY, InsertDate, GETDATE())) < 1";
+                           $"AND ABS({SqlDateDiff("DAY", "InsertDate", SqlDateTime)}) < 1";
 
             var res = await QueryAsync(query);
             return res.AsLong();
@@ -158,7 +159,7 @@ namespace BotWorker.Modules.Games
         public static async Task<int> GetCountAsync(long groupId, long userId)
         {
             int maxId = await GetMaxIdAsync(groupId);
-            string query = $"SELECT ISNULL(COUNT(Id), 0) FROM {FullName} " +
+            string query = $"SELECT {SqlIsNull("COUNT(Id)", "0")} FROM {FullName} " +
                            $"WHERE UserId = {userId} AND Id >= {maxId}";
 
             var res = await QueryAsync(query);
@@ -193,17 +194,17 @@ namespace BotWorker.Modules.Games
             string query;
             if (groupId == 0)
             {
-                query = $"SELECT TOP 1 1 FROM {FullName} " +
+                query = $"SELECT {SqlTop(1)} 1 FROM {FullName} " +
                         $"WHERE GroupId = {groupId} AND UserId = {qq} AND chengyu = '{chengYu}' " +
-                        $"AND Id > (SELECT TOP 1 Id FROM {FullName} " +
-                        $"WHERE GroupId = {groupId} AND UserId = {qq} AND GameNo = 1 ORDER BY Id DESC)";
+                        $"AND Id > (SELECT {SqlTop(1)} Id FROM {FullName} " +
+                        $"WHERE GroupId = {groupId} AND UserId = {qq} AND GameNo = 1 ORDER BY Id DESC {SqlLimit(1)}) {SqlLimit(1)}";
             }
             else
             {
-                query = $"SELECT TOP 1 1 FROM {FullName} " +
+                query = $"SELECT {SqlTop(1)} 1 FROM {FullName} " +
                         $"WHERE GroupId = {groupId} AND chengyu = '{chengYu}' " +
-                        $"AND Id > (SELECT TOP 1 Id FROM {FullName} " +
-                        $"WHERE GroupId = {groupId} AND GameNo = 1 ORDER BY Id DESC)";
+                        $"AND Id > (SELECT {SqlTop(1)} Id FROM {FullName} " +
+                        $"WHERE GroupId = {groupId} AND GameNo = 1 ORDER BY Id DESC {SqlLimit(1)}) {SqlLimit(1)}";
             }
 
             return (await QueryScalarAsync<int>(query)) == 1;

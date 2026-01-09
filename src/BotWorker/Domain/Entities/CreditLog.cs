@@ -13,7 +13,8 @@ public class CreditLog : MetaData<CreditLog>
     public static async Task<int> AddLogAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
     {
         var (sql, paras) = await SqlHistoryAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo);
-        return (await QueryScalarAsync<int>(sql + ";SELECT SCOPE_IDENTITY();", trans, paras));
+        string identitySql = IsPostgreSql ? " RETURNING Id" : ";SELECT SCOPE_IDENTITY();";
+        return (await QueryScalarAsync<int>(sql + identitySql, trans, paras));
     }
 
     //积分变动记录
@@ -41,7 +42,7 @@ public class CreditLog : MetaData<CreditLog>
 
     public static async Task<int> CreditCountAsync(long userId, string creditInfo, int second = 60)
     {
-        string sql = $"select count(Id) from {FullName} where UserId = {userId} and CreditInfo like '%{creditInfo}%' and abs(datediff(second, getdate(), InsertDate)) <= {second}";
+        string sql = $"select count(Id) from {FullName} where UserId = {userId} and CreditInfo like '%{creditInfo}%' and abs({SqlDateDiff("second", SqlDateTime, "InsertDate")}) <= {second}";
         return (await QueryAsync(sql)).AsInt();
     }
 

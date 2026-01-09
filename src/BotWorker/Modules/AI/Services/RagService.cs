@@ -8,7 +8,8 @@ namespace BotWorker.Modules.AI.Services
 {
     public interface IRagService
     {
-        Task<List<Chunk>> SearchAsync(string query, int topK = 3);
+        Task<List<Chunk>> SearchAsync(string query, long groupId = 0, int topK = 3);
+        Task<string> GetFormattedKnowledgeAsync(string query, long groupId = 0, int topK = 3);
         Task IndexDocumentAsync(string content, string source);
     }
 
@@ -22,7 +23,22 @@ namespace BotWorker.Modules.AI.Services
             _kbService = kbService;
         }
 
-        public async Task<List<Chunk>> SearchAsync(string query, int topK = 3)
+        public async Task<string> GetFormattedKnowledgeAsync(string query, long groupId = 0, int topK = 3)
+        {
+            var chunks = await SearchAsync(query, groupId, topK);
+            if (chunks == null || !chunks.Any()) return string.Empty;
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("【参考知识库信息】:");
+            foreach (var chunk in chunks)
+            {
+                sb.AppendLine($"[来源:{chunk.Source}] {chunk.Content}");
+                sb.AppendLine();
+            }
+            return sb.ToString();
+        }
+
+        public async Task<List<Chunk>> SearchAsync(string query, long groupId = 0, int topK = 3)
         {
             if (string.IsNullOrWhiteSpace(query)) return new List<Chunk>();
 
@@ -31,7 +47,7 @@ namespace BotWorker.Modules.AI.Services
             // 1. 从 KnowledgeBaseService 获取知识
             try
             {
-                var kbResults = await _kbService.GetKnowledgesAsync(0, query);
+                var kbResults = await _kbService.GetKnowledgesAsync(groupId, query);
                 if (kbResults != null)
                 {
                     allResults.AddRange(kbResults.Select(r => new Chunk

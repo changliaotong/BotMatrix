@@ -154,7 +154,7 @@ namespace BotWorker.Domain.Entities
             try
             {
                 var (sql1, paras1) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, -balanceFreeze, "冻结余额", balanceValue - balanceFreeze);
-                var (sql2, paras2) = SqlSetValues($"balance = balance - ({balanceFreeze}), BalanceFreeze = isnull(BalanceFreeze,0) + ({balanceFreeze})", qq);
+                var (sql2, paras2) = SqlSetValues($"balance = balance - ({balanceFreeze}), BalanceFreeze = {SqlIsNull("BalanceFreeze","0")} + ({balanceFreeze})", qq);
                 await ExecAsync(sql1, trans, paras1);
                 await ExecAsync(sql2, trans, paras2);
 
@@ -190,7 +190,7 @@ namespace BotWorker.Domain.Entities
             try
             {
                 var (sql1, paras1) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, balanceUnfreeze, "解冻余额", balanceValue + balanceUnfreeze);
-                var (sql2, paras2) = SqlSetValues($"balance = balance + ({balanceUnfreeze}), BalanceFreeze = isnull(BalanceFreeze, 0) - ({balanceUnfreeze})", qq);
+                var (sql2, paras2) = SqlSetValues($"balance = balance + ({balanceUnfreeze}), BalanceFreeze = {SqlIsNull("BalanceFreeze", "0")} - ({balanceUnfreeze})", qq);
                 await ExecAsync(sql1, trans, paras1);
                 await ExecAsync(sql2, trans, paras2);
 
@@ -227,8 +227,8 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<string> GetBalanceListAsync(long groupId, long qq)
         {
-            string res = await QueryResAsync($"select top 10 Id, balance from {FullName} where UserId in " +
-                                  $"(select UserId from {CreditLog.FullName} where GroupId = {groupId}) order by balance desc",
+            string res = await QueryResAsync($"select {SqlTop(10)} Id, balance from {FullName} where UserId in " +
+                                  $"(select UserId from {CreditLog.FullName} where GroupId = {groupId}) order by balance desc{SqlLimit(10)}",
                                   "【第{i}名】 [@:{0}] 余额：{1:N}\n");
             return res.Contains(qq.ToString())
                 ? res

@@ -39,8 +39,7 @@ namespace BotWorker.Common.Extensions
             return obj.GetType()
                       .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                       .Where(p => p.CanRead)
-                      .Select(p => (p.Name, p.GetValue(obj)))
-                      .ToDictionary();
+                      .ToDictionary(p => p.Name, p => p.GetValue(obj));
         }
 
         private static readonly Random Random = new();  

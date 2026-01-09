@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Entities;
+namespace BotWorker.Domain.Entities;
 public partial class GroupOffical : MetaData<GroupOffical>
 {
     public override string TableName => "Group";
@@ -26,7 +26,7 @@ public partial class GroupOffical : MetaData<GroupOffical>
 
     public static long GetTargetGroup(string groupOpenid)
     {
-        return GetLong("isnull(TargetGroup, Id)", groupOpenid);
+        return GetLong($"{SqlIsNull("TargetGroup", "Id")}", groupOpenid);
     }
 
     public static string GetGroupOpenid(long groupId, long botQQ)

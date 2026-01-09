@@ -1,4 +1,4 @@
-﻿using BotWorker.Domain.Entities;
+using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
@@ -20,7 +20,7 @@ namespace BotWorker.Domain.Entities
             var userId = GetTargetUserId(userOpenid);
             if (userId != 0)
             {
-                var bot = GetLong("isnull(BotUin, 0)", userOpenid);
+                var bot = GetLong($"{SqlIsNull("BotUin", "0")}", userOpenid);
                 if (bot != botUin)
                     SetValue("BotUin", botUin, userOpenid);
                 return userId;
@@ -33,7 +33,7 @@ namespace BotWorker.Domain.Entities
 
         public static long GetTargetUserId(string userOpenid)
         {
-            return GetLong("isnull(TargetUserId, Id)", userOpenid);
+            return GetLong($"{SqlIsNull("TargetUserId", "Id")}", userOpenid);
         }
 
         private static long GetMaxUserId()

@@ -286,9 +286,9 @@ public partial class BotMessage : MetaData<BotMessage>
 
             if (context > 0)
             {
-                var query = $"SELECT TOP {context} Question, CASE WHEN IsAI = 1 THEN AnswerAI ELSE Message END AS Answer, UserName FROM {GroupSendMessage.FullName} " +
+                var query = $"SELECT {SqlTop(context)} Question, CASE WHEN IsAI = 1 THEN AnswerAI ELSE Message END AS Answer, UserName FROM {GroupSendMessage.FullName} " +
                             $"WHERE (AnswerId <> 0 or IsAI = 1) AND GroupId = {GroupId} {(Group.IsMultAI ? "" : $"AND UserId = {UserId}")} " +
-                            $"AND ABS(DATEDIFF(HOUR, GETDATE(), InsertDate)) <= 24 ORDER BY Id DESC";
+                            $"AND ABS({SqlDateDiff("HOUR", SqlDateTime, "InsertDate")}) <= 24 ORDER BY Id DESC {SqlLimit(context)}";
                 DataSet ds = QueryDataset(query);
 
                 if (ds != null)

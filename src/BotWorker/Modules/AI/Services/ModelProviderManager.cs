@@ -26,29 +26,36 @@ namespace BotWorker.Modules.AI.Services
             try
             {
                 var models = await LLMModel.GetAllActiveAsync();
-                var providers = await LLMProvider.GetAllAsync();
+                var providers = await LLMProvider.GetAllActiveAsync();
 
-                if (providers == null || models == null) return;
+                if (providers == null) return;
 
-                foreach (var model in models)
+                foreach (var provider in providers)
                 {
-                    var provider = providers.FirstOrDefault(p => p.Id == model.ProviderId);
-                    if (provider == null) continue;
+                    if (string.IsNullOrWhiteSpace(provider.ApiKey))
+                    {
+                        _logger?.LogWarning("Provider {ProviderName} has empty API Key, skipping.", provider.Name);
+                        continue;
+                    }
 
                     IModelProvider? apiProvider = null;
+                    var defaultModel = models?.FirstOrDefault(m => m.ProviderId == provider.Id)?.Name ?? "";
 
                     if (provider.ProviderType.Equals("azure", StringComparison.OrdinalIgnoreCase))
                     {
-                        apiProvider = new OpenAIAzureApiHelper(model.Name, provider.BaseUrl, provider.ApiKey);
+                        apiProvider = new OpenAIAzureApiHelper(provider.Name, provider.BaseUrl, provider.ApiKey);
                     }
-                    else if (provider.ProviderType.Equals("openai", StringComparison.OrdinalIgnoreCase))
+                    else if (provider.ProviderType.Equals("openai", StringComparison.OrdinalIgnoreCase) || 
+                             provider.ProviderType.Equals("doubao", StringComparison.OrdinalIgnoreCase) ||
+                             provider.ProviderType.Equals("deepseek", StringComparison.OrdinalIgnoreCase))
                     {
-                        // 使用通用 OpenAI 提供者
-                        apiProvider = new GenericOpenAIProvider(model.Name, provider.ApiKey, provider.BaseUrl, model.Name);
+                        // 许多提供者都兼容 OpenAI 协议
+                        apiProvider = new GenericOpenAIProvider(provider.Name, provider.ApiKey, provider.BaseUrl, defaultModel);
                     }
 
                     if (apiProvider != null)
                     {
+                        _logger?.LogInformation("Registered AI Provider: {ProviderName} ({ProviderType})", provider.Name, provider.ProviderType);
                         RegisterProvider(apiProvider);
                     }
                 }

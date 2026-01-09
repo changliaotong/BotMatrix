@@ -221,7 +221,7 @@ namespace BotWorker.Modules.Games
             if (user.State == 1) return "你已经在钓鱼了，耐心一点！";
 
             int wait = new Random().Next(1, 4); // 1-3分钟
-            await FishingUser.UpdateAsync($"State = 1, LastActionTime = GETDATE(), WaitMinutes = {wait}", userId);
+            await FishingUser.UpdateAsync($"State = 1, LastActionTime = {MetaData.SqlDateTime}, WaitMinutes = {wait}", userId);
             
             return $"✅ 成功抛竿到 {Locations[user.CurrentLocation].Name}！\n静静等待鱼儿上钩吧...";
         }

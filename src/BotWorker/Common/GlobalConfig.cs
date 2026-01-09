@@ -26,6 +26,15 @@ namespace BotWorker.Common
 
             Jwt = config.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
             ConnString = config.GetConnectionString("DefaultConnection") ?? string.Empty;
+            Console.WriteLine($"[CONFIG INFO] Database connection string loaded. Length: {ConnString.Length}");
+            if (ConnString.Length > 0)
+            {
+                var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = ConnString };
+                if (builder.TryGetValue("Server", out var server))
+                {
+                    Console.WriteLine($"[CONFIG INFO] Database Server: {server}");
+                }
+            }
             if (Enum.TryParse<DatabaseType>(config["DatabaseType"], true, out var dbType))
             {
                 DbType = dbType;

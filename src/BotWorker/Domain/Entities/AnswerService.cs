@@ -29,17 +29,23 @@ namespace BotWorker.Domain.Entities
                         ]);
         }
 
-        public static bool Exists(long questionId, string textAnswer, long groupId) =>
-            ExistsWhere($"QuestionId = {questionId} AND RobotId = {groupId} AND {DbName}.dbo.remove_biaodian(answer) = {DbName}.dbo.remove_biaodian({textAnswer.Quotes()})");
+        public static bool Exists(long questionId, string textAnswer, long groupId)
+        {
+            string func = IsPostgreSql ? "remove_biaodian" : $"{DbName}.dbo.remove_biaodian";
+            return ExistsWhere($"QuestionId = {questionId} AND RobotId = {groupId} AND {func}(answer) = {func}({textAnswer.Quotes()})");
+        }
 
-        public static bool Exists(long qqRobot, long questionId, string answer) =>
-            ExistsWhere($"QuestionId = {questionId} AND {DbName}.dbo.remove_biaodian(answer) = {DbName}.dbo.remove_biaodian({answer.Quotes()})");
+        public static bool Exists(long qqRobot, long questionId, string answer)
+        {
+            string func = IsPostgreSql ? "remove_biaodian" : $"{DbName}.dbo.remove_biaodian";
+            return ExistsWhere($"QuestionId = {questionId} AND {func}(answer) = {func}({answer.Quotes()})");
+        }
 
         public static long CountAnswer(long questionId) => CountField("Id", "QuestionId", questionId);
 
         public static int CountUsedPlus(long answerId) => Plus("UsedTimes", 1, answerId);
 
-        public static int AuditIt(long answerId, int audit, long qq) => Update($"audit = {audit}, AuditBy = {qq}, AuditDate = GETDATE()", answerId);
+        public static int AuditIt(long answerId, int audit, long qq) => Update($"audit = {audit}, AuditBy = {qq}, AuditDate = {SqlDateTime}", answerId);
 
     }
 }

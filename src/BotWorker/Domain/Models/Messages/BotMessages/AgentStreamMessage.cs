@@ -48,6 +48,16 @@ public partial class BotMessage : MetaData<BotMessage>
             // 3. 加载聊天历史
             GetChatHistory(HistoryMessageCount);            
 
+            // --- RAG 预检索优化 ---
+            if (Group.IsUseKnowledgebase && KbService != null)
+            {
+                var knowledge = await KbService.BuildPrompt(CurrentMessage, RealGroupId);
+                if (!string.IsNullOrEmpty(knowledge))
+                {
+                    History.AddSystemMessage(knowledge);
+                }
+            }
+
             IsAI = true; 
 
             try

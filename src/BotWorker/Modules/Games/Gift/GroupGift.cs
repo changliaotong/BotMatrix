@@ -109,9 +109,9 @@ namespace BotWorker.Modules.Games.Gift
 
         public static async Task<string> GetFansListAsync(long groupId, long qq, int topN = 10)
         {
-            string res = await QueryResAsync($"select top {topN} UserId, FansValue, FansLevel from {FullName} " +
-                                  $"where GroupId = {groupId} and IsFans = 1 order by FansValue desc",
-                                      "【第{i}名】 [@:{0}] 亲密度：{1}\n");
+            string sql = $"select {SqlTop(topN)} UserId, FansValue, FansLevel from {FullName} " +
+                                  $"where GroupId = {groupId} and IsFans = 1 order by FansValue desc {SqlLimit(topN)}";
+            string res = await QueryResAsync(sql, "【第{i}名】 [@:{0}] 亲密度：{1}\n");
             if (!res.Contains(qq.ToString()))
                 res += $"【第{{粉丝排名}}名】 {qq} 亲密度：{await GetIntAsync("FansValue", groupId, qq)}";
             return $"{res}\n👪 粉丝团成员：{await GetFansCountAsync(groupId)}人";
@@ -124,7 +124,7 @@ namespace BotWorker.Modules.Games.Gift
         public static async Task<(string, IDataParameter[])> SqlBingFansAsync(long groupId, long UserId)
         {
             return await ExistsAsync(groupId, UserId)
-                ? SqlUpdateWhere($"IsFans=1, FansDate=GETDATE(), FansLevel=1, FansValue=100", $"GroupID = {groupId} and UserId = {UserId}")
+                ? SqlUpdateWhere($"IsFans=1, FansDate={SqlDateTime}, FansLevel=1, FansValue=100", $"GroupID = {groupId} and UserId = {UserId}")
                 : SqlInsert([
                                 new Cov("GroupId", groupId),
                                 new Cov("UserId", UserId),
@@ -138,7 +138,7 @@ namespace BotWorker.Modules.Games.Gift
         // 点亮灯牌sql
         public static (string, IDataParameter[]) SqlLightLamp(long groupId, long UserId)
         {
-            return SqlUpdateWhere($"LampDate=GETDATE(), FansValue = FansValue + 10", $"GroupId = {groupId} and UserId = {UserId}");
+            return SqlUpdateWhere($"LampDate={SqlDateTime}, FansValue = FansValue + 10", $"GroupId = {groupId} and UserId = {UserId}");
         }
 
         // 是否点亮灯牌
@@ -147,7 +147,8 @@ namespace BotWorker.Modules.Games.Gift
 
         public static async Task<int> LampMinutesAsync(long groupId, long userId)
         {
-            return await GetIntAsync("DATEDIFF(MINUTE, ISNULL(LampDate, GETDATE()-1), GETDATE())", groupId, userId);
+            string sql = SqlDateDiff("MINUTE", SqlIsNull("LampDate", SqlDateAdd("day", -1, SqlDateTime)), SqlDateTime);
+            return await GetIntAsync(sql, groupId, userId);
         }
 
         //是否粉丝团成员
@@ -174,7 +175,8 @@ namespace BotWorker.Modules.Games.Gift
 
         public static async Task<int> GetFansLevelAsync(long groupId, long userId)
         {
-            return await GetIntAsync($"{DbName}.dbo.get_fans_level(isnull(FansValue, 0))", groupId, userId);
+            string func = IsPostgreSql ? "get_fans_level" : $"{DbName}.dbo.get_fans_level";
+            return await GetIntAsync($"{func}({SqlIsNull("FansValue", "0")})", groupId, userId);
         }
 
         // 粉丝团人数

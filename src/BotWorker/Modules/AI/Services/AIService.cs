@@ -114,6 +114,13 @@ namespace BotWorker.Modules.AI.Services
                 // 1. 准备插件列表
                 var plugins = new List<KernelPlugin>();
 
+                // 1.0 获取基础参数
+                long groupId = 0;
+                if (context != null)
+                {
+                    long.TryParse(context.GroupId, out groupId);
+                }
+
                 // 1.1 注入本地技能插件 (如果上下文存在)
                 if (context != null)
                 {
@@ -123,7 +130,7 @@ namespace BotWorker.Modules.AI.Services
                 }
 
                 // 1.2 注入 RAG 插件
-                plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService), "RAG"));
+                plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
 
                 // 1.3 注入 MCP 插件 (从 IMcpService 获取工具并转换为插件)
                 var mcpPlugins = await GetMcpPluginsAsync(context);
@@ -132,8 +139,19 @@ namespace BotWorker.Modules.AI.Services
                 // 2. 准备对话历史
                 var history = new ChatHistory();
                 
-                // 如果有 RAG，可以先进行预检索（或者让 AI 通过插件决定）
-                // 这里我们采用 AI 决定模式，但也注入一些基础系统提示词
+                // --- RAG 预检索优化 ---
+                if (context != null)
+                {
+                    // 在调用大模型之前，先尝试检索相关知识并注入上下文
+                    // 这样可以减少一次大模型的 Tool Call 回合，提高响应速度
+                    var knowledge = await _ragService.GetFormattedKnowledgeAsync(prompt, groupId);
+                    if (!string.IsNullOrEmpty(knowledge))
+                    {
+                        history.AddSystemMessage(knowledge);
+                        _logger.LogInformation("RAG pre-retrieval success for group {GroupId}", groupId);
+                    }
+                }
+                
                 history.AddSystemMessage("你是一个全能的机器人助手。你可以调用本地技能、查询知识库或使用外部工具来回答问题。");
                 history.AddUserMessage(prompt);
 
@@ -167,18 +185,36 @@ namespace BotWorker.Modules.AI.Services
 
             // 1. 准备插件
             var plugins = new List<KernelPlugin>();
+
+            long groupId = 0;
+            if (context != null)
+            {
+                long.TryParse(context.GroupId, out groupId);
+            }
+
             if (context != null)
             {
                 using var scope = _serviceProvider.CreateScope();
                 var robot = scope.ServiceProvider.GetRequiredService<IRobot>();
                 plugins.Add(KernelPluginFactory.CreateFromObject(new BotSkillPlugin(robot, context), "BotSkills"));
             }
-            plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService), "RAG"));
+            plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
             var mcpPlugins = await GetMcpPluginsAsync(context);
             if (mcpPlugins != null) plugins.AddRange(mcpPlugins);
 
             // 2. 准备对话历史
             var history = new ChatHistory();
+
+            // --- RAG 预检索优化 ---
+            if (context != null)
+            {
+                var knowledge = await _ragService.GetFormattedKnowledgeAsync(prompt, groupId);
+                if (!string.IsNullOrEmpty(knowledge))
+                {
+                    history.AddSystemMessage(knowledge);
+                }
+            }
+
             history.AddSystemMessage("你是一个全能的机器人助手。你可以调用本地技能、查询知识库或使用外部工具来回答问题。");
             history.AddUserMessage(prompt);
 
@@ -233,15 +269,19 @@ namespace BotWorker.Modules.AI.Services
     public class RagPlugin
     {
         private readonly IRagService _ragService;
-        public RagPlugin(IRagService ragService) => _ragService = ragService;
+        private readonly long _groupId;
+        public RagPlugin(IRagService ragService, long groupId)
+        {
+            _ragService = ragService;
+            _groupId = groupId;
+        }
 
-        [KernelFunction]
-        [Description("从知识库中搜索相关信息以回答用户问题。")]
+        [KernelFunction(name: "get_knowledge")]
+        [Description("当用户的问题与本群所配置的知识库内容有关时，调用此函数（如学校政策、公司制度等）")]
         public async Task<string> SearchKnowledge([Description("搜索关键词或问题")] string query)
         {
-            var results = await _ragService.SearchAsync(query);
-            if (!results.Any()) return "未找到相关知识。";
-            return string.Join("\n---\n", results.Select(r => r.Content));
+            // 对齐逻辑：使用统一的格式化输出
+            return await _ragService.GetFormattedKnowledgeAsync(query, _groupId);
         }
     }
 }

@@ -22,15 +22,15 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> UsePropAsync(long groupId, long userId, long propId, long qqProp)
         {
-            return await UpdateAsync($"UsedDate = getdate(), UsedUserId = {qqProp}, IsUsed = 1", await GetIdAsync(groupId, userId, propId));
+            return await UpdateAsync($"UsedDate = {SqlDateTime}, UsedUserId = {qqProp}, IsUsed = 1", await GetIdAsync(groupId, userId, propId));
         }
 
         public static async Task<string> GetMyPropListAsync(long groupId, long userId)
         {
             if (await IsClosedAsync(groupId)) return PropClosed;
 
-            string sql = $"select top 10 PropName, PropPrice from {FullName} a inner join sz84_robot..Prop b " +
-                         $"on a.PropId = b.Id where a.GroupId = {groupId} and a.UserId = {userId}";
+            string sql = $"select {SqlTop(10)} PropName, PropPrice from {FullName} a inner join sz84_robot..Prop b " +
+                         $"on a.PropId = b.Id where a.GroupId = {groupId} and a.UserId = {userId}{SqlLimit(10)}";
             return await QueryResAsync(sql, "{0} 价格：{1}分");
         }
 

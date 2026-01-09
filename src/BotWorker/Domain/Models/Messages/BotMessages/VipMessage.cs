@@ -192,7 +192,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (creditValue > 1000)
                 return $"该用户有{creditValue}分，升级前请先将原有积分清零";
 
-            int res = await UserInfo.UpdateAsync($"is_super=1, super_date=getdate(), ref_qq={UserId}", upgradeQQ);
+            int res = await UserInfo.UpdateAsync($"is_super=1, super_date={SqlDateTime}, ref_qq={UserId}", upgradeQQ);
             if (res == -1)
                 return RetryMsg;
 

@@ -63,7 +63,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static void MarkFileEmbedded(string fileId)
         {
-            var sql = $"UPDATE {FullName} SET IsEmbedded = 1, EmbeddedTime = GETDATE() WHERE Id = @fileId";
+            var sql = $"UPDATE {FullName} SET IsEmbedded = 1, EmbeddedTime = {SqlDateTime} WHERE Id = @fileId";
             var parameters = new[]
             {
                 DbProviderFactory.CreateParameter("@fileId", fileId),
@@ -73,7 +73,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static void MarkEmbeddingFailed(long fileId, string error)
         {
-            var sql = $"UPDATE {FullName} SET EmbeddingError = @Error, EmbeddedTime = GETDATE() WHERE Id = @fileId";
+            var sql = $"UPDATE {FullName} SET EmbeddingError = @Error, EmbeddedTime = {SqlDateTime} WHERE Id = @fileId";
             var parameters = new[]
             {
                 DbProviderFactory.CreateParameter("@error", error),

@@ -110,7 +110,7 @@ namespace BotWorker.Domain.Entities
         public static BotWorker.Models.MusicShareMessage GetMusicShareMessage(long id)
         {
             var msm = new BotWorker.Models.MusicShareMessage();
-            using (var dt = QueryDataset($"select top 1 * from {FullName} where Id = {id}"))
+            using (var dt = QueryDataset($"select {SqlTop(1)} * from {FullName} where Id = {id} {SqlLimit(1)}"))
             {
                 foreach (DataRow dr in dt.Tables[0].Rows)
                 {

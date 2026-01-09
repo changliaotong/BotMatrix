@@ -56,7 +56,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
                 if (AddGroupMember() != -1)
                 {
-                    GroupMember.UpdateWhere($"LastMsgId={MsgId.Quotes()}, LastTime=GETDATE()", $"GroupId={GroupId} AND UserId = {UserId}");
+                    GroupMember.UpdateWhere($"LastMsgId={MsgId.Quotes()}, LastTime={SqlDateTime}", $"GroupId={GroupId} AND UserId = {UserId}");
                 }
 
                 //音乐消息处理

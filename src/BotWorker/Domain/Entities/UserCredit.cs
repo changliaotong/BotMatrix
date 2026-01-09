@@ -230,12 +230,12 @@ namespace BotWorker.Domain.Entities
             return await GroupInfo.GetIsCreditAsync(groupId)
                 ? GroupMember.SqlSaveCredit(groupId, userId, creditSave)
                 : await BotInfo.GetIsCreditAsync(botUin) ? Friend.SqlSaveCredit(botUin, userId, creditSave)
-                                 : SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = isnull(SaveCredit, 0) + ({creditSave})", userId);
+                                 : SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = {SqlIsNull("SaveCredit", "0")} + ({creditSave})", userId);
         }
 
         public static (string, IDataParameter[]) SqlFreezeCredit(long userId, long creditFreeze)
         {
-            return SqlSetValues($"Credit = Credit - ({creditFreeze}), FreezeCredit = isnull(FreezeCredit, 0) + ({creditFreeze})", userId);
+            return SqlSetValues($"Credit = Credit - ({creditFreeze}), FreezeCredit = {SqlIsNull("FreezeCredit", "0")} + ({creditFreeze})", userId);
         }
 
         public static async Task<long> GetFreezeCreditAsync(long qq) => await GetLongAsync("FreezeCredit", qq);

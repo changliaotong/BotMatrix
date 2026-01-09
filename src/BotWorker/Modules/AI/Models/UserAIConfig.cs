@@ -30,7 +30,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static async Task<int> UpdateUsageAsync(long id)
         {
-            var sql = $"UPDATE {FullName} SET UseCount = UseCount + 1, LastUsedAt = GETDATE() WHERE Id = {id}";
+            var sql = $"UPDATE {FullName} SET UseCount = UseCount + 1, LastUsedAt = {SqlDateTime} WHERE Id = {id}";
             return await ExecAsync(sql);
         }
     }

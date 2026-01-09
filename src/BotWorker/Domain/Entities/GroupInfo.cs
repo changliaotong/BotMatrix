@@ -198,11 +198,11 @@ namespace BotWorker.Domain.Entities
                 return false;
 
             //体验超过180天可再次体验一次
-            int days = GetInt("ABS(DATEDIFF(DAY, GETDATE(), TrialStartDate))", groupId);
+            int days = GetInt($"ABS({SqlDateDiff("DAY", SqlDateTime, "TrialStartDate")})", groupId);
             if (days >= 180)
             {
                 int trialDays = 7;
-                Update($"IsValid = 1, TrialStartDate = GETDATE(), TrialEndDate = GETDATE() + {trialDays}", groupId);
+                Update($"IsValid = 1, TrialStartDate = {SqlDateTime}, TrialEndDate = {SqlDateAdd("day", trialDays, SqlDateTime)}", groupId);
                 return true;
             }
             return GetIsValid(groupId);
@@ -250,7 +250,7 @@ namespace BotWorker.Domain.Entities
         // 提示语间隔秒数 包含欢迎语、退群提示、改名提示等信息
         public static int GetLastHintTime(long groupId)
         {
-            return GetInt("ABS(DATEDIFF(SECOND, LastExitHintDate, GETDATE()))", groupId);
+            return GetInt($"ABS({SqlDateDiff("SECOND", "LastExitHintDate", SqlDateTime)})", groupId);
         }
 
         // 云问答
@@ -417,7 +417,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<string> GetRobotOwnerNameAsync(long groupId, BotData.Platform botType = BotData.Platform.NapCat)
         {
-            string res = await GetValueAsync("isnull(RobotOwnerName,'')", groupId);
+            string res = await GetValueAsync(SqlIsNull("RobotOwnerName", "''"), groupId);
             if (res == "")
             {
                 res = (await GetRobotOwnerAsync(groupId)).ToString();
@@ -447,7 +447,7 @@ namespace BotWorker.Domain.Entities
         public static int SetInGame(int isInGame, long groupId)
         {
             return SetValue("IsInGame", isInGame, groupId);
-        } 
+        }
 
         //是否群机器人主人
         public static bool IsOwner(long groupId, long userId)
@@ -460,10 +460,10 @@ namespace BotWorker.Domain.Entities
             return userId == await GetRobotOwnerAsync(groupId);
         }
 
-        // 开始成语接龙游戏
+        // 开始成语接龙 game
         public static int StartCyGame(int isInGame, string lastCy, long groupId)
         {
-            return Update($"IsInGame = {isInGame}, LastChengyu = {lastCy.Quotes()}, LastChengyuDate = GETDATE()", groupId);
+            return Update($"IsInGame = {isInGame}, LastChengyu = {lastCy.Quotes()}, LastChengyuDate = {SqlDateTime}", groupId);
         }
 
         public static bool GetIsValid(long groupId)

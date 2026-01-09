@@ -36,7 +36,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> InsertObjectAsync(object obj, IDbTransaction? trans)
         {
             var (sql, paras) = SqlInsertDict(obj.ToFields());
-            return (await ExecScalarAsync<int>(sql, trans, paras)) ?? 0;
+            return await ExecScalarAsync<int>(sql, trans, paras);
         }
 
         public static async Task<Dictionary<string, object>> InsertReturnFieldsAsync(object obj, params string[] outputFields)
@@ -97,7 +97,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 if (value is DateTime dt && dt == DateTime.MinValue)
                 {
                     fields.Add(field);
-                    values.Add("GETDATE()");
+                    values.Add(SqlDateTime);
                 }
                 else
                 {

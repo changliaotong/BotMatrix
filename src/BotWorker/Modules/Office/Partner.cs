@@ -49,13 +49,13 @@ namespace BotWorker.Modules.Office
 
         public static async Task<string> GetCreditTodayAsync(long qq)
         {
-            string sql = $"select top 10 a.UserId, SUM(abs(CreditAdd)) * 6 /1000 as partner_credit from {CreditLog.FullName} a inner join {UserInfo.FullName} b on a.UserId = b.UserId "
-                         + $"where datediff(day, a.InsertDate, getdate()) = 0 and b.credit_freeze = 1 and partner_qq = {qq} and a.InsertDate > b.BindDateHome "
+            string sql = $"select {SqlTop(10)} a.UserId, SUM(abs(CreditAdd)) * 6 /1000 as partner_credit from {CreditLog.FullName} a inner join {UserInfo.FullName} b on a.UserId = b.UserId "
+                         + $"where {SqlDateDiff("day", "a.InsertDate", SqlDateTime)} = 0 and b.credit_freeze = 1 and partner_qq = {qq} and a.InsertDate > b.BindDateHome "
                          + $"and (CreditInfo like '%猜大小%' or CreditInfo like '%三公%' or CreditInfo like '%抽奖%' or CreditInfo like '%猜拳%' or CreditInfo like '%猜数字%')"
-                         + $"group by a.UserId order by partner_credit desc";
+                         + $"group by a.UserId order by partner_credit desc {SqlLimit(10)}";
             string res = await QueryResAsync(sql, "{i} {0} {1}\n");
             sql = $"select SUM(abs(CreditAdd)) * 6 / 1000 as partner_credit from {CreditLog.FullName} a inner join  {UserInfo.FullName} b on a.UserId = b.UserId "
-                  + $"where datediff(day, a.InsertDate, getdate()) = 0 and b.IsSuper = 1 and partner_qq = {qq} and a.InsertDate > b.BinDate "
+                  + $"where {SqlDateDiff("day", "a.InsertDate", SqlDateTime)} = 0 and b.IsSuper = 1 and partner_qq = {qq} and a.InsertDate > b.BinDate "
                   + $"and (CreditInfo like '%猜大小%' or CreditInfo like '%三公%' or CreditInfo like '%抽奖%' or CreditInfo like '%猜拳%' or CreditInfo like '%猜数字%')";
             res += $"今日合计：{await QueryScalarAsync<string>(sql)}";
             return res;

@@ -48,15 +48,15 @@ namespace BotWorker.Modules.Games
                 new Cov("BlockHash", hashBlock)
             });
 
-            var sql2 = SqlSetValues($"IsOpen=1, OpenDate=GETDATE(), OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
+            var sql2 = SqlSetValues($"IsOpen=1, OpenDate={SqlDateTime}, OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
             return (sql1, sql2);
         }
 
         public static async Task<long> GetIdAsync(long groupId, long userId)
         {
-            string sql = $"SELECT ISNULL(MAX(Id),0) AS res FROM {FullName} WHERE GroupId = {groupId} AND IsOpen = 0";
+            string sql = $"SELECT {SqlIsNull("MAX(Id)", "0")} AS res FROM {FullName} WHERE GroupId = {groupId} AND IsOpen = 0";
             var res = await ExecScalarAsync<long>(groupId == 0 ? $"{sql} AND UserId = {userId} " : sql);
-            return res ?? 0;
+            return res;
         }
 
         public static async Task<string> GetHashAsync(long blockId)
@@ -101,7 +101,7 @@ namespace BotWorker.Modules.Games
                                     new Cov("BlockHash", hashBlock)
                                 ]);
 
-            var sql2 = SqlSetValues($"IsOpen=1, OpenDate=GETDATE(), OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
+            var sql2 = SqlSetValues($"IsOpen=1, OpenDate={SqlDateTime}, OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
             
             using var trans = await BeginTransactionAsync();
             try
@@ -230,7 +230,7 @@ namespace BotWorker.Modules.Games
 
         public static string GetBlockInfo16(string hash16)
         {
-            long block_id = GetWhere($"ISNULL(Id, 0)", $"BlockHash LIKE {hash16.QuotesLike()}").AsLong();
+            long block_id = GetWhere(SqlIsNull("Id", "0"), $"BlockHash LIKE {hash16.QuotesLike()}").AsLong();
             return block_id == 0
                 ? ""
                 : GetBlockInfo(block_id) + GetBlockSecret(block_id);

@@ -65,6 +65,6 @@ public class Friend : MetaData<Friend>
 
     public static (string, IDataParameter[]) SqlSaveCredit(long botUin, long userId, long creditSave)
     {
-        return SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = isnull(SaveCredit, 0) + ({creditSave})", botUin, userId);
+        return SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = {SqlIsNull("SaveCredit", "0")} + ({creditSave})", botUin, userId);
     }
 }

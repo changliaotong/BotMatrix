@@ -20,10 +20,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static (string sql, IDataParameter[] parameters) SqlSelect(Dictionary<string, object?> keyValues, string? orderBy = null, int? top = null)
         {   
             var (where, parameters) = SqlWhere(keyValues);
-            var sql = new StringBuilder($"SELECT {(top != null ? $"TOP {top} " : "")}* FROM {FullName} {where}");
+            string topClause = top.HasValue ? SqlTop(top.Value) : "";
+            string limitClause = top.HasValue ? SqlLimit(top.Value) : "";
             
-            if (!string.IsNullOrWhiteSpace(orderBy)) sql.Append($" ORDER BY {orderBy}");
-            return (sql.ToString(), parameters ?? []);
+            var sql = $"SELECT {topClause}* FROM {FullName} {where}";
+            if (!string.IsNullOrWhiteSpace(orderBy)) sql += $" ORDER BY {orderBy}";
+            sql += limitClause;
+
+            return (sql, parameters ?? []);
         }
 
         public static (string, IDataParameter[]) SqlSelectWhere(Dictionary<string, object?> conditions, IEnumerable<string>? selectFields = null,
@@ -43,18 +47,25 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
             if (offset.HasValue || limit.HasValue)
             {
-                // 使用 OFFSET/FETCH 模式（需要 ORDER BY）
-                if (string.IsNullOrEmpty(orderSql))
-                    throw new InvalidOperationException("使用分页（OFFSET/FETCH）时必须指定 orderBy 字段。");
+                if (IsPostgreSql)
+                {
+                    paginationSql = $"LIMIT {limit.GetValueOrDefault(int.MaxValue)} OFFSET {offset.GetValueOrDefault(0)}";
+                }
+                else
+                {
+                    // 使用 OFFSET/FETCH 模式（需要 ORDER BY）
+                    if (string.IsNullOrEmpty(orderSql))
+                        throw new InvalidOperationException("使用分页（OFFSET/FETCH）时必须指定 orderBy 字段。");
 
-                paginationSql = $"OFFSET {offset.GetValueOrDefault(0)} ROWS";
-                if (limit.HasValue)
-                    paginationSql += $" FETCH NEXT {limit.Value} ROWS ONLY";
+                    paginationSql = $"OFFSET {offset.GetValueOrDefault(0)} ROWS";
+                    if (limit.HasValue)
+                        paginationSql += $" FETCH NEXT {limit.Value} ROWS ONLY";
+                }
             }
             else if (limit.HasValue)
             {
-                // 没有 offset，只使用 TOP N
-                topClause = $"TOP {limit.Value} ";
+                topClause = SqlTop(limit.Value);
+                paginationSql = SqlLimit(limit.Value);
             }
 
             string sql = $"SELECT {topClause}{selectClause} FROM {FullName} {where} {orderSql} {paginationSql}".Trim();

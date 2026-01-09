@@ -62,7 +62,7 @@ namespace BotWorker.Application.Services
 
         private string GetGroupBlackList(BotMessage botMsg)
         {
-            return SQLConn.QueryRes($"SELECT TOP 10 BlackId FROM {BlackList.FullName} WHERE GroupId = {botMsg.GroupId} ORDER BY Id DESC",
+            return SQLConn.QueryRes($"SELECT {MetaData.SqlTop(10)} BlackId FROM {BlackList.FullName} WHERE GroupId = {botMsg.GroupId} ORDER BY Id DESC {MetaData.SqlLimit(10)}",
                             "{i} {0}\n") +
                    "已拉黑人数：" + BlackList.CountWhere($"GroupId = {botMsg.GroupId}") +
                    "\n拉黑 + QQ\n删黑 + QQ";
@@ -325,12 +325,12 @@ namespace BotWorker.Application.Services
         {
             var format = !botMsg.IsRealProxy && (botMsg.IsMirai || botMsg.IsNapCat) ? "第{i}名[@:{0}] 💎{1:N0}\n" : "第{i}名{0} 💎{1:N0}\n";
             string res = botMsg.Group.IsCredit
-                ? GroupMember.QueryWhere($"top {top} UserId, GroupCredit", $"groupId = {botMsg.GroupId}", "GroupCredit desc", format)
+                ? GroupMember.QueryWhere($"{MetaData.SqlTop(top)} UserId, GroupCredit", $"groupId = {botMsg.GroupId}", $"GroupCredit desc {MetaData.SqlLimit(top)}", format)
                 : botMsg.SelfInfo.IsCredit
-                    ? Friend.QueryWhere($"top {top} UserId, credit", $"UserId in (select UserId from {GroupMember.FullName} where GroupId = {botMsg.GroupId})",
-                                        $"credit desc", format)
-                    : UserInfo.QueryWhere($"top {top} Id, Credit", $"Id in (select UserId from {CreditLog.FullName} where GroupId = {botMsg.GroupId})",
-                                 $"credit desc", format);
+                    ? Friend.QueryWhere($"{MetaData.SqlTop(top)} UserId, credit", $"UserId in (select UserId from {GroupMember.FullName} where GroupId = {botMsg.GroupId})",
+                                        $"credit desc {MetaData.SqlLimit(top)}", format)
+                    : UserInfo.QueryWhere($"{MetaData.SqlTop(top)} Id, Credit", $"Id in (select UserId from {CreditLog.FullName} where GroupId = {botMsg.GroupId})",
+                                 $"credit desc {MetaData.SqlLimit(top)}", format);
             if (!res.Contains(botMsg.UserId.ToString()))
                 res += $"{{积分排名}} [@:{botMsg.UserId}] 💎{{积分}}\n";
             

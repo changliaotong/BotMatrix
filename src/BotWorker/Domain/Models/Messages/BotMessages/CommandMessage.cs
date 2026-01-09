@@ -50,6 +50,8 @@ public partial class BotMessage : MetaData<BotMessage>
             }
             else if (CmdName == "生成提示词")
                 Answer = $"{{#系统提示词生成器 请以【{CmdPara}】为主题生成一段智能体的系统提示词}}";
+            else if (CmdName == "菜单")
+                Answer = await GetMenuResAsync();
             else if (CmdName == "签到")
             { 
                 Answer = await TrySignInAsync(false);

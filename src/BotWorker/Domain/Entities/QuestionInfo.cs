@@ -1,4 +1,4 @@
-﻿using BotWorker.Common;
+using BotWorker.Common;
 
 using BotWorker.Infrastructure.Persistence.ORM;
 
@@ -68,7 +68,7 @@ namespace BotWorker.Domain.Entities
         /// 审核完成并升级为系统问题
         public static int Audit(long questionId, int audit2, int isSystem)
         {            
-            return Update($"Audit2 = {audit2}, Audit2Date = getdate(), Audit2By = {BotInfo.SystemUid}, IsSystem = {isSystem}", questionId);
+            return Update($"Audit2 = {audit2}, Audit2Date = {SqlDateTime}, Audit2By = {BotInfo.SystemUid}, IsSystem = {isSystem}", questionId);
         }
 
 

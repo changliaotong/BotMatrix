@@ -14,7 +14,7 @@ namespace BotWorker.Domain.Entities
 
         public static long GetOid(string text)
         {
-            return QueryScalar<long>($"select top 1 {Key} from {FullName} where replace(chengyu, '，', '') = '{text.RemoveBiaodian()}'");
+            return QueryScalar<long>($"select {SqlTop(1)} {Key} from {FullName} where replace(chengyu, '，', '') = '{text.RemoveBiaodian()}'{SqlLimit(1)}");
         }
 
         public static bool Exists(string text)
@@ -38,7 +38,8 @@ namespace BotWorker.Domain.Entities
         {
             if (oid == 0)
                 oid = GetOid(text);
-            string sSelect = $"chengyu, pingyin, isnull(N'\n💡【释义】' + diangu,''), isnull(N'\n📜【出处】' + chuchu,''), isnull(N'\n📝【例子】' + lizi,'')";
+            string prefix = IsPostgreSql ? "" : "N";
+            string sSelect = $"chengyu, pingyin, {SqlIsNull(prefix + "'\n💡【释义】' + diangu","''")}, {SqlIsNull(prefix + "'\n📜【出处】' + chuchu","''")}, {SqlIsNull(prefix + "'\n📝【例子】' + lizi","''")}";
             string sWhere = $"oid = {oid}";
             string sOrderby = "";
             string format = "📚【成语】{0}\n🔤【拼音】{1}{2}{3}{4})";
@@ -62,7 +63,7 @@ namespace BotWorker.Domain.Entities
         {
             if (oid == 0)
                 oid = GetOid(text);
-            string sSelect = $"chengyu, pingyin +' <span>|</span> ' + pinyin + ' <span>|</span> ' + spinyin, isnull('\n【释义】' + diangu,''), isnull('\n【出处】' + chuchu,''), isnull('\n【例子】' + lizi,'')";
+            string sSelect = $"chengyu, pingyin +' <span>|</span> ' + pinyin + ' <span>|</span> ' + spinyin, {SqlIsNull("'\n【释义】' + diangu","''")}, {SqlIsNull("'\n【出处】' + chuchu","''")}, {SqlIsNull("'\n【例子】' + lizi","''")}";
             string sWhere = $"oid = {oid}";
             string sOrderby = "";
             string format = "📚【成语】{0}\n🔤【拼音】{1}{2}{3}{4})";

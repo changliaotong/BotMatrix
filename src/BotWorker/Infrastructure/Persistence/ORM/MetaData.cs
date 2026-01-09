@@ -3,11 +3,64 @@ using System.Data.Common;
 using System.Reflection;
 using Newtonsoft.Json;
 using BotWorker.Infrastructure.Extensions;
+using BotWorker.Infrastructure.Caching;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public static class MetaData
     {
+        public static ICacheService? CacheService { get; set; } // 由外部初始化注入
+
+        public static bool IsPostgreSql => GlobalConfig.DbType == DatabaseType.PostgreSql;
+
+        public static string SqlTop(long n) => IsPostgreSql ? "" : $"TOP {n} ";
+        public static string SqlLimit(long n) => IsPostgreSql ? $" LIMIT {n}" : "";
+
+        public static string SqlIsNull(string field, string def) => IsPostgreSql ? $"COALESCE({field}, {def})" : $"ISNULL({field}, {def})";
+
+        public static string SqlRandomOrder => IsPostgreSql ? "RANDOM()" : "NEWID()";
+
+        public static string SqlRandomId => IsPostgreSql ? "gen_random_uuid()" : "NEWID()";
+
+        public static string SqlDateTime => IsPostgreSql ? "CURRENT_TIMESTAMP" : "GETDATE()";
+
+        public static string SqlDateAdd(string unit, object number, string start)
+        {
+            if (IsPostgreSql)
+            {
+                string intervalUnit = unit.ToLower() switch
+                {
+                    "day" => "day",
+                    "hour" => "hour",
+                    "minute" => "minute",
+                    "second" => "second",
+                    "month" => "month",
+                    "year" => "year",
+                    _ => unit
+                };
+                return $"(({start})::timestamp + ({number}::text || ' {intervalUnit}')::interval)";
+            }
+            return $"DATEADD({unit}, {number}, {start})";
+        }
+
+        public static string SqlDateDiff(string unit, string start, string end)
+        {
+            if (IsPostgreSql)
+            {
+                if (unit.ToLower() == "day")
+                    return $"(({end})::date - ({start})::date)";
+                if (unit.ToLower() == "hour")
+                    return $"(EXTRACT(EPOCH FROM ({end}) - ({start})) / 3600)";
+                if (unit.ToLower() == "minute")
+                    return $"(EXTRACT(EPOCH FROM ({end}) - ({start})) / 60)";
+                if (unit.ToLower() == "second")
+                    return $"EXTRACT(EPOCH FROM ({end}) - ({start}))";
+                if (unit.ToLower() == "month")
+                    return $"(EXTRACT(YEAR FROM age({end}, {start})) * 12 + EXTRACT(MONTH FROM age({end}, {start})))";
+            }
+            return $"DATEDIFF({unit}, {start}, {end})";
+        }
+
         public static IDataParameter CreateParameter(string parameterName, object? value)
         {
             if (value is byte[] byteValue)
@@ -37,6 +90,36 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
     {
+        private static bool _isTableChecked = false;
+
+        [JsonIgnore]
+        public static string Limit1 => GlobalConfig.DbType == DatabaseType.SqlServer ? "TOP 1" : "LIMIT 1";
+
+        [JsonIgnore]
+        public static string SqlDate => IsPostgreSql ? "CURRENT_DATE" : "CONVERT(DATE, GETDATE())";
+
+        [JsonIgnore]
+        public static string SqlDateTime => MetaData.SqlDateTime;
+
+        [JsonIgnore]
+        public static string SqlYesterday => IsPostgreSql ? "CURRENT_DATE - INTERVAL '1 day'" : "CONVERT(DATE, GETDATE()-1)";
+
+        public static string SqlTop(long n) => MetaData.SqlTop(n);
+        public static string SqlLimit(long n) => MetaData.SqlLimit(n);
+
+        public static string SqlIsNull(string field, string def) => MetaData.SqlIsNull(field, def);
+
+        public static string SqlRandomOrder => MetaData.SqlRandomOrder;
+
+        public static string SqlRandomId => MetaData.SqlRandomId;
+
+        public static string SqlDateAdd(string unit, object number, string start) => MetaData.SqlDateAdd(unit, number, start);
+
+        public static string SqlDateDiff(string unit, string start, string end) => MetaData.SqlDateDiff(unit, start, end);
+
+        [JsonIgnore]
+        public static bool IsPostgreSql => MetaData.IsPostgreSql;
+
         [JsonIgnore]
         public virtual string DataBase { get; } = "sz84_robot";
         [JsonIgnore]
@@ -73,7 +156,11 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             Keys = [instance.KeyField, instance.KeyField2];
             Key = instance.KeyField;
             Key2 = instance.KeyField2;
-            FullName = $"[{instance.DataBase}].[dbo].[{instance.TableName}]";
+            
+            if (IsPostgreSql)
+                FullName = $"\"{instance.DataBase}\".\"public\".\"{instance.TableName}\"";
+            else
+                FullName = $"[{instance.DataBase}].[dbo].[{instance.TableName}]";
         }
 
         // 查询：直接静态调用，内部用单例实例处理
@@ -137,24 +224,24 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             SyncCacheField(qq, 0, field, value);
         }
 
-        public static string QueryRes(string sql, string format)
+        public static string QueryRes(string sql, string format, IDbTransaction? trans = null)
         {
-            return SQLConn.QueryRes(sql, format);
+            return SQLConn.QueryRes(sql, format, "", trans);
         }
 
-        public static List<T> Query<T>(string sql, params IDataParameter[] parameters)
+        public static List<T> Query<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            return SQLConn.QueryAsync<T>(sql, parameters).GetAwaiter().GetResult();
+            return QueryAsync<T>(sql, trans, parameters).GetAwaiter().GetResult();
         }
 
-        public static T? QueryScalar<T>(string sql, params IDataParameter[] parameters)
+        public static T? QueryScalar<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            return SQLConn.QueryScalar<T>(sql, parameters);
+            return SQLConn.QueryScalar<T>(sql, trans, parameters);
         }
 
         public static DataSet QueryDataset(string sql, params IDataParameter[] parameters)
         {
-            return SQLConn.QueryDataset(sql, parameters);
+            return SQLConn.QueryDataset(sql, null, parameters);
         }
 
         public static DataSet QueryDataset(string sql, IDbTransaction? trans, params IDataParameter[] parameters)
@@ -169,12 +256,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<List<T>> QueryAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            return await SQLConn.QueryAsync<T>(sql, parameters);
+            return await SQLConn.QueryAsync<T>(sql, parameters, trans);
         }
 
         public static async Task<T?> QuerySingleAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : class, new()
         {
-            return await SQLConn.QuerySingleAsync<T>(sql, parameters);
+            return await SQLConn.QuerySingleAsync<T>(sql, trans, parameters);
         }
 
         public static async Task<List<T>> QueryListAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : new()
@@ -182,9 +269,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await SQLConn.QueryListAsync<T>(sql, parameters, trans);
         }
 
-        public static async Task<DataSet> QueryDatasetAsync(string sql, params IDataParameter[] parameters)
+        public static async Task<DataSet> QueryDatasetAsync(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
-            return await SQLConn.QueryDatasetAsync(sql, parameters);
+            return await SQLConn.QueryDatasetAsync(sql, trans, parameters);
         }
 
         public static async Task<IDbTransaction> BeginTransactionAsync()
@@ -216,12 +303,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await SQLConn.ExecAsync(sql, false, trans, parameters);
         }
 
-        public static async Task<T?> ExecScalarAsync<T>(string sql, params IDataParameter[] parameters) where T : struct
+        public static async Task<T?> ExecScalarAsync<T>(string sql, params IDataParameter[] parameters)
         {
             return await ExecScalarAsync<T>(sql, null, parameters);
         }
 
-        public static async Task<T?> ExecScalarAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters) where T : struct
+        public static async Task<T?> ExecScalarAsync<T>(string sql, IDbTransaction? trans = null, params IDataParameter[] parameters)
         {
             return await SQLConn.ExecScalarAsync<T>(sql, false, trans, parameters);
         }
@@ -248,17 +335,23 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task EnsureTableCreatedAsync()
         {
+            if (_isTableChecked) return;
             try
             {
                 var dbName = DbName;
                 var tableName = _instance.TableName;
                 
-                // 使用 INFORMATION_SCHEMA 检查表是否存在
-                var sqlCheck = $@"
-                    SELECT COUNT(*) 
-                    FROM {dbName}.INFORMATION_SCHEMA.TABLES 
-                    WHERE TABLE_CATALOG = '{dbName}' 
-                    AND TABLE_NAME = '{tableName}'";
+                string sqlCheck;
+                if (IsPostgreSql)
+                {
+                    // PostgreSQL: 检查 pg_tables
+                    sqlCheck = $"SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename = '{tableName.ToLower()}'";
+                }
+                else
+                {
+                    // SQL Server: 检查 sys.tables (比 INFORMATION_SCHEMA 快)
+                    sqlCheck = $"SELECT COUNT(*) FROM sys.tables WHERE name = '{tableName}'";
+                }
                 
                 var count = await QueryScalarAsync<int>(sqlCheck);
                 if (count == 0)
@@ -275,6 +368,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                         Console.WriteLine($"[ORM] Failed to create table: {FullName}. result={result}. Please check database permissions and connectivity.");
                     }
                 }
+                _isTableChecked = true;
             }
             catch (Exception ex)
             {
@@ -313,11 +407,11 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         {
             if (value is DateTime dateTimeValue && dateTimeValue == DateTime.MinValue)
             {
-                return $"ISNULL({parameterName}, GETDATE())";
+                return $"{SqlIsNull(parameterName, SqlDateTime)}";
             }
             else if (value is Guid guidValue && guidValue == Guid.Empty)
             {
-                return $"ISNULL({parameterName}, NEWID())";
+                return $"{SqlIsNull(parameterName, SqlRandomOrder)}";
             }
             else
             {
@@ -335,13 +429,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             }
             else if (value is string)
             {
-                return $"N'{EscapeSqlString(value.AsString())}'";
+                string str = EscapeSqlString(value.AsString());
+                return IsPostgreSql ? $"'{str}'" : $"N'{str}'";
             }
             else if (value is DateTime dateTime)
             {
                 if (dateTime == DateTime.MinValue)
                 {
-                    return "GETDATE()";
+                    return SqlDateTime;
                 }
                 else
                 {

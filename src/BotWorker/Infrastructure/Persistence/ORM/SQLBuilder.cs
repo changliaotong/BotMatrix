@@ -6,7 +6,14 @@ using BotWorker.Infrastructure.Persistence.Database;
 namespace BotWorker.Infrastructure.Persistence.ORM
 {
     public abstract partial class MetaData<TDerived> where TDerived : MetaData<TDerived>, new()
-    {    
+    {
+        protected static string Quote(string name)
+        {
+            if (IsPostgreSql)
+                return $"\"{name}\"";
+            return $"[{name}]";
+        }
+
         // ----------- 通用构造 Dictionary -----------
 
         public static Dictionary<string, object?> ToDict(object id, object? id2 = null)
@@ -44,7 +51,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             {
                 if (i++ > 0) sb.Append(" AND ");
                 var paramName = $"@k{i}";
-                sb.Append($"[{kvp.Key}] = {paramName}");
+                sb.Append($"{Quote(kvp.Key)} = {paramName}");
                 parameters.Add(CreateParameter(paramName, kvp.Value));
             }
 
@@ -57,7 +64,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static Dictionary<string, object?> CovToParams(List<Cov> columns)
         {
-            return columns.Select(c => (c.Name, c.Value)).ToDictionary();
+            return columns.ToDictionary(c => c.Name, c => c.Value);
         }
     }
 

@@ -51,8 +51,8 @@ namespace BotWorker.Domain.Entities
         {
             int is_year_vip = await IsYearVIPAsync(groupId) || await RestMonthsAsync(groupId) + month >= 12 ? 1 : 0;       
             return await IsVipAsync(groupId)
-                ? ($"update {FullName} set EndDate = dateadd(month, {month}, EndDate), UserId = {userId}, " +
-                  $"IncomeDay = (IncomeDay * DATEDIFF(MONTH,GETDATE(),EndDate) + {payMoney}) /((DATEDIFF(MONTH,GETDATE(),EndDate) + {month} + 0.0000001)*1.0)," +
+                ? ($"update {FullName} set EndDate = {SqlDateAdd("month", month, "EndDate")}, UserId = {userId}, " +
+                  $"IncomeDay = (IncomeDay * {SqlDateDiff("MONTH", SqlDateTime, "EndDate")} + {payMoney}) /(({SqlDateDiff("MONTH", SqlDateTime, "EndDate")} + {month} + 0.0000001)*1.0)," +
                   $"IsYearVip = {is_year_vip}, InsertBy = {insertBy}, IsGoon = null where GroupId = {groupId}" , [])
 
                 : SqlInsert([
@@ -84,7 +84,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> RestDaysAsync(long groupId)
         {
-            return await GetIntAsync("datediff(day,getdate(),EndDate)", groupId);
+            return await GetIntAsync(SqlDateDiff("day", SqlDateTime, "EndDate"), groupId);
         }
  
         // 是否年费版
@@ -134,7 +134,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> RestMonthsAsync(long groupId)
         {
-            return await GetIntAsync("DATEDIFF(MONTH,GETDATE(), EndDate)", groupId);
+            return await GetIntAsync(SqlDateDiff("MONTH", SqlDateTime, "EndDate"), groupId);
         }
     }
 }

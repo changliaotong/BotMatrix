@@ -166,7 +166,7 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
                 if (bm.IsPublic)
                     return "请用QQ发消息领取，体验群：6433316";
 
-                var resObj = QueryScalar<object>($"select top 1 1 from {FullName} where BotKey = (select top 1 BotKey from {FullName} where BindToken = {bindToken.Quotes()}) and UserId = {UserId}");
+                var resObj = QueryScalar<object>($"select {SqlTop(1)} 1 from {FullName} where BotKey = (select {SqlTop(1)} BotKey from {FullName} where BindToken = {bindToken.Quotes()}{SqlLimit(1)}) and UserId = {UserId}{SqlLimit(1)}");
                 if (resObj != null && resObj != DBNull.Value)
                     return "您已领过积分，不能再次领取";
 
@@ -187,7 +187,7 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
                 try
                 {
                     // 1. 更新绑定信息
-                    var (sqlBind, parasBind) = SqlUpdateWhere($"UserId = {UserId}, IsBind = 1, BindDate = getdate(), BindCredit = {creditAdd}", $"BindToken = {bindToken.Quotes()}");
+                    var (sqlBind, parasBind) = SqlUpdateWhere($"UserId = {UserId}, IsBind = 1, BindDate = {SqlDateTime}, BindCredit = {creditAdd}", $"BindToken = {bindToken.Quotes()}");
                     await ExecAsync(sqlBind, trans, parasBind);
 
                     // 2. 更新积分记录关联

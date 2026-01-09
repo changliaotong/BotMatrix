@@ -1,4 +1,5 @@
 using Serilog;
+using StackExchange.Redis;
 using BotWorker.Application.Messaging.Pipeline;
 using BotWorker.Common.Config;
 using BotWorker.Application.Messaging.Handlers;
@@ -11,9 +12,12 @@ using BotWorker.Modules.AI.Providers;
 using BotWorker.Infrastructure.Persistence.Database;
 using BotWorker.Infrastructure.Utils;
 
+using BotWorker.Infrastructure.Caching;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 初始化静态配置
+BotWorker.Common.GlobalConfig.Initialize(builder.Configuration);
 AppConfig.Initialize(builder.Configuration);
 
 // 配置 Serilog
@@ -27,6 +31,14 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker.Infrastructure.SignalR.HubLoggingFilter>();
 builder.Services.AddHttpClient();
+
+// 注册 Redis
+var redisHost = builder.Configuration["redis:host"] ?? "localhost";
+var redisPort = builder.Configuration["redis:port"] ?? "6379";
+var redisConn = $"{redisHost}:{redisPort},abortConnect=false";
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConn));
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+
 builder.Services.AddSingleton<IKnowledgeBaseService, BotWorker.Modules.AI.Plugins.KnowledgeBaseService>(sp => 
 {
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
@@ -111,6 +123,9 @@ builder.Services.AddSingleton<MessagePipeline>(sp =>
 builder.Services.AddHostedService<StartupLoader>();
 
 var app = builder.Build();
+
+// 初始化 MetaData 缓存
+BotWorker.Infrastructure.Persistence.ORM.MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
 
 // 注入插件管理器到 BotMessage
 BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();

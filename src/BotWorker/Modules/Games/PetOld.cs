@@ -83,7 +83,8 @@ namespace BotWorker.Modules.Games
         public static async Task<long> GetSellPriceAsync(long groupId, long friendId)
         {
             long minPrice = 100;
-            string res = await QueryScalarAsync<string>($"SELECT sz84_robot.dbo.get_sell_price(SellPrice, InsertDate) AS res FROM {FullName} " +
+            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
+            string res = await QueryScalarAsync<string>($"SELECT {func}(SellPrice, InsertDate) AS res FROM {FullName} " +
                                $"WHERE GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1") ?? "";
             long sellPrice = res == "" ? minPrice : res.AsLong();
             return sellPrice < minPrice ? minPrice : sellPrice;
@@ -108,7 +109,7 @@ namespace BotWorker.Modules.Games
         // 得到buyid
         public static async Task<int> GetBuyIdAsync(long groupId, long friendQQ)
         {
-            return (await GetWhereAsync<string>("ISNULL(Id, 0)", $"GroupId = {groupId} AND FriendId = {friendQQ} AND IsValid = 1")).AsInt();
+            return (await GetWhereAsync<string>(SqlIsNull("Id", "0"), $"GroupId = {groupId} AND FriendId = {friendQQ} AND IsValid = 1")).AsInt();
         }
 
         public static int GetBuyId(long groupId, long friendQQ)
@@ -138,8 +139,9 @@ namespace BotWorker.Modules.Games
             if (!await GroupInfo.GetIsPetAsync(groupId))
                 return InfoClosed;
 
-            string res = await QueryResAsync($"SELECT TOP {topN} FriendId, sz84_robot.dbo.get_sell_price(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
-                                  $"where GroupId = {groupId} and IsValid = 1 order by SellPrice desc", 
+            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
+            string res = await QueryResAsync($"SELECT {SqlTop(topN)} FriendId, {func}(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
+                                  $"where GroupId = {groupId} and IsValid = 1 order by SellPrice desc {SqlLimit(topN)}", 
                                   "【第{i}名】 [@:{0}] 身价：{1}\n");
             if (!res.Contains(userId.ToString()))
                 res += "{身价排名}";
@@ -160,9 +162,10 @@ namespace BotWorker.Modules.Games
             long myPirce = await GetSellPriceAsync(groupId, userId);
             string sql = $"SELECT COUNT(*)+1 AS res FROM {FullName} WHERE GroupId = {groupId} AND IsValid = 1 AND SellPrice > {myPirce}";
 
+            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
             return groupId == 0
-                ?  await QueryResAsync($"SELECT TOP {topN} GroupId, sz84_robot.dbo.get_sell_price(SellPrice, InsertDate) AS SellPrice " +
-                    $"FROM {FullName} WHERE IsValid = 1 AND FriendId = {userId} ORDER BY SellPrice DESC",
+                ?  await QueryResAsync($"SELECT {SqlTop(topN)} GroupId, {func}(SellPrice, InsertDate) AS SellPrice " +
+                    $"FROM {FullName} WHERE IsValid = 1 AND FriendId = {userId} ORDER BY SellPrice DESC {SqlLimit(topN)}",
                     "【{i}】 群：{0} 身价：{1}\n")
                 : $"【第{await QueryAsync(sql)}名】 [@:{userId}] 身价：{myPirce}";
         }
@@ -273,7 +276,7 @@ namespace BotWorker.Modules.Games
         // 更新卖出信息
         public static (string, IDataParameter[]) SqlUpdSellInfo(long sellTO, long sellPrice, long buyId)
         {
-            return SqlSetValues($"SellDate = GETDATE(), SellTo = {sellTO}, SellPrice = {sellPrice}, IsValid = 0", buyId);
+            return SqlSetValues($"SellDate = {SqlDateTime}, SellTo = {sellTO}, SellPrice = {sellPrice}, IsValid = 0", buyId);
         }
 
         // 我的宠物列表
@@ -285,8 +288,9 @@ namespace BotWorker.Modules.Games
             if (_groupId != 0 & !await GroupInfo.GetIsPetAsync(groupId))
                 return InfoClosed;
 
-            string sql = $"SELECT TOP {topN} FriendId, sz84_robot.dbo.get_sell_price(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
-                         $"WHERE GroupId = {groupId} AND UserId = {qq} AND IsValid = 1 ORDER BY SellPrice DESC";
+            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
+            string sql = $"SELECT {SqlTop(topN)} FriendId, {func}(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
+                         $"WHERE GroupId = {groupId} AND UserId = {qq} AND IsValid = 1 ORDER BY SellPrice DESC {SqlLimit(topN)}";
             string res = await QueryResAsync(sql, "【第{i}名】 [@:{0}] 身价：{1}\n");
             return $"{res}您买入萌宠数量：{await GetPetCountAsync(groupId, qq)}";
         }

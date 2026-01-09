@@ -338,7 +338,7 @@ namespace BotWorker.Modules.Games
             List<Card> deck = [];
             string query = $"SELECT Id, Rank, Suit FROM {FullName} WHERE groupId = @groupId ORDER BY DeckOrder";
             
-            var ds = await QueryDatasetAsync(query, CreateParameter("@groupId", groupId));
+            var ds = await QueryDatasetAsync(query, null, CreateParameter("@groupId", groupId));
             if (ds != null && ds.Tables.Count > 0)
             {
                 foreach (DataRow row in ds.Tables[0].Rows)

@@ -205,52 +205,7 @@ namespace BotWorker.Application.Services
             }
 
             return false;
-        }
-
-        public long GetQQByOpenid(string MemberOpenId)
-        {
-            Logger.Show($"{StaticMessage}");
-            return UserInfo.GetWhere("isnull(TargetUserId, Id)", $"UserOpenid = {MemberOpenId.Quotes()}").AsLong();
-        }
-
-        public long GetGroupByOpenid(string GroupOpenid)
-        {
-            Logger.Show($"{StaticMessage}");
-            return GroupInfo.GetWhere("isnull(TargetGroup, 0)", $"GroupOpenid = {GroupOpenid.Quotes()}").AsLong();
-        }
-
-        public string GetValue(string field, long id)
-        {
-            Logger.Show($"{StaticMessage}");
-            return BotInfo.GetValue(field, id);
-        }
-
-        public int SetValue(string field, string value, long id)
-        {
-            Logger.Show($"{StaticMessage}");
-            return BotInfo.SetValue(field, value, id);
-        }
-
-        public int SetIsSend(string msgGuid, int isSend)
-        {
-            Logger.Show($"{StaticMessage}");
-            var sql = $"update {GroupSendMessage.FullName} set is_send = {isSend} where msg_guid = {msgGuid.Quotes()}";
-            return Exec(sql);
-        }
-
-        public int Debug(string message, string group = "")
-        {
-            Logger.Show($"{StaticMessage}");
-            return DbDebug(message, group);
-        }
-
-        public int AppendSendMessage(string message)
-        {
-            Logger.Show($"{StaticMessage}");
-            BotMessage? context = JsonConvert.DeserializeObject<BotMessage>(message);
-            if (context == null) return -1;
-            return GroupSendMessage.Append(context);
-        }
+        }     
     }
 }
 

@@ -74,8 +74,8 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
                 if (value is DateTime dt && dt == DateTime.MinValue)
                 {
-                    // ✅ 特殊处理：DateTime.MinValue → GETDATE()
-                    sb.Append($"{field} = GETDATE()");
+                    // ✅ 特殊处理：DateTime.MinValue → SqlDateTime
+                    sb.Append($"{field} = {SqlDateTime}");
                 }
                 else
                 {
@@ -199,7 +199,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static int SetNow(string fieldName, object id, object? id2 = null)
         {
-            return SetValueOther(fieldName, "GETDATE()", id, id2);
+            return SetValueOther(fieldName, SqlDateTime, id, id2);
         }
 
         public static int Plus(string fieldName, object plusValue, object id, object? id2 = null)
@@ -216,7 +216,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var whereDict = ToDict(id, id2);
             var (whereClause, whereParams) = SqlWhere(whereDict, allowEmpty: false);
 
-            string sql = $"UPDATE {FullName} SET {fieldName} = ISNULL({fieldName}, 0) + @plusValue {whereClause}";
+            string sql = $"UPDATE {FullName} SET {fieldName} = " + SqlIsNull(fieldName, "0") + $" + @plusValue {whereClause}";
 
             var paramList = whereParams.ToList<IDataParameter>();
             paramList.Add(CreateParameter("@plusValue", plusValue ?? 0));
