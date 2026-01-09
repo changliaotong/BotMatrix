@@ -40,6 +40,19 @@ namespace BotWorker.Domain.Entities
             return GetWhere("IsClose", $"CmdName = {cmdName.Quotes()}").AsBool();
         }
 
+        public static async Task EnsureCommandExistsAsync(string name, string text)
+        {
+            if (!ExistsWhere($"CmdName = {name.Quotes()}"))
+            {
+                await InsertAsync(new List<Cov>
+                {
+                    new Cov("CmdName", name),
+                    new Cov("CmdText", text),
+                    new Cov("IsClose", 0)
+                });
+            }
+        }
+
         public static int SetCmdCloseAll(string cmdName, int isClose)
         {
             return UpdateWhere($"IsClose = {isClose}", $"CmdName = {cmdName.Quotes()}");

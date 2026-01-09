@@ -1,6 +1,5 @@
-using BotWorker.Modules.AI.Providers.Configs;
-using BotWorker.Modules.AI.Providers.Helpers;
 using BotWorker.Modules.AI.Services;
+using Microsoft.Extensions.Logging;
 
 namespace BotWorker.Modules.AI.Providers
 {
@@ -8,23 +7,15 @@ namespace BotWorker.Modules.AI.Providers
     {
         public readonly ModelProviderManager _manager;
 
-        public LLMApp()
+        public LLMApp(ILogger<ModelProviderManager>? logger = null)
         {
-            _manager = new ModelProviderManager();
-            InitializeProviders();
+            _manager = new ModelProviderManager(logger);
+            // 异步初始化将由外部调用或在第一次使用时触发
         }
 
-        private void InitializeProviders()
+        public async Task InitializeAsync()
         {
-            _manager.RegisterProvider(new OpenAIAzureApiHelper(AzureOpenAI.DeploymentName, AzureOpenAI.Endpoint, AzureOpenAI.ApiKey));
-
-            _manager.RegisterProvider(new GenericOpenAIProvider("Ollama", "ollama", Ollama.OllamaUrl.EndsWith("/v1") ? Ollama.OllamaUrl : Ollama.OllamaUrl.TrimEnd('/') + "/v1", Ollama.ModelId));
-
-            _manager.RegisterProvider(new GenericOpenAIProvider("Doubao", Doubao.Key, Doubao.Url, Doubao.ModelId));
-
-            _manager.RegisterProvider(new GenericOpenAIProvider("QWen", QWen.Key, QWen.Url, QWen.ModelId));
-
-            _manager.RegisterProvider(new GenericOpenAIProvider("DeepSeek", DeepSeek.Key, DeepSeek.Url, DeepSeek.ModelId));
+            await _manager.LoadFromDatabaseAsync();
         }
     }
 }

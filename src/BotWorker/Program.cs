@@ -108,7 +108,7 @@ builder.Services.AddSingleton<MessagePipeline>(sp =>
 });
 
 // 注册启动时加载插件的任务
-builder.Services.AddHostedService<StartupPluginLoader>();
+builder.Services.AddHostedService<StartupLoader>();
 
 var app = builder.Build();
 
@@ -134,11 +134,21 @@ app.MapHub<ChatHub>("/chatHub");
 
 app.Run();
 
-// 简单的启动插件加载器
-public class StartupPluginLoader(IPluginLoaderService loaderService) : BackgroundService
+// 简单的启动加载器
+public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // 0. 确保内置指令存在
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("开启租赁", "开启租赁");
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");
+
+        // 1. 初始化 AI 提供商
+        await llmApp.InitializeAsync();
+        
+        // 2. 加载插件
         await loaderService.LoadAllPluginsAsync();
     }
 }

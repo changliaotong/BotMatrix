@@ -12,6 +12,12 @@ using Microsoft.Extensions.DependencyInjection;
 using System.ComponentModel;
 using System.Linq;
 
+using BotWorker.Modules.AI.Models;
+using BotWorker.Modules.AI.Providers.Helpers;
+using BotWorker.Modules.Plugins;
+using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Domain.Entities;
+
 namespace BotWorker.Modules.AI.Services
 {
     public interface IAIService
@@ -28,6 +34,7 @@ namespace BotWorker.Modules.AI.Services
         private readonly LLMApp _llmApp;
         private readonly ILogger<AIService> _logger;
         private readonly IServiceProvider _serviceProvider;
+        private static readonly Random _random = new();
 
         public AIService(
             IMcpService mcpService, 
@@ -53,12 +60,55 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
+                // 默认使用 DeepSeek，如果 model 为空
+                // 如果 model 为 "Random"，则由 ModelProviderManager 随机选择
                 var providerName = model ?? "DeepSeek";
-                var provider = _llmApp._manager.GetProvider(providerName);
+                IModelProvider? provider = null;
+
+                // 1. 优先检查用户是否提供了自己的 Key
+                if (context is PluginContext pc && pc.Event is BotMessageEvent bme)
+                {
+                    var userId = bme.BotMessage.UserId;
+                    var userConfig = await UserAIConfig.GetUserConfigAsync(userId, providerName);
+                    if (userConfig != null && !string.IsNullOrEmpty(userConfig.ApiKey))
+                    {
+                        _logger.LogInformation("Using user-provided API key for user {UserId} and provider {ProviderName}", userId, providerName);
+                        provider = new GenericOpenAIProvider(providerName, userConfig.ApiKey, userConfig.BaseUrl, providerName);
+                        _ = UserAIConfig.UpdateUsageAsync(userConfig.Id);
+                    }
+                }
+
+                // 2. 如果没有用户 Key，且允许租赁，尝试从租赁池中随机选择
+                if (provider == null)
+                {
+                    var leasedConfigs = await UserAIConfig.GetLeasedConfigsAsync(providerName);
+                    if (leasedConfigs.Count > 0)
+                    {
+                        var config = leasedConfigs[_random.Next(leasedConfigs.Count)];
+                        _logger.LogInformation("Using leased API key from user {LeaserId} for provider {ProviderName}", config.UserId, providerName);
+                        provider = new GenericOpenAIProvider(providerName, config.ApiKey, config.BaseUrl, providerName);
+                        _ = UserAIConfig.UpdateUsageAsync(config.Id);
+                        
+                        // 奖励出租者：增加少量算力
+                        _ = UserInfo.AddTokensAsync(0, 0, "算力租赁奖励", config.UserId, "系统", 100, $"您的 API Key 被使用，获得算力奖励");
+                    }
+                }
+
+                // 3. 最后使用系统配置
+                if (provider == null)
+                {
+                    provider = _llmApp._manager.GetProvider(providerName);
+                }
 
                 if (provider == null)
                 {
-                    return $"Error: AI Provider '{providerName}' not found.";
+                    // 如果找不到指定的 provider，尝试获取随机一个作为兜底
+                    provider = _llmApp._manager.GetRandomProvider();
+                    if (provider == null)
+                    {
+                        return $"Error: No AI Providers available.";
+                    }
+                    _logger.LogWarning("Specified AI Provider '{providerName}' not found. Falling back to '{fallbackProvider}'.", providerName, provider.ProviderName);
                 }
 
                 // 1. 准备插件列表

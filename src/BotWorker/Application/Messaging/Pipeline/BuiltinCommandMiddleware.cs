@@ -74,7 +74,7 @@ namespace BotWorker.Application.Messaging.Pipeline
         {
             return (botMsg.CmdName.In("续费", "暗恋", "换群", "换主人", "警告") && !string.IsNullOrEmpty(botMsg.CmdPara) && !botMsg.CmdPara.IsNum())
                 || (botMsg.CmdName.In("剪刀", "石头", "布", "抽奖", "三公", "牛牛", "牌九", "骰子") && !string.IsNullOrEmpty(botMsg.CmdPara) && (botMsg.CmdPara.Trim() != "梭哈") && !botMsg.CmdPara.IsNum())
-                || (botMsg.CmdName.In("菜单", "领积分", "签到", "爱群主", "笑话", "鬼故事", "早安", "午安", "晚安", "揍群主", "升级", "降级", "结算", "一键改名") && !string.IsNullOrEmpty(botMsg.CmdPara))
+                || (botMsg.CmdName.In("菜单", "领积分", "签到", "爱群主", "笑话", "鬼故事", "早安", "午安", "晚安", "揍群主", "升级", "降级", "结算", "一键改名", "我的Key") && !string.IsNullOrEmpty(botMsg.CmdPara))
                 || (botMsg.CmdName.In("计算") && !botMsg.CmdPara.IsMatch(Regexs.Formula));
         }
     }

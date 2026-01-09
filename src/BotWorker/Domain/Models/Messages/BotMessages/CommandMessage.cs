@@ -193,6 +193,8 @@ public partial class BotMessage : MetaData<BotMessage>
                 else
                     await GetAnswerAsync();
             }
+            else if (CmdName.In("设置Key", "开启租赁", "关闭租赁", "我的Key"))
+                Answer = await GetAiConfigResAsync();
             else if (CmdName == "尚未实现")
                 Answer = $"尚未实现";
             else if (CmdName.In("开启", "关闭") && ((CmdPara.In("闭嘴", "闭嘴模式") && !IsRobotOwner()) || CmdPara.In("私链", "默认提示", "GPT4")))
