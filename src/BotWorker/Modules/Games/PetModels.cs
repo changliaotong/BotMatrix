@@ -73,7 +73,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<Pet?> GetByUserIdAsync(string userId)
         {
-            return (await QueryAsync("WHERE UserId = @UserId", new { UserId = userId })).FirstOrDefault();
+            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
         }
 
         public async Task UpdateStateByTimeAsync(PetConfig config)
@@ -183,12 +183,12 @@ namespace BotWorker.Modules.Games
 
         public static async Task<List<PetInventory>> GetByUserAsync(string userId)
         {
-            return (await QueryAsync("WHERE UserId = @UserId AND Count > 0", new { UserId = userId })).ToList();
+            return await QueryWhere("UserId = @p1 AND Count > 0", SqlParams(("@p1", userId)));
         }
 
         public static async Task AddItemAsync(string userId, string itemId, int count)
         {
-            var item = (await QueryAsync("WHERE UserId = @UserId AND ItemId = @ItemId", new { UserId = userId, ItemId = itemId })).FirstOrDefault();
+            var item = (await QueryWhere("UserId = @p1 AND ItemId = @p2", SqlParams(("@p1", userId), ("@p2", itemId)))).FirstOrDefault();
             if (item == null)
             {
                 item = new PetInventory { UserId = userId, ItemId = itemId, Count = count };

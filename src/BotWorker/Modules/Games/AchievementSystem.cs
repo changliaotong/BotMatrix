@@ -113,13 +113,13 @@ namespace BotWorker.Modules.Games
         {
             try
             {
-                var checkMetric = await UserMetric.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserMetrics'");
+                var checkMetric = await UserMetric.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserMetric.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserMetrics'");
                 if (checkMetric == 0)
                 {
                     await UserMetric.ExecAsync(BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<UserMetric>());
                 }
 
-                var checkAch = await UserAchievement.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserAchievements'");
+                var checkAch = await UserAchievement.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserAchievement.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserAchievements'");
                 if (checkAch == 0)
                 {
                     await UserAchievement.ExecAsync(BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<UserAchievement>());
@@ -128,6 +128,7 @@ namespace BotWorker.Modules.Games
             catch (Exception ex)
             {
                 Console.WriteLine($"[Achievement] Table init failed: {ex.Message}");
+                throw;
             }
         }
 
@@ -143,7 +144,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetUserAchievementsAsync(string userId)
         {
-            var unlocked = await UserAchievement.QueryAsync("WHERE UserId = @UserId", new { UserId = userId });
+            var unlocked = await UserAchievement.QueryWhere("UserId = @p1", UserAchievement.SqlParams(("@p1", userId)));
             var unlockedIds = unlocked.Select(a => a.AchievementId).ToHashSet();
 
             var sb = new StringBuilder();

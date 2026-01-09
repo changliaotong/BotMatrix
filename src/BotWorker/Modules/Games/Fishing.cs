@@ -193,7 +193,7 @@ namespace BotWorker.Modules.Games
             try
             {
                 // 检查 FishingUser 表
-                var checkUser = await FishingUser.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingUser'");
+                var checkUser = await FishingUser.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {FishingUser.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingUser'");
                 if (checkUser == 0)
                 {
                     var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<FishingUser>();
@@ -202,7 +202,7 @@ namespace BotWorker.Modules.Games
                 }
 
                 // 检查 FishingBag 表
-                var checkBag = await FishingBag.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingBag'");
+                var checkBag = await FishingBag.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {FishingBag.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FishingBag'");
                 if (checkBag == 0)
                 {
                     var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<FishingBag>();
@@ -213,6 +213,7 @@ namespace BotWorker.Modules.Games
             catch (Exception ex)
             {
                 Console.WriteLine($"[Fishing] Error ensuring tables: {ex.Message}");
+                throw;
             }
         }
 

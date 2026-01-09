@@ -16,6 +16,7 @@ namespace BotWorker.Application.Services
     {
         private readonly ConcurrentDictionary<Type, List<Delegate>> _subscriptions = new();
         private readonly ConcurrentQueue<SystemAuditEvent> _auditLog = new();
+        private readonly ConcurrentDictionary<BuffType, GlobalBuffEvent> _activeBuffs = new();
         private const int MaxAuditLogSize = 50;
 
         public EventNexus()
@@ -29,6 +30,21 @@ namespace BotWorker.Application.Services
                 }
                 return Task.CompletedTask;
             });
+
+            // 自动订阅全局 Buff 事件
+            Subscribe<GlobalBuffEvent>(ev => {
+                _activeBuffs[ev.Type] = ev;
+                return Task.CompletedTask;
+            });
+        }
+
+        public double GetActiveBuff(BuffType type)
+        {
+            if (_activeBuffs.TryGetValue(type, out var buff) && buff.IsActive)
+            {
+                return buff.Multiplier;
+            }
+            return 1.0; // 默认倍率为 1.0
         }
 
         public List<SystemAuditEvent> GetRecentAudits()

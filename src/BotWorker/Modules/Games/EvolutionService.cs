@@ -49,10 +49,10 @@ namespace BotWorker.Modules.Games
             }, HandleCommandAsync);
 
             // 订阅积分交易事件，实现自动经验增长
-            robot.Events.Subscribe<PointTransactionEvent>(OnPointTransactionAsync);
+            robot.Events?.Subscribe<PointTransactionEvent>(OnPointTransactionAsync);
             
             // 订阅系统交互事件，实现新手引导任务
-            robot.Events.Subscribe<SystemInteractionEvent>(OnSystemInteractionAsync);
+            robot.Events?.Subscribe<SystemInteractionEvent>(OnSystemInteractionAsync);
 
             _logger?.LogInformation("EvolutionService 已启动并成功订阅事件中枢");
         }
@@ -68,7 +68,7 @@ namespace BotWorker.Modules.Games
         {
             try
             {
-                var checkTable = await UserLevel.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserLevels'");
+                var checkTable = await UserLevel.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserLevel.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserLevels'");
                 if (checkTable == 0)
                 {
                     await UserLevel.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<UserLevel>());
@@ -77,6 +77,7 @@ namespace BotWorker.Modules.Games
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "EvolutionService 数据库初始化失败");
+                throw;
             }
         }
 
@@ -88,7 +89,11 @@ namespace BotWorker.Modules.Games
                 
                 // 天才数值模型：收入 0.8 倍经验，支出 1.2 倍经验 (鼓励流动)
                 double weight = ev.TransactionType == "Income" ? 0.8 : 1.2;
-                long expGain = (long)(Math.Abs(ev.Amount) * weight);
+                
+                // 应用全局 Buff 加成
+                double globalBuff = _robot?.Events.GetActiveBuff(BuffType.ExperienceMultiplier) ?? 1.0;
+                
+                long expGain = (long)(Math.Abs(ev.Amount) * (decimal)weight * (decimal)globalBuff);
                 
                 if (expGain <= 0) return;
 
@@ -96,7 +101,8 @@ namespace BotWorker.Modules.Games
                 userLevel.LastUpdateTime = DateTime.Now;
                 
                 // 详细日志记录
-                _logger?.LogInformation($"[进化] 用户 {ev.UserId} 产生行为({ev.TransactionType})，获得经验: {expGain}");
+                string buffInfo = globalBuff > 1.0 ? $" (含 {globalBuff}x 全服加成)" : "";
+                _logger?.LogInformation($"[进化] 用户 {ev.UserId} 产生行为({ev.TransactionType})，获得经验: {expGain}{buffInfo}");
 
                 // 检查是否升级
                 int oldLevel = userLevel.Level;
@@ -277,12 +283,12 @@ namespace BotWorker.Modules.Games
 
         public static async Task<UserLevel?> GetByUserIdAsync(string userId)
         {
-            return await GetSingleAsync("WHERE UserId = @UserId", new { UserId = userId });
+            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
         }
 
         public static async Task<List<UserLevel>> GetTopRankingsAsync(int limit = 10)
         {
-            return (await QueryAsync($"ORDER BY Experience DESC LIMIT {limit}")).ToList();
+            return await GetListAsync($"SELECT TOP {limit} * FROM {FullName} ORDER BY Experience DESC");
         }
     }
 }

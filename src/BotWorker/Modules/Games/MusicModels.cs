@@ -43,7 +43,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<List<SongOrder>> GetHistoryAsync(string userId)
         {
-            return (await QueryAsync("WHERE FromUserId = @UserId OR ToUserId = @UserId ORDER BY OrderTime DESC", new { UserId = userId })).ToList();
+            return await QueryWhere("FromUserId = @p1 OR ToUserId = @p1 ORDER BY OrderTime DESC", SqlParams(("@p1", userId)));
         }
     }
 }

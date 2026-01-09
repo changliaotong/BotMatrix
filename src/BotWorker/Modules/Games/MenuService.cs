@@ -54,7 +54,7 @@ namespace BotWorker.Modules.Games
         public Task StopAsync() => Task.CompletedTask;
 
         /// <summary>
-        /// 核心：自动收集系统内所有插件并构建菜单
+        /// 核心：自动收集系统内所有系统模块并构建菜单
         /// </summary>
         private void BuildDynamicMenuTree()
         {
@@ -63,14 +63,12 @@ namespace BotWorker.Modules.Games
             var newRoot = new MenuNode
             {
                 Id = "root",
-                Title = "🤖 智能机器人主控中心 (自动发现版)",
-                Description = "系统已自动扫描并聚合所有功能，请选择：",
+                Title = "🤖 BotMatrix 系统主控中心",
+                Description = "逻辑层已就绪，请选择需要交互的系统模块：",
                 Children = new List<MenuNode>()
             };
 
-            // 1. 获取所有插件元数据
-            // 注意：这里假设 IRobot 提供了获取已加载插件列表的能力
-            // 如果接口受限，我们通过反射当前程序集获取所有 IPlugin 实现
+            // 1. 获取所有系统模块元数据
             var pluginTypes = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(IPlugin).IsAssignableFrom(p) && !p.IsInterface && !p.IsAbstract);
@@ -80,7 +78,7 @@ namespace BotWorker.Modules.Games
             foreach (var type in pluginTypes)
             {
                 var attr = type.GetCustomAttribute<BotPluginAttribute>();
-                if (attr == null || attr.Id == "system.menu") continue;
+                if (attr == null || attr.Id == "system.menu" || attr.Id == "matrix_market") continue;
 
                 var category = attr.Category ?? "其他功能";
                 if (!categoryGroups.ContainsKey(category))
@@ -88,14 +86,14 @@ namespace BotWorker.Modules.Games
                     categoryGroups[category] = new List<MenuNode>();
                 }
 
-                // 为每个插件创建一个菜单项
+                // 为每个系统模块创建一个菜单项
                 categoryGroups[category].Add(new MenuNode
                 {
                     Id = attr.Id,
                     Title = attr.Name,
                     Description = attr.Description,
                     Type = MenuNodeType.Command,
-                    ActionSkill = attr.Id // 约定：动作技能 ID 与插件 ID 一致
+                    ActionSkill = attr.Id 
                 });
             }
 
@@ -106,7 +104,7 @@ namespace BotWorker.Modules.Games
                 {
                     Id = $"cat_{group.Key}",
                     Title = GetCategoryIcon(group.Key) + " " + group.Key,
-                    Description = $"包含 {group.Value.Count} 个相关功能",
+                    Description = $"包含 {group.Value.Count} 个逻辑子系统",
                     Type = MenuNodeType.Container,
                     Children = group.Value.Concat(new[] { 
                         new MenuNode { Id = "back", Title = "⬅️ 返回上一级", Type = MenuNodeType.Back } 
@@ -115,7 +113,27 @@ namespace BotWorker.Modules.Games
                 newRoot.Children.Add(categoryNode);
             }
 
-            // 3. 添加荣耀榜单选项
+            // 3. 添加资源中心 (Matrix Market)
+            newRoot.Children.Add(new MenuNode 
+            { 
+                Id = "market", 
+                Title = "🌌 矩阵资源中心", 
+                Description = "开启新系统、接入新逻辑、管理资源权限", 
+                Type = MenuNodeType.Command,
+                ActionSkill = "matrix_market"
+            });
+
+            // 4. 添加赛博团队 (Digital Staff)
+            newRoot.Children.Add(new MenuNode 
+            { 
+                Id = "staff", 
+                Title = "💼 赛博团队管理", 
+                Description = "指挥您的数字员工进行自动化开发与销售", 
+                Type = MenuNodeType.Command,
+                ActionSkill = "core.digital_staff"
+            });
+
+            // 5. 添加荣耀榜单选项
             newRoot.Children.Add(new MenuNode 
             { 
                 Id = "rankings", 
@@ -125,7 +143,7 @@ namespace BotWorker.Modules.Games
                 ActionSkill = "menu.rankings"
             });
 
-            // 4. 添加系统脉动 (Audit Log)
+            // 5. 添加系统脉动 (Audit Log)
             newRoot.Children.Add(new MenuNode 
             { 
                 Id = "monitor", 
@@ -135,11 +153,11 @@ namespace BotWorker.Modules.Games
                 ActionSkill = "menu.monitor"
             });
 
-            // 5. 添加退出选项
+            // 6. 添加退出选项
             newRoot.Children.Add(new MenuNode { Id = "exit", Title = "🚪 退出系统", Type = MenuNodeType.Command, ActionSkill = "menu.exit" });
 
             _rootMenu = newRoot;
-            _logger?.LogInformation($"菜单系统已完成自动发现，共聚合了 {categoryGroups.Count} 个分类。");
+            _logger?.LogInformation($"系统逻辑同步完成，共接入 {categoryGroups.Count} 个分类。");
         }
 
         private string GetCategoryIcon(string category)
@@ -233,6 +251,22 @@ namespace BotWorker.Modules.Games
                     {
                         return GetMonitorDisplay();
                     }
+                    if (selected.Id == "market")
+                    {
+                        // 映射到 MatrixMarketService 的指令
+                        return await _robot!.CallSkillAsync("matrix_market", ctx, Array.Empty<string>()) as string ?? "❌ 资源中心暂时无法连接";
+                    }
+
+                    // 检查是否是需要激活的系统
+                    if (selected.Id.StartsWith("game."))
+                    {
+                        var access = await UserModuleAccess.QueryWhere("UserId = @p1 AND ModuleId = @p2", UserModuleAccess.SqlParams(("@p1", ctx.UserId), ("@p2", selected.Id)));
+                        if (!access.Any())
+                        {
+                            return $"🔒 访问受限：系统检测到您尚未接入“{selected.Title}”。\n\n💡 请前往【🌌 矩阵资源中心】获取接入权限。";
+                        }
+                    }
+
                     return $"🚀 正在为您启动：{selected.Title}...\n(描述: {selected.Description})\n\n💡 请直接输入该功能的指令。";
 
                 case MenuNodeType.Input:
@@ -299,12 +333,25 @@ namespace BotWorker.Modules.Games
                 sb.AppendLine($"║ 👤 用户: {session.UserId.PadRight(18)}║");
                 sb.AppendLine($"║ 🆙 等级: Lv.{level.ToString().PadRight(15)}║");
                 sb.AppendLine($"║ ✨ 位面: {plane.PadRight(18)}║");
+
+                // 展示活跃的全局 Buff
+                double expBuff = _robot?.Events.GetActiveBuff(BuffType.ExperienceMultiplier) ?? 1.0;
+                double pointsBuff = _robot?.Events.GetActiveBuff(BuffType.PointsMultiplier) ?? 1.0;
+                if (expBuff > 1.0 || pointsBuff > 1.0)
+                {
+                    sb.AppendLine("╟────────────────────────────╢");
+                    if (expBuff > 1.0) sb.AppendLine($"║ 🔥 全服经验: {expBuff}x".PadRight(29) + "║");
+                    if (pointsBuff > 1.0) sb.AppendLine($"║ 💰 全服积分: {pointsBuff}x".PadRight(29) + "║");
+                }
             }
 
             sb.AppendLine("╟────────────────────────────╢");
             sb.AppendLine($"║ 📝 {node.Description.PadRight(24)}║");
             sb.AppendLine("║                            ║");
             
+            var userAccess = await UserModuleAccess.QueryWhere("UserId = @p1", UserModuleAccess.SqlParams(("@p1", session.UserId)));
+            var unlockedIds = userAccess.Select(a => a.ModuleId).ToHashSet();
+
             for (int i = 0; i < node.Children.Count; i++)
             {
                 var child = node.Children[i];
@@ -315,7 +362,14 @@ namespace BotWorker.Modules.Games
                     MenuNodeType.Back => "🔙",
                     _ => "🔹"
                 };
-                var line = $" {i + 1}. {icon} {child.Title}";
+
+                string title = child.Title;
+                if (child.Id.StartsWith("game.") && !unlockedIds.Contains(child.Id))
+                {
+                    title = "🔒 " + title;
+                }
+
+                var line = $" {i + 1}. {icon} {title}";
                 sb.AppendLine($"║ {line.PadRight(25)}║");
             }
 

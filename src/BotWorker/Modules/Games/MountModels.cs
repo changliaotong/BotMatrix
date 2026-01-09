@@ -72,12 +72,12 @@ namespace BotWorker.Modules.Games
 
         public static async Task<Mount?> GetActiveMountAsync(string userId)
         {
-            return (await QueryAsync("WHERE UserId = @UserId AND Status = @Status", new { UserId = userId, Status = (int)MountStatus.Riding })).FirstOrDefault();
+            return (await QueryWhere("UserId = @p1 AND Status = @p2", SqlParams(("@p1", userId), ("@p2", (int)MountStatus.Riding)))).FirstOrDefault();
         }
 
         public static async Task<List<Mount>> GetUserMountsAsync(string userId)
         {
-            return (await QueryAsync("WHERE UserId = @UserId", new { UserId = userId })).ToList();
+            return await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)));
         }
 
         public void GainExp(double exp)

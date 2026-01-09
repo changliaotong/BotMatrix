@@ -54,7 +54,7 @@ namespace BotWorker.Modules.Games
             try
             {
                 // 检查 UserPets 表
-                var checkPet = await Pet.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserPets'");
+                var checkPet = await Pet.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {Pet.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserPets'");
                 if (checkPet == 0)
                 {
                     var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<Pet>();
@@ -63,17 +63,18 @@ namespace BotWorker.Modules.Games
                 }
 
                 // 检查 PetInventory 表
-                var checkInv = await PetInventory.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PetInventory'");
+                var checkInv = await PetInventory.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {PetInventory.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserPetInventory'");
                 if (checkInv == 0)
                 {
                     var sql = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<PetInventory>();
                     await PetInventory.ExecAsync(sql);
-                    Console.WriteLine("[Pet] Created table PetInventory");
+                    Console.WriteLine("[Pet] Created table UserPetInventory");
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[PetService] 数据库表初始化失败: {ex.Message}");
+                throw;
             }
         }
 

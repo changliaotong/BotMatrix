@@ -23,7 +23,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<Baby?> GetByUserIdAsync(string userId)
         {
-            return (await QueryAsync("WHERE UserId = @UserId AND Status = 'active'", new { UserId = userId })).FirstOrDefault();
+            return (await QueryWhere("UserId = @p1 AND Status = 'active'", SqlParams(("@p1", userId)))).FirstOrDefault();
         }
     }
 
@@ -53,7 +53,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<BabyConfig> GetAsync()
         {
-            var config = (await QueryAsync("WHERE Id = 1")).FirstOrDefault();
+            var config = (await QueryWhere("Id = 1")).FirstOrDefault();
             if (config == null)
             {
                 config = new BabyConfig();

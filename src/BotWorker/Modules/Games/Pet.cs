@@ -46,7 +46,7 @@ namespace BotWorker.Modules.Games
             // 4. 注册通用事件钩子：用户发言增加亲密度
             await robot.RegisterEventAsync("message", HandleUserMessageAsync);
 
-            _logger.LogInformation("{PluginName} v{Version} 已启动。", Metadata.Name, Metadata.Version);
+            _logger?.LogInformation("{PluginName} v{Version} 已启动。", Metadata.Name, Metadata.Version);
         }
 
         private async Task HandleUserMessageAsync(IPluginContext ctx)

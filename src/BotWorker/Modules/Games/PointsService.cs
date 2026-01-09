@@ -57,14 +57,23 @@ namespace BotWorker.Modules.Games
             }, HandleCommandAsync);
 
             // 注册跨插件调用接口 (Skill API)
-            // 注意：跨插件调用通常使用 object 参数
             await robot.RegisterSkillAsync(new SkillCapability { Name = "points.transfer" }, async (ctx, args) => {
-                // 这里是作为指令的回调，但我们也需要它作为 Skill 被调用
-                return "Skill: points.transfer registered";
+                if (args == null || args.Length < 3) return "❌ 错误：缺少转账参数。格式：[FromId, ToId, Amount, Reason]";
+                
+                string fromId = args[0];
+                string toId = args[1];
+                if (!long.TryParse(args[2], out long amount)) return "❌ 错误：金额格式不正确。";
+                string reason = args.Length > 3 ? args[3] : "系统调用";
+
+                if (string.IsNullOrEmpty(fromId) || string.IsNullOrEmpty(toId) || amount <= 0)
+                {
+                    return "❌ 错误：转账参数不完整或金额错误。";
+                }
+
+                // 执行转账逻辑 (贷记 fromId, 借记 toId)
+                bool success = await TransferAsync(toId, fromId, amount, reason);
+                return success ? "✅ 转账成功" : "❌ 转账失败：余额不足或系统错误";
             });
-            
-            // 为了支持传统的 robot.CallSkillAsync("points.transfer", dict)
-            // 我们需要确保 PointsService 实例能被找到并调用其方法
         }
 
         public Task StopAsync() => Task.CompletedTask;
@@ -73,21 +82,29 @@ namespace BotWorker.Modules.Games
         {
             try
             {
-                var checkTable = await PointAccount.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PointAccounts'");
+                // 使用带数据库限定名的查询，确保在正确的数据库中检查
+                var sqlCheck = $"SELECT COUNT(*) FROM {PointAccount.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PointAccounts'";
+                var checkTable = await PointAccount.QueryScalarAsync<int>(sqlCheck);
                 if (checkTable == 0)
                 {
-                    await PointAccount.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<PointAccount>());
+                    var sql = SchemaSynchronizer.GenerateCreateTableSql<PointAccount>();
+                    await PointAccount.ExecAsync(sql);
+                    _logger?.LogInformation("Created table PointAccounts");
                 }
 
-                var checkLedger = await PointLedger.QueryScalarAsync<int>("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PointLedgers'");
+                var sqlCheckLedger = $"SELECT COUNT(*) FROM {PointLedger.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PointLedgers'";
+                var checkLedger = await PointLedger.QueryScalarAsync<int>(sqlCheckLedger);
                 if (checkLedger == 0)
                 {
-                    await PointLedger.ExecAsync(SchemaSynchronizer.GenerateCreateTableSql<PointLedger>());
+                    var sql = SchemaSynchronizer.GenerateCreateTableSql<PointLedger>();
+                    await PointLedger.ExecAsync(sql);
+                    _logger?.LogInformation("Created table PointLedgers");
                 }
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "PointsService 数据库初始化失败");
+                throw; // 重新抛出，让初始化失败可见
             }
         }
 
@@ -205,17 +222,23 @@ namespace BotWorker.Modules.Games
             long baseReward = 100;
             // 等级加成：每级增加 2%
             double multiplier = 1.0 + (level * 0.02);
-            long finalReward = (long)(baseReward * multiplier);
+            
+            // 全局 Buff 加成
+            double globalBuff = _robot?.Events.GetActiveBuff(BuffType.PointsMultiplier) ?? 1.0;
+            
+            long finalReward = (long)(baseReward * multiplier * globalBuff);
 
-            bool success = await TransferAsync(ctx.UserId, SYSTEM_RESERVE, finalReward, $"每日签到奖励 (等级加成 x{multiplier:F2})");
+            bool success = await TransferAsync(ctx.UserId, SYSTEM_RESERVE, finalReward, $"每日签到奖励 (等级加成 x{multiplier:F2}, 全服 Buff x{globalBuff:F2})");
             
             if (success)
             {
                 var account = await GetOrCreateAccountAsync(ctx.UserId);
                 string planeInfo = userLevel != null ? $" [{GetPlaneName(level)}]" : "";
+                string buffNotice = globalBuff > 1.0 ? $"🔥 全服翻倍 x{globalBuff:F1}\n" : "";
                 return $"✅ 签到成功！\n" +
+                       $"{buffNotice}" +
                        $"您的等级：Lv.{level}{planeInfo}\n" +
-                       $"获得奖励：{finalReward} 积分 (含 {((multiplier - 1) * 100):F0}% 进化加成)\n" +
+                       $"获得奖励：{finalReward} 积分 (含 {((multiplier * globalBuff - 1) * 100):F0}% 复合加成)\n" +
                        $"当前总额：{account.Balance}";
             }
             return "❌ 签到失败，请稍后再试。";

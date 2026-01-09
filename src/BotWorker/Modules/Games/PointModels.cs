@@ -32,7 +32,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<PointAccount?> GetByAccountIdAsync(string accountId)
         {
-            return await GetSingleAsync("WHERE AccountId = @AccountId", new { AccountId = accountId });
+            return (await QueryWhere("AccountId = @p1", SqlParams(("@p1", accountId)))).FirstOrDefault();
         }
     }
 
@@ -60,7 +60,13 @@ namespace BotWorker.Modules.Games
 
         public static async Task<List<PointLedger>> GetAccountHistoryAsync(string accountId, int limit = 20)
         {
-            return (await QueryAsync($"WHERE DebitAccountId = @Id OR CreditAccountId = @Id ORDER BY TransactionTime DESC", new { Id = accountId })).ToList();
+            return await QueryListAsync(new QueryOptions 
+            { 
+                FilterSql = "DebitAccountId = @p1 OR CreditAccountId = @p1", 
+                OrderBy = "TransactionTime DESC", 
+                Top = limit, 
+                Parameters = SqlParams(("@p1", accountId)) 
+            });
         }
     }
 }

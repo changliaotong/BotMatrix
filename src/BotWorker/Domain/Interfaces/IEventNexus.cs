@@ -30,5 +30,10 @@ namespace BotWorker.Domain.Interfaces
         /// 获取最近的系统审计日志
         /// </summary>
         List<SystemAuditEvent> GetRecentAudits();
+
+        /// <summary>
+        /// 获取当前的全局 Buff 倍率
+        /// </summary>
+        double GetActiveBuff(BuffType type);
     }
 }

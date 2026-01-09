@@ -41,7 +41,7 @@ namespace BotWorker.Modules.Games
                 var tables = new[] { "UserMarriages", "MarriageProposals", "WeddingItems", "SweetHearts" };
                 foreach (var table in tables)
                 {
-                    var count = await UserMarriage.QueryScalarAsync<int>($"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{table}'");
+                    var count = await UserMarriage.QueryScalarAsync<int>($"SELECT COUNT(*) FROM {UserMarriage.DbName}.INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{table}'");
                     if (count == 0)
                     {
                         string sql = table switch
@@ -57,7 +57,11 @@ namespace BotWorker.Modules.Games
                     }
                 }
             }
-            catch (Exception ex) { Console.WriteLine($"[Marriage] Init error: {ex.Message}"); }
+            catch (Exception ex) 
+            { 
+                Console.WriteLine($"[Marriage] Init error: {ex.Message}"); 
+                throw;
+            }
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
@@ -238,8 +242,8 @@ namespace BotWorker.Modules.Games
             var price = type == "dress" ? 500 : 1000;
 
             // 检查是否已购买
-            var existing = (await WeddingItem.QueryAsync($"WHERE UserId = @UserId AND ItemType = @ItemType", new { UserId = ctx.UserId, ItemType = type })).FirstOrDefault();
-            if (existing != null) return $"你已经拥有一件【{itemName}】了。";
+            var existing = (await WeddingItem.QueryWhere("UserId = @p1 AND ItemType = @p2", WeddingItem.SqlParams(("@p1", ctx.UserId), ("@p2", type)))).FirstOrDefault();
+            if (existing != null) return $"你已经拥有【{(type == "dress" ? "婚纱" : "婚戒")}】了。";
 
             var item = new WeddingItem { UserId = ctx.UserId, ItemType = type, Name = itemName, Price = price };
             await item.InsertAsync();

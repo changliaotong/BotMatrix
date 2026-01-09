@@ -49,6 +49,28 @@ namespace BotWorker.Domain.Models
     }
 
     /// <summary>
+    /// 全服光环 (Global Buff) 类型
+    /// </summary>
+    public enum BuffType
+    {
+        ExperienceMultiplier, // 经验倍率
+        PointsMultiplier,     // 积分倍率
+        DropRateMultiplier    // 掉率倍率
+    }
+
+    /// <summary>
+    /// 全服光环变更事件
+    /// </summary>
+    public class GlobalBuffEvent : BaseEvent
+    {
+        public BuffType Type { get; set; }
+        public double Multiplier { get; set; }
+        public DateTime ExpireTime { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public bool IsActive => DateTime.Now < ExpireTime;
+    }
+
+    /// <summary>
     /// 系统交互事件
     /// 用于追踪用户在系统中的各种行为
     /// </summary>

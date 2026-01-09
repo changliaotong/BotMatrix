@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 using BotWorker.Infrastructure.Communication.OneBot;
 using BotWorker.Modules.Plugins;
 
+using BotWorker.Application.Services;
+using BotWorker.Services;
+
 namespace BotWorker.Domain.Interfaces
 {
     public interface IRobot
@@ -40,6 +43,21 @@ namespace BotWorker.Domain.Interfaces
         /// 事件中枢
         /// </summary>
         IEventNexus Events { get; }
+
+        /// <summary>
+        /// AI 服务
+        /// </summary>
+        IAIService AI { get; }
+
+        /// <summary>
+        /// 国际化服务
+        /// </summary>
+        II18nService I18n { get; }
+
+        /// <summary>
+        /// 获取所有已注册的技能
+        /// </summary>
+        System.Collections.Generic.IReadOnlyList<BotWorker.Modules.Plugins.Skill> Skills { get; }
     }
 }
 

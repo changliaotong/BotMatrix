@@ -50,7 +50,8 @@ namespace BotWorker.Modules.Plugins
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RemotePlugin] Failed to connect to {_metadata.Name} at {_endpoint}: {ex.Message}");
+                var name = _metadata?.Name ?? "Unknown Remote Plugin";
+                Console.WriteLine($"[RemotePlugin] Failed to connect to {name} at {_endpoint}: {ex.Message}");
             }
         }
 

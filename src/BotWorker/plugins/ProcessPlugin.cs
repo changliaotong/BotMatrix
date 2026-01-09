@@ -101,27 +101,40 @@ namespace BotWorker.Modules.Plugins
 
         private void StartProcess()
         {
-            var startInfo = new ProcessStartInfo
+            if (string.IsNullOrWhiteSpace(_executablePath))
             {
-                FileName = _executablePath,
-                WorkingDirectory = _workingDirectory,
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
+                _logger?.LogWarning("无法启动进程插件：未提供可执行文件路径。");
+                return;
+            }
 
-            _process = new Process { StartInfo = startInfo };
-            _process.OutputDataReceived += (s, e) => HandleStdout(e.Data);
-            _process.ErrorDataReceived += (s, e) => {
-                if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine($"[Plugin:{_metadata.Name}] ERR: {e.Data}");
-            };
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = _executablePath,
+                    WorkingDirectory = _workingDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
 
-            _process.Start();
-            _stdin = _process.StandardInput;
-            _process.BeginOutputReadLine();
-            _process.BeginErrorReadLine();
+                _process = new Process { StartInfo = startInfo };
+                _process.OutputDataReceived += (s, e) => HandleStdout(e.Data);
+                _process.ErrorDataReceived += (s, e) => {
+                    if (!string.IsNullOrEmpty(e.Data)) _logger?.LogError($"[ProcessPlugin:{_metadata.Name}] {e.Data}");
+                };
+
+                _process.Start();
+                _stdin = _process.StandardInput;
+                _process.BeginOutputReadLine();
+                _process.BeginErrorReadLine();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"启动进程插件 {_metadata.Name} 失败");
+            }
         }
 
         private async void HandleStdout(string? data)
