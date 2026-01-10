@@ -26,6 +26,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static string SqlRandomId => IsPostgreSql ? "gen_random_uuid()" : "NEWID()";
 
         public static string SqlDateTime => IsPostgreSql ? "CURRENT_TIMESTAMP" : "GETDATE()";
+        public static string SqlLen(string field) => IsPostgreSql ? $"LENGTH({field})" : $"LEN({field})";
 
         public static string SqlQuote(string identifier)
         {
@@ -290,6 +291,8 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static string SqlRandomOrder => MetaData.SqlRandomOrder;
 
         public static string SqlRandomId => MetaData.SqlRandomId;
+
+        public static string SqlLen(string field) => MetaData.SqlLen(field);
 
         public static string SqlDateAdd(string unit, object number, string start) => MetaData.SqlDateAdd(unit, number, start);
 
@@ -790,6 +793,24 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return res;
         }
 
+        public static async Task<string> QueryWhereAsync(string select, string where, string orderBy, string format)
+        {
+            string sql = $"SELECT {select} FROM {FullName} WHERE {where} ORDER BY {orderBy}";
+            return await QueryResAsync(sql, format);
+        }
+
+        public static async Task<string> QueryWhereAsync(string select, string where, string orderBy, string format, string totalFormat)
+        {
+            string sql = $"SELECT {select} FROM {FullName} WHERE {where} ORDER BY {orderBy}";
+            string res = await QueryResAsync(sql, format);
+            if (!string.IsNullOrEmpty(res) && !string.IsNullOrEmpty(totalFormat))
+            {
+                long count = await CountWhereAsync(where);
+                res += totalFormat.Replace("{c}", count.ToString());
+            }
+            return res;
+        }
+
         public static async Task<string> QueryResAsync(string sql, string format)
         {
             return await SQLConn.QueryResAsync(sql, format);
@@ -1023,6 +1044,26 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static T? GetSingle<T>(object id, object? id2 = null, params string[] fieldNames) where T : new()
         {
             return GetList<T>(id, id2, fieldNames).FirstOrDefault();
+        }
+
+        public static async Task<IEnumerable<string>> GetRandomAsync(string[] fieldNames, int top = 1)
+        {
+            string fields = string.Join(", ", fieldNames.Select(fieldName => fieldName.IsNull() ? Quote(Key) : MetaData.SqlQuote(fieldName)));
+            string sql = $"SELECT {SqlTop(top)}{fields} FROM {FullName} ORDER BY {SqlRandomOrder}{SqlLimit(top)}";
+            DataSet ds = await QueryDatasetAsync(sql);
+            if (ds == null || ds.Tables.Count == 0) return [];
+            IEnumerable<string> res = ds.Tables[0].AsEnumerable().Select(dr => string.Join(", ", fieldNames.Select(fieldName => dr[fieldName].ToString())));
+            return res;
+        }
+
+        public static async Task<IEnumerable<string>> GetRandomAsync(string fieldName, int top = 1)
+        {
+            return await GetRandomAsync([fieldName], top);
+        }
+
+        public static async Task<string> GetRandomAsync(string fieldName)
+        {
+            return (await GetRandomAsync(fieldName, 1)).FirstOrDefault().AsString();
         }
 
         public static IEnumerable<string> GetRandom(string[] fieldNames, int top = 1)
@@ -1306,20 +1347,98 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public virtual async Task<int> InsertAsync(IDbTransaction? trans = null)
         {
-            var (sql, paras) = SqlInsertDict(ToDictionary(), [], ["Id", "Guid"]);
+            var data = ToDictionary();
+            var exclude = new List<string> { "Guid" };
+
+            // 改进主键排除逻辑：如果主键是字符串或 Guid 且有值，则包含在 INSERT 中；如果是数字则排除（由数据库生成）
+            if (data.TryGetValue(Key, out var idValue) || data.TryGetValue(Key.ToLower(), out idValue) || data.TryGetValue(Key.ToUpper(), out idValue))
+            {
+                bool shouldKeep = false;
+                if (idValue is string s && !string.IsNullOrEmpty(s)) shouldKeep = true;
+                else if (idValue is Guid g && g != Guid.Empty) shouldKeep = true;
+                
+                if (!shouldKeep)
+                {
+                    exclude.Add(Key);
+                }
+            }
+            else
+            {
+                // 如果字典里没找到 Key，说明可能主键不是属性，或者命名不匹配，保守起见排除 Key
+                exclude.Add(Key);
+            }
+
+            if (!string.IsNullOrEmpty(Key2))
+            {
+                if (data.TryGetValue(Key2, out var idValue2) || data.TryGetValue(Key2.ToLower(), out idValue2) || data.TryGetValue(Key2.ToUpper(), out idValue2))
+                {
+                    bool shouldKeep2 = false;
+                    if (idValue2 is string s2 && !string.IsNullOrEmpty(s2)) shouldKeep2 = true;
+                    else if (idValue2 is Guid g2 && g2 != Guid.Empty) shouldKeep2 = true;
+
+                    if (!shouldKeep2)
+                    {
+                        exclude.Add(Key2);
+                    }
+                }
+                else
+                {
+                    exclude.Add(Key2);
+                }
+            }
+
+            var (sql, paras) = SqlInsertDict(data, [], exclude.ToArray());
             return await ExecAsync(sql, trans, paras);
         }
 
         public virtual async Task<T?> InsertAsync<T>(string field, IDbTransaction? trans = null) where T : struct
         {
-            var (sql, paras) = SqlInsertDict(ToDictionary(), [field], ["Id", "Guid"]);
+            var data = ToDictionary();
+            var exclude = new List<string> { "Guid" };
+
+            if (data.TryGetValue(Key, out var idValue) || data.TryGetValue(Key.ToLower(), out idValue) || data.TryGetValue(Key.ToUpper(), out idValue))
+            {
+                bool shouldKeep = false;
+                if (idValue is string s && !string.IsNullOrEmpty(s)) shouldKeep = true;
+                else if (idValue is Guid g && g != Guid.Empty) shouldKeep = true;
+                
+                if (!shouldKeep)
+                {
+                    exclude.Add(Key);
+                }
+            }
+            else
+            {
+                exclude.Add(Key);
+            }
+
+            var (sql, paras) = SqlInsertDict(data, [field], exclude.ToArray());
             var dict = await Database.SQLConn.ExecWithOutputAsync(sql, paras, [field], trans);
             return dict.TryGetValue(field, out var val) ? (T?)Convert.ChangeType(val, typeof(T)) : null;
         }
 
         public virtual async Task<(T1?, T2?)> InsertAsync<T1, T2>(string field1, string field2, IDbTransaction? trans = null) where T1 : struct where T2 : struct
         {
-            var (sql, paras) = SqlInsertDict(ToDictionary(), [field1, field2], ["Id", "Guid"]);
+            var data = ToDictionary();
+            var exclude = new List<string> { "Guid" };
+
+            if (data.TryGetValue(Key, out var idValue) || data.TryGetValue(Key.ToLower(), out idValue) || data.TryGetValue(Key.ToUpper(), out idValue))
+            {
+                bool shouldKeep = false;
+                if (idValue is string s && !string.IsNullOrEmpty(s)) shouldKeep = true;
+                else if (idValue is Guid g && g != Guid.Empty) shouldKeep = true;
+                
+                if (!shouldKeep)
+                {
+                    exclude.Add(Key);
+                }
+            }
+            else
+            {
+                exclude.Add(Key);
+            }
+
+            var (sql, paras) = SqlInsertDict(data, [field1, field2], exclude.ToArray());
             var dict = await Database.SQLConn.ExecWithOutputAsync(sql, paras, [field1, field2], trans);
 
             var val1 = dict.TryGetValue(field1, out var v1) ? (T1?)Convert.ChangeType(v1, typeof(T1)) : null;
@@ -1337,10 +1456,10 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return await ExecScalarAsync<int>(sql, trans, paras);
         }
 
-        public static async Task<Dictionary<string, object>> InsertReturnFieldsAsync(object obj, params string[] outputFields)
+        public static async Task<Dictionary<string, object>?> InsertReturnFieldsAsync(object obj, params string[] outputFields)
             => await InsertReturnFieldsAsync(obj, null, outputFields);
 
-        public static async Task<Dictionary<string, object>> InsertReturnFieldsAsync(object obj, IDbTransaction? trans, params string[] outputFields)
+        public static async Task<Dictionary<string, object>?> InsertReturnFieldsAsync(object obj, IDbTransaction? trans, params string[] outputFields)
         {
             var fields = obj.ToFields();
             var (sql, paras) = SqlInsertDict(fields, outputFields);
@@ -1378,7 +1497,30 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> InsertAsync(List<Cov> columns, IDbTransaction? trans = null)
         {
             var data = CovToParams(columns);
-            var (sql, paras) = SqlInsertDict(data);
+            var exclude = new List<string> { "Guid" };
+
+            // 改进主键排除逻辑：如果主键是字符串或 Guid 且有值，则包含在 INSERT 中；如果是数字则排除（由数据库生成）
+            if (data.TryGetValue(Key, out var idValue) || data.TryGetValue(Key.ToLower(), out idValue) || data.TryGetValue(Key.ToUpper(), out idValue))
+            {
+                bool shouldKeep = false;
+                if (idValue is string s && !string.IsNullOrEmpty(s)) shouldKeep = true;
+                else if (idValue is Guid g && g != Guid.Empty) shouldKeep = true;
+                else if (idValue is long l && l != 0) shouldKeep = true;
+                else if (idValue is int i && i != 0) shouldKeep = true;
+                
+                if (!shouldKeep)
+                {
+                    exclude.Add(Key);
+                }
+            }
+            else
+            {
+                // 如果是 Cov 列表，且没有包含 Key，说明可能希望数据库生成主键
+                // 但如果是 Guid 或 String 类型的主键，通常需要显式提供
+                // 这里我们默认如果不提供且数据库不是自增，可能会报错，但由 SqlInsertDict 处理
+            }
+
+            var (sql, paras) = SqlInsertDict(data, [], exclude.ToArray());
             var result = await ExecAsync(sql, trans, paras);
             if (result > 0)
              {
@@ -1592,7 +1734,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> SetValueAsync(string fieldName, object value, object id, object? id2 = null, IDbTransaction? trans = null)
         {
             var (sql, parameters) = SqlUpdate(fieldName, value, id, id2);
-            var result = await ExecAsync(sql, parameters, trans);
+            var result = await ExecAsync(sql, trans, parameters);
             if (result > 0)
             {
                 if (!IsHighFrequency(fieldName))

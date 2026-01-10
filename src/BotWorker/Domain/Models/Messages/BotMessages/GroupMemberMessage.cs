@@ -68,7 +68,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return CreditSystemClosed;
 
             if (CmdPara == "")
-                return $"{GroupGift.GiftFormat}\n\n{Gift.GetGiftList(GroupId, UserId)}";
+                return $"{GroupGift.GiftFormat}\n\n{Gift.GetGiftList(SelfId, GroupId, UserId)}";
 
             List<string> users = CmdPara.GetValueList(Regexs.Users);
             CmdPara = CmdPara.RegexReplace(Regexs.Users, "");

@@ -18,8 +18,8 @@
           <button @click="scrollTo('detailed')" class="hover:text-pink-500 transition-colors">模块详解</button>
           <button @click="scrollTo('pricing')" class="hover:text-pink-500 transition-colors">资费方案</button>
           <button @click="scrollTo('faq')" class="hover:text-pink-500 transition-colors">常见问题</button>
-          <router-link to="/" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all border border-slate-700">
-            返回主站
+          <router-link to="/botmatrix" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all border border-slate-700">
+            BotMatrix
           </router-link>
           <button @click="openAction('subscribe')" class="px-6 py-2 bg-pink-500 hover:bg-pink-400 text-white rounded-lg transition-all shadow-lg shadow-pink-500/20">
             立即开启

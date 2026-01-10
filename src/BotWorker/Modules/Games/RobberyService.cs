@@ -68,10 +68,10 @@ namespace BotWorker.Modules.Games
             }
 
             // 3. 获取双方积分
-            long victimCredit = await UserInfo.GetCreditAsync(groupId, victimId);
+            long victimCredit = await UserInfo.GetCreditAsync(botId, groupId, victimId);
             if (victimCredit < 100) return $"❌ 【{target.Name}】太穷了（积分不足100），连土匪都看不上他。";
 
-            long robberCredit = await UserInfo.GetCreditAsync(groupId, robberId);
+            long robberCredit = await UserInfo.GetCreditAsync(botId, groupId, robberId);
 
             // 4. 计算打劫金额 (抢夺 5% - 15%)
             double percent = Random.Shared.Next(5, 16) / 100.0;

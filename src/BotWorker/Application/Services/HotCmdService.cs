@@ -160,7 +160,7 @@ namespace BotWorker.Application.Services
             // 钓鱼
             else if (currentMessage.IsMatch(Regexs.Fishing))
             {
-                answer = Fishing.GetFishing(botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, currentMessage.RegexGetValue(Regexs.Fishing, "CmdName"), "");
+                answer = await Fishing.GetFishing(botMsg.GroupId, botMsg.GroupName, botMsg.UserId, botMsg.Name, currentMessage.RegexGetValue(Regexs.Fishing, "CmdName"), "");
             }
             // 买渔具
             else if (currentMessage.IsMatch(Regexs.FishingBuy))
@@ -205,7 +205,7 @@ namespace BotWorker.Application.Services
             {
                 string matchRegex = currentMessage.IsMatch(Regexs.CreditUserId) ? Regexs.CreditUserId : Regexs.CreditUserId2;
                 long credit_qq = currentMessage.RegexGetValue(matchRegex, "UserId").AsLong();
-                answer = $"[@:{credit_qq}]的{UserInfo.GetCreditType(botMsg.GroupId, credit_qq)}：{UserInfo.GetCredit(botMsg.GroupId, credit_qq)}";
+                answer = $"[@:{credit_qq}]的{{积分类型}}：{{积分}}";
                 if (BlackList.IsSystemBlack(credit_qq)) answer += "\n{BlackListMsg}";
             }
             // 金币查询

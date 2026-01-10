@@ -40,7 +40,7 @@ public partial class BotMessage : MetaData<BotMessage>
             IsCancelProxy = true;
 
             if (CmdName == "清空灰名单")
-                return GetClearGrey();
+                return await GetClearGreyAsync();
 
             if (CmdPara.IsNull())
                 return GetGroupGreyList();
@@ -63,7 +63,7 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         // 清空灰名单
-        public string GetClearGrey()
+        public async Task<string> GetClearGreyAsync()
         {
             if (!IsRobotOwner())
                 return $"您无权清空灰名单";
@@ -73,7 +73,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return "灰名单已为空，无需清空";
 
             if (!IsConfirm && greyCount >= 7)
-                return ConfirmMessage($"清空灰名单 人数{greyCount}");
+                return await ConfirmMessage($"清空灰名单 人数{greyCount}");
 
             return GreyList.DeleteAll(GroupId) == -1
                 ? RetryMsg

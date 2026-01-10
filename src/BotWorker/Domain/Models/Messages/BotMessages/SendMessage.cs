@@ -49,6 +49,12 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 GroupSendMessage.Append(this);
             }
 
+            if (!string.IsNullOrEmpty(Answer))
+            {
+                // 将 [@:12345] 替换为 CQ 码 [CQ:at,qq=12345]
+                Answer = System.Text.RegularExpressions.Regex.Replace(Answer, @"\[@:(?<UserId>\d+)\]", "[CQ:at,qq=${UserId}]");
+            }
+
             ShowMessage($"{(isDup ? "[重复]" : "")}发送消息 {MsgGuid} {Answer} {IsSend}", ConsoleColor.Green);
             Console.Error.WriteLine($"[SendMessage] EventId: {MsgId}, IsSend: {IsSend}, IsWeb: {IsWeb}, IsOnebot: {IsOnebot}, Platform: {Platform}, BotType: {SelfInfo.BotType}");
 

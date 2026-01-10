@@ -15,7 +15,7 @@ namespace BotWorker.Modules.AI.Models
         public string LogoUrl { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
 
-        public static async Task<Dictionary<string, object>> AppendAsync(LLMProvider llmProvider, params string[] fields)
+        public static async Task<Dictionary<string, object>?> AppendAsync(LLMProvider llmProvider, params string[] fields)
         { 
             return await InsertReturnFieldsAsync(new
             {

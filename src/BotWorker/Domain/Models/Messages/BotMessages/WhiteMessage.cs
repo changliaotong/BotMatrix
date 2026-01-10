@@ -52,7 +52,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return OwnerOnlyMsg;
 
             if (CmdName == "清空白名单")
-                return GetClearWhite();
+                return await GetClearWhiteAsync();
 
             if (CmdPara == "")
                 return await GetGroupWhiteListAsync();
@@ -108,13 +108,13 @@ public partial class BotMessage : MetaData<BotMessage>
         public string GetWhiteRes() => GetWhiteResAsync().GetAwaiter().GetResult(); 
 
         // 清空白名单
-        public string GetClearWhite()
+        public async Task<string> GetClearWhiteAsync()
         {
             if (!IsRobotOwner() && !BotInfo.IsAdmin(SelfId, UserId))
                 return OwnerOnlyMsg;
 
             if (CountWhiteList() > 10 && !IsConfirm)
-                return ConfirmMessage($"清空群{GroupId}白名单 数量：{CountWhiteList()}");
+                return await ConfirmMessage($"清空群{GroupId}白名单 数量：{CountWhiteList()}");
 
             return WhiteList.DeleteAll(GroupId) == -1
                 ? RetryMsg

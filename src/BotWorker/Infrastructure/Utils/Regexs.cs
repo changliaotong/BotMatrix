@@ -130,7 +130,7 @@ namespace BotWorker.Infrastructure.Utils
         public static string AdWords => @"搔B|我频繁了|荭|荭苞|红苞|[\+＋➕][我群裙qQｑＱ扣]|裙号|不收废|名片攒|免费送|免费翎|黄色软件|黄色视频|颜色视频|颜色软件|加好友咨询|搔B|动态裙|进群领取" +
                                         "|扫一扫进群|每人都有388|鎹你|V群|日入过百|兼zhi|时时彩|时彩|時時彩|時彩|兼职|红包雨|加盟|发红包群|本人QQ|骚女QQ|急聘兼职|急聘淘宝兼职|日赚150|工资按单现结|招聘兼职" +
                                         "|日赚百元|淘宝招兼职|夫妻大秀群|jumpqq|裙聊";
-        public static string UrlWhite => @"[\w\d:/]*.(baidu.com|qq.com|sz84.com|sz84.net|pengguanghui.com｜windows.net)";
+        public static string UrlWhite => @"[\w\d:/]*.(baidu.com|qq.com|sz84.com|sz84.net|qlogo.cn|pengguanghui.com｜windows.net)";
         public static string KeyGroup => "赞|攒|邀人|送赞|红包|名片赞|打字|拉人|互赞|信誉|资源|土豪|澳门|下注|激情|视频|成人|夫妻|机器人|免费|av|内部|天天有钱|天天来领钱|荭|福利|秒赞|苞|线报|利福|5中5";
         public static string BlackWords => "老虎机|六四事件|李洪志|法轮功|法轮大法|老虎机|胡锦涛|丁薛祥|胡春华|习近平|彭丽媛|江泽民|王沪宁|王岐山|李克强|李强|天安门";
         public static string ReplaceWords => "避孕套|制服|女优";

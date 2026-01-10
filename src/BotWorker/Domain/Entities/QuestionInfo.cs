@@ -78,7 +78,7 @@ namespace BotWorker.Domain.Entities
             if (text.Length > 200)
                 return 0;
             else
-                return GetWhere(Key, $"question = N{text.Quotes()}", "Id").AsLong();
+                return GetWhere(Key, $"question = {text.Quotes()}", "Id").AsLong();
         }
 
         // 去掉标点符号、表情 如果全是标点或全是表情则不去掉

@@ -111,7 +111,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             }
 
             else if (CurrentMessage.IsMatch(Regexs.Fishing))//钓鱼
-                Answer = Fishing.GetFishing(GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(Regexs.Fishing, "CmdName"), "");
+                Answer = await Fishing.GetFishing(GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(Regexs.Fishing, "CmdName"), "");
 
             else if (CurrentMessage.IsMatch(Regexs.FishingBuy)) //买渔具
                 Answer = Fishing.GetBuyTools(SelfId, GroupId, GroupName, UserId, Name,
@@ -143,7 +143,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 regexCmd = CurrentMessage.IsMatch(Regexs.CreditUserId) ? Regexs.CreditUserId : Regexs.CreditUserId2;
                 long credit_qq = CurrentMessage.RegexGetValue(regexCmd, "UserId").AsLong();
-                Answer = $"[@:{credit_qq}]的{UserInfo.GetCreditType(GroupId, credit_qq)}：{UserInfo.GetCredit(GroupId, credit_qq)}";
+                Answer = $"[@:{credit_qq}]的{{积分类型}}：{{积分}}";
                 if (BlackList.IsSystemBlack(credit_qq))
                     Answer += "\n{BlackListMsg}";
             }

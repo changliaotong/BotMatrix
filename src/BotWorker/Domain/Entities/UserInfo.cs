@@ -154,12 +154,16 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
         return qq > 2850000000 && qq.AsString()[..3].In("285", "300") && Income.Total(qq) < 10;
     }
 
-    public static string GetCreditType(long groupId, long qq)
-        => GetCreditTypeAsync(groupId, qq).GetAwaiter().GetResult();
+    public static string GetCreditType(long botUin, long groupId, long qq)
+        => GetCreditTypeAsync(botUin, groupId, qq).GetAwaiter().GetResult();
 
-    public static async Task<string> GetCreditTypeAsync(long groupId, long qq)
+    public static async Task<string> GetCreditTypeAsync(long botUin, long groupId, long qq)
     {
-        return groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId) ? "本群积分" : await GetIsSuperAsync(qq) ? "超级积分" : "通用积分";
+        if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId))
+            return "本群积分";
+        if (await BotInfo.GetIsCreditAsync(botUin))
+            return "本机积分";
+        return await GetIsSuperAsync(qq) ? "超级积分" : "通用积分";
     }
 
     public static bool GetIsSuper(long qq)

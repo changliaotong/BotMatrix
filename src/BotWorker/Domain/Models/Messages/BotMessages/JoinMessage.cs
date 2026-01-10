@@ -189,7 +189,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                             if (Group.InviteCredit > 50)
                             {
                                 long minusCredit = Group.InviteCredit - 50;
-                                long ownerCredit = UserInfo.GetCredit(GroupId, Group.RobotOwner);
+                                long ownerCredit = UserInfo.GetCredit(SelfId, GroupId, Group.RobotOwner);
                                 if (ownerCredit >= minusCredit)
                                 {
                                     var resOwner = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, Group.RobotOwner, Group.RobotOwnerName, -minusCredit, $"邀人送分:{InvitorQQ}邀请{UserId}", trans);

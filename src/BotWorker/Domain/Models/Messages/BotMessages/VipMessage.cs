@@ -23,11 +23,11 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!User.IsSuper)
                 return $"非超级分用户不能自己换群，请联系客服QQ处理";
 
-            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long creditValue = await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
             if (creditValue < 12000)
                 return $"您的积分{creditValue}不足12000，换群需扣除12000积分";
             if (!IsConfirm)
-                return ConfirmMessage("换群将扣除12000分");
+                return await ConfirmMessage("换群将扣除12000分");
 
             var (resCode, newValue) = await AddCreditAsync(-12000, "换群扣分");
             if (resCode == -1)
@@ -39,7 +39,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (i == -1)
                 return RetryMsg;
 
-            return $"✅ 换群成功！将机器人加入新群即可使用\n积分：-12000，累计：{creditValue}";
+            return $"✅ 换群成功！将机器人加入新群即可使用\n{{积分类型}}：-12000，累计：{{积分}}";
         }
 
         public string GetChangeGroup() => GetChangeGroupAsync().GetAwaiter().GetResult();
@@ -58,7 +58,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!User.IsSuper)
                 return $"非超级分用户不能自己换主人，请联系客服QQ处理";
 
-            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long creditValue = await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
             if (creditValue < 12000)
                 return $"换主人需扣除12000分，您的积分{creditValue}不足";
 
@@ -75,7 +75,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             await GroupVip.SetValueAsync("UserId", newUserId, GroupId);
 
-            return $"✅ 换主人成功！\n积分：-12000，累计：{creditValue}";
+            return $"✅ 换主人成功！\n{{积分类型}}：-12000，累计：{{积分}}";
         }
 
         public string GetChangeOwner() => GetChangeOwnerAsync().GetAwaiter().GetResult();
@@ -152,7 +152,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!User.IsSuper)
                 return $"仅超级积分可兑换礼品，你的积分类型：{{积分类型}}";
 
-            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long creditValue = await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
 
             if (CmdPara == "")
                 return "红富士苹果包邮12斤：\n 24个装（中果）：119,520分\n换中果发送【兑换礼品 119520】\n您的{积分类型}：{积分}";
@@ -164,7 +164,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return $"您的积分{creditValue}不足119,520";
 
             if (!IsConfirm)
-                return ConfirmMessage("119520分换苹果一箱24个装");
+                return await ConfirmMessage("119520分换苹果一箱24个装");
 
             var minusRes = await MinusCreditAsync(44160, "兑换礼品 苹果一箱24个装（中果）");
             if (minusRes.Item1 == -1)
@@ -188,7 +188,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (await UserInfo.GetIsSuperAsync(upgradeQQ))
                 return "已为超级积分，无需升级";
 
-            long creditValue = await UserInfo.GetTotalCreditAsync(upgradeQQ);
+            long creditValue = await UserInfo.GetTotalCreditAsync(SelfId, upgradeQQ);
             if (creditValue > 1000)
                 return $"该用户有{creditValue}分，升级前请先将原有积分清零";
 
@@ -210,13 +210,13 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!User.IsSuper)
                 return "普通积分无需降级";
 
-            if (IsConfirm && await UserInfo.GetCreditAsync(UserId) <= 1000)
+            if (IsConfirm && await UserInfo.GetCreditAsync(SelfId, UserId) <= 1000)
             {
                 int i = await UserInfo.SetValueAsync("IsSuper", false, UserId);
                 return i == -1 ? RetryMsg : "降级成功";
             }
             else
-                return ConfirmMessage("确认降级为普通积分");
+                return await ConfirmMessage("确认降级为普通积分");
         }
 
         public string GetCancelSuper() => GetCancelSuperAsync().GetAwaiter().GetResult();
@@ -230,7 +230,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             if (GroupId == 0 || IsPublic)
             {
-                string sql = $"select top 5 GroupId, abs(datediff(day, getdate(), EndDate)) as res from {GroupVip.FullName} where UserId = {UserId} order by EndDate";
+                string sql = $"select {SqlTop(5)} GroupId, abs({SqlDateDiff("day", SqlDateTime, "EndDate")}) as res from {GroupVip.FullName} where UserId = {UserId} order by EndDate {SqlLimit(5)}";
                 res = await QueryResAsync(sql, "{0} 有效期：{1}天\n");
                 return res;
             }

@@ -42,7 +42,7 @@ public partial class BotMessage : MetaData<BotMessage>
         {
             IsCancelProxy = true;
 
-            var sessionManager = PluginManager.Sessions;
+            var sessionManager = PluginManager?.Sessions;
             if (sessionManager == null) return RetryMsg;
 
             // 使用 SessionManager 生成验证码并存储会话
@@ -59,7 +59,7 @@ public partial class BotMessage : MetaData<BotMessage>
         // 确认执行命令
         public async Task ConfirmCmdAsync()
         {
-            var sessionManager = PluginManager.Sessions;
+            var sessionManager = PluginManager?.Sessions;
             if (sessionManager == null) return;
 
             var session = await sessionManager.GetSessionAsync(UserId.ToString(), RealGroupId.ToString());

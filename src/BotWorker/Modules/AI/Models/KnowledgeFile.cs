@@ -47,7 +47,7 @@ namespace BotWorker.Modules.AI.Models
         }
 
         // 新增文件记录
-        public static async Task<Dictionary<string, object>> AddAsync(KnowledgeFile file)
+        public static async Task<Dictionary<string, object>?> AddAsync(KnowledgeFile file)
         {
             return await InsertReturnFieldsAsync(new
             {

@@ -7,6 +7,73 @@ public partial class BotMessage : MetaData<BotMessage>
 {
         private const int MaxDepth = 5;
 
+        public async Task<string> GetQaAnswerAsync(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return string.Empty;
+
+            var oldCmdPara = CmdPara;
+            var oldAnswer = Answer;
+            var oldAnswerId = AnswerId;
+            var oldIsCmd = IsCmd;
+            var oldIsCancelProxy = IsCancelProxy;
+
+            try
+            {
+                CmdPara = QuestionInfo.GetNew(question);
+                long qid = QuestionInfo.GetQId(CmdPara);
+
+                if (qid == 0) return string.Empty;
+
+                QuestionInfo.PlusUsedTimes(qid);
+
+                int cloud = !IsGroup || IsGuild ? 5 : !User.IsShutup ? Group.IsCloudAnswer : 0;
+                long ansId = 0;
+
+                if (QuestionInfo.GetIsSystem(qid))
+                {
+                    ansId = GetDefaultAnswerAt(qid);
+                }
+                else
+                {
+                    ansId = GetGroupAnswer(GroupId, qid);
+                    if (ansId == 0 && cloud >= 2)
+                    {
+                        ansId = GetDefaultAnswer(qid);
+                        if (ansId != 0) ansId = GetDefaultAnswerAt(qid);
+
+                        if (ansId == 0 && cloud >= 3)
+                        {
+                            ansId = GetAllAnswerAudit(qid);
+                            if (ansId == 0) ansId = GetAllAnswerNotAudit(qid);
+                            if (ansId == 0 && cloud >= 4) ansId = GetAllAnswer(qid);
+                        }
+                    }
+                }
+
+                if (ansId == 0) return string.Empty;
+
+                AnswerId = ansId;
+                Answer = AnswerInfo.GetValue("answer", ansId);
+                await ResolveAnswerRefsAsync();
+                
+                string result = Answer;
+                if (result.Equals("#none", StringComparison.CurrentCultureIgnoreCase))
+                    result = string.Empty;
+                else
+                    result = result.Replace("??", "  ");
+
+                return result;
+            }
+            finally
+            {
+                CmdPara = oldCmdPara;
+                Answer = oldAnswer;
+                AnswerId = oldAnswerId;
+                IsCmd = oldIsCmd;
+                IsCancelProxy = oldIsCancelProxy;
+            }
+        }
+
         public async Task GetAnswerAsync()
         {
             if (CurrentMessage.StartsWith("[自动回复]"))
@@ -182,16 +249,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 Answer = string.Empty;
             else 
             {
-                //@机器人或私聊机器人没有答案的使用ai
-                if (!CmdPara.IsNull() && Answer.IsNull() && !IsDup && !IsMusic)
-                {
-                    if ((IsAgent || IsCallAgent || IsAtMe || IsGuild || !IsGroup || IsPublic || (cloud >= 5 && !IsAtOthers)) && !IsWeb)
-                    {
-                        await GetAgentResAsync();                              
-                    }                    
-                }
-                else
-                    Answer = Answer.Replace("??", "  "); //Emoji 表情
+                Answer = Answer.Replace("??", "  "); //Emoji 表情
             }
 
             if (AnswerId != 0 && !IsGuild)
@@ -205,33 +263,33 @@ public partial class BotMessage : MetaData<BotMessage>
             //本群 及 系统级答案（audit2=3）
             return group == BotInfo.GroupIdDef
                 ? GetDefaultAnswer(question)
-                : AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND ((RobotId = {group} AND audit2 <> -4) OR audit2 = 3) {(length > 0 ? $" AND LEN(answer) >= {length}" : "")}", SqlRandomOrder).AsLong();
+                : AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND ((RobotId = {group} AND audit2 <> -4) OR audit2 = 3) {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder).AsLong();
         }
 
         // 官方 
         public long GetDefaultAnswer(long question, int length = 0) =>
-            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND RobotId = {GroupId} AND audit2 >= 0 {(length > 0 ? $" AND LEN(answer) >= {length}" : "")}", SqlRandomOrder).AsLong();
+            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND RobotId = {GroupId} AND audit2 >= 0 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder).AsLong();
 
         // 话痨(官方群+审核升级到默认群内容) audit2 >= 1 (1,2,3) 
         public static long GetDefaultAnswerAt(long question, int length = 0)
         {
             var sql = $"QuestionId = {question} AND ABS(audit) = 1 ";
             sql += $"AND (Id IN (SELECT {SqlTop(20)} ID FROM {AnswerInfo.FullName} WHERE QuestionId = {question} AND Audit2 >= 1 ORDER BY (({SqlIsNull("GoonTimes", "0")} + 1)/({SqlIsNull("UsedTimes", "0")} + 1)) DESC {SqlLimit(20)})";
-            sql += $"OR Id IN (SELECT {SqlTop(10)} Id FROM {AnswerInfo.FullName} WHERE QuestionId = {question} AND Audit2 >= 1 AND UsedTimes < 100 ORDER BY UsedTimes DESC {SqlLimit(10)})) {(length > 0 ? $" AND LEN(answer) >= {length}" : "")}";
+            sql += $"OR Id IN (SELECT {SqlTop(10)} Id FROM {AnswerInfo.FullName} WHERE QuestionId = {question} AND Audit2 >= 1 AND UsedTimes < 100 ORDER BY UsedTimes DESC {SqlLimit(10)})) {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}";
             var res = AnswerInfo.GetWhere("Id", sql, SqlRandomOrder).AsLong();
             return res;
         }
 
         //终极
         public static long GetAllAnswerAudit(long question, int length = 0) =>
-            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= 0 {(length > 0 ? $" AND LEN(answer) >= {length}" : "")}", SqlRandomOrder).AsLong();
+            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= 0 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder).AsLong();
 
         //终极+1 
         public static long GetAllAnswerNotAudit(long question, int length = 0) =>
-            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= -1 {(length > 0 ? $" AND LEN(answer) >= {length}" : "")}", SqlRandomOrder).AsLong();
+            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= -1 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder).AsLong();
 
         public static long GetAllAnswer(long question, int length = 0) =>
-            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= -2 {(length > 0 ? $" AND LEN(answer) >= {length}" : "")}", SqlRandomOrder).AsLong();
+            AnswerInfo.GetWhere("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= -2 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder).AsLong();
 
         public async Task ResolveAnswerRefsAsync(int depth = 0)
         {
@@ -466,51 +524,62 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         //笑话
-        public string GetJokeRes()
+        public async Task<string> GetJokeResAsync()
         {
-            AnswerId = AnswerInfo.GetWhere("Id", $"QuestionId = 2303 AND ABS(audit) = 1 AND audit2 >= 0", SqlRandomOrder).AsLong();
-            GetAnswer();
-            return Answer;
+            return await GetQaAnswerAsync("笑话");
         }
 
         //故事
-        public void GetStory()
+        public async Task GetStoryAsync()
         {
-            AnswerId = AnswerInfo.GetWhere("Id", $"QuestionId IN (50701, 545) AND LEN(answer) > 40 AND ABS(audit) = 1 AND audit2 >= 0 ", SqlRandomOrder).AsLong();
+            AnswerId = AnswerInfo.GetWhere("Id", $"QuestionId IN (50701, 545) AND {SqlLen("answer")} > 40 AND ABS(audit) = 1 AND audit2 >= 0 ", SqlRandomOrder).AsLong();
             GetAnswer();
+            await ResolveAnswerRefsAsync();
         }
 
         //鬼故事
-        public void GetGhostStory()
+        public async Task GetGhostStoryAsync()
         {
             AnswerId = AnswerInfo.GetWhere("Id",
                 $"QuestionId IN (SELECT Id FROM {QuestionInfo.FullName} WHERE question like '鬼故事%') " +
-                $"AND LEN(answer) > 40 AND ABS(audit) = 1 AND audit2 > -3", SqlRandomOrder).AsLong();
+                $"AND {SqlLen("answer")} > 40 AND ABS(audit) = 1 AND audit2 > -3", SqlRandomOrder).AsLong();
             GetAnswer();
-            Answer = $"✅ 鬼故事\n{Answer}" + MinusCreditRes(10, "鬼故事扣分");
+            await ResolveAnswerRefsAsync();
+            if (!string.IsNullOrEmpty(Answer))
+            {
+                Answer = $"✅ 鬼故事\n{Answer}" + MinusCreditRes(10, "鬼故事扣分");
+            }
         }
 
         // 对联
-        public void GetCouplets()
+        public async Task GetCoupletsAsync()
         {
             AnswerId = AnswerInfo.GetWhere("Id", $"QuestionId IN (SELECT Id FROM {QuestionInfo.FullName} WHERE question LIKE '%对联%') " +
-                                   $"AND LEN(answer) > 12 AND ABS(audit) = 1 AND audit2 > -3 ", SqlRandomOrder).AsLong();
+                                   $"AND {SqlLen("answer")} > 12 AND ABS(audit) = 1 AND audit2 > -3 ", SqlRandomOrder).AsLong();
             GetAnswer();
-            Answer = $"✅ 对联\n{Answer}" + MinusCreditRes(10, "对联扣分");           
+            await ResolveAnswerRefsAsync();
+            if (!string.IsNullOrEmpty(Answer))
+            {
+                Answer = $"✅ 对联\n{Answer}" + MinusCreditRes(10, "对联扣分");
+            }
         }
 
         /// 抽签
-        public void GetChouqian()
+        public async Task GetChouqianAsync()
         {
             var sql = $"SELECT {SqlTop(1)} Id FROM {AnswerInfo.FullName} WHERE RobotId = 286946883 and QuestionId = 225781 AND AUDIT2 > 0 " +
                       $"ORDER BY {SqlRandomOrder} {SqlLimit(1)}";
             AnswerId = QueryScalar<long>(sql);
             GetAnswer();
-            Answer = $"✅ {Answer}\n✨ 古签藏玄意，早喵见真机。\n发送【解签】为你精准解读";
+            await ResolveAnswerRefsAsync();
+            if (!string.IsNullOrEmpty(Answer))
+            {
+                Answer = $"✅ {Answer}\n✨ 古签藏玄意，早喵见真机。\n发送【解签】为你精准解读";
+            }
         }
 
         /// 解签
-        public void GetJieqian()
+        public async Task GetJieqianAsync()
         {
             var sql = $"SELECT {SqlTop(1)} AnswerId FROM {GroupSendMessage.FullName} " +
                       $"WHERE GroupId = {GroupId} AND UserId = {UserId} " +
@@ -521,7 +590,11 @@ public partial class BotMessage : MetaData<BotMessage>
             {
                 AnswerId = AnswerInfo.GetWhere("Id", $"parentanswer = {answerId}").AsLong();
                 GetAnswer();
-                Answer = Answer.StripMarkdown();
+                await ResolveAnswerRefsAsync();
+                if (!string.IsNullOrEmpty(Answer))
+                {
+                    Answer = Answer.StripMarkdown();
+                }
             }
         }
 

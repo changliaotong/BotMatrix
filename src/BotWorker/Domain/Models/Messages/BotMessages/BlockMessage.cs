@@ -14,7 +14,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!CmdPara.In("大", "小", "单", "双", "围", "d", "x", "w", "s", "j", "z", "红", "蓝", "和", "三公", "剪刀", "石头", "布", "抽奖", "庄", "闲") && !CmdPara.IsNum())
             {
                 if (CmdPara.Length <= 3)
-                    return $"🎁 梭哈 + 大小单双围4-17\n📌 例如：梭哈 大\n         梭哈 9\n💎 积分:{UserInfo.GetCredit(GroupId, UserId)}全押 ✨";
+                    return $"🎁 梭哈 + 大小单双围4-17\n📌 例如：梭哈 大\n         梭哈 9\n💎 {{积分类型}}:{{积分}}全押 ✨";
                 else
                     return "";
             }
@@ -32,7 +32,7 @@ public partial class BotMessage : MetaData<BotMessage>
             long min = Group.BlockMin;
             long credit = UserInfo.GetCredit(GroupId, UserId);
             if (credit < min)
-                return $"您的积分{credit}不足{min}";
+                return $"您的{{积分类型}}{{积分}}不足{min}";
             
             CmdPara = credit.AsString();
             return await GetBlockResAsync();
@@ -50,7 +50,7 @@ public partial class BotMessage : MetaData<BotMessage>
             CmdName = Block.GetCmd(CmdName, UserId);
 
             if (CmdName.In("押大", "押小", "押单", "押双", "押围", "押全围") && !CmdPara.IsNum())
-                return "请押积分，您的积分：{积分}";
+                return "请押积分，您的{{积分类型}}：{{积分}}";
 
             if (CmdName.In("红", "和", "蓝", "庄", "闲"))
                 return await GetRedBlueResAsync(GroupId == 10084);
@@ -80,7 +80,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
 
             if (!CmdPara.IsNum())
-                return "请押积分，您的积分：{积分}";
+                return "请押积分，您的{{积分类型}}：{{积分}}";
 
             long blockCredit = CmdPara.AsLong();
             if (blockCredit < Group.BlockMin)
@@ -88,7 +88,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             long creditValue = UserInfo.GetCredit(GroupId, UserId);
             if (creditValue < blockCredit)
-                return $"您只有{creditValue}分";
+                return $"您只有{{积分}}分";
 
             int typeId = BlockType.GetTypeId(CmdName);
             blockNum = Block.GetNum(SelfId, GroupId, GroupName, UserId, Name);

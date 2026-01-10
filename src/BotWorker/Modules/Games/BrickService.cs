@@ -65,7 +65,7 @@ namespace BotWorker.Modules.Games
             }
 
             // 2. 检查积分是否足够
-            long myCredit = await UserInfo.GetCreditAsync(groupId, attackerId);
+            long myCredit = await UserInfo.GetCreditAsync(botId, groupId, attackerId);
             if (myCredit < BRICK_COST) return $"❌ 拍砖需要消耗 {BRICK_COST} 积分，你太穷了，连搬砖的力气都没有。";
 
             // 3. 执行扣分 (买砖头)

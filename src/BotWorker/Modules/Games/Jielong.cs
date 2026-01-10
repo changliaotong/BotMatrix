@@ -56,8 +56,7 @@ namespace BotWorker.Modules.Games
 
         // 为机器人获取一个随机接龙结果
         public static async Task<string> GetJielongAsync(long groupId, long UserId, string currCy)
-        {
-            string pinyin = Chengyu.PinYinLast(currCy);
+        {            string pinyin = await Chengyu.PinYinLastAsync(currCy);
             string sql = $"SELECT {SqlTop(1)} chengyu FROM {Chengyu.FullName} " +
                            $"WHERE pinyin LIKE '{pinyin} %' AND chengyu NOT IN " +
                            $"(SELECT chengyu FROM {FullName} WHERE GroupId = {groupId} AND UserId = {UserId} " +
@@ -68,48 +67,20 @@ namespace BotWorker.Modules.Games
             return await QueryScalarAsync<string>(sql) ?? "";
         }
 
-        public static string GetJielong(long groupId, long UserId, string currCy)
-        {
-            return GetJielongAsync(groupId, UserId, currCy).GetAwaiter().GetResult();
-        }
-
         // 接龙游戏最大ID
         public static async Task<int> GetMaxIdAsync(long groupId)
-        {
-            return await QueryScalarAsync<int>($"SELECT MAX(Id) FROM {FullName} WHERE GroupId = {groupId} AND GameNo = 1");
-        }
-
-        public static int GetMaxId(long groupId)
-        {
-            return GetMaxIdAsync(groupId).GetAwaiter().GetResult();
+        {            return await QueryScalarAsync<int>($"SELECT MAX(Id) FROM {FullName} WHERE GroupId = {groupId} AND GameNo = 1");
         }
 
         // 接龙成功数量
         public static async Task<string> GetGameCountAsync(long groupId, long qq)
-        {
-            string func = IsPostgreSql ? "getchengyugamecount" : $"{DbName}.dbo.getchengyugamecount";
+        {            string func = IsPostgreSql ? "getchengyugamecount" : $"{DbName}.dbo.getchengyugamecount";
             return await QueryScalarAsync<string>($"SELECT {func}({groupId},{qq})") ?? "0";
-        }
-
-        public static string GetGameCount(long groupId, long qq)
-        {
-            return GetGameCountAsync(groupId, qq).GetAwaiter().GetResult();
         }
 
         // 接龙加分总数
         public static async Task<long> GetCreditAddAsync(long userId)
-        {
-            string query = $"SELECT {SqlIsNull("SUM(CreditAdd)", "0")} FROM {CreditLog.FullName} " +
-                           $"WHERE UserId = {userId} AND CreditInfo = '成语接龙' " +
-                           $"AND ABS({SqlDateDiff("DAY", "InsertDate", SqlDateTime)}) < 1";
-
-            var res = await QueryAsync(query);
-            return res.AsLong();
-        }
-
-        public static long GetCreditAdd(long userId)
-        {
-            return GetCreditAddAsync(userId).GetAwaiter().GetResult();
+        {            return await QueryScalarAsync<long>($"SELECT SUM(Credit) FROM {FullName} WHERE UserId = {userId} AND Credit > 0");
         }
 
         // 成语接龙加分
@@ -125,11 +96,6 @@ namespace BotWorker.Modules.Games
                     res = $"\n💎 积分：+{creditAdd}，累计：{creditValue:N0}";
             }
             return res;
-        }
-
-        public static string AddCredit(BotMessage bm)
-        {
-            return AddCreditAsync(bm).GetAwaiter().GetResult();
         }
 
         // 成语接龙扣分
@@ -150,11 +116,6 @@ namespace BotWorker.Modules.Games
             return res;
         }
 
-        public static string MinusCredit(BotMessage bm)
-        {
-            return MinusCreditAsync(bm).GetAwaiter().GetResult();
-        }
-
         // 接龙成功数量
         public static async Task<int> GetCountAsync(long groupId, long userId)
         {
@@ -164,11 +125,6 @@ namespace BotWorker.Modules.Games
 
             var res = await QueryAsync(query);
             return res.AsInt();
-        }
-
-        public static int GetCount(long groupId, long userId)
-        {
-            return GetCountAsync(groupId, userId).GetAwaiter().GetResult();
         }
 
         // 添加接龙成功的数据到数据库
@@ -181,11 +137,6 @@ namespace BotWorker.Modules.Games
                 new Cov("chengyu", chengYu),
                 new Cov("GameNo", gameNo)
             ]);
-        }
-
-        public static int Append(long groupId, long qq, string name, string chengYu, int gameNo)
-        {
-            return AppendAsync(groupId, qq, name, chengYu, gameNo).GetAwaiter().GetResult();
         }
 
         // 是否重复成语
@@ -208,11 +159,6 @@ namespace BotWorker.Modules.Games
             }
 
             return (await QueryScalarAsync<int>(query)) == 1;
-        }
-
-        public static bool IsDup(long groupId, long qq, string chengYu)
-        {
-            return IsDupAsync(groupId, qq, chengYu).GetAwaiter().GetResult();
         }
     }
 }

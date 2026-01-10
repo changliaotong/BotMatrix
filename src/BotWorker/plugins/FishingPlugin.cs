@@ -1,5 +1,16 @@
+using BotWorker.Domain.Interfaces;
+using BotWorker.Modules.Plugins;
+using System.Threading.Tasks;
+
 namespace BotWorker.Plugins
 {
+    [BotPlugin(
+        Id = "game.fishing",
+        Name = "Fishing",
+        Description = "一个简单的钓鱼插件",
+        Version = "1.0.0",
+        Author = "BotMatrix Team"
+    )]
     public class FishingPlugin : IPlugin
     {
         public string Name => "Fishing";

@@ -306,6 +306,11 @@ func Run() {
 	mux.HandleFunc("/api/admin/logs", manager.AdminMiddleware(HandleGetLogs(manager.Manager)))
 	mux.HandleFunc("/api/admin/logs/clear", manager.AdminMiddleware(HandleClearLogs(manager.Manager)))
 
+	// 数字员工审计与审批
+	mux.HandleFunc("/api/admin/audit/tools", manager.AdminMiddleware(HandleToolAuditActions(manager.Manager)))
+	mux.HandleFunc("/api/admin/audit/tools/approve", manager.AdminMiddleware(HandleToolAuditActions(manager.Manager)))
+	mux.HandleFunc("/api/admin/audit/tools/reject", manager.AdminMiddleware(HandleToolAuditActions(manager.Manager)))
+
 	// 系统配置
 	mux.HandleFunc("/api/admin/config", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -798,7 +803,7 @@ func NewManager() *Manager {
 						chatModel = embedModel // 兜底
 					}
 
-					es := rag.NewTaskAIEmbeddingService(m.AIIntegrationService, embedModel.ID, embedModel.ModelID)
+					es := rag.NewTaskAIEmbeddingService(m.AIIntegrationService, embedModel.ID, embedModel.ModelName)
 					kb := rag.NewPostgresKnowledgeBase(m.GORMDB, es, m.AIIntegrationService, chatModel.ID)
 
 					// 将向量服务注入认知记忆系统
@@ -816,7 +821,7 @@ func NewManager() *Manager {
 							aiSvc.SetKnowledgeBase(kb)
 						}
 
-						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ModelID))
+						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ModelName))
 
 						// 自动同步系统文档
 						go m.SyncSystemKnowledge()
@@ -1084,6 +1089,9 @@ func (m *Manager) handleWorkerAction(msg map[string]any) {
 		selfID, _ = msg["bot_id"].(string) // 向后兼容
 	}
 	platform, _ := msg["platform"].(string)
+	if platform == "" {
+		platform = "qq" // Default platform
+	}
 	params := msg["params"]
 
 	clog.Info("[WorkerAction] Received action from worker",
@@ -1195,11 +1203,17 @@ func (m *Manager) handleWorkerAction(msg map[string]any) {
 // 实现 tasks.BotManager 接口
 func (m *Manager) SendBotAction(botID string, action string, params any) error {
 	m.Mutex.RLock()
+	// 尝试直接查找 (可能已经是 platform:id 格式)
 	bot, exists := m.Bots[botID]
+	if !exists && !strings.Contains(botID, ":") {
+		// 如果不是 platform:id 格式，尝试加上默认的 qq:
+		botKey := fmt.Sprintf("qq:%s", botID)
+		bot, exists = m.Bots[botKey]
+	}
 	m.Mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("bot %s not found", botID)
+		return fmt.Errorf("bot %s not found (tried both direct and qq: prefix)", botID)
 	}
 
 	echo := fmt.Sprintf("task|%d|%s", time.Now().UnixNano(), action)

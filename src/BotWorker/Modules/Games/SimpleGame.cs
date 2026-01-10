@@ -33,6 +33,18 @@ namespace BotWorker.Modules.Games
             var userId = long.Parse(ctx.UserId);
             var cmd = ctx.RawMessage.Trim();
 
+            // 尝试从问答库获取回复，实现动态内容配置
+            if (ctx is PluginContext pluginCtx && pluginCtx.Event is Infrastructure.Communication.OneBot.BotMessageEvent botMsgEvent)
+            {
+                var botMsg = botMsgEvent.BotMessage;
+                var qaRes = await botMsg.GetQaAnswerAsync(cmd);
+                if (!string.IsNullOrEmpty(qaRes))
+                {
+                    return qaRes;
+                }
+            }
+
+            // 兜底硬编码逻辑
             if (cmd.Contains("抢楼")) return SimpleGame.RobBuilding(userId);
             if (cmd.Contains("打飞机")) return SimpleGame.DaFeiji(userId);
             if (cmd.Contains("打地鼠")) return SimpleGame.DaDishu(userId);

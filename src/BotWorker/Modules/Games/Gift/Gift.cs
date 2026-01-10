@@ -20,21 +20,21 @@ namespace BotWorker.Modules.Games.Gift
         }
 
         // 随机一个礼物
-        public static long GetRandomGift(long groupId, long qq)
-            => GetRandomGiftAsync(groupId, qq).GetAwaiter().GetResult();
+        public static long GetRandomGift(long botUin, long groupId, long qq)
+            => GetRandomGiftAsync(botUin, groupId, qq).GetAwaiter().GetResult();
 
-        public static async Task<long> GetRandomGiftAsync(long groupId, long qq)
+        public static async Task<long> GetRandomGiftAsync(long botUin, long groupId, long qq)
         {
-            return (await QueryAsync($"select top 1 Id from {FullName} where GiftCredit < {await UserInfo.GetCreditAsync(groupId, qq)} order by newid()")).AsLong();
+            return (await QueryAsync($"select top 1 Id from {FullName} where GiftCredit < {await UserInfo.GetCreditAsync(botUin, groupId, qq)} order by newid()")).AsLong();
         }
 
         // 礼物列表
-        public static string GetGiftList(long groupId, long qq)
-            => GetGiftListAsync(groupId, qq).GetAwaiter().GetResult();
+        public static string GetGiftList(long botUin, long groupId, long qq)
+            => GetGiftListAsync(botUin, groupId, qq).GetAwaiter().GetResult();
 
-        public static async Task<string> GetGiftListAsync(long groupId, long qq)
+        public static async Task<string> GetGiftListAsync(long botUin, long groupId, long qq)
         {
-            long credit = await UserInfo.GetCreditAsync(groupId, qq);
+            long credit = await UserInfo.GetCreditAsync(botUin, groupId, qq);
             string res = await QueryResAsync($"select top 5 Id, GiftName, GiftCredit from {FullName} where IsValid = 1 and GiftCredit <= {credit} order by newid()", "{1}={2}分\n");
             if (res == "")
                 res = await QueryResAsync($"select top 5 Id, GiftName, GiftCredit from {FullName}  where IsValid = 1 and GiftCredit < 10000 order by newid()", "{1}={2}分\n");

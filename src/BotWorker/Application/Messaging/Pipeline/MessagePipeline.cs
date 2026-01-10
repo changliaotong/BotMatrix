@@ -65,11 +65,34 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (index < _middlewares.Count)
                 {
                     var middleware = _middlewares[index++];
-                    await middleware.InvokeAsync(ctx, Next);
+                    logger.LogInformation("[Pipeline] Step {Step}/{Total}: Executing {MiddlewareName} for message {MessageId}", 
+                        index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
+                    
+                    try
+                    {
+                        await middleware.InvokeAsync(ctx, Next);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "[Pipeline] Error in middleware {MiddlewareName} for message {MessageId}", 
+                            middleware.GetType().Name, ctx.EventId);
+                        throw;
+                    }
+
+                    logger.LogInformation("[Pipeline] Step {Step}/{Total}: Completed {MiddlewareName} for message {MessageId}", 
+                        index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
                 }
             }
 
             await Next(pluginContext);
+
+            // 如果管道执行完后有回答且尚未发送，则自动发送
+            if (!string.IsNullOrEmpty(context.Answer) && !context.IsSent && context.IsSend)
+            {
+                logger.LogInformation("[Pipeline] Auto-sending final answer for message {MessageId}", context.MsgId);
+                await context.SendMessageAsync();
+            }
+
             return true;
         }
     }

@@ -53,7 +53,7 @@ namespace BotWorker.Domain.Entities
                 long prop_id = await Prop.GetIdAsync(cmdPara);
                 if (prop_id != 0)
                 {
-                    long credit_value = await UserInfo.GetCreditAsync(groupId, qq);
+                    long credit_value = await UserInfo.GetCreditAsync(botUin, groupId, qq);
                     int prop_price = await Prop.GetIntAsync("PropPrice", prop_id);
                     if (credit_value < prop_price)
                         return $"您的积分{credit_value}不足{prop_price}";

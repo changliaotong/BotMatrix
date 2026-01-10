@@ -65,9 +65,9 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                // 默认使用 DeepSeek，如果 model 为空
+                // 默认使用 Doubao 模型，如果 model 为空
                 // 如果 model 为 "Random"，则由 ModelProviderManager 随机选择
-                var providerName = model ?? "DeepSeek";
+                var providerName = model ?? "Doubao";
                 IModelProvider? provider = null;
 
                 // 1. 优先检查用户是否提供了自己的 Key
@@ -111,7 +111,7 @@ namespace BotWorker.Modules.AI.Services
                     provider = _llmApp._manager.GetRandomProvider();
                     if (provider == null)
                     {
-                        return $"Error: No AI Providers available.";
+                        return "没有可用的 AI 提供商。";
                     }
                     _logger.LogWarning("Specified AI Provider '{providerName}' not found. Falling back to '{fallbackProvider}'.", providerName, provider.ProviderName);
                 }
@@ -136,6 +136,8 @@ namespace BotWorker.Modules.AI.Services
 
                 // 1.2 注入 RAG 插件
                 plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
+                plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
+                plugins.Add(KernelPluginFactory.CreateFromObject(new SystemAdminPlugin(), "SystemAdmin"));
 
                 // 1.3 注入 MCP 插件 (从 IMcpService 获取工具并转换为插件)
                 var mcpPlugins = await GetMcpPluginsAsync(context);
@@ -185,7 +187,7 @@ namespace BotWorker.Modules.AI.Services
 
             if (provider == null)
             {
-                yield return $"Error: AI Provider '{providerName}' not found.";
+                yield return $"❌ 错误：找不到 AI 提供商 '{providerName}'。";
                 yield break;
             }
 
@@ -206,6 +208,7 @@ namespace BotWorker.Modules.AI.Services
             }
             plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
             plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
+            plugins.Add(KernelPluginFactory.CreateFromObject(new SystemAdminPlugin(), "SystemAdmin"));
             var mcpPlugins = await GetMcpPluginsAsync(context);
             if (mcpPlugins != null) plugins.AddRange(mcpPlugins);
 
@@ -260,7 +263,7 @@ namespace BotWorker.Modules.AI.Services
                         var dictArgs = new Dictionary<string, object>();
                         foreach (var arg in args) dictArgs[arg.Key] = arg.Value ?? "";
                         var response = await _mcpService.CallToolAsync(tool.ServerId, tool.Name, dictArgs);
-                        if (response.IsError) return $"Error: {string.Join("\n", response.Content.Select(c => c.Text))}";
+                        if (response.IsError) return $"❌ 错误：{string.Join("\n", response.Content.Select(c => c.Text))}";
                         return string.Join("\n", response.Content.Select(c => c.Text));
                     },
                     tool.Name,

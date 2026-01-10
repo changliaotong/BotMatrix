@@ -8,7 +8,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
         // 赎身
         public async Task<string> GetFreeMeAsync()
         {
-            var checkResult = CheckFreeMe();
+            var checkResult = await CheckFreeMeAsync();
             if (checkResult.Error != null) return checkResult.Error;
 
             int res = await PetOld.DoFreeMeAsync(SelfId, GroupId, GroupName, UserId, Name, checkResult.CurrMaster, checkResult.CreditMinus, checkResult.CreditAdd);
@@ -20,7 +20,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             return $"✅ 赎身成功！\n[@:{checkResult.CurrMaster}]积分：+{checkResult.CreditAdd}，累计：{masterCredit}\n您的积分：-{checkResult.CreditMinus}，累计：{currentCredit}";
         }
 
-        private (string? Error, long CurrMaster, long CreditAdd, long CreditMinus) CheckFreeMe()
+        private async Task<(string? Error, long CurrMaster, long CreditAdd, long CreditMinus)> CheckFreeMeAsync()
         {
             if (!Group.IsPet)
                 return (PetOld.InfoClosed, 0, 0, 0);
@@ -40,7 +40,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 return ($"您的积分{creditValue}不足{creditMinus}", 0, 0, 0);
 
             if (!IsConfirm)
-                return (ConfirmMessage($"赎身需扣分：-{creditMinus}"), 0, 0, 0);
+                return (await ConfirmMessage($"赎身需扣分：-{creditMinus}"), 0, 0, 0);
 
             return (null, currMaster, creditAdd, creditMinus);
         }

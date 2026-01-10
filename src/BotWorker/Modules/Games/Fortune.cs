@@ -28,6 +28,18 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> HandleFortuneAsync(IPluginContext ctx, string[] args)
         {
+            // 优先尝试从问答库获取“抽签”或“运势”相关回复
+            if (ctx is PluginContext pluginCtx && pluginCtx.Event is Infrastructure.Communication.OneBot.BotMessageEvent botMsgEvent)
+            {
+                var botMsg = botMsgEvent.BotMessage;
+                var cmd = ctx.RawMessage.Trim();
+                var qaRes = await botMsg.GetQaAnswerAsync(cmd);
+                if (!string.IsNullOrEmpty(qaRes))
+                {
+                    return qaRes;
+                }
+            }
+
             var fortune = Fortune.GenerateFortune(ctx.UserId);
             return await Task.FromResult(Fortune.Format(fortune));
         }

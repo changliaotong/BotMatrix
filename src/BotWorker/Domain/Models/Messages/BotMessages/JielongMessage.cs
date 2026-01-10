@@ -1,4 +1,4 @@
-﻿using BotWorker.Domain.Entities;
+using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 
@@ -13,39 +13,39 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (CmdPara == "结束")
             {
                 //只想结束翻译?
-                if (UserInGame())
+                if (await UserInGameAsync())
                 {
-                    return GameOver() == -1
+                    return await GameOverAsync() == -1
                         ? RetryMsg
-                        : $"✅ 成语接龙游戏结束{Jielong.MinusCredit(this)}";
+                        : $"✅ 成语接龙游戏结束{await Jielong.MinusCreditAsync(this)}";
                 }
                 return "";
             }
 
-            bool inGame = InGame();
+            bool inGame = await InGameAsync();
             string currCy;
             string res;
             string creditInfo;
             if (!inGame)
             {
                 if (CmdPara == "")
-                    CmdPara = CurrCy();
+                    CmdPara = await CurrCyAsync();
 
                 if (CmdPara.IsNull())
-                    CmdPara = Chengyu.GetRandom("chengyu").RemoveBiaodian();
-                else if (!Chengyu.Exists(CmdPara))
+                    CmdPara = (await Chengyu.GetRandomAsync("chengyu")).RemoveBiaodian();
+                else if (!await Chengyu.ExistsAsync(CmdPara))
                     return User.IsSuper || User.CreditTotal > 10000 ? $"【{CmdPara}】不是成语" : $"您输入的不是成语";                
 
-                Jielong.Append(GroupId, UserId, Name, CmdPara, 1);
-                Start();
+                await Jielong.AppendAsync(GroupId, UserId, Name, CmdPara, 1);
+                await StartAsync();
                 currCy = CmdPara;
-                creditInfo = Jielong.AddCredit(this);
+                creditInfo = await Jielong.AddCreditAsync(this);
                 res = $"✅ 成语接龙开始！";
             }
             else
             {
-                currCy = CurrCy();
-                string pinyin = Chengyu.PinYin(currCy);
+                currCy = await CurrCyAsync();
+                string pinyin = await Chengyu.PinYinAsync(currCy);
                 CmdPara = CmdPara.RemoveQqAds();
                 if (CmdPara == "")
                     return Message.Contains("接龙") || Message == ""
@@ -53,106 +53,107 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                         : "";
 
                 if (CmdPara == "提示")
-                    return Jielong.GetJielong(GroupId, UserId, currCy).MaskIdiom();
+                    return (await Jielong.GetJielongAsync(GroupId, UserId, currCy)).MaskIdiom();
 
-                if (!Chengyu.Exists(CmdPara))
+                if (!await Chengyu.ExistsAsync(CmdPara))
                 {
-                    if (IsGroup && GroupInfo.GetInt("DATEDIFF(MINUTE, LastChengyuDate, GETDATE())", GroupId) > 10)
+                    if (IsGroup && await GroupInfo.GetChengyuIdleMinutesAsync(GroupId) > 10)
                     {
-                        GroupInfo.SetInGame(0, GroupId);
+                        await GroupInfo.SetInGameAsync(0, GroupId);
                         Answer = "✅ 成语接龙超时自动结束";
                         await SendMessageAsync();
                         return "";
                     }
                     return CmdPara.Length == 4 || Message.StartsWith("接龙") || Message.StartsWith("jl")
-                        ? $"【{CmdPara}】不是成语\n💡 发【结束】退出游戏\n📌 请接：{currCy}{Jielong.MinusCredit(this)}"
+                        ? $"【{CmdPara}】不是成语\n💡 发【结束】退出游戏\n📌 请接：{currCy}{await Jielong.MinusCreditAsync(this)}"
                         : "";
                 }
 
                 //是否正确
-                if (Chengyu.PinYinFirst(CmdPara) == Chengyu.PinYinLast(currCy))
+                if (await Chengyu.PinYinFirstAsync(CmdPara) == await Chengyu.PinYinLastAsync(currCy))
                 {
-                    if (Jielong.IsDup(GroupId, UserId, CmdPara))
+                    if (await Jielong.IsDupAsync(GroupId, UserId, CmdPara))
                         return "已有人接过此成语，请勿重复！";
 
-                    creditInfo = Jielong.AddCredit(this);
-                    Jielong.Append(GroupId, UserId, Name, CmdPara, 0);
+                    creditInfo = await Jielong.AddCreditAsync(this);
+                    await Jielong.AppendAsync(GroupId, UserId, Name, CmdPara, 0);
                     currCy = CmdPara;
-                    res = $"✅ 接龙『{CmdPara}』成功！{Jielong.GetGameCount(GroupId, UserId)}";
+                    res = $"✅ 接龙『{CmdPara}』成功！{await Jielong.GetGameCountAsync(GroupId, UserId)}";
                 }
                 else if (CmdPara == currCy)
                     return "被人抢先了，下次出手要快！";
                 else
-                    return $"接龙『{CmdPara}』不成功！\n📌 请接：{currCy}\n🔤 拼音：{pinyin}{Jielong.MinusCredit(this)}";
+                    return $"接龙『{CmdPara}』不成功！\n📌 请接：{currCy}\n🔤 拼音：{pinyin}{await Jielong.MinusCreditAsync(this)}";
             }
 
-            currCy = Jielong.GetJielong(GroupId, UserId, currCy);
+            currCy = await Jielong.GetJielongAsync(GroupId, UserId, currCy);
             if (currCy != "")
             {
-                SetLastChengyu(currCy);
+                await SetLastChengyuAsync(currCy);
                 if (IsGroup)
-                    Jielong.Append(GroupId, SelfId, "", currCy, 0);
+                    await Jielong.AppendAsync(GroupId, SelfId, "", currCy, 0);
                 else
-                    Jielong.Append(GroupId, UserId, Name, currCy, 0);
-                res = $"{res}\n📌 请接：{currCy}\n🔤 拼音：{Chengyu.PinYin(currCy)}{creditInfo}";
+                    await Jielong.AppendAsync(GroupId, UserId, Name, currCy, 0);
+                res = $"{res}\n📌 请接：{currCy}\n🔤 拼音：{await Chengyu.PinYinAsync(currCy)}{creditInfo}";
             }
             else
             {
-                GameOver();
-                SetLastChengyu("");
+                await GameOverAsync();
+                await SetLastChengyuAsync("");
                 res = $"✅ {res}\n📌 我不会接『{CmdPara}』，你赢了{creditInfo}";
             }
             return res;
         }        
 
         /// 更新游戏当前要接龙的成语到数据库
-        public int SetLastChengyu(string currCy)
+        public async Task<int> SetLastChengyuAsync(string currCy)
         {
             return IsGroup
-                ? GroupInfo.StartCyGame(1, currCy, GroupId)
-                : UserInfo.SetValue("LastChengyu", currCy, UserId);
+                ? await GroupInfo.StartCyGameAsync(1, currCy, GroupId)
+                : await UserInfo.SetValueAsync("LastChengyu", currCy, UserId);
         }
 
         // 开局游戏
-        public int Start()
+        public async Task<int> StartAsync()
         {
             return IsGroup
-                ? GroupInfo.StartCyGame(1, CmdPara, GroupId)
-                : UserInfo.SetState(UserInfo.States.GameCy, UserId);
+                ? await GroupInfo.StartCyGameAsync(1, CmdPara, GroupId)
+                : await UserInfo.SetStateAsync(UserInfo.States.GameCy, UserId);
         }
 
         // 结束游戏
-        public int GameOver()
+        public async Task<int> GameOverAsync()
         {
             return IsGroup
-                ? GroupInfo.SetInGame(0, GroupId)
-                : UserInfo.SetState(UserInfo.States.Chat, UserId);
+                ? await GroupInfo.SetInGameAsync(0, GroupId)
+                : await UserInfo.SetStateAsync(UserInfo.States.Chat, UserId);
         }
 
         // 当前成语
-        public string CurrCy()
+        public async Task<string> CurrCyAsync()
         {
             return !IsGroup
                 ? User.LastChengyu
-                : Group.LastChengyu;
+                : (await GroupInfo.GetSingleAsync(GroupId))?.LastChengyu ?? "";
         }
 
         // 用户是否游戏中
-        public  bool UserInGame()
+        public async Task<bool> UserInGameAsync()
         {
             int state = User.State;
             return !IsGroup ? state == (int)UserInfo.States.GameCy : state.In((int)UserInfo.States.Chat, (int)UserInfo.States.GameCy);
         }
 
         // 判断群或个人是否在游戏中
-        public bool InGame()
+        public async Task<bool> InGameAsync()
         {
             int state = User.State;
             if (!IsGroup)            
                 return state == (int)UserInfo.States.GameCy;            
             else
             {
-                var isInGame = Group.IsInGame > 0;
+                var group = await GroupInfo.GetSingleAsync(GroupId);
+                var isInGame = group != null && group.IsInGame > 0;
                 return isInGame && state.In((int)UserInfo.States.Chat, (int)UserInfo.States.GameCy);
             }
         }

@@ -38,7 +38,7 @@ namespace BotWorker.Application.Services
             botMsg.IsCancelProxy = true;
 
             if (botMsg.CmdName == "清空黑名单")
-                return GetClearBlack(botMsg);
+                return await GetClearBlackAsync(botMsg);
 
             if (botMsg.CmdPara.IsNull())
                 return GetGroupBlackList(botMsg);
@@ -68,7 +68,7 @@ namespace BotWorker.Application.Services
                    "\n拉黑 + QQ\n删黑 + QQ";
         }
 
-        private string GetClearBlack(BotMessage botMsg)
+        private async Task<string> GetClearBlackAsync(BotMessage botMsg)
         {
             if (!botMsg.IsRobotOwner())
                 return C.OwnerOnlyMsg;
@@ -78,7 +78,7 @@ namespace BotWorker.Application.Services
                 return "黑名单已为空，无需清空";
 
             if (!botMsg.IsConfirm && blackCount > 10)
-                return botMsg.ConfirmMessage($"清空黑名单 人数{blackCount}");
+                return await botMsg.ConfirmMessage($"清空黑名单 人数{blackCount}");
 
             return BlackList.DeleteAll(botMsg.GroupId) == -1
                 ? C.RetryMsg
@@ -161,7 +161,7 @@ namespace BotWorker.Application.Services
 
             if (cmdName == "存分")
             {
-                credit_oper = credit_oper == 0 ? await UserInfo.GetCreditAsync(botMsg.GroupId, botMsg.UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetCreditAsync(botMsg.SelfId, botMsg.GroupId, botMsg.UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可存";
 
@@ -170,7 +170,7 @@ namespace BotWorker.Application.Services
             }
             else if (cmdName == "取分")
             {
-                credit_oper = credit_oper == 0 ? await UserInfo.GetSaveCreditAsync(botMsg.GroupId, botMsg.UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetSaveCreditAsync(botMsg.SelfId, botMsg.GroupId, botMsg.UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可取";
 
@@ -192,8 +192,8 @@ namespace BotWorker.Application.Services
 
         private async Task<(int Result, long CreditValue, long CreditSave, string Res)> DoSaveCreditAsync(BotMessage botMsg, long creditOper)
         {
-            long creditValue = await UserInfo.GetCreditAsync(botMsg.GroupId, botMsg.UserId);
-            long creditSave = await UserInfo.GetSaveCreditAsync(botMsg.GroupId, botMsg.UserId);
+            long creditValue = await UserInfo.GetCreditAsync(botMsg.SelfId, botMsg.GroupId, botMsg.UserId);
+            long creditSave = await UserInfo.GetSaveCreditAsync(botMsg.SelfId, botMsg.GroupId, botMsg.UserId);
             long credit_oper2 = creditOper;
             string cmdName = "存分";
             string res = "";
@@ -236,11 +236,10 @@ namespace BotWorker.Application.Services
                 UserInfo.SyncCacheField(botMsg.UserId, botMsg.GroupId, "SaveCredit", creditSave);
 
                 res = $"✅ {cmdName}：{credit_oper2}\n" +
-                    $"💰 {{积分类型}}：{creditValue:N0}\n" +
-                    $"🏦 已存积分：{creditSave:N0}\n" +
-                    $"📈 积分总额：{creditValue + creditSave:N0}";
+                    $"💰 {{积分类型}}：{{积分}}\n" +
+                    $"🏦 已存积分：{{已存存分}}\n" +
+                    $"📈 积分总额：{{积分总额}}";
 
-                res = res.Replace("{积分类型}", await UserInfo.GetCreditTypeAsync(botMsg.GroupId, botMsg.UserId));
                 return (0, creditValue, creditSave, res);
             }
             catch (Exception ex)
@@ -323,7 +322,7 @@ namespace BotWorker.Application.Services
 
         public string GetCreditList(BotMessage botMsg, long top = 10)
         {
-            var format = !botMsg.IsRealProxy && (botMsg.IsMirai || botMsg.IsNapCat) ? "第{i}名[@:{0}] 💎{1:N0}\n" : "第{i}名{0} 💎{1:N0}\n";
+            var format = !botMsg.IsRealProxy && (botMsg.IsMirai || botMsg.IsQQ) ? "第{i}名[@:{0}] 💎{1:N0}\n" : "第{i}名{0} 💎{1:N0}\n";
             string res = botMsg.Group.IsCredit
                 ? GroupMember.QueryWhere($"{MetaData.SqlTop(top)} UserId, GroupCredit", $"groupId = {botMsg.GroupId}", $"GroupCredit desc {MetaData.SqlLimit(top)}", format)
                 : botMsg.SelfInfo.IsCredit

@@ -21,7 +21,6 @@ namespace BotWorker.Domain.Entities
         [DbIgnore]
         public bool IsProxy { get; set; }
         public string GroupMemo { get; set; } = string.Empty;
-        [DbIgnore]
         public long GroupOwner { get; set; }
         public string GroupOwnerName { get; set; } = string.Empty;
         public string GroupOwnerNickname { get; set; } = string.Empty;
@@ -37,7 +36,6 @@ namespace BotWorker.Domain.Entities
         [JsonIgnore]
         [HighFrequency]
         public DateTime LastDate { get; set; }
-        [DbIgnore]
         [JsonIgnore]
         [HighFrequency]
         public int IsInGame { get; set; }
@@ -90,11 +88,9 @@ namespace BotWorker.Domain.Entities
         [JsonIgnore]
         [HighFrequency]
         public string LastAnswer { get; set; } = string.Empty;
-        [DbIgnore]
         [JsonIgnore]
         [HighFrequency]
         public string LastChengyu { get; set; } = string.Empty;
-        [DbIgnore]
         [JsonIgnore]
         [HighFrequency]
         public DateTime LastChengyuDate { get; set; }
@@ -204,6 +200,48 @@ namespace BotWorker.Domain.Entities
         public static bool IsPowerOff(long groupId)
             => !GetPowerOn(groupId);
        
+        public static long GetGroupOwner(long groupId, long def = 0)
+        {
+            return GetDef("GroupOwner", groupId, def);
+        }
+
+        public static long GetRobotOwner(long groupId, long def = 0)
+        {
+            return GetDef("RobotOwner", groupId, def);
+        }
+
+        public static bool IsOwner(long groupId, long userId)
+        {
+            return userId == GetRobotOwner(groupId);
+        }
+
+        public static bool GetIsValid(long groupId)
+        {
+            return GetBool("IsValid", groupId);
+        }
+
+        public static string GetRobotOwnerName(long groupId)
+        {
+            string res = GetValue("isnull(RobotOwnerName,'')", groupId);
+            if (res == "")
+            {
+                res = GetRobotOwner(groupId).ToString();
+                res = $"[@:{res}]";
+            }
+            return res;
+        }
+
+        public static string GetRobotOwnerName(long groupId, string botName)
+        {
+            string res = GetValue("isnull(RobotOwnerName,'')", groupId);
+            if (res == "")
+            {
+                res = GetRobotOwner(groupId).ToString();
+                res = $"[@:{res}]";
+            }
+            return res;
+        }
+
         // 判断该群是否还可以体验
         public static bool IsCanTrial(long groupId)
         {
@@ -272,8 +310,6 @@ namespace BotWorker.Domain.Entities
             return await GetIntAsync("IsCloudAnswer", groupId);
         }
 
-        public static int CloudAnswer(long groupId) => CloudAnswerAsync(groupId).GetAwaiter().GetResult();
-
         ///云问答内容
         public static async Task<string> CloudAnswerResAsync(long groupId)
         {
@@ -284,8 +320,6 @@ namespace BotWorker.Domain.Entities
             else
                 return string.Empty;
         }
-
-        public static string CloudAnswerRes(long groupId) => CloudAnswerResAsync(groupId).GetAwaiter().GetResult();
 
         /// 退群拉黑
         public static bool GetIsBlackExit(long groupId)
@@ -425,10 +459,7 @@ namespace BotWorker.Domain.Entities
         }
 
         // 机器人主人名称
-        public static string GetRobotOwnerName(long groupId, BotData.Platform botType = BotData.Platform.NapCat)
-            => GetRobotOwnerNameAsync(groupId, botType).GetAwaiter().GetResult();
-
-        public static async Task<string> GetRobotOwnerNameAsync(long groupId, BotData.Platform botType = BotData.Platform.NapCat)
+        public static async Task<string> GetRobotOwnerNameAsync(long groupId, BotData.Platform botType = BotData.Platform.QQ)
         {
             string res = await GetValueAsync(SqlIsNull("RobotOwnerName", "''"), groupId);
             if (res == "")
@@ -440,60 +471,50 @@ namespace BotWorker.Domain.Entities
         }
 
         // 群主
-        public static long GetGroupOwner(long groupId, long def = 0)
-            => GetGroupOwnerAsync(groupId, def).GetAwaiter().GetResult();
-
         public static async Task<long> GetGroupOwnerAsync(long groupId, long def = 0)
         {
             return await GetLongAsync("GroupOwner", groupId, def);
         }
 
         // 机器人主人
-        public static long GetRobotOwner(long groupId, long def = 0)
-            => GetRobotOwnerAsync(groupId, def).GetAwaiter().GetResult();
-
         public static async Task<long> GetRobotOwnerAsync(long groupId, long def = 0)
         {
             return await GetLongAsync("RobotOwner", groupId, def);
         }
 
-        public static int SetInGame(int isInGame, long groupId)
+        public static async Task<int> SetInGameAsync(int isInGame, long groupId)
         {
-            return SetValue("IsInGame", isInGame, groupId);
+            return await SetValueAsync("IsInGame", isInGame, groupId);
         }
 
         //是否群机器人主人
-        public static bool IsOwner(long groupId, long userId)
-        {
-            return userId == GetRobotOwner(groupId);
-        }
-
         public static async Task<bool> IsOwnerAsync(long groupId, long userId)
         {
             return userId == await GetRobotOwnerAsync(groupId);
         }
 
         // 开始成语接龙 game
-        public static int StartCyGame(int isInGame, string lastCy, long groupId)
+        public static async Task<int> StartCyGameAsync(int isInGame, string lastCy, long groupId)
         {
-            return Update(new
+            return await UpdateAsync(new
             {
                 IsInGame = isInGame,
                 LastChengyu = lastCy,
-                LastChengyuDate = DateTime.MinValue
+                LastChengyuDate = DateTime.Now
             }, groupId);
         }
 
-        public static bool GetIsValid(long groupId)
-            => GetIsValidAsync(groupId).GetAwaiter().GetResult();
+        // 获取最后一次成语接龙的时间间隔（分钟）
+        public static async Task<int> GetChengyuIdleMinutesAsync(long groupId)
+        {
+            string sql = $"SELECT ABS({SqlDateDiff("MINUTE", "LastChengyuDate", SqlDateTime)}) FROM {FullName} WHERE Id = {groupId}";
+            return await QueryScalarAsync<int>(sql);
+        }
 
         public static async Task<bool> GetIsValidAsync(long groupId)
         {
             return await GetBoolAsync("IsValid", groupId);
         }
-
-        public static string GetGroupName(long groupId)
-            => GetGroupNameAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<string> GetGroupNameAsync(long groupId)
         {

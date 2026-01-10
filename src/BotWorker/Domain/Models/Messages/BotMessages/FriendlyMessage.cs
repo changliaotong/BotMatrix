@@ -22,14 +22,17 @@ public partial class BotMessage : MetaData<BotMessage>
             var host = uri.Host.ToLowerInvariant();
 
             // 域名白名单（按需增加）
-            if (host.EndsWith("sz84.com")) return true;
-            if (host == "i.y.qq.com") return true;
-            if (host == "music.163.com") return true;
+            if (host == "sz84.com" || host.EndsWith(".sz84.com")) return true;
+            if (host == "gdstudio.xyz" || host.EndsWith(".gdstudio.xyz")) return true;
+            if (host == "i.y.qq.com" || host.EndsWith(".music.tc.qq.com") || host.EndsWith(".gtimg.cn")) return true;
+            if (host == "music.163.com" || host.EndsWith(".126.net")) return true;
             if (host == "mp.weixin.qq.com") return true;
-            if (host == "q1.qlogo.cn") return true;
+            if (host == "qlogo.cn" || host.EndsWith(".qlogo.cn")) return true;
             if (host == "res.qpt.qq.com") return true;
-            if (host.EndsWith(".kuwo.cn")) return true;
-            if (host.EndsWith(".kuguo.com")) return true;
+            if (host == "kuwo.cn" || host.EndsWith(".kuwo.cn")) return true;
+            if (host == "kugou.com" || host.EndsWith(".kugou.com")) return true;
+            if (host == "url.cn" || host == "t.cn" || host == "dwz.cn") return true; // 常用短链
+            if (host.EndsWith(".qq.com") || host.EndsWith(".tencent.com")) return true; // 信任腾讯域名
 
             // 对于 *.qq.com 下的特定路径或 id 也允许，通过判断原始 url 包含特定片段
             var raw = uri.ToString();
@@ -57,7 +60,7 @@ public partial class BotMessage : MetaData<BotMessage>
             Answer = Answer.Replace("\\{", "{").Replace("\\}", "}");
 
             // 提取全部 URL
-            var urls = Regex.Matches(Answer, Regexs.Url)
+            var urls = Regex.Matches(Answer, $"({Regexs.Url})|({Regexs.Url2})")
                 .Cast<Match>()
                 .Select(m => m.Value)
                 .ToList();
@@ -100,16 +103,18 @@ public partial class BotMessage : MetaData<BotMessage>
                     Reason += "[负分]";
                 }
 
-                if (IsGroup && !BotInfo.GetBool("IsGroup", SelfId))
+                var isGroupEnabled = BotInfo.GetBool("IsGroup", SelfId);
+                if (IsGroup && !isGroupEnabled)
                 {
                     IsSend = false;
-                    Reason += "[群聊关闭]";
+                    Reason += $"[群聊关闭(Bot:{SelfId})]";
                 }
 
-                if (!IsGroup && !BotInfo.GetBool("IsPrivate", SelfId))
+                var isPrivateEnabled = BotInfo.GetBool("IsPrivate", SelfId);
+                if (!IsGroup && !isPrivateEnabled)
                 { 
                     IsSend = false;
-                    Reason += "[私聊关闭]";
+                    Reason += $"[私聊关闭(Bot:{SelfId})]";
                 }
             }
 
@@ -185,7 +190,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
             Ctx.Register("内置词设置", () => GroupWarn.GetKeysSetAsync(GroupId));
 
-            Ctx.Register("随机礼物", () => Gift.GetGiftListAsync(GroupId, UserId));
+            Ctx.Register("随机礼物", () => Gift.GetGiftListAsync(SelfId, GroupId, UserId));
             Ctx.Register("今日发言榜", async () => (await GroupMsgCount.GetCountListAsync(SelfId, GroupId, UserId, 8)).ToString());
             Ctx.Register("昨日发言榜", async () => (await GroupMsgCount.GetCountListYAsync(SelfId, GroupId, UserId, 8)).ToString());
             Ctx.Register("今日发言次数", async () => (await GroupMsgCount.GetMsgCountAsync(GroupId, UserId)).ToString());
@@ -204,15 +209,15 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("领积分", () => GetFreeCreditAsync());
             Ctx.Register("积分榜", () => GetCreditListAsync());
             Ctx.Register("积分总榜", () => GetCreditListAllAsync(UserId));
-            Ctx.Register("积分类型", () => UserInfo.GetCreditTypeAsync(GroupId, UserId));
+            Ctx.Register("积分类型", () => UserInfo.GetCreditTypeAsync(SelfId, GroupId, UserId));
             Ctx.Register("积分排名", async () => (await UserInfo.GetCreditRankingAsync(SelfId, GroupId, UserId)).ToString());
-            Ctx.Register("积分总排名", async () => (await UserInfo.GetCreditRankingAllAsync(UserId)).ToString("N0"));
-            Ctx.Register("本群积分", async () => (await UserInfo.GetCreditAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("积分总排名", async () => (await UserInfo.GetCreditRankingAllAsync(SelfId, UserId)).ToString("N0"));
+            Ctx.Register("本群积分", async () => (await UserInfo.GetCreditAsync(SelfId, GroupId, UserId)).ToString("N0"));
             Ctx.Register("本机积分", async () => (await Friend.GetCreditAsync(SelfId, UserId)).ToString("N0"));
             Ctx.Register("通用积分", async () => (await UserInfo.GetCreditAsync(UserId)).ToString("N0"));
-            Ctx.Register("已存积分", async () => (await UserInfo.GetSaveCreditAsync(GroupId, UserId)).ToString("N0"));
-            Ctx.Register("储存积分", async () => (await UserInfo.GetSaveCreditAsync(GroupId, UserId)).ToString("N0"));
-            Ctx.Register("积分总额", async () => (await UserInfo.GetTotalCreditAsync(GroupId, UserId)).ToString("N0"));
+            Ctx.Register("已存积分", async () => (await UserInfo.GetSaveCreditAsync(SelfId, GroupId, UserId)).ToString("N0"));
+            Ctx.Register("储存积分", async () => (await UserInfo.GetSaveCreditAsync(SelfId, GroupId, UserId)).ToString("N0"));
+            Ctx.Register("积分总额", async () => (await UserInfo.GetTotalCreditAsync(SelfId, GroupId, UserId)).ToString("N0"));
             Ctx.Register("冻结积分", async () => (await UserInfo.GetFreezeCreditAsync(UserId)).ToString("N0"));
             Ctx.Register("余额", async () => (await UserInfo.GetBalanceAsync(UserId)).ToString("N"));
             Ctx.Register("冻结余额", async () => (await UserInfo.GetFreezeBalanceAsync(UserId)).ToString("N"));
@@ -220,7 +225,7 @@ public partial class BotMessage : MetaData<BotMessage>
             // 特殊处理积分（判断负分情况）
             Ctx.Register("积分", async () =>
             {
-                long credit_value = await UserInfo.GetCreditAsync(GroupId, UserId);
+                long credit_value = await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
                 var baseValue = credit_value.ToString("N0");
                 if (credit_value < 0)
                     return $"{baseValue}\n您已负分{credit_value}，低于-50分后将不能使用机器人";

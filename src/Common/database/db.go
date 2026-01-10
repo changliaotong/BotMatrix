@@ -47,7 +47,12 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		&models.MCPTool{},
 		&models.MessageStat{},
 		&models.UserLoginToken{},
+		&models.User{},
+		&models.BotEntity{},
 	}
+
+	// 预先检查并修复一些关键表的列，防止 AutoMigrate 失败
+	m.fixCommonColumns(db)
 
 	for _, model := range modelsToMigrate {
 		if err := db.AutoMigrate(model); err != nil {
@@ -91,10 +96,10 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 	go func() {
 		log.Printf("[DB] Starting call_count sync from ai_usage_logs...")
 		var counts []struct {
-			AgentID uint
+			AgentID uint `gorm:"column:AgentId"`
 			Total   int
 		}
-		if err := db.Model(&models.AIUsageLog{}).Select("agent_id, count(*) as total").Group("agent_id").Scan(&counts).Error; err == nil {
+		if err := db.Model(&models.AIUsageLog{}).Select("\"AgentId\" as agent_id, count(*) as total").Group("\"AgentId\"").Scan(&counts).Error; err == nil {
 			for _, c := range counts {
 				if c.AgentID > 0 {
 					db.Model(&models.AIAgent{}).Where("id = ?", c.AgentID).Update("call_count", c.Total)
@@ -107,6 +112,47 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 	}()
 
 	return nil
+}
+
+// fixCommonColumns 预先检查并修复一些关键表的列，防止 AutoMigrate 失败
+func (m *GORMManager) fixCommonColumns(db *gorm.DB) {
+	// 1. 修复 users 表
+	if db.Migrator().HasTable("users") {
+		// 检查 deleted_at
+		if !db.Migrator().HasColumn("users", "deleted_at") {
+			log.Println("[DB] Adding missing column users.deleted_at")
+			db.Exec("ALTER TABLE users ADD COLUMN deleted_at timestamptz")
+			db.Exec("CREATE INDEX idx_users_deleted_at ON users(deleted_at)")
+		}
+		// 检查 platform
+		if !db.Migrator().HasColumn("users", "platform") {
+			log.Println("[DB] Adding missing column users.platform")
+			db.Exec("ALTER TABLE users ADD COLUMN platform varchar(32)")
+		}
+		// 检查 platform_id
+		if !db.Migrator().HasColumn("users", "platform_id") {
+			log.Println("[DB] Adding missing column users.platform_id")
+			db.Exec("ALTER TABLE users ADD COLUMN platform_id varchar(64)")
+		}
+	}
+
+	// 2. 修复 BotEntity 表 (注意表名可能是 BotEntity 或 bot_entities)
+	botTable := "BotEntity"
+	if db.Migrator().HasTable(botTable) {
+		if !db.Migrator().HasColumn(botTable, "platform") {
+			log.Println("[DB] Adding missing column BotEntity.platform")
+			db.Exec("ALTER TABLE \"BotEntity\" ADD COLUMN platform varchar(32)")
+		}
+	}
+
+	// 3. 修复 DigitalRoleTemplate 表
+	templateTable := "DigitalRoleTemplate"
+	if db.Migrator().HasTable(templateTable) {
+		if !db.Migrator().HasColumn(templateTable, "name") {
+			log.Println("[DB] Adding missing column DigitalRoleTemplate.name")
+			db.Exec("ALTER TABLE \"DigitalRoleTemplate\" ADD COLUMN name varchar(100)")
+		}
+	}
 }
 
 // InitDB initializes the PostgreSQL database connection

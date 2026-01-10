@@ -123,8 +123,8 @@ namespace BotWorker.Modules.Games
 
                 // 1. 检查付款方余额 (系统发行方除外)
                 if (creditId != SYSTEM_RESERVE)
-                {
-                    long currentBalance = await UserInfo.GetCreditAsync(groupId, creditQQ);
+                {                    
+                    long currentBalance = await UserInfo.GetCreditAsync(botUin, groupId, creditQQ);
                     if (currentBalance < amount)
                     {
                         _logger?.LogWarning($"转账失败：账户 {creditId} 余额不足 ({currentBalance} < {amount})");
@@ -189,9 +189,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetBalanceMsgAsync(IPluginContext ctx)
         {
-            long groupId = !string.IsNullOrEmpty(ctx.GroupId) ? long.Parse(ctx.GroupId) : 0;
-            long balance = await UserInfo.GetCreditAsync(groupId, long.Parse(ctx.UserId));
-            return $"💰 您的积分账户：\n余额：{balance}\n账户：{ctx.UserId}";
+            return "🏅 积分总览\n💎 {积分类型}：{积分} \n🏦 已存积分：{已存积分}\n📈 积分总额：{积分总额}\n🌐 全球排名：第{积分总排名}名 ✨";
         }
 
         private async Task<string> SignMsgAsync(IPluginContext ctx)
@@ -210,7 +208,8 @@ namespace BotWorker.Modules.Games
             if (success)
             {
                 long groupId = !string.IsNullOrEmpty(ctx.GroupId) ? long.Parse(ctx.GroupId) : 0;
-                long balance = await UserInfo.GetCreditAsync(groupId, long.Parse(ctx.UserId));
+                long botUin = long.Parse(ctx.BotId);
+                long balance = await UserInfo.GetCreditAsync(botUin, groupId, long.Parse(ctx.UserId));
                 string planeInfo = userLevel != null ? $" [{GetPlaneName(level)}]" : "";
                 string buffNotice = globalBuff > 1.0 ? $"🔥 全服翻倍 x{globalBuff:F1}\n" : "";
                 return $"✅ 签到成功！\n" +
@@ -234,8 +233,9 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetSystemReportMsgAsync(IPluginContext ctx)
         {
-            long reserveBalance = await UserInfo.GetCreditAsync(0, long.Parse(SYSTEM_RESERVE));
-            long revenueBalance = await UserInfo.GetCreditAsync(0, long.Parse(SYSTEM_REVENUE));
+            long botUin = long.Parse(ctx.BotId);
+            long reserveBalance = await UserInfo.GetCreditAsync(botUin, 0, long.Parse(SYSTEM_RESERVE));
+            long revenueBalance = await UserInfo.GetCreditAsync(botUin, 0, long.Parse(SYSTEM_REVENUE));
             
             return $"📊 系统财务简报 (原有数据库)：\n" +
                    $"----------------\n" +

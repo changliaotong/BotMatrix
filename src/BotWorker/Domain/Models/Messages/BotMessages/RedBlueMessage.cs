@@ -23,7 +23,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 if (CmdPara.ToUpper().In("梭哈", "SH"))
                     CmdPara = creditValue.ToString();
                 else
-                    return "请押积分，您的积分：{积分}";
+                    return $"请押积分，您的{{积分类型}}：{creditValue:N0}";
             }
 
             long blockCredit = CmdPara.AsLong();
@@ -31,7 +31,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 return $"至少押{Group.BlockMin}分";
 
             if (creditValue < blockCredit)
-                return $"您只有{creditValue}分";
+                return $"您只有{creditValue:N0}分";
 
             string res = "";
             List<Card> deck;
@@ -163,7 +163,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 creditValue = addRes.CreditValue;
             }
 
-            res += $"✅ 得分：{creditGet}，累计：{creditValue}";
+            res += $"✅ 得分：{creditGet:N0}，累计：{creditValue:N0}";
 
             // 判断是否需要重新洗牌
             if (deck.Count < 6)
@@ -192,7 +192,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 if (CmdPara.ToUpper().In("梭哈", "SH"))
                     CmdPara = creditValue.ToString();
                 else
-                    return "请押积分，您的积分：{积分}";
+                    return $"请押积分，您的{{积分类型}}：{creditValue:N0}";
             }
 
             long blockCredit = CmdPara.AsLong();

@@ -51,8 +51,8 @@ namespace BotWorker.Modules.AI.Filters
                 // 4. 执行 Executor 职责
                 await next(context);
 
-                // 5. 审计记录：执行结果
-                var outputJson = JsonSerializer.Serialize(context.Result.Value);
+                // 5.审计记录：执行结果
+                var outputJson = JsonSerializer.Serialize(context.Result?.GetValue<object>());
                 await _auditService.UpdateResultAsync(logId, outputJson, "Success");
             }
             catch (Exception ex)

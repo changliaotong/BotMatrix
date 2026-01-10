@@ -47,7 +47,7 @@ namespace BotWorker.Modules.Games
             long petCount = await GetPetCountAsync(groupId, qq);
 
 
-            long creditValue = await UserInfo.GetCreditAsync(groupId, qq);
+            long creditValue = await UserInfo.GetCreditAsync(botQQ, groupId, qq);
             if (creditValue < buyCredit)
                 return $"您的积分{creditValue}不足{buyCredit}";
 
@@ -63,7 +63,7 @@ namespace BotWorker.Modules.Games
 
             long creditSell = buyCredit * 8 / 10;
             long creditFriendGet = buyCredit / 10;
-            long currentCredit = await UserInfo.GetCreditAsync(groupId, qq);
+            long currentCredit = await UserInfo.GetCreditAsync(botQQ, groupId, qq);
             return $"✅ 您的宠物+1={petCount + 1}了！\n萌宠[@:{friendQQ}]+{creditFriendGet}分\n卖家[@:{fromQQ}] +{creditSell}分\n积分：-{sellPrice}分 累计：{currentCredit}";
         }
 

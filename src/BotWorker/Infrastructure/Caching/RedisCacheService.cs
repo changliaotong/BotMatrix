@@ -9,6 +9,7 @@ namespace BotWorker.Infrastructure.Caching
         private readonly IConnectionMultiplexer _redis;
         private readonly IDatabase _db;
         private readonly ILogger<RedisCacheService>? _logger;
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Threading.SemaphoreSlim> _locks = new();
 
         public RedisCacheService(IConnectionMultiplexer redis, ILogger<RedisCacheService>? logger = null)
         {
@@ -128,9 +129,24 @@ namespace BotWorker.Infrastructure.Caching
             var cached = await GetAsync<T>(key);
             if (cached != null) return cached;
 
-            var value = await factory();
-            await SetAsync(key, value, expiration);
-            return value;
+            var semaphore = _locks.GetOrAdd(key, _ => new System.Threading.SemaphoreSlim(1, 1));
+            await semaphore.WaitAsync();
+            try
+            {
+                // Double check
+                cached = await GetAsync<T>(key);
+                if (cached != null) return cached;
+
+                var value = await factory();
+                await SetAsync(key, value, expiration);
+                return value;
+            }
+            finally
+            {
+                semaphore.Release();
+                // Optional: Clean up unused semaphores to avoid memory leak
+                if (semaphore.CurrentCount == 1) _locks.TryRemove(key, out _);
+            }
         }
 
         public async Task SetStringAsync(string key, string value, TimeSpan? expiration = null)

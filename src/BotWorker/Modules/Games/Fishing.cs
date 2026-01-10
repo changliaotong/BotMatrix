@@ -187,9 +187,9 @@ namespace BotWorker.Modules.Games
         };
 
         // 兼容旧版 HotCmdMessage 调用
-        public static string GetFishing(long groupId, string groupName, long userId, string name, string cmdName, string cmdPara)
+        public static async Task<string> GetFishing(long groupId, string groupName, long userId, string name, string cmdName, string cmdPara)
         {
-            return GetStatusAsync(userId, name).GetAwaiter().GetResult();
+            return await GetStatusAsync(userId, name);
         }
 
         public static string GetBuyTools(long selfId, long groupId, string groupName, long userId, string name, string cmdName, string cmdPara, string cmdPara2)

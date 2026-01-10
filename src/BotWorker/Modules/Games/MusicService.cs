@@ -32,6 +32,8 @@ namespace BotWorker.Modules.Games
             new() { Name = "点歌历史", Keywords = ["点歌历史", "musiclog"] }
         ];
 
+        public MusicService() { }
+
         public MusicService(ILogger<MusicService> logger)
         {
             _logger = logger;

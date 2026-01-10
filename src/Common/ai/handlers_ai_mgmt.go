@@ -746,7 +746,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 			}
 
 			db.Create(&models.AIUsageLog{
-				UserID:          userID,
+				UserID:          fmt.Sprintf("%d", userID),
 				AgentID:         agent.ID,
 				ModelName:       model.ModelName,
 				ProviderType:    model.Provider.Type,

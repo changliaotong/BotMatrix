@@ -16,15 +16,25 @@ namespace BotWorker.Application.Messaging.Pipeline
                 var botMsg = botMsgEvent.BotMessage;
                 var message = botMsg.CurrentMessage.Trim();
 
-                // 处理 开机/关闭 指令
+                // 处理 开机/关机/开启/关闭 指令
                 if (message == "开机" || message == "#开机")
                 {
-                    botMsg.Answer = await botMsg.GetOpenAsync(true);
+                    botMsg.Answer = await botMsg.SetPowerAsync(true);
+                    return;
+                }
+                if (message == "关机" || message == "#关机")
+                {
+                    botMsg.Answer = await botMsg.SetPowerAsync(false);
+                    return;
+                }
+                if (message == "开启" || message == "#开启")
+                {
+                    botMsg.Answer = await botMsg.SetOpenAsync(true);
                     return;
                 }
                 if (message == "关闭" || message == "#关闭")
                 {
-                    botMsg.Answer = await botMsg.GetOpenAsync(false);
+                    botMsg.Answer = await botMsg.SetOpenAsync(false);
                     return;
                 }
 

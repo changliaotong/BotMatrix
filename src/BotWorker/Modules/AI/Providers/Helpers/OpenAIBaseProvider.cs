@@ -37,10 +37,11 @@ namespace BotWorker.Modules.AI.Providers.Helpers
                 var kernel = BuildKernel(options);
                 var chatService = kernel.GetRequiredService<IChatCompletionService>();
                 
-                var settings = new PromptExecutionSettings
+                var settings = new PromptExecutionSettings();
+                if (kernel.Plugins.Count > 0)
                 {
-                    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-                };
+                    settings.FunctionChoiceBehavior = FunctionChoiceBehavior.Auto();
+                }
 
                 var result = await chatService.GetChatMessageContentAsync(history, settings, kernel, options.CancellationToken);
                 return result.Content ?? string.Empty;
@@ -48,7 +49,7 @@ namespace BotWorker.Modules.AI.Providers.Helpers
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "[{ProviderName}] ExecuteAsync error", ProviderName);
-                return $"Error: {ex.Message}";
+                return $"❌ 错误：{ex.Message}";
             }
         }
 
@@ -57,10 +58,11 @@ namespace BotWorker.Modules.AI.Providers.Helpers
             var kernel = BuildKernel(options);
             var chatService = kernel.GetRequiredService<IChatCompletionService>();
 
-            var settings = new PromptExecutionSettings
+            var settings = new PromptExecutionSettings();
+            if (kernel.Plugins.Count > 0)
             {
-                FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-            };
+                settings.FunctionChoiceBehavior = FunctionChoiceBehavior.Auto();
+            }
 
             IAsyncEnumerable<StreamingChatMessageContent> stream;
             try

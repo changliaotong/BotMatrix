@@ -14,6 +14,9 @@ using BotWorker.Infrastructure.Utils;
 using BotWorker.Modules.AI.Tools;
 using BotWorker.Infrastructure.Caching;
 
+using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Infrastructure.Communication;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 初始化静态配置
@@ -22,6 +25,7 @@ AppConfig.Initialize(builder.Configuration);
 
 // 配置 Serilog
 Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
     .WriteTo.Console()
     .CreateLogger();
 builder.Host.UseSerilog();
@@ -35,7 +39,12 @@ builder.Services.AddHttpClient();
 // 注册 Redis
 var redisHost = builder.Configuration["redis:host"] ?? "localhost";
 var redisPort = builder.Configuration["redis:port"] ?? "6379";
+var redisPassword = builder.Configuration["redis:password"];
 var redisConn = $"{redisHost}:{redisPort},abortConnect=false";
+if (!string.IsNullOrEmpty(redisPassword))
+{
+    redisConn += $",password={redisPassword}";
+}
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConn));
 builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 
@@ -49,16 +58,27 @@ builder.Services.AddSingleton<IKnowledgeBaseService, BotWorker.Modules.AI.Plugin
 // 注册核心业务服务
 builder.Services.AddSingleton<IEventNexus, EventNexus>();
 builder.Services.AddSingleton<IToolAuditService, ToolAuditService>();
+builder.Services.AddSingleton<SandboxService>();
 builder.Services.AddSingleton<LLMApp>();
 builder.Services.AddSingleton<IMcpService, MCPManager>();
 builder.Services.AddSingleton<IRagService, RagService>();
 builder.Services.AddSingleton<IAIService, AIService>();
 builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
+builder.Services.AddHostedService<McpInitializationService>();
 builder.Services.AddSingleton<II18nService, I18nService>();
+builder.Services.AddSingleton<IOneBotApiClient, OneBotApiClient>();
 builder.Services.AddSingleton<IRobot, PluginManager>();
 builder.Services.AddSingleton<PluginManager>(sp => (PluginManager)sp.GetRequiredService<IRobot>());
 builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();
 builder.Services.AddSingleton<IMCPHost, PluginMcpHost>();
+
+// 注册应用层业务服务
+builder.Services.AddSingleton<IPermissionService, PermissionService>();
+builder.Services.AddSingleton<IBotApiService, BotApiService>();
+builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddSingleton<BotWorker.Domain.Interfaces.IGroupRepository, BotWorker.Infrastructure.Persistence.Repositories.GroupRepository>();
+builder.Services.AddSingleton<IGroupService, GroupService>();
+builder.Services.AddSingleton<IHotCmdService, HotCmdService>();
 
 // 注册中间件
 builder.Services.AddSingleton<ExceptionMiddleware>();
@@ -74,6 +94,7 @@ builder.Services.AddTransient<SetupMiddleware>();
 builder.Services.AddTransient<PowerStatusMiddleware>();
 builder.Services.AddTransient<MediaTypeMiddleware>();
 builder.Services.AddTransient<BuiltinCommandMiddleware>();
+builder.Services.AddTransient<QaMiddleware>();
 builder.Services.AddSingleton<AiMiddleware>();
 builder.Services.AddTransient<AutoSignInMiddleware>();
 
@@ -111,17 +132,21 @@ builder.Services.AddSingleton<MessagePipeline>(sp =>
     pipeline.Use(sp.GetRequiredService<MediaTypeMiddleware>());
     // 12. 核心内置指令 (踢人/禁言/普通指令)
     pipeline.Use(sp.GetRequiredService<BuiltinCommandMiddleware>());
-    // 13. AI/智能体
+    // 13. 问答系统
+    pipeline.Use(sp.GetRequiredService<QaMiddleware>());
+    // 14. AI/智能体
     pipeline.Use(sp.GetRequiredService<AiMiddleware>());
-    // 14. 自动化业务 (自动签到)
+    // 15. 自动化业务 (自动签到)
     pipeline.Use(sp.GetRequiredService<AutoSignInMiddleware>());
-    // 15. 业务插件级分发 (普通插件)
+    // 16. 业务插件级分发 (普通插件)
     pipeline.Use(sp.GetRequiredService<PluginMiddleware>());
     return pipeline;
 });
 
 // 注册启动时加载插件的任务
 builder.Services.AddHostedService<StartupLoader>();
+builder.Services.AddHostedService<BotWorker.Infrastructure.Messaging.RedisStreamConsumer>();
+builder.Services.AddHostedService<BotNexusClient>();
 
 var app = builder.Build();
 
@@ -155,16 +180,23 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : 
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        Log.Information("[Startup] Starting StartupLoader...");
         // 0. 确保内置指令存在
-        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
-        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("开启租赁", "开启租赁");
-        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
-        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");
+        await BotCmd.EnsureTableCreatedAsync();
+        await BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
+        await BotCmd.EnsureCommandExistsAsync("开启租赁", "开启租赁");
+        await BotCmd.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
+        await BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");
+        await BotCmd.EnsureCommandExistsAsync("积分榜", "积分榜");
+        await BotCmd.EnsureCommandExistsAsync("后台", "后台");
 
+        Log.Information("[Startup] Initializing AI App...");
         // 1. 初始化 AI 提供商
         await llmApp.InitializeAsync();
         
+        Log.Information("[Startup] Loading all plugins...");
         // 2. 加载插件
         await loaderService.LoadAllPluginsAsync();
+        Log.Information("[Startup] StartupLoader finished.");
     }
 }

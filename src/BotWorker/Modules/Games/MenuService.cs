@@ -315,8 +315,9 @@ namespace BotWorker.Modules.Games
             if (node == null) return "❌ 菜单节点丢失，请尝试回复【刷新菜单】。";
 
             var sb = new StringBuilder();
-            sb.AppendLine("╔════════════════════════════╗");
-            sb.AppendLine($"║  {node.Title.PadRight(24)}║");
+            
+            // 头部：标题与用户信息
+            sb.AppendLine($"┏━━ {node.Title} ━━┓");
             
             if (session.CurrentMenuId == "root")
             {
@@ -329,25 +330,27 @@ namespace BotWorker.Modules.Games
                     plane = GetPlaneName(level);
                 }
 
-                sb.AppendLine("╟────────────────────────────╢");
-                sb.AppendLine($"║ 👤 用户: {session.UserId.PadRight(18)}║");
-                sb.AppendLine($"║ 🆙 等级: Lv.{level.ToString().PadRight(15)}║");
-                sb.AppendLine($"║ ✨ 位面: {plane.PadRight(18)}║");
+                // 尝试获取用户积分
+                long credit = await UserInfo.GetCreditAsync(long.Parse(session.UserId));
+
+                sb.AppendLine($"┃ 👤 账户: {session.UserId}");
+                sb.AppendLine($"┃ 🆙 等级: Lv.{level} ({plane})");
+                sb.AppendLine($"┃ 💰 积分: {credit:N0}");
 
                 // 展示活跃的全局 Buff
                 double expBuff = _robot?.Events.GetActiveBuff(BuffType.ExperienceMultiplier) ?? 1.0;
                 double pointsBuff = _robot?.Events.GetActiveBuff(BuffType.PointsMultiplier) ?? 1.0;
                 if (expBuff > 1.0 || pointsBuff > 1.0)
                 {
-                    sb.AppendLine("╟────────────────────────────╢");
-                    if (expBuff > 1.0) sb.AppendLine($"║ 🔥 全服经验: {expBuff}x".PadRight(29) + "║");
-                    if (pointsBuff > 1.0) sb.AppendLine($"║ 💰 全服积分: {pointsBuff}x".PadRight(29) + "║");
+                    sb.AppendLine("┃ ━━━━━━━━━━━━━━━━━━");
+                    if (expBuff > 1.0) sb.AppendLine($"┃ 🔥 经验加成: {expBuff}x");
+                    if (pointsBuff > 1.0) sb.AppendLine($"┃ � 积分加成: {pointsBuff}x");
                 }
             }
 
-            sb.AppendLine("╟────────────────────────────╢");
-            sb.AppendLine($"║ 📝 {node.Description.PadRight(24)}║");
-            sb.AppendLine("║                            ║");
+            sb.AppendLine("┃ ━━━━━━━━━━━━━━━━━━");
+            sb.AppendLine($"┃ 📝 {node.Description}");
+            sb.AppendLine("┃");
             
             var userAccess = await UserModuleAccess.QueryWhere("UserId = @p1", UserModuleAccess.SqlParams(("@p1", session.UserId)));
             var unlockedIds = userAccess.Select(a => a.ModuleId).ToHashSet();
@@ -356,9 +359,9 @@ namespace BotWorker.Modules.Games
             {
                 var child = node.Children[i];
                 var icon = child.Type switch {
-                    MenuNodeType.Container => "📁",
-                    MenuNodeType.Command => "⚡",
-                    MenuNodeType.Input => "⌨️",
+                    MenuNodeType.Container => "�",
+                    MenuNodeType.Command => "▶️",
+                    MenuNodeType.Input => "💬",
                     MenuNodeType.Back => "🔙",
                     _ => "🔹"
                 };
@@ -369,13 +372,12 @@ namespace BotWorker.Modules.Games
                     title = "🔒 " + title;
                 }
 
-                var line = $" {i + 1}. {icon} {title}";
-                sb.AppendLine($"║ {line.PadRight(25)}║");
+                sb.AppendLine($"┃  {i + 1}. {icon} {title}");
             }
 
-            sb.AppendLine("║                            ║");
-            sb.AppendLine("║ 💡 输入数字选择 | 退出菜单 ║");
-            sb.AppendLine("╚════════════════════════════╝");
+            sb.AppendLine("┃");
+            sb.AppendLine("┃ 💡 回复数字选择 | 退出菜单");
+            sb.AppendLine("┗━━━━━━━━━━━━━━━━━━┛");
 
             return sb.ToString();
         }

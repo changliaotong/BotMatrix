@@ -59,7 +59,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             long creditValue = UserInfo.GetCredit(GroupId, UserId);
             if (creditValue < blockCredit)
-                return $"您的积分{creditValue}不足{blockCredit}";
+                return $"您的{{积分类型}}{{积分}}不足{blockCredit}";
 
             int iRobot = C.RandomInt(1, 3);
             long bonus = blockCredit;
@@ -89,7 +89,7 @@ public partial class BotMessage : MetaData<BotMessage>
             (int i, creditValue) = AddCredit(bonus - blockCredit, "猜拳得分");
             return i == -1
                 ? RetryMsg
-                : $"✅ 我出{strRobot}，你{strWin}了！ \n得分：{bonus}，累计：{creditValue}";
+                : $"✅ 我出{strRobot}，你{strWin}了！ \n得分：{bonus}，累计：{{积分}}";
         }   
 
 
@@ -114,7 +114,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     if (CmdPara == "梭哈")
                         CmdPara = creditValue.ToString();
                     else
-                        return $"请押积分！您的积分{creditValue}";
+                        return $"请押积分！您的{{积分类型}}{{积分}}";
                 }
 
                 long blockCredit = CmdPara.AsLong(); 
@@ -122,7 +122,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     return $"至少押{Group.BlockMin}分";
 
                 if (creditValue < blockCredit)
-                    return $"您的积分{creditValue}不足{blockCredit}";
+                    return $"您的{{积分类型}}{{积分}}不足{blockCredit}";
 
                 //生成随机数，保存积分以及猜测次数
                 resCsz = C.RandomInt(1, 13);
@@ -133,7 +133,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     //扣分
                     MinusCredit(cszCredit, "猜数字扣分");
                     return $"您有3次机会，请发送：\n" +
-                           $"我猜 + 数字\n-{cszCredit}分，累计：{creditValue}";
+                           $"我猜 + 数字\n-{cszCredit}分，累计：{{积分}}";
                 }
                 else
                     return "系统出错，请稍后重试";
@@ -155,7 +155,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     UserInfo.UpdateCszGame(-1, 0, 0, UserId);
                     long creditWin = (cszCredit * 19) / 10;
                     (int i, creditValue) = AddCredit(creditWin, "猜数字赢");
-                    return i == -1 ? RetryMsg : $"✅ 恭喜：{cszTimes + 1}次猜对！\n得分：{creditWin}，累计：{creditValue}";
+                    return i == -1 ? RetryMsg : $"✅ 恭喜：{cszTimes + 1}次猜对！\n得分：{creditWin}，累计：{{积分}}";
                 }
                 else
                 {

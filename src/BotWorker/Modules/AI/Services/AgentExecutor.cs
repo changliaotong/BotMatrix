@@ -49,16 +49,34 @@ namespace BotWorker.Modules.AI.Services
         /// </summary>
         public async Task<string> ExecuteAgentTaskAsync(string taskId, string staffId, string prompt, IPluginContext context)
         {
-            // 1. Planner: 决定行动方案
-            // 这里我们利用 Semantic Kernel 的自动函数调用能力，但通过拦截器实现规范中的“Executor”和“Reviewer”职责
-            
-            // 注意：AIService.ChatWithContextAsync 内部已经配置了 RAG, BotSkills 和 MCP 插件
-            // 我们需要一种方式在插件执行前进行审计和风险检查
-            
-            // 由于 AIService 内部使用了 Semantic Kernel，最优雅的方式是使用 Kernel 的 Function Invoking/Invoked 事件
-            // 或者我们可以手动实现一个循环来精确控制 Planner/Executor/Reviewer 职责
-            
-            return await _aiService.ChatWithContextAsync(prompt, context);
+            // 1. Planner: 任务分析与规划
+            // 在复杂任务中，Planner 负责将任务拆解。目前我们通过系统提示词引导 AI 进入规划状态
+            var planningPrompt = $@"
+[任务 ID: {taskId}]
+[员工 ID: {staffId}]
+你现在作为 'Planner' 角色。请分析以下用户需求，并规划执行步骤。
+如果需求简单，直接开始执行。
+如果需求复杂，请先在心中拆解步骤。
+
+用户需求：{prompt}";
+
+            // 2. Executor: 执行任务 (带审计拦截器)
+            // AIService 内部已经通过 DigitalEmployeeToolFilter 实现了 Executor 职责和风险控制
+            var result = await _aiService.ChatWithContextAsync(planningPrompt, context);
+
+            // 3. Reviewer: 结果校验与总结
+            // 规范要求 Reviewer 判定结果是否合规、是否完成了用户目标
+            var reviewPrompt = $@"
+你现在作为 'Reviewer' 角色。
+请评估以下任务执行结果是否完整且符合预期。
+如果结果中包含 'ERROR: 该操作属于高风险行为'，请向用户解释原因并引导其联系管理员审批。
+
+任务需求：{prompt}
+执行结果：{result}
+
+请给出最终的用户答复：";
+
+            return await _aiService.ChatAsync(reviewPrompt);
         }
     }
 }

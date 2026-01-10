@@ -19,11 +19,10 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (botMsg.IsGroup && !botMsg.Group.IsPowerOn)
                 {
                     var msg = botMsg.CurrentMessage.Trim();
-                    // 除非是开启指令，否则拦截
-                    if (msg != "开机" && msg != "#开机")
+                    // 除非是开启/开机指令，否则拦截
+                    if (msg != "开机" && msg != "#开机" && msg != "开启" && msg != "#开启")
                     {
-                        // 这里可以根据需要决定是否回复“已关机”
-                        // 为了减少打扰，通常只在被 @ 或输入指令时回复
+                        context.Logger?.LogInformation("[PowerStatus] Intercepted: Bot is PowerOff in group {GroupId}, message {MessageId}", botMsg.GroupId, context.EventId);
                         return; // 拦截
                     }
                 }

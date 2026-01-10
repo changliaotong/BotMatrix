@@ -59,9 +59,20 @@ namespace BotWorker.Modules.Plugins
                             { "from", ctx.UserId },
                             { "group_id", ctx.GroupId ?? "" }
                         });
+
+                        // 处理错误和 400 提示
+                        if (!response.OK || !string.IsNullOrEmpty(response.Error))
+                        {
+                            var error = response.Error ?? "插件执行出错";
+                            if (!string.IsNullOrEmpty(ctx.GroupId) && (error.Contains("400") || error.Contains("BadRequest")))
+                            {
+                                return "⚠️ 此功能在群内使用受限，请私聊机器人使用。";
+                            }
+                            return error;
+                        }
                         
                         // 提取响应中的第一个 text action 作为返回
-                        return response.Actions?.FirstOrDefault(a => a.Type == "reply" || a.Type == "send_message")?.Text ?? "";
+                        return response.Actions?.FirstOrDefault(a => a.Type == "reply" || a.Type == "send_message" || a.Type == "send_text")?.Text ?? "";
                     });
                 }
             }
@@ -82,21 +93,42 @@ namespace BotWorker.Modules.Plugins
 
         private async Task<ResponseMessage> SendRequestAsync(string eventName, Dictionary<string, object> payload)
         {
+            if (_process == null || _process.HasExited)
+            {
+                _logger?.LogWarning($"[ProcessPlugin:{_metadata.Name}] 进程未运行，尝试重启...");
+                StartProcess();
+            }
+
+            if (_stdin == null)
+            {
+                return new ResponseMessage { OK = false, Error = "Stdin is not available" };
+            }
+
             var requestId = Guid.NewGuid().ToString();
             var tcs = new TaskCompletionSource<ResponseMessage>();
             _pendingRequests[requestId] = tcs;
 
-            await SendEventAsync(eventName, payload, requestId);
-
-            // 设置超时，防止插件挂死
-            var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(5000));
-            if (completedTask == tcs.Task)
+            try
             {
-                return await tcs.Task;
+                await SendEventAsync(eventName, payload, requestId);
+
+                // 设置超时，防止插件挂死
+                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(10000)); // 增加到 10 秒
+                if (completedTask == tcs.Task)
+                {
+                    return await tcs.Task;
+                }
+                
+                _pendingRequests.Remove(requestId);
+                _logger?.LogWarning($"[ProcessPlugin:{_metadata.Name}] 请求超时: {eventName} (ID: {requestId})");
+                return new ResponseMessage { OK = false, Error = "Request timeout" };
             }
-            
-            _pendingRequests.Remove(requestId);
-            return new ResponseMessage { OK = false, Error = "Request timeout" };
+            catch (Exception ex)
+            {
+                _pendingRequests.Remove(requestId);
+                _logger?.LogError(ex, $"[ProcessPlugin:{_metadata.Name}] 发送请求失败: {eventName}");
+                return new ResponseMessage { OK = false, Error = ex.Message };
+            }
         }
 
         private void StartProcess()

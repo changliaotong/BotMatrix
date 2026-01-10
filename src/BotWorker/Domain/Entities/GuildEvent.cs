@@ -19,7 +19,7 @@ namespace BotWorker.Domain.Entities
         public string EventInfo { get; set; } = string.Empty;
         public DateTime InsertDate { get; set; }
 
-        public static async Task<Dictionary<string, object>> AppendAsync(GuildEvent @event, params string[] fields)
+        public static async Task<Dictionary<string, object>?> AppendAsync(GuildEvent @event, params string[] fields)
         {
             return await InsertReturnFieldsAsync(new
             {
@@ -31,8 +31,8 @@ namespace BotWorker.Domain.Entities
                 @event.UserName,
                 @event.EventType,
                 @event.EventName,
-                @event.EventInfo,               
-  
+                @event.EventInfo,
+                @event.InsertDate
             }, fields);
         }
     }

@@ -37,6 +37,7 @@ namespace BotWorker.Modules.Plugins
         private readonly ConcurrentDictionary<string, object?> _state = new();
 
         // 基础信息
+        public string EventId => (_ev is OneBotEvent ob) ? ob.MessageId.ToString() : (_ev is BotMessageEvent bm) ? bm.BotMessage.MsgId : Guid.NewGuid().ToString("N");
         public string Message => _ev.RawMessage;
         public string? GroupId => _ev.GroupId;
         public string UserId => _ev.UserId;
@@ -180,9 +181,8 @@ namespace BotWorker.Modules.Plugins
         public string[] Events { get; set; } = Array.Empty<string>();
 
         // 运行配置
-        public string? Type { get; set; }          // native, process, remote
+        public string? Type { get; set; }          // native, process
         public string? Executable { get; set; }    // 仅 process 类型使用
-        public string? Endpoint { get; set; }      // 仅 remote 类型使用
         public string? EntryPoint { get; set; }    // 仅 native 类型使用 (DLL 路径)
         public string[]? Actions { get; set; }     // 兼容旧字段
     }

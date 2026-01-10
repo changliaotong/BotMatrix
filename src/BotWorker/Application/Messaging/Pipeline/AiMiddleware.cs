@@ -33,12 +33,27 @@ namespace BotWorker.Application.Messaging.Pipeline
                     return; // 拦截，由 AI 负责后续处理
                 }
 
-                // 2. 检查用户当前状态是否为 AI 模式
+                // 2. 检查用户当前状态是否为 AI 模式，或者是否需要 AI 兜底
                 var userStateRes = UserInfo.GetStateRes(botMsg.User.State);
                 if (userStateRes == "AI")
                 {
                     await botMsg.GetAgentResAsync();
                     return; // 拦截
+                }
+
+                // 3. 问答系统未命中时的 AI 兜底 (从 AnswerMessage.cs 移过来的逻辑)
+                if (string.IsNullOrEmpty(botMsg.Answer) && (!botMsg.IsCmd || botMsg.CmdName == "闲聊") && !botMsg.IsDup && !botMsg.IsMusic)
+                {
+                    int cloud = !botMsg.IsGroup || botMsg.IsGuild ? 5 : !botMsg.User.IsShutup ? botMsg.Group.IsCloudAnswer : 0;
+                    
+                    if ((botMsg.IsAgent || botMsg.IsCallAgent || botMsg.IsAtMe || botMsg.IsGuild || !botMsg.IsGroup || botMsg.IsPublic || (cloud >= 5 && !botMsg.IsAtOthers)) && !botMsg.IsWeb)
+                    {
+                        await botMsg.GetAgentResAsync();
+                        if (!string.IsNullOrEmpty(botMsg.Answer))
+                        {
+                            return; // 如果 AI 生成了回答，则拦截
+                        }
+                    }
                 }
             }
 

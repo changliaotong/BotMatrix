@@ -33,12 +33,14 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
         public async Task<string> GetSetupUrlAsync()
         {
-            if (!IsPublic && IsGroup )
+            if (!IsPublic && IsGroup)
                 return "安全起见，请私聊使用此功能";
 
             (int i, var token) = Token.Append(UserId);
-            if (i == -1)            
+            if (i == -1)
                 return RetryMsg;
+
+            string loginMethod = "登录方法：\n1. 点击下方链接直接进入\n2. 或在登录页面输入您的QQ号和TOKEN";
 
             if (IsGuild)
             {
@@ -52,11 +54,11 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 await SendMessageAsync();
                 Answer = OldAnswer;
                 DelayMs = OldDelayMs;
-                return $"早喵机器人后台地址：sz84点com\n您的登录TOKEN（请勿转发他人）：{token}";
+                return $"早喵机器人后台地址：sz84点com\n{loginMethod}\n您的登录TOKEN（请勿转发他人）：{token}";
             }
             else
             {
-                return $"以下地址可直接进入后台（请勿转发他人）\n{url}/login?t={token}";
+                return $"早喵机器人后台地址：{SetupUrl}\n{loginMethod}\n以下地址可直接进入后台（请勿转发他人）\n{SetupUrl}/login?t={token}";
             }
         }
 
@@ -536,12 +538,25 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             };
         }
 
-        public async Task<string> GetOpenAsync(bool open)
+        public async Task<string> SetPowerAsync(bool powerOn)
         {
             if (!HaveSetupRight()) return "您无权修改本群设置！";
-            Group.IsPowerOn = open;
+            Group.IsPowerOn = powerOn;
             await Group.UpdateAsync();
-            return open ? "机器人已开机" : "机器人已关机";
+            return powerOn ? "机器人已开机" : "机器人已关机";
+        }
+
+        public async Task<string> SetOpenAsync(bool isOpen)
+        {
+            if (!HaveSetupRight()) return "您无权修改本群设置！";
+            Group.IsOpen = isOpen;
+            await Group.UpdateAsync();
+            return isOpen ? "机器人已开启" : "机器人已关闭";
+        }
+
+        public async Task<string> GetOpenAsync(bool open)
+        {
+            return await SetPowerAsync(open);
         }
 
         public async Task<string> HandleSetupAsync()

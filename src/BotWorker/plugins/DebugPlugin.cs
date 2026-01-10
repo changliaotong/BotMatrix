@@ -1,5 +1,16 @@
+using BotWorker.Domain.Interfaces;
+using BotWorker.Modules.Plugins;
+using System.Threading.Tasks;
+
 namespace BotWorker.Plugins
 {
+    [BotPlugin(
+        Id = "system.debug",
+        Name = "DebugPlugin",
+        Description = "用于调试上下文信息的插件",
+        Version = "1.0.0",
+        Author = "BotMatrix Team"
+    )]
     public class DebugPlugin : IPlugin
     {
         public string Name => "DebugPlugin";

@@ -21,19 +21,26 @@ namespace BotWorker.Modules.Games
         public static async Task<UserMetric> GetOrCreateAsync(string userId, string key)
         {
             string id = $"{userId}_{key}";
-            var metric = await GetSingleAsync(id);
-            if (metric == null)
+            try
             {
-                metric = new UserMetric { Id = id, UserId = userId, MetricKey = key, Value = 0 };
-                await InsertAsync([
-                    new Cov("Id", id),
-                    new Cov("UserId", userId),
-                    new Cov("MetricKey", key),
-                    new Cov("Value", 0),
-                    new Cov("LastUpdateTime", DateTime.Now)
-                ]);
+                var metric = await GetSingleAsync(id);
+                if (metric == null)
+                {
+                    metric = new UserMetric { Id = id, UserId = userId, MetricKey = key, Value = 0 };
+                    await InsertAsync([
+                        new Cov("Id", id),
+                        new Cov("UserId", userId),
+                        new Cov("MetricKey", key),
+                        new Cov("Value", 0),
+                        new Cov("LastUpdateTime", DateTime.Now)
+                    ]);
+                }
+                return metric;
             }
-            return metric;
+            catch (Exception ex) when (ex.Message.Contains("Duplicate entry") || ex.Message.Contains("Violation of PRIMARY KEY constraint"))
+            {
+                return await GetSingleAsync(id) ?? throw new Exception("Failed to retrieve existing metric after duplicate key error.", ex);
+            }
         }
     }
 

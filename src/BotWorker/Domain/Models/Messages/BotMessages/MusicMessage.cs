@@ -95,7 +95,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
         public async Task GetMusicResAsync(string cmdPara2 = "")
         {
-            if (!Platform.In(Platforms.Mirai, Platforms.NapCat, Platforms.QQGuild))
+            if (!Platform.In(Platforms.Mirai, Platforms.QQ, Platforms.QQGuild))
             {
                 Answer = $"当前版本机器人暂无{CmdName}功能";
                 return;

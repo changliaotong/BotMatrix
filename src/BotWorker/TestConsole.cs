@@ -62,7 +62,7 @@ namespace BotWorker
             Console.WriteLine();
 
             // 初始化模拟数据
-            var selfInfo = new BotInfo { BotUin = 51437810, BotName = "测试机器人", BotType = Platforms.BotType(Platforms.NapCat) };
+            var selfInfo = new BotInfo { BotUin = 51437810, BotName = "测试机器人", BotType = Platforms.BotType(Platforms.QQ) };
             var groupInfo = new GroupInfo { Id = 86433316, GroupName = "测试群", IsPowerOn = true, IsUseKnowledgebase = true, IsAI = true, IsCloudAnswer = 5 };
             var userInfo = new UserInfo { Id = 1653346663, Name = "测试用户", Credit = 1000, IsAI = true };
 

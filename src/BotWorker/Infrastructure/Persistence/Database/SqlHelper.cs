@@ -84,6 +84,14 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 {
                     if (value is int i)
                         return (T)(object)(i != 0);
+                    if (value is long l)
+                        return (T)(object)(l != 0);
+                    if (value is byte b1)
+                        return (T)(object)(b1 != 0);
+                    if (value is short s1)
+                        return (T)(object)(s1 != 0);
+                    if (value is decimal d)
+                        return (T)(object)(d != 0);
                     if (value is string s)
                         return (T)(object)(s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase));
                     if (value is bool b)

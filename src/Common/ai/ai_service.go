@@ -310,7 +310,7 @@ func (s *AIServiceImpl) Chat(ctx context.Context, modelID uint, messages []Messa
 		// 异步记录使用日志
 		go func() {
 			usage := models.AIUsageLog{
-				UserID:       0, // TODO: 从 context 获取
+				UserID:       "0", // TODO: 从 context 获取
 				ModelName:    model.ModelName,
 				ProviderType: provider.Type,
 				InputTokens:  resp.Usage.PromptTokens,
@@ -373,7 +373,7 @@ func (s *AIServiceImpl) ChatAgent(ctx context.Context, modelID uint, messages []
 			var model models.AIModel
 			s.db.First(&model, modelID)
 			usage := models.AIUsageLog{
-				UserID:       0, // TODO
+				UserID:       "0", // TODO
 				ModelName:    model.ModelName,
 				ProviderType: "agent",
 				InputTokens:  resp.Usage.PromptTokens,

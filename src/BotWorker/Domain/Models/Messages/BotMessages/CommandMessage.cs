@@ -70,13 +70,13 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName == "爱早喵")
                 Answer = await GetLoveZaomiaoRes();
             else if (CmdName == "抽签")
-                GetChouqian();
+                await GetChouqianAsync();
             else if (CmdName == "解签")
-                GetJieqian();
+                await GetJieqianAsync();
             else if (CmdName == "笑话")
-                Answer = GetJokeRes();
+                Answer = await GetJokeResAsync();
             else if (CmdName == "鬼故事")
-                GetGhostStory();
+                await GetGhostStoryAsync();
             else if (CmdName.In("早安", "午安", "晚安") && CmdPara.IsNull())
                 await GetGreetingAsync();
             else if (CmdName == "闲聊")
@@ -129,6 +129,10 @@ public partial class BotMessage : MetaData<BotMessage>
                 Answer = CmdPara.Sha384();
             else if (CmdName == "sha512")
                 Answer = CmdPara.Sha512();
+            else if (CmdName == "积分榜")
+                Answer = await UserInfo.GetCreditListAsync(GroupId);
+            else if (CmdName == "后台")
+                Answer = await GetSetupUrlAsync();
             else if (CmdName == "加密")
                 Answer = Encrypt.GetEncryptRes(UserInfo.GetGuid(UserId).AsString(), CmdName, CmdPara);
             else if (CmdName == "解密")

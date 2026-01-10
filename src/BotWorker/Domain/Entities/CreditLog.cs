@@ -23,7 +23,7 @@ public class CreditLog : MetaData<CreditLog>
 
     public static async Task<(string, IDataParameter[])> SqlHistoryAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
     {
-        long creditValue = await UserInfo.GetCreditAsync(groupId, qq);
+        long creditValue = await UserInfo.GetCreditAsync(botUin, groupId, qq);
         return SqlInsert(new
         {
             BotUin = botUin,

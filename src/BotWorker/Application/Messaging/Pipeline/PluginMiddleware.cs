@@ -21,9 +21,11 @@ namespace BotWorker.Application.Messaging.Pipeline
             // 插件中间件通常是管道的末端，它负责实际的业务分发
             var result = await _pluginManager.DispatchAsync(context);
             
-            // 如果插件返回了结果且 Context 还没 Answer，则设置 Answer
-            // 注意：由于 IPluginContext 的设计，插件可能已经通过 ReplyAsync 自行回复了。
-            // 这里的逻辑可以根据需要调整。
+            // 如果插件返回了结果且当前还没有设置 Answer，则尝试回复
+            if (!string.IsNullOrEmpty(result))
+            {
+                await context.ReplyAsync(result);
+            }
 
             // 继续执行下一个中间件（如果有）
             await next(context);

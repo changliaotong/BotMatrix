@@ -18,8 +18,8 @@ namespace BotWorker.Application.Messaging.Pipeline
             {
                 var botMsg = botMsgEvent.BotMessage;
 
-                // 1. 检查使用权限
-                var isHaveUseRight = botMsg.IsGuild || botMsg.HaveUseRight();
+                // 1. 检查使用权限 (私聊与频道默认有权，群聊需检查配置)
+                var isHaveUseRight = !botMsg.IsGroup || botMsg.IsGuild || botMsg.HaveUseRight();
                 if (!isHaveUseRight)
                 {
                     botMsg.Reason += "[使用权限]";

@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Models.Messages.BotMessages;
+namespace BotWorker.Domain.Models.Messages.BotMessages;
 
 public partial class BotMessage : MetaData<BotMessage>
 { 
@@ -71,7 +71,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     await ExecAsync(sql1, trans, paras1);
 
                     // 2. 增加积分 (自动记录日志)
-                    long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+                    long creditValue = await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
                     if (Group.IsCreditSystem)
                     {
                         var res = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "签到加分", trans);
@@ -84,7 +84,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     await trans.CommitAsync();
 
                     var result = $"{GetHeadCQ()}✅ {(isAuto ? "自动" : "")}签到成功！\n";
-                    result += Group.IsCreditSystem ? $"💎 {await UserInfo.GetCreditTypeAsync(GroupId, UserId)}：+{creditAdd}→{creditValue:N0}\n" : "";
+                    result += Group.IsCreditSystem ? $"💎 {{积分类型}}：+{creditAdd}→{creditValue:N0}\n" : "";
                     result += BuildSignedMessage(signTimes, signLevel, signTimesAll + 1);
                     return result;
                 }

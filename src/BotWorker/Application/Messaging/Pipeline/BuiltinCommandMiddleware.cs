@@ -27,12 +27,14 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (botMsg.IsCmd)
                 {
                     (botMsg.CmdName, botMsg.CmdPara) = BotMessage.GetCmdPara(botMsg.CurrentMessage, BotCmd.GetRegexCmd());
+                    context.Logger?.LogInformation("[BuiltinCommand] Identified command: {CmdName} for message {MessageId}", botMsg.CmdName, context.EventId);
 
                     // 如果是已迁移到插件的管理指令，则跳过内置处理，让插件系统处理
                     if (botMsg.CmdName.In("踢", "禁言", "取消禁言", "设置头衔", "开机", "关机", "设置欢迎语", "欢迎语", "改名提示", "拉黑", "取消拉黑", "黑名单", "被踢拉黑", "退群拉黑", "敏感词系统",
                         "领养宝宝", "我的宝宝", "宝宝改名", "宝宝学习", "宝宝打工", "宝宝互动", "宝宝商城", "购买", "拐卖宝宝说明", "开启宝宝系统", "关闭宝宝系统", "抛弃宝宝",
                         "求婚", "接受求婚", "拒绝求婚", "我要离婚", "办理结婚证", "办理离婚证", "我的婚姻", "婚姻面板", "发喜糖", "发红包", "吃喜糖", "购买婚纱", "购买婚戒", "我的对象", "另一半签到", "另一半抢楼", "另一半抢红包", "领取结婚福利", "我的甜蜜爱心", "赠送甜蜜爱心", "使用甜蜜抽奖", "甜蜜爱心说明"))
                     {
+                        context.Logger?.LogInformation("[BuiltinCommand] Skipping migrated command {CmdName} to plugins", botMsg.CmdName);
                         await next(context);
                         return;
                     }
@@ -40,8 +42,9 @@ namespace BotWorker.Application.Messaging.Pipeline
                     // 指令有效性检查
                     if (IsInvalidCommand(botMsg))
                     {
+                        context.Logger?.LogInformation("[BuiltinCommand] Invalid command format for {CmdName}, falling back to QA/AI", botMsg.CmdName);
                         botMsg.IsCmd = false;
-                        botMsg.CmdName = "闲聊";
+                        botMsg.CmdName = string.Empty;
                         botMsg.CmdPara = botMsg.CurrentMessage;
                     }
                     else
@@ -49,20 +52,19 @@ namespace BotWorker.Application.Messaging.Pipeline
                         if (botMsg.IsRefresh) botMsg.HandleRefresh();
                         else await botMsg.GetCmdResAsync();
 
-                        if (!string.IsNullOrEmpty(botMsg.Answer)) return;
+                        if (!string.IsNullOrEmpty(botMsg.Answer))
+                        {
+                            context.Logger?.LogInformation("[BuiltinCommand] Handled by GetCmdResAsync, Answer: {Answer}", botMsg.Answer);
+                            return;
+                        }
                     }
                 }
 
                 // 2. 确认指令状态
                 await botMsg.ConfirmCmdAsync();
-                if (!string.IsNullOrEmpty(botMsg.Answer)) return;
-
-                // 3. 默认降级处理
-                botMsg.CmdPara = botMsg.CurrentMessage;
-                await botMsg.GetCmdResAsync();
-
-                if (botMsg.IsRefresh && !string.IsNullOrEmpty(botMsg.Answer))
+                if (!string.IsNullOrEmpty(botMsg.Answer))
                 {
+                    context.Logger?.LogInformation("[BuiltinCommand] Handled by ConfirmCmdAsync, Answer: {Answer}", botMsg.Answer);
                     return;
                 }
             }

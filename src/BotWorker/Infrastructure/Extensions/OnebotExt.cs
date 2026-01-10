@@ -9,7 +9,7 @@ namespace BotWorker.Infrastructure.Extensions
     {
         public static long GetSelfId(this EventBase message)
         {            
-            message.Platform = message.Platform ?? Platforms.NapCat;
+            message.Platform ??= Platforms.QQ;
             if (message.Platform == Platforms.QQGuild)
                 return UserGuild.GetUserId(0, message.SelfId, message.GroupId);
             else if (message.Platform == Platforms.Weixin)

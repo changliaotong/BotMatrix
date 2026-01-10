@@ -33,10 +33,10 @@ namespace BotWorker.Modules.Games.Gift
 
         public static async Task<string> GetGiftResAsync(long botUin, long groupId, string groupName, long userId, string name, long qqGift, string giftName, int giftCount)
         {
-            if (giftName == "")
-                return $"{GiftFormat}\n\n{await Gift.GetGiftListAsync(groupId, userId)}";
+            if (giftName == "礼物")
+                return $"{GiftFormat}\n\n{await Gift.GetGiftListAsync(botUin, groupId, userId)}";
 
-            long giftId = giftName == "" ? await Gift.GetRandomGiftAsync(groupId, userId) : await Gift.GetGiftIdAsync(giftName);
+            long giftId = giftName == "" ? await Gift.GetRandomGiftAsync(botUin, groupId, userId) : await Gift.GetGiftIdAsync(giftName);
             if (giftId == 0)
                 return "不存在此礼物";
 
@@ -46,13 +46,13 @@ namespace BotWorker.Modules.Games.Gift
             long creditAdd = creditMinus / 2;
             long creditAddOwner = creditAdd / 2;
 
-            long credit_value = await UserInfo.GetCreditAsync(groupId, userId);
+            long credit_value = await UserInfo.GetCreditAsync(botUin, groupId, userId);
             if (credit_value < creditMinus)
                 return $"您的积分{credit_value}不足{creditMinus}";
 
             long robotOwner = await GroupInfo.GetGroupOwnerAsync(groupId);
             string ownerName = await GroupInfo.GetRobotOwnerNameAsync(groupId);
-            string creditName = await UserInfo.GetCreditTypeAsync(groupId, userId);
+            string creditName = await UserInfo.GetCreditTypeAsync(botUin, groupId, userId);
 
             await UserInfo.AppendUserAsync(botUin, groupId, qqGift, "");
 

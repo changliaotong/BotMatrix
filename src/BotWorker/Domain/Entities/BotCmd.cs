@@ -42,14 +42,23 @@ namespace BotWorker.Domain.Entities
 
         public static async Task EnsureCommandExistsAsync(string name, string text)
         {
-            if (!ExistsWhere($"CmdName = {name.Quotes()}"))
+            try
             {
-                await InsertAsync(new List<Cov>
+                if (!await ExistsWhereAsync($"CmdName = {name.Quotes()}"))
                 {
-                    new Cov("CmdName", name),
-                    new Cov("CmdText", text),
-                    new Cov("IsClose", 0)
-                });
+                    Console.WriteLine($"[BotCmd] Command '{name}' not found, inserting...");
+                    await InsertAsync(new List<Cov>
+                    {
+                        new Cov("CmdName", name),
+                        new Cov("CmdText", text),
+                        new Cov("IsClose", 0)
+                    });
+                    Console.WriteLine($"[BotCmd] Command '{name}' inserted.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BotCmd] Error ensuring command '{name}': {ex.Message}");
             }
         }
 

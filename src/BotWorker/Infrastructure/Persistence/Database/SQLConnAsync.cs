@@ -270,6 +270,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                         var item = new T();
                         foreach (var prop in properties)
                         {
+                            if (!prop.CanWrite) continue;
                             if (HasColumn(reader, prop.Name) && !reader.IsDBNull(reader.GetOrdinal(prop.Name)))
                             {
                                 prop.SetValue(item, SqlHelper.ConvertValue(reader[prop.Name], prop.PropertyType));
@@ -335,6 +336,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
                         foreach (var prop in props)
                         {
+                            if (!prop.CanWrite) continue;
                             var colName = SqlHelper.GetColumnName(prop);
 
                             int ordinal;

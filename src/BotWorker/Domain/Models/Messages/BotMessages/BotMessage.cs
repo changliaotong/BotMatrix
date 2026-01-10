@@ -28,6 +28,7 @@ public partial class BotMessage
         public string UserOpenId => User.UserOpenId;
         public string DisplayName { get; set; } = string.Empty;
         public string MsgId { get; set; } = string.Empty;
+        public long Time { get; set; } = 0;
         public bool IsSuperAdmin => BotInfo.IsSuperAdmin(UserId);
         public bool IsAtMe { get; set; } = false;
         public bool IsAtAll { get; set; } = false;
@@ -85,11 +86,22 @@ public partial class BotMessage
         public bool IsProxy { get; set; } = false;
         public bool IsSent { get; set; } = false;
 
+        public bool InGame() => Group.IsInGame == 1;
+
         public virtual async Task SendMusicAsync(string title, string artist, string jumpUrl, string coverUrl, string audioUrl)
         {
-            Answer = $"🎵 {title} - {artist}\n🔗 {audioUrl}";
+            if (IsQQ)
+            {
+                Answer = $"[CQ:music,type=custom,url={jumpUrl},audio={audioUrl},title={title},content={artist},image={coverUrl}]";
+            }
+            else
+            {
+                string coverPart = string.IsNullOrEmpty(coverUrl) ? "" : $"[CQ:image,file={coverUrl}]\n";
+                Answer = $"{coverPart}🎵 {title} - {artist}\n🔗 {audioUrl}";
+            }
             await SendMessageAsync();
         }
+
         private bool _isCancelProxy;
 
         public bool IsCancelProxy

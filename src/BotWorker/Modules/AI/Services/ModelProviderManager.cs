@@ -7,7 +7,7 @@ namespace BotWorker.Modules.AI.Services
 {
     public class ModelProviderManager
     {
-        private readonly Dictionary<string, IModelProvider> _providers = [];
+        private readonly Dictionary<string, IModelProvider> _providers = new(StringComparer.OrdinalIgnoreCase);
         private readonly ILogger<ModelProviderManager>? _logger;
         private static readonly Random _random = new();
 
@@ -25,16 +25,33 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
+                Console.WriteLine("[AI] Starting to load AI providers from database...");
+                _logger?.LogInformation("[AI] Starting to load AI providers from database...");
+
+                // 确保表存在
+                await LLMProvider.EnsureTableCreatedAsync();
+                await LLMModel.EnsureTableCreatedAsync();
+
                 var models = await LLMModel.GetAllActiveAsync();
                 var providers = await LLMProvider.GetAllActiveAsync();
 
-                if (providers == null) return;
+                if (providers == null || models == null)
+                {
+                    Console.WriteLine("[AI] No active providers or models found in database.");
+                    _logger?.LogWarning("[AI] No active providers or models found in database.");
+                    return;
+                }
+
+                Console.WriteLine($"[AI] Retrieved {models.Count} models and {providers.Count} providers from database.");
+                _logger?.LogInformation("[AI] Retrieved {ModelCount} models and {ProviderCount} providers from database.", 
+                    models.Count, providers.Count);
 
                 foreach (var provider in providers)
                 {
                     if (string.IsNullOrWhiteSpace(provider.ApiKey))
                     {
-                        _logger?.LogWarning("Provider {ProviderName} has empty API Key, skipping.", provider.Name);
+                        Console.WriteLine($"[AI] Provider {provider.Name} has empty API Key, skipping.");
+                        _logger?.LogWarning("[AI] Provider {ProviderName} has empty API Key, skipping.", provider.Name);
                         continue;
                     }
 
@@ -55,14 +72,16 @@ namespace BotWorker.Modules.AI.Services
 
                     if (apiProvider != null)
                     {
-                        _logger?.LogInformation("Registered AI Provider: {ProviderName} ({ProviderType})", provider.Name, provider.ProviderType);
+                        Console.WriteLine($"[AI] Registered AI Provider: {provider.Name} ({provider.ProviderType})");
+                        _logger?.LogInformation("[AI] Registered AI Provider: {ProviderName} ({ProviderType})", provider.Name, provider.ProviderType);
                         RegisterProvider(apiProvider);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to load AI providers from database");
+                Console.WriteLine($"[AI] Failed to load AI providers: {ex.Message}");
+                _logger?.LogError(ex, "[AI] Failed to load AI providers from database");
             }
         }
 

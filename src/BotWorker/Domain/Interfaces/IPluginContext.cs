@@ -14,6 +14,7 @@ namespace BotWorker.Domain.Interfaces
     public interface IPluginContext
     {
         // 基础信息
+        string EventId { get; }
         string Message { get; }
         string? GroupId { get; }
         string UserId { get; }

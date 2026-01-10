@@ -73,7 +73,6 @@ public partial class BotMessage : MetaData<BotMessage>
     public async Task<string> GetRecallCountAsync() => (await GroupEvent.GetRecallCountAsync(GroupId)).ToString();
     public async Task<string> GetEventCountAsync(GroupEventType eventType) => (await GroupEvent.GetEventCountAsync(GroupId, eventType.ToString())).ToString();
     public async Task<string> GetMenuResAsync() => await Task.FromResult(GetMenuRes());
-    public async Task<string> GetJokeResAsync() => await Task.FromResult(GetJokeRes());
     public async Task<string> GetRecallMsgResAsync() => await GetRecallMsgRes();
     public async Task<string> GetTestItAsync() => await Task.FromResult(GetTestIt());
     public async Task<string> GetShutupResAsync() => await Task.FromResult(GetShutupRes());

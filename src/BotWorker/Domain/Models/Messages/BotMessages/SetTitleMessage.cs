@@ -1,4 +1,4 @@
-﻿
+
 using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Models.Messages.BotMessages
@@ -24,6 +24,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (!IsGroup)
                 return "头衔功能仅限群内使用";
 
+            // 优先使用事件中的机器人权限，不依赖可能滞后的数据库群主信息
             if (!IsGuild && SelfPerm != 0)
                 return "我不是群主不能设置头衔";
 

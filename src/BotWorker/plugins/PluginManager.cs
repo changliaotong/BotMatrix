@@ -28,6 +28,7 @@ namespace BotWorker.Modules.Plugins
         private readonly IServiceProvider _serviceProvider;
         private readonly SessionManager _sessionManager;
         private readonly IEventNexus _eventNexus;
+        private readonly IOneBotApiClient _oneBot;
         private IPlugin? _currentLoadingPlugin;
 
         private FileSystemWatcher? _watcher;
@@ -53,7 +54,8 @@ namespace BotWorker.Modules.Plugins
             ILogger<PluginManager> logger,
             IServiceProvider serviceProvider,
             IConnectionMultiplexer redis,
-            IEventNexus eventNexus)
+            IEventNexus eventNexus,
+            IOneBotApiClient oneBot)
         {
             _aiService = aiService;
             _agentExecutor = agentExecutor;
@@ -62,6 +64,7 @@ namespace BotWorker.Modules.Plugins
             _logger = logger;
             _serviceProvider = serviceProvider;
             _eventNexus = eventNexus;
+            _oneBot = oneBot;
             _sessionManager = new SessionManager(redis);
 
             _reloadTimer = new System.Timers.Timer(3000); // 3秒防抖，与Go一致
@@ -71,14 +74,32 @@ namespace BotWorker.Modules.Plugins
 
         public async Task SendMessageAsync(string platform, string botId, string? groupId, string userId, string message)
         {
-            // 这里应该通过 OneBotApiClient 或 SignalR Hub 发送消息
-            // 暂时使用日志记录，后续接入实际发送逻辑
             _logger.LogInformation("[SendMessage] Platform: {Platform}, Bot: {BotId}, Group: {GroupId}, User: {UserId}, Message: {Message}", 
                 platform, botId, groupId, userId, message);
 
-            // TODO: 从 _serviceProvider 获取 OneBot 服务并发送
-            // var onebot = _serviceProvider.GetService<IOneBotApiClient>();
-            // if (onebot != null) { ... }
+            try
+            {
+                if (!string.IsNullOrEmpty(groupId))
+                {
+                    await _oneBot.SendActionAsync(platform, botId, "send_group_msg", new
+                    {
+                        group_id = groupId,
+                        message = message
+                    });
+                }
+                else
+                {
+                    await _oneBot.SendActionAsync(platform, botId, "send_private_msg", new
+                    {
+                        user_id = userId,
+                        message = message
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send message via OneBot API");
+            }
         }
 
         public async Task ScanPluginsAsync(string baseDir)
@@ -176,12 +197,6 @@ namespace BotWorker.Modules.Plugins
                             {
                                 var exePath = Path.Combine(pluginDir, config.Executable);
                                 plugin = new ProcessPlugin(config, exePath, _logger, pluginDir);
-                            }
-                            break;
-                        case "remote":
-                            if (!string.IsNullOrEmpty(config.Endpoint))
-                            {
-                                plugin = new RemotePlugin(config, config.Endpoint);
                             }
                             break;
                         default:
@@ -306,12 +321,23 @@ namespace BotWorker.Modules.Plugins
 
         public async Task<string> DispatchAsync(IPluginContext ctx)
         {
+            _logger.LogInformation("[Dispatch] EventType: {EventType}, UserId: {UserId}, GroupId: {GroupId}, Message: '{Message}', SkillCount: {SkillCount}", 
+                ctx.EventType, ctx.UserId, ctx.GroupId, ctx.RawMessage, _skills.Count);
+
             // 1. 处理通用事件分发
             if (_eventHandlers.TryGetValue(ctx.EventType, out var handlers))
             {
+                _logger.LogInformation("[Dispatch] Found {Count} event handlers for {EventType}", handlers.Count, ctx.EventType);
                 foreach (var handler in handlers)
                 {
-                    try { await handler(ctx); } catch (Exception ex) { _logger.LogError(ex, "Error in event handler for {EventType}", ctx.EventType); }
+                    try 
+                    { 
+                        await handler(ctx); 
+                    } 
+                    catch (Exception ex) 
+                    { 
+                        _logger.LogError(ex, "[Dispatch] Error in event handler for {EventType}", ctx.EventType); 
+                    }
                 }
             }
 
@@ -325,6 +351,7 @@ namespace BotWorker.Modules.Plugins
                 var session = await _sessionManager.GetSessionAsync(ctx.UserId, ctx.GroupId);
                 if (session != null)
                 {
+                    _logger.LogInformation("[Dispatch] Active session found for user {UserId}, Plugin: {PluginId}, Action: {Action}", ctx.UserId, session.PluginId, session.Action);
                     if (message == "取消")
                     {
                         await _sessionManager.ClearSessionAsync(ctx.UserId, ctx.GroupId);
@@ -340,6 +367,7 @@ namespace BotWorker.Modules.Plugins
                     {
                         if (message == session.ConfirmationCode)
                         {
+                            _logger.LogInformation("Session confirmation code matched for {UserId}", ctx.UserId);
                             // 验证码匹配，允许继续执行，并标记为已确认
                             ctx.IsConfirmed = true;
                             await _sessionManager.ClearSessionAsync(ctx.UserId, ctx.GroupId);
@@ -359,8 +387,7 @@ namespace BotWorker.Modules.Plugins
                         {
                             try
                             {
-                                // 直接将整条消息作为参数传递给 Handler，或者保持 args 为空
-                                // 插件会通过 ctx.SessionAction 和 ctx.SessionStep 识别这是会话响应
+                                _logger.LogInformation("[Dispatch] Message handled by session for user {UserId}, Plugin: {PluginId}", ctx.UserId, session.PluginId);
                                 return await targetSkill.Handler(ctx, Array.Empty<string>());
                             }
                             catch (Exception ex)
@@ -380,15 +407,9 @@ namespace BotWorker.Modules.Plugins
                         if (message.StartsWith(cmd, StringComparison.OrdinalIgnoreCase))
                         {
                             var args = message.Substring(cmd.Length).Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                            try
-                            {
-                                return await skill.Handler(ctx, args);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Error executing skill: {SkillName}", skill.Capability.Name);
-                                return $"执行错误: {ex.Message}";
-                            }
+                            _logger.LogInformation("[Dispatch] Command match: Skill '{SkillName}' matched command '{Command}'", skill.Capability.Name, cmd);
+                            var result = await skill.Handler(ctx, args);
+                            return result;
                         }
                     }
                 }
@@ -435,8 +456,10 @@ namespace BotWorker.Modules.Plugins
                 }
 
                 // 2.4 AI 兜底 (AI Fallback)
-                _logger.LogInformation("No explicit match found, falling back to AI for: {Message}", message);
-                return await _aiService.ChatWithContextAsync(message, ctx);
+                _logger.LogInformation("[Dispatch] No explicit match found, falling back to AI for: {Message}", message);
+                var aiResult = await _aiService.ChatWithContextAsync(message, ctx);
+                _logger.LogInformation("[Dispatch] AI result: {Result}", aiResult);
+                return aiResult;
             }
 
             return string.Empty;

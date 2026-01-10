@@ -23,12 +23,12 @@ namespace BotWorker.Application.Services
 
         public bool IsAdmin(BotMessage botMsg)
         {
-            return botMsg.UserPerm >= 2;
+            return botMsg.UserPerm <= 1;
         }
 
         public bool IsGroupOwner(BotMessage botMsg)
         {
-            return botMsg.UserId == botMsg.Group.RobotOwner;
+            return botMsg.UserId == botMsg.Group.GroupOwner || botMsg.UserId == botMsg.Group.RobotOwner;
         }
 
         public bool HaveSetupRight(BotMessage botMsg)

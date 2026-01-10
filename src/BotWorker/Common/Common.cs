@@ -17,6 +17,7 @@ namespace BotWorker.Core.Configurations
 
         public static string RetryMsgTooFast => _configuration?["Messages:RetryMsgTooFast"] ?? "速度太快了，请稍后再试";
         public static string YearOnlyMsg => _configuration?["Messages:YearOnlyMsg"] ?? "非年费版不能使用此功能";
+        public static string SetupUrl => _configuration?["sz84:SetupUrl"] ?? _url;
         public static long[] OfficalBots { get; set; } = [3889418604, 3889420782, 3889411042, 3889610970, 3889535978, 3889494926, 3889699720, 3889699721, 3889699722, 3889699723];
     }
 }

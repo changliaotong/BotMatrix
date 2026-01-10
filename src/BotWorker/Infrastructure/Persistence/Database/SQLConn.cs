@@ -36,6 +36,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             return DbProviderFactory.CreateParameter(name, value);
         }
 
+
         public static object? ExecScalar(string sql, IDataParameter[]? parameters = null)
         {
             using var conn = DbProviderFactory.CreateConnection();
@@ -524,9 +525,9 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 command.CommandText = sql;
                 command.Transaction = trans;
                 command.CommandTimeout = 60;
-                if (parameters != null)
+                var processedParameters = ProcessParameters(parameters);
+                if (processedParameters != null)
                 {
-                    var processedParameters = ProcessParameters(parameters);
                     foreach (var p in processedParameters) command.Parameters.Add(p);
                 }
                 return command.ExecuteNonQuery();

@@ -73,14 +73,24 @@ func InitDefaultRoleTemplates(db *gorm.DB) {
 	}
 
 	for _, t := range templates {
-		var count int64
-		db.Model(&models.DigitalRoleTemplate{}).Where("name = ?", t.Name).Count(&count)
-		if count == 0 {
+		var existing models.DigitalRoleTemplate
+		// 优先使用 GORM 的模型查询，它会自动处理列名映射
+		err := db.Where(&models.DigitalRoleTemplate{Name: t.Name}).First(&existing).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			clog.Error("查询岗位模板失败", zap.String("template", t.Name), zap.Error(err))
+			continue
+		}
+
+		if err == gorm.ErrRecordNotFound {
 			if err := db.Create(&t).Error; err != nil {
 				clog.Error("初始化岗位模板失败", zap.String("template", t.Name), zap.Error(err))
 			} else {
 				clog.Info("已初始化岗位模板", zap.String("template", t.Name))
 			}
+		} else {
+			// 如果已存在，可以选择更新（根据需求）
+			// 这里保持原样，仅记录日志
+			clog.Debug("岗位模板已存在", zap.String("template", t.Name))
 		}
 	}
 }

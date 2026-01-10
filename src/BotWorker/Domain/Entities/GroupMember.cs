@@ -73,7 +73,7 @@ namespace BotWorker.Domain.Entities
             if (coins_type == (int)CoinsLog.CoinsType.groupCredit && !await GroupInfo.GetIsCreditAsync(groupId))
                 return $"没有开启本群积分";
 
-            long credit_value = await UserInfo.GetCreditAsync(credit_group, qq);
+            long credit_value = await UserInfo.GetCreditAsync(botUin, credit_group, qq);
 
             if (cmdName == "充值")
             {
@@ -121,7 +121,7 @@ namespace BotWorker.Domain.Entities
         public static async Task<string> ExchangeCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coins_type, string cmdName, string cmdPara, long minus_credit, long coins_oper, long coins_qq)
         {
             long credit_group = groupId; // 简化处理，通常积分群就是当前群
-            long credit_value = await UserInfo.GetCreditAsync(credit_group, qq);
+            long credit_value = await UserInfo.GetCreditAsync(botUin, credit_group, qq);
             if (coins_type == (int)CoinsLog.CoinsType.groupCredit)
             { 
                 if (!await GroupInfo.GetIsCreditAsync(groupId))
@@ -384,7 +384,7 @@ namespace BotWorker.Domain.Entities
                 if (creditAdd < 10)
                     return $"至少{(cmdName == "上分" ? "上" : "下")}10分";
 
-                var creditValue = await UserInfo.GetCreditAsync(groupId, creditQQ);
+                var creditValue = await UserInfo.GetCreditAsync(botUin, groupId, creditQQ);
 
                 if (cmdName == "下分")
                 {
@@ -431,7 +431,7 @@ namespace BotWorker.Domain.Entities
         {
             if (withdrawAmount < 100) return "提现金额不能低于100";
 
-            long creditValue = await UserInfo.GetCreditAsync(groupId, userId);
+            long creditValue = await UserInfo.GetCreditAsync(botUin, groupId, userId);
             if (creditValue < withdrawAmount) return $"您的积分{creditValue}不足{withdrawAmount}";
 
             using var wrapper = await BeginTransactionAsync();

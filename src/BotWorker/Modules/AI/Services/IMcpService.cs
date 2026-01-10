@@ -16,6 +16,7 @@ namespace BotWorker.Modules.AI.Services
     {
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
         public MCPScope Scope { get; set; } = MCPScope.Global;
         public long OwnerId { get; set; }
     }

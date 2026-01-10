@@ -1,5 +1,8 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using Microsoft.Extensions.DependencyInjection;
+using BotWorker.Modules.Plugins;
+using BotWorker.Domain.Interfaces;
 
 namespace BotWorker.Application.Services
 {
@@ -16,12 +19,16 @@ namespace BotWorker.Application.Services
         private readonly string _pluginsDir;
         private FileSystemWatcher? _watcher;
 
+        private readonly IServiceProvider _serviceProvider;
+
         public PluginLoaderService(
             PluginManager pluginManager,
-            ILogger<PluginLoaderService> logger)
+            ILogger<PluginLoaderService> logger,
+            IServiceProvider serviceProvider)
         {
             _pluginManager = pluginManager;
             _logger = logger;
+            _serviceProvider = serviceProvider;
             _pluginsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins");
             
             if (!Directory.Exists(_pluginsDir))
@@ -55,9 +62,10 @@ namespace BotWorker.Application.Services
         {
             _logger.LogInformation("开始加载插�?..");
 
-            // 1. 加载当前程序集中的内置插�?
+            // 1. 加载当前程序集中的内置插件
             var builtInPlugins = Assembly.GetExecutingAssembly().GetTypes()
-                .Where(t => typeof(IPlugin).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
+                .Where(t => typeof(IPlugin).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
+                .Where(t => t != typeof(ProcessPlugin));
 
             foreach (var type in builtInPlugins)
             {
@@ -78,7 +86,7 @@ namespace BotWorker.Application.Services
         {
             try
             {
-                if (Activator.CreateInstance(type) is IPlugin plugin)
+                if (ActivatorUtilities.CreateInstance(_serviceProvider, type) is IPlugin plugin)
                 {
                     _logger.LogInformation("加载插件: {Name} ({Description})", plugin.Metadata.Name, plugin.Metadata.Description);
                     await _pluginManager.LoadPluginAsync(plugin);

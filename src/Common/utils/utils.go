@@ -119,9 +119,35 @@ func ToString(v any) string {
 		return strconv.FormatInt(val, 10)
 	case int32:
 		return strconv.FormatInt(int64(val), 10)
+	case bool:
+		return strconv.FormatBool(val)
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// ParseInt parses a string to int with a default value
+func ParseInt(s string, defaultValue int) int {
+	if s == "" {
+		return defaultValue
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
+// WriteJSON writes a JSON response with a status code
+func WriteJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
+// ReadJSON reads JSON from the request body
+func ReadJSON(r *http.Request, v any) error {
+	return json.NewDecoder(r.Body).Decode(v)
 }
 
 // ToBool converts any value to bool

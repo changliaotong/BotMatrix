@@ -90,7 +90,7 @@ namespace BotWorker.Domain.Entities
             string transferInfo)
         {
             // 1. 前置检查
-            long senderCredit = await GetCreditAsync(groupId, senderId);
+            long senderCredit = await GetCreditAsync(botUin, groupId, senderId);
             if (senderCredit < creditMinus)
                 return (-1, senderCredit, 0);
 
@@ -162,16 +162,12 @@ namespace BotWorker.Domain.Entities
         //读取积分
         public static async Task<long> GetCreditAsync(long botUin, long userId, IDbTransaction? trans = null)
         {
-            return await BotInfo.GetIsCreditAsync(botUin) ? await Friend.GetCreditAsync(botUin, userId, trans) : await GetLongAsync("credit", userId, null, trans);
+            return await BotInfo.GetIsCreditAsync(botUin) ? await Friend.GetCreditAsync(botUin, userId, trans) : await GetLongAsync("Credit", userId, null, trans);
         }
 
         //积分总额
-        public static async Task<long> GetTotalCreditAsync(long userId) => await GetCreditAsync(userId) + await GetSaveCreditAsync(userId);
-        public static long GetTotalCredit(long userId) => GetTotalCreditAsync(userId).GetAwaiter().GetResult();
-
-        public static async Task<long> GetTotalCreditAsync(long groupId, long qq) => await GetCreditAsync(groupId, qq) + await GetSaveCreditAsync(groupId, qq);
-        public static long GetTotalCredit(long groupId, long qq) => GetTotalCreditAsync(groupId, qq).GetAwaiter().GetResult();
-
+        public static async Task<long> GetTotalCreditAsync(long botUin, long userId) => await GetCreditAsync(botUin, userId) + await GetSaveCreditAsync(botUin, userId);
+        public static async Task<long> GetTotalCreditAsync(long botUin, long groupId, long userId) => await GetCreditAsync(botUin, groupId, userId) + await GetSaveCreditAsync(botUin, groupId, userId);
         public static async Task<long> GetSaveCreditAsync(long botUin, long userId)
         {
             return await BotInfo.GetIsCreditAsync(botUin)
@@ -228,7 +224,7 @@ namespace BotWorker.Domain.Entities
         //冻结积分 (重构异步版)
         public static async Task<int> FreezeCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditFreeze)
         {
-            long creditValue = await GetCreditAsync(groupId, qq);
+            long creditValue = await GetCreditAsync(botUin, groupId, qq);
             if (creditValue < creditFreeze) return -1;
 
             using var trans = await BeginTransactionAsync();
@@ -288,7 +284,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<long> GetCreditRankingAsync(long botUin, long groupId, long qq)
         {
-            long creditValue = await GetCreditAsync(groupId, qq);
+            long creditValue = await GetCreditAsync(botUin, groupId, qq);
             
             // 1. 优先检查本群积分
             if (await GroupInfo.GetIsCreditAsync(groupId))
@@ -312,12 +308,12 @@ namespace BotWorker.Domain.Entities
                 creditValue, groupId) + 1;
         }
 
-        public static long GetCreditRankingAll(long qq)
-            => GetCreditRankingAllAsync(qq).GetAwaiter().GetResult();
+        public static long GetCreditRankingAll(long botUin, long qq)
+            => GetCreditRankingAllAsync(botUin, qq).GetAwaiter().GetResult();
 
-        public static async Task<long> GetCreditRankingAllAsync(long qq)
+        public static async Task<long> GetCreditRankingAllAsync(long botUin, long qq)
         {
-            long totalCredit = await GetTotalCreditAsync(qq);
+            long totalCredit = await GetTotalCreditAsync(botUin, qq);
             return await CountWhereAsync(
                 "[Credit] + [SaveCredit] > {0}",
                 totalCredit) + 1;

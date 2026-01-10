@@ -25,10 +25,16 @@ public partial class BotMessage : MetaData<BotMessage>
         // 黑名单列表
         public async Task<string> GetGroupBlackListAsync()
         {
-            return await QueryResAsync($"SELECT {SqlTop(10)} BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC {SqlLimit(10)}",
-                            "{i} {0}\n") +
-                   "已拉黑人数：" + await BlackList.CountWhereAsync($"GroupId = {GroupId}") +
-                   "\n拉黑 + QQ\n删黑 + QQ";
+            var list = await QueryResAsync($"SELECT {SqlTop(10)} BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC {SqlLimit(10)}",
+                            "{i} {0}\n");
+            
+            var count = await BlackList.CountWhereAsync($"GroupId = {GroupId}");
+            
+            return (string.IsNullOrEmpty(list) ? "🌑 黑名单暂无记录\n" : $"🌑 黑名单列表 (前10):\n{list}") +
+                   $"👥 已拉黑人数：{count}\n" +
+                   "📝 命令提示：\n" +
+                   "拉黑 + QQ：将用户加入黑名单\n" +
+                   "解除拉黑 + QQ：将用户移出黑名单";
         }
 
         public string GetGroupBlackList() => GetGroupBlackListAsync().GetAwaiter().GetResult();
@@ -39,7 +45,7 @@ public partial class BotMessage : MetaData<BotMessage>
             IsCancelProxy = true;
 
             if (CmdName == "清空黑名单")
-                return GetClearBlack();
+                return await GetClearBlackAsync();
 
             if (CmdPara.IsNull())                            
                 return await GetGroupBlackListAsync();            
@@ -63,7 +69,7 @@ public partial class BotMessage : MetaData<BotMessage>
         }
 
         // 清空黑名单
-        public string GetClearBlack()
+        public async Task<string> GetClearBlackAsync()
         {
             if (!IsRobotOwner())
                 return OwnerOnlyMsg;
@@ -73,7 +79,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return "黑名单已为空，无需清空";
 
             if (!IsConfirm && blackCount > 10)
-                return ConfirmMessage($"清空黑名单 人数{blackCount}");
+                return await ConfirmMessage($"清空黑名单 人数{blackCount}");
 
             return BlackList.DeleteAll(GroupId) == -1
                 ? RetryMsg

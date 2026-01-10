@@ -17,6 +17,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (Domain.Entities.BlackList.IsSystemBlack(botMsg.UserId))
                 {
                     botMsg.Answer = $"检测到黑名单用户 {botMsg.UserId}，已拦截其请求。";
+                    context.Logger?.LogInformation("[Blacklist] Intercepted system black user {UserId}, message {MessageId}", botMsg.UserId, context.EventId);
                     if (botMsg.IsGroup)
                     {
                          await botMsg.KickOutAsync(botMsg.SelfId, botMsg.RealGroupId, botMsg.UserId);
@@ -27,6 +28,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 // 用户黑名单拦截(参考原 HandleBlackWarnAsync)
                 if (botMsg.IsBlack)
                 {
+                    context.Logger?.LogInformation("[Blacklist] Intercepted black user {UserId}, message {MessageId}", botMsg.UserId, context.EventId);
                     if (botMsg.IsGroup)
                     {
                         // 群聊：如果权限足够则踢人
@@ -55,6 +57,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 // 3. 用户灰名单拦截
                 if (botMsg.IsGrey)
                 {
+                    context.Logger?.LogInformation("[Blacklist] Intercepted grey user {UserId}, message {MessageId}", botMsg.UserId, context.EventId);
                     return; // 灰名单静默拦截
                 }
 
@@ -64,6 +67,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                     await botMsg.GetKeywordWarnAsync();
                     if (!string.IsNullOrEmpty(botMsg.Answer))
                     {
+                        context.Logger?.LogInformation("[Blacklist] Intercepted keyword warn for user {UserId}, message {MessageId}", botMsg.UserId, context.EventId);
                         botMsg.IsRecall = botMsg.Group.IsRecall;
                         botMsg.RecallAfterMs = botMsg.Group.RecallTime * 1000;
                         return; // 命中了敏感词拦截，停止后续插件执行

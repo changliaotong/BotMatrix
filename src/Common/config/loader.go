@@ -19,7 +19,13 @@ var (
 	ENABLE_SKILL = true
 	REDIS_ADDR   = "localhost:6379"
 	REDIS_PWD    = ""
+	resolvedPath = "" // Store the resolved path
 )
+
+// GetResolvedConfigPath returns the path to the loaded config file
+func GetResolvedConfigPath() string {
+	return resolvedPath
+}
 
 // Redis Key constants
 const (
@@ -37,12 +43,12 @@ const (
 
 // InitConfig initializes the global configuration
 func InitConfig(path string) error {
-	resolvedPath := path
-	if resolvedPath == "" {
+	path_to_load := path
+	if path_to_load == "" {
 		// Try current directory
 		if _, err := os.Stat(CONFIG_FILE); err == nil {
-			resolvedPath = CONFIG_FILE
-			log.Printf("[DEBUG] Found config in current dir: %s", resolvedPath)
+			path_to_load = CONFIG_FILE
+			log.Printf("[DEBUG] Found config in current dir: %s", path_to_load)
 		} else {
 			// Try project root (assuming we are in a subfolder of BotMatrix)
 			cwd, _ := os.Getwd()
@@ -53,17 +59,18 @@ func InitConfig(path string) error {
 			if rootPath != "" {
 				testPath := filepath.Join(rootPath, CONFIG_FILE)
 				if _, err := os.Stat(testPath); err == nil {
-					resolvedPath = testPath
-					log.Printf("[DEBUG] Found config in root: %s", resolvedPath)
+					path_to_load = testPath
+					log.Printf("[DEBUG] Found config in root: %s", path_to_load)
 				}
 			}
 		}
 	}
 
-	if resolvedPath == "" {
-		resolvedPath = CONFIG_FILE // fallback
+	if path_to_load == "" {
+		path_to_load = CONFIG_FILE // fallback
 	}
 
+	resolvedPath = path_to_load
 	loadConfigFromFile(resolvedPath)
 	loadConfigFromEnv()
 
@@ -157,4 +164,13 @@ func loadConfigFromEnv() {
 	if val := os.Getenv("AI_EMBEDDING_MODEL"); val != "" {
 		GlobalConfig.AIEmbeddingModel = val
 	}
+}
+
+// SaveConfig saves the global configuration to the config file
+func SaveConfig(cfg *AppConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(CONFIG_FILE, data, 0644)
 }

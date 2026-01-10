@@ -1,4 +1,4 @@
-﻿using BotWorker.Common;
+using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Entities;
@@ -14,9 +14,8 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             if (cityName.IsNull())
             {
                 cityName = User.CityName ?? "";
-                return cityName == ""
-                    ? "命令格式：天气 + 城市名 例如：\n天气 深圳\n设置城市 北京"
-                    : await GetWeatherResAsync(cityName);
+                if (cityName == "") cityName = "深圳";
+                return await GetWeatherResAsync(cityName);
             }
 
             string? _city_name = cityName.RegexReplace(Regexs.Province, "");

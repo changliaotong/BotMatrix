@@ -17,7 +17,11 @@ namespace BotWorker.Plugins
     public class DialogDemoPlugin : IPlugin
     {
         private IRobot? _robot;
-        private readonly ILogger<DialogDemoPlugin> _logger;
+        private readonly ILogger<DialogDemoPlugin>? _logger;
+
+        public DialogDemoPlugin()
+        {
+        }
 
         public DialogDemoPlugin(ILogger<DialogDemoPlugin> logger)
         {
@@ -61,7 +65,7 @@ namespace BotWorker.Plugins
             {
                 var content = ctx.Message;
                 // 这里可以存入数据库
-                _logger.LogInformation("收到来自 {User} 的反馈: {Content}", ctx.UserId, content);
+                _logger?.LogInformation("收到来自 {User} 的反馈: {Content}", ctx.UserId, content);
                 
                 await _robot!.Sessions.ClearSessionAsync(ctx.UserId, ctx.GroupId);
                 return "✅ 感谢您的反馈！我们已记录。";

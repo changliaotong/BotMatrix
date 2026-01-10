@@ -5,7 +5,7 @@ namespace BotWorker.Common.Data
         public enum Platform
         {
             Mirai = 0, 
-            NapCat = 1,
+            QQ = 1,
             Weixin = 2,
             Public = 3,
             Guild = 4,

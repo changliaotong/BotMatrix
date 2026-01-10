@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using BotWorker.Common;
 
 namespace BotWorker.Common.Extensions
 {
@@ -511,7 +512,8 @@ namespace BotWorker.Common.Extensions
             string res = msg;
             if (!res.Contains(".sz84.com") && !res.Contains("i.y.qq.com/n2/m/playsong")
                 && !res.Contains("music.163.com/#/song") && !res.Contains(".qq.com/51437810")
-                && !res.Contains(".qq.com/1653346663") && !res.Contains("mp.weixin.qq.com/"))
+                && !res.Contains(".qq.com/1653346663") && !res.Contains("mp.weixin.qq.com/")
+                && !res.Contains(".qlogo.cn"))
             {
                 MatchEvaluator myEvaluator = new(ReplaceEvaluator);
                 res = res.RegexReplace(Regexs.DirtyWords, myEvaluator);
@@ -612,8 +614,10 @@ namespace BotWorker.Common.Extensions
         {
             if (text == null)
                 return "null";
-            else
-                return $"'{(text.IsNull() ? "" : text.Trim().Replace("'", "''"))}'";
+            
+            // 为 SQL Server 添加 N 前缀以支持 Unicode (nvarchar)
+            string prefix = GlobalConfig.DbType == DatabaseType.SqlServer ? "N" : "";
+            return $"{prefix}'{(text.IsNull() ? "" : text.Trim().Replace("'", "''"))}'";
         }
 
         /// 替换单引号用于sql

@@ -11,7 +11,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return CreditSystemClosed;
 
             if (CmdPara == "")
-                return "📄 命令格式：卖分 + 数值\n📌 使用示例：卖分 1000\n💎 超级积分：10,000→4R\n🎁 普通积分：10,000→1R\n📦 您的{积分类型}：{积分}";
+                return "📄 命令格式：卖分 + 数值\n📌 使用示例：卖分 1000\n💎 超级积分：10,000→4R\n🎁 普通积分：10,000→1R\n📦 您的{{积分类型}}：{{积分}}";
 
             if (BotInfo.GetIsCredit(SelfId))
                 return "本机积分不能兑换余额";
@@ -26,11 +26,11 @@ public partial class BotMessage : MetaData<BotMessage>
             if (creditMinus < 1000)
                 return "至少需要1000分";
 
-            long creditValue = UserInfo.GetCredit(GroupId, UserId);
+            long creditValue = UserInfo.GetCredit(SelfId, GroupId, UserId);
             if (creditValue < creditMinus)
-                return $"您只有{creditValue}分";
+                return $"您只有{creditValue:N0}分";
 
-            return "您无权使用此命令";
+            return $"✅ 卖出成功！\n💎 {{积分类型}}：-{creditMinus:N0}→{creditValue - creditMinus:N0}\n💳 余额：...";
 
             //creditValue -= creditMinus;
             //decimal balanceValue = GetBalance(userId);
@@ -88,7 +88,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             if (CmdName == "存分")
             {
-                credit_oper = credit_oper == 0 ? await UserInfo.GetCreditAsync(GroupId, UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetCreditAsync(SelfId, GroupId, UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可存";
 
@@ -97,7 +97,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
             else if (CmdName == "取分")
             {
-                credit_oper = credit_oper == 0 ? await UserInfo.GetSaveCreditAsync(GroupId, UserId) : credit_oper;
+                credit_oper = credit_oper == 0 ? await UserInfo.GetSaveCreditAsync(SelfId, GroupId, UserId) : credit_oper;
                 if (credit_oper == 0)
                     return "您没有积分可取";
 
@@ -110,8 +110,8 @@ public partial class BotMessage : MetaData<BotMessage>
         //存取分 (异步重构版)
         public async Task<(int Result, long CreditValue, long CreditSave, string Res)> DoSaveCreditAsync(long creditOper)
         {
-            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
-            long creditSave = await UserInfo.GetSaveCreditAsync(GroupId, UserId);
+            long creditValue = await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
+            long creditSave = await UserInfo.GetSaveCreditAsync(SelfId, GroupId, UserId);
             long credit_oper2 = creditOper;
             string cmdName = "存分";
             string res = "";
@@ -153,7 +153,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 UserInfo.SyncCacheField(UserId, GroupId, "Credit", creditValue);
                 UserInfo.SyncCacheField(UserId, GroupId, "SaveCredit", creditSave);
 
-                res = $"✅ {cmdName}：{credit_oper2}\n" +
+                res = $"✅ {cmdName}：{credit_oper2:N0}\n" +
                     $"💰 {{积分类型}}：{creditValue:N0}\n" +
                     $"🏦 已存积分：{creditSave:N0}\n" +
                     $"📈 积分总额：{creditValue + creditSave:N0}";
@@ -270,7 +270,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
             return i == -1
                 ? RetryMsg
-                : $"✅ 打赏成功！\n🎉 打赏积分：{rewardCredit:N0}{transferFee:N0}\n🎯 对方积分：{receiverCredit:N0}\n🙋 您的积分：{senderCredit:N0}";
+                : $"✅ 打赏成功！\n🎉 打赏{{积分类型}}：{rewardCredit:N0}{transferFee:N0}\n🎯 对方{{积分类型}}：{receiverCredit:N0}\n🙋 您的{{积分类型}}：{senderCredit:N0}";
         }
 
         public long GetCredit()
@@ -285,7 +285,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!IsBlackSystem && (IsPublic || IsGuild || IsRealProxy)) return "";
             
             var res = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, -creditMinus, creditInfo);
-            return res.Result == -1 ? "" : $"\n💎 积分：-{creditMinus}，累计：{res.CreditValue}";
+            return res.Result == -1 ? "" : $"\n💎 {{积分类型}}：-{creditMinus}，累计：{res.CreditValue}";
         }
 
         public string MinusCreditRes(long creditMinus, string creditInfo)
