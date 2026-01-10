@@ -1,13 +1,13 @@
 ﻿using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 
-namespace sz84.Infrastructure.Extensions.Text
+namespace BotWorker.Infrastructure.Extensions.Text
 {
     /// <summary>
     /// Path-access json property
     /// <remarks>A json converter must be attached on a class</remarks>
     /// </summary>
-    public class JsonPathConverter : JsonConverter
+    public class JsonPathConverter : Newtonsoft.Json.JsonConverter
     {
         public override object? ReadJson(JsonReader reader, Type objectType,
             object? existingValue, JsonSerializer serializer)

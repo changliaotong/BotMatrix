@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace sz84.Infrastructure.Extensions.IO
+namespace BotWorker.Infrastructure.Extensions.IO
 {
     /// <summary>
     /// Handle FileInfo in a more convenient way

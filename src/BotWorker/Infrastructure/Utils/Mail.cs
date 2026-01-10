@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using System.Net.Mail;
 
-namespace sz84.Infrastructure.Utils
+namespace BotWorker.Infrastructure.Utils
 {
     public class Mail
     {

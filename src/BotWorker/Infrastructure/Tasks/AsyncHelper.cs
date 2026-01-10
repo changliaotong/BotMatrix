@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 
-namespace sz84.Infrastructure.Tasks
+namespace BotWorker.Infrastructure.Tasks
 {
     public static class AsyncHelper
     {

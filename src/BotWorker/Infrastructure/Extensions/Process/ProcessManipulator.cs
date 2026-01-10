@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace sz84.Infrastructure.Extensions.Process
+namespace BotWorker.Infrastructure.Extensions.Process
 {
     using System.Diagnostics;
 

@@ -1,6 +1,6 @@
 ﻿using Markdig;
 
-namespace sz84.Infrastructure.Markdown
+namespace BotWorker.Infrastructure.Markdown
 {   
     public static class MarkdownHelper
     {

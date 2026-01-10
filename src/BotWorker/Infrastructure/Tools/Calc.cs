@@ -1,9 +1,7 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
-using sz84.Core.MetaDatas;
-using sz84.Core.Database;
 
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class Calc : MetaData<Calc>
     {

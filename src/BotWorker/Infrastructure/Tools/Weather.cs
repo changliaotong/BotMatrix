@@ -1,9 +1,7 @@
 using Newtonsoft.Json.Linq;
 using System.Net;
-using sz84.Core.MetaDatas;
-using sz84.Infrastructure.Utils;
 
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class Weather : MetaData<Weather>
     {

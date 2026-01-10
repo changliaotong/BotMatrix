@@ -1,15 +1,24 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using BotWorker.Services;
-using BotWorker.Core.Plugin;
-using sz84.Core.Services;
-using sz84.Infrastructure.Caching;
 using Serilog;
-using Microsoft.EntityFrameworkCore;
-using sz84.Infrastructure.Background;
+using StackExchange.Redis;
+using BotWorker.Application.Messaging.Pipeline;
+using BotWorker.Common.Config;
+using BotWorker.Application.Messaging.Handlers;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Modules.Plugins;
+using BotWorker.Application.Services;
+using BotWorker.Modules.AI.Services;
+using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Providers;
+using BotWorker.Infrastructure.Persistence.Database;
+using BotWorker.Infrastructure.Utils;
+using BotWorker.Modules.AI.Tools;
+using BotWorker.Infrastructure.Caching;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 初始化静态配置
+BotWorker.Common.GlobalConfig.Initialize(builder.Configuration);
+AppConfig.Initialize(builder.Configuration);
 
 // 配置 Serilog
 Log.Logger = new LoggerConfiguration()
@@ -20,25 +29,115 @@ builder.Host.UseSerilog();
 // 添加基础服务
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker.Infrastructure.SignalR.HubLoggingFilter>();
 builder.Services.AddHttpClient();
 
-// 注册数据库
-builder.Services.AddDbContext<BotDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
 // 注册 Redis
-builder.Services.AddSingleton<EntityCacheHelper>(sp => 
-    new EntityCacheHelper(builder.Configuration.GetConnectionString("Redis") ?? "localhost"));
+var redisHost = builder.Configuration["redis:host"] ?? "localhost";
+var redisPort = builder.Configuration["redis:port"] ?? "6379";
+var redisConn = $"{redisHost}:{redisPort},abortConnect=false";
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConn));
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+
+builder.Services.AddSingleton<IKnowledgeBaseService, BotWorker.Modules.AI.Plugins.KnowledgeBaseService>(sp => 
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+    httpClient.BaseAddress = new Uri(AppConfig.KbApiUrl ?? "http://localhost:5000");
+    return new BotWorker.Modules.AI.Plugins.KnowledgeBaseService(httpClient);
+});
 
 // 注册核心业务服务
-builder.Services.AddSingleton<PluginManager>();
+builder.Services.AddSingleton<IEventNexus, EventNexus>();
+builder.Services.AddSingleton<IToolAuditService, ToolAuditService>();
+builder.Services.AddSingleton<LLMApp>();
+builder.Services.AddSingleton<IMcpService, MCPManager>();
+builder.Services.AddSingleton<IRagService, RagService>();
+builder.Services.AddSingleton<IAIService, AIService>();
+builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
+builder.Services.AddSingleton<II18nService, I18nService>();
+builder.Services.AddSingleton<IRobot, PluginManager>();
+builder.Services.AddSingleton<PluginManager>(sp => (PluginManager)sp.GetRequiredService<IRobot>());
 builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();
 builder.Services.AddSingleton<IMCPHost, PluginMcpHost>();
 
+// 注册中间件
+builder.Services.AddSingleton<ExceptionMiddleware>();
+builder.Services.AddSingleton<FriendlyMessageMiddleware>();
+builder.Services.AddTransient<PluginMiddleware>();
+builder.Services.AddTransient<BlacklistMiddleware>();
+builder.Services.AddTransient<PreProcessMiddleware>();
+builder.Services.AddTransient<MaintenanceMiddleware>();
+builder.Services.AddTransient<SecretSignalMiddleware>();
+builder.Services.AddTransient<StatisticsMiddleware>();
+builder.Services.AddTransient<VipMiddleware>();
+builder.Services.AddTransient<SetupMiddleware>();
+builder.Services.AddTransient<PowerStatusMiddleware>();
+builder.Services.AddTransient<MediaTypeMiddleware>();
+builder.Services.AddTransient<BuiltinCommandMiddleware>();
+builder.Services.AddSingleton<AiMiddleware>();
+builder.Services.AddTransient<AutoSignInMiddleware>();
+
+  // 注册指令处理器
+   builder.Services.AddSingleton<AdminCommandHandler>();
+   builder.Services.AddSingleton<SetupCommandHandler>();
+   builder.Services.AddSingleton<HotCommandHandler>();
+   builder.Services.AddSingleton<GameCommandHandler>();
+
+  // 注册并配置 Pipeline
+builder.Services.AddSingleton<MessagePipeline>(sp => 
+{
+    var pipeline = new MessagePipeline(sp);
+    // 1. 全局异常处理
+    pipeline.Use(sp.GetRequiredService<ExceptionMiddleware>());
+    // 2. 最终消息加工
+    pipeline.Use(sp.GetRequiredService<FriendlyMessageMiddleware>());
+    // 3. 消息清洗与预处理
+    pipeline.Use(sp.GetRequiredService<PreProcessMiddleware>());
+    // 4. 系统级拦截 (维护中)
+    pipeline.Use(sp.GetRequiredService<MaintenanceMiddleware>());
+    // 5. 全局暗语 (状态查询)
+    pipeline.Use(sp.GetRequiredService<SecretSignalMiddleware>());
+    // 6. 安全级拦截 (黑名单)
+    pipeline.Use(sp.GetRequiredService<BlacklistMiddleware>());
+    // 7. 数据统计 (副作用操作)
+    pipeline.Use(sp.GetRequiredService<StatisticsMiddleware>());
+    // 8. 权限与VIP检查
+    pipeline.Use(sp.GetRequiredService<VipMiddleware>());
+    // 9. 管理级指令 (不受开关机限制)
+    pipeline.Use(sp.GetRequiredService<SetupMiddleware>());
+    // 10. 状态级拦截 (开关机状态检查)
+    pipeline.Use(sp.GetRequiredService<PowerStatusMiddleware>());
+    // 11. 媒体类型处理 (图片/文件等)
+    pipeline.Use(sp.GetRequiredService<MediaTypeMiddleware>());
+    // 12. 核心内置指令 (踢人/禁言/普通指令)
+    pipeline.Use(sp.GetRequiredService<BuiltinCommandMiddleware>());
+    // 13. AI/智能体
+    pipeline.Use(sp.GetRequiredService<AiMiddleware>());
+    // 14. 自动化业务 (自动签到)
+    pipeline.Use(sp.GetRequiredService<AutoSignInMiddleware>());
+    // 15. 业务插件级分发 (普通插件)
+    pipeline.Use(sp.GetRequiredService<PluginMiddleware>());
+    return pipeline;
+});
+
 // 注册启动时加载插件的任务
-builder.Services.AddHostedService<StartupPluginLoader>();
+builder.Services.AddHostedService<StartupLoader>();
 
 var app = builder.Build();
+
+// 初始化 MetaData 缓存
+BotWorker.Infrastructure.Persistence.ORM.MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
+
+// 注入插件管理器到 BotMessage
+BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
+BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
+
+// 检查是否为测试模式
+if (args.Contains("--test"))
+{
+    await BotWorker.TestConsole.RunAsync(builder.Configuration);
+    return;
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -51,11 +150,21 @@ app.MapHub<ChatHub>("/chatHub");
 
 app.Run();
 
-// 简单的启动插件加载器
-public class StartupPluginLoader(IPluginLoaderService loaderService) : BackgroundService
+// 简单的启动加载器
+public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // 0. 确保内置指令存在
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("开启租赁", "开启租赁");
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
+        await BotWorker.Domain.Entities.BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");
+
+        // 1. 初始化 AI 提供商
+        await llmApp.InitializeAsync();
+        
+        // 2. 加载插件
         await loaderService.LoadAllPluginsAsync();
     }
 }

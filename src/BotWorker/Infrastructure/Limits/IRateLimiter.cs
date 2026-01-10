@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Limits
+﻿namespace BotWorker.Infrastructure.Limits
 {
     // IRateLimiter.cs
     public interface IRateLimiter

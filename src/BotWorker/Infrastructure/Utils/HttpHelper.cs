@@ -1,8 +1,7 @@
 using System.Net;
 using System.Text;
-using BotWorker.Common;
 
-namespace sz84.Infrastructure.Utils
+namespace BotWorker.Infrastructure.Utils
 {
     public static class HttpHelper
     {
@@ -16,7 +15,7 @@ namespace sz84.Infrastructure.Utils
             }
             catch (Exception e)
             {
-                Common.ErrorMessage($"\nException Caught!\nMessage :{e.Message}");
+                Logger.Error($"\nException Caught!\nMessage :{e.Message}");
                 return "";
             }
         }

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class Retirement
     {

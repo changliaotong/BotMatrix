@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using sz84.Core.Services;
+using BotWorker.Core.Services;
 
-namespace sz84.Infrastructure.SignalR
+namespace BotWorker.Infrastructure.SignalR
 {
     public static class SignalRHelper
     {

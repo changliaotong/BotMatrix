@@ -1,8 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using sz84.Core.Interfaces;
-
-namespace sz84.Infrastructure.Background
+﻿namespace BotWorker.Infrastructure.Background
 {
     public class QueuedHostedService(IBackgroundTaskQueue taskQueue, ILogger<QueuedHostedService> logger) : BackgroundService
     {

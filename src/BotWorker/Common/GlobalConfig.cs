@@ -2,12 +2,19 @@ using Microsoft.Extensions.Configuration;
 
 namespace BotWorker.Common
 {
+    public enum DatabaseType
+    {
+        SqlServer,
+        PostgreSql
+    }
+
     public static class GlobalConfig
     {
         private static IConfiguration? _configuration;
 
         public static JwtSettings Jwt { get; private set; } = new();
         public static string ConnString { get; set; } = string.Empty;
+        public static DatabaseType DbType { get; set; } = DatabaseType.SqlServer;
         public static string RedisConnection { get; set; } = string.Empty;
         public static string SignalRConnString { get; set; } = string.Empty;
         public static string KnowledgeBaseConnection { get; set; } = string.Empty;
@@ -19,6 +26,19 @@ namespace BotWorker.Common
 
             Jwt = config.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
             ConnString = config.GetConnectionString("DefaultConnection") ?? string.Empty;
+            Console.WriteLine($"[CONFIG INFO] Database connection string loaded. Length: {ConnString.Length}");
+            if (ConnString.Length > 0)
+            {
+                var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = ConnString };
+                if (builder.TryGetValue("Server", out var server))
+                {
+                    Console.WriteLine($"[CONFIG INFO] Database Server: {server}");
+                }
+            }
+            if (Enum.TryParse<DatabaseType>(config["DatabaseType"], true, out var dbType))
+            {
+                DbType = dbType;
+            }
             RedisConnection = config.GetConnectionString("RedisConnection") ?? string.Empty;
             SignalRConnString = config["SignalR:HubUrl"] ?? string.Empty;
             KnowledgeBaseConnection = config.GetConnectionString("KnowledgeBaseConnection") ?? string.Empty;

@@ -1,6 +1,6 @@
-﻿using sz84.Core.MetaDatas;
+using BotWorker.Infrastructure.Persistence.ORM;
 
-namespace sz84.Infrastructure.Tools
+namespace BotWorker.Infrastructure.Tools
 {
     public class Todo : MetaData<Todo>
     {

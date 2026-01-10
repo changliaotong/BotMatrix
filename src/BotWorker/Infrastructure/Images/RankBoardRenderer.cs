@@ -5,7 +5,7 @@ using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-namespace sz84.Infrastructure.Images;
+namespace BotWorker.Infrastructure.Images;
 
 public class RankBoardRenderer
 {

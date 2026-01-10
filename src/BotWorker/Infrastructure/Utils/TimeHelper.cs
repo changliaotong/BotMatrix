@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Utils
+﻿namespace BotWorker.Infrastructure.Utils
 {
     class TimeHelper
     {       

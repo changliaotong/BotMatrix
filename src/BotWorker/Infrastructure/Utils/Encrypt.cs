@@ -4,7 +4,7 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 using BotWorker.Common;
 
-namespace sz84.Infrastructure.Utils
+namespace BotWorker.Infrastructure.Utils
 {
     public static class Encrypt
     {
@@ -428,7 +428,7 @@ namespace sz84.Infrastructure.Utils
             }
             catch (Exception ex)
             {
-                Common.ErrorMessage($"RSA解密出错:{ex.Message}");
+                ErrorMessage($"RSA解密出错:{ex.Message}");
                 return text;
             }
         }
@@ -507,7 +507,7 @@ namespace sz84.Infrastructure.Utils
             }
             catch (Exception ex)
             {
-                Common.ErrorMessage($"RSA解密2出错:{ex.Message}");
+                ErrorMessage($"RSA解密2出错:{ex.Message}");
                 return text;
             }
         }

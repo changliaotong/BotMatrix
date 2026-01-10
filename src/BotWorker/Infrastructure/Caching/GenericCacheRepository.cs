@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Caching
+﻿namespace BotWorker.Infrastructure.Caching
 {
     public class GenericCacheRepository<T> : ICacheRepository<T>
     {

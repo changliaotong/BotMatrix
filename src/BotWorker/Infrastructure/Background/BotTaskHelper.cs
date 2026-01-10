@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using sz84.Bots.BotMessages;
-using sz84.Core.Interfaces;
+using BotWorker.Domain.Models.Messages.BotMessages;
+using BotWorker.Domain.Interfaces;
 
-namespace sz84.Infrastructure.Background
+namespace BotWorker.Infrastructure.Background
 {
     public static class BotTaskHelper
     {

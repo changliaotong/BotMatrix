@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
-using sz84.Core.Services;
+using BotWorker.Core.Services;
 
-namespace sz84.Infrastructure.SignalR
+namespace BotWorker.Infrastructure.SignalR
 {
     public class RedisUserConnectionManager : IUserConnectionManager
     {

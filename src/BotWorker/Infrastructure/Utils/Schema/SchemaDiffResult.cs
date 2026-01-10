@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Utils.Schema;
+﻿namespace BotWorker.Infrastructure.Utils.Schema;
 
 public class SchemaDiffResult
 {

@@ -1,8 +1,6 @@
 ﻿using System.Threading.Channels;
-using sz84.Core.Interfaces;
 
-
-namespace sz84.Infrastructure.Background
+namespace BotWorker.Infrastructure.Background
 {
     public class BackgroundTaskQueue : IBackgroundTaskQueue
     {

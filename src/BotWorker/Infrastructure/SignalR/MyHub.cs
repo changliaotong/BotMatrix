@@ -1,17 +1,17 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
-using sz84.Agents.Plugins;
-using sz84.Infrastructure.Caching;
+using BotWorker.Modules.AI.Plugins;
+using BotWorker.Infrastructure.Caching;
 
-namespace sz84.Infrastructure.SignalR
+namespace BotWorker.Infrastructure.SignalR
 {
-    public class MyHub(ICacheService cache, KnowledgeBaseService qaService, IUserConnectionManager userConnectionManager, ILogger<MyHub> logger) : Hub
+    public class MyHub(ICacheService cache, KnowledgeBaseService qaService, IUserConnectionManager userConnectionManager, Microsoft.Extensions.Logging.ILogger<MyHub> logger) : Hub
     {
         private readonly IUserConnectionManager _userConnectionManager = userConnectionManager;
         public readonly ICacheService _cache = cache;
         public readonly KnowledgeBaseService _qaService = qaService;
-        public readonly ILogger<MyHub> _logger = logger;
+        public readonly Microsoft.Extensions.Logging.ILogger<MyHub> _logger = logger;
 
 
         public static async Task NotifyUpgrade(IHubContext<MyHub> context)

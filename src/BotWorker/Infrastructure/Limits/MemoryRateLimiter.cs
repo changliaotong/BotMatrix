@@ -1,4 +1,4 @@
-﻿namespace sz84.Infrastructure.Limits
+﻿namespace BotWorker.Infrastructure.Limits
 {
     // MemoryRateLimiter.cs
     public class MemoryRateLimiter : IRateLimiter
