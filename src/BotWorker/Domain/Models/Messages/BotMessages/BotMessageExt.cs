@@ -59,8 +59,8 @@ public partial class BotMessage : MetaData<BotMessage>
     [JsonIgnore]
     public bool IsWeb => Platform == Platforms.Web;
     [JsonIgnore]
-    public bool IsNapCat => Platform == Platforms.NapCat;
-    public bool IsOnebot => IsNapCat || IsGuild || IsWeixin || IsWorker;
+    public bool IsQQ => Platform == Platforms.QQ;
+    public bool IsOnebot => IsQQ || IsGuild || IsWeixin || IsWorker;
     [JsonIgnore]
     public bool IsGroupBound => GroupId < GroupInfo.groupMin;
     [JsonIgnore]

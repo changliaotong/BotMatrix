@@ -83,6 +83,7 @@ public partial class BotMessage
         public int Accept { get; set; } = 0;                         
         public string Reason { get; set; } = string.Empty;
         public bool IsProxy { get; set; } = false;
+        public bool IsSent { get; set; } = false;
 
         public virtual async Task SendMusicAsync(string title, string artist, string jumpUrl, string coverUrl, string audioUrl)
         {
@@ -147,7 +148,7 @@ public partial class BotMessage
         {
             get
             {
-                if (!IsNapCat) return false;
+                if (!IsQQ) return false;
                 if (!IsGroup) return false;
                 if (CmdName == "语音播报") return true;
                 if (IsEntirelyInBrackets(Answer)) return false;

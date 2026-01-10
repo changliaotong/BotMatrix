@@ -203,7 +203,10 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var props = obj.GetType().GetProperties();
             foreach (var prop in props)
             {
-                result.Add(new Cov(prop.Name, prop.GetValue(obj)));
+                if (prop.GetIndexParameters().Length == 0)
+                {
+                    result.Add(new Cov(prop.Name, prop.GetValue(obj)));
+                }
             }
             return result;
         }
@@ -560,12 +563,14 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         public static async Task<int> ExecAsync(string sql, IDbTransaction? trans, IDataParameter[] parameters)
         {
             var (resolvedSql, _) = ResolveSql(sql);
+            Logger.Debug($"[DB] Exec - SQL: {resolvedSql}");
             return await SQLConn.ExecAsync(resolvedSql, false, trans, parameters);
         }
 
         public static async Task<T?> ExecScalarAsync<T>(string sql, IDbTransaction? trans, IDataParameter[] parameters)
         {
             var (resolvedSql, _) = ResolveSql(sql);
+            Logger.Debug($"[DB] ExecScalar - SQL: {resolvedSql}");
             return await SQLConn.ExecScalarAsync<T>(resolvedSql, false, trans, parameters);
         }
 
@@ -676,7 +681,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             options ??= new QueryOptions { GetAll = true };
 
             string where = string.IsNullOrWhiteSpace(options.FilterSql) ? "" : $"WHERE {options.FilterSql}";
-            string orderBy = string.IsNullOrWhiteSpace(options.OrderBy) ? $"ORDER BY {Quote(KeyField)} DESC" : $"ORDER BY {options.OrderBy}";
+            string orderBy = string.IsNullOrWhiteSpace(options.OrderBy) ? $"ORDER BY {Quote(Key)} DESC" : $"ORDER BY {options.OrderBy}";
 
             string topClause = "";
             string pagingClause = "";
@@ -934,10 +939,18 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             => await GetAsync<long>(fieldName, id, id2, 0L, trans);
 
         public static bool GetBool(string fieldName, object id, object? id2 = null)
-            => GetBoolAsync(fieldName, id, id2).GetAwaiter().GetResult();
+        {
+            Logger.Debug($"GetBool called - FieldName: {fieldName}, Id: {id}, Id2: {id2}");
+            var result = GetBoolAsync(fieldName, id, id2).GetAwaiter().GetResult();
+            Logger.Debug($"GetBool result - FieldName: {fieldName}, Result: {result}");
+            return result;
+        }
 
         public static async Task<bool> GetBoolAsync(string fieldName, object id, object? id2 = null, IDbTransaction? trans = null)
-            => await GetAsync<bool>(fieldName, id, id2, false, trans);
+        {
+            Logger.Debug($"GetBoolAsync called - FieldName: {fieldName}, Id: {id}, Id2: {id2}");
+            return await GetAsync<bool>(fieldName, id, id2, false, trans);
+        }
 
         public static Dictionary<string, object?>? GetDict(object id, object? id2 = null, params string[] fieldNames)
             => GetDictAsync(id, id2, fieldNames).GetAwaiter().GetResult();
@@ -1190,12 +1203,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             return (await QueryScalarAsync<long>($"SELECT COUNT({Quote(field)}) FROM {FullName} WHERE {Quote(key)} = @p1", null, SqlParams(("@p1", value)))).AsLong();
         }
 
-        public static long CountField(string fieldName, string KeyField, object FieldValue)
-            => CountFieldAsync(fieldName, KeyField, FieldValue).GetAwaiter().GetResult();
+        public static long CountField(string fieldName, string keyField, object fieldValue)
+            => CountFieldAsync(fieldName, keyField, fieldValue).GetAwaiter().GetResult();
 
-        public static async Task<long> CountFieldAsync(string fieldName, string KeyField, object FieldValue)
+        public static async Task<long> CountFieldAsync(string fieldName, string keyField, object fieldValue)
         {
-            return await CountByKeyValueAsync(fieldName, KeyField, FieldValue);
+            return await CountByKeyValueAsync(fieldName, keyField, fieldValue);
         }
 
         public static long CountKey(object id)
@@ -1329,8 +1342,20 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<Dictionary<string, object>> InsertReturnFieldsAsync(object obj, IDbTransaction? trans, params string[] outputFields)
         {
-            var (sql, paras) = SqlInsertDict(obj.ToFields(), outputFields);
-            return await ExecWithOutputAsync(sql, paras, outputFields, trans);
+            var fields = obj.ToFields();
+            var (sql, paras) = SqlInsertDict(fields, outputFields);
+            var result = await ExecWithOutputAsync(sql, paras, outputFields, trans);
+            if (result != null && result.Count > 0)
+             {
+                 var id = result.TryGetValue(Key, out var v1) ? v1 : (fields.TryGetValue(Key, out var v2) ? v2 : null);
+                 var id2 = !string.IsNullOrEmpty(Key2) ? (result.TryGetValue(Key2, out var v3) ? v3 : (fields.TryGetValue(Key2, out var v4) ? v4 : null)) : null;
+                 if (id != null)
+                 {
+                     await InvalidateAllCachesAsync(id, id2);
+                     Logger.Debug($"[Cache] InvalidateAll(InsertReturn) - Table: {FullName}, ID: {id}-{id2}");
+                 }
+             }
+            return result;
         }
 
         public static int Insert(object columns, IDbTransaction? trans = null)
@@ -1354,7 +1379,19 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         {
             var data = CovToParams(columns);
             var (sql, paras) = SqlInsertDict(data);
-            return await ExecAsync(sql, trans, paras);
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0)
+             {
+                 // 如果插入的数据包含主键，则尝试失效相关缓存（防止之前缓存了空结果）
+                 var id = columns.FirstOrDefault(c => c.Name.Equals(Key, StringComparison.OrdinalIgnoreCase))?.Value;
+                 var id2 = !string.IsNullOrEmpty(Key2) ? columns.FirstOrDefault(c => c.Name.Equals(Key2, StringComparison.OrdinalIgnoreCase))?.Value : null;
+                 if (id != null)
+                 {
+                     await InvalidateAllCachesAsync(id, id2);
+                     Logger.Debug($"[Cache] InvalidateAll(Insert) - Table: {FullName}, ID: {id}-{id2}");
+                 }
+             }
+            return result;
         }
 
         public static (string sql, IDataParameter[] paras) SqlInsert(object columns)
@@ -1508,7 +1545,17 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         {
             var (sqlWhere, parameters) = SqlWhere(id, id2);
             var sql = $"UPDATE {FullName} SET {MetaData.SqlQuote(fieldName)} = {SqlDateTime} {sqlWhere}";
-            return await ExecAsync(sql, trans, parameters);
+            var result = await ExecAsync(sql, trans, parameters);
+            if (result > 0)
+            {
+                if (!IsHighFrequency(fieldName))
+                {
+                    await InvalidateCacheAsync(id, id2);
+                }
+                await InvalidateFieldCacheAsync(fieldName, id, id2);
+                Logger.Debug($"[Cache] Invalidate(SetNow) - Table: {FullName}, Field: {fieldName}, ID: {id}-{id2}");
+            }
+            return result;
         }
 
         public static int SetNow(string fieldName, object id, object? id2 = null)
@@ -1531,6 +1578,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                     await InvalidateCacheAsync(id, id2);
                 }
                 await InvalidateFieldCacheAsync(fieldName, id, id2);
+                Logger.Debug($"[Cache] Invalidate(Plus) - Table: {FullName}, Field: {fieldName}, ID: {id}-{id2}");
             }
             return result;
         }
@@ -1552,6 +1600,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                     await InvalidateCacheAsync(id, id2);
                 }
                 await InvalidateFieldCacheAsync(fieldName, id, id2);
+                Logger.Debug($"[Cache] Invalidate(SetValue) - Table: {FullName}, Field: {fieldName}, ID: {id}-{id2}");
             }
             return result;
         }
@@ -1563,15 +1612,15 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var data = ToDictionary();
             var exclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                KeyField,
+                Key,
                 "Id",
                 "Guid",
             };
-            if (!string.IsNullOrEmpty(KeyField2)) exclude.Add(KeyField2);
+            if (!string.IsNullOrEmpty(Key2)) exclude.Add(Key2);
             foreach (var f in excludeFields) exclude.Add(f);
 
             var setData = data.Where(kvp => !exclude.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-            var whereData = data.Where(kvp => string.Equals(kvp.Key, KeyField, StringComparison.OrdinalIgnoreCase) || string.Equals(kvp.Key, KeyField2, StringComparison.OrdinalIgnoreCase)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            var whereData = data.Where(kvp => string.Equals(kvp.Key, Key, StringComparison.OrdinalIgnoreCase) || string.Equals(kvp.Key, Key2, StringComparison.OrdinalIgnoreCase)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             if (whereData.Count == 0) throw new InvalidOperationException("主键字段未赋值，无法更新");
 
@@ -1594,6 +1643,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 {
                     await InvalidateFieldCacheAsync(kv.Key, id1!, id2);
                 }
+                Logger.Debug($"[Cache] Invalidate(UpdateInstance) - Table: {FullName}, ID: {id1}-{id2}, Fields: {string.Join(", ", setData.Keys)}");
             }
             return result;
         }
@@ -1667,6 +1717,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 {
                     await InvalidateFieldCacheAsync(col.Name, id, id2);
                 }
+                Logger.Debug($"[Cache] Invalidate(UpdateStatic) - Table: {FullName}, ID: {id}-{id2}, Fields: {string.Join(", ", columns.Select(c => c.Name))}");
             }
             return result;
         }
@@ -1683,6 +1734,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
                 {
                     await InvalidateFieldCacheAsync(kv.Key, id, id2);
                 }
+                Logger.Debug($"[Cache] Invalidate(UpdateObject) - Table: {FullName}, ID: {id}-{id2}, Fields: {string.Join(", ", fields.Keys)}");
             }
             return result;
         }
@@ -1695,12 +1747,92 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var (sqlWhere, parameters) = SqlWhere(id, id2);
             var sql = $"UPDATE {FullName} SET {sSet} {sqlWhere}";
             var result = await ExecAsync(sql, trans, parameters);
-            if (result > 0) await InvalidateAllCachesAsync(id, id2);
+            if (result > 0) 
+            {
+                await InvalidateAllCachesAsync(id, id2);
+                Logger.Debug($"[Cache] InvalidateAll(UpdateSet) - Table: {FullName}, ID: {id}-{id2}");
+            }
             return result;
         }
 
         public static int UpdateWhere(string sSet, string sWhere, IDbTransaction? trans = null)
             => UpdateWhereAsync(sSet, sWhere, trans).GetAwaiter().GetResult();
+
+        public static async Task<int> UpdateWhereAsync(string sSet, string sWhere, IDbTransaction? trans = null, params object?[] args)
+        {
+            var (sqlWhere, parameters) = ResolveSql(sWhere.EnsureStartsWith("WHERE"), args);
+            var sql = $"UPDATE {FullName} SET {sSet} {sqlWhere}";
+            var result = await ExecAsync(sql, trans, parameters);
+            Logger.Debug($"[DB] UpdateWhereAsync - Table: {FullName}, SQL: {sql}, Result: {result}");
+            if (result > 0)
+            {
+                // 尝试解析 ID 并失效缓存
+                var idCandidates = ExtractIdsFromWhere(sWhere, args);
+                Logger.Debug($"[Cache] Invalidate - Table: {FullName}, Extracted IDs: {string.Join(", ", idCandidates)}");
+                foreach (var id in idCandidates)
+                {
+                    await InvalidateAllCachesAsync(id);
+                }
+            }
+            return result;
+        }
+
+        private static List<object> ExtractIdsFromWhere(string sWhere, object?[] args)
+        {
+            var idCandidates = new List<object>();
+            if (args == null || args.Length == 0) return idCandidates;
+
+            try
+            {
+                // 1. 传统逻辑：第一个参数通常是 ID
+                if (args.Length > 0 && args[0] != null) 
+                {
+                    idCandidates.Add(args[0]!);
+                    Logger.Debug($"[Cache] ExtractIds - Added first arg: {args[0]}");
+                }
+
+                // 2. 正则匹配 Key = {n} 或 id = {n}
+                // 支持格式：Key = {0}, Key IN ({0}, {1}), id = {0}
+                var patterns = new[] { 
+                    $@"{Key}\s*=\s*\{{(\d+)\}}", 
+                    $@"{Key}\s+IN\s*\((.*?)\)",
+                    @"id\s*=\s*\{{(\d+)\}}",
+                    @"id\s+IN\s*\((.*?)\)"
+                };
+
+                foreach (var pattern in patterns)
+                {
+                    var matches = System.Text.RegularExpressions.Regex.Matches(sWhere, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    foreach (System.Text.RegularExpressions.Match match in matches)
+                    {
+                        if (match.Groups[1].Success)
+                        {
+                            var val = match.Groups[1].Value;
+                            if (val.Contains("{")) // 可能是 IN ({0}, {1})
+                            {
+                                var subMatches = System.Text.RegularExpressions.Regex.Matches(val, @"\{(\d+)\}");
+                                foreach (System.Text.RegularExpressions.Match subMatch in subMatches)
+                                {
+                                    if (int.TryParse(subMatch.Groups[1].Value, out int argIndex) && argIndex < args.Length && args[argIndex] != null)
+                                    {
+                                        idCandidates.Add(args[argIndex]!);
+                                    }
+                                }
+                            }
+                            else if (int.TryParse(val, out int argIndex) && argIndex < args.Length && args[argIndex] != null)
+                            {
+                                idCandidates.Add(args[argIndex]!);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug($"[Cache] ExtractIdsFromWhere Error: {ex.Message}");
+            }
+            return idCandidates.Distinct().ToList();
+        }
 
         public static async Task<int> UpdateWhereAsync(object columns, string sWhere, params object?[] args)
             => await UpdateWhereAsync(columns, sWhere, null, args);
@@ -1727,17 +1859,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var result = await ExecAsync(sql, trans, [.. parameters]);
             if (result > 0)
             {
-                // 尝试解析简单的 ID = {0}
-                if (sWhere.IndexOf("id", StringComparison.OrdinalIgnoreCase) >= 0 && args.Length > 0)
+                var idCandidates = ExtractIdsFromWhere(sWhere, args);
+                foreach (var id in idCandidates)
                 {
-                    var id = args[0];
-                    if (id != null)
+                    await InvalidateCacheAsync(id);
+                    foreach (var col in data)
                     {
-                        await InvalidateCacheAsync(id);
-                        foreach (var col in data)
-                        {
-                            await InvalidateFieldCacheAsync(col.Name, id);
-                        }
+                        await InvalidateFieldCacheAsync(col.Name, id);
                     }
                 }
             }
@@ -1770,24 +1898,15 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var result = await ExecAsync(sql, trans, [.. parameters]);
             
             // 如果 sWhere 是简单的 ID 匹配，我们需要失效缓存
-            // 为简单起见，如果 sWhere 包含 "=" 且 args 中有值，我们尝试解析
-            // 但 Increment 通常用于统计，可能并发很高，全量失效字段缓存是必须的
             if (result > 0)
             {
-                // 这是一个痛点：sWhere 可能不是简单的 ID。
-                // 如果是按 ID 更新，我们需要提取 ID。
-                // 如果无法提取，则只能等待缓存过期，或者由调用者手动失效。
-                // 这里我们尝试解析简单的 ID = {0}
-                if (sWhere.IndexOf("id", StringComparison.OrdinalIgnoreCase) >= 0 && args.Length > 0)
+                var idCandidates = ExtractIdsFromWhere(sWhere, args);
+                foreach (var id in idCandidates)
                 {
-                    var id = args[0];
-                    if (id != null)
+                    await InvalidateCacheAsync(id);
+                    foreach (var col in data)
                     {
-                        await InvalidateCacheAsync(id);
-                        foreach (var col in data)
-                        {
-                            await InvalidateFieldCacheAsync(col.Name, id);
-                        }
+                        await InvalidateFieldCacheAsync(col.Name, id);
                     }
                 }
             }
@@ -1824,13 +1943,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var where = new Dictionary<string, object?>();
             var type = GetType();
 
-            var key1Value = (type.GetProperty(KeyField)?.GetValue(this)) ?? throw new InvalidOperationException($"主键字段 {KeyField} 未赋值");
-            where[KeyField] = key1Value;
+            var key1Value = (type.GetProperty(Key)?.GetValue(this)) ?? throw new InvalidOperationException($"主键字段 {Key} 未赋值");
+            where[Key] = key1Value;
 
-            if (!string.IsNullOrEmpty(KeyField2))
+            if (!string.IsNullOrEmpty(Key2))
             {
-                var key2Value = (type.GetProperty(KeyField2)?.GetValue(this)) ?? throw new InvalidOperationException($"主键字段 {KeyField2} 未赋值");
-                where[KeyField2] = key2Value;
+                var key2Value = (type.GetProperty(Key2)?.GetValue(this)) ?? throw new InvalidOperationException($"主键字段 {Key2} 未赋值");
+                where[Key2] = key2Value;
             }
 
             var (whereSql, parameters) = SqlWhere(where, allowEmpty: false);
@@ -1838,8 +1957,8 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             var result = await ExecAsync(sql, trans, parameters);
             if (result > 0)
             {
-                var id1 = where[KeyField];
-                var id2 = where.ContainsKey(KeyField2) ? where[KeyField2] : null;
+                var id1 = where[Key];
+                var id2 = where.ContainsKey(Key2) ? where[Key2] : null;
                 await InvalidateCacheAsync(id1!, id2);
             }
             return result;
@@ -1867,7 +1986,11 @@ namespace BotWorker.Infrastructure.Persistence.ORM
         {
             var (sql, paras) = SqlDelete(id, id2);
             var result = await ExecAsync(sql, trans, paras);
-            if (result > 0) await InvalidateAllCachesAsync(id, id2);
+            if (result > 0) 
+            {
+                await InvalidateAllCachesAsync(id, id2);
+                Logger.Debug($"[Cache] InvalidateAll(Delete) - Table: {FullName}, ID: {id}-{id2}");
+            }
             return result;
         }
 
@@ -1878,7 +2001,15 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             => DeleteAllAsync(value, trans).GetAwaiter().GetResult();
 
         public static async Task<int> DeleteAllAsync(object value, IDbTransaction? trans = null)
-            => await ExecAsync(SqlDeleteAll(value), trans);
+        {
+            var result = await ExecAsync(SqlDeleteAll(value), trans);
+            if (result > 0 && (Key.Equals(Key, StringComparison.OrdinalIgnoreCase) || Key.Equals("id", StringComparison.OrdinalIgnoreCase)))
+            {
+                await InvalidateAllCachesAsync(value);
+                Logger.Debug($"[Cache] InvalidateAll(DeleteAll) - Table: {FullName}, ID: {value}");
+            }
+            return result;
+        }
 
         public static string SqlDeleteAll2(object value)
             => $"DELETE FROM {FullName} WHERE {Quote(Key2)} = {value.AsString().Quotes()}";
@@ -1887,12 +2018,29 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             => DeleteAll2Async(value, trans).GetAwaiter().GetResult();
 
         public static async Task<int> DeleteAll2Async(object value, IDbTransaction? trans = null)
-            => await ExecAsync(SqlDeleteAll2(value), trans);
+        {
+            var result = await ExecAsync(SqlDeleteAll2(value), trans);
+            if (result > 0 && (Key2.Equals(Key, StringComparison.OrdinalIgnoreCase) || Key2.Equals("id", StringComparison.OrdinalIgnoreCase)))
+            {
+                await InvalidateAllCachesAsync(value);
+                Logger.Debug($"[Cache] InvalidateAll(DeleteAll2) - Table: {FullName}, ID: {value}");
+            }
+            return result;
+        }
 
         public static async Task<int> DeleteWhereAsync(string sWhere, IDbTransaction? trans = null, params object?[] args)
         {
             var (sql, paras) = ResolveSql($"DELETE FROM {FullName} {sWhere.EnsureStartsWith("WHERE")}", args);
-            return await ExecAsync(sql, trans, paras);
+            var result = await ExecAsync(sql, trans, paras);
+            if (result > 0)
+            {
+                var idCandidates = ExtractIdsFromWhere(sWhere, args);
+                foreach (var id in idCandidates)
+                {
+                    await InvalidateAllCachesAsync(id);
+                }
+            }
+            return result;
         }
 
         public static int DeleteWhere(string sWhere, IDbTransaction? trans = null, params object?[] args)
@@ -1900,7 +2048,13 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<int> DeleteByKeyValueAsync(string key, object value, IDbTransaction? trans = null)
         {
-            return await ExecAsync($"DELETE FROM {FullName} WHERE {Quote(key)} = {0}", trans, value);
+            var result = await ExecAsync($"DELETE FROM {FullName} WHERE {Quote(key)} = {0}", trans, value);
+            if (result > 0 && (key.Equals(Key, StringComparison.OrdinalIgnoreCase) || key.Equals("id", StringComparison.OrdinalIgnoreCase)))
+            {
+                await InvalidateAllCachesAsync(value);
+                Logger.Debug($"[Cache] InvalidateAll(DeleteByKV) - Table: {FullName}, {key}: {value}");
+            }
+            return result;
         }
 
         // ----------- Save & Upsert 保存 & 更新插入 -----------
@@ -2027,14 +2181,23 @@ WHEN NOT MATCHED THEN
             if (trans == null && MetaData.CacheService != null)
             {
                 var cached = await MetaData.CacheService.GetAsync<TDerived>(cacheKey);
-                if (cached != null) return cached;
+                if (cached != null) 
+                {
+                    Logger.Debug($"[Cache] HIT - Table: {FullName}, Key: {cacheKey}");
+                    return cached;
+                }
+                Logger.Debug($"[Cache] MISS - Table: {FullName}, Key: {cacheKey}");
             }
 
             var (sql, parameters) = SqlSelect("*", key1, key2);
+            Logger.Debug($"[DB] Loading Row - Table: {FullName}, SQL: {sql}");
             var result = await QuerySingleAsync<TDerived>(sql, trans, parameters);
 
             if (trans == null && result != null && MetaData.CacheService != null)
-                await MetaData.CacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            {
+                Logger.Debug($"[Cache] SET - Table: {FullName}, Key: {cacheKey}");
+                await MetaData.CacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(1));
+            }
 
             return result;
         }
@@ -2045,12 +2208,16 @@ WHEN NOT MATCHED THEN
             T LoadFromDb()
             {
                 var (sql, paras) = SqlGet(fieldName, id, id2);
+                Logger.Debug($"[DB] Loading Field - Table: {FullName}, Field: {fieldName}, SQL: {sql}");
                 return QueryScalar<T>(sql, trans, paras)!;               
             }
 
             if (trans != null || MetaData.CacheService == null) return LoadFromDb();
             var cacheKey = id2 == null ? GetCacheKey(fieldName, id) : GetCacheKey(fieldName, id, id2);
-            return MetaData.CacheService.GetOrAdd(cacheKey, LoadFromDb, TimeSpan.FromMinutes(5));
+            
+            var result = MetaData.CacheService.GetOrAdd(cacheKey, LoadFromDb, TimeSpan.FromMinutes(1));
+            Logger.Debug($"[Cache] GetOrAdd - Table: {FullName}, Field: {fieldName}, Key: {cacheKey}");
+            return result;
         }
 
         public static async Task<T> GetAsync<T>(string fieldName, object id, object? id2 = null, T defaultValue = default!, IDbTransaction? trans = null) where T : struct
@@ -2059,13 +2226,22 @@ WHEN NOT MATCHED THEN
             async Task<T> LoadFromDbAsync()
             {
                 var (sql, paras) = SqlGet(fieldName, id, id2);
+                Logger.Debug($"[DB] Loading Field - Table: {FullName}, Field: {fieldName}, SQL: {sql}");
                 var raw = await QueryScalarAsync<T>(sql, trans, paras);
                 return SqlHelper.ConvertValue<T>(raw, defaultValue);
             }
 
-            if (trans != null || MetaData.CacheService == null) return await LoadFromDbAsync();
+            if (trans != null || MetaData.CacheService == null || 
+                fieldName == "IsGroup" || fieldName == "IsPrivate" || 
+                fieldName == "IsPowerOn" || fieldName == "UseRight" || fieldName == "IsOpen") 
+            {
+                Logger.Debug($"[Cache] Bypass - Table: {FullName}, Field: {fieldName}, Reason: {(trans != null ? "Transaction" : (MetaData.CacheService == null ? "NoCacheService" : "CriticalField"))} (at MetaData.cs:GetAsync, line 2232)");
+                return await LoadFromDbAsync();
+            }
             var cacheKey = id2 == null ? GetCacheKey(fieldName, id) : GetCacheKey(fieldName, id, id2);
-            return await MetaData.CacheService.GetOrAddAsync(cacheKey, LoadFromDbAsync, TimeSpan.FromMinutes(5));
+            var result = await MetaData.CacheService.GetOrAddAsync(cacheKey, LoadFromDbAsync, TimeSpan.FromMinutes(1));
+            Logger.Debug($"[Cache] GetOrAddField - Table: {FullName}, Field: {fieldName}, Key: {cacheKey}");
+            return result;
         }
 
         public static async Task<string> GetValueAsync(string fieldName, object id, object? id2 = null, IDbTransaction? trans = null)
@@ -2074,20 +2250,32 @@ WHEN NOT MATCHED THEN
             async Task<string> LoadFromDbAsync()
             {
                 var (sql, parameters) = SqlGetStr(fieldName, id, id2);
+                Logger.Debug($"[DB] Loading Value - Table: {FullName}, Field: {fieldName}, SQL: {sql}");
                 var res = await QueryScalarAsync<string>(sql, trans, parameters);
                 return res ?? "";
             }
 
             if (trans != null || MetaData.CacheService == null) return await LoadFromDbAsync();
             var cacheKey = id2 == null ? GetCacheKey(fieldName, id) : GetCacheKey(fieldName, id, id2);
-            return await MetaData.CacheService.GetOrAddAsync(cacheKey, LoadFromDbAsync, TimeSpan.FromMinutes(5));
+            var result = await MetaData.CacheService.GetOrAddAsync(cacheKey, LoadFromDbAsync, TimeSpan.FromMinutes(1));
+            Logger.Debug($"[Cache] GetOrAddValue - Table: {FullName}, Field: {fieldName}, Key: {cacheKey}");
+            return result;
         }
 
         public static async Task InvalidateCacheAsync(object key1, object? key2 = null)
         {
             if (MetaData.CacheService == null) return;
             var cacheKey = key2 == null ? GetCacheKey(key1) : GetCacheKey(key1, key2);
+            Logger.Debug($"[Cache] InvalidateAsync - Table: {FullName}, Key: {cacheKey}");
             await MetaData.CacheService.RemoveAsync(cacheKey);
+        }
+
+        public static void InvalidateCache(object key1, object? key2 = null)
+        {
+            if (MetaData.CacheService == null) return;
+            var cacheKey = key2 == null ? GetCacheKey(key1) : GetCacheKey(key1, key2);
+            Logger.Debug($"[Cache] Invalidate - Table: {FullName}, Key: {cacheKey}");
+            MetaData.CacheService.Remove(cacheKey);
         }
 
         /// <summary>
@@ -2096,6 +2284,7 @@ WHEN NOT MATCHED THEN
         public static async Task InvalidateAllCachesAsync(object id, object? id2 = null)
         {
             if (MetaData.CacheService == null) return;
+            Logger.Debug($"[Cache] InvalidateAllAsync - Table: {FullName}, ID: {id}-{id2}");
             await InvalidateCacheAsync(id, id2);
             var props = GetProperties();
             foreach (var prop in props)
@@ -2104,10 +2293,23 @@ WHEN NOT MATCHED THEN
             }
         }
 
+        public static void InvalidateAllCaches(object id, object? id2 = null)
+        {
+            if (MetaData.CacheService == null) return;
+            Logger.Debug($"[Cache] InvalidateAll - Table: {FullName}, ID: {id}-{id2}");
+            InvalidateCache(id, id2);
+            var props = GetProperties();
+            foreach (var prop in props)
+            {
+                InvalidateFieldCache(prop.Name, id, id2);
+            }
+        }
+
         public static void InvalidateFieldCache(string fieldName, object key1, object? key2 = null)
         {
             if (MetaData.CacheService == null) return;
             var cacheKey = key2 == null ? GetCacheKey(fieldName, key1) : GetCacheKey(fieldName, key1, key2);
+            Logger.Debug($"[Cache] InvalidateField - Table: {FullName}, Field: {fieldName}, Key: {cacheKey}");
             MetaData.CacheService.Remove(cacheKey);
         }
 
@@ -2115,6 +2317,7 @@ WHEN NOT MATCHED THEN
         {
             if (MetaData.CacheService == null) return;
             var cacheKey = key2 == null ? GetCacheKey(fieldName, key1) : GetCacheKey(fieldName, key1, key2);
+            Logger.Debug($"[Cache] InvalidateFieldAsync - Table: {FullName}, Field: {fieldName}, Key: {cacheKey}");
             await MetaData.CacheService.RemoveAsync(cacheKey);
         }
 
@@ -2122,7 +2325,7 @@ WHEN NOT MATCHED THEN
         {
             var keys = GetKeyValues().Select(k => k.Value).ToArray();
             var cacheKey = GetCacheKey(keys);
-            await cacheService.SetAsync(cacheKey, this, TimeSpan.FromMinutes(5));
+            await cacheService.SetAsync(cacheKey, this, TimeSpan.FromMinutes(1));
         }
 
         // ----------- 其他辅助方法 -----------
@@ -2239,10 +2442,32 @@ WHEN NOT MATCHED THEN
             => await GetSingleAsync(id, id2) ?? throw new Exception($"主键属性 {id} {id2}不存在");
 
         public static void SyncCacheField(long qq, long groupId, string field, object value)
-            => Console.WriteLine($"[CacheSync] {FullName}: {qq}-{groupId} {field} = {value}");
+        {
+            if (MetaData.CacheService == null) return;
+            var id2 = groupId == 0 ? null : (object)groupId;
+            var cacheKey = id2 == null ? GetCacheKey(field, qq) : GetCacheKey(field, qq, id2);
+            MetaData.CacheService.Set(cacheKey, value, TimeSpan.FromMinutes(1));
+            // 同时失效行级缓存，因为行数据已经变了
+            InvalidateCache(qq, id2);
+            Logger.Debug($"[CacheSync] {FullName}: {qq}-{groupId} {field} = {value}");
+        }
+
+        public static async Task SyncCacheFieldAsync(long qq, long groupId, string field, object value)
+        {
+            if (MetaData.CacheService == null) return;
+            var id2 = groupId == 0 ? null : (object)groupId;
+            var cacheKey = id2 == null ? GetCacheKey(field, qq) : GetCacheKey(field, qq, id2);
+            await MetaData.CacheService.SetAsync(cacheKey, value, TimeSpan.FromMinutes(1));
+            // 同时失效行级缓存，因为行数据已经变了
+            await InvalidateCacheAsync(qq, id2);
+            Logger.Debug($"[CacheSyncAsync] {FullName}: {qq}-{groupId} {field} = {value}");
+        }
 
         public static void SyncCacheField(long qq, string field, object value)
             => SyncCacheField(qq, 0, field, value);
+
+        public static async Task SyncCacheFieldAsync(long qq, string field, object value)
+            => await SyncCacheFieldAsync(qq, 0, field, value);
 
         public static async Task<TDerived?> LoadAsync(Guid guid)
             => await GetSingleAsync(guid);
@@ -2291,6 +2516,16 @@ WHEN NOT MATCHED THEN
         }
 
         public static long GetId(string guid) => GetId(Guid.Parse(guid));
+
+        public static async Task<TDerived?> GetByGuidAsync(string guid)
+        {
+            return (await QueryWhere($"{Quote(GuidField)} = @guid", SqlParams(("@guid", guid)))).FirstOrDefault();
+        }
+
+        public static async Task<TDerived?> GetByGuidAsync(Guid guid)
+        {
+            return (await QueryWhere($"{Quote(GuidField)} = @guid", SqlParams(("@guid", guid)))).FirstOrDefault();
+        }
 
         public static Guid GetGuid(long id)
         {

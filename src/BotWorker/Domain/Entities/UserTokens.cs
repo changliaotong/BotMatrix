@@ -63,23 +63,22 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
 
     public static long GetTokens(long qq) => GetTokensAsync(qq).GetAwaiter().GetResult();
 
-    public static async Task<string> GetTokensListAsync(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.NapCat)
+    public static async Task<string> GetTokensListAsync(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.QQ)
     {
-        var format = ((int)botType).In(0, 1) ? "{i} [@:{0}]：{1}\n" : "{i} {0} {1}\n";
-        var res = await QueryResAsync($"select {SqlTop(top)} UserId, Tokens from {FullName} WHERE UserId IN (SELECT UserId FROM {GroupMember.FullName} WHERE GroupId = {groupId}) order by Tokens desc {SqlLimit(top)}", format);
-        if (!res.Contains(qq.ToString()))
-            res += $"{await GetTokensRankingAsync(groupId, qq)} [@:{qq}]：{await GetTokensAsync(qq)}\n";
-        return res;
+        return await QueryResAsync(
+            $"SELECT {SqlTop((int)top)} [UserId], [Tokens] FROM {FullName} " +
+            $"WHERE [UserId] IN (SELECT [UserId] FROM {GroupMember.FullName} WHERE [GroupId] = {0}) " +
+            $"ORDER BY [Tokens] DESC {SqlLimit((int)top)}",
+            "【第{i}名】 [@:{0}] 算力：{1}\n",
+            groupId);
     }
 
-    public static string GetTokensList(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.NapCat) => GetTokensListAsync(groupId, qq, top, botType).GetAwaiter().GetResult();
+    public static string GetTokensList(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.QQ) => GetTokensListAsync(groupId, qq, top, botType).GetAwaiter().GetResult();
 
     public static async Task<long> GetTokensRankingAsync(long groupId, long qq)
     {
         return await CountWhereAsync($"tokens > {await GetTokensAsync(qq)} and UserId in (SELECT UserId FROM {GroupMember.FullName} WHERE GroupId = {groupId})") + 1;
     }
-
-    public static long GetTokensRanking(long groupId, long qq) => GetTokensRankingAsync(groupId, qq).GetAwaiter().GetResult();
 
     //消耗算力当天合计（单群）
     public static long GetDayTokensGroup(long groupId, long userId)

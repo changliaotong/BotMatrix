@@ -2,7 +2,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages;
 
 public partial class BotMessage: MetaData<BotMessage>
 {
-        public string GetHeadCQ() => IsNapCat && IsGroup ? UserInfo.GetHeadCQ(UserId) : "";
+        public string GetHeadCQ() => IsQQ && IsGroup ? UserInfo.GetHeadCQ(UserId) : "";
 
         public string GetHintInfo()
         {

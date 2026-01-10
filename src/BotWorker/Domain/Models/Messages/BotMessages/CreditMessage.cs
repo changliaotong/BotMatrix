@@ -301,7 +301,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
         public string GetCreditListAll(long qq, long top = 10)
         {
-            var format = !IsRealProxy && (IsMirai || IsNapCat) ? "{i} [@:{0}]：{1}\n" : "{i} {0} {1}\n";
+            var format = !IsRealProxy && (IsMirai || IsQQ) ? "{i} [@:{0}]：{1}\n" : "{i} {0} {1}\n";
             string res = SelfInfo.IsCredit
                 ? QueryRes($"select top {top} UserId, credit from {Friend.FullName} where BotUin = {SelfId} order by Credit desc", format)
                 : QueryRes($"select top {top} Id, credit from {UserInfo.FullName} order by Credit desc", format);
@@ -312,7 +312,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
         public string GetCreditList(long top = 10)
         {
-            var format = !IsRealProxy && (IsMirai || IsNapCat) ? "第{i}名[@:{0}] 💎{1:N0}\n" : "第{i}名{0} 💎{1:N0}\n";
+            var format = !IsRealProxy && (IsMirai || IsQQ) ? "第{i}名[@:{0}] 💎{1:N0}\n" : "第{i}名{0} 💎{1:N0}\n";
             string res = Group.IsCredit
                 ? GroupMember.QueryWhere($"top {top} UserId, GroupCredit", $"groupId = {GroupId}", "GroupCredit desc", format)
                 : SelfInfo.IsCredit

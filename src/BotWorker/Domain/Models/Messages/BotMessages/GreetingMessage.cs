@@ -111,7 +111,7 @@ public partial class BotMessage : MetaData<BotMessage>
                         "☀️ 午安：10:00 ~ 18:00\n" +
                         "🌙 晚安：17:00 ~ 5:00";
 
-            //if ((IsOffical || IsNapCat || IsMirai) && !Answer.IsNull())            
+            //if ((IsOffical || IsQQ || IsMirai) && !Answer.IsNull())            
             //await SendMessageAsync();               
 
             //Answer = "";

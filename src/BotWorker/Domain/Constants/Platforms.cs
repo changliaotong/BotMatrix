@@ -3,7 +3,7 @@ namespace BotWorker.Domain.Constants;
 public static class Platforms
 {
     public const string Mirai = "Mirai";
-    public const string NapCat = "NapCat";
+    public const string QQ = "qq";
     public const string Weixin = "weixin";
     public const string Public = "Public";
     public const string WeCom = "WeCom";
@@ -16,7 +16,7 @@ public static class Platforms
     platform switch
     {
         Mirai => 0,
-        NapCat => 1,
+        QQ => 1,
         Weixin => 2,
         Public => 3,
         QQGuild => 4,
@@ -31,14 +31,14 @@ public static class Platforms
         return value switch
         {
             0 => Mirai,
-            1 => NapCat,
+            1 => QQ,
             2 => Weixin,
             3 => Public,
             4 => QQGuild,
             5 => Web,
             6 => Local,
             7 => Worker,
-            _ => NapCat   // 默认平台，建议保持和正向一致
+            _ => QQ   // 默认平台，建议保持和正向一致
         };
     }
 }

@@ -23,12 +23,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (!isHaveUseRight)
                 {
                     botMsg.Reason += "[使用权限]";
-                    if (!botMsg.IsGroup)
-                    {
-                        botMsg.Answer = $"({botMsg.GroupId})你没有使用权限，请联系群主授权";
-                        if (botMsg.UserPerm != 0 && botMsg.UserId != botMsg.Group.RobotOwner)
-                            botMsg.Answer += UserInfo.GetResetDefaultGroup(botMsg.UserId);
-                    }
+                    botMsg.IsSend = false; // 不回消息
                     return; // 拦截
                 }
 

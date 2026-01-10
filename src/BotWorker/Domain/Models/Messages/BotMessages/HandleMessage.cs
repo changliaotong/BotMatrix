@@ -65,7 +65,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
 
             if (IsProxy && ProxyBotUin == 0)
             {
-                if (IsMirai || IsNapCat)
+                if (IsMirai || IsQQ)
                 {
                     IsCancelProxy = true;
                     Reason += "[官机不在]";

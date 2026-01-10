@@ -257,7 +257,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             int i = GroupInfo.SetValue("VoiceId", voiceId, GroupId);
             if (i == -1) return RetryMsg;
 
-            if (IsNapCat)
+            if (IsQQ)
             {
                 // 找出所有分组
                 var groupNames = VoiceMap.Categories

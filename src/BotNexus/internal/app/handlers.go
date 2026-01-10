@@ -83,7 +83,7 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 	if m.Bots == nil {
 		m.Bots = make(map[string]*types.BotClient)
 	}
-	botKey := bot.SelfID
+	botKey := fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID)
 	m.Bots[botKey] = bot
 	m.Mutex.Unlock()
 
@@ -206,16 +206,17 @@ func (m *Manager) fetchBotInfo(bot *types.BotClient) {
 							name = fmt.Sprintf("Group %s (Auto)", gID)
 						}
 						// Create GroupInfo struct
+						botKey := fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID)
 						cachedGroup := types.GroupInfo{
 							GroupID:   gID,
 							GroupName: name,
-							BotID:     bot.SelfID,
+							BotID:     botKey,
 							IsCached:  true,
 							LastSeen:  time.Now(),
 						}
 						m.GroupCache[gID] = cachedGroup
 						// Persist to database
-						go m.SaveGroupToDB(gID, name, bot.SelfID)
+						go m.SaveGroupToDB(gID, name, botKey)
 					}
 				}
 				m.CacheMutex.Unlock()
@@ -243,7 +244,7 @@ func (m *Manager) handleBotConnection(bot *types.BotClient) {
 	defer func() {
 		close(stopHeartbeat) // Stop heartbeat
 		// Cleanup work when connection is closed
-		m.removeBot(bot.SelfID)
+		m.removeBot(bot.SelfID, bot.Platform)
 		bot.Conn.Close()
 
 		// Update online status to offline
@@ -405,10 +406,12 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 		if bot.SelfID != msgSelfID && strings.Contains(bot.SelfID, ":") {
 			// Current is temporary IP ID, received formal ID, updating
 			oldID := bot.SelfID
+			oldKey := fmt.Sprintf("%s:%s", bot.Platform, oldID)
 			m.Mutex.Lock()
-			delete(m.Bots, oldID)
+			delete(m.Bots, oldKey)
 			bot.SelfID = msgSelfID
-			m.Bots[bot.SelfID] = bot
+			newKey := fmt.Sprintf("%s:%s", bot.Platform, msgSelfID)
+			m.Bots[newKey] = bot
 			m.Mutex.Unlock()
 			log.Printf("[Bot] Updated Bot ID from %s to %s", oldID, msgSelfID)
 		}
@@ -1104,13 +1107,14 @@ func (m *Manager) handleBotMessageEvent(bot *types.BotClient, msg types.Internal
 }
 
 // removeBot removes Bot connection
-func (m *Manager) removeBot(botID string) {
+func (m *Manager) removeBot(botID string, platform string) {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
 
-	if _, exists := m.Bots[botID]; exists {
-		delete(m.Bots, botID)
-		log.Printf("Removed Bot %s from active connections", botID)
+	botKey := fmt.Sprintf("%s:%s", platform, botID)
+	if _, exists := m.Bots[botKey]; exists {
+		delete(m.Bots, botKey)
+		log.Printf("Removed Bot %s (Platform: %s) from active connections", botID, platform)
 	}
 }
 
@@ -1982,7 +1986,12 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 
 	m.Mutex.RLock()
 	if selfID != "" {
-		if bot, exists := m.Bots[selfID]; exists {
+		platform := action.Platform
+		if platform == "" {
+			platform = "qq"
+		}
+		botKey := fmt.Sprintf("%s:%s", platform, selfID)
+		if bot, exists := m.Bots[botKey]; exists {
 			targetBot = bot
 		}
 	}
@@ -2204,7 +2213,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 		log.Printf("[ROUTING] [ERROR] Failed to forward Worker %s request to Bot %s: %v. Attempting fallback...", worker.ID, targetBot.SelfID, err)
 
 		// Remove failed Bot and try another one
-		m.removeBot(targetBot.SelfID)
+		m.removeBot(targetBot.SelfID, targetBot.Platform)
 
 		// Simple retry logic: find another available Bot
 		var fallbackBot *types.BotClient

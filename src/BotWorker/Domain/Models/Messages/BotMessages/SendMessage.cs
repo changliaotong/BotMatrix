@@ -37,8 +37,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
         //发送消息
         public async Task SendMessageAsync(bool isDup = false)
         {
-            ShowMessage($"[关闭消息] SelfInfo {SelfInfo.BotUin} IsGroup {IsGroup} SelfInfo.IsGroup {SelfInfo.IsGroup} SelfInfo.IsPrivate {SelfInfo.IsPrivate} ");
-            if ((IsGroup && !SelfInfo.IsGroup) || (!IsGroup && !SelfInfo.IsPrivate))
+            if ((IsGroup && !BotInfo.GetBool("IsGroup", SelfId)) || (!IsGroup && !BotInfo.GetBool("IsPrivate", SelfId)))
             {                
                 Reason += IsGroup ? "[群聊关闭]" : "[私聊关闭]";
                 IsSend = false;
@@ -51,17 +50,25 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             }
 
             ShowMessage($"{(isDup ? "[重复]" : "")}发送消息 {MsgGuid} {Answer} {IsSend}", ConsoleColor.Green);
-            Console.Error.WriteLine($"[SendMessage] IsWeb: {IsWeb}, IsWorker: {IsWorker}, Platform: {Platform}, BotType: {SelfInfo.BotType}");
+            Console.Error.WriteLine($"[SendMessage] EventId: {MsgId}, IsSend: {IsSend}, IsWeb: {IsWeb}, IsOnebot: {IsOnebot}, Platform: {Platform}, BotType: {SelfInfo.BotType}");
+
+            if (!IsSend)
+            {
+                Console.Error.WriteLine($"[SendMessage] Message {MsgId} suppressed: {Reason}");
+                return;
+            }
 
             if (IsWeb || IsOnebot)
             {
                 if (ReplyMessageAsync == null) 
                 {
-                    Console.Error.WriteLine("[SendMessage] ReplyMessageAsync is NULL!");
+                    Console.Error.WriteLine($"[SendMessage] ReplyMessageAsync is NULL for event {MsgId}!");
                     return;
                 }
-                Console.Error.WriteLine("[SendMessage] Calling ReplyMessageAsync...");
+                Console.Error.WriteLine($"[SendMessage] Calling ReplyMessageAsync for event {MsgId}...");
                 await ReplyMessageAsync();
+                IsSent = true;
+                Console.Error.WriteLine($"[SendMessage] ReplyMessageAsync call completed for event {MsgId}.");
             }
             else
             {
@@ -72,6 +79,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
                 var json = JsonConvert.SerializeObject(this);
                 if (ReplyBotMessageAsync == null) return;
                 await ReplyBotMessageAsync(json);
+                IsSent = true;
             }            
         }
     }

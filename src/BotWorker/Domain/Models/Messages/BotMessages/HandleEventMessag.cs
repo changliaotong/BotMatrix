@@ -8,6 +8,8 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
     {        
         public async Task HandleEventAsync()
         {
+            if (EventType == "meta_event") return;
+
             //官机openid处理
             (var isNewGroup, var isBot) = await HandleGuildMessageAsync();
             if (isBot)
@@ -49,7 +51,7 @@ namespace BotWorker.Domain.Models.Messages.BotMessages
             {
                 IsVip = GroupVip.IsVip(GroupId);
 
-                if ((IsMirai || IsNapCat || IsWeixin || IsWorker) && !Group.IsValid && !GroupInfo.IsCanTrial(GroupId))
+                if ((IsMirai || IsQQ || IsWeixin || IsWorker) && !Group.IsValid && !GroupInfo.IsCanTrial(GroupId))
                 {
                     Answer = $"{(GroupVip.IsVipOnce(GroupId) ? "已过期" : "体验期已过")}退群";
                     IsCancelProxy = true;
