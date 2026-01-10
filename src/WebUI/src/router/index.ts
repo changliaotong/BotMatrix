@@ -8,14 +8,18 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
+      component: () => import('@/views/portal/bots/EarlyMeow.vue'),
+      meta: { layout: 'blank' }
+    },
+    {
+      path: '/matrix',
+      name: 'matrix-home',
       component: () => import('@/views/portal/Home.vue'),
       meta: { layout: 'blank' }
     },
     {
       path: '/bots/early-meow',
-      name: 'bot-early-meow',
-      component: () => import('@/views/portal/bots/EarlyMeow.vue'),
-      meta: { layout: 'blank' }
+      redirect: '/'
     },
     {
       path: '/bots/nexus-guard',
