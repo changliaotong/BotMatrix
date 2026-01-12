@@ -21,11 +21,62 @@ namespace BotWorker.Infrastructure.Tools
         public DateTime? DueDate { get; set; } // 截止日期
         public DateTime InsertDate { get; set; } = DateTime.Now;
 
+        public static new async Task EnsureTableCreatedAsync()
+        {
+            await MetaData<Todo>.EnsureTableCreatedAsync();
+
+            // 确保 Todo 表结构完整 (支持旧表升级)
+            await SQLConn.ExecAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Description')
+                    ALTER TABLE Todo ADD Description NVARCHAR(MAX) DEFAULT '' NOT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Priority')
+                    ALTER TABLE Todo ADD Priority NVARCHAR(20) DEFAULT 'Medium' NOT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Progress')
+                    ALTER TABLE Todo ADD Progress INT DEFAULT 0 NOT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Status')
+                    ALTER TABLE Todo ADD Status NVARCHAR(50) DEFAULT 'Pending' NOT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Category')
+                    ALTER TABLE Todo ADD Category NVARCHAR(100) DEFAULT 'Todo' NOT NULL;
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'DueDate')
+                    ALTER TABLE Todo ADD DueDate DATETIME NULL;
+            ");
+        }
+
         public const string format = "todo + 内容 [Dev/Test] [P1/P2/P3] 新增\ntodo - 数字 删除\ntodo #数字 [进度/done/P1/P2/P3/desc 内容] 更新\ntodo + #关键字 查询";
 
         // todo
         public static string GetTodoRes(long groupId, string groupName, long qq, string name, string cmdName, string cmdPara)
         {
+            Console.WriteLine($"[Todo] GetTodoRes: cmdName='{cmdName}', cmdPara='{cmdPara}'");
+            cmdName = cmdName.ToLower();
+            if (cmdName == "todo" || cmdName == "td")
+            {
+                if (cmdPara.StartsWith("+"))
+                {
+                    cmdName = "+";
+                    cmdPara = cmdPara[1..].Trim();
+                }
+                else if (cmdPara.StartsWith("-"))
+                {
+                    cmdName = "-";
+                    cmdPara = cmdPara[1..].Trim();
+                }
+                else if (cmdPara.StartsWith("#"))
+                {
+                    // 保持 cmdName 为 todo，后面会处理 # 开头的 cmdPara
+                }
+                else if (cmdPara.IsNull())
+                {
+                    // 列表查询
+                }
+                else
+                {
+                    // 默认当作搜索
+                    return GetTodos(qq, cmdPara);
+                }
+            }
+            Console.WriteLine($"[Todo] Processed: cmdName='{cmdName}', cmdPara='{cmdPara}'");
+
             if (cmdName == "+" || cmdName.IsNull() && !cmdPara.IsNull() && !cmdPara.StartsWith('#'))
             {
                 // 支持 todo + 内容 Dev P1 或 todo + 内容 Test
@@ -154,8 +205,8 @@ namespace BotWorker.Infrastructure.Tools
         // 得到 todoNo 的 todo
         public static string GetTodo(long qq, int todoNo)
         {
-            string sql = $"select top 1 TodoNo, Category, Priority, Progress, Status, TodoTitle from {FullName} where UserId = {qq} and TodoNo = {todoNo}";
-            return QueryRes(sql, "#{0} [{1}] [{2}] {3}% {4} {5}");
+            string sql = $"select {SqlTop(1)} TodoNo, Category, Priority, Progress, Status, TodoTitle, Description from {FullName} where UserId = {qq} and TodoNo = {todoNo} {SqlLimit(1)}";
+            return QueryRes(sql, "#{0} [{1}] [{2}] {3}% {4} {5}\n描述: {6}");
         }
 
         // todo 列表
@@ -170,7 +221,8 @@ namespace BotWorker.Infrastructure.Tools
                 else sWhere += $" and TodoTitle like '%{cmdPara}%'";
             }
 
-            string res = QueryWhere($"top {topN} TodoNo, Priority, Progress, substring(TodoTitle, 1, 20)", sWhere, "TodoNo desc", "#{0} [{1}] [{2}%] {3}\n", $"{{c}}/{Count(qq)}");
+            string columns = $"{SqlTop(topN)} TodoNo, Category, Priority, Progress, {SqlIsNull("substring(TodoTitle, 1, 20)", "''")}";
+            string res = QueryWhere(columns, sWhere, "TodoNo desc", "#{0} [{1}] [{2}] [{3}%] {4}\n", $"{{c}}/{Count(qq)}");
             return res.IsNull() ? $"太好了，没有todo" : res;
         }
     }

@@ -1,7 +1,4 @@
-﻿using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
-namespace BotWorker.Domain.Entities
+﻿namespace BotWorker.Domain.Entities
 {
     public class GreyList : MetaData<GreyList>
     {

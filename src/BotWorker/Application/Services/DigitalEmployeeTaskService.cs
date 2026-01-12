@@ -1,8 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-
-namespace BotWorker.Application.Services
+﻿namespace BotWorker.Application.Services
 {
     public interface IDigitalEmployeeTaskService
     {

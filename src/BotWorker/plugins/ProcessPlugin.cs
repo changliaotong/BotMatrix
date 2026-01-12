@@ -1,11 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Text.Json;
-using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
-using Microsoft.Extensions.Logging;
 
 namespace BotWorker.Modules.Plugins
 {

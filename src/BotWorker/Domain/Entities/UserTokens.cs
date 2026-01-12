@@ -4,54 +4,74 @@ namespace BotWorker.Domain.Entities;
 
 public partial class UserInfo : MetaDataGuid<UserInfo>
 {
-    public static (string, IDataParameter[]) SqlAddTokens(long userId, float tokens)
+    public static async Task<(string, IDataParameter[])> SqlAddTokensAsync(long userId, float tokens, IDbTransaction? trans = null)
     {
-        return Exists(userId)
+        return await ExistsAsync(userId, trans)
             ? SqlPlus("Tokens", tokens, userId)
             : SqlInsert(new List<Cov> {
                             new Cov("UserId", userId),
-                                new Cov("Tokens", tokens),
+                            new Cov("Tokens", tokens),
                         });
     }
 
-    public static async Task<(int Result, long TokensValue)> AddTokensAsync(long botUin, long groupId, string groupName, long qq, string name, long tokensAdd, string tokensInfo, IDbTransaction? trans = null)
+    public static async Task<(int Result, long TokensValue, int LogId)> AddTokensAsync(long botUin, long groupId, string groupName, long qq, string name, long tokensAdd, string tokensInfo, IDbTransaction? trans = null)
     {
-        await AppendAsync(botUin, groupId, qq, name, GroupInfo.GetGroupOwner(groupId));
-        
-        bool isNewTrans = false;
-        if (trans == null)
-        {
-            trans = await BeginTransactionAsync();
-            isNewTrans = true;
-        }
-
         try
         {
-            var (sql1, paras1) = TokensLog.SqlLog(botUin, groupId, groupName, qq, name, tokensAdd, tokensInfo);
-            await ExecAsync(sql1, trans, paras1);
+            // 1. 确保用户存在 (必须使用同一事务)
+            await AppendAsync(botUin, groupId, qq, name, await GroupInfo.GetGroupOwnerAsync(groupId), trans: trans);
 
+            // 2. 获取当前准确值并加锁 (UPDLOCK)
+            // 这一步是防止死锁的关键：先锁定 User 行，后续所有操作都在此锁保护下
+            var tokensValue = await GetTokensForUpdateAsync(qq, trans);
+
+            // 3. 如果是消耗算力，检查是否足够
+            if (tokensAdd < 0 && tokensValue < Math.Abs(tokensAdd))
+            {
+                return (-2, tokensValue, 0); // -2 表示算力不足
+            }
+
+            // 4. 记录日志 (直接使用已获取的 tokensValue，避免再次查询)
+            int logId = await TokensLog.AddLogAsync(botUin, groupId, groupName, qq, name, tokensAdd, tokensValue, tokensInfo, trans);
+
+            // 5. 更新算力
             var (sql2, paras2) = SqlPlus("tokens", tokensAdd, qq);
             await ExecAsync(sql2, trans, paras2);
 
-            if (isNewTrans) await trans.CommitAsync();
+            return (0, tokensValue + tokensAdd, logId);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[AddTokens Error] {ex.Message}\n{ex.StackTrace}");
+            if (trans != null) throw; // 事务嵌套时抛出异常，由外层事务处理回滚
+            return (-1, 0, 0);
+        }
+    }
 
-            var tokensValue = GetTokens(qq);
-            SyncCacheField(qq, "Tokens", tokensValue);
-            return (0, tokensValue);
-        }
-        catch
+    public static async Task<(int Result, long TokensValue, int LogId)> AddTokensTransAsync(long botUin, long groupId, string groupName, long qq, string name, long tokensAdd, string tokensInfo, IDbTransaction? trans = null)
+    {
+        using var wrapper = await BeginTransactionAsync(trans);
+        try
         {
-            if (isNewTrans) await trans.RollbackAsync();
-            return (-1, 0);
+            var res = await AddTokensAsync(botUin, groupId, groupName, qq, name, tokensAdd, tokensInfo, wrapper.Transaction);
+            wrapper.Commit();
+
+            await SyncTokensCacheAsync(qq, res.TokensValue);
+            return res;
         }
-        finally
+        catch (Exception ex)
         {
-            if (isNewTrans)
-            {
-                trans.Connection?.Close();
-                trans.Dispose();
-            }
+            Logger.Error($"[AddTokensTrans Error] {ex.Message}");
+            wrapper.Rollback();
+            if (trans != null) throw;
+            return (-1, 0, 0);
         }
+    }
+
+    public static async Task SyncTokensCacheAsync(long qq, long newValue)
+    {
+        SyncCacheField(qq, "Tokens", newValue);
+        await Task.CompletedTask;
     }
 
     public static async Task<long> GetTokensAsync(long qq)
@@ -61,7 +81,10 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
             : 0;
     }
 
-    public static long GetTokens(long qq) => GetTokensAsync(qq).GetAwaiter().GetResult();
+    public static async Task<long> GetTokensForUpdateAsync(long qq, IDbTransaction? trans = null)
+    {
+        return await GetForUpdateAsync<long>("tokens", qq, null, 0, trans);
+    }
 
     public static async Task<string> GetTokensListAsync(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.QQ)
     {
@@ -73,48 +96,37 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
             groupId);
     }
 
-    public static string GetTokensList(long groupId, long qq, long top, BotData.Platform botType = BotData.Platform.QQ) => GetTokensListAsync(groupId, qq, top, botType).GetAwaiter().GetResult();
-
     public static async Task<long> GetTokensRankingAsync(long groupId, long qq)
     {
         return await CountWhereAsync($"tokens > {await GetTokensAsync(qq)} and UserId in (SELECT UserId FROM {GroupMember.FullName} WHERE GroupId = {groupId})") + 1;
     }
 
     //消耗算力当天合计（单群）
-    public static long GetDayTokensGroup(long groupId, long userId)
+    public static async Task<long> GetDayTokensGroupAsync(long groupId, long userId)
     {
         var sql = $"SELECT SUM(TokensAdd) FROM {TokensLog.FullName} WHERE GroupId = {groupId} AND UserId = {userId} " +
                   $"AND ABS({SqlDateDiff("DAY", "InsertDate", SqlDateTime)}) = 0 AND TokensAdd < 0";
-        return QueryScalar<long>(sql);
+        return await QueryScalarAsync<long>(sql);
     }
 
     //消耗算力当天合计（所有）
-    public static long GetDayTokens(long userId)
+    public static async Task<long> GetDayTokensAsync(long userId)
     {
         var sql = $"SELECT SUM(TokensAdd) FROM {TokensLog.FullName} WHERE UserId = {userId} " +
                   $"AND ABS({SqlDateDiff("DAY", "InsertDate", SqlDateTime)}) = 0 AND TokensAdd < 0";
-        return QueryScalar<long>(sql);
+        return await QueryScalarAsync<long>(sql);
     }
 
-    public static int AddTokens(long botUin, long groupId, string groupName, long qq, string name, long tokensAdd, string tokensInfo)
+    public static async Task<int> MinusTokensAsync(long botUin, long groupId, string groupName, long qq, string name, long minus, string tokensInfo)
     {
-        return AddTokensAsync(botUin, groupId, groupName, qq, name, tokensAdd, tokensInfo).GetAwaiter().GetResult().Result;
+        var res = await AddTokensTransAsync(botUin, groupId, groupName, qq, name, -minus, tokensInfo);
+        return res.Result;
     }
 
-    public static int MinusTokens(long botUin, long groupId, string groupName, long qq, string name, long minus, string tokensInfo)
+    public static async Task<string> MinusTokensResAsync(long botUin, long groupId, string groupName, long qq, string name, long minus, string tokensInfo)
     {
-        return AddTokens(botUin, groupId, groupName, qq, name, -minus, tokensInfo);
-    }
-
-    public static int MinusTokens(BotMessage bm, long minus, string tokensInfo)
-    {
-        return AddTokens(bm.SelfId, bm.RealGroupId, bm.GroupName, bm.UserId, bm.Name, -minus, tokensInfo);
-    }
-
-    public static string MinusTokensRes(long botUin, long groupId, string groupName, long qq, string name, long minus, string tokensInfo)
-    {
-        return MinusTokens(botUin, groupId, groupName, qq, name, minus, tokensInfo) == -1
+        return await MinusTokensAsync(botUin, groupId, groupName, qq, name, minus, tokensInfo) == -1
             ? ""
-            : ""; // $"\n算力:-{minus}，累计：{{TOKENS}}";
+            : ""; 
     }
 }

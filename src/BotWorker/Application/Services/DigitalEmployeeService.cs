@@ -7,18 +7,11 @@ namespace BotWorker.Application.Services
         Task<string> ExecuteTaskAsync(string taskDescription);
     }
 
-    public class DigitalEmployeeService : IDigitalEmployeeService
+    public class DigitalEmployeeService(IAIService aiService) : IDigitalEmployeeService
     {
-        private readonly IAIService _aiService;
-
-        public DigitalEmployeeService(IAIService aiService)
-        {
-            _aiService = aiService;
-        }
-
         public async Task<string> ExecuteTaskAsync(string taskDescription)
         {
-            return await _aiService.ChatAsync($"执行任务: {taskDescription}");
+            return await aiService.ChatAsync($"执行任务: {taskDescription}");
         }
     }
 }

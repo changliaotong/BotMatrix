@@ -291,54 +291,86 @@ namespace BotWorker.Modules.Games
         public static void ClearShuffledDeck(long groupId)
             => ClearShuffledDeckAsync(groupId).GetAwaiter().GetResult();
 
-        public static async Task ClearShuffledDeckAsync(long groupId)
+        public static async Task ClearShuffledDeckAsync(long groupId, IDbTransaction? trans = null)
         {
             string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId}";
-            await ExecAsync(sql);
+            await ExecAsync(sql, trans);
         }
 
         public static void ClearShuffledDeck(long groupId, long id)
             => ClearShuffledDeckAsync(groupId, id).GetAwaiter().GetResult();
 
-        public static async Task ClearShuffledDeckAsync(long groupId, long id)
+        public static async Task ClearShuffledDeckAsync(long groupId, long id, IDbTransaction? trans = null)
         {
             string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId} and Id = {id}";
-            await ExecAsync(sql);
+            await ExecAsync(sql, trans);
+        }
+
+        public static async Task ClearShuffledDeckAsync(long groupId, List<int> ids, IDbTransaction? trans = null)
+        {
+            if (ids == null || ids.Count == 0) return;
+            string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId} AND Id IN ({string.Join(",", ids)})";
+            await ExecAsync(sql, trans);
         }
 
         public static void SaveShuffledDeck(long groupId, List<Card> deck)
             => SaveShuffledDeckAsync(groupId, deck).GetAwaiter().GetResult();
 
-        public static async Task SaveShuffledDeckAsync(long groupId, List<Card> deck)
+        public static async Task SaveShuffledDeckAsync(long groupId, List<Card> deck, IDbTransaction? trans = null)
         {
-            await ClearShuffledDeckAsync(groupId);
-            for (int i = 0; i < deck.Count; i++)
+            if (trans != null)
+            {
+                await SaveShuffledDeckInternalAsync(groupId, deck, trans);
+            }
+            else
+            {
+                using var wrapper = await BeginTransactionAsync();
+                try
+                {
+                    await SaveShuffledDeckInternalAsync(groupId, deck, wrapper.Transaction);
+                    await wrapper.CommitAsync();
+                }
+                catch
+                {
+                    await wrapper.RollbackAsync();
+                    throw;
+                }
+            }
+        }
+
+        private static async Task SaveShuffledDeckInternalAsync(long groupId, List<Card> deck, IDbTransaction trans)
+        {
+            await ClearShuffledDeckAsync(groupId, trans);
+            foreach (var (card, i) in deck.Select((c, i) => (c, i)))
+            {
                 await InsertAsync([
                     new Cov("GroupId", groupId),
-                    new Cov("Id", deck[i].Id),
-                    new Cov("Rank", deck[i].Rank),
-                    new Cov("Suit", deck[i].Suit),
+                    new Cov("Id", card.Id),
+                    new Cov("Rank", card.Rank),
+                    new Cov("Suit", card.Suit),
                     new Cov("DeckOrder", i),
-                ]);
+                ], trans);
+            }
         }
 
         public static bool IsShuffledDeckExists(long groupId)
             => IsShuffledDeckExistsAsync(groupId).GetAwaiter().GetResult();
 
-        public static async Task<bool> IsShuffledDeckExistsAsync(long groupId)
+        public static async Task<bool> IsShuffledDeckExistsAsync(long groupId, IDbTransaction? trans = null)
         {
-            return await CountWhereAsync($"groupId = {groupId}") >= 6;
+            return await CountWhereAsync($"groupId = {groupId}", trans) >= 6;
         }
 
         public static List<Card> ReadShuffledDeck(long groupId)
             => ReadShuffledDeckAsync(groupId).GetAwaiter().GetResult();
 
-        public static async Task<List<Card>> ReadShuffledDeckAsync(long groupId)
+        public static async Task<List<Card>> ReadShuffledDeckAsync(long groupId, IDbTransaction? trans = null, bool lockRow = false)
         {
             List<Card> deck = [];
-            string query = $"SELECT Id, Rank, Suit FROM {FullName} WHERE groupId = @groupId ORDER BY DeckOrder";
-            
-            var ds = await QueryDatasetAsync(query, [CreateParameter("@groupId", groupId)]);
+            string lockSql = lockRow ? " WITH (UPDLOCK, ROWLOCK) " : "";
+            string query = $"SELECT Id, Rank, Suit FROM {FullName}{lockSql} WHERE groupId = @groupId ORDER BY DeckOrder";
+
+            var ds = await QueryDatasetAsync(query, trans, [CreateParameter("@groupId", groupId)]);
             if (ds != null && ds.Tables.Count > 0)
             {
                 foreach (DataRow row in ds.Tables[0].Rows)

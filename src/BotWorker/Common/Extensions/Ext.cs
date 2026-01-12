@@ -345,7 +345,7 @@ namespace BotWorker.Common.Extensions
             }
             catch (Exception e)
             {
-                C.ErrorMessage($"\nException Caught!\nMessage :{e.Message}");
+                Logger.Error($"\nException Caught!\nMessage :{e.Message}");
                 return "";
             }
         }
@@ -422,11 +422,6 @@ namespace BotWorker.Common.Extensions
                 return text[..3] + mask.Times(3) + text[^3..];
             else
                 return text;
-        }
-
-        public static string WrapWord(this string text, int width)
-        {
-            return ImageGen.WordWrap(text, width);
         }
 
         public static bool IsNullOrEmpty(this string? text)

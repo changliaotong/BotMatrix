@@ -45,6 +45,21 @@ namespace BotWorker.Infrastructure.Messaging
         {
             var db = _redis.GetDatabase();
 
+            // Try to fix MISCONF error on Redis side (self-healing)
+            try
+            {
+                var server = _redis.GetServer(_redis.GetEndPoints()[0]);
+                if (server != null)
+                {
+                    await server.ConfigSetAsync("stop-writes-on-bgsave-error", "no");
+                    _logger.LogInformation("Attempted to set stop-writes-on-bgsave-error to no for self-healing");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Failed to set stop-writes-on-bgsave-error (self-healing): {Message}", ex.Message);
+            }
+
             // Ensure consumer group exists
             try
             {
@@ -66,12 +81,20 @@ namespace BotWorker.Infrastructure.Messaging
             {
                 try
                 {
+                    if (!_redis.IsConnected)
+                    {
+                        _logger.LogWarning("Redis is not connected, waiting for connection...");
+                        await Task.Delay(5000, stoppingToken);
+                        continue;
+                    }
+
                     // Read from group
                     // Using ">" to read new messages
                     var messages = await db.StreamReadGroupAsync(_streamName, _groupName, _consumerName, ">", _batchSize);
 
                     if (messages == null || messages.Length == 0)
                     {
+                        await Task.Delay(_blockTimeMs, stoppingToken);
                         continue;
                     }
 
@@ -88,7 +111,7 @@ namespace BotWorker.Infrastructure.Messaging
                             try
                             {
                                 string payloadStr = payload.ToString();
-                                _logger.LogDebug("Processing message from stream {StreamName}, ID: {MsgId}. Payload: {Payload}", _streamName, msg.Id, payloadStr);
+                                // _logger.LogDebug("Processing message from stream {StreamName}, ID: {MsgId}. Payload: {Payload}", _streamName, msg.Id, payloadStr);
 
                                 var botMessage = await BotMessageMapper.MapToOneBotEventAsync(payloadStr, _apiClient);
                                 if (botMessage != null)
@@ -97,23 +120,28 @@ namespace BotWorker.Infrastructure.Messaging
                                     var now = DateTimeOffset.Now.ToUnixTimeSeconds();
                                     if (botMessage.Time > 0)
                                     {
-                                        if (botMessage.Time < _startTime - 10) // 允许 10 秒的时钟偏差
+                                        if (botMessage.Time < _startTime)
                                         {
+                                            /*
                                             _logger.LogWarning("Skipping cached message sent before startup: {MsgId}, Time: {Time}, StartTime: {StartTime}", 
                                                 botMessage.MsgId, botMessage.Time, _startTime);
+                                            */
                                             await db.StreamAcknowledgeAsync(_streamName, _groupName, msg.Id);
                                             continue;
                                         }
                                         
                                         if (now - botMessage.Time > 60) // 超过 60 秒的消息不再处理
                                         {
+                                            /*
                                             _logger.LogWarning("Skipping expired message: {MsgId}, Time: {Time}, Age: {Age}s", 
                                                 botMessage.MsgId, botMessage.Time, now - botMessage.Time);
+                                            */
                                             await db.StreamAcknowledgeAsync(_streamName, _groupName, msg.Id);
                                             continue;
                                         }
                                     }
 
+                                    /*
                                     if (botMessage.EventType != "meta_event")
                                     {
                                         _logger.LogInformation("Mapped message: {MsgId}, Type: {EventType}, From: {UserId}, Group: {GroupId}, Content: {Message}", 
@@ -123,6 +151,7 @@ namespace BotWorker.Infrastructure.Messaging
                                     {
                                         _logger.LogDebug("Mapped meta event: {MsgId}", botMessage.MsgId);
                                     }
+                                    */
                                     await _pipeline.ExecuteAsync(botMessage);
                                 }
                                 else

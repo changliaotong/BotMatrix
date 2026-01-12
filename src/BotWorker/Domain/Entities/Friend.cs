@@ -1,5 +1,4 @@
 using System.Data;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities;
 public class Friend : MetaData<Friend>
@@ -32,9 +31,12 @@ public class Friend : MetaData<Friend>
             });
     }
 
-    public static (string, IDataParameter[]) SqlAddCredit(long botUin, long userId, long creditPlus)
+    public static (string, IDataParameter[]) SqlAddCredit(long botUin, long userId, long creditPlus, IDbTransaction? trans = null)
+        => SqlAddCreditAsync(botUin, userId, creditPlus, trans).GetAwaiter().GetResult();
+
+    public static async Task<(string, IDataParameter[])> SqlAddCreditAsync(long botUin, long userId, long creditPlus, IDbTransaction? trans = null)
     {
-        if (Exists(botUin, userId))
+        if (await ExistsAsync(botUin, userId, trans))
             return SqlPlus("Credit", creditPlus, botUin, userId);
         else
             return SqlInsert(new
@@ -48,6 +50,11 @@ public class Friend : MetaData<Friend>
     public static async Task<long> GetCreditAsync(long botUin, long userId, IDbTransaction? trans = null)
     {
         return await GetLongAsync("Credit", botUin, userId, trans);
+    }
+
+    public static async Task<long> GetCreditForUpdateAsync(long botUin, long userId, IDbTransaction? trans = null)
+    {
+        return await GetForUpdateAsync<long>("Credit", botUin, userId, 0, trans);
     }
 
     public static long GetCredit(long botUin, long userId)

@@ -1,17 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
 using StackExchange.Redis;
 using BotWorker.Infrastructure.Communication.OneBot;
-using BotWorker.Application.Services;
-using BotWorker.Domain.Entities;
-using BotWorker.Domain.Interfaces;
 
-using BotWorker.Modules.AI.Services;
-using BotWorker.Modules.AI.Interfaces;
 
 namespace BotWorker.Modules.Plugins
 {
@@ -43,6 +33,7 @@ namespace BotWorker.Modules.Plugins
         public IAgentExecutor Agent => _agentExecutor;
         public II18nService I18n => _i18nService;
         public IRagService Rag => _ragService;
+        public ILogger Logger => _logger;
         public SessionManager Sessions => _sessionManager;
         public IEventNexus Events => _eventNexus;
 

@@ -1,0 +1,19 @@
+{
+    "server": {
+        "uri": "ws://localhost:8081/ws/bots",
+        "bot_id": "51437810",
+        "platform": "qq"
+    },
+    "tester": {
+        "user_id": 1653346663,
+        "nickname": "Tester"
+    },
+    "test_cases": [
+        {"name": "Sangong 100", "input": "三公 100", "expected_not_empty": true, "timeout": 30},
+        {"name": "Smart Todo Add Dev P1", "input": "todo + 重构代码 Dev P1", "expected_contains": ["待办添加成功", "Dev", "High"], "timeout": 20},
+        {"name": "Smart Todo List", "input": "todo", "expected_contains": ["#", "Dev", "High"], "timeout": 20},
+        {"name": "Smart Todo Search", "input": "todo 重构", "expected_contains": ["重构"], "timeout": 20},
+        {"name": "Smart Todo Update Progress", "input": "todo #1 50", "expected_contains": ["进度已更新为 50%"], "timeout": 20},
+        {"name": "Smart Todo Done", "input": "todo #1 done", "expected_contains": ["已完成"], "timeout": 20}
+    ]
+}

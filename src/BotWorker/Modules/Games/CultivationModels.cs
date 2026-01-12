@@ -28,7 +28,9 @@ namespace BotWorker.Modules.Games
 
         public static async Task<List<CultivationProfile>> GetTopCultivatorsAsync(int limit = 10)
         {
-            return await QueryWhere("1=1 ORDER BY Level DESC, Exp DESC LIMIT @p1", SqlParams(("@p1", limit)));
+            string topClause = SqlTop(limit);
+            string limitClause = SqlLimit(limit);
+            return await QueryWhere($"{topClause} 1=1 ORDER BY Level DESC, Exp DESC {limitClause}", SqlParams());
         }
 
         public string GetStageName()

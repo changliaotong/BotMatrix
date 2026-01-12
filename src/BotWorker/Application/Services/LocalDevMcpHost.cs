@@ -1,22 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace BotWorker.Application.Services
 {
-    public class LocalDevMcpHost : IMCPHost
+    public class LocalDevMcpHost(string baseDir) : IMCPHost
     {
-        private readonly string _baseDir;
         private readonly string[] _protectedPaths = { ".git", "config.json", ".env", "id_rsa", "id_rsa.pub" };
         private readonly string[] _allowedCmds = { "dotnet", "git", "ls", "dir", "grep", "cat", "find", "mkdir" };
-
-        public LocalDevMcpHost(string baseDir)
-        {
-            _baseDir = baseDir;
-        }
 
         public Task<IEnumerable<MCPTool>> ListToolsAsync(string serverId, CancellationToken ct = default)
         {
@@ -65,13 +52,13 @@ namespace BotWorker.Application.Services
                 switch (toolName)
                 {
                     case "dev_read_file":
-                        var readPath = Path.Combine(_baseDir, arguments["path"].ToString()!);
+                        var readPath = Path.Combine(baseDir, arguments["path"].ToString()!);
                         if (IsProtected(readPath)) return Error("Path is protected");
                         var content = await File.ReadAllTextAsync(readPath, ct);
                         return Success(content);
 
                     case "dev_write_file":
-                        var writePath = Path.Combine(_baseDir, arguments["path"].ToString()!);
+                        var writePath = Path.Combine(baseDir, arguments["path"].ToString()!);
                         if (IsProtected(writePath)) return Error("Path is protected");
                         var writeContent = arguments["content"].ToString()!;
                         await File.WriteAllTextAsync(writePath, writeContent, ct);

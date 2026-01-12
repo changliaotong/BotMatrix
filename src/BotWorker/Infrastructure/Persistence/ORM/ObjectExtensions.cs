@@ -1,5 +1,4 @@
 using System.Data;
-using BotWorker.Infrastructure.Persistence.Database;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
 {

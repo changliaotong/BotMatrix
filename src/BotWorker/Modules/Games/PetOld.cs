@@ -292,7 +292,7 @@ namespace BotWorker.Modules.Games
             string sql = $"SELECT {SqlTop(topN)} FriendId, {func}(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
                          $"WHERE GroupId = {groupId} AND UserId = {qq} AND IsValid = 1 ORDER BY SellPrice DESC {SqlLimit(topN)}";
             string res = await QueryResAsync(sql, "【第{i}名】 [@:{0}] 身价：{1}\n");
-            return $"{res}您买入萌宠数量：{await GetPetCountAsync(groupId, qq)}";
+            return $"{res}当前宠物状态：您买入的宠物数量：{await GetPetCountAsync(groupId, qq)}";
         }
     }
 }

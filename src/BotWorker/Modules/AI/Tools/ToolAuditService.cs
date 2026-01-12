@@ -39,27 +39,42 @@ namespace BotWorker.Modules.AI.Tools
     {
         public async Task<string> LogCallAsync(string taskId, string staffId, string toolName, string input, ToolRiskLevel risk)
         {
-            var log = new ToolAuditLog
+            try
             {
-                TaskId = taskId,
-                StaffId = staffId,
-                ToolName = toolName,
-                InputArgs = input,
-                RiskLevel = risk,
-                Status = "InProgress"
-            };
-            await log.InsertAsync();
-            return log.Guid.ToString();
+                var log = new ToolAuditLog
+                {
+                    TaskId = taskId,
+                    StaffId = staffId,
+                    ToolName = toolName,
+                    InputArgs = input,
+                    RiskLevel = risk,
+                    Status = "InProgress"
+                };
+                await log.InsertAsync();
+                return log.Guid.ToString();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ToolAuditService] Error logging call: {ex.Message}");
+                return Guid.NewGuid().ToString(); // 返回一个新的 GUID，即使保存失败也允许流程继续
+            }
         }
 
         public async Task UpdateResultAsync(string logId, string output, string status = "Success")
         {
-            var log = await ToolAuditLog.GetByGuidAsync(logId);
-            if (log != null)
+            try
             {
-                log.OutputResult = output;
-                log.Status = status;
-                await log.UpdateAsync();
+                var log = await ToolAuditLog.GetByGuidAsync(logId);
+                if (log != null)
+                {
+                    log.OutputResult = output;
+                    log.Status = status;
+                    await log.UpdateAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ToolAuditService] Error updating result: {ex.Message}");
             }
         }
 

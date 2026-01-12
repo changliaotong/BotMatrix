@@ -1,9 +1,4 @@
-﻿using System;
-using System.Linq;
-using BotWorker.Infrastructure.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
-namespace BotWorker.Domain.Entities
+﻿namespace BotWorker.Domain.Entities
 {
     public class Cidian : MetaData<Cidian>
     {

@@ -19,7 +19,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 var botMsg = botMsgEvent.BotMessage;
 
                 // 1. 同行过滤
-                if (UserInfo.StartWith285or300(botMsg.UserId))
+                if (await UserInfo.StartWith285or300Async(botMsg.UserId))
                 {
                     botMsg.Reason += "[同行]";
                     context.Logger?.LogInformation("[PreProcess] Filtered: Peer user {UserId} for message {MessageId}", botMsg.UserId, context.EventId);

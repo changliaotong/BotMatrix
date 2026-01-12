@@ -1,8 +1,5 @@
 using System.Text.Json;
-using BotWorker.Domain.Models.Messages.BotMessages;
 using BotWorker.Infrastructure.Communication.OneBot;
-using BotWorker.Domain.Entities;
-using BotWorker.Modules.Plugins;
 
 namespace BotWorker.Infrastructure.Messaging
 {

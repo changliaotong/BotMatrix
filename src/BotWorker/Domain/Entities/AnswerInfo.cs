@@ -1,5 +1,3 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     //问答系统

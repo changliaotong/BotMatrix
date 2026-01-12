@@ -1,7 +1,4 @@
-using System;
 using System.Text.Json.Serialization;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Infrastructure.Utils;
 
 namespace BotWorker.Infrastructure.Communication.OneBot
 {

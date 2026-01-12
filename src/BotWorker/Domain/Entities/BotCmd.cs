@@ -4,22 +4,54 @@ namespace BotWorker.Domain.Entities
     {
         public override string TableName => "Cmd";
         public override string KeyField => "Id";
+        private static readonly Dictionary<string, string> _baseCommandMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "菜单", "菜单" }, { "menu", "菜单" },
+            { "帮助", "帮助" }, { "help", "帮助" }, { "指令", "帮助" },
+            { "签到", "签到" }, { "checkin", "签到" },
+            { "积分", "积分" }, { "credit", "积分" },
+            { "金币", "金币" }, { "coins", "金币" },
+            { "计算", "计算" }, { "calc", "计算" },
+            { "钓鱼", "钓鱼" }, { "fish", "钓鱼" },
+            { "抛竿", "抛竿" }, { "收竿", "收竿" },
+            { "购买", "购买" }, { "buy", "购买" },
+            { "买分", "买分" },
+            { "我的宠物", "我的宠物" }, { "pet", "我的宠物" },
+            { "我的待办", "todo" }, { "todo", "todo" }, { "td", "todo" },
+            { "添加待办", "todo" },
+            { "拍砖", "拍砖" },
+            { "早安", "早安" }, { "午安", "午安" }, { "晚安", "晚安" },
+            { "闲聊", "闲聊" }, { "chat", "闲聊" }, { "ai", "闲聊" },
+            { "成语", "成语" },
+            { "提示词", "提示词" },
+            { "报时", "报时" },
+            { "点歌", "点歌" },
+            { "倒计时", "倒计时" }
+        };
+
         public static string GetRegexCmd()
         {
-            var sql = $"SELECT CmdText FROM {FullName} WHERE IsClose = 0 ORDER BY LEN(CmdName) DESC";
-            // 按长度降序排序
-            var sortedCommands = QueryRes(sql, "{0}|").Trim('|')
-                .Split('|')                           // 拆分为数组
-                .OrderByDescending(cmd => cmd.Length) // 按长度降序排序
+            var sql = $"SELECT {Quote("CmdText")} FROM {FullName} WHERE {Quote("IsClose")} = 0 ORDER BY {SqlLen(Quote("CmdText"))} DESC";
+            var res = QueryRes(sql, "{0}|").Trim('|');
+            
+            var dbCommands = string.IsNullOrEmpty(res) ? Array.Empty<string>() : res.Split('|');
+            var allCommands = dbCommands.Concat(_baseCommandMap.Keys).Distinct()
+                .OrderByDescending(cmd => cmd.Length)
                 .ToArray();
 
-            // 重新拼接为正则表达式
-            return @$"^[#＃﹟/／ ]*(?<cmdName>({string.Join('|', sortedCommands)}))[+ ]*(?<cmdPara>.*)";            
+            return @$"^[#＃﹟/／ ]*(?<cmdName>({string.Join('|', allCommands)}))\s*(?<cmdPara>.*)";            
         }
 
         public static string GetCmdName(string cmdText)
         {
-            return QueryScalar<string>($"SELECT CmdName FROM {FullName} WHERE CmdText LIKE '%|{cmdText}|%' OR CmdText LIKE '{cmdText}|%' OR CmdText LIKE '%|{cmdText}'") ?? "";
+            if (string.IsNullOrEmpty(cmdText)) return "";
+
+            // 优先从基础命令映射中查找
+            if (_baseCommandMap.TryGetValue(cmdText, out var baseName))
+                return baseName;
+
+            // 再从数据库中查找
+            return QueryScalar<string>($"SELECT CmdName FROM {FullName} WHERE CmdText = {cmdText.Quotes()} OR CmdText LIKE '%|{cmdText}|%' OR CmdText LIKE '{cmdText}|%' OR CmdText LIKE '%|{cmdText}'") ?? "";
         }
 
         public static string GetClosedCmd()

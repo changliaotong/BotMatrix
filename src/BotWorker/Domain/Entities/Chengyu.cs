@@ -1,9 +1,3 @@
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Entities;
-
-using BotWorker.Infrastructure.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class Chengyu : MetaData<Chengyu>
@@ -124,9 +118,6 @@ namespace BotWorker.Domain.Entities
         }
 
         // 反查 根据释义反查成语
-        public static string GetFanChaRes(BotMessage bm)
-            => GetFanChaResAsync(bm).GetAwaiter().GetResult();
-
         public static async Task<string> GetFanChaResAsync(BotMessage bm)
         {
             if (bm.CmdPara.IsNullOrWhiteSpace())

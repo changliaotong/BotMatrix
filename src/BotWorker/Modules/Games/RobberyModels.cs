@@ -28,7 +28,9 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<DateTime> GetLastRobTimeAsync(string userId)
         {
-            var last = (await QueryWhere("RobberId = @p1 ORDER BY RobTime DESC LIMIT 1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            string topClause = SqlTop(1);
+            string limitClause = SqlLimit(1);
+            var last = (await QueryWhere($"{topClause} RobberId = @p1 ORDER BY RobTime DESC {limitClause}", SqlParams(("@p1", userId)))).FirstOrDefault();
             return last?.RobTime ?? DateTime.MinValue;
         }
 
@@ -37,7 +39,9 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<DateTime> GetProtectionEndTimeAsync(string userId)
         {
-            var last = (await QueryWhere("VictimId = @p1 AND IsSuccess = 1 ORDER BY RobTime DESC LIMIT 1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            string topClause = SqlTop(1);
+            string limitClause = SqlLimit(1);
+            var last = (await QueryWhere($"{topClause} VictimId = @p1 AND IsSuccess = 1 ORDER BY RobTime DESC {limitClause}", SqlParams(("@p1", userId)))).FirstOrDefault();
             if (last == null) return DateTime.MinValue;
             // 被成功打劫后保护 30 分钟
             return last.RobTime.AddMinutes(30);

@@ -1,7 +1,8 @@
 using System.Data;
 
 namespace BotWorker.Infrastructure.Persistence.ORM
-{    public class QueryOptions
+{    
+    public class QueryOptions
     {
         public int? PageIndex { get; set; }     // 从1开始
         public int? PageSize { get; set; }      // 每页数量

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
-using BotWorker.Infrastructure.Persistence.Database;
-
-namespace BotWorker.Application.Services
+﻿namespace BotWorker.Application.Services
 {
     public class LimiterService : ILimiter
     {

@@ -1,7 +1,3 @@
-using BotWorker.Domain.Entities;
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class UserGuild : MetaData<UserGuild>

@@ -31,7 +31,9 @@ namespace BotWorker.Modules.Games
 
         public static async Task<List<UserPairingProfile>> GetActiveSeekersAsync(int limit = 10)
         {
-            return await QueryWhere("IsLooking = 1 ORDER BY LastActive DESC LIMIT @p1", SqlParams(("@p1", limit)));
+            string topClause = SqlTop(limit);
+            string limitClause = SqlLimit(limit);
+            return await QueryWhere($"{topClause} IsLooking = 1 ORDER BY LastActive DESC {limitClause}", SqlParams());
         }
     }
 

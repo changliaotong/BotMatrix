@@ -42,8 +42,8 @@ namespace BotWorker.Modules.AI.Plugins
                 return knowledgeResponse.Results;
             }
             catch (Exception ex)
-            { 
-                InfoMessage($"获取知识库失败{ex.Message}");
+            {
+                Logger.Error($"获取知识库失败{ex.Message}");
                 return null;
             };
         }

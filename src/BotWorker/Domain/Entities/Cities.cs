@@ -1,6 +1,4 @@
-﻿using BotWorker.Infrastructure.Persistence.ORM;
-
-namespace BotWorker.Domain.Entities
+﻿namespace BotWorker.Domain.Entities
 {
     /// <summary>
     /// 中国城市数据

@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-namespace BotWorker.Application.Services
+﻿namespace BotWorker.Application.Services
 {
     public interface IFissionService
     {

@@ -100,8 +100,8 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                var prompt = $"你是一个搜索专家。请将以下用户提问改写为一个或多个最适合在知识库中进行向量搜索和关键词搜索的关键词或短语。只需要返回改写后的内容，不要有任何解释。\n提问：{query}\n改写结果：";
-                var refined = await AIService.ChatAsync(prompt);
+                var prompt = $"你是一个搜索专家。请将以下用户提问改写为一个或多个最适合在知识库中进行向量搜索 and 关键词搜索的关键词或短语。只需要返回改写后的内容，不要有任何解释。\n提问：{query}\n改写结果：";
+                var refined = await AIService.RawChatAsync(prompt);
                 if (!string.IsNullOrWhiteSpace(refined))
                 {
                     Console.WriteLine($"[Agentic RAG] Query Refined: '{query}' -> '{refined.Trim()}'");
@@ -124,7 +124,7 @@ namespace BotWorker.Modules.AI.Services
                 try
                 {
                     var prompt = $"你是一个知识库评估专家。请判断以下检索到的内容是否能回答或有助于回答用户的问题。只需要返回 YES 或 NO。\n用户提问：{query}\n检索内容：{chunk.Content}\n判断结果：";
-                    var decision = await AIService.ChatAsync(prompt);
+                    var decision = await AIService.RawChatAsync(prompt);
                     var isRelevant = decision?.Trim().ToUpper().Contains("YES") ?? true;
                     if (!isRelevant)
                     {

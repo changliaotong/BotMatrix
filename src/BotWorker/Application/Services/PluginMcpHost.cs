@@ -1,30 +1,16 @@
 using BotWorker.Infrastructure.Communication.OneBot;
-using BotWorker.Infrastructure.Utils;
 
 namespace BotWorker.Application.Services
 {
-    public class PluginMcpHost : IMCPHost
+    public class PluginMcpHost(
+        PluginManager pluginManager,
+        IAIService aiService,
+        II18nService i18nService,
+        ILogger<PluginMcpHost> logger) : IMCPHost
     {
-        private readonly PluginManager _pluginManager;
-        private readonly IAIService _aiService;
-        private readonly II18nService _i18nService;
-        private readonly Microsoft.Extensions.Logging.ILogger<PluginMcpHost> _logger;
-
-        public PluginMcpHost(
-            PluginManager pluginManager, 
-            IAIService aiService, 
-            II18nService i18nService,
-            Microsoft.Extensions.Logging.ILogger<PluginMcpHost> logger)
-        {
-            _pluginManager = pluginManager;
-            _aiService = aiService;
-            _i18nService = i18nService;
-            _logger = logger;
-        }
-
         public Task<IEnumerable<MCPTool>> ListToolsAsync(string serverId, CancellationToken ct = default)
         {
-            var tools = _pluginManager.Skills.Select(skill => new MCPTool
+            var tools = pluginManager.Skills.Select(skill => new MCPTool
             {
                 Name = skill.Capability.Name,
                 Description = skill.Capability.Description + (string.IsNullOrEmpty(skill.Capability.Usage) ? "" : "\n用法: " + skill.Capability.Usage),
@@ -59,7 +45,7 @@ namespace BotWorker.Application.Services
 
         public async Task<MCPCallToolResponse> CallToolAsync(string serverId, string toolName, Dictionary<string, object> arguments, CancellationToken ct = default)
         {
-            var skill = _pluginManager.Skills.FirstOrDefault(s => s.Capability.Name == toolName);
+            var skill = pluginManager.Skills.FirstOrDefault(s => s.Capability.Name == toolName);
             if (skill == null)
             {
                 return new MCPCallToolResponse
@@ -90,9 +76,9 @@ namespace BotWorker.Application.Services
                     ev, 
                     "mcp", 
                     "system", 
-                    _aiService, 
-                    _i18nService,
-                    _logger,
+                    aiService, 
+                    i18nService,
+                    logger,
                     replyDelegate: null,
                     musicReplyDelegate: null);
                 

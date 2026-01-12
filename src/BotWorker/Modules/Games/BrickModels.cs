@@ -31,7 +31,9 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<DateTime> GetLastActionTimeAsync(string userId)
         {
-            var last = (await QueryWhere("AttackerId = @p1 ORDER BY ActionTime DESC LIMIT 1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            string topClause = SqlTop(1);
+            string limitClause = SqlLimit(1);
+            var last = (await QueryWhere($"{topClause} AttackerId = @p1 ORDER BY ActionTime DESC {limitClause}", SqlParams(("@p1", userId)))).FirstOrDefault();
             return last?.ActionTime ?? DateTime.MinValue;
         }
 
@@ -40,7 +42,9 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<List<(string UserId, int Count)>> GetTopAttackersAsync(int limit = 10)
         {
-            string sql = $"SELECT AttackerId as RankUserId, COUNT(*) as RankCount FROM BrickRecords WHERE IsSuccess = 1 GROUP BY AttackerId ORDER BY RankCount DESC LIMIT {limit}";
+            string topClause = SqlTop(limit);
+            string limitClause = SqlLimit(limit);
+            string sql = $"SELECT {topClause} AttackerId as RankUserId, COUNT(*) as RankCount FROM BrickRecords WHERE IsSuccess = 1 GROUP BY AttackerId ORDER BY RankCount DESC {limitClause}";
             var results = await QueryAsync(sql);
             return results.Select(r => (r.RankUserId, r.RankCount)).ToList();
         }

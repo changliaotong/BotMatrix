@@ -1,10 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
-using BotWorker.Modules.Plugins;
-using Microsoft.Extensions.Logging;
-
 namespace BotWorker.Plugins
 {
     [BotPlugin(

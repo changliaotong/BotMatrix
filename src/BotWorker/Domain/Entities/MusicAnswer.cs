@@ -1,5 +1,3 @@
-
-
 namespace BotWorker.Domain.Entities
 {
     public class MusicAnswer : AnswerInfo
@@ -14,11 +12,11 @@ namespace BotWorker.Domain.Entities
                 if (!ExistsAandB("Id", questionId, "Answer", answer))
                 {
                     if (Append(botUin, groupId, qq, BotInfo.GroupCrm, questionId, title, answer, 1, 0, 2, "系统问答") == -1)
-                        ErrorMessage($"添加答案失败：{title} {songId}");
+                        Logger.Error($"添加答案失败：{title} {songId}");
                     else
                     {
                         QuestionInfo.Audit(questionId, 1, 1);
-                        InfoMessage($"✅ 已添加：Title:{title} SongId:{songId}");
+                        Logger.Info($"✅ 已添加：Title:{title} SongId:{songId}");
                     }
                 }
             }

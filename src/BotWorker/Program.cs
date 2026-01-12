@@ -2,45 +2,34 @@ using Serilog;
 using StackExchange.Redis;
 using BotWorker.Application.Messaging.Pipeline;
 using BotWorker.Common.Config;
-using BotWorker.Application.Messaging.Handlers;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Modules.Plugins;
-using BotWorker.Application.Services;
-using BotWorker.Modules.AI.Services;
 using BotWorker.Modules.AI.Interfaces;
-using BotWorker.Modules.AI.Providers;
-using BotWorker.Infrastructure.Persistence.Database;
-using BotWorker.Infrastructure.Utils;
 using BotWorker.Modules.AI.Tools;
-using BotWorker.Infrastructure.Caching;
-
 using BotWorker.Infrastructure.Communication.OneBot;
-using BotWorker.Infrastructure.Communication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 初始化静态配置
-BotWorker.Common.GlobalConfig.Initialize(builder.Configuration);
+GlobalConfig.Initialize(builder.Configuration);
 AppConfig.Initialize(builder.Configuration);
 
 // 配置 Serilog
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+    .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
     .WriteTo.Console()
     .CreateLogger();
 builder.Host.UseSerilog();
 
 // 添加基础服务
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
-builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubFilter, BotWorker.Infrastructure.SignalR.HubLoggingFilter>();
 builder.Services.AddHttpClient();
 
 // 注册 Redis
 var redisHost = builder.Configuration["redis:host"] ?? "localhost";
 var redisPort = builder.Configuration["redis:port"] ?? "6379";
 var redisPassword = builder.Configuration["redis:password"];
-var redisConn = $"{redisHost}:{redisPort},abortConnect=false";
+var redisConn = $"{redisHost}:{redisPort},abortConnect=false,allowAdmin=true";
 if (!string.IsNullOrEmpty(redisPassword))
 {
     redisConn += $",password={redisPassword}";
@@ -63,22 +52,21 @@ builder.Services.AddSingleton<LLMApp>();
 builder.Services.AddSingleton<IMcpService, MCPManager>();
 builder.Services.AddSingleton<IRagService, RagService>();
 builder.Services.AddSingleton<IAIService, AIService>();
+builder.Services.AddSingleton<IImageGenerationService, ImageGenerationService>();
+builder.Services.AddSingleton<IJobService, JobService>();
+builder.Services.AddSingleton<IEmployeeService, EmployeeService>();
+builder.Services.AddSingleton<IEvaluationService, EvaluationService>();
+builder.Services.AddSingleton<IEvolutionService, BotWorker.Modules.AI.Services.EvolutionService>();
+builder.Services.AddSingleton<IDevWorkflowManager, DevWorkflowManager>();
 builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
 builder.Services.AddHostedService<McpInitializationService>();
+builder.Services.AddHostedService<EvolutionBackgroundService>();
 builder.Services.AddSingleton<II18nService, I18nService>();
 builder.Services.AddSingleton<IOneBotApiClient, OneBotApiClient>();
 builder.Services.AddSingleton<IRobot, PluginManager>();
 builder.Services.AddSingleton<PluginManager>(sp => (PluginManager)sp.GetRequiredService<IRobot>());
 builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();
 builder.Services.AddSingleton<IMCPHost, PluginMcpHost>();
-
-// 注册应用层业务服务
-builder.Services.AddSingleton<IPermissionService, PermissionService>();
-builder.Services.AddSingleton<IBotApiService, BotApiService>();
-builder.Services.AddSingleton<IUserService, UserService>();
-builder.Services.AddSingleton<BotWorker.Domain.Interfaces.IGroupRepository, BotWorker.Infrastructure.Persistence.Repositories.GroupRepository>();
-builder.Services.AddSingleton<IGroupService, GroupService>();
-builder.Services.AddSingleton<IHotCmdService, HotCmdService>();
 
 // 注册中间件
 builder.Services.AddSingleton<ExceptionMiddleware>();
@@ -98,13 +86,7 @@ builder.Services.AddTransient<QaMiddleware>();
 builder.Services.AddSingleton<AiMiddleware>();
 builder.Services.AddTransient<AutoSignInMiddleware>();
 
-  // 注册指令处理器
-   builder.Services.AddSingleton<AdminCommandHandler>();
-   builder.Services.AddSingleton<SetupCommandHandler>();
-   builder.Services.AddSingleton<HotCommandHandler>();
-   builder.Services.AddSingleton<GameCommandHandler>();
-
-  // 注册并配置 Pipeline
+// 注册并配置 Pipeline
 builder.Services.AddSingleton<MessagePipeline>(sp => 
 {
     var pipeline = new MessagePipeline(sp);
@@ -146,23 +128,19 @@ builder.Services.AddSingleton<MessagePipeline>(sp =>
 // 注册启动时加载插件的任务
 builder.Services.AddHostedService<StartupLoader>();
 builder.Services.AddHostedService<BotWorker.Infrastructure.Messaging.RedisStreamConsumer>();
-builder.Services.AddHostedService<BotNexusClient>();
+//builder.Services.AddHostedService<BotNexusClient>();
 
 var app = builder.Build();
 
 // 初始化 MetaData 缓存
-BotWorker.Infrastructure.Persistence.ORM.MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
+MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
 
 // 注入插件管理器到 BotMessage
-BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
+BotMessage.LLMApp = app.Services.GetRequiredService<LLMApp>();
 BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
-
-// 检查是否为测试模式
-if (args.Contains("--test"))
-{
-    await BotWorker.TestConsole.RunAsync(builder.Configuration);
-    return;
-}
+BotMessage.ServiceProvider = app.Services;
+LLMApp.ServiceProvider = app.Services;
+BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
 
 if (app.Environment.IsDevelopment())
 {
@@ -171,8 +149,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 app.MapControllers();
-app.MapHub<ChatHub>("/chatHub");
-
 app.Run();
 
 // 简单的启动加载器
@@ -183,7 +159,21 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : 
         Log.Information("[Startup] Starting StartupLoader...");
         // 0. 确保内置指令存在
         await BotCmd.EnsureTableCreatedAsync();
+        await BotWorker.Infrastructure.Tools.Todo.EnsureTableCreatedAsync();
+        
+        // 初始化进化系统相关表
+        await BotWorker.Modules.AI.Models.Evolution.JobDefinition.EnsureTableCreatedAsync();
+        await BotWorker.Modules.AI.Models.Evolution.EmployeeInstance.EnsureTableCreatedAsync();
+        await BotWorker.Modules.AI.Models.Evolution.TaskRecord.EnsureTableCreatedAsync();
+        await BotWorker.Modules.AI.Models.Evolution.TaskExecution.EnsureTableCreatedAsync();
+
+        // 注入初始岗位
+        var jobService = BotMessage.ServiceProvider.GetRequiredService<IJobService>();
+        await jobService.SeedJobsAsync();
+
         await BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
+        await BotCmd.EnsureCommandExistsAsync("岗位任务", "岗位任务");
+        await BotCmd.EnsureCommandExistsAsync("自动开发", "自动开发");
         await BotCmd.EnsureCommandExistsAsync("开启租赁", "开启租赁");
         await BotCmd.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
         await BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");

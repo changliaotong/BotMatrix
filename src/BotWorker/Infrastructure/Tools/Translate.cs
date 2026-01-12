@@ -11,9 +11,9 @@ namespace BotWorker.Infrastructure.Tools
 
         public static async Task<string> GetAzureResAsync(string text) 
         {
-            string subscriptionKey = "327f2895a3e747ed86f32669f20f19cb";
-            string endpoint = "https://api.cognitive.microsofttranslator.com"; 
-            string location = "global";
+            string subscriptionKey = AzureTranslateSubscriptionKey;
+            string endpoint = AzureTranslateEndpoint; 
+            string location = AzureTranslateLocation;
 
             // 发起自动检测请求
             string detectRequestBody = JsonConvert.SerializeObject(new[] { new { Text = text } });

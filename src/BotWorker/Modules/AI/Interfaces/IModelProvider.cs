@@ -9,6 +9,8 @@ namespace BotWorker.Modules.AI.Interfaces
                 
         Task<string> ExecuteAsync(ChatHistory history, ModelExecutionOptions options);
         IAsyncEnumerable<string> StreamExecuteAsync(ChatHistory history, ModelExecutionOptions options);
+
+        Task<string> GenerateImageAsync(string prompt, ModelExecutionOptions options);
     }
 
     public class ModelExecutionOptions

@@ -36,7 +36,7 @@ namespace BotWorker.Modules.AI.Providers.Txt2Img
             }
             catch (Exception ex)
             {
-                Debug($"An error occurred while saving image: {ex.Message}");
+                Logger.Error($"An error occurred while saving image: {ex.Message}");
                 return -1;
             }
         }

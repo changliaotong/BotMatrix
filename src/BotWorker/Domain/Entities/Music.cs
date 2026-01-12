@@ -1,12 +1,7 @@
-using Mirai.Net.Data.Messages.Concretes;
 using Newtonsoft.Json;
 using System.Data;
 using System.Text.Json;
 using System.Web;
-using BotWorker.Common;
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Modules.Games;
 
 namespace BotWorker.Domain.Entities
 {

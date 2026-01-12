@@ -553,7 +553,7 @@ namespace BotWorker.Modules.Games
                     sqls.Add($"INSERT INTO CognitiveMemories (Id, StaffId, Category, Content, Importance, CreateTime, LastSeen) " +
                              $"VALUES ('{Guid.NewGuid()}', '{staffId}', '{m.Category}', '{m.Content}', {m.Importance}, '{m.CreateTime:yyyy-MM-dd HH:mm:ss}', '{m.LastSeen:yyyy-MM-dd HH:mm:ss}')");
                 }
-                BotWorker.Infrastructure.Persistence.Database.SQLConn.ExecTrans(sqls.ToArray());
+                await BotWorker.Infrastructure.Persistence.Database.SQLConn.ExecTransAsync(sqls.ToArray());
                 _logger?.LogInformation($"员工 {staffId} 记忆提炼完成，新增 {newMemories.Count} 条记忆。");
             }
         }

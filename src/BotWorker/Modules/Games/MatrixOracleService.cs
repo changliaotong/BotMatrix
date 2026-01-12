@@ -103,7 +103,7 @@ namespace BotWorker.Modules.Games
             }
 
             await _robot.Rag.IndexDocumentAsync(manual.ToString(), "system_manual");
-            _logger?.LogInformation("[Oracle] 系统说明书已完成 RAG 索引。");
+            // _logger?.LogInformation("[Oracle] 系统说明书已完成 RAG 索引。");
 
             return "OK";
         }

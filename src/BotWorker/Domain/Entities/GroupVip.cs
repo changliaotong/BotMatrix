@@ -1,5 +1,4 @@
 using System.Data;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {
@@ -37,16 +36,7 @@ namespace BotWorker.Domain.Entities
             }
         }
 
-        // 购买机器人
-        public static int BuyRobot(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy)
-        {
-            return BuyRobotAsync(botUin, groupId, groupName, qqBuyer, buyerName, month, payMoney, payMethod, trade, memo, insertBy).GetAwaiter().GetResult();
-        }
-
         // 购买、续费机器人
-        public static (string, IDataParameter[]) SqlBuyVip(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
-            => SqlBuyVipAsync(groupId, groupName, userId, month, payMoney, vipInfo, insertBy).GetAwaiter().GetResult();
-
         public static async Task<(string, IDataParameter[])> SqlBuyVipAsync(long groupId, string groupName, long userId, long month, decimal payMoney, string vipInfo, int insertBy = BotInfo.SystemUid)
         {
             int is_year_vip = await IsYearVIPAsync(groupId) || await RestMonthsAsync(groupId) + month >= 12 ? 1 : 0;       
@@ -71,16 +61,12 @@ namespace BotWorker.Domain.Entities
 
 
         // 换群
-        public static int ChangeGroup(long groupId, long newGroupId, long qq)
-            => ChangeGroupAsync(groupId, newGroupId, qq).GetAwaiter().GetResult();
-
-        public static async Task<int> ChangeGroupAsync(long groupId, long newGroupId, long qq)
+        public static async Task<int> ChangeGroupAsync(long groupId, long newGroupId, long qq, IDbTransaction? trans = null)
         {
-            return await ExecAsync($"exec sz84_robot..sp_ChangeVIP {groupId}, {newGroupId}, {qq}, {BotInfo.SystemUid}");
+            return await ExecAsync($"exec sz84_robot..sp_ChangeVIP {groupId}, {newGroupId}, {qq}, {BotInfo.SystemUid}", trans);
         }
 
-        public static int RestDays(long groupId)
-            => RestDaysAsync(groupId).GetAwaiter().GetResult();
+        public static int RestDays(long groupId) => RestDaysAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<int> RestDaysAsync(long groupId)
         {
@@ -88,24 +74,21 @@ namespace BotWorker.Domain.Entities
         }
  
         // 是否年费版
-        public static bool IsYearVIP(long groupId)
-            => IsYearVIPAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<bool> IsYearVIPAsync(long groupId)
         {
             return await GetBoolAsync("IsYearVip", groupId);
         }
 
-        public static bool IsVip(long groupId)
-            => IsVipAsync(groupId).GetAwaiter().GetResult();
+        public static bool IsVip(long groupId) => IsVipAsync(groupId).GetAwaiter().GetResult();
+        public static bool IsForever(long groupId) => IsForeverAsync(groupId).GetAwaiter().GetResult();
+        public static bool IsVipOnce(long groupId) => IsVipOnceAsync(groupId).GetAwaiter().GetResult();
+        public static bool IsClientVip(long qq) => IsClientVipAsync(qq).GetAwaiter().GetResult();
+        public static bool IsYearVIP(long groupId) => IsYearVIPAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<bool> IsVipAsync(long groupId)
         {
             return await ExistsAsync(groupId);
         }
-
-        public static bool IsForever(long groupId)
-            => IsForeverAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<bool> IsForeverAsync(long groupId)
         {
@@ -113,24 +96,17 @@ namespace BotWorker.Domain.Entities
         }
 
         //是否开通过VIP
-        public static bool IsVipOnce(long groupId)
-            => IsVipOnceAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<bool> IsVipOnceAsync(long groupId)
         {
             return await Income.IsVipOnceAsync(groupId);
         }
-
-        public static bool IsClientVip(long qq)
-            => IsClientVipAsync(qq).GetAwaiter().GetResult();
 
         public static async Task<bool> IsClientVipAsync(long qq)
         {
             return await ExistsFieldAsync("UserId", qq.ToString());
         }
 
-        public static int RestMonths(long groupId)
-            => RestMonthsAsync(groupId).GetAwaiter().GetResult();
+        public static int RestMonths(long groupId) => RestMonthsAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<int> RestMonthsAsync(long groupId)
         {

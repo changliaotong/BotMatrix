@@ -10,7 +10,7 @@ namespace BotWorker.Core.Services
         {
             Client = factory.CreateClient("DefaultClient");
             Client.BaseAddress = new Uri(nav.BaseUri);
-            Client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+            Client.DefaultRequestHeaders.Add("X-Api-Key", _apiKey);
         }
     }
 

@@ -1,8 +1,5 @@
-﻿using Mirai.Net.Data.Messages.Concretes;
+using Mirai.Net.Data.Messages.Concretes;
 using System.Text.RegularExpressions;
-using BotWorker.Common;
-
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {
@@ -23,20 +20,24 @@ namespace BotWorker.Domain.Entities
         // 收到MV分享消息时添加到MV库
         public static int HandleApp(long botUin, long groupId, long userId, AppMessage message)
         {
-            ShowMessage($"content:{message.Content}");
+            // ShowMessage($"content:{message.Content}");
             int i = 0;
             string mv_vid = GetVid(message.Content);
             if (mv_vid != "")
             {
                 if (ExistsMv(message.Content))
-                    ShowMessage("此MV已存在", ConsoleColor.DarkGreen);
+                {
+                    // ShowMessage("此MV已存在", ConsoleColor.DarkGreen);
+                }
                 else
                 {
                     i = Append(mv_vid, message.Content, groupId, userId);
                     if (i == -1)
-                        ErrorMessage("添加MV失败");
+                        Logger.Error("添加MV失败");
                     else
-                        ShowMessage($"✅ 添加MV成功！\nVID：{mv_vid}\nMV数量：{CountAsync}", ConsoleColor.DarkRed);
+                    {
+                        // ShowMessage($"✅ 添加MV成功！\nVID：{mv_vid}\nMV数量：{CountAsync}", ConsoleColor.DarkRed);
+                    }
                 }
                 //if (Common.IsNum(mv_vid))
                 //{

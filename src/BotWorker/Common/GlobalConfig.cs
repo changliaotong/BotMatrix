@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Configuration;
-
 namespace BotWorker.Common
 {
     public enum DatabaseType

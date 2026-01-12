@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using BotWorker.Common;
 
 namespace BotWorker.Domain.Entities
 {
@@ -13,7 +12,7 @@ namespace BotWorker.Domain.Entities
 
 
         // 敏感词管理
-        public static string GetEditKeyword(long groupID, string message)
+        public static async Task<string> GetEditKeywordAsync(long groupID, string message)
         {
             string res = "";
 
@@ -45,7 +44,7 @@ namespace BotWorker.Domain.Entities
                 return "敏感词长度不能大于10";
 
             //增加敏感词
-            string keyword = GroupInfo.GetValue(fieldName, groupID);
+            string keyword = await GroupInfo.GetValueAsync(fieldName, groupID);
             if (cmdOper == "+")
             {
                 operName = "添加";
@@ -85,25 +84,9 @@ namespace BotWorker.Domain.Entities
             else
                 return "操作符不正确";
 
-            return GroupInfo.SetValue(fieldName, keyword, groupID) == -1
+            return await GroupInfo.SetValueAsync(fieldName, keyword, groupID) == -1
                 ? $"{operName}{cmdName}{RetryMsg}"
                 : $"{operName}{cmdName}结果：{res}";
-        }
-
-        public static string ImageUrl(long groupId)
-        {
-            var keywords = new[]
-{
-                ("RecallKeyword", "撤回词"),
-                ("CreditKeyword", "扣分词"),
-                ("WarnKeyword", "警告词"),
-                ("MuteKeyword", "禁言词"),
-                ("KickKeyword", "踢出词"),
-                ("BlackKeyword", "拉黑词")
-            };
-
-            var res = string.Join("\n\n", keywords.Select(k => $"{k.Item2}：{RegexRemove(GroupInfo.GetValue(k.Item1, groupId)).Replace("|", " ").WrapWord(45)}"));
-            return ImageGen.ImageUrl(res);
         }
 
         public static string RegexReplaceKeyword(string keyword)
@@ -260,11 +243,6 @@ namespace BotWorker.Domain.Entities
             };
         }
 
-        public static string GetKeysSet(long group_id, string cmdName = "")
-        {
-            return GetKeysSetAsync(group_id, cmdName).GetAwaiter().GetResult();
-        }
-
         public static async Task<string> GetKeysSetAsync(long group_id, string cmdName = "")
         {
             string res = "";
@@ -296,36 +274,39 @@ namespace BotWorker.Domain.Entities
         }
 
         // 清除警告
-        public static string GetClearRes(long groupId, string cmdPara)
+        public static async Task<string> GetClearResAsync(long groupId, string cmdPara)
         {
             if (!cmdPara.IsMatchQQ())
                 return "格式不正确，请发送 清警告 + QQ";
 
-            if (ClearWarn(groupId, cmdPara.GetAtUserId()) == -1)
+            if (await ClearWarnAsync(groupId, cmdPara.GetAtUserId()) == -1)
                 return  RetryMsg;
 
            return "该用户警告已清除！";
         }
 
         // 查警告
-        public static string  GetWarnInfoAsync(long groupId, string cmdPara)
+        public static async Task<string> GetWarnInfoAsync(long groupId, string cmdPara)
         {
             if (!cmdPara.IsMatchQQ())
                 return "格式不正确，请发送 清警告 + QQ";
             long warn_qq = cmdPara.GetAtUserId();
-            return $"群成员[@:{warn_qq}]警告次数:{WarnCount(warn_qq, groupId)}";
+            return $"群成员[@:{warn_qq}]警告次数:{await WarnCountAsync(warn_qq, groupId)}";
+        }
+        
+        public static long WarnCount(long userId, long groupId) => WarnCountAsync(userId, groupId).GetAwaiter().GetResult();
+
+        public static async Task<long> WarnCountAsync(long userId, long groupId)
+        {
+            return await CountWhereAsync($"GroupId = {groupId} and UserId = {userId}");
         }
 
+        public static int AppendWarn(long botUin, long userId, long groupId, string warnInfo, long insertBy) 
+            => AppendWarnAsync(botUin, userId, groupId, warnInfo, insertBy).GetAwaiter().GetResult();
 
-
-        public static long WarnCount(long userId, long groupId)
+        public static async Task<int> AppendWarnAsync(long botUin, long userId, long groupId, string warnInfo, long insertBy)
         {
-            return CountWhere($"GroupId = {groupId} and UserId = {userId}");
-        }
-
-        public static int AppendWarn(long botUin, long userId, long groupId, string warnInfo, long insertBy)
-        {
-            return Insert([
+            return await InsertAsync([
                             new Cov("BotUin", botUin),
                             new Cov("GroupId", groupId),
                             new Cov("UserId", userId),
@@ -334,9 +315,11 @@ namespace BotWorker.Domain.Entities
                         ]);
         }
 
-        public static int ClearWarn(long groupId, long qq)
+        public static int ClearWarn(long groupId, long qq) => ClearWarnAsync(groupId, qq).GetAwaiter().GetResult();
+
+        public static async Task<int> ClearWarnAsync(long groupId, long qq)
         {
-            return Delete(groupId, qq);
+            return await DeleteAsync(groupId, qq);
         }
 
     }

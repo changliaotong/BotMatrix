@@ -1,9 +1,4 @@
 using System.Data;
-using System.Reflection;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Entities;
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {
@@ -11,64 +6,132 @@ namespace BotWorker.Domain.Entities
     {
         public static async Task<(int Result, long CreditValue, int LogId)> AddCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
         {
-            var creditValue = await GetCreditAsync(botUin, groupId, qq, trans);
-            
-            using var wrapper = await BeginTransactionAsync(trans);
+            // Logger.Debug($"[AddCredit Start] QQ:{qq}, Add:{creditAdd}, Info:{creditInfo}, ExistingTrans:{(trans != null)}");
             try
             {
                 // 1. 确保用户存在
                 long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId);
-                await AppendAsync(botUin, groupId, qq, name, ownerId);
+                await AppendAsync(botUin, groupId, qq, name, ownerId, trans: trans);
 
-                // 2. 执行积分操作
-                var (sql, paras) = await SqlAddCreditAsync(botUin, groupId, qq, creditAdd);
-                await ExecAsync(sql, wrapper.Transaction, paras);
+                // 2. 获取当前准确分值（在事务内获取，并加锁防止并发修改）
+                var creditValue = await GetCreditForUpdateAsync(botUin, groupId, qq, trans);
+                // Logger.Debug($"[AddCredit Current] QQ:{qq}, Current:{creditValue}");
 
-                // 3. 记录日志
-                int logId = await CreditLog.AddLogAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo, wrapper.Transaction);
+                // 3. 执行积分操作
+                var (sql, paras) = await SqlAddCreditAsync(botUin, groupId, qq, creditAdd, trans);
+                // Logger.Debug($"[AddCredit SQL] {sql}");
+                await ExecAsync(sql, trans, paras);
 
-                wrapper.Commit();
+                // 4. 记录日志
+                int logId = await CreditLog.AddLogAsync(botUin, groupId, groupName, qq, name, creditAdd, creditValue, creditInfo, trans);
 
-                SyncCacheField(qq, groupId, "Credit", creditValue + creditAdd);
-                return (0, creditValue + creditAdd, logId);
+                long newValue = creditValue + creditAdd;
+                // Logger.Debug($"[AddCredit Success] QQ:{qq}, Add:{creditAdd}, NewValue:{newValue}");
+                return (0, newValue, logId);
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
-                Console.WriteLine($"[AddCredit Error] {ex.Message}");
-                return (-1, creditValue, 0);
+                Logger.Error($"[AddCredit Error] {ex.Message}");
+                if (trans != null) throw; // 事务嵌套时抛出异常，由外层事务处理回滚
+                return (-1, 0, 0);
             }
         }
 
-        //增加积分
-        public static (int Result, long CreditValue) AddCredit(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo)
+        public static (int Result, long CreditValue, int LogId) AddCredit(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
+            => AddCreditTransAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo, trans).GetAwaiter().GetResult();
+
+        public static (int Result, long CreditValue, int LogId) AddCredit(long botUin, long qq, long creditAdd, string creditInfo, IDbTransaction? trans = null)
+            => AddCredit(botUin, 0, "", qq, "", creditAdd, creditInfo, trans);
+
+        public static async Task<(int Result, long CreditValue, int LogId)> AddCreditTransAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
         {
-            var res = AddCreditAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo).GetAwaiter().GetResult();
-            return (res.Result, res.CreditValue);
+            using var wrapper = await BeginTransactionAsync(trans);
+            try
+            {
+                var res = await AddCreditAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo, wrapper.Transaction);
+                await wrapper.CommitAsync();
+
+                // 5. 统一同步缓存（仅在自身开启事务时同步）
+                if (trans == null)
+                {
+                    await SyncCreditCacheAsync(botUin, groupId, qq, res.CreditValue);
+                }
+
+                return res;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[AddCreditTrans Error] {ex.Message}");
+                await wrapper.RollbackAsync();
+                if (trans != null) throw;
+                return (-1, 0, 0);
+            }
         }
 
-        public static (int, long) MinusCredit(long botUin, long groupId, string groupName, long qq, string name, long creditMinus, string creditInfo)
-            => AddCredit(botUin, groupId, groupName, qq, name, -creditMinus, creditInfo);
+        public static async Task<int> MinusCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditMinus, string creditInfo)
+        {
+            var res = await AddCreditTransAsync(botUin, groupId, groupName, qq, name, -creditMinus, creditInfo);
+            return res.Result;
+        }
 
+        public static int MinusCredit(long botUin, long groupId, string groupName, long qq, string name, long creditMinus, string creditInfo)
+            => MinusCreditAsync(botUin, groupId, groupName, qq, name, creditMinus, creditInfo).GetAwaiter().GetResult();
 
-        //增加积分sql
-        public static (string, IDataParameter[]) SqlAddCredit(long botUin, long groupId, long userId, long creditPlus)
-            => SqlAddCreditAsync(botUin, groupId, userId, creditPlus).GetAwaiter().GetResult();
+        public static long GetCredit(long userId) => GetCreditAsync(userId).GetAwaiter().GetResult();
+        public static long GetCredit(long botUin, long userId) => GetCreditAsync(botUin, userId).GetAwaiter().GetResult();
+        public static long GetCredit(long botUin, long groupId, long userId) => GetCreditAsync(botUin, groupId, userId).GetAwaiter().GetResult();
 
-        public static async Task<(string, IDataParameter[])> SqlAddCreditAsync(long botUin, long groupId, long userId, long creditPlus)
+        public static async Task<int> AppendUserAsync(long botUin, long groupId, long qq, string name, long ownerId, IDbTransaction? trans = null)
+        {
+            return await AppendAsync(botUin, groupId, qq, name, ownerId, trans: trans);
+        }
+
+        public static int AppendUser(long botUin, long groupId, long qq, string name, long ownerId)
+            => AppendUserAsync(botUin, groupId, qq, name, ownerId).GetAwaiter().GetResult();
+
+        public static int AppendUser(long botUin, long groupId, long qq, string name)
+            => AppendUserAsync(botUin, groupId, qq, name, 0).GetAwaiter().GetResult();
+
+        public static int SetState(object state, long qq)
+        {
+            int stateValue = state is int i ? i : (int)state;
+            return SetValue("State", stateValue, qq);
+        }
+
+        public static async Task SyncCreditCacheAsync(long botUin, long groupId, long qq, long newValue)
+        {
+            if (await GroupInfo.GetIsCreditAsync(groupId))
+                GroupMember.SyncCacheField(groupId, qq, "GroupCredit", newValue);
+            else if (await BotInfo.GetIsCreditAsync(botUin))
+                Friend.SyncCacheField(botUin, qq, "Credit", newValue);
+            else
+                SyncCacheField(qq, "Credit", newValue);
+        }
+
+        public static async Task SyncSaveCreditCacheAsync(long botUin, long groupId, long qq, long newValue)
+        {
+            if (await GroupInfo.GetIsCreditAsync(groupId))
+                GroupMember.SyncCacheField(groupId, qq, "SaveCredit", newValue);
+            else if (await BotInfo.GetIsCreditAsync(botUin))
+                Friend.SyncCacheField(botUin, qq, "SaveCredit", newValue);
+            else
+                SyncCacheField(qq, "SaveCredit", newValue);
+        }
+
+        public static async Task<(string, IDataParameter[])> SqlAddCreditAsync(long botUin, long groupId, long userId, long creditPlus, IDbTransaction? trans = null)
         {
             if (await GroupInfo.GetIsCreditAsync(groupId))
             {
-                return GroupMember.SqlAddCredit(groupId, userId, creditPlus);
+                return await GroupMember.SqlAddCreditAsync(groupId, userId, creditPlus, trans);
             }
             else if (await BotInfo.GetIsCreditAsync(botUin))
             {
-                return Friend.SqlAddCredit(botUin, userId, creditPlus);
+                return await Friend.SqlAddCreditAsync(botUin, userId, creditPlus, trans);
             }
             else
             {
                 // 暂时保持同步 Exists，因为它调用频繁且是内存/主键检查
-                if (await ExistsAsync(userId))
+                if (await ExistsAsync(userId, null, trans))
                     return SqlPlus("Credit", creditPlus, userId);
                 else
                     return SqlInsert(new
@@ -87,18 +150,18 @@ namespace BotWorker.Domain.Entities
             long senderId, string senderName, 
             long receiverId, string receiverName, 
             long creditMinus, long creditAdd, 
-            string transferInfo)
+            string transferInfo, IDbTransaction? trans = null)
         {
-            // 1. 前置检查
-            long senderCredit = await GetCreditAsync(botUin, groupId, senderId);
-            if (senderCredit < creditMinus)
-                return (-1, senderCredit, 0);
-
-            // 2. 开启事务
-            using var wrapper = await BeginTransactionAsync();
+            // 1. 开启事务 (在事务内检查余额并加锁)
+            using var wrapper = await BeginTransactionAsync(trans);
             try
             {
-                // 3. 链式调用业务方法，全部复用同一个 trans (通过 AsyncLocal 自动传递)
+                // 2. 获取发送者当前准确分值（加锁）
+                long senderCredit = await GetCreditForUpdateAsync(botUin, groupId, senderId, wrapper.Transaction);
+                if (senderCredit < creditMinus)
+                    return (-1, senderCredit, 0);
+
+                // 3. 链式调用业务方法，全部复用同一个 trans
                 // 扣除发送者积分 (内部会自动记录日志)
                 var res1 = await AddCreditAsync(botUin, groupId, groupName, senderId, senderName, -creditMinus, $"{transferInfo}扣分：{receiverId}", wrapper.Transaction);
                 
@@ -106,58 +169,68 @@ namespace BotWorker.Domain.Entities
                 var res2 = await AddCreditAsync(botUin, groupId, groupName, receiverId, receiverName, creditAdd, $"{transferInfo}加分：{senderId}", wrapper.Transaction);
 
                 // 4. 提交事务
-                wrapper.Commit();
+                await wrapper.CommitAsync();
+
+                // 5. 同步缓存 (仅在自身开启事务时同步)
+                if (trans == null)
+                {
+                    await SyncCreditCacheAsync(botUin, groupId, senderId, res1.CreditValue);
+                    await SyncCreditCacheAsync(botUin, groupId, receiverId, res2.CreditValue);
+                }
 
                 return (0, res1.CreditValue, res2.CreditValue);
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
-                Console.WriteLine($"[TransferCredit Error] {ex.Message}");
-                return (-1, senderCredit, 0);
+                await wrapper.RollbackAsync();
+                Logger.Error($"[TransferCredit Error] {ex.Message}");
+                if (trans != null) throw;
+                return (-1, 0, 0);
             }
         }
-
-        //转账积分
-        public static int TransferCredit(long botUin, long groupId, string groupName, long qq, string name, long qqTo, string nameTo, long creditMinus, long creditAdd, ref long creditValue, ref long creditValue2, string transferInfo)
-        {
-            var res = TransferCreditAsync(botUin, groupId, groupName, qq, name, qqTo, nameTo, creditMinus, creditAdd, transferInfo).GetAwaiter().GetResult();
-            if (res.Result == 0)
-            {
-                creditValue = res.SenderCredit;
-                creditValue2 = res.ReceiverCredit;
-            }
-            return res.Result;
-        }
-
 
         public static async Task<long> GetCreditAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
-            return groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId)
-                ? await GroupMember.GetGroupCreditAsync(groupId, qq, trans)
-                : await GetCreditAsync(botUin, qq, trans);
+            if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId))
+            {
+                // Logger.Debug($"[UserInfo] GetCredit - Type: Group, GroupId: {groupId}, QQ: {qq}");
+                return await GroupMember.GetGroupCreditAsync(groupId, qq, trans);
+            }
+            else if (await BotInfo.GetIsCreditAsync(botUin))
+            {
+                // Logger.Debug($"[UserInfo] GetCredit - Type: Friend, BotUin: {botUin}, QQ: {qq}");
+                return await Friend.GetCreditAsync(botUin, qq, trans);
+            }
+            else
+            {
+                // Logger.Debug($"[UserInfo] GetCredit - Type: General, QQ: {qq}");
+                return await GetCreditAsync(botUin, qq, trans);
+            }
         }
 
-        public static long GetCredit(long botUin, long groupId, long qq)
+        public static async Task<long> GetCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
-            return GetCreditAsync(botUin, groupId, qq).GetAwaiter().GetResult();
-        }
-
-        public static long GetCredit(long groupId, long qq)
-        {
-            return GetCreditAsync(BotInfo.BotUinDef, groupId, qq).GetAwaiter().GetResult();
+            if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId))
+            {
+                // Logger.Debug($"[UserInfo] GetCreditForUpdate - Type: Group, GroupId: {groupId}, QQ: {qq}");
+                return await GroupMember.GetGroupCreditForUpdateAsync(groupId, qq, trans);
+            }
+            else if (await BotInfo.GetIsCreditAsync(botUin))
+            {
+                // Logger.Debug($"[UserInfo] GetCreditForUpdate - Type: Friend, BotUin: {botUin}, QQ: {qq}");
+                return await Friend.GetCreditForUpdateAsync(botUin, qq, trans);
+            }
+            else
+            {
+                // Logger.Debug($"[UserInfo] GetCreditForUpdate - Type: General, QQ: {qq}");
+                return await GetForUpdateAsync<long>("Credit", qq, null, 0, trans);
+            }
         }
 
         public static async Task<long> GetCreditAsync(long userId, IDbTransaction? trans = null)
         {
             return await GetLongAsync("Credit", userId, null, trans);
         }
-
-        public static long GetCredit(long userId)
-        {
-            return GetCreditAsync(userId).GetAwaiter().GetResult();
-        }
-
 
         //读取积分
         public static async Task<long> GetCreditAsync(long botUin, long userId, IDbTransaction? trans = null)
@@ -168,42 +241,41 @@ namespace BotWorker.Domain.Entities
         //积分总额
         public static async Task<long> GetTotalCreditAsync(long botUin, long userId) => await GetCreditAsync(botUin, userId) + await GetSaveCreditAsync(botUin, userId);
         public static async Task<long> GetTotalCreditAsync(long botUin, long groupId, long userId) => await GetCreditAsync(botUin, groupId, userId) + await GetSaveCreditAsync(botUin, groupId, userId);
-        public static async Task<long> GetSaveCreditAsync(long botUin, long userId)
-        {
-            return await BotInfo.GetIsCreditAsync(botUin)
-                ? await Friend.GetSaveCreditAsync(botUin, userId)
-                : await GetSaveCreditAsync(userId);
-        }
 
-        public static long GetSaveCredit(long botUin, long userId)
-        {
-            return GetSaveCreditAsync(botUin, userId).GetAwaiter().GetResult();
-        }
-
-        public static async Task<long> GetSaveCreditAsync(long botUin, long groupId, long qq)
+        public static async Task<long> GetSaveCreditAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
             return await GroupInfo.GetIsCreditAsync(groupId)
-                ? await GroupMember.GetLongAsync("SaveCredit", groupId, qq)
-                : await GetSaveCreditAsync(qq);
+                ? await GroupMember.GetLongAsync("SaveCredit", groupId, qq, trans)
+                : await GetSaveCreditAsync(botUin, qq, trans);
         }
 
-        public static long GetSaveCredit(long botUin, long groupId, long qq)
+        public static async Task<long> GetSaveCreditAsync(long botUin, long userId, IDbTransaction? trans = null)
         {
-            return GetSaveCreditAsync(botUin, groupId, qq).GetAwaiter().GetResult();
+            return await BotInfo.GetIsCreditAsync(botUin)
+                ? await Friend.GetSaveCreditAsync(botUin, userId, trans)
+                : await GetSaveCreditAsync(userId, trans);
         }
 
-        public static async Task<long> GetSaveCreditAsync(long userId)
+        public static async Task<long> GetSaveCreditAsync(long userId, IDbTransaction? trans = null)
         {
-            return await GetLongAsync("SaveCredit", userId);
+            return await GetLongAsync("SaveCredit", userId, null, trans);
         }
 
-        public static long GetSaveCredit(long userId)
+        public static async Task<long> GetSaveCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
-            return GetSaveCreditAsync(userId).GetAwaiter().GetResult();
+            if (await GroupInfo.GetIsCreditAsync(groupId))
+            {
+                return await GroupMember.GetForUpdateAsync<long>("SaveCredit", groupId, qq, 0, trans);
+            }
+            else if (await BotInfo.GetIsCreditAsync(botUin))
+            {
+                return await Friend.GetForUpdateAsync<long>("SaveCredit", botUin, qq, 0, trans);
+            }
+            else
+            {
+                return await GetForUpdateAsync<long>("SaveCredit", qq, null, 0, trans);
+            }
         }
-
-        public static (string, IDataParameter[]) SqlSaveCredit(long botUin, long groupId, long userId, long creditSave)
-            => SqlSaveCreditAsync(botUin, groupId, userId, creditSave).GetAwaiter().GetResult();
 
         public static async Task<(string, IDataParameter[])> SqlSaveCreditAsync(long botUin, long groupId, long userId, long creditSave)
         {
@@ -213,34 +285,48 @@ namespace BotWorker.Domain.Entities
                                  : SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = {SqlIsNull("SaveCredit", "0")} + ({creditSave})", userId);
         }
 
+        public static (string, IDataParameter[]) SqlSaveCredit(long botUin, long groupId, long userId, long creditSave)
+            => SqlSaveCreditAsync(botUin, groupId, userId, creditSave).GetAwaiter().GetResult();
+
         public static (string, IDataParameter[]) SqlFreezeCredit(long userId, long creditFreeze)
         {
             return SqlSetValues($"Credit = Credit - ({creditFreeze}), FreezeCredit = {SqlIsNull("FreezeCredit", "0")} + ({creditFreeze})", userId);
         }
 
-        public static async Task<long> GetFreezeCreditAsync(long qq) => await GetLongAsync("FreezeCredit", qq);
-        public static long GetFreezeCredit(long qq) => GetFreezeCreditAsync(qq).GetAwaiter().GetResult();
+        public static async Task<long> GetFreezeCreditAsync(long qq, IDbTransaction? trans = null) => await GetLongAsync("FreezeCredit", qq, null, trans);
+
+        public static async Task<long> GetFreezeCreditForUpdateAsync(long qq, IDbTransaction? trans = null)
+        {
+            return await GetForUpdateAsync<long>("FreezeCredit", qq, null, 0, trans);
+        }
 
         //冻结积分 (重构异步版)
         public static async Task<int> FreezeCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditFreeze)
         {
-            long creditValue = await GetCreditAsync(botUin, groupId, qq);
-            if (creditValue < creditFreeze) return -1;
-
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
+                // 1. 获取当前积分并加锁
+                long creditValue = await GetCreditForUpdateAsync(botUin, groupId, qq, wrapper.Transaction);
+                if (creditValue < creditFreeze)
+                {
+                    await wrapper.RollbackAsync();
+                    return -1;
+                }
+
                 var (sql, paras) = SqlFreezeCredit(qq, creditFreeze);
-                await ExecAsync(sql, trans, paras);
-                await CreditLog.AddLogAsync(botUin, groupId, groupName, qq, name, -creditFreeze, "冻结积分", trans);
+                await ExecAsync(sql, wrapper.Transaction, paras);
+                await CreditLog.AddLogAsync(botUin, groupId, groupName, qq, name, -creditFreeze, creditValue, "冻结积分", wrapper.Transaction);
                 
-                await trans.CommitAsync();
-                SyncCacheField(qq, groupId, "Credit", creditValue - creditFreeze);
+                await wrapper.CommitAsync();
+
+                await SyncCacheFieldAsync(qq, groupId, "Credit", creditValue - creditFreeze);
                 return 0;
             }
-            catch
+            catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
+                Logger.Error($"[FreezeCredit Error] {ex.Message}");
                 return -1;
             }
         }
@@ -248,39 +334,34 @@ namespace BotWorker.Domain.Entities
         //解冻积分 (重构异步版)
         public static async Task<int> UnfreezeCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long creditUnfreeze)
         {
-            long creditValue = await GetFreezeCreditAsync(qq);
-            if (creditValue < creditUnfreeze) return -1;
-
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
-                var (sql, paras) = SqlFreezeCredit(qq, -creditUnfreeze);
-                await ExecAsync(sql, trans, paras);
-                await CreditLog.AddLogAsync(botUin, groupId, groupName, qq, name, creditUnfreeze, "解冻积分", trans);
+                // 1. 获取当前冻结积分并加锁
+                long freezeValue = await GetFreezeCreditForUpdateAsync(qq, wrapper.Transaction);
+                long creditValue = await GetCreditForUpdateAsync(botUin, groupId, qq, wrapper.Transaction);
+                if (freezeValue < creditUnfreeze)
+                {
+                    await wrapper.RollbackAsync();
+                    return -1;
+                }
 
-                await trans.CommitAsync();
-                SyncCacheField(qq, groupId, "FreezeCredit", creditValue - creditUnfreeze);
+                var (sql, paras) = SqlFreezeCredit(qq, -creditUnfreeze);
+                await ExecAsync(sql, wrapper.Transaction, paras);
+                await CreditLog.AddLogAsync(botUin, groupId, groupName, qq, name, creditUnfreeze, creditValue, "解冻积分", wrapper.Transaction);
+
+                await wrapper.CommitAsync();
+
+                await SyncCacheFieldAsync(qq, groupId, "FreezeCredit", freezeValue - creditUnfreeze);
                 return 0;
             }
-            catch
+            catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
+                Logger.Error($"[UnfreezeCredit Error] {ex.Message}");
                 return -1;
             }
         }
-
-        public static int DoFreezeCredit(long botUin, long groupId, string groupName, long qq, string name, long creditFreeze)
-        {
-            return FreezeCreditAsync(botUin, groupId, groupName, qq, name, creditFreeze).GetAwaiter().GetResult();
-        }
-
-        public static int UnfreezeCredit(long botUin, long groupId, string groupName, long qq, string name, long creditUnfreeze)
-        {
-            return UnfreezeCreditAsync(botUin, groupId, groupName, qq, name, creditUnfreeze).GetAwaiter().GetResult();
-        }
-
-        public static long GetCreditRanking(long botUin, long groupId, long qq)
-            => GetCreditRankingAsync(botUin, groupId, qq).GetAwaiter().GetResult();
 
         public static async Task<long> GetCreditRankingAsync(long botUin, long groupId, long qq)
         {
@@ -308,9 +389,6 @@ namespace BotWorker.Domain.Entities
                 creditValue, groupId) + 1;
         }
 
-        public static long GetCreditRankingAll(long botUin, long qq)
-            => GetCreditRankingAllAsync(botUin, qq).GetAwaiter().GetResult();
-
         public static async Task<long> GetCreditRankingAllAsync(long botUin, long qq)
         {
             long totalCredit = await GetTotalCreditAsync(botUin, qq);
@@ -328,9 +406,6 @@ namespace BotWorker.Domain.Entities
                 groupId);
         }
 
-        public static string GetCreditList(long groupId)
-            => GetCreditListAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<string> GetCreditListAllAsync()
         {
             return await QueryResAsync(
@@ -338,8 +413,5 @@ namespace BotWorker.Domain.Entities
                 $"ORDER BY TotalCredit DESC {SqlLimit(10)}",
                 "【第{i}名】 [@:{0}] 积分：{1}\n");
         }
-
-        public static string GetCreditListAll()
-            => GetCreditListAllAsync().GetAwaiter().GetResult();
     }
 }

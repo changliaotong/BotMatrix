@@ -1,10 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
-using BotWorker.Modules.AI.Services;
-using BotWorker.Modules.AI.Interfaces;
-
 namespace BotWorker.Application.Services
 {
     public class McpInitializationService : IHostedService

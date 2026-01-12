@@ -1,9 +1,3 @@
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Entities;
-using BotWorker.Infrastructure.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Infrastructure.Utils;
-
 namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
 {
     public class ClientPublic : MetaData<ClientPublic>

@@ -9,26 +9,30 @@ namespace BotWorker.Modules.AI.Plugins
 {
     public class SystemToolPlugin
     {
-        private readonly string _baseDirectory;
+        private readonly string _projectRoot;
 
         public SystemToolPlugin()
         {
-            _baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            // 尝试获取项目根目录 (向上查找两级，假设在 src/BotWorker/bin/Debug/netX.0)
+            var current = AppDomain.CurrentDomain.BaseDirectory;
+            var dir = new DirectoryInfo(current);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "BotMatrix.sln")))
+            {
+                dir = dir.Parent;
+            }
+            _projectRoot = dir?.FullName ?? AppDomain.CurrentDomain.BaseDirectory;
         }
 
-        [KernelFunction(name: "read_file")]
-        [Description("读取指定文件的内容。仅限项目根目录下的文本文件。")]
-        [ToolRisk(ToolRiskLevel.Low, "读取系统文件内容")]
-        public async Task<string> ReadFile([Description("文件相对路径")] string filePath)
+        [KernelFunction(name: "read_code")]
+        [Description("读取项目源代码文件的内容。")]
+        [ToolRisk(ToolRiskLevel.Low, "读取系统源代码")]
+        public async Task<string> ReadCode([Description("源代码文件相对路径 (从解决方案根目录开始)")] string filePath)
         {
             try
             {
-                // 简单的路径安全检查，防止目录穿越
-                if (filePath.Contains("..")) return "Error: 禁止访问上级目录。";
-
-                var fullPath = Path.Combine(_baseDirectory, filePath);
+                if (filePath.Contains("..")) return "Error: 禁止跨目录访问。";
+                var fullPath = Path.Combine(_projectRoot, filePath);
                 if (!File.Exists(fullPath)) return $"Error: 文件 {filePath} 不存在。";
-
                 return await File.ReadAllTextAsync(fullPath);
             }
             catch (Exception ex)
@@ -37,49 +41,22 @@ namespace BotWorker.Modules.AI.Plugins
             }
         }
 
-        [KernelFunction(name: "list_directory")]
-        [Description("列出指定目录下的文件和子目录。")]
-        [ToolRisk(ToolRiskLevel.Low, "列出目录结构")]
-        public string ListDirectory([Description("目录相对路径")] string path = ".")
+        [KernelFunction(name: "write_code")]
+        [Description("修改或创建项目源代码文件。")]
+        [ToolRisk(ToolRiskLevel.High, "修改系统源代码")]
+        public async Task<string> WriteCode(
+            [Description("源代码文件相对路径")] string filePath,
+            [Description("代码内容")] string content)
         {
             try
             {
-                if (path.Contains("..")) return "Error: 禁止访问上级目录。";
-
-                var fullPath = Path.Combine(_baseDirectory, path);
-                if (!Directory.Exists(fullPath)) return $"Error: 目录 {path} 不存在。";
-
-                var entries = Directory.GetFileSystemEntries(fullPath);
-                return string.Join("\n", entries.Select(Path.GetFileName));
-            }
-            catch (Exception ex)
-            {
-                return $"Error: 列出目录失败 - {ex.Message}";
-            }
-        }
-
-        [KernelFunction(name: "write_file")]
-        [Description("写入或覆盖指定文件的内容。属于高风险操作。")]
-        [ToolRisk(ToolRiskLevel.High, "修改系统文件内容")]
-        public async Task<string> WriteFile(
-            [Description("文件相对路径")] string filePath,
-            [Description("文件新内容")] string content)
-        {
-            try
-            {
-                if (filePath.Contains("..")) return "Error: 禁止访问上级目录。";
-                
-                // 禁止修改核心配置文件
-                if (filePath.EndsWith(".dll") || filePath.EndsWith(".exe"))
-                    return "Error: 禁止修改二进制文件。";
-
-                var fullPath = Path.Combine(_baseDirectory, filePath);
+                if (filePath.Contains("..")) return "Error: 禁止跨目录访问。";
+                var fullPath = Path.Combine(_projectRoot, filePath);
                 var directory = Path.GetDirectoryName(fullPath);
                 if (directory != null && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
-
                 await File.WriteAllTextAsync(fullPath, content);
                 return $"Success: 文件 {filePath} 已成功更新。";
             }
@@ -98,7 +75,7 @@ namespace BotWorker.Modules.AI.Plugins
         {
             try
             {
-                var configPath = Path.Combine(_baseDirectory, "appsettings.json");
+                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
                 if (!File.Exists(configPath)) return "Error: 找不到 appsettings.json。";
 
                 var json = await File.ReadAllTextAsync(configPath);

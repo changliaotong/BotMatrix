@@ -1,73 +1,60 @@
 using System.Data;
-using BotWorker.Domain.Entities;
-using BotWorker.Common;
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Entities
 {
     public partial class UserInfo : MetaDataGuid<UserInfo>
     {
-        public static async Task<decimal> GetBalanceAsync(long qq)
+        public static async Task<decimal> GetBalanceAsync(long qq, IDbTransaction? trans = null)
         {
-            return await GetAsync<decimal>("balance", qq, null, 0m);
+            return await GetAsync<decimal>("balance", qq, null, 0m, trans);
         }
 
-        public static decimal GetBalance(long qq) => GetBalanceAsync(qq).GetAwaiter().GetResult();
+        public static async Task<decimal> GetBalanceForUpdateAsync(long qq, IDbTransaction? trans = null)
+        {
+            return await GetForUpdateAsync<decimal>("balance", qq, null, 0m, trans);
+        }
+
+        public static async Task<decimal> GetFreezeBalanceAsync(long qq, IDbTransaction? trans = null)
+        {
+            return await GetAsync<decimal>("BalanceFreeze", qq, null, 0m, trans);
+        }
+
+        public static async Task<decimal> GetFreezeBalanceForUpdateAsync(long qq, IDbTransaction? trans = null)
+        {
+            return await GetForUpdateAsync<decimal>("BalanceFreeze", qq, null, 0m, trans);
+        }
 
         public record AddBalanceResult(int Result, decimal BalanceValue);
 
-        //增加余额
-        public static int AddBalance(long botUin, long groupId, string groupName, long qq, string name, decimal balanceAdd, string balanceInfo)
-        {
-            return AddBalanceAsync(botUin, groupId, groupName, qq, name, balanceAdd, balanceInfo).GetAwaiter().GetResult().Result;
-        }
-
         public static async Task<AddBalanceResult> AddBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceAdd, string balanceInfo, IDbTransaction? trans = null)
         {
-            // 如果没有传入事务，则创建一个新事务
-            bool isNewTrans = trans == null && MetaData.CurrentTransaction.Value == null;
-            if (isNewTrans) trans = await BeginTransactionAsync();
-
+            using var wrapper = await BeginTransactionAsync(trans);
             try
             {
                 // 1. 确保用户存在
-                await AppendAsync(botUin, groupId, qq, name, GroupInfo.GetGroupOwner(groupId));
+                await AppendAsync(botUin, groupId, qq, name, await GroupInfo.GetGroupOwnerAsync(groupId), trans: wrapper.Transaction);
                 
-                var balanceValue = GetBalance(qq) + balanceAdd;
-                var (sql, paras) = SqlAddBalance(qq, balanceAdd);
-                var (sql2, paras2) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, balanceAdd, balanceInfo, balanceValue);
+                // 2. 获取当前分值并加锁
+                var balanceValue = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
+                var newValue = balanceValue + balanceAdd;
 
-                await ExecAsync(sql, trans, paras);
-                await ExecAsync(sql2, trans, paras2);
+                var (sql, paras) = await SqlAddBalanceAsync(qq, balanceAdd, wrapper.Transaction);
+                var (sql2, paras2) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, balanceAdd, balanceInfo, newValue);
 
-                if (isNewTrans && trans != null)
-                    CommitTransaction(trans);
+                await ExecAsync(sql, wrapper.Transaction, paras);
+                await ExecAsync(sql2, wrapper.Transaction, paras2);
 
-                SyncCacheField(qq, "Balance", balanceValue);
-                return new AddBalanceResult(0, balanceValue);
+                wrapper.Commit();
+
+                SyncCacheField(qq, "Balance", newValue);
+                return new AddBalanceResult(0, newValue);
             }
             catch (Exception ex)
             {
-                if (isNewTrans && trans != null)
-                    RollbackTransaction(trans);
-                Console.WriteLine($"[AddBalance Error] {ex.Message}");
-                return new AddBalanceResult(-1, GetBalance(qq));
+                wrapper.Rollback();
+                Logger.Error($"[AddBalance Error] {ex.Message}");
+                return new AddBalanceResult(-1, await GetBalanceAsync(qq));
             }
-            finally
-            {
-                if (isNewTrans && trans != null)
-                {
-                    trans.Connection?.Close();
-                    trans.Dispose();
-                }
-            }
-        }
-
-        //减少余额
-        public static int MinusBalance(long botUin, long groupId, string groupName, long qq, string name, decimal balanceMinus, string balanceInfo)
-        {
-            return MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, balanceInfo).GetAwaiter().GetResult().Result;
         }
 
         public static async Task<AddBalanceResult> MinusBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceMinus, string balanceInfo, IDbTransaction? trans = null)
@@ -78,37 +65,35 @@ namespace BotWorker.Domain.Entities
         //转账 (异步事务版)
         public static async Task<(int Result, decimal SenderBalance, decimal ReceiverBalance)> TransferAsync(long botUin, long groupId, string groupName, long qq, string name, long qqTo, string nameTo, decimal balanceMinus, decimal balanceAdd)
         {
-            var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
-                var res1 = await MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, $"转账给：{qqTo}");
-                var res2 = await AddBalanceAsync(botUin, groupId, groupName, qqTo, nameTo, balanceAdd, $"转账来自：{qq}");
+                // 1. 获取发送者余额并加锁，检查是否足够
+                var currentBalance = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
+                if (currentBalance < balanceMinus)
+                {
+                    wrapper.Rollback();
+                    return (-2, currentBalance, 0); // -2 表示余额不足
+                }
 
-                CommitTransaction(trans);
+                var res1 = await MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, $"转账给：{qqTo}", wrapper.Transaction);
+                var res2 = await AddBalanceAsync(botUin, groupId, groupName, qqTo, nameTo, balanceAdd, $"转账来自：{qq}", wrapper.Transaction);
+
+                wrapper.Commit();
                 return (0, res1.BalanceValue, res2.BalanceValue);
             }
             catch (Exception ex)
             {
-                RollbackTransaction(trans);
-                Console.WriteLine($"[Transfer Error] {ex.Message}");
+                wrapper.Rollback();
+                Logger.Error($"[Transfer Error] {ex.Message}");
                 return (-1, 0, 0);
             }
-            finally
-            {
-                trans.Connection?.Close();
-                trans.Dispose();
-            }
-        }
-
-        //转账
-        public static int Transfer(long botUin, long groupId, string groupName, long qq, string name, long qqTo, string nameTo, decimal balanceMinus, decimal balanceAdd)
-        {
-            var res = TransferAsync(botUin, groupId, groupName, qq, name, qqTo, nameTo, balanceMinus, balanceAdd).GetAwaiter().GetResult();
-            return res.Result;
         }
 
         //转账操作
-        public static string GetTransferBalance(long botUin, long groupId, string groupName, long qq, string name, string cmdPara)
+        public static string GetTransferBalance(long botUin, long groupId, string groupName, long qq, string name, string cmdPara) => GetTransferBalanceAsync(botUin, groupId, groupName, qq, name, cmdPara).GetAwaiter().GetResult();
+
+        public static async Task<string> GetTransferBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, string cmdPara)
         {
             cmdPara = cmdPara.Trim();
             if (cmdPara.NotMatch(Regexs.Transfer))
@@ -121,104 +106,93 @@ namespace BotWorker.Domain.Entities
             if (balanceTransfer < 1)
                 return "至少转1.00R";
 
-            decimal balanceMinus = balanceTransfer;
-            if (GetBalance(qq) < balanceMinus)
-                return $"余额{GetBalance(qq)}不足{balanceMinus}。";
+            var res = await TransferAsync(botUin, groupId, groupName, qq, name, qqTransfer, "", balanceTransfer, balanceTransfer);
+            if (res.Result == -2)
+                return $"余额{res.SenderBalance}不足{balanceTransfer}。";
 
-            var res = TransferAsync(botUin, groupId, groupName, qq, name, qqTransfer, "", balanceMinus, balanceTransfer).GetAwaiter().GetResult();
             return res.Result == -1
                 ? RetryMsg
                 : $"✅ 成功转出：{balanceTransfer}\n[@:{qqTransfer}] 的余额：{res.ReceiverBalance}\n你的余额：{res.SenderBalance}";
         }
 
-        //冻结余额
-        public static decimal GetFreezeBalance(long qq)
-        {
-            return Get<decimal>("BalanceFreeze", qq);
-        }
-
-        public static async Task<decimal> GetFreezeBalanceAsync(long qq)
-        {
-            return await GetAsync<decimal>("BalanceFreeze", qq, null, 0m);
-        }
-
         //冻结余额 (异步事务版)
         public static async Task<(int Result, decimal BalanceValue, decimal FreezeValue)> FreezeBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceFreeze)
         {
-            decimal balanceValue = GetBalance(qq);
-            if (balanceValue < balanceFreeze)
-                return (-1, balanceValue, 0);
-
-            decimal freezeValue = GetFreezeBalance(qq);
-
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
-                var (sql1, paras1) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, -balanceFreeze, "冻结余额", balanceValue - balanceFreeze);
-                var (sql2, paras2) = SqlSetValues($"balance = balance - ({balanceFreeze}), BalanceFreeze = {SqlIsNull("BalanceFreeze","0")} + ({balanceFreeze})", qq);
-                await ExecAsync(sql1, trans, paras1);
-                await ExecAsync(sql2, trans, paras2);
+                // 1. 获取当前余额并加锁
+                decimal balanceValue = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
+                if (balanceValue < balanceFreeze)
+                {
+                    wrapper.Rollback();
+                    return (-1, balanceValue, 0);
+                }
 
-                await trans.CommitAsync();
+                decimal freezeValue = await GetFreezeBalanceForUpdateAsync(qq, wrapper.Transaction);
+                decimal newBalance = balanceValue - balanceFreeze;
+                decimal newFreeze = freezeValue + balanceFreeze;
 
-                SyncCacheField(qq, "Balance", balanceValue - balanceFreeze);
-                SyncCacheField(qq, "BalanceFreeze", freezeValue + balanceFreeze);
-                return (0, balanceValue - balanceFreeze, freezeValue + balanceFreeze);
+                var (sql1, paras1) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, -balanceFreeze, "冻结余额", newBalance);
+                var (sql2, paras2) = SqlSetValues($"balance = balance - ({balanceFreeze}), BalanceFreeze = {SqlIsNull("BalanceFreeze", "0")} + ({balanceFreeze})", qq);
+                await ExecAsync(sql1, wrapper.Transaction, paras1);
+                await ExecAsync(sql2, wrapper.Transaction, paras2);
+
+                wrapper.Commit();
+
+                SyncCacheField(qq, "Balance", newBalance);
+                SyncCacheField(qq, "BalanceFreeze", newFreeze);
+                return (0, newBalance, newFreeze);
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
-                Console.WriteLine($"[FreezeBalance Error] {ex.Message}");
-                return (-1, balanceValue, freezeValue);
+                wrapper.Rollback();
+                Logger.Error($"[FreezeBalance Error] {ex.Message}");
+                return (-1, await GetBalanceAsync(qq), await GetFreezeBalanceAsync(qq));
             }
-        }
-
-        //冻结余额
-        public static int FreezeBalance(long botUin, long groupId, string groupName, long qq, string name, decimal balanceFreeze)
-        {
-            return FreezeBalanceAsync(botUin, groupId, groupName, qq, name, balanceFreeze).GetAwaiter().GetResult().Result;
         }
 
         //解冻余额 (异步事务版)
         public static async Task<(int Result, decimal BalanceValue, decimal FreezeValue)> UnfreezeBalanceAsync(long botUin, long groupId, string groupName, long qq, string name, decimal balanceUnfreeze)
         {
-            decimal freezeValue = GetFreezeBalance(qq);
-            if (freezeValue < balanceUnfreeze) return (-1, 0, freezeValue);
-
-            decimal balanceValue = GetBalance(qq);
-
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync();
             try
             {
-                var (sql1, paras1) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, balanceUnfreeze, "解冻余额", balanceValue + balanceUnfreeze);
+                // 1. 获取当前冻结余额并加锁
+                decimal freezeValue = await GetFreezeBalanceForUpdateAsync(qq, wrapper.Transaction);
+                if (freezeValue < balanceUnfreeze)
+                {
+                    wrapper.Rollback();
+                    return (-1, 0, freezeValue);
+                }
+
+                decimal balanceValue = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
+                decimal newBalance = balanceValue + balanceUnfreeze;
+                decimal newFreeze = freezeValue - balanceUnfreeze;
+
+                var (sql1, paras1) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, balanceUnfreeze, "解冻余额", newBalance);
                 var (sql2, paras2) = SqlSetValues($"balance = balance + ({balanceUnfreeze}), BalanceFreeze = {SqlIsNull("BalanceFreeze", "0")} - ({balanceUnfreeze})", qq);
-                await ExecAsync(sql1, trans, paras1);
-                await ExecAsync(sql2, trans, paras2);
+                await ExecAsync(sql1, wrapper.Transaction, paras1);
+                await ExecAsync(sql2, wrapper.Transaction, paras2);
 
-                await trans.CommitAsync();
+                wrapper.Commit();
 
-                SyncCacheField(qq, "Balance", balanceValue + balanceUnfreeze);
-                SyncCacheField(qq, "BalanceFreeze", freezeValue - balanceUnfreeze);
-                return (0, balanceValue + balanceUnfreeze, freezeValue - balanceUnfreeze);
+                SyncCacheField(qq, "Balance", newBalance);
+                SyncCacheField(qq, "BalanceFreeze", newFreeze);
+                return (0, newBalance, newFreeze);
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
-                Console.WriteLine($"[UnfreezeBalance Error] {ex.Message}");
-                return (-1, balanceValue, freezeValue);
+                wrapper.Rollback();
+                Logger.Error($"[UnfreezeBalance Error] {ex.Message}");
+                return (-1, await GetBalanceAsync(qq), await GetFreezeBalanceAsync(qq));
             }
         }
 
-        //解冻余额
-        public static int UnfreezeBalance(long botUin, long groupId, string groupName, long qq, string name, decimal balanceUnfreeze)
-        {
-            return UnfreezeBalanceAsync(botUin, groupId, groupName, qq, name, balanceUnfreeze).GetAwaiter().GetResult().Result;
-        }
-
         //增加余额sql
-        public static (string, IDataParameter[]) SqlAddBalance(long userId, decimal balancePlus)
+        public static async Task<(string, IDataParameter[])> SqlAddBalanceAsync(long userId, decimal balancePlus, IDbTransaction? trans = null)
         {
-            return Exists(userId)
+            return await ExistsAsync(userId, trans)
                 ? SqlPlus("Balance", balancePlus, userId)
                 : SqlInsert(new { UserId = userId, Balance = balancePlus });
         }
@@ -234,8 +208,6 @@ namespace BotWorker.Domain.Entities
                 : $"{res}{await GetMyBalanceListAsync(groupId, qq)}";
         }
 
-        public static string GetBalanceList(long groupId, long qq) => GetBalanceListAsync(groupId, qq).GetAwaiter().GetResult();
-
         public static async Task<string> GetMyBalanceListAsync(long groupId, long qq)
         {
             decimal balance = await GetBalanceAsync(qq);
@@ -244,7 +216,5 @@ namespace BotWorker.Domain.Entities
                                balance, groupId);
             return $"【第{res}名】 [@:{qq}] 余额：{balance:N}";
         }
-
-        public static string GetMyBalanceList(long groupId, long qq) => GetMyBalanceListAsync(groupId, qq).GetAwaiter().GetResult();
     }
 }

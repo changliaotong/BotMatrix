@@ -25,8 +25,10 @@ namespace BotWorker.Modules.AI.Services
     public interface IAIService
     {
         Task<string> ChatAsync(string prompt, string? model = null);
-        Task<string> ChatWithContextAsync(string prompt, IPluginContext context, string? model = null);
+        Task<string> ChatWithContextAsync(string prompt, IPluginContext? context, string? model = null);
         IAsyncEnumerable<string> StreamChatAsync(string prompt, IPluginContext? context = null, string? model = null);
+        Task<string> GenerateImageAsync(string prompt, IPluginContext? context = null, string? model = null);
+        Task<string> RawChatAsync(string prompt, string? model = null);
     }
 
     public class AIService : IAIService
@@ -34,6 +36,7 @@ namespace BotWorker.Modules.AI.Services
         private readonly IMcpService _mcpService;
         private readonly IRagService _ragService;
         private readonly IToolAuditService _auditService;
+        private readonly IImageGenerationService _imageService;
         private readonly LLMApp _llmApp;
         private readonly ILogger<AIService> _logger;
         private readonly IServiceProvider _serviceProvider;
@@ -43,6 +46,7 @@ namespace BotWorker.Modules.AI.Services
             IMcpService mcpService, 
             IRagService ragService,
             IToolAuditService auditService,
+            IImageGenerationService imageService,
             LLMApp llmApp, 
             ILogger<AIService> logger,
             IServiceProvider serviceProvider)
@@ -50,6 +54,7 @@ namespace BotWorker.Modules.AI.Services
             _mcpService = mcpService;
             _ragService = ragService;
             _auditService = auditService;
+            _imageService = imageService;
             _llmApp = llmApp;
             _logger = logger;
             _serviceProvider = serviceProvider;
@@ -62,23 +67,20 @@ namespace BotWorker.Modules.AI.Services
         }
 
         public async Task<string> ChatWithContextAsync(string prompt, IPluginContext? context, string? model = null)
-        {
-            try
+        {            try
             {
-                // 默认使用 Doubao 模型，如果 model 为空
-                // 如果 model 为 "Random"，则由 ModelProviderManager 随机选择
-                var providerName = model ?? "Doubao";
-                IModelProvider? provider = null;
+                // 使用新的模型管理方法获取 Provider 和 ModelId
+                var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
 
                 // 1. 优先检查用户是否提供了自己的 Key
                 if (context is PluginContext pc && pc.Event is BotMessageEvent bme)
                 {
                     var userId = bme.BotMessage.UserId;
+                    var providerName = provider?.ProviderName ?? model ?? "Doubao";
                     var userConfig = await UserAIConfig.GetUserConfigAsync(userId, providerName);
                     if (userConfig != null && !string.IsNullOrEmpty(userConfig.ApiKey))
                     {
-                        _logger.LogInformation("Using user-provided API key for user {UserId} and provider {ProviderName}", userId, providerName);
-                        provider = new GenericOpenAIProvider(providerName, userConfig.ApiKey, userConfig.BaseUrl, providerName);
+                        provider = new GenericOpenAIProvider(providerName, userConfig.GetDecryptedApiKey(), userConfig.BaseUrl, modelId ?? providerName);
                         _ = UserAIConfig.UpdateUsageAsync(userConfig.Id);
                     }
                 }
@@ -86,12 +88,12 @@ namespace BotWorker.Modules.AI.Services
                 // 2. 如果没有用户 Key，且允许租赁，尝试从租赁池中随机选择
                 if (provider == null)
                 {
+                    var providerName = model ?? "Doubao";
                     var leasedConfigs = await UserAIConfig.GetLeasedConfigsAsync(providerName);
                     if (leasedConfigs.Count > 0)
                     {
                         var config = leasedConfigs[_random.Next(leasedConfigs.Count)];
-                        _logger.LogInformation("Using leased API key from user {LeaserId} for provider {ProviderName}", config.UserId, providerName);
-                        provider = new GenericOpenAIProvider(providerName, config.ApiKey, config.BaseUrl, providerName);
+                        provider = new GenericOpenAIProvider(providerName, config.GetDecryptedApiKey(), config.BaseUrl, modelId ?? providerName);
                         _ = UserAIConfig.UpdateUsageAsync(config.Id);
                         
                         // 奖励出租者：增加少量算力
@@ -99,21 +101,9 @@ namespace BotWorker.Modules.AI.Services
                     }
                 }
 
-                // 3. 最后使用系统配置
                 if (provider == null)
                 {
-                    provider = _llmApp._manager.GetProvider(providerName);
-                }
-
-                if (provider == null)
-                {
-                    // 如果找不到指定的 provider，尝试获取随机一个作为兜底
-                    provider = _llmApp._manager.GetRandomProvider();
-                    if (provider == null)
-                    {
-                        return "没有可用的 AI 提供商。";
-                    }
-                    _logger.LogWarning("Specified AI Provider '{providerName}' not found. Falling back to '{fallbackProvider}'.", providerName, provider.ProviderName);
+                    return "没有可用的 AI 提供商。";
                 }
 
                 // 1. 准备插件列表
@@ -138,6 +128,7 @@ namespace BotWorker.Modules.AI.Services
                 plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
                 plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
                 plugins.Add(KernelPluginFactory.CreateFromObject(new SystemAdminPlugin(), "SystemAdmin"));
+                plugins.Add(KernelPluginFactory.CreateFromObject(new ImageGenerationPlugin(_imageService), "ImageGeneration"));
 
                 // 1.3 注入 MCP 插件 (从 IMcpService 获取工具并转换为插件)
                 var mcpPlugins = await GetMcpPluginsAsync(context);
@@ -164,8 +155,7 @@ namespace BotWorker.Modules.AI.Services
 
                 // 3. 执行
                 var options = new ModelExecutionOptions
-                {
-                    ModelId = null, // 使用 Provider 默认模型
+                {                    ModelId = modelId, // 使用映射到的具体模型 ID
                     Plugins = plugins,
                     Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null,
                     CancellationToken = default
@@ -180,14 +170,75 @@ namespace BotWorker.Modules.AI.Services
             }
         }
 
+        public async Task<string> RawChatAsync(string prompt, string? model = null)
+        {
+            try
+            {
+                var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
+                if (provider == null) return "没有可用的 AI 提供商。";
+
+                var history = new ChatHistory();
+                history.AddUserMessage(prompt);
+
+                var options = new ModelExecutionOptions
+                {
+                    ModelId = modelId,
+                    CancellationToken = default
+                };
+
+                return await provider.ExecuteAsync(history, options);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AIService RawChat Error");
+                return $"AI Error: {ex.Message}";
+            }
+        }
+
+        public async Task<string> GenerateImageAsync(string prompt, IPluginContext? context = null, string? model = null)
+        {
+            try
+            {
+                // 如果指定了模型，且不是默认的生图模型，则走原有逻辑
+                if (!string.IsNullOrEmpty(model) && model != "Doubao")
+                {
+                    var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Image);
+                    if (provider != null)
+                    {
+                        var options = new ModelExecutionOptions
+                        {
+                            ModelId = modelId,
+                            CancellationToken = default
+                        };
+                        _logger.LogInformation("[AIService] Generating image with provider {ProviderName}, model {ModelId}, prompt: {Prompt}", 
+                            provider.ProviderName, modelId, prompt);
+                        var imageUrl = await provider.GenerateImageAsync(prompt, options);
+                        return imageUrl.StartsWith("http") ? $"[CQ:image,file={imageUrl}]" : imageUrl;
+                    }
+                }
+
+                // 默认使用新封装的 ImageGenerationService (带 Prompt 优化)
+                var result = await _imageService.GenerateImageAsync(prompt, true);
+                if (string.IsNullOrEmpty(result))
+                {
+                    return "❌ 图像生成失败。";
+                }
+                return result.StartsWith("[CQ:image") ? result : $"[CQ:image,file={result}]";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AIService GenerateImage Error");
+                return $"AI Image Error: {ex.Message}";
+            }
+        }
+
         public async IAsyncEnumerable<string> StreamChatAsync(string prompt, IPluginContext? context = null, string? model = null)
         {
-            var providerName = model ?? "DeepSeek";
-            var provider = _llmApp._manager.GetProvider(providerName);
+            var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
 
             if (provider == null)
             {
-                yield return $"❌ 错误：找不到 AI 提供商 '{providerName}'。";
+                yield return $"❌ 错误：找不到 AI 提供商 '{model}'。";
                 yield break;
             }
 
@@ -209,6 +260,7 @@ namespace BotWorker.Modules.AI.Services
             plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
             plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
             plugins.Add(KernelPluginFactory.CreateFromObject(new SystemAdminPlugin(), "SystemAdmin"));
+            plugins.Add(KernelPluginFactory.CreateFromObject(new ImageGenerationPlugin(_imageService), "ImageGeneration"));
             var mcpPlugins = await GetMcpPluginsAsync(context);
             if (mcpPlugins != null) plugins.AddRange(mcpPlugins);
 
@@ -231,6 +283,7 @@ namespace BotWorker.Modules.AI.Services
             // 3. 执行流式调用
             var options = new ModelExecutionOptions
             {
+                ModelId = modelId,
                 Plugins = plugins,
                 Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null
             };

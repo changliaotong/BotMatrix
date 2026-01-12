@@ -52,26 +52,26 @@ namespace BotWorker.Modules.Games
             return (sql1, sql2);
         }
 
-        public static async Task<long> GetIdAsync(long groupId, long userId)
+        public static async Task<long> GetIdAsync(long groupId, long userId, IDbTransaction? trans = null)
         {
             string sql = $"SELECT {SqlIsNull("MAX(Id)", "0")} AS res FROM {FullName} WHERE GroupId = {groupId} AND IsOpen = 0";
-            var res = await ExecScalarAsync<long>(groupId == 0 ? $"{sql} AND UserId = {userId} " : sql);
+            var res = await ExecScalarAsync<long>(groupId == 0 ? $"{sql} AND UserId = {userId} " : sql, trans);
             return res;
         }
 
-        public static async Task<string> GetHashAsync(long blockId)
+        public static async Task<string> GetHashAsync(long blockId, IDbTransaction? trans = null)
         {
             if (blockId == 0) return string.Empty;
-            var res = await QueryScalarAsync<string>($"SELECT BlockHash FROM {FullName} WHERE Id = {blockId}");
+            var res = await QueryScalarAsync<string>($"SELECT BlockHash FROM {FullName} WHERE Id = {blockId}", trans);
             return res ?? string.Empty;
         }
 
-        public static async Task<int> AppendAsync(long botUin, long groupId, string groupName, long userId, string name, string prevRes, (string sql, IDataParameter[] paras) sqlAddCredit, (string sql, IDataParameter[] paras) sqlCreditHis)
+        public static async Task<int> AppendAsync(long botUin, long groupId, string groupName, long userId, string name, string prevRes, (string sql, IDataParameter[] paras) sqlAddCredit, (string sql, IDataParameter[] paras) sqlCreditHis, IDbTransaction? trans = null)
         {
-            long prevId = await GetIdAsync(groupId, userId);
+            long prevId = await GetIdAsync(groupId, userId, trans);
             string prevHash = prevId == 0 
                 ? groupId == 0 ? UserInfo.GetGuid(userId).AsString().Sha256() : GroupInfo.GetGuid(groupId).AsString().Sha256()
-                : await GetHashAsync(prevId);
+                : await GetHashAsync(prevId, trans);
             string hashRobot = BotInfo.GetBotGuid(botUin).Sha256();
             string hashRoom = groupId == 0 ? "" : GroupInfo.GetGuid(groupId).AsString().Sha256();            
             string hashClient = UserInfo.GetGuid(userId).AsString().Sha256();
@@ -103,20 +103,20 @@ namespace BotWorker.Modules.Games
 
             var sql2 = SqlSetValues($"IsOpen=1, OpenDate={SqlDateTime}, OpenBotUin={botUin}, OpenUserId={userId}, OpenUserName={name.Quotes()}", prevId);
             
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await BeginTransactionAsync(trans);
             try
             {
-                await ExecAsync(sql.sql, trans, sql.paras);
-                if (!sqlAddCredit.sql.IsNull()) await ExecAsync(sqlAddCredit.sql, trans, sqlAddCredit.paras);
-                if (!sqlCreditHis.sql.IsNull()) await ExecAsync(sqlCreditHis.sql, trans, sqlCreditHis.paras);
-                await ExecAsync(sql2.sql, trans, sql2.parameters);
-                await trans.CommitAsync();
+                await ExecAsync(sql.sql, wrapper.Transaction, sql.paras);
+                if (!sqlAddCredit.sql.IsNull()) await ExecAsync(sqlAddCredit.sql, wrapper.Transaction, sqlAddCredit.paras);
+                if (!sqlCreditHis.sql.IsNull()) await ExecAsync(sqlCreditHis.sql, wrapper.Transaction, sqlCreditHis.paras);
+                await ExecAsync(sql2.sql, wrapper.Transaction, sql2.parameters);
+                await wrapper.CommitAsync();
                 return 0;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Block.AppendAsync error: {ex.Message}");
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
                 return -1;
             }
         }
@@ -160,9 +160,9 @@ namespace BotWorker.Modules.Games
         public static string GetHash(long groupId, long qq)
             => GetHashAsync(groupId, qq).GetAwaiter().GetResult();
 
-        public static async Task<string> GetHashAsync(long groupId, long qq)
+        public static async Task<string> GetHashAsync(long groupId, long qq, IDbTransaction? trans = null)
         {
-            return await GetHashAsync(await GetIdAsync(groupId, qq));
+            return await GetHashAsync(await GetIdAsync(groupId, qq, trans), trans);
         }
 
         public static long GetId(long groupId, long userId)
@@ -176,13 +176,13 @@ namespace BotWorker.Modules.Games
         public static int GetNum(long botUin, long groupId, string groupName, long qq, string name)
             => GetNumAsync(botUin, groupId, groupName, qq, name).GetAwaiter().GetResult();
 
-        public static async Task<int> GetNumAsync(long botUin, long groupId, string groupName, long qq, string name)
+        public static async Task<int> GetNumAsync(long botUin, long groupId, string groupName, long qq, string name, IDbTransaction? trans = null)
         {
-            long blockId = await GetIdAsync(groupId, qq);
+            long blockId = await GetIdAsync(groupId, qq, trans);
             if (blockId == 0)
             {
-                if (await AppendAsync(botUin, groupId, groupName, qq, name, "创世区块", (string.Empty, Array.Empty<IDataParameter>()), (string.Empty, Array.Empty<IDataParameter>())) != -1)
-                    return await GetNumAsync(botUin, groupId, groupName, qq, name);
+                if (await AppendAsync(botUin, groupId, groupName, qq, name, "创世区块", (string.Empty, Array.Empty<IDataParameter>()), (string.Empty, Array.Empty<IDataParameter>()), trans) != -1)
+                    return await GetNumAsync(botUin, groupId, groupName, qq, name, trans);
             }
             return GetNum(blockId);
         }
@@ -190,12 +190,12 @@ namespace BotWorker.Modules.Games
         public static int GetOdds(int typeId, string typeName, int blockNum)
             => GetOddsAsync(typeId, typeName, blockNum).GetAwaiter().GetResult();
 
-        public static async Task<int> GetOddsAsync(int typeId, string typeName, int blockNum)
+        public static async Task<int> GetOddsAsync(int typeId, string typeName, int blockNum, IDbTransaction? trans = null)
         {
             if (typeId >= 32 & typeId <= 37)
                 return blockNum.ToString().Split([typeName.Replace("押", "")], StringSplitOptions.None).Length - 1;
             else
-                return await QueryScalarAsync<int>($"SELECT BlockOdds FROM {BlockType.FullName} WHERE Id = {typeId}");
+                return await QueryScalarAsync<int>($"SELECT BlockOdds FROM {BlockType.FullName} WHERE Id = {typeId}", trans);
         }
 
         public static string FormatNum(int Num)
@@ -265,13 +265,16 @@ namespace BotWorker.Modules.Games
         }
 
         public static bool IsWin(int typeId, string typeName, int blockNum)
+            => IsWinAsync(typeId, typeName, blockNum).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsWinAsync(int typeId, string typeName, int blockNum, IDbTransaction? trans = null)
         {
             if (typeId >= 32 & typeId <= 37)
             {
                 int i = blockNum.ToString().Split([typeName.Replace("押", "")], StringSplitOptions.None).Length - 1;
                 return i > 0;
             }
-            return (QueryScalar<string>($"select IsWin from {BlockWin.FullName} where TypeId = {typeId} and BlockNum = {blockNum}") ?? "").AsBool();
+            return (await QueryScalarAsync<string>($"select IsWin from {BlockWin.FullName} where TypeId = {typeId} and BlockNum = {blockNum}", trans) ?? "").AsBool();
         }
     }
 
@@ -282,8 +285,11 @@ namespace BotWorker.Modules.Games
 
         // 随机一组数字（三个1-6）
         public static int RandomNum()
+            => RandomNumAsync().GetAwaiter().GetResult();
+
+        public static async Task<int> RandomNumAsync(IDbTransaction? trans = null)
         {
-            return GetInt("BlockNum", RandomInt(1, 216));
+            return await GetIntAsync("BlockNum", RandomInt(1, 216), null, trans);
         }
     }
     public class BlockType : MetaData<BlockType>
@@ -293,8 +299,12 @@ namespace BotWorker.Modules.Games
 
         //类型
         public static int GetTypeId(string TypeName)
+            => GetTypeIdAsync(TypeName).GetAwaiter().GetResult();
+
+        public static async Task<int> GetTypeIdAsync(string TypeName, IDbTransaction? trans = null)
         {
-            return GetWhere($"Id", $"TypeName = {TypeName.Replace("押", "").Quotes()}").AsInt();
+            var res = await GetWhereAsync("Id", $"TypeName = {TypeName.Replace("押", "").Quotes()}", null, trans);
+            return res.AsInt();
         }
 
     }

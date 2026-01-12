@@ -1047,10 +1047,10 @@ func (m *Manager) SyncSystemKnowledge() {
 
 func (m *Manager) startRedisWorkerSubscription() {
 	ctx := context.Background()
-	pubsub := m.Rdb.Subscribe(ctx, "botmatrix:worker:register", "botmatrix:worker:skill_result", config.REDIS_KEY_ACTION_QUEUE)
+	pubsub := m.Rdb.Subscribe(ctx, "botmatrix:worker:register", "botmatrix:worker:skill_result", config.REDIS_KEY_ACTION_QUEUE, "botmatrix:actions")
 	defer pubsub.Close()
 
-	clog.Info("[Redis] Subscribed to worker channels: register, skill_result, actions")
+	clog.Info("[Redis] Subscribed to worker channels: register, skill_result, actions, botmatrix:actions")
 
 	for {
 		msg, err := pubsub.ReceiveMessage(ctx)
@@ -1060,6 +1060,8 @@ func (m *Manager) startRedisWorkerSubscription() {
 			continue
 		}
 
+		clog.Info("[Redis] Received raw message", zap.String("channel", msg.Channel), zap.String("payload", msg.Payload))
+
 		var rawMsg map[string]any
 		if err := json.Unmarshal([]byte(msg.Payload), &rawMsg); err != nil {
 			clog.Error("[Redis] Failed to unmarshal message", zap.Error(err))
@@ -1068,10 +1070,30 @@ func (m *Manager) startRedisWorkerSubscription() {
 
 		msgType, _ := rawMsg["type"].(string)
 
+		// 如果没有 type，但有 action 和 self_id，则视为 action (兼容模式)
+		if msgType == "" {
+			if _, ok := rawMsg["action"]; ok {
+				if _, ok := rawMsg["self_id"]; ok {
+					msgType = "action"
+				}
+			}
+		}
+
+		// 如果还是没有 type，但有 skill_id，则视为 skill_result
+		if msgType == "" {
+			if _, ok := rawMsg["skill_id"]; ok {
+				msgType = "skill_result"
+			}
+		}
+
 		switch msgType {
 		case "action":
 			// 处理来自 Worker 的 Action
 			m.handleWorkerAction(rawMsg)
+
+		case "api_response":
+			// 处理来自机器人的 API 响应 (用于回复 Echo)
+			// m.handleApiResponse(rawMsg)
 
 		case "skill_result":
 			var skillResult types.SkillResult

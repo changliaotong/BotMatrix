@@ -1,6 +1,4 @@
 ﻿
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class GoodsOrder : MetaData<GoodsOrder>

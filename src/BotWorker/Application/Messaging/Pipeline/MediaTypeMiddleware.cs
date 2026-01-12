@@ -1,6 +1,3 @@
-using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
-using BotWorker.Modules.Plugins;
 using BotWorker.Infrastructure.Communication.OneBot;
 
 namespace BotWorker.Application.Messaging.Pipeline

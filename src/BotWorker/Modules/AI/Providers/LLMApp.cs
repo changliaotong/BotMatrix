@@ -6,6 +6,7 @@ namespace BotWorker.Modules.AI.Providers
     public class LLMApp
     {
         public readonly ModelProviderManager _manager;
+        public static IServiceProvider? ServiceProvider { get; set; }
 
         public LLMApp(ILogger<ModelProviderManager>? logger = null)
         {

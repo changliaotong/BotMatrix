@@ -1,6 +1,3 @@
-﻿using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class WhiteList : MetaData<WhiteList>
@@ -12,11 +9,11 @@ namespace BotWorker.Domain.Entities
 
 
         // 加入白名单
-        public static int AppendWhiteList(long botUin, long groupId, string groupName, long qq, string name, long qqWhite)
+        public static async Task<int> AppendWhiteListAsync(long botUin, long groupId, string groupName, long qq, string name, long qqWhite)
         {
-            return Exists(groupId, qqWhite) 
+            return await ExistsAsync(groupId, qqWhite) 
                 ? 0 
-                : Insert([
+                : await InsertAsync([
                             new Cov("BotUin", botUin),
                             new Cov("GroupId", groupId),
                             new Cov("GroupName", groupName),
@@ -24,6 +21,11 @@ namespace BotWorker.Domain.Entities
                             new Cov("UserName", name),
                             new Cov("WhiteId", qqWhite),
                         ]);
+        }
+
+        public static int AppendWhiteList(long botUin, long groupId, string groupName, long qq, string name, long qqWhite)
+        {
+            return AppendWhiteListAsync(botUin, groupId, groupName, qq, name, qqWhite).GetAwaiter().GetResult();
         }
 
 

@@ -207,7 +207,7 @@ namespace BotWorker.Modules.Games
         {
             var user = await FishingUser.GetOrCreateAsync(userId);
             var loc = Locations[user.CurrentLocation];
-            var stateStr = user.State == 1 ? "🎣 正在垂钓中..." : "💤 闲逛中";
+            var stateStr = user.State == 1 ? "🎣 正在垂钓中... (输入 收竿/收杆 看看收获)" : "💤 闲逛中 (输入 抛竿 开始钓鱼)";
             
             return $"【{nickname}的钓鱼执照】\n" +
                    $"等级：Lv.{user.Level} (XP: {user.Exp})\n" +

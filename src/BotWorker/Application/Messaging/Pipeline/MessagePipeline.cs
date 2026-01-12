@@ -1,11 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Interfaces;
-using Microsoft.Extensions.DependencyInjection;
-using BotWorker.Modules.Plugins;
 using BotWorker.Infrastructure.Communication.OneBot;
 
 namespace BotWorker.Application.Messaging.Pipeline
@@ -65,8 +57,8 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (index < _middlewares.Count)
                 {
                     var middleware = _middlewares[index++];
-                    logger.LogInformation("[Pipeline] Step {Step}/{Total}: Executing {MiddlewareName} for message {MessageId}", 
-                        index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
+                    // logger.LogInformation("[Pipeline] Step {Step}/{Total}: Executing {MiddlewareName} for message {MessageId}", 
+                    //    index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
                     
                     try
                     {
@@ -79,8 +71,8 @@ namespace BotWorker.Application.Messaging.Pipeline
                         throw;
                     }
 
-                    logger.LogInformation("[Pipeline] Step {Step}/{Total}: Completed {MiddlewareName} for message {MessageId}", 
-                        index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
+                    // logger.LogInformation("[Pipeline] Step {Step}/{Total}: Completed {MiddlewareName} for message {MessageId}", 
+                    //    index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
                 }
             }
 
@@ -89,7 +81,7 @@ namespace BotWorker.Application.Messaging.Pipeline
             // 如果管道执行完后有回答且尚未发送，则自动发送
             if (!string.IsNullOrEmpty(context.Answer) && !context.IsSent && context.IsSend)
             {
-                logger.LogInformation("[Pipeline] Auto-sending final answer for message {MessageId}", context.MsgId);
+                // logger.LogInformation("[Pipeline] Auto-sending final answer for message {MessageId}", context.MsgId);
                 await context.SendMessageAsync();
             }
 

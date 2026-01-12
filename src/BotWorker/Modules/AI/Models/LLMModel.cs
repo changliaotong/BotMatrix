@@ -3,6 +3,12 @@ using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Modules.AI.Models
 {
+    public enum LLMModelType
+    {
+        Chat = 0,
+        Image = 1
+    }
+
     public class LLMModel : MetaDataGuid<LLMModel>
     {
         public override string TableName => "LLMModel";
@@ -12,14 +18,16 @@ namespace BotWorker.Modules.AI.Models
         public int ProviderId { get; set; }
         public string Memo { get; set; } = string.Empty;
         public int Status { get; set; } = 1;
+        public int ModelType { get; set; } = 0; // 0: Chat, 1: Image
 
-        public static int Append(string name, int providerId, string memo = "")
+        public static int Append(string name, int providerId, string memo = "", int modelType = 0)
         {
             return Insert([
                 new Cov("Name", name),
                 new Cov("ProviderId", providerId),
                 new Cov("Memo", memo),
-                new Cov("Status", 1)
+                new Cov("Status", 1),
+                new Cov("ModelType", modelType)
             ]);
         }
 
@@ -29,14 +37,14 @@ namespace BotWorker.Modules.AI.Models
             bool IsUsable(int id)
             {
                 if (id <= 0) return false;
-                var sql = $"SELECT COUNT(*) FROM {FullName} m JOIN LLMProvider p ON m.ProviderId = p.Id WHERE m.Id = {id} AND m.Status = 1";
+                var sql = $"SELECT COUNT(*) FROM {FullName} m JOIN LLMProvider p ON m.ProviderId = p.Id WHERE m.Id = {id} AND m.Status = 1 AND p.Status = 1";
                 return QueryScalar<int>(sql) > 0;
             }
 
             if (!IsUsable(modelId))
             {
                 // 随机选择一个模型激活的
-                var sql = $"SELECT {SqlTop(1)} m.Id FROM {FullName} m JOIN LLMProvider p ON m.ProviderId = p.Id WHERE m.Status = 1 ORDER BY {SqlRandomOrder}{SqlLimit(1)}";
+                var sql = $"SELECT {SqlTop(1)} m.Id FROM {FullName} m JOIN LLMProvider p ON m.ProviderId = p.Id WHERE m.Status = 1 AND p.Status = 1 ORDER BY {SqlRandomOrder}{SqlLimit(1)}";
                 modelId = QueryScalar<int>(sql);
             }
 

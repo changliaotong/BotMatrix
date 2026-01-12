@@ -1,9 +1,4 @@
-﻿using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Modules.Plugins;
-
-namespace BotWorker.Application.Messaging.Pipeline
+﻿namespace BotWorker.Application.Messaging.Pipeline
 {
     /// <summary>
     /// 暗语中间件：处理“天王盖地虎”等全局身份验证和状态查询指令

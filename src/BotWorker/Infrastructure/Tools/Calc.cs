@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Scripting;
+using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 
 namespace BotWorker.Infrastructure.Tools
@@ -18,6 +18,7 @@ namespace BotWorker.Infrastructure.Tools
                 //错误输入纠正 + - * / 等
                 key = key.Replace("＋", "+").Replace("－", "-").Replace("×", "*").Replace("／", "/").Replace("[", "(").Replace("]", ")").Replace("（", "(").Replace("）", ")").Replace("÷", "/");
                 key = key.Replace(";", "").Replace("ｘ", "*").Replace("＊", "*");
+                key = key.Replace("=", "").Replace("＝", "").Replace("?", "").Replace("？", "");
                 if (key.Contains('/'))
                     key = key.Replace("/", "*1.0/");
                 return SQLConn.Query("select " + key + " as res");
@@ -28,28 +29,29 @@ namespace BotWorker.Infrastructure.Tools
             }
         }
 
-        public static string GetJsRes(string key)
+        public static async Task<string> GetJsRes(string key)
         {
             try
             {                
                 //错误输入纠正 + - * / 等
                 key = key.Replace("＋", "+").Replace("－", "-").Replace("×", "*").Replace("／", "/").Replace("[", "(").Replace("]", ")").Replace("（", "(").Replace("）", ")").Replace("÷", "/");
                 key = key.Replace(";", "").Replace("ｘ", "*").Replace("＊", "*");
+                key = key.Replace("=", "").Replace("＝", "").Replace("?", "").Replace("？", "");
                 if (key.Contains('/'))
                     key = key.Replace("/", "*1.0/");
 
-                var result = CSharpScript.EvaluateAsync<double>(key).Result;
+                var result = await CSharpScript.EvaluateAsync<double>(key);
                 return result.ToString();
             }
             catch (CompilationErrorException ex)
             {
-                Debug(string.Join(", ", ex.Diagnostics), "计算");
+                Logger.Error(string.Join(", ", ex.Diagnostics));
                 //return "表达式编译错误";// +  );                
                 return "";
             }
             catch (Exception ex)
             {
-                Debug(ex.Message, "计算");
+                Logger.Error(ex.Message);
                 return "不正确的表达式"; 
             }
         }

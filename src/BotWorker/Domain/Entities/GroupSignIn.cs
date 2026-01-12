@@ -13,12 +13,8 @@ namespace BotWorker.Domain.Entities
                             new Cov("weibo_info", weiboInfo),
                             new Cov("weibo_type", 1),
                             new Cov("group_id", groupId),
+                            new Cov("insert_date", DateTime.MinValue),
                         });
-        }
-
-        public static int Append(long botUin, long groupId, long qq, string weiboInfo)
-        {
-            return AppendAsync(botUin, groupId, qq, weiboInfo).GetAwaiter().GetResult();
         }
 
         // 今日签到人数
@@ -27,31 +23,16 @@ namespace BotWorker.Domain.Entities
             return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND ABS({SqlDateDiff("DAY", "insert_date", SqlDateTime)}) = 0");
         }
 
-        public static long SignCount(long groupId)
-        {
-            return SignCountAsync(groupId).GetAwaiter().GetResult();
-        }
-
         // 昨日签到人数
         public static async Task<long> SignCountYAsync(long groupId)
         {
             return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND ABS({SqlDateDiff("DAY", "insert_date", SqlDateTime)}) = 1");
         }
 
-        public static long SignCountY(long groupId)
-        {
-            return SignCountYAsync(groupId).GetAwaiter().GetResult();
-        }
-
         // 本月签到次数
         public static async Task<long> SignCountThisMonthAsync(long groupId, long qq)
         {
             return await CountWhereAsync($"weibo_type = 1 AND group_id = {groupId} AND weibo_qq = {qq} AND ABS({SqlDateDiff("MONTH", "insert_date", SqlDateTime)}) = 0");
-        }
-
-        public static long SignCountThisMonth(long groupId, long qq)
-        {
-            return SignCountThisMonthAsync(groupId, qq).GetAwaiter().GetResult();
         }
     }
 }

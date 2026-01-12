@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Configuration;
-
 namespace BotWorker.Common.Config
 {
     public class AppConfig
@@ -10,7 +8,7 @@ namespace BotWorker.Common.Config
         {
             _configuration = configuration;
         }
-
+        public const string RetryMsg = "操作失败，请稍后重试";
         internal static string _url => _configuration?["BotWorker:url"] ?? "https://sz84.com";
         internal static string _apiKey => _configuration?["BotWorker:api_key"] ?? "AFCDE195E9EE00DCFCB5E0ED44D129EB";
 

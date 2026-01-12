@@ -45,11 +45,6 @@ namespace BotWorker.Application.Messaging.Pipeline
                     {
                         // 私聊：返回拉黑提示
                         botMsg.Answer = $"您已被群({botMsg.GroupId})拉黑";
-                        if (botMsg.GroupId != BotInfo.GroupCrm)
-                        {
-                            // 这里可以根据需要保留或简化逻辑
-                            botMsg.Answer += UserInfo.GetResetDefaultGroup(botMsg.UserId);
-                        }
                         return;
                     }
                 }

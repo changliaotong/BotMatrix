@@ -8,8 +8,15 @@ namespace BotWorker.Domain.Entities
         public long MsgId { get; set; }
         public long? GroupId { get; set; }
         public long? ClientQQ { get; set; }
+        [BotWorker.Infrastructure.Utils.Schema.Attributes.Column("Question")]
         public string? Question { get; set; }
+
+        [BotWorker.Infrastructure.Utils.Schema.Attributes.Column("AnswerAI")]
         public string? AnswerAi { get; set; }
+
+        [BotWorker.Infrastructure.Utils.Schema.Attributes.Column("Message")]
+        public string? Message { get; set; }
+
         public DateTime? InsertDate { get; set; }
 
         public static int UserCount(long groupId)

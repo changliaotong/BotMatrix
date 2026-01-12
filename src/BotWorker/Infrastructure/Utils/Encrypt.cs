@@ -428,7 +428,7 @@ namespace BotWorker.Infrastructure.Utils
             }
             catch (Exception ex)
             {
-                ErrorMessage($"RSA解密出错:{ex.Message}");
+                Logger.Error($"RSA解密出错:{ex.Message}");
                 return text;
             }
         }
@@ -507,7 +507,7 @@ namespace BotWorker.Infrastructure.Utils
             }
             catch (Exception ex)
             {
-                ErrorMessage($"RSA解密2出错:{ex.Message}");
+                Logger.Error($"RSA解密2出错:{ex.Message}");
                 return text;
             }
         }

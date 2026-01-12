@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-
 namespace BotWorker.Application.Services
 {
     public interface ISensitiveWordService

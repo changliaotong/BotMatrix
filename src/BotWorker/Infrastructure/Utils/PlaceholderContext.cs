@@ -1,7 +1,4 @@
 ﻿using System.Reflection;
-using System.Text.RegularExpressions;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Infrastructure.Utils
 {
@@ -160,7 +157,7 @@ namespace BotWorker.Infrastructure.Utils
 
                 foreach (var pair in replacements)
                 {
-                    InfoMessage($"[占位符] {pair.Key} -> {pair.Value}");
+                    // InfoMessage($"[占位符] {pair.Key} -> {pair.Value}");
                     bm.Answer = bm.Answer.Replace(pair.Key, pair.Value);
                 }
             }             

@@ -1,20 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace BotWorker.Application.Services
 {
-    public class BrowserMcpHost : IMCPHost
+    public class BrowserMcpHost(IBrowserService browserService) : IMCPHost
     {
-        private readonly IBrowserService _browserService;
-
-        public BrowserMcpHost(IBrowserService browserService)
-        {
-            _browserService = browserService;
-        }
-
         public Task<IEnumerable<MCPTool>> ListToolsAsync(string serverId, CancellationToken ct = default)
         {
             var tools = new List<MCPTool>
@@ -62,12 +49,12 @@ namespace BotWorker.Application.Services
                 switch (toolName)
                 {
                     case "browser_navigate":
-                        var content = await _browserService.NavigateAsync(url);
+                        var content = await browserService.NavigateAsync(url);
                         if (content.Length > 10000) content = content.Substring(0, 10000) + "... (truncated)";
                         return Success(content);
 
                     case "browser_screenshot":
-                        var screenshot = await _browserService.TakeScreenshotAsync(url);
+                        var screenshot = await browserService.TakeScreenshotAsync(url);
                         return Success(screenshot);
 
                     default:

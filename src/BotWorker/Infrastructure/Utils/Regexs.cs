@@ -10,18 +10,18 @@ namespace BotWorker.Infrastructure.Utils
         public static string OfficalRejectWords => @"啪啪啪|黄爆|跑骚|🇹🇼|sm|射精|伪娘|偷看美女洗澡|爆菊|更衣|荤段子|汪洋大|勾引男|禽兽|纳粹|被操|淫|嫖|功高盖|野无遗|胖次|发春|互赞|呻吟|脱光|上吊|吊死|毛爷爷|陈独秀|自杀|宽衣|电倒|凹凸曼|床及|卖号|色群|妈逼|淫荡|亡政|阴道|线下约|大波妹|胎盘|丁字裤"; 
         //计算
         public static string Formula =>
-            @"^\s*(?<formula>(?:[0-9]+(?:\.[0-9]+)?|\([^\)]+\)|（[^）]+）)(?:\s*[\+\-\*\/×÷＋－×÷／﹢﹣＊／]\s*(?:[0-9]+(?:\.[0-9]+)?|\([^\)]+\)|（[^）]+）))*?)\s*[=＝]\s*[?？]?\s*$";
-
-        //coins
-        public static string ExchangeCoins => @"^\s*(?<CmdName>兑换)\s*(?<cmdPara>金币|黑金币|紫币|游戏币|积分|本群分|本群积分)\s*(?<cmdPara2>\d*)\s*$";
-        public static string AddMinus => @"^\s*(?<CmdName>充值|找)\s*(?<cmdPara>金币|黑金币|紫币|积分|群积分|本群分|本群积分|飞机票|禁言卡|解禁卡|解禁言)\s*(\[@:)?(?<cmdPara2>[1-9]\d{4,10})]?\s*(?<cmdPara3>\d*)\s*$";
+            @"^\s*(?<formula>(?:[0-9]+(?:\.[0-9]+)?|\([^\)]+\)|（[^）]+）)(?:\s*[\+\-\*\/×÷＋－×÷／﹢﹣＊／]\s*(?:[0-9]+(?:\.[0-9]+)?|\([^\)]+\)|（[^）]+）))*)\s*(?:[=＝]\s*[?？]?\s*)?$";
 
         //fishing 
         public static string Fishing => @"^\s*(?<CmdName>钓鱼|抛竿|收竿)\s*$";
         public static string FishingBuy => @"^\s*(?<CmdName>购买)\s*(?<cmdPara>鱼(竿|钩|饵|线))\s*(?<cmdPara2>\d*)\s*$";
         public static string FishingSell => @"^\s*(?<CmdName>卖)\s*(?<cmdPara>水鬼|鲸鱼|章鱼|黄鱼|青蛙|贝壳|内衣|破鞋)\s*(?<cmdPara2>\d*)\s*$";
 
-        //pet
+        //coins
+        public static string ExchangeCoins => @"^\s*(?<CmdName>兑换)\s*(?<cmdPara>金币|黑金币|紫币|游戏币|积分|本群分|本群积分)\s*(?<cmdPara2>\d*)\s*$";
+        public static string AddMinus => @"^\s*(?<CmdName>充值|找)\s*(?<cmdPara>金币|黑金币|紫币|积分|群积分|本群分|本群积分|飞机票|禁言卡|解禁卡|解禁言)\s*(\[@:)?(?<cmdPara2>[1-9]\d{4,10})]?\s*(?<cmdPara3>\d*)\s*$";
+
+         //pet
         public static string BuyBet => @"^#?买[+＋ ]*(\[?@:?)?(?<UserId>[1-9]\d{4,10})(\])? *$";
         public static string PetPrice => @"^#?(查?身价|sj) *(\[?@:?)?(?<UserId>[1-9]\d{4,10})(\])?$";
 

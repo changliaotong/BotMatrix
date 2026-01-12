@@ -52,6 +52,12 @@ namespace BotWorker.Modules.AI.Models
             return SqlPlus("SubscriptionCount", increment, id);
         }
 
+        public static async Task<int> UsedTimesIncrementAsync(long id, int increment = 1)
+        {
+            var (sql, parameters) = SqlPlus("usedTimes", increment, id);
+            return await ExecAsync(sql, null, parameters);
+        }
+
         public static int UsedTimesIncrement(long id, int increment = 1)
         {
             var (sql, parameters) = SqlPlus("usedTimes", increment, id);

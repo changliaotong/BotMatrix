@@ -31,7 +31,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                     var isAuto = botMsg.CmdName != "签到" && !message.Contains("签到") && !message.Contains("打卡");
                     if (isAuto)
                     {
-                        var answer = botMsg.TrySignIn(isAuto) ?? string.Empty;
+                        var answer = await botMsg.TrySignInAsync(isAuto) ?? string.Empty;
                         if (!string.IsNullOrWhiteSpace(answer))
                         {
                             botMsg.CostTime = sw.Elapsed.TotalSeconds;

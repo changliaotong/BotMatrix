@@ -1,6 +1,3 @@
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class BlackList : MetaData<BlackList>
@@ -17,17 +14,22 @@ namespace BotWorker.Domain.Entities
             return await QueryListAsync<long>(sql, null, parameters);
         }
 
-        public static bool IsSystemBlack(long userId)
+        public static bool IsSystemBlack(long userId) => IsSystemBlackAsync(userId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsSystemBlackAsync(long userId)
         {
-            return Exists(BotInfo.GroupIdDef, userId);
+            return await ExistsAsync(BotInfo.GroupIdDef, userId);
         }
 
-        // 加入黑名单
         public static int AddBlackList(long botUin, long groupId, string groupName, long qq, string name, long blackQQ, string blackInfo)
+            => AddBlackListAsync(botUin, groupId, groupName, qq, name, blackQQ, blackInfo).GetAwaiter().GetResult();
+
+        // 加入黑名单
+        public static async Task<int> AddBlackListAsync(long botUin, long groupId, string groupName, long qq, string name, long blackQQ, string blackInfo)
         {
-            return Exists(groupId, blackQQ)
+            return await ExistsAsync(groupId, blackQQ)
                 ? 0
-                : Insert([
+                : await InsertAsync([
                             new Cov("BotUin", botUin),
                             new Cov("GroupId", groupId),
                             new Cov("GroupName", groupName),
@@ -41,9 +43,11 @@ namespace BotWorker.Domain.Entities
         /// <summary>
         /// 清空指定群组的黑名单
         /// </summary>
-        public static int ClearGroupBlacklist(long groupId)
+        public static int ClearGroupBlacklist(long groupId) => ClearGroupBlacklistAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<int> ClearGroupBlacklistAsync(long groupId)
         {
-            return Exec($"DELETE FROM BlackList WHERE GroupId = {groupId}");
+            return await ExecAsync($"DELETE FROM BlackList WHERE GroupId = {groupId}");
         }
     }
 }

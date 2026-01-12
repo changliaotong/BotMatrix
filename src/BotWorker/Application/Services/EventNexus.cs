@@ -1,9 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Models;
 
 namespace BotWorker.Application.Services

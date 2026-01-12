@@ -49,8 +49,15 @@ namespace BotWorker.Application.Messaging.Pipeline
                     }
                     else
                     {
-                        if (botMsg.IsRefresh) botMsg.HandleRefresh();
-                        else await botMsg.GetCmdResAsync();
+                        if (botMsg.IsRefresh) await botMsg.HandleRefreshAsync();
+                        else 
+                        {
+                            await botMsg.GetCmdResAsync();
+                            if (string.IsNullOrEmpty(botMsg.Answer))
+                            {
+                                await botMsg.GetHotCmdAsync();
+                            }
+                        }
 
                         if (!string.IsNullOrEmpty(botMsg.Answer))
                         {
@@ -72,7 +79,7 @@ namespace BotWorker.Application.Messaging.Pipeline
             await next(context);
         }
 
-        private bool IsInvalidCommand(BotWorker.Domain.Models.Messages.BotMessages.BotMessage botMsg)
+        private bool IsInvalidCommand(BotMessage botMsg)
         {
             return (botMsg.CmdName.In("续费", "暗恋", "换群", "换主人", "警告") && !string.IsNullOrEmpty(botMsg.CmdPara) && !botMsg.CmdPara.IsNum())
                 || (botMsg.CmdName.In("剪刀", "石头", "布", "抽奖", "三公", "牛牛", "牌九", "骰子") && !string.IsNullOrEmpty(botMsg.CmdPara) && (botMsg.CmdPara.Trim() != "梭哈") && !botMsg.CmdPara.IsNum())

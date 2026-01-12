@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-using BotWorker.Common.Data;
 
 namespace BotWorker.Domain.Entities
 {
@@ -146,23 +145,13 @@ namespace BotWorker.Domain.Entities
         public bool IsSendHelpInfo { get; set; }
         public bool IsRecall { get; set; }
         public bool IsCreditSystem { get; set; }
-
-        public static long GetSourceGroupId(long botUin, long groupId)
-        {
-            return GetWhere("Id", $"BotUin = {botUin} and TargetGroup = {groupId}").AsLong();
-        }
+        public string CreditName => "积分";
 
         //本群积分
-        public static bool GetIsCredit(long groupId)
-            => GetIsCreditAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<bool> GetIsCreditAsync(long groupId)
         {
             return groupId != 0 && await GetBoolAsync("IsCredit", groupId);
         }
-
-        public static bool GetIsPet(long groupId)
-            => GetIsPetAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<bool> GetIsPetAsync(long groupId)
         {
@@ -170,138 +159,141 @@ namespace BotWorker.Domain.Entities
         }
 
         // 关机
-        public static int SetPowerOff(long groupId)
-            => SetPowerOffAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<int> SetPowerOffAsync(long groupId)
         {
             return await SetValueAsync("IsPowerOn", false, groupId);
         }
 
         /// 开机
-        public static int SetPowerOn(long groupId)
-            => SetPowerOnAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<int> SetPowerOnAsync(long groupId)
         {
             return await SetValueAsync("IsPowerOn", true, groupId);
         }
 
         // 是否开机
-        public static bool GetPowerOn(long groupId, string groupName = "")
-            => GetPowerOnAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<bool> GetPowerOnAsync(long groupId)
         {
             return await GetBoolAsync("IsPowerOn", groupId);
         }
 
-        // 是否关机
-        public static bool IsPowerOff(long groupId)
-            => !GetPowerOn(groupId);
-       
-        public static long GetGroupOwner(long groupId, long def = 0)
+        public static async Task<long> GetGroupOwnerAsync(long groupId, long def = 0)
         {
-            return GetDef("GroupOwner", groupId, def);
+            return await GetLongAsync("GroupOwner", groupId, def);
         }
 
-        public static long GetRobotOwner(long groupId, long def = 0)
+        public static int SetRobotOwner(long groupId, long ownerId) => SetRobotOwnerAsync(groupId, ownerId).GetAwaiter().GetResult();
+
+        public static async Task<int> SetRobotOwnerAsync(long groupId, long ownerId)
         {
-            return GetDef("RobotOwner", groupId, def);
+            return await SetValueAsync("RobotOwner", ownerId, groupId);
         }
 
-        public static bool IsOwner(long groupId, long userId)
+        public static long GetRobotOwner(long groupId) => GetRobotOwnerAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<long> GetRobotOwnerAsync(long groupId, long def = 0)
         {
-            return userId == GetRobotOwner(groupId);
+            return await GetLongAsync("RobotOwner", groupId, def);
         }
 
-        public static bool GetIsValid(long groupId)
+        public static bool IsOwner(long groupId, long userId) => IsOwnerAsync(groupId, userId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsOwnerAsync(long groupId, long userId)
         {
-            return GetBool("IsValid", groupId);
+            return userId == await GetRobotOwnerAsync(groupId);
         }
 
-        public static string GetRobotOwnerName(long groupId)
+        public static bool IsPowerOff(long groupId) => IsPowerOffAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<bool> IsPowerOffAsync(long groupId)
         {
-            string res = GetValue("isnull(RobotOwnerName,'')", groupId);
+            return !await GetPowerOnAsync(groupId);
+        }
+
+        public static async Task<bool> GetIsValidAsync(long groupId)
+        {
+            return await GetBoolAsync("IsValid", groupId);
+        }
+
+        public static async Task<string> GetRobotOwnerNameAsync(long groupId)
+        {
+            string res = await GetValueAsync(SqlIsNull("RobotOwnerName", "''"), groupId);
             if (res == "")
             {
-                res = GetRobotOwner(groupId).ToString();
+                res = (await GetRobotOwnerAsync(groupId)).ToString();
                 res = $"[@:{res}]";
             }
             return res;
         }
 
-        public static string GetRobotOwnerName(long groupId, string botName)
+        public static async Task<string> GetRobotOwnerNameAsync(long groupId, string botName)
         {
-            string res = GetValue("isnull(RobotOwnerName,'')", groupId);
+            string res = await GetValueAsync(SqlIsNull("RobotOwnerName", "''"), groupId);
             if (res == "")
             {
-                res = GetRobotOwner(groupId).ToString();
+                res = (await GetRobotOwnerAsync(groupId)).ToString();
                 res = $"[@:{res}]";
             }
             return res;
         }
+
+
+
+        public static bool IsCanTrial(long groupId) => IsCanTrialAsync(groupId).GetAwaiter().GetResult();
 
         // 判断该群是否还可以体验
-        public static bool IsCanTrial(long groupId)
+        public static async Task<bool> IsCanTrialAsync(long groupId)
         {
-            if (GroupVip.IsVipOnce(groupId))
+            if (await GroupVip.IsVipOnceAsync(groupId))
                 return false;
 
             //体验超过180天可再次体验一次
-            int days = GetInt($"ABS({SqlDateDiff("DAY", SqlDateTime, "TrialStartDate")})", groupId);
+            int days = await GetIntAsync($"ABS({SqlDateDiff("DAY", SqlDateTime, "TrialStartDate")})", groupId);
             if (days >= 180)
             {
                 int trialDays = 7;
-                Update($"IsValid = 1, TrialStartDate = {SqlDateTime}, TrialEndDate = {SqlDateAdd("day", trialDays, SqlDateTime)}", groupId);
+                await UpdateAsync($"IsValid = 1, TrialStartDate = {SqlDateTime}, TrialEndDate = {SqlDateAdd("day", trialDays, SqlDateTime)}", groupId);
                 return true;
             }
-            return GetIsValid(groupId);
-        }   
+            return await GetIsValidAsync(groupId);
+        }
 
-        // 取消体验
-        public static int SetInvalid(long groupId, string groupName = "", long groupOwner = 0, long robotOwner = 0)
+        public static async Task<int> SetInvalidAsync(long groupId, string groupName = "", long groupOwner = 0, long robotOwner = 0)
         {
-            Append(groupId, groupName, BotInfo.BotUinDef, BotInfo.BotNameDef, groupOwner, robotOwner);
-            if (GroupVip.IsVip(groupId))
+            await AppendAsync(groupId, groupName, BotInfo.BotUinDef, BotInfo.BotNameDef, groupOwner, robotOwner);
+            if (await GroupVip.IsVipAsync(groupId))
                 return -1;
             else
-                return SetValue("IsValid", false, groupId);
+                return await SetValueAsync("IsValid", false, groupId);
         }
 
-        public static int SetHintDate(long groupId)
+        public static async Task<int> SetHintDateAsync(long groupId)
         {
-            return SetNow("LastExitHintDate", groupId);
-        }    
-
-        // 管理员白名单
-        public static bool GetIsWhite(long groupId)
-        {
-            return GetBool("IsWhite", groupId);
+            return await SetNowAsync("LastExitHintDate", groupId);
         }
 
-        // 群链开关状态
-        public static string GetIsBlockRes(long groupId)
+        public static async Task<bool> GetIsWhiteAsync(long groupId)
         {
-            return GetIsBlock(groupId) ? "已开启" : "已关闭";
+            return await GetBoolAsync("IsWhite", groupId);
         }
 
-        // 群链开关
-        public static bool GetIsBlock(long groupId)
+        public static async Task<string> GetIsBlockResAsync(long groupId)
         {
-            return GetBool("IsBlock", groupId);
+            return await GetIsBlockAsync(groupId) ? "已开启" : "已关闭";
         }
 
-        // 是否开启
-        public static int GetIsOpen(long groupId)
+        public static async Task<bool> GetIsBlockAsync(long groupId)
         {
-            return GetInt("IsOpen", groupId);
-        }        
+            return await GetBoolAsync("IsBlock", groupId);
+        }
 
-        // 提示语间隔秒数 包含欢迎语、退群提示、改名提示等信息
-        public static int GetLastHintTime(long groupId)
+        public static async Task<int> GetIsOpenAsync(long groupId)
         {
-            return GetInt($"ABS({SqlDateDiff("SECOND", "LastExitHintDate", SqlDateTime)})", groupId);
+            return await GetIntAsync("IsOpen", groupId);
+        }
+
+        public static async Task<int> GetLastHintTimeAsync(long groupId)
+        {
+            return await GetIntAsync($"ABS({SqlDateDiff("SECOND", "LastExitHintDate", SqlDateTime)})", groupId);
         }
 
         // 云问答
@@ -321,23 +313,23 @@ namespace BotWorker.Domain.Entities
                 return string.Empty;
         }
 
-        /// 退群拉黑
-        public static bool GetIsBlackExit(long groupId)
+        public static async Task<bool> GetIsBlackExitAsync(long groupId)
         {
-            return GetBool("IsBlackExit", groupId);
+            return await GetBoolAsync("IsBlackExit", groupId);
         }
 
-        // 被踢拉黑
-        public static bool GetIsBlackKick(long groupId)
+        public static async Task<bool> GetIsBlackKickAsync(long groupId)
         {
-            return GetBool("IsBlackKick", groupId);
+            return await GetBoolAsync("IsBlackKick", groupId);
         }
+
+        public static string GetClosedFunc(long groupId) => GetClosedFuncAsync(groupId).GetAwaiter().GetResult();
 
         // 关闭的功能
-        public static string GetClosedFunc(long groupId)
+        public static async Task<string> GetClosedFuncAsync(long groupId)
         {
-            string res = QueryRes($"SELECT CmdName FROM {BotCmd.FullName}", "{0}\n");
-            string closeRegex = GetValue("CloseRegex", groupId);
+            string res = await QueryResAsync($"SELECT CmdName FROM {BotCmd.FullName}", "{0}\n");
+            string closeRegex = await GetValueAsync("CloseRegex", groupId);
             if (closeRegex.IsNull())  return "";
 
             StringBuilder sb = new("\n已关闭：");
@@ -350,31 +342,30 @@ namespace BotWorker.Domain.Entities
             return sb.ToString();
         }
 
+        public static string GetClosedRegex(long groupId) => GetClosedRegexAsync(groupId).GetAwaiter().GetResult();
+
         // 关闭的功能 regex
-        public static string GetClosedRegex(long groupId)
+        public static async Task<string> GetClosedRegexAsync(long groupId)
         {
-            string res = GetValue("CloseRegex", groupId);
+            string res = await GetValueAsync("CloseRegex", groupId);
             if (res != "")
                 res = @"^[#＃﹟]{0,1}(?<cmd>(" + res.Trim().Replace(" ", "|") + @"))[+]*(?<cmdPara>[\s\S]*)";
             return res;
         }
 
-        // 退群提示
-        public static bool GetIsExitHint(long groupId)
+        public static async Task<bool> GetIsExitHintAsync(long groupId)
         {
-            return GetBool("IsExitHint", groupId);
+            return await GetBoolAsync("IsExitHint", groupId);
         }
 
-        // 被踢提示
-        public static bool GetIsKickHint(long groupId)
+        public static async Task<bool> GetIsKickHintAsync(long groupId)
         {
-            return GetBool("IsKickHint", groupId);
+            return await GetBoolAsync("IsKickHint", groupId);
         }
 
-        // 命令前缀
-        public static bool GetIsRequirePrefix(long groupId)
+        public static async Task<bool> GetIsRequirePrefixAsync(long groupId)
         {
-            return GetBool("IsRequirePrefix", groupId);
+            return await GetBoolAsync("IsRequirePrefix", groupId);
         }
 
 
@@ -391,15 +382,11 @@ namespace BotWorker.Domain.Entities
             };
         }
 
-        public static string GetJoinRes(long groupId) => GetJoinResAsync(groupId).GetAwaiter().GetResult();
-
         // 系统提示词
         public static async Task<string> GetSystemPromptAsync(long groupId)
         {
             return await GetValueAsync("SystemPrompt", groupId);
         }
-
-        public static string GetSystemPrompt(long groupId) => GetSystemPromptAsync(groupId).GetAwaiter().GetResult();
 
         // 机器人管理权限 状态
         public static async Task<string> GetAdminRightResAsync(long groupId)
@@ -414,8 +401,6 @@ namespace BotWorker.Domain.Entities
             };
         }
 
-        public static string GetAdminRightRes(long groupId) => GetAdminRightResAsync(groupId).GetAwaiter().GetResult();
-
         /// 机器人使用权限 状态
         public static async Task<string> GetRightResAsync(long groupId)
         {
@@ -428,8 +413,6 @@ namespace BotWorker.Domain.Entities
                 _ => "已关闭",
             };
         }
-
-        public static string GetRightRes(long groupId) => GetRightResAsync(groupId).GetAwaiter().GetResult();
 
         // 教学权限
         public static async Task<string> GetTeachRightResAsync(long groupId)
@@ -444,7 +427,42 @@ namespace BotWorker.Domain.Entities
             };
         }
 
-        public static string GetTeachRightRes(long groupId) => GetTeachRightResAsync(groupId).GetAwaiter().GetResult();
+        public static async Task<int> SetInGameAsync(int isInGame, long groupId)
+        {
+            return await SetValueAsync("IsInGame", isInGame, groupId);
+        }
+
+        public static async Task<int> StartCyGameAsync(int state, string lastChengyu, long groupId)
+        {
+            return await UpdateAsync(new { IsInGame = state, LastChengyu = lastChengyu }, groupId);
+        }
+
+        public static async Task<int> StartCyGameAsync(long groupId)
+        {
+            return await SetValueAsync("IsCyGame", true, groupId);
+        }
+
+        public static async Task<int> GetChengyuIdleMinutesAsync(long groupId)
+        {
+            return await GetIntAsync(SqlDateDiff("MINUTE", "LastChatDate", SqlDateTime), groupId);
+        }
+
+        public static int SetPowerOn(long groupId) => SetPowerOnAsync(groupId).GetAwaiter().GetResult();
+        public static int SetPowerOff(long groupId) => SetPowerOffAsync(groupId).GetAwaiter().GetResult();
+        public static int SetInGame(int isInGame, long groupId) => SetInGameAsync(isInGame, groupId).GetAwaiter().GetResult();
+        public static int StartCyGame(int state, string lastChengyu, long groupId) => StartCyGameAsync(state, lastChengyu, groupId).GetAwaiter().GetResult();
+        public static int StartCyGame(long groupId) => StartCyGameAsync(groupId).GetAwaiter().GetResult();
+        public static int GetChengyuIdleMinutes(long groupId) => GetChengyuIdleMinutesAsync(groupId).GetAwaiter().GetResult();
+
+        public static int SetPowerOn(bool isOpen, long groupId)
+        {
+            return SetValue("IsPowerOn", isOpen, groupId);
+        }
+
+        public static int GetLastHintTime(long groupId) => GetLastHintTimeAsync(groupId).GetAwaiter().GetResult();
+        public static int SetHintDate(long groupId) => SetHintDateAsync(groupId).GetAwaiter().GetResult();
+        public static int SetInvalid(long groupId, string groupName = "", long groupOwner = 0, long robotOwner = 0) => SetInvalidAsync(groupId, groupName, groupOwner, robotOwner).GetAwaiter().GetResult();
+        public static bool IsVip(long groupId) => GroupVip.IsVipAsync(groupId).GetAwaiter().GetResult();
 
         // 设置机器人开关状态
         public static int SetIsOpen(bool isOpen, long groupId)
@@ -452,10 +470,11 @@ namespace BotWorker.Domain.Entities
             return SetValue("IsOpen", isOpen, groupId);
         }
 
-        // 是否发送欢迎语
-        public static string GetWelcomeRes(long groupId)
+        public static string GetWelcomeRes(long groupId) => GetWelcomeResAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<string> GetWelcomeResAsync(long groupId)
         {
-            return GetBool("IsWelcomeHint", groupId) ? "发送" : "不发送";
+            return await GetBoolAsync("IsWelcomeHint", groupId) ? "发送" : "不发送";
         }
 
         // 机器人主人名称
@@ -470,104 +489,43 @@ namespace BotWorker.Domain.Entities
             return res;
         }
 
-        // 群主
-        public static async Task<long> GetGroupOwnerAsync(long groupId, long def = 0)
-        {
-            return await GetLongAsync("GroupOwner", groupId, def);
-        }
-
-        // 机器人主人
-        public static async Task<long> GetRobotOwnerAsync(long groupId, long def = 0)
-        {
-            return await GetLongAsync("RobotOwner", groupId, def);
-        }
-
-        public static async Task<int> SetInGameAsync(int isInGame, long groupId)
-        {
-            return await SetValueAsync("IsInGame", isInGame, groupId);
-        }
-
-        //是否群机器人主人
-        public static async Task<bool> IsOwnerAsync(long groupId, long userId)
-        {
-            return userId == await GetRobotOwnerAsync(groupId);
-        }
-
-        // 开始成语接龙 game
-        public static async Task<int> StartCyGameAsync(int isInGame, string lastCy, long groupId)
-        {
-            return await UpdateAsync(new
-            {
-                IsInGame = isInGame,
-                LastChengyu = lastCy,
-                LastChengyuDate = DateTime.Now
-            }, groupId);
-        }
-
-        // 获取最后一次成语接龙的时间间隔（分钟）
-        public static async Task<int> GetChengyuIdleMinutesAsync(long groupId)
-        {
-            string sql = $"SELECT ABS({SqlDateDiff("MINUTE", "LastChengyuDate", SqlDateTime)}) FROM {FullName} WHERE Id = {groupId}";
-            return await QueryScalarAsync<int>(sql);
-        }
-
-        public static async Task<bool> GetIsValidAsync(long groupId)
-        {
-            return await GetBoolAsync("IsValid", groupId);
-        }
-
         public static async Task<string> GetGroupNameAsync(long groupId)
         {
             return await GetValueAsync("GroupName", groupId);
         }
-
-        public static string GetGroupOwnerNickname(long groupId)
-            => GetGroupOwnerNicknameAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<string> GetGroupOwnerNicknameAsync(long groupId)
         {
             return await GetValueAsync("GroupOwnerNickname", groupId);
         }
 
-        public static bool GetIsAI(long groupId)
-            => GetIsAIAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<bool> GetIsAIAsync(long groupId)
         {
             return await GetBoolAsync("IsAI", groupId);
         }
-
-        public static bool GetIsOwnerPay(long groupId)
-            => GetIsOwnerPayAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<bool> GetIsOwnerPayAsync(long groupId)
         {
             return await GetBoolAsync("IsOwnerPay", groupId);
         }
 
-        public static int GetContextCount(long groupId)
-            => GetContextCountAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<int> GetContextCountAsync(long groupId)
         {
             return await GetIntAsync("ContextCount", groupId);
         }
-
-        public static bool GetIsMultAI(long groupId)
-            => GetIsMultAIAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<bool> GetIsMultAIAsync(long groupId)
         {
             return await GetBoolAsync("IsMultAI", groupId);
         }
 
-        public static bool GetIsUseKnowledgebase(long groupId)
-            => GetIsUseKnowledgebaseAsync(groupId).GetAwaiter().GetResult();
-
         public static async Task<bool> GetIsUseKnowledgebaseAsync(long groupId)
         {
             return await GetBoolAsync("IsUseKnowledgebase", groupId);
         }
+
+        public static int Append(long group, string name, long selfId, string selfName, long groupOwner = 0, long robotOwner = 0, string openid = "")
+            => AppendAsync(group, name, selfId, selfName, groupOwner, robotOwner, openid).GetAwaiter().GetResult();
 
         // 添加新群
         public static async Task<int> AppendAsync(long group, string name, long selfId, string selfName, long groupOwner = 0, long robotOwner = 0, string openid = "")
@@ -591,10 +549,10 @@ namespace BotWorker.Domain.Entities
 
             if (!name.IsNull()) updateFields["GroupName"] = name;
 
-            if (groupOwner != 0 && GetGroupOwner(group) == 0 && !GroupVip.IsVip(group))
+            if (groupOwner != 0 && await GetGroupOwnerAsync(group) == 0 && !await GroupVip.IsVipAsync(group))
                 updateFields["GroupOwner"] = groupOwner;
 
-            if (robotOwner != 0 && GetRobotOwner(group) == 0 && !GroupVip.IsVip(group))
+            if (robotOwner != 0 && await GetRobotOwnerAsync(group) == 0 && !await GroupVip.IsVipAsync(group))
                 updateFields["RobotOwner"] = robotOwner;
 
             updateFields["BotUin"] = selfId;
@@ -603,20 +561,60 @@ namespace BotWorker.Domain.Entities
             return await UpdateAsync(updateFields, group);
         }
 
-        // 添加新群
-        public static int Append(long group, string name, long selfId, string selfName, long groupOwner = 0, long robotOwner = 0, string openid = "")
+        public static async Task<bool> GetIsNoLogAsync(long groupId) => await GetBoolAsync("IsNoLog", groupId);
+        public static async Task<bool> GetIsNoCheckAsync(long groupId) => await GetBoolAsync("IsNoCheck", groupId);
+        public static async Task<bool> GetIsHintCloseAsync(long groupId) => await GetBoolAsync("IsHintClose", groupId);
+        public static async Task<long> GetSourceGroupIdAsync(long groupId) => await GetLongAsync("SourceGroupId", groupId);
+        public static async Task<long> GetSourceGroupIdAsync(long botUin, long groupId) => await GetLongAsync("SourceGroupId", groupId);
+
+        public static long GetSourceGroupId(long groupId) => GetSourceGroupIdAsync(groupId).GetAwaiter().GetResult();
+        public static long GetSourceGroupId(long botUin, long groupId) => GetSourceGroupIdAsync(botUin, groupId).GetAwaiter().GetResult();
+
+        public static bool GetBool(string fieldName, long groupId) => GetBoolAsync(fieldName, groupId).GetAwaiter().GetResult();
+
+        public static async Task<int> SetIsOpenAsync(bool isOpen, long groupId)
         {
-            return AppendAsync(group, name, selfId, selfName, groupOwner, robotOwner, openid).GetAwaiter().GetResult();
+            return await SetValueAsync("IsOpen", isOpen, groupId);
         }
 
-        public static int UpdateGroup(long group, string name, long selfId, long groupOwner = 0, long robotOwner = 0)
+        public static async Task<string> GetSystemPromptStatusAsync(long groupId)
         {
-            return UpdateGroupAsync(group, name, selfId, groupOwner, robotOwner).GetAwaiter().GetResult();
+            string prompt = await GetSystemPromptAsync(groupId);
+            if (string.IsNullOrEmpty(prompt)) prompt = "未设置";
+            return $"📌 设置系统提示词\n内容：\n{prompt}";
         }
 
-        public static int SetRobotOwner(long groupId, long groupOwner)
-        {            
-            return SetValue("RobotOwner", groupOwner, groupId);
+        public static string GetSystemPromptStatus(long groupId) => GetSystemPromptStatusAsync(groupId).GetAwaiter().GetResult();
+
+        public static async Task<string> GetVipResAsync(long groupId)
+        {
+            string version;
+            string res;
+
+            if (await GroupVip.ExistsAsync(groupId))
+            {
+                if (await GroupVip.IsYearVIPAsync(groupId))
+                    version = "年费版";
+                else
+                    version = "VIP版";
+                int valid_days = await GroupVip.RestDaysAsync(groupId);
+                if (valid_days >= 1850)
+                    res = "『永久版』";
+                else
+                    res = $"『{version}』有效期：{valid_days}天";
+            }
+            else
+            {
+                if (await GroupVip.IsVipOnceAsync(groupId))
+                    return "已过期，请及时续费";
+                else
+                    version = "体验版";
+                res = $"『{version}』";
+            }
+
+            return res;
         }
+
+        public static string GetVipRes(long groupId) => GetVipResAsync(groupId).GetAwaiter().GetResult();
     }
 }

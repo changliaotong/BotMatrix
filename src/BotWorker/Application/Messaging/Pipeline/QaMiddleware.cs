@@ -21,12 +21,12 @@ namespace BotWorker.Application.Messaging.Pipeline
                 }
 
                 // 尝试匹配问答
-                context.Logger?.LogInformation("[QaMiddleware] Attempting QA for message {MessageId}", context.EventId);
+                // context.Logger?.LogInformation("[QaMiddleware] Attempting QA for message {MessageId}", context.EventId);
                 await botMsg.GetAnswerAsync();
 
                 if (!string.IsNullOrEmpty(botMsg.Answer))
                 {
-                    context.Logger?.LogInformation("[QaMiddleware] Handled by GetAnswerAsync, Answer: {Answer}", botMsg.Answer);
+                    // context.Logger?.LogInformation("[QaMiddleware] Handled by GetAnswerAsync, Answer: {Answer}", botMsg.Answer);
                     return; // 拦截，直接返回
                 }
             }

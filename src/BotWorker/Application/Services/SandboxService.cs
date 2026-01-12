@@ -1,45 +1,30 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Docker.DotNet;
 using Docker.DotNet.Models;
-using Microsoft.Extensions.Logging;
 
 namespace BotWorker.Application.Services
 {
-    public class Sandbox
+    public class Sandbox(string id, SandboxService service)
     {
-        public string ID { get; set; } = string.Empty;
-        private readonly SandboxService _service;
-
-        public Sandbox(string id, SandboxService service)
-        {
-            ID = id;
-            _service = service;
-        }
+        public string ID { get; set; } = id;
 
         public async Task<(string stdout, string stderr)> ExecAsync(string command, CancellationToken ct = default)
         {
-            return await _service.ExecInContainerAsync(ID, command, ct);
+            return await service.ExecInContainerAsync(ID, command, ct);
         }
 
         public async Task WriteFileAsync(string path, byte[] content, CancellationToken ct = default)
         {
-            await _service.WriteFileToContainerAsync(ID, path, content, ct);
+            await service.WriteFileToContainerAsync(ID, path, content, ct);
         }
 
         public async Task<string> ReadFileAsync(string path, CancellationToken ct = default)
         {
-            return await _service.ReadFileFromContainerAsync(ID, path, ct);
+            return await service.ReadFileFromContainerAsync(ID, path, ct);
         }
 
         public async Task DestroyAsync(CancellationToken ct = default)
         {
-            await _service.DestroySandboxAsync(ID, ct);
+            await service.DestroySandboxAsync(ID, ct);
         }
     }
 

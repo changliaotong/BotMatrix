@@ -48,7 +48,7 @@ namespace BotWorker.Infrastructure.Communication.OneBot
             var json = JsonSerializer.Serialize(payload);
             var db = _redis.GetDatabase();
             
-            _logger.LogInformation("[OneBot] Publishing action {Action} for {Platform}:{SelfId} with echo {Echo}", action, platform, selfId, echo);
+            // _logger.LogInformation("[OneBot] Publishing action {Action} for {Platform}:{SelfId} with echo {Echo}", action, platform, selfId, echo);
             
             // Publish to botmatrix:actions
             await db.PublishAsync(RedisChannel.Literal("botmatrix:actions"), json);

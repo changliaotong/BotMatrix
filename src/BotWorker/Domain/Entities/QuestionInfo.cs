@@ -1,7 +1,3 @@
-using BotWorker.Common;
-
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class QuestionInfo : MetaDataGuid<QuestionInfo>
@@ -23,27 +19,29 @@ namespace BotWorker.Domain.Entities
         }
 
         // 新增问题
-        public static long Append(long botUin, long groupId, long qq, string question)
+        public static long Append(long botUin, long groupId, long qq, string question) => AppendAsync(botUin, groupId, qq, question).GetAwaiter().GetResult();
+
+        public static async Task<long> AppendAsync(long botUin, long groupId, long qq, string question)
         {
             question = GetNew(question);
             if (question.IsNull())
                 return 0;
             else
             {
-                long questionId = GetQId(question);
+                long questionId = await GetQIdAsync(question);
                 if (questionId == 0)
                 {
                     if (question.Length < 200)
                     {
-                        if (Insert([
+                        if (await InsertAsync([
                             new Cov("BotUin", botUin),
                             new Cov("GroupId", groupId),
                             new Cov("UserId", qq),
                             new Cov("question", question)
                             ]) == -1)
-                            ErrorMessage("添加问答问题失败");
+                            Logger.Error("添加问答问题失败");
                         else
-                            questionId = GetAutoId(FullName);
+                            questionId = await GetAutoIdAsync(FullName);
                     }
                     else
                         questionId = 0;
@@ -53,32 +51,38 @@ namespace BotWorker.Domain.Entities
         }
 
         // 使用次数+1
-        public static int PlusUsedTimes(long questionId)
+        public static async Task<int> PlusUsedTimesAsync(long questionId)
         {
-            return Plus("CUsed", 1, questionId);
+            return await PlusAsync("CUsed", 1, questionId);
         }
 
         // 是否系统问题
-        public static bool GetIsSystem(long QuestionId)
+        public static bool GetIsSystem(long QuestionId) => GetIsSystemAsync(QuestionId).GetAwaiter().GetResult();
+
+        public static async Task<bool> GetIsSystemAsync(long QuestionId)
         {
-            return GetBool("IsSystem", QuestionId);
+            return await GetBoolAsync("IsSystem", QuestionId);
         }
 
       
         /// 审核完成并升级为系统问题
-        public static int Audit(long questionId, int audit2, int isSystem)
+        public static int Audit(long questionId, int audit2, int isSystem) => AuditAsync(questionId, audit2, isSystem).GetAwaiter().GetResult();
+
+        public static async Task<int> AuditAsync(long questionId, int audit2, int isSystem)
         {            
-            return Update($"Audit2 = {audit2}, Audit2Date = {SqlDateTime}, Audit2By = {BotInfo.SystemUid}, IsSystem = {isSystem}", questionId);
+            return await UpdateAsync($"Audit2 = {audit2}, Audit2Date = {SqlDateTime}, Audit2By = {BotInfo.SystemUid}, IsSystem = {isSystem}", questionId);
         }
 
 
         // 学习功能之问题是否存在
-        public static long GetQId(string text)
+        public static long GetQId(string text) => GetQIdAsync(text).GetAwaiter().GetResult();
+
+        public static async Task<long> GetQIdAsync(string text)
         {
             if (text.Length > 200)
                 return 0;
             else
-                return GetWhere(Key, $"question = {text.Quotes()}", "Id").AsLong();
+                return (await GetWhereAsync(Key, $"question = {text.Quotes()}", "Id")).AsLong();
         }
 
         // 去掉标点符号、表情 如果全是标点或全是表情则不去掉

@@ -1,11 +1,4 @@
-﻿using System.Threading.Tasks;
-using BotWorker.Domain.Interfaces;
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Entities;
-using BotWorker.Modules.Plugins;
-using BotWorker.Infrastructure.Utils;
-
-namespace BotWorker.Application.Messaging.Pipeline
+﻿namespace BotWorker.Application.Messaging.Pipeline
 {
     /// <summary>
     /// VIP与权限中间件：处理使用权限、续费提醒、进群确认等
@@ -86,7 +79,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                             ? $"({botMsg.GroupId}) 机器人已过期"
                             : $"({botMsg.GroupId}) 机器人已过体验期";
 
-                        botMsg.Answer += UserInfo.GetResetDefaultGroup(botMsg.UserId);
+                        botMsg.IsSend = false; // 不回消息
                         return;
                     }
                 }

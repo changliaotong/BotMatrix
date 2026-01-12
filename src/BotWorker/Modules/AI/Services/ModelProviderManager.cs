@@ -8,6 +8,7 @@ namespace BotWorker.Modules.AI.Services
     public class ModelProviderManager
     {
         private readonly Dictionary<string, IModelProvider> _providers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (IModelProvider Provider, string ModelId, LLMModelType Type)> _modelMapping = new(StringComparer.OrdinalIgnoreCase);
         private readonly ILogger<ModelProviderManager>? _logger;
         private static readonly Random _random = new();
 
@@ -31,6 +32,7 @@ namespace BotWorker.Modules.AI.Services
                 // 确保表存在
                 await LLMProvider.EnsureTableCreatedAsync();
                 await LLMModel.EnsureTableCreatedAsync();
+                await UserAIConfig.EnsureTableCreatedAsync();
 
                 var models = await LLMModel.GetAllActiveAsync();
                 var providers = await LLMProvider.GetAllActiveAsync();
@@ -46,8 +48,11 @@ namespace BotWorker.Modules.AI.Services
                 _logger?.LogInformation("[AI] Retrieved {ModelCount} models and {ProviderCount} providers from database.", 
                     models.Count, providers.Count);
 
+                _modelMapping.Clear();
+
                 foreach (var provider in providers)
                 {
+                    Console.WriteLine($"[AI] Processing Provider: {provider.Name}, Status: {provider.Status}, Type: {provider.ProviderType}, HasKey: {!string.IsNullOrWhiteSpace(provider.ApiKey)}");
                     if (string.IsNullOrWhiteSpace(provider.ApiKey))
                     {
                         Console.WriteLine($"[AI] Provider {provider.Name} has empty API Key, skipping.");
@@ -56,7 +61,8 @@ namespace BotWorker.Modules.AI.Services
                     }
 
                     IModelProvider? apiProvider = null;
-                    var defaultModel = models?.FirstOrDefault(m => m.ProviderId == provider.Id)?.Name ?? "";
+                    var providerModels = models.Where(m => m.ProviderId == provider.Id).ToList();
+                    var defaultModel = providerModels.FirstOrDefault()?.Name ?? "";
 
                     if (provider.ProviderType.Equals("azure", StringComparison.OrdinalIgnoreCase))
                     {
@@ -66,7 +72,6 @@ namespace BotWorker.Modules.AI.Services
                              provider.ProviderType.Equals("doubao", StringComparison.OrdinalIgnoreCase) ||
                              provider.ProviderType.Equals("deepseek", StringComparison.OrdinalIgnoreCase))
                     {
-                        // 许多提供者都兼容 OpenAI 协议
                         apiProvider = new GenericOpenAIProvider(provider.Name, provider.ApiKey, provider.BaseUrl, defaultModel);
                     }
 
@@ -75,6 +80,13 @@ namespace BotWorker.Modules.AI.Services
                         Console.WriteLine($"[AI] Registered AI Provider: {provider.Name} ({provider.ProviderType})");
                         _logger?.LogInformation("[AI] Registered AI Provider: {ProviderName} ({ProviderType})", provider.Name, provider.ProviderType);
                         RegisterProvider(apiProvider);
+
+                        // 注册具体模型映射
+                        foreach (var model in providerModels)
+                        {
+                            _modelMapping[model.Name] = (apiProvider, model.Name, (LLMModelType)model.ModelType);
+                            Console.WriteLine($"[AI] Registered Model: {model.Name} (Type: {(LLMModelType)model.ModelType}) for Provider: {provider.Name}");
+                        }
                     }
                 }
             }
@@ -94,10 +106,46 @@ namespace BotWorker.Modules.AI.Services
 
             if (!_providers.TryGetValue(providerName, out var provider))
             {
+                // 如果找不到 Provider，尝试按模型名称找
+                if (_modelMapping.TryGetValue(providerName, out var mapping))
+                {
+                    return mapping.Provider;
+                }
                 return null;
             }
 
             return provider;
+        }
+
+        public (IModelProvider? Provider, string? ModelId) GetProviderAndModel(string? modelOrProviderName, LLMModelType preferredType = LLMModelType.Chat)
+        {
+            if (string.IsNullOrEmpty(modelOrProviderName) || modelOrProviderName.Equals("Random", StringComparison.OrdinalIgnoreCase))
+            {
+                // 随机选择一个符合类型的模型
+                var suitableModels = _modelMapping.Values.Where(m => m.Type == preferredType).ToList();
+                if (suitableModels.Count > 0)
+                {
+                    var picked = suitableModels[_random.Next(suitableModels.Count)];
+                    return (picked.Provider, picked.ModelId);
+                }
+                return (GetRandomProvider(), null);
+            }
+
+            // 1. 尝试作为模型名称查找
+            if (_modelMapping.TryGetValue(modelOrProviderName, out var mapping))
+            {
+                return (mapping.Provider, mapping.ModelId);
+            }
+
+            // 2. 尝试作为 Provider 名称查找
+            if (_providers.TryGetValue(modelOrProviderName, out var provider))
+            {
+                // 找到该 Provider 下符合类型的第一个模型
+                var providerModel = _modelMapping.Values.FirstOrDefault(m => m.Provider == provider && m.Type == preferredType);
+                return (provider, providerModel.ModelId);
+            }
+
+            return (null, null);
         }
 
         public IModelProvider? GetRandomProvider()

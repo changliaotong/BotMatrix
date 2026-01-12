@@ -1,8 +1,3 @@
-using BotWorker.Domain.Models.Messages.BotMessages;
-using BotWorker.Domain.Constants;
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Entities
 {
     public class BotLog : MetaData<BotLog>
