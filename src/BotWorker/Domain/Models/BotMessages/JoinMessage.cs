@@ -167,8 +167,8 @@ namespace BotWorker.Domain.Models.BotMessages
             {
                 try
                 {
-                    int i = UserInfo.AppendUser(SelfId, GroupId, UserId, Name);
-                    int j = UserInfo.AppendUser(SelfId, GroupId, InvitorQQ, InvitorName);
+                    int i = await UserInfo.AppendUserAsync(SelfId, GroupId, UserId, Name);
+                    int j = await UserInfo.AppendUserAsync(SelfId, GroupId, InvitorQQ, InvitorName);
                     if (i >= 0 && j >= 0)
                     {
                         using var wrapper = await BeginTransactionAsync();

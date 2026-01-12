@@ -350,7 +350,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (res != "")
                 return res;
 
-            long creditValue = GetCredit();
+            long creditValue = await GetCreditAsync();
             if (creditValue < 0)
                 return $"您已负分（{creditValue}），不能教我说话了";
 

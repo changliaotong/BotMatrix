@@ -384,9 +384,9 @@ public partial class BotMessage : MetaData<BotMessage>
                 long creditAdd;
                 if (isWin)
                 {
-                    int blockOdds = await Block.GetOddsAsync(typeId, typeName, blockNum, wrapper.Transaction);
-                    creditAdd = blockCredit * blockOdds;
-                    creditGet = blockCredit * (blockOdds + 1);
+                    decimal blockOdds = await Block.GetOddsAsync(typeId, typeName, blockNum, wrapper.Transaction);
+                    creditAdd = (long)(blockCredit * blockOdds);
+                    creditGet = (long)(blockCredit * (blockOdds + 1));
                 }
                 else
                     creditAdd = -blockCredit;

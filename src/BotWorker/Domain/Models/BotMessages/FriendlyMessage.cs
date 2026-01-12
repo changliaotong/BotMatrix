@@ -456,6 +456,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 inner.Group = await GroupInfo.LoadAsync(inner.GroupId) ?? new();
                 inner.User = await UserInfo.LoadAsync(inner.UserId) ?? new();
                 inner.Answer = "";
+                inner.IsNested = true;
 
                 // 递归处理内层结构
                 BotMessage resolvedInner = await ResolveNestedExpressions(inner, maxDepth, currentDepth + 1);

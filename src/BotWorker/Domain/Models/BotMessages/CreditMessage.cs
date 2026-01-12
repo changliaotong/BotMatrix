@@ -142,9 +142,6 @@ public partial class BotMessage : MetaData<BotMessage>
             }
         } 
 
-        public (int Result, long CreditValue) AddCredit(long creditAdd, string creditInfo, IDbTransaction? trans = null)
-            => AddCreditAsync(creditAdd, creditInfo, trans).GetAwaiter().GetResult();
-
         public async Task<(int Result, long CreditValue)> AddCreditAsync(long creditAdd, string creditInfo, IDbTransaction? trans = null)
         {
             if (trans != null)
@@ -158,9 +155,6 @@ public partial class BotMessage : MetaData<BotMessage>
                 return (res.Result, res.CreditValue);
             }
         }
-
-        public (int Result, long CreditValue) MinusCredit(long creditMinus, string creditInfo, IDbTransaction? trans = null)
-            => MinusCreditAsync(creditMinus, creditInfo, trans).GetAwaiter().GetResult();
 
         public async Task<(int Result, long CreditValue)> MinusCreditAsync(long creditMinus, string creditInfo, IDbTransaction? trans = null)
         {

@@ -120,9 +120,9 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName == "拍砖")
                 Answer = await Brick.GetBrickResAsync(this);
             else if (CmdName == "添加待办")
-                Answer = Todo.GetTodoRes(GroupId, GroupName, UserId, Name, "+", CmdPara);
+                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, "+", CmdPara);
             else if (CmdName == "我的待办")
-                Answer = Todo.GetTodoRes(GroupId, GroupName, UserId, Name, "todo", CmdPara);
+                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, "todo", CmdPara);
             else if (CmdName.In("钓鱼", "抛竿", "收竿"))
                 Answer = await Fishing.GetFishing(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
             else if (CmdName == "大写")
@@ -148,7 +148,7 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName == "繁体")
                 Answer = CmdPara.AsFanti().ReplaceInvalid();
             else if (CmdName == "md5")
-                Answer = CmdPara.MD5();
+                Answer = CmdPara.MD5().ToLower();
             else if (CmdName == "sha256")
                 Answer = CmdPara.Sha256();
             else if (CmdName == "sha384")
@@ -204,7 +204,7 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (CmdName.In("猜数字", "我猜"))
                 Answer = await GetGuessNumAsync();
             else if (CmdName == "todo")
-                Answer = Todo.GetTodoRes(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
+                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
             else if (CmdName == "报时")
                 Answer = $"🕒 现在时间：{DateTime.Now:yyyy年MM月dd日 HH:mm:ss} 星期{"日一二三四五六"[(int)DateTime.Now.DayOfWeek]}";
             else if (CmdName == "倒计时")
@@ -319,7 +319,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 }
             }
 
-            long credit = UserInfo.GetCredit(GroupId, UserId);
+            long credit = await UserInfo.GetCreditAsync(GroupId, UserId);
             if (credit <= -5000)
             {
                 if (CmdName == "闲聊" || User.State == (int)UserInfo.States.Chat && IsGroup)                

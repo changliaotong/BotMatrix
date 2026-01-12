@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data;
 using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Entities
@@ -105,6 +106,11 @@ namespace BotWorker.Domain.Entities
         public static string GetBotGuid(long botUin)
         {
             return GetValue("BotGuid", botUin);
+        }
+
+        public static async Task<string> GetBotGuidAsync(long botUin, IDbTransaction? trans = null)
+        {
+            return await GetValueAsync("BotGuid", botUin, null, trans);
         }
 
         public static bool IsRobot(long qq)

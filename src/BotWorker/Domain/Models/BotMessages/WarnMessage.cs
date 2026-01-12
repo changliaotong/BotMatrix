@@ -247,7 +247,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 {
                     await RecallAsync(SelfId, RealGroupId, MsgId);
                     Answer = $"[@:{UserId}] 发言违规扣分";
-                    (int i, long creditValue) = MinusCredit(100, "敏感词扣分");
+                    (int i, long creditValue) = await MinusCreditAsync(100, "敏感词扣分");
                     if (i != -1)
                         Answer += $"\n积分：-100，累计：{creditValue}";
                     GroupEvent.Append(this, $"扣分", $"扣分：-100 敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
@@ -290,10 +290,10 @@ public partial class BotMessage : MetaData<BotMessage>
 
         public async Task<string> AddWarn(long TargetId, string targetName, long UserId)
         {
-            if (GroupWarn.AppendWarn(SelfId, TargetId, GroupId, Message, SelfId) == -1)
+            if (await GroupWarn.AppendWarnAsync(SelfId, TargetId, GroupId, Message, SelfId) == -1)
                 return RetryMsg;
 
-            long countWarn = GroupWarn.WarnCount(TargetId, ParentGroup?.Id ?? 0);
+            long countWarn = await GroupWarn.WarnCountAsync(TargetId, ParentGroup?.Id ?? 0);
             if (countWarn >= Group.BlackCount)
             {
                 await KickOutAsync(SelfId, RealGroupId, TargetId);

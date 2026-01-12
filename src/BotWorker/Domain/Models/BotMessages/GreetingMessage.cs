@@ -39,7 +39,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 else
                     Answer = "虽然已经不算早，但一天的精彩才刚刚开始，早安！🌈";
 
-                Answer = $"✅ {Answer}你是本群第{GreetingRecords.GetCount(GroupId, 0)}全服第{GreetingRecords.GetCount(0)}位早起者！😄";
+                Answer = $"✅ {Answer}你是本群第{await GreetingRecords.GetCountAsync(GroupId, 0)}全服第{await GreetingRecords.GetCountAsync(0)}位早起者！😄";
             }
             else if (CmdName == "午安")
             {
@@ -50,7 +50,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 else if (hour >= 13 && hour < 14)
                     Answer = "饭后小憩，午后阳光温暖惬意，愿你心情舒畅~ 😌";
                 else if (hour >= 14 && hour < 15)
-                    Answer = "困意袭来？眯一会儿或伸个懒腰，继续迎接下午的挑战吧！☕";
+                    Answer = "困意袭来？眯一会儿或伸个腰，继续迎接下午的挑战吧！☕";
                 else if (hour >= 15 && hour < 16)
                     Answer = "午后时光正好，来杯茶，感受片刻的宁静。午安~ 🍵";
                 else if (hour >= 16 && hour < 17)
@@ -59,7 +59,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     Answer = "夕阳西下，光影交织，是时候放慢脚步，享受傍晚的宁静。🌇";
                 else
                     Answer = "午安也是一种祝福，不管几点都希望你一切顺利、安好如初~ ✨";
-                Answer = $"✅ {Answer}你是本群第{GreetingRecords.GetCount(GroupId, 1)}全服第{GreetingRecords.GetCount(1)}位饭困者 😴";
+                Answer = $"✅ {Answer}你是本群第{await GreetingRecords.GetCountAsync(GroupId, 1)}全服第{await GreetingRecords.GetCountAsync(1)}位饭困者 😴";
             }
             else if (CmdName == "晚安")
             {
@@ -87,20 +87,20 @@ public partial class BotMessage : MetaData<BotMessage>
                     Answer = "夜将尽，梦将启，如果你还未入睡，现在也不晚，晚安~ 🌠";
                 else
                     Answer = "💤 晚安，现在是个不错的睡觉时间~ 祝你好梦！✨";
-                Answer = $"✅ {Answer}你是本群第{GreetingRecords.GetCount(GroupId, 2)}全服第{GreetingRecords.GetCount(2)}位追梦人！💤";
+                Answer = $"✅ {Answer}你是本群第{await GreetingRecords.GetCountAsync(GroupId, 2)}全服第{await GreetingRecords.GetCountAsync(2)}位追梦人！💤";
             }
 
-            if (GreetingRecords.Exists(GroupId, UserId, greetingType))
+            if (await GreetingRecords.ExistsAsync(GroupId, UserId, greetingType))
                 Answer = $"今天已经问候过{CmdName}了";            
             else if (((CmdName == "早安" && now.Hour >= 3 && now.Hour < 12) || (CmdName == "午安" && now.Hour >= 10 && now.Hour < 18) || (CmdName == "晚安" && now.Hour >= 17 || now.Hour < 5)))
             {
-                int i = GreetingRecords.Append(SelfId, GroupId, GroupName, UserId, Name, greetingType);
+                int i = await GreetingRecords.AppendAsync(SelfId, GroupId, GroupName, UserId, Name, greetingType);
                 if (i == -1)
                     Answer = RetryMsg;
                 else if (Group.IsCreditSystem)
                 {
                     var creditAdd = 50;
-                    (i, long credit, _) = UserInfo.AddCredit(SelfId, GroupId, GroupName, UserId, Name, creditAdd, $"{CmdName}加分");
+                    (i, long credit, _) = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, $"{CmdName}加分");
                     if (i != -1)
                         Answer += $"\n💎 积分：+{creditAdd}，累计：{credit:N0}";
                 }

@@ -137,7 +137,7 @@ public partial class BotMessage : MetaData<BotMessage>
             if (IsRealProxy)
                 IsCancelProxy = true;   
 
-            if (IsGroup && !Group.IsAI)
+            if (!IsNested && IsGroup && !Group.IsAI)
             {
                 if (CmdName.In("AI"))
                     Answer = "AI功能已关闭";
@@ -146,7 +146,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return;
             }
 
-            if (!User.IsAI)
+            if (!IsNested && !User.IsAI)
             {
                 if (IsAtMe || !IsGroup || IsPublic)                
                     Answer = $"你的算力已用完。请每日签到获得或联系客服购买";
@@ -155,7 +155,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return;
             }
 
-            if (!await IsEnoughAsync())
+            if (!IsNested && !await IsEnoughAsync())
             {
                 if (IsAtMe || !IsGroup || IsPublic)
                     Answer = $"你的算力已用完。请每日签到获得或联系客服购买";
@@ -164,7 +164,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 return;
             }
 
-            if (User.Credit <= 0)
+            if (!IsNested && User.Credit <= 0)
             {
                 if (IsAtMe || !IsGroup || IsPublic)
                     Answer = $"你的积分已用完。请每日签到获得或联系客服购买";

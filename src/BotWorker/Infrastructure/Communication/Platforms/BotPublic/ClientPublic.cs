@@ -105,8 +105,8 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
                 return RetryMsg;
 
             long creditAdd = 5000;
-            long creditValue = UserInfo.GetCredit(userId);
-            long creditValue2 = UserInfo.GetCredit(recUserId);
+            long creditValue = await UserInfo.GetCreditAsync(userId);
+            long creditValue2 = await UserInfo.GetCreditAsync(recUserId);
 
             using var trans = await BeginTransactionAsync();
             try
@@ -175,7 +175,7 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
                 bm.AddClient();
 
                 //更新绑定信息，加入事务运行 更新积分记录 发送消息记录
-                long creditValue = UserInfo.GetCredit(groupId, UserId);
+                long creditValue = await UserInfo.GetCreditAsync(groupId, UserId);
 
                 using var trans = await BeginTransactionAsync();
                 try

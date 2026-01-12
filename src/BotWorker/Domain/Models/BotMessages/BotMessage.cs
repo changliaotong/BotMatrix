@@ -153,6 +153,7 @@ public partial class BotMessage
             }
         }
 
+        public bool IsNested { get; set; } = false;
         public bool IsNewAnswer { get; set; } = false;
         public float Similarity { get; set; } = 0.00F;
         public long NewQuestionId { get; set; } = 0;

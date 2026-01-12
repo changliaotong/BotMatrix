@@ -94,7 +94,7 @@ namespace BotWorker.Domain.Models.BotMessages
             {
                 CmdName = CurrentMessage.RegexGetValue(regexCmd, "cmd_oper");
                 CmdPara = CurrentMessage.RegexGetValue(regexCmd, "cmdPara");
-                Answer = Todo.GetTodoRes(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
+                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
             }
             else if (CurrentMessage.IsMatch(Regexs.LeaveGroup) && IsSuperAdmin) //退群
             {

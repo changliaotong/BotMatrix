@@ -3355,6 +3355,14 @@ WHEN NOT MATCHED THEN
                 return GetWhere<Guid>(GuidField, $"{Quote(IdField)} = @id", SqlParams(("@id", id)));            
         }
 
+        public static async Task<Guid> GetGuidAsync(long id, IDbTransaction? trans = null)
+        {
+            if (Key.Equals(IdField, StringComparison.OrdinalIgnoreCase))
+                return await GetAsync<Guid>(GuidField, id, null, default, trans);
+            else
+                return await GetWhereAsync<Guid>(GuidField, $"{Quote(IdField)} = @id", "", trans);
+        }
+
         public static Dictionary<string, object?>? GetDict(Guid guid, params string[] fields)
             => GetDicts($"{Quote(GuidField)} = @guid", SqlParams(("@guid", guid)) , fields).FirstOrDefault();
 

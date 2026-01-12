@@ -82,7 +82,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
     public bool IsEnough() => IsEnoughAsync().GetAwaiter().GetResult();
     public string BatchInsertAgent() => BatchInsertAgentAsync().GetAwaiter().GetResult();
-    public long GetCredit() => UserInfo.GetCredit(SelfId, GroupId, UserId);
+    public async Task<long> GetCreditAsync() => await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
     public string MinusCreditRes(long creditMinus, string creditInfo) => MinusCreditResAsync(creditMinus, creditInfo).GetAwaiter().GetResult();
     public bool IsTooFast() => IsTooFastAsync().GetAwaiter().GetResult();
     public string GetCaiquan() => GetCaiquanAsync().GetAwaiter().GetResult();

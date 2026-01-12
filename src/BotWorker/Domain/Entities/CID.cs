@@ -8,6 +8,13 @@ namespace BotWorker.Domain.Entities
         public override string TableName => "IDC";
         public override string KeyField => "Id";
 
+        public static string GetCidRes(BotWorker.Domain.Models.BotMessages.BotMessage msg)
+        {
+            string cid = msg.CurrentMessage;
+            if (!CheckIDCard(cid)) return "身份证号码格式不正确";
+            return $"身份证号码：{cid}\n查询结果：校验通过，格式合法。";
+        }
+
         //验证身份证号码
         public static bool CheckIDCard(string Id)
         {
@@ -98,7 +105,7 @@ namespace BotWorker.Domain.Entities
         {
             var res = GetCidRes(bm.Message);
             if (isMinus)            
-                res += bm.MinusCredit(10, "查身份证扣分");
+                res += bm.MinusCreditRes(10, "查身份证扣分");
             return res;
         }
 

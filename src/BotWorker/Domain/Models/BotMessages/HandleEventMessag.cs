@@ -17,7 +17,7 @@ namespace BotWorker.Domain.Models.BotMessages
 
             if (!IsGuild)
             {
-                UserInfo.AppendUser(SelfId, GroupId, UserId, Name);
+                await UserInfo.AppendUserAsync(SelfId, GroupId, UserId, Name);
                 if (IsAnotherRobot() && EventType.In("FriendMessageEvent", "GroupMessageEvent")) return;
 
                 if (UserId.In(BotInfo.NimingUin, BotInfo.NimingUin2))

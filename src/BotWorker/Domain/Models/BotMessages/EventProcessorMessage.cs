@@ -14,7 +14,7 @@ public partial class BotMessage : MetaData<BotMessage>
         {xp(3)}：经验值 
         
         */
-        public void ProcessEvent()
+        public async Task ProcessEventAsync()
         {
             var pattern = @"{([+\-]?\w+)\(([^)}]*)\)}";
             var matches = Regex.Matches(Answer, pattern);
@@ -29,12 +29,12 @@ public partial class BotMessage : MetaData<BotMessage>
                 {
                     case "credit":
                         int value = ParseRandomValue(arg);
-                        AddCredit(value, $"");
+                        await AddCreditAsync(value, $"");
                         replacement = $"(+{arg}💎)";
                         break;
                     case "-credit":
                         value = ParseRandomValue(arg);
-                        AddCredit(-value, $"");
+                        await AddCreditAsync(-value, $"");
                         replacement = $"(-{arg}💎)";
                         break;
                     case "xp":

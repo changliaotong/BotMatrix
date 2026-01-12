@@ -45,9 +45,9 @@ namespace BotWorker.Infrastructure.Tools
         public const string format = "todo + 内容 [Dev/Test] [P1/P2/P3] 新增\ntodo - 数字 删除\ntodo #数字 [进度/done/P1/P2/P3/desc 内容] 更新\ntodo + #关键字 查询";
 
         // todo
-        public static string GetTodoRes(long groupId, string groupName, long qq, string name, string cmdName, string cmdPara)
+        public static async Task<string> GetTodoResAsync(long groupId, string groupName, long qq, string name, string cmdName, string cmdPara)
         {
-            Console.WriteLine($"[Todo] GetTodoRes: cmdName='{cmdName}', cmdPara='{cmdPara}'");
+            Console.WriteLine($"[Todo] GetTodoResAsync: cmdName='{cmdName}', cmdPara='{cmdPara}'");
             cmdName = cmdName.ToLower();
             if (cmdName == "todo" || cmdName == "td")
             {
@@ -72,7 +72,7 @@ namespace BotWorker.Infrastructure.Tools
                 else
                 {
                     // 默认当作搜索
-                    return GetTodos(qq, cmdPara);
+                    return await GetTodosAsync(qq, cmdPara);
                 }
             }
             Console.WriteLine($"[Todo] Processed: cmdName='{cmdName}', cmdPara='{cmdPara}'");
@@ -98,9 +98,10 @@ namespace BotWorker.Infrastructure.Tools
                 else if (cmdPara.Contains(" P2", StringComparison.OrdinalIgnoreCase)) { priority = "Medium"; cmdPara = cmdPara.Replace(" P2", "", StringComparison.OrdinalIgnoreCase).Trim(); }
                 else if (cmdPara.Contains(" P3", StringComparison.OrdinalIgnoreCase)) { priority = "Low"; cmdPara = cmdPara.Replace(" P3", "", StringComparison.OrdinalIgnoreCase).Trim(); }
 
-                return Append(groupId, qq, cmdPara, category, priority, out int todo_no) == -1
+                var res = await AppendAsync(groupId, qq, cmdPara, category, priority);
+                return res.Result == -1
                     ? RetryMsg
-                    : $"待办添加成功，#{todo_no} [{category}] [{priority}]";
+                    : $"待办添加成功，#{res.TodoNo} [{category}] [{priority}]";
             }
             else if (cmdName == "-" || cmdName == "删除")
             {
@@ -109,16 +110,16 @@ namespace BotWorker.Infrastructure.Tools
                 {
                     int todo_no = cmdPara.AsInt();
                     string sWhere = $"UserId = {qq} and TodoNo = {todo_no}";
-                    if (!ExistsWhere(sWhere))
+                    if (!await ExistsWhereAsync(sWhere))
                         return $"不存在#{todo_no}";
 
-                    return DeleteWhere(sWhere) == -1
+                    return await DeleteWhereAsync(sWhere) == -1
                         ? RetryMsg
                         : $"成功删除#{todo_no}";
                 }
                 else if (cmdPara == "all")
                 {
-                    return DeleteWhere($"UserId = {qq}") == -1
+                    return await DeleteWhereAsync($"UserId = {qq}") == -1
                         ? RetryMsg
                         : $"真棒！全部完成！";
                 }
@@ -139,26 +140,26 @@ namespace BotWorker.Infrastructure.Tools
 
                         if (updateVal == "DONE")
                         {
-                            return UpdateWhere(new { Progress = 100, Status = "Completed" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
+                            return await UpdateWhereAsync(new { Progress = 100, Status = "Completed" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
                                 ? RetryMsg
                                 : $"待办#{todo_no}已完成！";
                         }
                         else if (updateVal == "DESC")
                         {
                             string desc = string.Join(" ", parts.Skip(2));
-                            return UpdateWhere(new { Description = desc }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
+                            return await UpdateWhereAsync(new { Description = desc }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
                                 ? RetryMsg
                                 : $"待办#{todo_no}描述已更新";
                         }
-                        else if (updateVal == "P1") return UpdateWhere(new { Priority = "High" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 High";
-                        else if (updateVal == "P2") return UpdateWhere(new { Priority = "Medium" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 Medium";
-                        else if (updateVal == "P3") return UpdateWhere(new { Priority = "Low" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 Low";
+                        else if (updateVal == "P1") return await UpdateWhereAsync(new { Priority = "High" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 High";
+                        else if (updateVal == "P2") return await UpdateWhereAsync(new { Priority = "Medium" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 Medium";
+                        else if (updateVal == "P3") return await UpdateWhereAsync(new { Priority = "Low" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 Low";
                         else if (updateVal.IsNum())
                         {
                             int progress = updateVal.AsInt();
                             progress = Math.Clamp(progress, 0, 100);
                             string status = progress == 100 ? "Completed" : (progress > 0 ? "InProgress" : "Pending");
-                            return UpdateWhere(new { Progress = progress, Status = status }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
+                            return await UpdateWhereAsync(new { Progress = progress, Status = status }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
                                 ? RetryMsg
                                 : $"待办#{todo_no}进度已更新为 {progress}%";
                         }
@@ -170,20 +171,23 @@ namespace BotWorker.Infrastructure.Tools
                     string todoNoStr = cmdPara[1..];
                     if (todoNoStr.IsNum())
                     {
-                        string res = GetTodo(qq, todoNoStr.AsInt());
+                        string res = await GetTodoAsync(qq, todoNoStr.AsInt());
                         return res == "" ? $"没有#{todoNoStr}" : res;
                     }
                 }
             }
-            return GetTodos(qq, cmdPara);
+            return await GetTodosAsync(qq, cmdPara);
         }
 
+        public static string GetTodoRes(long groupId, string groupName, long qq, string name, string cmdName, string cmdPara)
+            => GetTodoResAsync(groupId, groupName, qq, name, cmdName, cmdPara).GetAwaiter().GetResult();
+
         // 新增todo
-        public static int Append(long groupId, long qq, string cmdPara, string category, string priority, out int todoNo)
+        public static async Task<(int Result, int TodoNo)> AppendAsync(long groupId, long qq, string cmdPara, string category, string priority)
         {
-            todoNo = QueryScalar<int>($"select max(TodoNo)+1 from {FullName} where UserId = {qq}");
+            int todoNo = await QueryScalarAsync<int>($"select max(TodoNo)+1 from {FullName} where UserId = {qq}");
             todoNo = todoNo == 0 ? 1 : todoNo;
-            return Insert(new
+            var res = await InsertAsync(new
             {
                 GroupId = groupId,
                 UserId = qq,
@@ -194,23 +198,37 @@ namespace BotWorker.Infrastructure.Tools
                 Progress = 0,
                 Status = "Pending"
             });
+            return (res, todoNo);
+        }
+
+        public static int Append(long groupId, long qq, string cmdPara, string category, string priority, out int todoNo)
+        {
+            var res = AppendAsync(groupId, qq, cmdPara, category, priority).GetAwaiter().GetResult();
+            todoNo = res.TodoNo;
+            return res.Result;
         }
 
         // todo 数量
-        public static long Count(long qq)
+        public static async Task<long> CountAsync(long qq)
         {
-            return CountWhere($"UserId = {qq}");
+            return await CountWhereAsync($"UserId = {qq}");
         }
+
+        public static long Count(long qq)
+            => CountAsync(qq).GetAwaiter().GetResult();
 
         // 得到 todoNo 的 todo
-        public static string GetTodo(long qq, int todoNo)
+        public static async Task<string> GetTodoAsync(long qq, int todoNo)
         {
             string sql = $"select {SqlTop(1)} TodoNo, Category, Priority, Progress, Status, TodoTitle, Description from {FullName} where UserId = {qq} and TodoNo = {todoNo} {SqlLimit(1)}";
-            return QueryRes(sql, "#{0} [{1}] [{2}] {3}% {4} {5}\n描述: {6}");
+            return await QueryResAsync(sql, "#{0} [{1}] [{2}] {3}% {4} {5}\n描述: {6}");
         }
 
+        public static string GetTodo(long qq, int todoNo)
+            => GetTodoAsync(qq, todoNo).GetAwaiter().GetResult();
+
         // todo 列表
-        public static string GetTodos(long qq, string cmdPara, int topN = 5)
+        public static async Task<string> GetTodosAsync(long qq, string cmdPara, int topN = 5)
         {
             string sWhere = $"UserId = {qq}";
             if (!string.IsNullOrEmpty(cmdPara))
@@ -222,8 +240,11 @@ namespace BotWorker.Infrastructure.Tools
             }
 
             string columns = $"{SqlTop(topN)} TodoNo, Category, Priority, Progress, {SqlIsNull("substring(TodoTitle, 1, 20)", "''")}";
-            string res = QueryWhere(columns, sWhere, "TodoNo desc", "#{0} [{1}] [{2}] [{3}%] {4}\n", $"{{c}}/{Count(qq)}");
+            string res = await QueryWhereAsync(columns, sWhere, "TodoNo desc", "#{0} [{1}] [{2}] [{3}%] {4}\n", $"{{c}}/{await CountAsync(qq)}");
             return res.IsNull() ? $"太好了，没有todo" : res;
         }
+
+        public static string GetTodos(long qq, string cmdPara, int topN = 5)
+            => GetTodosAsync(qq, cmdPara, topN).GetAwaiter().GetResult();
     }
 }

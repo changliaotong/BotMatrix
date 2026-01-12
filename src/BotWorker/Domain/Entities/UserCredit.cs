@@ -37,12 +37,6 @@ namespace BotWorker.Domain.Entities
             }
         }
 
-        public static (int Result, long CreditValue, int LogId) AddCredit(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
-            => AddCreditTransAsync(botUin, groupId, groupName, qq, name, creditAdd, creditInfo, trans).GetAwaiter().GetResult();
-
-        public static (int Result, long CreditValue, int LogId) AddCredit(long botUin, long qq, long creditAdd, string creditInfo, IDbTransaction? trans = null)
-            => AddCredit(botUin, 0, "", qq, "", creditAdd, creditInfo, trans);
-
         public static async Task<(int Result, long CreditValue, int LogId)> AddCreditTransAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, string creditInfo, IDbTransaction? trans = null)
         {
             using var wrapper = await BeginTransactionAsync(trans);
@@ -74,23 +68,10 @@ namespace BotWorker.Domain.Entities
             return res.Result;
         }
 
-        public static int MinusCredit(long botUin, long groupId, string groupName, long qq, string name, long creditMinus, string creditInfo)
-            => MinusCreditAsync(botUin, groupId, groupName, qq, name, creditMinus, creditInfo).GetAwaiter().GetResult();
-
-        public static long GetCredit(long userId) => GetCreditAsync(userId).GetAwaiter().GetResult();
-        public static long GetCredit(long botUin, long userId) => GetCreditAsync(botUin, userId).GetAwaiter().GetResult();
-        public static long GetCredit(long botUin, long groupId, long userId) => GetCreditAsync(botUin, groupId, userId).GetAwaiter().GetResult();
-
         public static async Task<int> AppendUserAsync(long botUin, long groupId, long qq, string name, long ownerId, IDbTransaction? trans = null)
         {
             return await AppendAsync(botUin, groupId, qq, name, ownerId, trans: trans);
         }
-
-        public static int AppendUser(long botUin, long groupId, long qq, string name, long ownerId)
-            => AppendUserAsync(botUin, groupId, qq, name, ownerId).GetAwaiter().GetResult();
-
-        public static int AppendUser(long botUin, long groupId, long qq, string name)
-            => AppendUserAsync(botUin, groupId, qq, name, 0).GetAwaiter().GetResult();
 
         public static int SetState(object state, long qq)
         {

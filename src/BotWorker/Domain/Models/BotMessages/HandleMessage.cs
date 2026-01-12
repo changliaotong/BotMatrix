@@ -97,16 +97,16 @@ namespace BotWorker.Domain.Models.BotMessages
                     Logger.Error("更新发言统计数据时出错。");
             }
 
-            if (!Group.IsPowerOn && !IsGuild)
+            if (!IsNested && !Group.IsPowerOn && !IsGuild)
             {
                 if (CurrentMessage == "开机" || CurrentMessage == "关机")
                 {
-                    Answer = GroupInfo.SetPowerOnOff(SelfId, GroupId, UserId, CurrentMessage);
+                    Answer = await GroupInfo.SetPowerOnOffAsync(SelfId, GroupId, UserId, CurrentMessage);
                     return;
                 }
 
                 Reason += "[关机]";
-                if (!IsGroup) Answer = "机器人已关机，请先开机";
+                if (!IsGroup || IsAtMe || IsCmd) Answer = "机器人已关机，请先开机";
                 return;
             }
 
@@ -220,7 +220,7 @@ namespace BotWorker.Domain.Models.BotMessages
             // =========================================== 此行前面的命令 机器人关闭后依然起作用 ======================================
             if (IsGroup)
             {
-                if (!Group.IsOpen && !IsGuild)
+                if (!IsNested && !Group.IsOpen && !IsGuild)
                 {
                     if (IsAtMe || IsCmd)                    
                         Answer = "机器人已关闭，请先 开启"; 

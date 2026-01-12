@@ -12,8 +12,8 @@
             if (res == -1)
                 return RetryMsg;
 
-            long currentCredit = UserInfo.GetCredit(GroupId, UserId);
-            long masterCredit = UserInfo.GetCredit(GroupId, checkResult.CurrMaster);
+            long currentCredit = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long masterCredit = await UserInfo.GetCreditAsync(GroupId, checkResult.CurrMaster);
             return $"✅ 赎身成功！\n[@:{checkResult.CurrMaster}]积分：+{checkResult.CreditAdd}，累计：{masterCredit}\n您的积分：-{checkResult.CreditMinus}，累计：{currentCredit}";
         }
 
@@ -32,7 +32,7 @@
             long creditMinus = buyPrice * 12 / 10;
             if (User.IsSuper)
                 creditMinus = creditMinus * 22 / 10;
-            long creditValue = UserInfo.GetCredit(Group.Id, UserId);
+            long creditValue = await UserInfo.GetCreditAsync(Group.Id, UserId);
             if (creditValue < creditMinus)
                 return ($"您的积分{creditValue}不足{creditMinus}", 0, 0, 0);
 

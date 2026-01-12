@@ -49,7 +49,7 @@ namespace BotWorker.Modules.Games
             var cmdName = ctx.RawMessage.Trim().Split(' ')[0];
             var cmdPara = args.Length > 0 ? args[0] : "";
 
-            long creditValue = UserInfo.GetCredit(groupId, userId);
+            long creditValue = await UserInfo.GetCreditAsync(groupId, userId);
             
             if (string.IsNullOrEmpty(cmdPara))
                 return "请押积分，您的积分：" + creditValue;
