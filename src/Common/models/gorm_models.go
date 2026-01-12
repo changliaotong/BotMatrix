@@ -622,8 +622,10 @@ type DigitalEmployeeTodo struct {
 	EmployeeID  uint           `gorm:"index;column:EmployeeId" json:"employee_id"`  // 所属员工 ID
 	Title       string         `gorm:"size:255;not null;column:Title" json:"title"` // 待办事项标题
 	Description string         `gorm:"type:text;column:Description" json:"description"`
+	Category    string         `gorm:"size:50;default:'Todo';column:Category" json:"category"`   // Todo, Dev, Test
 	Priority    string         `gorm:"size:20;default:'medium';column:Priority" json:"priority"` // low, medium, high
 	Status      string         `gorm:"size:20;default:'pending';column:Status" json:"status"`    // pending, in_progress, completed, cancelled
+	Progress    int            `gorm:"default:0;column:Progress" json:"progress"`                // 进度 0-100
 	DueDate     *time.Time     `gorm:"column:DueDate" json:"due_date"`                           // 截止日期
 	CompletedAt *time.Time     `gorm:"column:CompletedAt" json:"completed_at"`                   // 完成时间
 	CreatedAt   time.Time      `gorm:"column:CreatedAt" json:"created_at"`
