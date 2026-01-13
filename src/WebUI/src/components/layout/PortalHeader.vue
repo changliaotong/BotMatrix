@@ -188,12 +188,12 @@
                       <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.control_center', tt('portal.控制中心')) }}</span>
                     </router-link>
 
-                    <router-link to="/console/bot-setup" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
+                    <router-link to="/setup/bot" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <Bot class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
                       <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.bot_setup', tt('portal.小号设置')) }}</span>
                     </router-link>
 
-                    <router-link to="/console/group-setup" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
+                    <router-link to="/setup/group" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <Users class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
                       <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.group_setup', tt('portal.群聊设置')) }}</span>
                     </router-link>

@@ -115,6 +115,25 @@ const router = createRouter({
       meta: { layout: 'blank', title: 'title.test' }
     },
 
+    // --- Portal Setup ---
+    {
+      path: '/setup',
+      component: RouterView,
+      meta: { requiresAuth: true, layout: 'blank', title: 'title.setup' },
+      children: [
+        {
+          path: 'bot',
+          name: 'portal-bot-setup',
+          component: () => import('@/views/portal/setup/BotSetup.vue'),
+        },
+        {
+          path: 'group',
+          name: 'portal-group-setup',
+          component: () => import('@/views/portal/setup/GroupSetup.vue'),
+        }
+      ]
+    },
+
     // --- Auth ---
     {
       path: '/login',
@@ -155,16 +174,6 @@ const router = createRouter({
           path: 'contacts',
           name: 'console-contacts',
           component: () => import('@/views/console/Contacts.vue'),
-        },
-        {
-          path: 'group-setup',
-          name: 'console-group-setup',
-          component: () => import('@/views/console/GroupSetup.vue'),
-        },
-        {
-          path: 'bot-setup',
-          name: 'console-bot-setup',
-          component: () => import('@/views/console/BotSetup.vue'),
         },
         {
           path: 'messages',

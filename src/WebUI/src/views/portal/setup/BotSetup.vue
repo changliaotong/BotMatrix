@@ -3,6 +3,8 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useBotStore } from '@/stores/bot';
 import { useSystemStore } from '@/stores/system';
+import PortalHeader from '@/components/layout/PortalHeader.vue';
+import PortalFooter from '@/components/layout/PortalFooter.vue';
 import { 
   ArrowLeft, 
   Save, 
@@ -109,12 +111,6 @@ const copyApiKey = async () => {
 const fetchBotInfo = async () => {
   const uinStr = route.query.bot_uin as string;
   const adminIdStr = route.query.admin_id as string;
-  const isAdmin = systemStore.user?.is_admin;
-  
-  if (!uinStr && !isAdmin) {
-    router.push('/console/bots');
-    return;
-  }
   
   if (uinStr) {
     botUin.value = parseInt(uinStr);
@@ -131,10 +127,8 @@ const fetchBotInfo = async () => {
         const found = allBots.value.find((b: any) => b.bot_uin === botUin.value);
         if (found) {
           botInfo.value = { ...botInfo.value, ...found };
-        } else if (!isAdmin) {
-          router.push('/console/bots');
         }
-      } else if (isAdmin && allBots.value.length > 0) {
+      } else if (allBots.value.length > 0) {
         botInfo.value = { ...botInfo.value, ...allBots.value[0] };
         botUin.value = botInfo.value.bot_uin;
       }
@@ -160,7 +154,7 @@ const handleSave = async () => {
   try {
     const res = await botStore.updateMemberSetup(botInfo.value);
     if (res.success) {
-      // Success toast would be nice here
+      // Success toast
     }
   } catch (err) {
     console.error('Save error:', err);
@@ -173,8 +167,11 @@ onMounted(fetchBotInfo);
 </script>
 
 <template>
-  <div class="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
-    <!-- Header -->
+  <div class="min-h-screen bg-[var(--bg-body)] text-[var(--text-main)] selection:bg-[var(--matrix-color)]/30 overflow-x-hidden" :class="[systemStore.style]">
+    <PortalHeader />
+    
+    <div class="pt-28 pb-20 p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <button @click="router.back()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
@@ -406,6 +403,7 @@ onMounted(fetchBotInfo);
         </div>
       </div>
     </div>
+    <PortalFooter />
   </div>
 </template>
 

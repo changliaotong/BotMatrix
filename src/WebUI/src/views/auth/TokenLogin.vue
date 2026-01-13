@@ -58,7 +58,7 @@ onMounted(async () => {
         if (authStore.isAdmin) {
           router.push('/console'); // Control Center (Dashboard)
         } else {
-          router.push('/console/bot-setup'); // Bot Settings
+          router.push('/setup/bot'); // Bot Settings
         }
       }
     } else {

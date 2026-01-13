@@ -59,8 +59,8 @@ const iconMap: Record<string, any> = {
 const routeMap: Record<string, string> = {
   'dashboard': '/console',
   'bots': '/console/bots',
-  'bot-setup': '/console/bot-setup',
-  'group-setup': '/console/group-setup',
+  'bot-setup': '/setup/bot',
+  'group-setup': '/setup/group',
   'contacts': '/console/contacts',
   'messages': '/console/messages',
   'tasks': '/console/tasks',

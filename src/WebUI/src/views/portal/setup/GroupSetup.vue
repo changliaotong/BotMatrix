@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { useSystemStore } from '@/stores/system';
 import { useBotStore } from '@/stores/bot';
 import { useAuthStore } from '@/stores/auth';
+import PortalHeader from '@/components/layout/PortalHeader.vue';
+import PortalFooter from '@/components/layout/PortalFooter.vue';
 import { 
   Settings, 
   Save, 
@@ -23,7 +25,6 @@ const botStore = useBotStore();
 const authStore = useAuthStore();
 const t = (key: string) => systemStore.t(key);
 
-const isAdmin = authStore.user?.role === 'admin';
 const loading = ref(true);
 const saving = ref(false);
 const activeTab = ref('basic');
@@ -173,25 +174,14 @@ const fetchGroupData = async () => {
         const current = groups.find((g: any) => g.id.toString() === groupId.toString());
         if (current) {
           groupInfo.value = { ...groupInfo.value, ...current };
-        } else if (!isAdmin) {
-          // If not found and not admin, fallback to first group or contacts
-          if (groups.length > 0) {
-            groupInfo.value = { ...groupInfo.value, ...groups[0] };
-            router.replace({ query: { ...route.query, id: groups[0].id } });
-          } else {
-            router.push({ name: 'console-contacts' });
-          }
+        } else if (groups.length > 0) {
+          groupInfo.value = { ...groupInfo.value, ...groups[0] };
+          router.replace({ query: { ...route.query, id: groups[0].id } });
         }
       } else if (groups.length > 0) {
-        // No ID provided, select first one
         groupInfo.value = { ...groupInfo.value, ...groups[0] };
         router.replace({ query: { ...route.query, id: groups[0].id } });
-      } else if (!isAdmin) {
-        // No groups at all
-        router.push({ name: 'console-contacts' });
       }
-    } else if (!isAdmin) {
-      router.push({ name: 'console-contacts' });
     }
   } catch (error) {
     console.error('Fetch error:', error);
@@ -205,7 +195,7 @@ const handleSave = async () => {
   try {
     const res = await botStore.updateGroupSetup(groupInfo.value);
     if (res.success) {
-      // Show success toast if available
+      // Success toast
     }
   } catch (error) {
     console.error('Save error:', error);
@@ -231,8 +221,11 @@ watch(() => route.query.admin_id, () => {
 </script>
 
 <template>
-  <div class="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
-    <!-- Header -->
+  <div class="min-h-screen bg-[var(--bg-body)] text-[var(--text-main)] selection:bg-[var(--matrix-color)]/30 overflow-x-hidden" :class="[systemStore.style]">
+    <PortalHeader />
+    
+    <div class="pt-28 pb-20 p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <button @click="router.back()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
@@ -277,7 +270,7 @@ watch(() => route.query.admin_id, () => {
             <button 
               v-for="related in relatedGroups.slice(0, 5)" 
               :key="related.id"
-              @click="router.push({ name: 'console-group-setup', query: { id: related.id } })"
+              @click="router.push({ name: 'portal-group-setup', query: { id: related.id } })"
               class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all text-left"
               :class="{ 'bg-[var(--matrix-color)]/5 border border-[var(--matrix-color)]/20': related.id === groupInfo.id }"
             >
@@ -566,6 +559,7 @@ watch(() => route.query.admin_id, () => {
         </div>
       </div>
     </div>
+    <PortalFooter />
   </div>
 </template>
 
