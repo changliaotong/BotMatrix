@@ -1,0 +1,23 @@
+{
+    "server": {
+        "uri": "ws://localhost:8081/ws/bots",
+        "bot_id": "51437810",
+        "platform": "qq"
+    },
+    "tester": {
+        "user_id": 1653346663,
+        "nickname": "Tester"
+    },
+    "test_cases": [
+        {"name": "Sangong 100", "input": "三公 100", "expected_not_empty": true, "timeout": 30},
+        {"name": "Caiquan 100", "input": "石头 100", "expected_not_empty": true, "timeout": 30},
+        {"name": "Anlian Test", "input": "暗恋 123456", "expected_not_empty": true, "timeout": 30},
+        {"name": "Todo Add", "input": "todo + TestTask", "expected_contains": ["待办添加成功"], "timeout": 20},
+        {"name": "Close Credit System", "input": "关闭 积分系统", "expected_contains": ["积分系统已关闭"], "timeout": 20},
+        {"name": "Sangong Blocked", "input": "三公 100", "expected_contains": ["积分系统已关闭"], "timeout": 20},
+        {"name": "Caiquan Blocked", "input": "石头 100", "expected_contains": ["积分系统已关闭"], "timeout": 20},
+        {"name": "Todo Still Works", "input": "todo", "expected_contains": ["TestTask"], "timeout": 20},
+        {"name": "Open Credit System", "input": "开启 积分系统", "expected_contains": ["积分系统已开启"], "timeout": 20},
+        {"name": "Sangong Recovered", "input": "三公 100", "expected_not_empty": true, "timeout": 30}
+    ]
+}

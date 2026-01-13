@@ -1,0 +1,31 @@
+{
+    "server": {
+        "uri": "ws://localhost:8081/ws/bots",
+        "bot_id": "51437810",
+        "platform": "qq"
+    },
+    "tester": {
+        "user_id": 1653346663,
+        "nickname": "Tester"
+    },
+    "test_cases": [
+        {"name": "System: Help Menu", "input": "菜单", "expected_not_empty": true, "timeout": 20},
+        {"name": "System: Power Check", "input": "开机", "expected_not_empty": true, "timeout": 20},
+        {"name": "System: Credit Status", "input": "积分", "expected_contains": ["积分"], "timeout": 20},
+        {"name": "Game: Sangong", "input": "三公 100", "expected_not_empty": true, "timeout": 30},
+        {"name": "Game: Caiquan", "input": "石头 100", "expected_not_empty": true, "timeout": 30},
+        {"name": "Game: LuckyDraw", "input": "抽奖", "expected_not_empty": true, "timeout": 30},
+        {"name": "Game: SecretLove", "input": "暗恋 123456", "expected_contains": ["登记成功"], "timeout": 20},
+        {"name": "Game: Block Bet", "input": "押大 100", "expected_not_empty": true, "timeout": 30},
+        {"name": "Tool: Todo Add", "input": "todo + PluginTest", "expected_contains": ["待办添加成功"], "timeout": 20},
+        {"name": "Tool: Todo List", "input": "todo", "expected_contains": ["PluginTest"], "timeout": 20},
+        {"name": "Tool: Weather", "input": "天气 北京", "expected_not_empty": true, "timeout": 30},
+        {"name": "Tool: Calc", "input": "计算 123*456", "expected_contains": ["56088"], "timeout": 20},
+        {"name": "Tool: MD5", "input": "md5 hello", "expected_contains": ["5d41402abc4b2a76b9719d911017c592"], "timeout": 20},
+        {"name": "Tool: Time", "input": "报时", "expected_contains": ["现在时间"], "timeout": 20},
+        {"name": "AI: Agent Chat", "input": "ai 你是谁？", "expected_not_empty": true, "timeout": 60},
+        {"name": "AI: Prompt Gen", "input": "生成提示词 厨师", "expected_contains": ["#系统提示词生成器"], "timeout": 20},
+        {"name": "Info: Credit List", "input": "积分榜", "expected_not_empty": true, "timeout": 30},
+        {"name": "System: Signin", "input": "签到", "expected_not_empty": true, "timeout": 20}
+    ]
+}

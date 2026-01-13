@@ -1,0 +1,39 @@
+backend:
+  name: github
+  repo: your-organization/robot-meow-website
+  branch: main
+local_backend: true
+
+media_folder: "public/admin/media"
+public_folder: "/admin/media"
+
+collections:
+  - name: pages
+    label: Pages
+    folder: content/pages
+    create: true
+    slug: '{{slug}}'
+    fields:
+      - { label: 'Title', name: 'title', widget: 'string' }
+      - { label: 'Body', name: 'body', widget: 'markdown' }
+
+  - name: products
+    label: Products
+    folder: content/products
+    create: true
+    slug: '{{slug}}'
+    fields:
+      - { label: 'Title', name: 'title', widget: 'string' }
+      - { label: 'Slug', name: 'slug', widget: 'string' }
+      - { label: 'Description', name: 'description', widget: 'text' }
+      - { label: 'Images', name: 'images', widget: 'image' }
+
+  - name: pricing
+    label: Pricing
+    folder: content/pricing
+    create: true
+    slug: '{{slug}}'
+    fields:
+      - { label: 'Name', name: 'name', widget: 'string' }
+      - { label: 'Price', name: 'price', widget: 'string' }
+      - { label: 'Features', name: 'features', widget: 'list', fields: [ { label: 'Feature', name: 'feature', widget: 'string' } ] }

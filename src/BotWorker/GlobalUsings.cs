@@ -1,0 +1,26 @@
+global using System.Text.RegularExpressions;
+global using static BotWorker.Core.Configurations.AppConfig;
+global using static BotWorker.Infrastructure.Persistence.Database.SQLConn;
+global using BotWorker.Application.Services;
+global using BotWorker.Domain.Constants;
+global using BotWorker.Common;
+global using BotWorker.Common.Data;
+global using BotWorker.Common.Extensions;
+global using BotWorker.Domain.Entities;
+global using BotWorker.Domain.Interfaces;
+global using BotWorker.Domain.Models.BotMessages;
+global using BotWorker.Infrastructure.Persistence.ORM;
+global using BotWorker.Infrastructure.Utils;
+global using BotWorker.Infrastructure.Caching;
+global using BotWorker.Infrastructure.Persistence.Database;
+global using BotWorker.Infrastructure.Tools;
+global using BotWorker.Infrastructure.Communication.Platforms.BotPublic;
+global using BotWorker.Infrastructure.Logging;
+global using BotWorker.Modules.AI.Models;
+global using BotWorker.Modules.AI.Providers;
+global using BotWorker.Modules.AI.Services;
+global using BotWorker.Modules.Games;
+global using BotWorker.Modules.Games.Gift;
+global using BotWorker.Modules.Office;
+global using BotWorker.Modules.Plugins;
+

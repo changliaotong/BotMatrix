@@ -60,7 +60,7 @@ func InitGORM() error {
 type GORMManager = database.GORMManager
 
 func NewGORMManager() *GORMManager {
-	return database.NewGORMManager(GlobalManager.GORMDB)
+	return database.NewGORMManager(GlobalManager.GORMDB, nil)
 }
 
 // --- models & types ---

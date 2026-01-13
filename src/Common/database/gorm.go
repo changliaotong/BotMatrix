@@ -16,6 +16,18 @@ type GORMManager struct {
 	LegacyDB *gorm.DB
 }
 
+var globalDB *gorm.DB
+
+// GetDB returns the global GORM database connection
+func GetDB() *gorm.DB {
+	return globalDB
+}
+
+// SetDB sets the global GORM database connection
+func SetDB(db *gorm.DB) {
+	globalDB = db
+}
+
 // NewGORMManager creates a new GORMManager
 func NewGORMManager(db *gorm.DB, legacyDB *gorm.DB) *GORMManager {
 	return &GORMManager{DB: db, LegacyDB: legacyDB}

@@ -2,7 +2,7 @@ go 1.25.5
 
 use (
 	./src/BotNexus
-	./src/BotWorker
+	./src/BotWorker.Go
 	./src/Common
 	./src/ConsoleBot
 	./src/DingTalkBot

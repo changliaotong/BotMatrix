@@ -1,0 +1,98 @@
+{
+    "server": {
+        "uri": "ws://localhost:8081/ws/bots",
+        "bot_id": "51437810",
+        "platform": "qq"
+    },
+    "tester": {
+        "user_id": 1653346663,
+        "nickname": "Tester"
+    },
+    "test_cases": [
+        { "name": "AI Chat", "input": "/ai 1+1等于几？", "expected_contains": ["2"], "timeout": 20 },
+        { "name": "System Help", "input": "/help", "expected_contains": ["帮助", "菜单"], "timeout": 10 },
+        { "name": "Credit Query", "input": "积分", "expected_contains": ["积分"], "timeout": 10 },
+        { "name": "Coins Query", "input": "金币", "expected_contains": ["金币"], "timeout": 10 },
+        { "name": "Fishing Start", "input": "钓鱼", "expected_contains": ["钓鱼"], "timeout": 10 },
+        { "name": "Pet Status", "input": "我的宠物", "expected_contains": ["宠物"], "timeout": 10 },
+        { "name": "Formula Calculation", "input": "计算 1024 * 2", "expected_contains": ["2048"], "timeout": 10 },
+        { "name": "Todo Add", "input": "添加待办 测试任务", "expected_contains": ["待办"], "timeout": 10 },
+        { "name": "Brick Attack", "input": "拍砖 @Tester", "expected_contains": ["砖"], "timeout": 10 },
+        
+        { "name": "Menu Command", "input": "菜单", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Check-in", "input": "签到", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Weather", "input": "天气 北京", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Manual", "input": "说明书", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "Draw 100", "input": "抽奖 100", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Sangong 100", "input": "三公 100", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Suoha 9", "input": "梭哈 9", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Withdraw Credits After Suoha", "input": "取分 1000", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Guess Size 10", "input": "猜大小 10", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "Deposit Credits", "input": "存分 10", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Withdraw Credits", "input": "取分 10", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Credit Leaderboard", "input": "积分榜", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Buy Credits", "input": "买分 10", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Sell Credits", "input": "卖分 10", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Reward", "input": "打赏 @Tester 10", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Collect Credits", "input": "领积分", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Compute Power", "input": "算力", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Balance", "input": "余额", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Renew", "input": "续费", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Intimacy", "input": "亲密度", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "Good Morning", "input": "早安", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Good Afternoon", "input": "午安", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Good Night", "input": "晚安", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Love Group Master", "input": "爱群主", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Fortune", "input": "运势", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Draw Lots", "input": "抽签", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Interpret Lots", "input": "解签", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Rainbow Fart", "input": "彩虹屁", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Idiom", "input": "成语", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Idiom Solitaire", "input": "接龙", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Joke", "input": "笑话", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Ghost Story", "input": "鬼故事", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Translate", "input": "翻译 hello", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Request Song", "input": "点歌 周杰伦", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Time Report", "input": "报时", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Countdown", "input": "倒计时 10", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Rock Paper Scissors", "input": "猜拳", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Riddle", "input": "猜谜", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Fan Club", "input": "粉丝团", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "This Group", "input": "本群", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Chatterbox", "input": "话唠", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Agent", "input": "智能体", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Tune", "input": "调校", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Transform", "input": "变身", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Welcome Message", "input": "欢迎语", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Mute Me", "input": "禁言我", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "Backend", "input": "后台", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Settings", "input": "设置", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Master", "input": "主人", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Change Master", "input": "换主人", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "Power Off Test", "input": "关机", "expected_contains": ["关机"], "timeout": 10, "type": "group" },
+        { "name": "Verify Off", "input": "帮助", "expected_no_response": true, "timeout": 5, "type": "group" },
+        { "name": "Power On Test", "input": "开机", "expected_contains": ["开机"], "timeout": 10, "type": "group" },
+        { "name": "Verify On", "input": "帮助", "expected_not_empty": true, "timeout": 10, "type": "group" },
+        
+        { "name": "Close Plugin Test", "input": "关闭 积分系统", "expected_contains": ["成功关闭"], "timeout": 10, "type": "group" },
+        { "name": "Verify Plugin Off", "input": "积分", "expected_contains": ["已关闭"], "timeout": 5, "type": "group" },
+        { "name": "Open Plugin Test", "input": "开启 积分系统", "expected_contains": ["成功开启"], "timeout": 10, "type": "group" },
+        { "name": "Verify Plugin On", "input": "积分", "expected_contains": ["积分"], "timeout": 10, "type": "group" },
+        
+        { "name": "Speak", "input": "发言", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Prompt", "input": "提示词", "expected_not_empty": true, "timeout": 10 },
+        
+        { "name": "Smart Todo Add Dev P1", "input": "todo + 重构代码 Dev P1", "expected_contains": ["待办添加成功", "Dev", "High"], "timeout": 10 },
+        { "name": "Smart Todo List", "input": "todo", "expected_contains": ["重构代码", "Dev", "High"], "timeout": 10 },
+        { "name": "Smart Todo Update Progress", "input": "todo #1 50", "expected_contains": ["进度已更新为 50%"], "timeout": 10 },
+        { "name": "Smart Todo Update Description", "input": "todo #1 desc 这是一个测试描述", "expected_contains": ["描述已更新"], "timeout": 10 },
+        { "name": "Smart Todo View Detail", "input": "todo #1", "expected_contains": ["重构代码", "这是一个测试描述", "50%"], "timeout": 10 },
+        { "name": "Smart Todo Done", "input": "todo #1 done", "expected_contains": ["已完成"], "timeout": 10 }
+    ]
+}
