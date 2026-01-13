@@ -105,3 +105,48 @@ docker-compose up -d --build
 - **PII 脱敏**: 开启 `ENABLE_PRIVACY_GUARD=true`，系统将自动识别并屏蔽日志与外发数据中的手机号、姓名。
 - **健康检查**: 配置 Docker `HEALTHCHECK` 确保故障实例自动剔除。
 - **审计跟踪**: 每一项关键操作 (如 `send_msg`) 均通过 `AIAgentTrace` 记录 `execution_id` 供回溯。
+
+---
+
+## 8. 系统性能优化 (Optimization)
+
+为了降低系统延迟并提升吞吐能力，BotMatrix 实施了以下优化措施：
+
+### 8.1 AI 解析器优化 (AIParser)
+- **预编译机制**: 在 Worker 报备技能时，自动遍历并预编译正则表达式。
+- **正则缓存**: 引入 `regexCache` 存储已编译的正则对象，使用 `sync.RWMutex` 确保线程安全。
+
+### 8.2 Redis 交互策略
+- **配置本地化缓存 (ConfigCache)**: 系统每 30 秒从 Redis 同步一次频率限制与 TTL 配置，主流程直接从内存读取（O(1) 复杂度）。
+- **会话热点缓存 (SessionCache)**: 使用 `sync.Map` 存储活跃会话，采用“写穿式”同步（读：本地优先 -> Redis；写：本地即时 -> Redis 异步）。
+
+### 8.3 身份校验优化
+- **头部信息传递**: WebSocket 连接时显式传递 `X-Self-ID` 和 `X-Platform` 头部。
+- **快速注册**: BotNexus 无需解析首条消息即可快速完成身份识别。
+
+---
+
+## 9. 移动端管理 (Miniprogram)
+
+BotMatrix 提供配套的微信小程序，方便在移动端管理机器人与监控系统。
+
+### 9.1 核心功能
+- **系统状态**: CPU、内存、磁盘使用率及实时告警。
+- **机器人管理**: 状态监控、批量操作与搜索。
+- **日志管理**: 实时查看、级别筛选与关键词搜索。
+
+### 9.2 技术架构
+- **前端**: 微信小程序原生开发，WebSocket + HTTPS 通信。
+- **后端**: 集成 Overmind REST API。
+
+---
+
+## 10. 常见问题 (FAQ)
+
+### Q1: 插件无法热加载？
+请确认是否通过 `Admin` 指令 `#reload` 触发，并检查 `capabilities` 是否正确上报。
+
+### Q2: 消息延迟突然增高？
+检查 Redis 网络连接，或确认 `ConfigCache` 同步是否正常。
+
+---
