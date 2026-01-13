@@ -4,9 +4,17 @@
 
 ## 📁 目录结构
 
-### 📖 核心手册 (Core Manuals)
+### 📖 用户手册 (User Manuals)
+- [**用户使用手册总入口**](./用户手册.md) - 最终用户功能指引总入口。
+  - [管理命令手册](./MANUAL_ADMIN.md)
+  - [聊天与 AI 功能手册](./MANUAL_CHAT.md)
+  - [积分与经济系统手册](./MANUAL_ECONOMY.md)
+  - [娱乐与游戏功能手册](./MANUAL_GAMES.md)
+  - [系统变量说明](./MANUAL_VARIABLES.md)
+  - [扩展功能手册 (插件)](./MANUAL_PLUGINS.md)
+
+### 💻 开发者文档 (Developer Docs)
 - [**开发者指南**](./DEVELOPER_GUIDE.md) - 深入了解 BotWorker 架构与插件开发。
-- [**用户使用手册**](./USER_MANUAL.md) - 最终用户功能指引与指令说明。
 
 ### 🏛️ [架构设计 (Architecture)](./Arch/)
 - [DigitalStaff 架构设计](./Arch/DigitalStaff_Architecture.md) - 数字员工系统的核心架构。

@@ -11,6 +11,8 @@ namespace BotWorker.Modules.AI.Interfaces
         IAsyncEnumerable<string> StreamExecuteAsync(ChatHistory history, ModelExecutionOptions options);
 
         Task<string> GenerateImageAsync(string prompt, ModelExecutionOptions options);
+
+        Task<float[]> GenerateEmbeddingAsync(string text, ModelExecutionOptions options);
     }
 
     public class ModelExecutionOptions

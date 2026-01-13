@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Embeddings;
 using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Plugins;
 using Microsoft.Extensions.Logging;
@@ -169,6 +170,22 @@ namespace BotWorker.Modules.AI.Providers.Helpers
             {
                 _logger?.LogError(ex, "[{ProviderName}] GenerateImageAsync error", ProviderName);
                 return $"❌ 错误：{ex.Message}";
+            }
+        }
+
+        public virtual async Task<float[]> GenerateEmbeddingAsync(string text, ModelExecutionOptions options)
+        {
+            try
+            {
+                var kernel = BuildKernel(options);
+                var embeddingService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
+                var result = await embeddingService.GenerateEmbeddingAsync(text, kernel, options.CancellationToken);
+                return result.ToArray();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "[{ProviderName}] GenerateEmbeddingAsync error", ProviderName);
+                return Array.Empty<float>();
             }
         }
 
