@@ -47,7 +47,22 @@ Redis plays a crucial role as the core communication bus.
 4.  **Execution**: **BotWorker** subscribed to the channel receives the message and runs plugin logic.
 5.  **Feedback**: After processing, BotWorker sends response commands back to BotNexus or calls API interfaces directly.
 
-## 📈 Scalability Design
+## 🎯 Message Routing & Skill System
+
+### Routing Logic
+BotNexus provides intelligent message routing supporting two modes:
+1. **Exact Match**: Direct mapping for specific users (`user_123`), groups (`group_456`), or bots.
+2. **Wildcard Match**: Supports patterns like `*_test` or `123*`.
+3. **RTT-based Load Balancing**: Automatically chooses the optimal node based on average response time and health status.
+
+### Skill System Compatibility
+To ensure compatibility between different versions of Workers:
+- **Feature Toggle**: Controlled via `ENABLE_SKILL=true` in `config.json` or environment variables.
+- **Dynamic Discovery**: Workers report their "Skills" (capabilities) upon registration.
+- **Skill-Aware Distribution**: BotNexus routes tasks only to Workers that have reported the required skill.
+- **Graceful Downgrade**: If the skill system is disabled, the system falls back to traditional OneBot message forwarding.
+
+## 📈 Scalability & High Availability
 
 - **Horizontal Scaling**: Multiple BotWorker nodes can be started to share the load.
 - **High Availability**: BotNexus supports cluster deployment (with a load balancer).

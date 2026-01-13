@@ -23,12 +23,15 @@ nav:
   - 🛠️ 开发者中心:
     - 开发者全景指南: zh-CN/development/DEVELOPMENT_GUIDE.md
     - 项目日志与测试计划: zh-CN/development/PROJECT_LOGS.md
-  - 🇺🇸 English:
-    - Home: en-US/README.md
-    - Vision: en-US/VISION.md
-    - User Guide: en-US/USER_GUIDE.md
-    - Architecture: en-US/core/ARCHITECTURE.md
-    - Deployment: en-US/deployment/CONTAINER_BEST_PRACTICES.md
+  - 🌐 English Docs:
+    - Documentation Hub: en-US/README.md
+    - System Architecture: en-US/core/ARCHITECTURE.md
+    - Deployment Guide: en-US/core/DEPLOYMENT.md
+    - Core Components: en-US/core/COMPONENTS.md
+    - Plugin System: en-US/core/PLUGIN_SYSTEM.md
+    - Plugins Catalog: en-US/core/PLUGINS_CATALOG.md
+    - API Reference: en-US/core/API_REFERENCE.md
+    - Changelog: en-US/CHANGELOG.md
   - 📁 归档 (Archive):
     - 历史版本升级: archive/zh-CN/legacy/REDIS_UPGRADE.md
     - 历史計畫文件: archive/zh-CN/legacy/CONFLICT_PLAN.md
