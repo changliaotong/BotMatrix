@@ -4,6 +4,10 @@
 
 ## 📁 目录结构
 
+### 📖 核心手册 (Core Manuals)
+- [**开发者指南**](./DEVELOPER_GUIDE.md) - 深入了解 BotWorker 架构与插件开发。
+- [**用户使用手册**](./USER_MANUAL.md) - 最终用户功能指引与指令说明。
+
 ### 🏛️ [架构设计 (Architecture)](./Arch/)
 - [DigitalStaff 架构设计](./Arch/DigitalStaff_Architecture.md) - 数字员工系统的核心架构。
 - [Robot 架构设计](./Arch/Robot_Architecture.md) - 机器人本体系统的设计文档。
