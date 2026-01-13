@@ -590,33 +590,33 @@ func (DigitalEmployeeTodo) TableName() string {
 
 // DigitalEmployeeTask 数字员工任务全生命周期管理
 type DigitalEmployeeTask struct {
-	ID               uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	ExecutionID      string         `gorm:"size:100;uniqueIndex;column:ExecutionId" json:"execution_id"`      // 全局唯一执行 ID
-	ParentTaskID     uint           `gorm:"index;column:ParentTaskId" json:"parent_task_id"`                  // 父任务 ID (用于子任务拆解)
-	CreatorID        string         `gorm:"size:64;column:CreatorId" json:"creator_id"`                       // 创建者 (可以是 UserID 或 EmployeeID)
+	ID               uint             `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	ExecutionID      string           `gorm:"size:100;uniqueIndex;column:ExecutionId" json:"execution_id"`      // 全局唯一执行 ID
+	ParentTaskID     uint             `gorm:"index;column:ParentTaskId" json:"parent_task_id"`                  // 父任务 ID (用于子任务拆解)
+	CreatorID        string           `gorm:"size:64;column:CreatorId" json:"creator_id"`                       // 创建者 (可以是 UserID 或 EmployeeID)
 	AssigneeID       uint             `gorm:"index;column:AssigneeId" json:"assignee_id"`                       // 负责人 (数字员工 ID)
 	Assignee         *DigitalEmployee `gorm:"foreignKey:AssigneeID" json:"assignee"`                            // 关联负责人详情
 	TaskType         string           `gorm:"size:20;not null;default:'rule';column:TaskType" json:"task_type"` // rule, ai, hybrid
-	Title            string         `gorm:"size:255;not null;column:Title" json:"title"`
-	Description      string         `gorm:"type:text;column:Description" json:"description"`
-	Context          string         `gorm:"type:text;column:Context" json:"context"`               // 任务上下文 (JSON)
-	Steps            string         `gorm:"type:text;column:Steps" json:"steps"`                   // 执行步骤记录 (JSON)
-	Result           string         `gorm:"type:text;column:Result" json:"result"`                 // 最终结果
-	Status           string         `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, running, paused, done, failed
-	Priority         string         `gorm:"size:20;default:'medium';column:Priority" json:"priority"`
-	Progress         int            `gorm:"default:0;column:Progress" json:"progress"`                   // 0-100
-	PlanRaw          string         `gorm:"type:text;column:PlanRaw" json:"plan_raw"`                    // AI 生成的任务计划 (JSON)
-	CurrentStepIndex int            `gorm:"default:0;column:CurrentStepIndex" json:"current_step_index"` // 当前正在执行的步骤索引
-	ResultRaw        string         `gorm:"type:text;column:ResultRaw" json:"result_raw"`                // 最终执行结果 (JSON)
-	ErrorMsg         string         `gorm:"type:text;column:ErrorMsg" json:"error_msg"`                  // 错误信息
-	TokenUsage       int            `gorm:"default:0;column:TokenUsage" json:"token_usage"`              // 任务总消耗 Token
-	Duration         int            `gorm:"default:0;column:Duration" json:"duration"`                   // 执行耗时 (秒)
-	StartTime        *time.Time     `gorm:"column:StartTime" json:"start_time"`
-	EndTime          *time.Time     `gorm:"column:EndTime" json:"end_time"`
-	Deadline         *time.Time     `gorm:"column:Deadline" json:"deadline"`
-	CreatedAt        time.Time      `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt        time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+	Title            string           `gorm:"size:255;not null;column:Title" json:"title"`
+	Description      string           `gorm:"type:text;column:Description" json:"description"`
+	Context          string           `gorm:"type:text;column:Context" json:"context"`               // 任务上下文 (JSON)
+	Steps            string           `gorm:"type:text;column:Steps" json:"steps"`                   // 执行步骤记录 (JSON)
+	Result           string           `gorm:"type:text;column:Result" json:"result"`                 // 最终结果
+	Status           string           `gorm:"size:20;default:'pending';column:Status" json:"status"` // pending, running, paused, done, failed
+	Priority         string           `gorm:"size:20;default:'medium';column:Priority" json:"priority"`
+	Progress         int              `gorm:"default:0;column:Progress" json:"progress"`                   // 0-100
+	PlanRaw          string           `gorm:"type:text;column:PlanRaw" json:"plan_raw"`                    // AI 生成的任务计划 (JSON)
+	CurrentStepIndex int              `gorm:"default:0;column:CurrentStepIndex" json:"current_step_index"` // 当前正在执行的步骤索引
+	ResultRaw        string           `gorm:"type:text;column:ResultRaw" json:"result_raw"`                // 最终执行结果 (JSON)
+	ErrorMsg         string           `gorm:"type:text;column:ErrorMsg" json:"error_msg"`                  // 错误信息
+	TokenUsage       int              `gorm:"default:0;column:TokenUsage" json:"token_usage"`              // 任务总消耗 Token
+	Duration         int              `gorm:"default:0;column:Duration" json:"duration"`                   // 执行耗时 (秒)
+	StartTime        *time.Time       `gorm:"column:StartTime" json:"start_time"`
+	EndTime          *time.Time       `gorm:"column:EndTime" json:"end_time"`
+	Deadline         *time.Time       `gorm:"column:Deadline" json:"deadline"`
+	CreatedAt        time.Time        `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt        time.Time        `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt        gorm.DeletedAt   `gorm:"index;column:DeletedAt" json:"-"`
 }
 
 func (DigitalEmployeeTask) TableName() string {
@@ -705,6 +705,49 @@ func (BotSkillPermission) TableName() string {
 	return "BotSkillPermission"
 }
 
+// User 系统用户模型
+type User struct {
+	ID             uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	Username       string         `gorm:"size:100;uniqueIndex;not null;column:Username" json:"username"`
+	PasswordHash   string         `gorm:"size:255;not null;column:PasswordHash" json:"-"`
+	Platform       string         `gorm:"size:50;column:Platform" json:"platform"`
+	PlatformID     string         `gorm:"size:100;column:PlatformId" json:"platform_id"`
+	IsAdmin        bool           `gorm:"default:false;column:IsAdmin" json:"is_admin"`
+	Active         bool           `gorm:"default:true;column:Active" json:"active"`
+	SessionVersion int            `gorm:"default:1;column:SessionVersion" json:"session_version"`
+	CreatedAt      time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt      time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+}
+
+func (User) TableName() string {
+	return "UserAccount" // 避免与 legacy User 表冲突
+}
+
+// BotEntity 机器人实体模型 (用于管理)
+type BotEntity struct {
+	ID            uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	SelfID        string         `gorm:"size:64;uniqueIndex;not null;column:SelfId" json:"self_id"`
+	Platform      string         `gorm:"size:50;not null;column:Platform" json:"platform"`
+	Name          string         `gorm:"size:100;column:Name" json:"name"`
+	Nickname      string         `gorm:"size:100;column:Nickname" json:"nickname"`
+	Status        string         `gorm:"size:50;column:Status" json:"status"`
+	Connected     bool           `gorm:"column:Connected" json:"connected"`
+	Enabled       bool           `gorm:"default:true;column:Enabled" json:"enabled"`
+	Address       string         `gorm:"size:255;column:Address" json:"address"`
+	Token         string         `gorm:"size:500;column:Token" json:"token"`
+	LastDate      time.Time      `gorm:"column:LastDate" json:"last_date"`
+	LastSeen      time.Time      `gorm:"column:LastSeen" json:"last_seen"`
+	HeartbeatDate time.Time      `gorm:"column:HeartbeatDate" json:"heartbeat_date"`
+	CreatedAt     time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt     time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+}
+
+func (BotEntity) TableName() string {
+	return "BotEntity"
+}
+
 // SessionGORM represents general plugin session state
 type SessionGORM struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
@@ -756,6 +799,20 @@ type DigitalFactoryGoal struct {
 
 func (DigitalFactoryGoal) TableName() string {
 	return "DigitalFactoryGoal"
+}
+
+// UserLoginTokenGORM 用户登录令牌 (用于免密登录)
+type UserLoginTokenGORM struct {
+	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	Platform   string    `gorm:"size:50;column:Platform" json:"platform"`
+	PlatformID string    `gorm:"size:100;column:PlatformId" json:"platform_id"`
+	Token      string    `gorm:"size:100;uniqueIndex;column:Token" json:"token"`
+	ExpiresAt  time.Time `gorm:"column:ExpiresAt" json:"expires_at"`
+	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
+}
+
+func (UserLoginTokenGORM) TableName() string {
+	return "UserLoginToken"
 }
 
 // DigitalFactoryMilestone 目标里程碑

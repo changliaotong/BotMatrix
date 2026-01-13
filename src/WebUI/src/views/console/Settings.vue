@@ -21,8 +21,8 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
     id: 'classic', 
     nameKey: 'style_classic',
     colors: {
-      light: { bg: '#f3f4f6', sidebar: '#ffffff', header: '#ffffff', accent: '#3b82f6', text: '#111827', border: '#e5e7eb' },
-      dark: { bg: '#111827', sidebar: '#111827', header: '#111827', accent: '#60a5fa', text: '#f9fafb', border: '#1f2937' }
+      light: { bg: '#fdfaff', sidebar: '#ffffff', header: '#ffffff', accent: '#9333ea', text: '#1e1b4b', border: 'rgba(147, 51, 234, 0.1)' },
+      dark: { bg: '#020617', sidebar: '#020617', header: '#020617', accent: '#a855f7', text: '#f8fafc', border: 'rgba(168, 85, 247, 0.15)' }
     }
   },
   { 
@@ -34,19 +34,11 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
     }
   },
   { 
-    id: 'tech', 
-    nameKey: 'style_tech',
+    id: 'industrial', 
+    nameKey: 'style_industrial',
     colors: {
-      light: { bg: '#f0f4f8', sidebar: '#ffffff', header: '#ffffff', accent: '#2b6cb0', text: '#102a43', border: '#243b53' },
-      dark: { bg: '#010a1a', sidebar: '#010c1e', header: '#010c1e', accent: '#0ea5e9', text: '#e0f2fe', border: '#0ea5e9' }
-    }
-  },
-  { 
-    id: 'mac', 
-    nameKey: 'style_mac',
-    colors: {
-      light: { bg: '#f5f5f7', sidebar: '#e8e8ed', header: '#f5f5f7', accent: '#0071e3', text: '#1d1d1f', border: '#d2d2d7' },
-      dark: { bg: '#000000', sidebar: '#1c1c1e', header: '#000000', accent: '#0a84ff', text: '#f5f5f7', border: '#3a3a3c' }
+      light: { bg: '#ffffff', sidebar: '#f8fafc', header: '#ffffff', accent: '#2563eb', text: '#0f172a', border: 'rgba(148, 163, 184, 0.15)' },
+      dark: { bg: '#0f172a', sidebar: '#070a14', header: '#0f172a', accent: '#38bdf8', text: '#f8fafc', border: '#38bdf8' }
     }
   }
 ];

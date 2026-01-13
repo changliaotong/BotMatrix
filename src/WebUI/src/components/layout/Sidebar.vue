@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { 
   Cpu, 
   PanelLeftClose, 
+  PanelLeft,
   LayoutDashboard, 
   Bot, 
   MessageSquare,
@@ -21,7 +22,8 @@ import {
   UserCog,
   BookOpen,
   Activity,
-  Sparkles
+  Sparkles,
+  Wrench
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
@@ -47,13 +49,15 @@ const iconMap: Record<string, any> = {
   UserCog,
   BookOpen,
   Activity,
-  Sparkles
+  Sparkles,
+  Wrench
 };
 
 // Map item IDs to routes
 const routeMap: Record<string, string> = {
   'dashboard': '/console',
   'bots': '/console/bots',
+  'bot-setup': '/console/bot-setup',
   'contacts': '/console/contacts',
   'messages': '/console/messages',
   'tasks': '/console/tasks',
@@ -148,10 +152,10 @@ const filteredMenuGroups = computed(() => {
        class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"></div>
 
   <!-- Sidebar -->
-  <aside class="fixed lg:static inset-y-0 left-0 flex-shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-sidebar)] flex flex-col z-50 transition-all duration-300 overflow-hidden"
+  <aside class="fixed md:static inset-y-0 left-0 flex-shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-sidebar)] flex flex-col z-50 transition-all duration-300 overflow-hidden"
      :class="[
-         systemStore.isSidebarCollapsed ? 'w-64 lg:w-20' : 'w-64 lg:w-64',
-         systemStore.showMobileMenu ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+         systemStore.isSidebarCollapsed ? 'w-64 md:w-20' : 'w-64 md:w-64',
+         systemStore.showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
      ]">
   
     <!-- Logo Area -->
@@ -164,14 +168,14 @@ const filteredMenuGroups = computed(() => {
             <span v-show="!systemStore.isSidebarCollapsed" class="font-bold tracking-tight text-[var(--sidebar-text)] whitespace-nowrap">{{ t('botmatrix') }}</span>
         </div>
         <!-- Collapse Toggle (Desktop) -->
-        <button v-show="!systemStore.isSidebarCollapsed"
-                @click="systemStore.toggleSidebar()" 
-                class="hidden lg:flex p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--sidebar-text-muted)] transition-colors flex-shrink-0">
-            <PanelLeftClose class="w-4 h-4" />
+        <button @click="systemStore.toggleSidebar()" 
+                class="hidden md:flex p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-[var(--sidebar-text-muted)] transition-colors flex-shrink-0">
+            <PanelLeftClose v-if="!systemStore.isSidebarCollapsed" class="w-4 h-4" />
+            <PanelLeft v-else class="w-4 h-4" />
         </button>
         <!-- Close Toggle (Mobile) -->
         <button @click="systemStore.showMobileMenu = false" 
-                class="lg:hidden p-2 text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)]">
+                class="md:hidden p-2 text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)]">
             <PanelLeftClose class="w-5 h-5" />
         </button>
     </div>

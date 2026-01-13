@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,8 +15,8 @@ const CONFIG_FILE = "config.json"
 
 // Backward compatibility constants
 var (
-	WS_PORT      = ":8080"
-	WEBUI_PORT   = ":5000"
+	WS_PORT      = "0.0.0.0:8080"
+	WEBUI_PORT   = "0.0.0.0:5000"
 	ENABLE_SKILL = true
 	REDIS_ADDR   = "localhost:6379"
 	REDIS_PWD    = ""
@@ -82,6 +83,40 @@ func InitConfig(path string) error {
 		REDIS_PWD = GlobalConfig.RedisPwd
 	}
 
+	return nil
+}
+
+// GetResolvedConfigPath returns the actual path of the config file being used
+func GetResolvedConfigPath() string {
+	// If GlobalConfig was loaded from a specific file, we should have stored it
+	// For now, return the default location logic
+	if _, err := os.Stat(CONFIG_FILE); err == nil {
+		return CONFIG_FILE
+	}
+	cwd, _ := os.Getwd()
+	rootPath := findProjectRoot(cwd)
+	if rootPath != "" {
+		testPath := filepath.Join(rootPath, CONFIG_FILE)
+		if _, err := os.Stat(testPath); err == nil {
+			return testPath
+		}
+	}
+	return CONFIG_FILE
+}
+
+// SaveConfig saves the configuration to file
+func SaveConfig(cfg *AppConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+
+	// Always save to the default CONFIG_FILE location
+	if err := os.WriteFile(CONFIG_FILE, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %v", err)
+	}
+
+	log.Printf("Successfully saved config to %s", CONFIG_FILE)
 	return nil
 }
 

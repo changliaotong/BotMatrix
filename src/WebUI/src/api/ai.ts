@@ -49,6 +49,37 @@ export interface AIAgent {
   voice_lang: string;
   voice_rate: number;
   call_count: number;
+  
+  // Digital Employee fields
+  employee_id?: string;
+  title?: string;
+  department?: string;
+  level?: string;
+  supervisor_id?: number;
+  supervisor_name?: string;
+  bio?: string;
+  skills?: string; // JSON string
+  status?: string;
+  online_status?: string;
+  salary_token?: number;
+  salary_limit?: number;
+  kpi_score?: number;
+  roi_score?: number;
+  efficiency_score?: number;
+  autonomy_score?: number;
+  onboarding_at?: string;
+  task_count?: number;
+  success_rate?: number;
+  last_active_at?: string;
+  version?: string;
+  sop_id?: string;
+  sandbox_type?: string;
+  memory_type?: string;
+  active_task_id?: string;
+  token_usage?: number;
+  cost_saved?: number;
+  mcp_tools?: string[]; // Mounted MCP tool names
+
   created_at?: string;
   updated_at?: string;
 }

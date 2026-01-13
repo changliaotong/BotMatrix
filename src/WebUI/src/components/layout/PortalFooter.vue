@@ -1,41 +1,75 @@
 <template>
-  <footer class="py-16 border-t border-slate-800 bg-slate-900">
-    <div class="max-w-7xl mx-auto px-4">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
+  <footer class="py-24 border-t border-[var(--border-color)] bg-[var(--bg-body)] relative overflow-hidden">
+    <!-- Background Decor -->
+    <div class="absolute top-0 left-1/4 w-96 h-96 bg-[var(--matrix-color)]/5 blur-[120px] rounded-full"></div>
+    <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/5 blur-[120px] rounded-full"></div>
+
+    <div class="max-w-7xl mx-auto px-6 relative z-10">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-16 mb-20">
         <div class="col-span-2">
-          <div class="flex items-center gap-2 mb-6">
-            <div class="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center font-bold text-slate-900">M</div>
-            <span class="text-xl font-bold text-white">BotMatrix</span>
+          <div class="flex items-center gap-3 mb-8">
+            <div class="w-10 h-10 bg-gradient-to-br from-[var(--matrix-color)] to-indigo-600 rounded-xl flex items-center justify-center font-black text-white shadow-lg shadow-[var(--matrix-glow)]">M</div>
+            <div class="flex flex-col">
+              <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ tt('common.project_name') }}</span>
+              <span class="text-[8px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ tt('common.nexus_os') }}</span>
+            </div>
           </div>
-          <p class="text-slate-500 max-w-sm leading-relaxed">
-            AI 原生智能体操作系统。我们致力于通过 Global Agent Mesh 协议打破企业数据孤岛，构建可信、安全、高效的数字员工协作生态。
+          <p class="text-[var(--text-muted)] max-w-sm leading-relaxed text-sm font-medium">
+            {{ tt('footer.desc') }}
           </p>
         </div>
         <div>
-          <h4 class="font-bold mb-6 text-white">资源</h4>
-          <ul class="space-y-4 text-slate-400 text-sm">
-            <li><router-link to="/docs" class="hover:text-cyan-400 transition-colors">使用文档</router-link></li>
-            <li><a href="#" class="hover:text-cyan-400 transition-colors">API 参考</a></li>
-            <li><a href="#" class="hover:text-cyan-400 transition-colors">插件市场</a></li>
-            <li><router-link to="/pricing" class="hover:text-cyan-400 transition-colors">版本对比</router-link></li>
+          <h4 class="text-[12px] font-black uppercase tracking-[0.2em] mb-8 text-[var(--text-main)]">{{ tt('footer.zaomiao') }}</h4>
+          <ul class="space-y-4 text-[var(--text-muted)] text-[12px] font-black uppercase tracking-widest">
+            <li><router-link to="/meow" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.home') }}</router-link></li>
+            <li><router-link to="/meow/tech" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.tech') }}</router-link></li>
+            <li><router-link to="/meow/ecosystem" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.ecosystem') }}</router-link></li>
+            <li><router-link to="/meow/pricing" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.pricing') }}</router-link></li>
           </ul>
         </div>
         <div>
-          <h4 class="font-bold mb-6 text-white">关于</h4>
-          <ul class="space-y-4 text-slate-400 text-sm">
-            <li><router-link to="/about" class="hover:text-cyan-400 transition-colors">项目简介</router-link></li>
-            <li><a href="https://github.com/changliaotong/BotMatrix" target="_blank" class="hover:text-cyan-400 transition-colors">GitHub 源码</a></li>
-            <li><a href="#" class="hover:text-cyan-400 transition-colors">加入我们</a></li>
-            <li><a href="#" class="hover:text-cyan-400 transition-colors">隐私政策</a></li>
+          <h4 class="text-[12px] font-black uppercase tracking-[0.2em] mb-8 text-[var(--text-main)]">{{ tt('footer.digital_staff') }}</h4>
+          <ul class="space-y-4 text-[var(--text-muted)] text-[12px] font-black uppercase tracking-widest">
+            <li><router-link to="/bots/digital-employee#vision" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.vision') }}</router-link></li>
+            <li><router-link to="/bots/digital-employee#revolution" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.revolution') }}</router-link></li>
+            <li><router-link to="/bots/digital-employee#kpi" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.kpi') }}</router-link></li>
+            <li><router-link to="/bots/digital-employee#security" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.security') }}</router-link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-[12px] font-black uppercase tracking-[0.2em] mb-8 text-[var(--text-main)]">{{ tt('footer.more') }}</h4>
+          <ul class="space-y-4 text-[var(--text-muted)] text-[12px] font-black uppercase tracking-widest">
+            <li><router-link to="/docs" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.docs') }}</router-link></li>
+            <li><router-link to="/pricing" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.plans') }}</router-link></li>
+            <li><router-link to="/about" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.about') }}</router-link></li>
+            <li><a href="#" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.privacy') }}</a></li>
           </ul>
         </div>
       </div>
-      <div class="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-6 text-slate-500 text-sm">
-        <p>© 2026 BotMatrix Open Source Project. All rights reserved.</p>
-        <div class="flex gap-8">
-          <span>Made with ❤️ for Developers</span>
+      
+      <div class="pt-12 border-t border-[var(--border-color)] flex flex-col md:flex-row justify-between items-center gap-8 text-[12px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">
+        <div class="flex items-center gap-6 flex-wrap justify-center md:justify-start">
+          <a href="https://github.com/changliaotong/BotMatrix" target="_blank" class="hover:text-[var(--matrix-color)] transition-colors flex items-center gap-2">
+            <Github class="w-4 h-4" />
+            <span>GITHUB</span>
+          </a>
+          <span class="w-1 h-1 rounded-full bg-[var(--border-color)]"></span>
+          <span>{{ tt('footer.copyright') }}</span>
+          <a href="https://beian.miit.gov.cn/" target="_blank" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.beian') }}</a>
+        </div>
+        <div class="flex items-center gap-6">
+          <span class="flex items-center gap-2">
+            {{ tt('footer.made_with').split('HEART')[0] }} <Heart class="w-3 h-3 text-rose-500 fill-rose-500" /> {{ tt('footer.made_with').split('HEART')[1] }}
+          </span>
         </div>
       </div>
     </div>
   </footer>
 </template>
+
+<script setup lang="ts">
+import { Github, Heart } from 'lucide-vue-next';
+import { useI18n } from '@/utils/i18n';
+
+const { t: tt } = useI18n();
+</script>

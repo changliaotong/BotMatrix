@@ -49,7 +49,7 @@ const chartData = computed(() => {
         value: stats.cpu_usage?.toFixed(1) || '0',
         unit: '%',
         trend: stats.cpu_trend || [],
-        color: '#3b82f6',
+        color: 'var(--status-online)',
         icon: Cpu
       };
     case 'memory':
@@ -58,7 +58,7 @@ const chartData = computed(() => {
         value: stats.memory_used_percent?.toFixed(1) || '0',
         unit: '%',
         trend: (stats.mem_trend || []).map((v: number) => (v / (stats.memory_total || 1)) * 100),
-        color: '#a855f7',
+        color: 'var(--matrix-color)',
         icon: Database
       };
     case 'throughput':
@@ -67,7 +67,7 @@ const chartData = computed(() => {
         value: stats.message_count || '0',
         unit: t('unit_msg'),
         trend: stats.msg_trend || [],
-        color: '#00ff41',
+        color: 'var(--status-busy)',
         icon: Activity
       };
     default:
@@ -161,7 +161,7 @@ const formatBytes = (bytes: number) => {
               </div>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-bold">
+              <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--status-online)]/10 text-[var(--status-online)] text-xs font-bold">
                 <ArrowUpRight class="w-4 h-4" /> 12%
               </div>
               <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('vs_last_hour') }}</p>
@@ -178,7 +178,7 @@ const formatBytes = (bytes: number) => {
           <!-- Network Traffic -->
           <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-4">
             <div class="flex items-center gap-3">
-              <Network class="w-5 h-5 text-blue-500" />
+              <Network class="w-5 h-5 text-[var(--status-online)]" />
               <h3 class="font-bold uppercase tracking-widest text-sm">{{ t('network_traffic') }}</h3>
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -196,7 +196,7 @@ const formatBytes = (bytes: number) => {
           <!-- Disk Status -->
           <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-4">
             <div class="flex items-center gap-3">
-              <HardDrive class="w-5 h-5 text-orange-500" />
+              <HardDrive class="w-5 h-5 text-[var(--status-busy)]" />
               <h3 class="font-bold uppercase tracking-widest text-sm">{{ t('disk_status') }}</h3>
             </div>
             <div class="space-y-4">
@@ -205,7 +205,7 @@ const formatBytes = (bytes: number) => {
                 <p class="text-xs font-bold text-[var(--text-muted)]">{{ botStore.stats.disk_usage }}</p>
               </div>
               <div class="w-full h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-                <div class="h-full bg-orange-500" :style="{ width: botStore.stats.disk_usage }"></div>
+                <div class="h-full bg-[var(--status-busy)]" :style="{ width: botStore.stats.disk_usage }"></div>
               </div>
             </div>
           </div>

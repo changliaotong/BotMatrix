@@ -94,8 +94,8 @@ onUnmounted(() => {
 
 const getLevelColor = (level: string) => {
   switch (level) {
-    case 'ERROR': return 'text-red-500 bg-red-500/10';
-    case 'WARN': return 'text-yellow-500 bg-yellow-500/10';
+    case 'ERROR': return 'text-[var(--status-offline)] bg-[var(--status-offline)]/10';
+    case 'WARN': return 'text-[var(--status-busy)] bg-[var(--status-busy)]/10';
     case 'INFO': return 'text-[var(--matrix-color)] bg-[var(--matrix-color)]/10';
     default: return 'text-[var(--text-muted)] bg-[var(--text-muted)]/10';
   }
@@ -148,7 +148,7 @@ const getLevelIcon = (level: string) => {
         </button>
         <button 
           @click="clearLogs"
-          class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all shrink-0"
+          class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-[var(--status-offline)]/10 text-[var(--status-offline)] text-[10px] font-black uppercase tracking-widest hover:bg-[var(--status-offline)]/20 transition-all shrink-0"
         >
           <Trash2 class="w-3 h-3" />
           {{ t('clear') }}
@@ -230,7 +230,7 @@ const getLevelIcon = (level: string) => {
               </div>
               <p :class="[
                 'text-[11px] leading-relaxed break-all font-medium transition-colors',
-                log.level === 'ERROR' ? 'text-red-400' : 'text-[var(--text-main)]/80'
+                log.level === 'ERROR' ? 'text-[var(--status-offline)]/80' : 'text-[var(--text-main)]/80'
               ]">
                 {{ log.message }}
               </p>
@@ -264,6 +264,6 @@ const getLevelIcon = (level: string) => {
   border-radius: 10px;
 }
 .mono {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Noto Sans SC', monospace;
 }
 </style>

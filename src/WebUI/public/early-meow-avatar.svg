@@ -1,0 +1,40 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Soft Shadow -->
+  <circle cx="100" cy="110" r="70" fill="#000" fill-opacity="0.05"/>
+  
+  <!-- Cat Ears -->
+  <path d="M55 75L35 25C35 25 75 35 85 55" fill="#FFB37E" stroke="#FFB37E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M145 75L165 25C165 25 125 35 115 55" fill="#FFB37E" stroke="#FFB37E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Inner Ears -->
+  <path d="M60 70L45 40C45 40 70 45 75 60" fill="#FFC0CB"/>
+  <path d="M140 70L155 40C155 40 130 45 125 60" fill="#FFC0CB"/>
+  
+  <!-- Cat Head - Very Round -->
+  <path d="M40 100C40 60 160 60 160 100C160 140 130 165 100 165C70 165 40 140 40 100Z" fill="#FFF9F0" stroke="#FFB37E" stroke-width="8"/>
+  
+  <!-- Eyes - Big and Sparkly -->
+  <circle cx="75" cy="105" r="10" fill="#3D3D3D"/>
+  <circle cx="78" cy="102" r="4" fill="white"/>
+  <circle cx="125" cy="105" r="10" fill="#3D3D3D"/>
+  <circle cx="128" cy="102" r="4" fill="white"/>
+  
+  <!-- Blush -->
+  <circle cx="60" cy="125" r="12" fill="#FFC0CB" fill-opacity="0.5"/>
+  <circle cx="140" cy="125" r="12" fill="#FFC0CB" fill-opacity="0.5"/>
+  
+  <!-- Nose - Small Pink Heart -->
+  <path d="M96 120C96 118 104 118 104 120C104 122 100 125 100 125C100 125 96 122 96 120Z" fill="#FFC0CB"/>
+  
+  <!-- Mouth - W shape -->
+  <path d="M85 135C85 135 92.5 145 100 135C107.5 145 115 135 115 135" stroke="#FFB37E" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Whiskers - Thin and Cute -->
+  <path d="M45 120L25 115" stroke="#FFB37E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M45 130L25 135" stroke="#FFB37E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M155 120L175 115" stroke="#FFB37E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M155 130L175 135" stroke="#FFB37E" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Little Sparkle -->
+  <path d="M170 80L175 70L180 80L175 90L170 80Z" fill="#FFD700" fill-opacity="0.8"/>
+</svg>

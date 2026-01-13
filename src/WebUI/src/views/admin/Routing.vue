@@ -164,15 +164,15 @@ onMounted(fetchRules);
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="p-4 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center gap-4 text-red-500">
-      <div class="p-3 rounded-2xl bg-red-500/10">
+    <div v-if="error" class="p-4 rounded-3xl bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 flex items-center gap-4 text-[var(--status-offline)]">
+      <div class="p-3 rounded-2xl bg-[var(--status-offline)]/10">
         <AlertCircle class="w-6 h-6" />
       </div>
       <div class="flex-1">
         <h4 class="font-black text-xs uppercase tracking-widest">{{ t('error') }}</h4>
         <p class="text-sm font-medium">{{ error }}</p>
       </div>
-      <button @click="fetchRules" class="p-3 rounded-2xl hover:bg-red-500/10 transition-colors">
+      <button @click="fetchRules" class="p-3 rounded-2xl hover:bg-[var(--status-offline)]/10 transition-colors">
         <Plus class="w-5 h-5 rotate-45" />
       </button>
     </div>
@@ -202,7 +202,7 @@ onMounted(fetchRules);
               </button>
               <button 
                 @click="handleDeleteRule(rule.key)"
-                class="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
+                class="p-2 rounded-xl bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 text-[var(--status-offline)] hover:bg-[var(--status-offline)] hover:text-[var(--sidebar-text)] transition-all"
               >
                 <Trash2 class="w-4 h-4" />
               </button>
@@ -240,7 +240,7 @@ onMounted(fetchRules);
           <div class="flex items-center gap-2">
             <div :class="[
               'w-1.5 h-1.5 rounded-full',
-              workers.find(w => w.id === rule.worker_id)?.status === 'online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'
+              workers.find(w => w.id === rule.worker_id)?.status === 'online' ? 'bg-[var(--status-online)]' : 'bg-[var(--status-offline)] animate-pulse'
             ]"></div>
             <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">
               {{ t(workers.find(w => w.id === rule.worker_id)?.status || 'unknown') }}

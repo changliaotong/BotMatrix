@@ -1,61 +1,118 @@
 import { createRouter, createWebHistory, RouterView } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useSystemStore } from '@/stores/system';
+import { t } from '@/utils/i18n';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    // --- Portal / Official Website ---
+    // --- EarlyMeow (Standalone) ---
+    {
+      path: '/meow',
+      component: () => import('@/views/portal/bots/earlymeow/Layout.vue'),
+      meta: { layout: 'blank', title: 'title.meow' },
+      children: [
+        {
+          path: '',
+          name: 'early-meow-home',
+          component: () => import('@/views/portal/bots/earlymeow/pages/Home.vue'),
+        },
+        {
+          path: 'tech',
+          name: 'early-meow-tech',
+          component: () => import('@/views/portal/bots/earlymeow/pages/Tech.vue'),
+        },
+        {
+          path: 'pricing',
+          name: 'early-meow-pricing',
+          component: () => import('@/views/portal/bots/earlymeow/pages/Pricing.vue'),
+        },
+        {
+          path: 'ecosystem',
+          name: 'early-meow-ecosystem',
+          component: () => import('@/views/portal/bots/earlymeow/pages/Ecosystem.vue'),
+        },
+        {
+          path: 'console',
+          name: 'early-meow-console',
+          component: () => import('@/views/portal/bots/earlymeow/Console.vue'),
+          meta: { requiresAuth: true }
+        }
+      ]
+    },
     {
       path: '/',
       name: 'home',
-      component: () => import('@/views/portal/bots/EarlyMeow.vue'),
-      meta: { layout: 'blank' }
+      component: () => import('@/views/portal/Home.vue'),
+      meta: { layout: 'blank', title: 'title.home' }
     },
     {
       path: '/matrix',
-      name: 'matrix-home',
-      component: () => import('@/views/portal/Home.vue'),
-      meta: { layout: 'blank' }
+      redirect: '/'
     },
     {
       path: '/bots/early-meow',
-      redirect: '/'
+      redirect: '/meow'
     },
     {
       path: '/bots/nexus-guard',
       name: 'bot-nexus-guard',
       component: () => import('@/views/portal/bots/NexusGuard.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.home' }
     },
     {
       path: '/bots/digital-employee',
-      name: 'bot-digital-employee',
-      component: () => import('@/views/portal/bots/DigitalEmployee.vue'),
-      meta: { layout: 'blank' }
+      component: () => import('@/views/portal/bots/digital-employee/Layout.vue'),
+      meta: { layout: 'blank', title: 'title.digital_employee' },
+      children: [
+        {
+          path: '',
+          name: 'bot-digital-employee',
+          component: () => import('@/views/portal/bots/digital-employee/pages/Home.vue'),
+        }
+      ]
     },
     {
       path: '/about',
       name: 'about',
       component: () => import('@/views/portal/About.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.about' }
     },
     {
       path: '/pricing',
       name: 'pricing',
       component: () => import('@/views/portal/Pricing.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.pricing' }
     },
     {
       path: '/docs',
       name: 'docs',
       component: () => import('@/views/portal/Docs.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.docs' }
+    },
+    {
+      path: '/docs/:id',
+      name: 'docs-detail',
+      component: () => import('@/views/portal/DocsDetail.vue'),
+      meta: { layout: 'blank', title: 'title.docs' }
     },
     {
       path: '/news',
       name: 'news',
       component: () => import('@/views/portal/News.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.news' }
+    },
+    {
+      path: '/news/:id',
+      name: 'news-detail',
+      component: () => import('@/views/portal/NewsDetail.vue'),
+      meta: { layout: 'blank', title: 'title.news' }
+    },
+    {
+      path: '/industrial-test',
+      name: 'industrial-test',
+      component: () => import('@/views/portal/IndustrialTest.vue'),
+      meta: { layout: 'blank', title: 'title.test' }
     },
 
     // --- Auth ---
@@ -63,26 +120,26 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/auth/Login.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.login' }
     },
     {
       path: '/register',
       name: 'register',
       component: () => import('@/views/auth/Register.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.register' }
     },
     {
       path: '/auth/token-login',
       name: 'token-login',
       component: () => import('@/views/auth/TokenLogin.vue'),
-      meta: { layout: 'blank' }
+      meta: { layout: 'blank', title: 'title.login' }
     },
 
     // --- User Console ---
     {
       path: '/console',
       component: RouterView,
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, title: 'title.console' },
       children: [
         {
           path: '',
@@ -98,6 +155,16 @@ const router = createRouter({
           path: 'contacts',
           name: 'console-contacts',
           component: () => import('@/views/console/Contacts.vue'),
+        },
+        {
+          path: 'group-setup',
+          name: 'console-group-setup',
+          component: () => import('@/views/console/GroupSetup.vue'),
+        },
+        {
+          path: 'bot-setup',
+          name: 'console-bot-setup',
+          component: () => import('@/views/console/BotSetup.vue'),
         },
         {
           path: 'messages',
@@ -131,7 +198,7 @@ const router = createRouter({
     {
       path: '/admin',
       component: RouterView,
-      meta: { requiresAuth: true, requiresAdmin: true },
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'title.admin' },
       children: [
         {
           path: 'workers',
@@ -187,10 +254,24 @@ const router = createRouter({
       redirect: '/'
     }
   ],
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition;
+    } else if (to.hash) {
+      return {
+        el: to.hash,
+        behavior: 'smooth',
+        top: 80, // Offset for fixed header
+      };
+    } else {
+      return { top: 0 };
+    }
+  },
 });
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
+  const systemStore = useSystemStore();
   const token = localStorage.getItem('wxbot_token');
   
   // Check if the route or any of its parents require authentication
@@ -203,7 +284,10 @@ router.beforeEach(async (to, from, next) => {
     if (!token) {
       console.log('[Router] No token found, redirecting to login');
       authStore.logout(); // Ensure state is cleared
-      next({ name: 'login' });
+      next({ 
+        name: 'login',
+        query: { redirect: to.fullPath }
+      });
     } else {
       // Check auth if user info is missing
       if (!authStore.user) {
@@ -212,13 +296,19 @@ router.beforeEach(async (to, from, next) => {
           if (!isValid) {
             console.log('[Router] Auth check failed, redirecting to login');
             authStore.logout();
-            next({ name: 'login' });
+            next({ 
+              name: 'login',
+              query: { redirect: to.fullPath }
+            });
             return;
           }
         } catch (err) {
           console.error('[Router] Auth check error:', err);
           authStore.logout();
-          next({ name: 'login' });
+          next({ 
+            name: 'login',
+            query: { redirect: to.fullPath }
+          });
           return;
         }
       }
@@ -237,7 +327,17 @@ router.beforeEach(async (to, from, next) => {
     // Public paths
     // If already logged in and visiting login/register, redirect to console
     if (token && (to.name === 'login' || to.name === 'register')) {
-      next({ name: 'console-dashboard' });
+      const redirect = to.query.redirect as string;
+      if (redirect) {
+        next(redirect);
+      } else {
+        // Default landing pages
+        if (authStore.isAdmin) {
+          next({ name: 'console-dashboard' });
+        } else {
+          next({ name: 'console-bot-setup' });
+        }
+      }
     } else {
       next();
     }

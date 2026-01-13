@@ -215,7 +215,7 @@ onMounted(fetchUsers);
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500">
+          <div class="p-3 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
             <Shield class="w-6 h-6" />
           </div>
           <div>
@@ -226,7 +226,7 @@ onMounted(fetchUsers);
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-green-500/10 text-green-500">
+          <div class="p-3 rounded-2xl bg-[var(--status-online)]/10 text-[var(--status-online)]">
             <CheckCircle2 class="w-6 h-6" />
           </div>
           <div>
@@ -257,7 +257,7 @@ onMounted(fetchUsers);
               <div class="flex items-center gap-3">
                 <h3 class="font-black text-[var(--text-main)] tracking-tight">{{ user.username }}</h3>
                 <span 
-                  :class="user.role === 'admin' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] border-[var(--matrix-color)]/20'"
+                  :class="user.role === 'admin' ? 'bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] border-[var(--matrix-color)]/20' : 'bg-[var(--text-muted)]/10 text-[var(--text-muted)] border-[var(--text-muted)]/20'"
                   class="px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-widest"
                 >
                   {{ t(user.role) }}
@@ -265,7 +265,7 @@ onMounted(fetchUsers);
               </div>
               <div class="flex items-center gap-4 mt-1">
                 <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full" :class="user.status === 'active' ? 'bg-green-500' : 'bg-red-500'"></span>
+                  <span class="w-1.5 h-1.5 rounded-full" :class="user.status === 'active' ? 'bg-[var(--status-online)]' : 'bg-[var(--status-offline)]'"></span>
                   <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t(user.status) }}</span>
                 </div>
                 <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('last_login') }}: {{ user.last_login || t('never') }}</div>

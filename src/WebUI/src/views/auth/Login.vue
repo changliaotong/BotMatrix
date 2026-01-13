@@ -62,7 +62,18 @@ const handleLogin = async () => {
   try {
     const success = await authStore.login(trimmedUsername, trimmedPassword);
     if (success) {
-      router.push('/console');
+      // Get redirect path from query or determine default based on role
+      const redirect = router.currentRoute.value.query.redirect as string;
+      if (redirect) {
+        router.push(redirect);
+      } else {
+        // Default landing pages
+        if (authStore.isAdmin) {
+          router.push('/console'); // Control Center (Dashboard)
+        } else {
+          router.push('/console/bot-setup'); // Bot Settings
+        }
+      }
     } else {
       error.value = t('login_error_auth');
     }
@@ -173,8 +184,14 @@ const handleLogin = async () => {
           </button>
         </form>
 
-        <div class="text-center">
-          <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+        <div class="text-center space-y-4">
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">
+            {{ t('no_account') }} 
+            <router-link :to="{ name: 'register', query: { redirect: router.currentRoute.value.query.redirect } }" class="text-matrix hover:underline decoration-2 underline-offset-4 transition-all">
+              {{ t('register_now') }}
+            </router-link>
+          </p>
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest pt-4">
             {{ t('copyright') }}
           </p>
         </div>

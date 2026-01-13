@@ -541,7 +541,7 @@ const filteredFriends = computed(() => {
             :key="field"
             @click="toggleSort(field as any)"
             :class="['px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all', 
-              sortBy === field ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5']"
+              sortBy === field ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:bg-[var(--matrix-color)]/10']"
           >
             {{ t('sort_' + field) }}
             <span v-if="sortBy === field" class="ml-1">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
@@ -568,14 +568,14 @@ const filteredFriends = computed(() => {
       <button 
         v-if="!searchQuery"
         @click="showAddModal = true"
-        class="px-6 py-2 border border-[var(--matrix-color)] text-[var(--matrix-color)] font-bold rounded-xl hover:bg-[var(--matrix-color)] hover:text-black transition-all"
+        class="px-6 py-2 border border-[var(--matrix-color)] text-[var(--matrix-color)] font-bold rounded-xl hover:bg-[var(--matrix-color)]/10 transition-all"
       >
         {{ t('start_now') }}
       </button>
       <button 
         v-else
         @click="searchQuery = ''"
-        class="px-6 py-2 border border-[var(--border-color)] text-[var(--text-muted)] font-bold rounded-xl hover:bg-black/5 transition-all"
+        class="px-6 py-2 border border-[var(--border-color)] text-[var(--text-muted)] font-bold rounded-xl hover:bg-[var(--matrix-color)]/10 transition-all"
       >
         {{ t('clear_search') }}
       </button>
@@ -655,7 +655,10 @@ const filteredFriends = computed(() => {
         <div class="flex gap-2 relative z-10">
           <button 
             @click="botStore.setCurrentBotId(bot.id)"
-            class="flex-1 py-2.5 sm:py-3 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-[var(--matrix-color)] hover:text-black transition-all duration-300"
+            class="flex-1 py-2.5 sm:py-3 rounded-2xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300"
+            :class="botStore.currentBotId === bot.id 
+              ? 'bg-[var(--matrix-color)] text-black shadow-lg shadow-[var(--matrix-color)]/20' 
+              : 'bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-black'"
           >
             {{ botStore.currentBotId === bot.id ? t('currently_selected') : t('set_as_current') }}
           </button>
@@ -1148,7 +1151,7 @@ const filteredFriends = computed(() => {
   --tw-ring-color: var(--matrix-color);
 }
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Noto Sans SC', monospace;
 }
 /* Scrollbar */
 .scrollbar-thin::-webkit-scrollbar {

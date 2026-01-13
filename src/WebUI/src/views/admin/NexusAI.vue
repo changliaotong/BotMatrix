@@ -28,22 +28,77 @@ import {
   VolumeX,
   Pause,
   Play,
-  Wand2,
-  ThumbsUp,
-  ThumbsDown,
-  RotateCcw,
-  Copy,
-  Check,
-  Activity,
-  FileUp,
-  FileText,
-  Database
+  Wand2, 
+  ThumbsUp, 
+  ThumbsDown, 
+  RotateCcw, 
+  Copy, 
+  Check, 
+  Activity, 
+  FileUp, 
+  FileText, 
+  Database, 
+  Sun, 
+  Moon, 
+  Globe, 
+  ChevronDown, 
+  Briefcase, 
+  IdCard, 
+  Target, 
+  Coins, 
+  ShieldCheck, 
+  Users, 
+  UserCircle, 
+  Hash, 
+  Building2, 
+  Trophy, 
+  Wrench, 
+  Calendar,
+  Zap
 } from 'lucide-vue-next';
 import { aiApi, type AIAgent, type AISession, type AIChatMessage } from '@/api/ai';
 
 const systemStore = useSystemStore();
 const route = useRoute();
 const t = (key: string) => systemStore.t(key);
+
+// --- Language Picker ---
+const showLangPicker = ref(false);
+const langPickerRef = ref<HTMLElement | null>(null);
+const languages = [
+  { id: 'zh-CN', nameKey: 'lang_zh_cn' },
+  { id: 'zh-TW', nameKey: 'lang_zh_tw' },
+  { id: 'en-US', nameKey: 'lang_en_us' },
+  { id: 'ja-JP', nameKey: 'lang_ja_jp' }
+];
+const langShortNameMap: Record<string, string> = {
+  'zh-CN': 'CN',
+  'zh-TW': 'TW',
+  'en-US': 'EN',
+  'ja-JP': 'JP'
+};
+
+const toggleLangPicker = () => {
+  showLangPicker.value = !showLangPicker.value;
+};
+
+const selectLang = (langId: string) => {
+  systemStore.setLang(langId as any);
+  showLangPicker.value = false;
+};
+
+// Close lang picker when clicking outside
+onMounted(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (langPickerRef.value && !langPickerRef.value.contains(event.target as Node)) {
+      showLangPicker.value = false;
+    }
+  };
+  window.addEventListener('click', handleClickOutside);
+  onUnmounted(() => {
+    window.removeEventListener('click', handleClickOutside);
+  });
+});
 
 // --- State ---
 const activeTab = ref('sessions'); // sessions, agents, models, providers
@@ -112,11 +167,11 @@ const isGenerating = ref(false);
 const isLoadingHistory = ref(false);
 const contextLength = ref(5);
 const contextOptions = [
-  { label: '1 条', value: 1 },
-  { label: '3 条', value: 3 },
-  { label: '5 条', value: 5 },
-  { label: '10 条', value: 10 },
-  { label: '20 条', value: 20 }
+  { label: '1 ' + t('ai_count_unit'), value: 1 },
+  { label: '3 ' + t('ai_count_unit'), value: 3 },
+  { label: '5 ' + t('ai_count_unit'), value: 5 },
+  { label: '10 ' + t('ai_count_unit'), value: 10 },
+  { label: '20 ' + t('ai_count_unit'), value: 20 }
 ];
 const hasMoreHistory = ref<Record<string, boolean>>({});
 const scrollContainer = ref<HTMLElement | null>(null);
@@ -627,7 +682,7 @@ const generateTitle = async (session: AISession) => {
       headers: getHeaders(),
       body: JSON.stringify({
         agent_id: BUILTIN_AGENTS.TITLE_GENERATOR,
-        message: `请根据以下对话内容，生成一个简短的会话标题（不超过10个字）：\n\n${context}`,
+        message: `${t('ai_gen_title_prompt')}\n\n${context}`,
         stream: false
       })
     });
@@ -692,8 +747,8 @@ const fetchData = async () => {
     // Select first agent by default if none selected and in agents tab
     // Update agent list to ensure ID 4 is Lu Xun
       agents.value = agents.value.map(a => {
-        if (a.id === 4 && (a.name === '早喵' || !a.name)) {
-          return { ...a, name: '鲁迅' };
+        if (a.id === 4 && (a.name === t('common.earlymeow') || !a.name)) {
+          return { ...a, name: t('ai_fallback_name') };
         }
         return a;
       });
@@ -721,7 +776,7 @@ const handleKBUpload = async (event: Event) => {
   try {
     const res = await aiApi.uploadKnowledge(file);
     if (res.data.success) {
-      alert(res.data.message || '上传成功，正在后台解析...');
+      alert(res.data.message || t('ai_upload_success_parsing'));
       // 延迟刷新列表，给后端一点时间开始处理
       setTimeout(() => {
         aiApi.getKnowledgeList().then(r => {
@@ -729,10 +784,10 @@ const handleKBUpload = async (event: Event) => {
         });
       }, 2000);
     } else {
-      alert(res.data.message || '上传失败');
+      alert(res.data.message || t('ai_upload_failed'));
     }
   } catch (err: any) {
-    alert('上传请求失败: ' + (err.message || err));
+    alert(t('ai_upload_request_failed') + (err.message || err));
   } finally {
     isUploadingKB.value = false;
     target.value = '';
@@ -740,17 +795,17 @@ const handleKBUpload = async (event: Event) => {
 };
 
 const deleteKnowledge = async (id: number) => {
-  if (!confirm('确定要删除这个知识文档吗？关联的切片也将被清除。')) return;
+  if (!confirm(t('ai_delete_kb_confirm'))) return;
 
   try {
     const res = await aiApi.deleteKnowledge(id);
     if (res.data.success) {
       knowledgeDocs.value = knowledgeDocs.value.filter(d => d.id !== id);
     } else {
-      alert(res.data.message || '删除失败');
+      alert(res.data.message || t('ai_delete_failed'));
     }
   } catch (err: any) {
-    alert('请求失败: ' + (err.message || err));
+    alert(t('ai_request_failed') + (err.message || err));
   }
 };
 
@@ -796,8 +851,8 @@ const selectSession = async (session: AISession) => {
     let agent = agents.value.find(a => a.id === session.agent_id);
     
     // Ensure ID 4 is Lu Xun
-    if (agent && agent.id === 4 && (agent.name === '早喵' || !agent.name)) {
-      agent = { ...agent, name: '鲁迅' };
+    if (agent && agent.id === 4 && (agent.name === t('common.earlymeow') || !agent.name)) {
+      agent = { ...agent, name: t('ai_fallback_name') };
     }
 
     if (agent) {
@@ -812,11 +867,11 @@ const selectSession = async (session: AISession) => {
         } else {
           // Fallback if agent cannot be found
           console.warn(`[DATA DEBUG] Agent ID ${session.agent_id} not found in backend, using fallback`);
-          const fallbackName = session.agent_id === 4 ? '鲁迅' : `智能体 #${session.agent_id}`;
+          const fallbackName = session.agent_id === 4 ? t('ai_fallback_name') : `${t('ai_agent_id_prefix')} #${session.agent_id}`;
           selectedAgent.value = {
             id: session.agent_id,
             name: fallbackName,
-            description: '系统默认智能体',
+            description: t('ai_default_agent_desc'),
             visibility: 'public',
             revenue_rate: 0,
             owner_id: 0,
@@ -832,11 +887,11 @@ const selectSession = async (session: AISession) => {
       } catch (e) {
         console.error('Failed to fetch agent for session:', e);
         // Fallback
-        const fallbackName = session.agent_id === 4 ? '鲁迅' : `智能体 #${session.agent_id}`;
+        const fallbackName = session.agent_id === 4 ? t('ai_fallback_name') : `${t('ai_agent_id_prefix')} #${session.agent_id}`;
         selectedAgent.value = {
           id: session.agent_id,
           name: fallbackName,
-          description: '系统默认智能体',
+          description: t('ai_default_agent_desc'),
           visibility: 'public',
           revenue_rate: 0,
           owner_id: 0,
@@ -980,7 +1035,7 @@ const shareAgent = (agent: AIAgent) => {
   url.searchParams.delete('session_id');
   
   navigator.clipboard.writeText(url.toString()).then(() => {
-    alert(t('ai_copy_success') || '链接已复制到剪贴板');
+    alert(t('ai_copy_success') || t('ai.link_copied'));
   }).catch(err => {
     console.error('Failed to copy link:', err);
   });
@@ -1488,11 +1543,68 @@ const filteredSessions = computed(() => {
               : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--matrix-color)]/5'
           ]"
         >
-          {{ tab === 'knowledge' ? '知识库' : t('ai_' + tab) }}
+          {{ tab === 'knowledge' ? t('ai_knowledge') : t('ai_' + tab) }}
         </button>
       </nav>
 
       <div class="flex items-center gap-3">
+        <!-- Theme Toggle -->
+        <button 
+          @click="systemStore.toggleMode"
+          class="p-2.5 rounded-xl bg-[var(--bg-body)]/50 border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--matrix-color)] hover:border-[var(--matrix-color)]/30 transition-all active:scale-95"
+          :title="systemStore.mode === 'dark' ? t('theme_light') : t('theme_dark')"
+        >
+          <Sun v-if="systemStore.mode === 'dark'" class="w-4 h-4" />
+          <Moon v-else class="w-4 h-4" />
+        </button>
+
+        <!-- Language Selector -->
+        <div class="relative" ref="langPickerRef">
+          <button 
+            @click="toggleLangPicker"
+            class="flex items-center gap-2 px-3 py-2.5 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl text-[var(--text-muted)] hover:text-[var(--matrix-color)] hover:border-[var(--matrix-color)]/30 transition-all active:scale-95"
+          >
+            <Globe class="w-4 h-4" />
+            <span class="text-xs font-bold uppercase tracking-wider">{{ langShortNameMap[systemStore.lang] || 'EN' }}</span>
+            <ChevronDown class="w-3 h-3 transition-transform duration-300" :class="{ 'rotate-180': showLangPicker }" />
+          </button>
+
+          <!-- Dropdown -->
+          <Transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="translate-y-1 opacity-0"
+            enter-to-class="translate-y-0 opacity-100"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="translate-y-0 opacity-100"
+            leave-to-class="translate-y-1 opacity-0"
+          >
+            <div 
+              v-if="showLangPicker"
+              class="absolute right-0 mt-2 w-40 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl shadow-black/20 backdrop-blur-xl z-50 overflow-hidden"
+            >
+              <div class="p-1.5">
+                <button 
+                  v-for="lang in languages" 
+                  :key="lang.id"
+                  @click="selectLang(lang.id)"
+                  :class="[
+                    'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all group',
+                    systemStore.lang === lang.id 
+                      ? 'bg-[var(--matrix-color)] text-[var(--sidebar-text-active)]' 
+                      : 'text-[var(--text-muted)] hover:bg-[var(--matrix-color)]/10 hover:text-[var(--text-main)]'
+                  ]"
+                >
+                  {{ t(lang.nameKey) }}
+                  <div 
+                    v-if="systemStore.lang === lang.id"
+                    class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"
+                  ></div>
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
         <button 
           v-if="activeTab === 'knowledge'"
           @click="kbFileInput?.click()"
@@ -1501,7 +1613,7 @@ const filteredSessions = computed(() => {
         >
           <Loader2 v-if="isUploadingKB" class="w-4 h-4 animate-spin" />
           <FileUp v-else class="w-4 h-4" />
-          {{ isUploadingKB ? '上传中...' : '上传文档' }}
+          {{ isUploadingKB ? t('ai_uploading') : t('ai_upload_docs') }}
         </button>
         <input 
           ref="kbFileInput"
@@ -1582,7 +1694,31 @@ const filteredSessions = computed(() => {
               
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2 truncate">
+                  <!-- Online Status Dot -->
+                  <div class="relative flex h-2 w-2 mr-0.5">
+                    <span 
+                      v-if="agent.online_status === 'online'" 
+                      class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"
+                    ></span>
+                    <span 
+                      class="relative inline-flex rounded-full h-2 w-2"
+                      :class="[
+                        agent.online_status === 'online' ? 'bg-emerald-500' : 
+                        agent.online_status === 'busy' ? 'bg-amber-500' : 'bg-slate-500'
+                      ]"
+                    ></span>
+                  </div>
+
+                  <div v-if="agent.employee_id" class="flex-shrink-0 p-1 rounded-lg bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
+                    <UserCircle class="w-3.5 h-3.5" />
+                  </div>
                   <span class="font-bold text-sm text-[var(--text-main)] truncate">{{ agent.name }}</span>
+                  
+                  <!-- Job Level Badge -->
+                  <span v-if="agent.level" class="flex-shrink-0 px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-500/10 text-slate-500 border border-slate-500/20 uppercase tracking-tighter">
+                    {{ agent.level }}
+                  </span>
+
                   <span v-if="agent.call_count > 0" class="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black bg-[var(--matrix-color)] text-[var(--sidebar-text-active)] uppercase tracking-tighter">
                     {{ agent.call_count }}
                   </span>
@@ -1592,15 +1728,41 @@ const filteredSessions = computed(() => {
                   <button @click.stop="deleteAgent(agent.id)" class="p-1.5 hover:bg-red-500/10 rounded-lg text-[var(--text-muted)] hover:text-red-500 transition-colors" title="Delete"><Trash2 class="w-3.5 h-3.5" /></button>
                 </div>
               </div>
-              <span class="text-xs text-[var(--text-muted)] line-clamp-1 leading-relaxed">{{ agent.description || t('no_description') }}</span>
-              <div class="flex items-center gap-2 mt-1">
+
+              <!-- Digital Employee Badges -->
+              <div v-if="agent.employee_id || agent.department" class="flex flex-wrap gap-1.5">
+                <span v-if="agent.employee_id" class="px-1.5 py-0.5 rounded bg-[var(--bg-body)] text-[9px] font-bold text-[var(--text-muted)] border border-[var(--border-color)] flex items-center gap-1">
+                  <Hash class="w-2.5 h-2.5" /> {{ agent.employee_id }}
+                </span>
+                <span v-if="agent.department" class="px-1.5 py-0.5 rounded bg-[var(--matrix-color)]/5 text-[9px] font-bold text-[var(--matrix-color)] border border-[var(--matrix-color)]/10 flex items-center gap-1">
+                  <Building2 class="w-2.5 h-2.5" /> {{ agent.department }}
+                </span>
+                <span v-if="agent.kpi_score" class="px-1.5 py-0.5 rounded bg-emerald-500/5 text-[9px] font-bold text-emerald-500 border border-emerald-500/10 flex items-center gap-1">
+                  <Trophy class="w-2.5 h-2.5" /> {{ agent.kpi_score }}
+                </span>
+                <span v-if="agent.efficiency_score" class="px-1.5 py-0.5 rounded bg-yellow-500/5 text-[9px] font-bold text-yellow-500 border border-yellow-500/10 flex items-center gap-1">
+                  <Zap class="w-2.5 h-2.5" /> {{ agent.efficiency_score }}
+                </span>
+                <span v-if="agent.autonomy_score" class="px-1.5 py-0.5 rounded bg-purple-500/5 text-[9px] font-bold text-purple-500 border border-purple-500/10 flex items-center gap-1">
+                  <Cpu class="w-2.5 h-2.5" /> {{ agent.autonomy_score }}
+                </span>
+              </div>
+
+              <div class="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-[var(--border-color)]/30">
                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--bg-body)] text-[var(--text-muted)] border border-[var(--border-color)] uppercase tracking-wider">
                   {{ getModelName(agent.model_id) }}
                 </span>
-                <span v-if="agent.call_count > 0" class="flex items-center gap-1 text-[10px] text-[var(--text-muted)] font-bold">
-                  <Activity class="w-3 h-3" />
-                  {{ agent.call_count }}
-                </span>
+                <div class="flex items-center gap-3 ml-auto">
+                  <span v-if="agent.salary_token" class="flex items-center gap-1 text-[10px] text-amber-500 font-black">
+                    <Coins class="w-3 h-3" /> {{ agent.salary_token.toLocaleString() }}
+                  </span>
+                  <span v-if="agent.skills" class="flex items-center gap-1 text-[10px] text-[var(--matrix-color)] font-bold">
+                    <Wrench class="w-3 h-3" /> {{ agent.skills.split(',').length }}
+                  </span>
+                  <span v-if="agent.onboarding_at" class="flex items-center gap-1 text-[10px] text-[var(--text-muted)] opacity-60">
+                    <Calendar class="w-3 h-3" /> {{ new Date(agent.onboarding_at).toLocaleDateString() }}
+                  </span>
+                </div>
               </div>
             </div>
             <div v-if="filteredAgents.length === 0" class="p-12 text-center">
@@ -1643,7 +1805,7 @@ const filteredSessions = computed(() => {
               <span class="text-xs text-[var(--text-muted)] line-clamp-1 leading-relaxed">{{ session.last_msg || '...' }}</span>
               <div class="flex items-center gap-2 mt-1">
                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--bg-body)] text-[var(--matrix-color)] border border-[var(--matrix-color)]/20 uppercase tracking-wider">
-                  {{ session.agent?.name || `智能体 #${session.agent_id}` }}
+                  {{ session.agent?.name || `${t('ai_agent_id_prefix')} #${session.agent_id}` }}
                 </span>
               </div>
             </div>
@@ -1711,7 +1873,7 @@ const filteredSessions = computed(() => {
                   </select>
                   <!-- Tooltip/Hint -->
                   <div class="absolute bottom-full right-0 mb-2 w-48 p-2 bg-black/80 text-[var(--sidebar-text)] text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed font-medium">
-                    {{ t('ai_context_hint') || '上下文越长，消耗的算力资源越多，响应可能变慢。' }}
+                    {{ t('ai_context_hint') }}
                   </div>
                 </div>
 
@@ -1724,7 +1886,7 @@ const filteredSessions = computed(() => {
                       ? 'bg-[var(--matrix-color)]/20 border-[var(--matrix-color)]/30 text-[var(--matrix-color)]' 
                       : 'bg-[var(--bg-body)]/50 border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
                   ]"
-                  :title="isAutoVoiceEnabled ? t('ai_voice_on') || '语音播报已开启' : t('ai_voice_off') || '语音播报已关闭'"
+                  :title="isAutoVoiceEnabled ? t('ai_voice_on') : t('ai_voice_off')"
                 >
                   <component :is="isAutoVoiceEnabled ? Volume2 : VolumeX" class="w-4 h-4" />
                   <span v-if="isAutoVoiceEnabled && isSpeaking" class="flex gap-0.5 items-center">
@@ -1928,7 +2090,7 @@ const filteredSessions = computed(() => {
             <div>
               <h2 class="text-3xl font-black text-[var(--text-main)] tracking-tight uppercase italic leading-none flex items-center gap-3">
                 <Database class="w-8 h-8 text-[var(--matrix-color)]" />
-                知识库管理
+                {{ tai知识库管理 }}
               </h2>
               <p class="text-[var(--text-muted)] text-xs font-bold tracking-[0.2em] uppercase mt-3 opacity-60">RAG KNOWLEDGE BASE / DOCUMENT INDEXING</p>
             </div>
@@ -1938,7 +2100,7 @@ const filteredSessions = computed(() => {
                 <input 
                   v-model="searchQuery"
                   type="text" 
-                  placeholder="搜索文档..."
+                  :placeholder="t(\'ai_search_docs\')"
                   class="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl pl-11 pr-4 py-2.5 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all min-w-[240px]"
                 />
               </div>
@@ -1956,7 +2118,7 @@ const filteredSessions = computed(() => {
                 <Loader2 v-else class="w-8 h-8 animate-spin" />
               </div>
               <div class="text-center">
-                <h3 class="font-bold text-[var(--text-main)] uppercase tracking-widest">{{ isUploadingKB ? '正在上传...' : '上传新文档' }}</h3>
+                <h3 class="font-bold text-[var(--text-main)] uppercase tracking-widest">{{ isUploadingKB ? t('ai_uploading_now') : t('ai.upload_new_doc') }}</h3>
                 <p class="text-xs text-[var(--text-muted)] mt-2 font-medium opacity-50 uppercase tracking-tighter">PDF, MD, DOCX, CODE, TXT...</p>
               </div>
             </div>
@@ -2003,7 +2165,7 @@ const filteredSessions = computed(() => {
               <Database class="w-10 h-10" />
             </div>
             <h3 class="text-xl font-black text-[var(--text-main)] tracking-tight uppercase italic">{{ t('ai_no_data') }}</h3>
-            <p class="text-[var(--text-muted)] text-sm mt-4 max-w-xs mx-auto font-medium leading-relaxed uppercase tracking-widest opacity-40">上传文档以开始构建机器人的本地知识库</p>
+            <p class="text-[var(--text-muted)] text-sm mt-4 max-w-xs mx-auto font-medium leading-relaxed uppercase tracking-widest opacity-40">{ t('ai.upload_kb_desc') }</p>
           </div>
         </div>
       </div>
@@ -2202,12 +2364,211 @@ const filteredSessions = computed(() => {
               <input v-model.number="editingAgent.revenue_rate" type="number" step="0.0001" min="0" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-2xl px-5 py-3.5 text-[var(--text-main)] font-bold focus:outline-none focus:border-[var(--matrix-color)]/50 focus:ring-4 focus:ring-[var(--matrix-color)]/5 transition-all" />
             </div>
 
+            <!-- Digital Employee Section -->
+            <div class="space-y-4 col-span-2 p-6 rounded-3xl bg-[var(--bg-body)]/30 border border-[var(--border-color)]">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="p-2 rounded-xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
+                  <UserCircle class="w-5 h-5" />
+                </div>
+                <h3 class="text-xs font-black uppercase tracking-widest text-[var(--text-main)]">{{ 数字员工档案Digita }}</h3>
+              </div>
+              
+              <div class="grid grid-cols-3 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_employee_id') }}</label>
+                  <input v-model="editingAgent.employee_id" type="text" placeholder="EMP-001" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all" />
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_title') }}</label>
+                  <input v-model="editingAgent.title" type="text" :placeholder="t('ai.rd_assistant')" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all" />
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_department') }}</label>
+                  <input v-model="editingAgent.department" type="text" :placeholder="t('ai.core_rd')" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_level') }}</label>
+                  <select v-model="editingAgent.level" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all appearance-none cursor-pointer">
+                    <option value="P1">{{ P1助理Assistan }}</option>
+                    <option value="P2">{{ P2专员Speciali }}</option>
+                    <option value="P3">{{ P3高级Senior }}</option>
+                    <option value="P4">{{ P4专家Expert }}</option>
+                    <option value="P5">{{ P5资深专家Staff }}</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_onboarding_at') }}</label>
+                  <input v-model="editingAgent.onboarding_at" type="date" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all" />
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_kpi') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Trophy class="w-4 h-4 text-emerald-500" />
+                    <span class="text-sm font-black text-emerald-500">{{ editingAgent.kpi_score || 0 }}</span>
+                    <input v-model.number="editingAgent.kpi_score" type="range" min="0" max="100" class="flex-1 accent-emerald-500 h-1.5" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_salary_limit') }} (Token Budget)</label>
+                  <div class="flex items-center gap-3">
+                    <input v-model.number="editingAgent.salary_limit" type="number" placeholder="1000000" class="flex-1 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all" />
+                    <div class="flex flex-col">
+                      <span class="text-[9px] font-bold text-[var(--text-muted)] uppercase opacity-40">{{ t('ai_salary_token') }}</span>
+                      <span class="text-xs font-black text-[var(--matrix-color)]">{{ (editingAgent.salary_token || 0).toLocaleString() }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_online_status') }}</label>
+                  <select v-model="editingAgent.online_status" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all appearance-none cursor-pointer">
+                    <option value="online">{{ 在线Online }}</option>
+                    <option value="offline">{{ 离线Offline }}</option>
+                    <option value="busy">{{ 忙碌Busy }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ 技能集SkillsSet }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Wrench class="w-4 h-4 text-[var(--matrix-color)]" />
+                    <input v-model="editingAgent.skills" type="text" :placeholder="t(\t('ai.ai数据分析翻译搜索'))" class="flex-1 bg-transparent border-none text-xs text-[var(--text-main)] focus:outline-none" />
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ 直属主管Supervis }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Users class="w-4 h-4 text-blue-500" />
+                    <input v-model.number="editingAgent.supervisor_id" type="number" placeholder="0" class="flex-1 bg-transparent border-none text-xs text-[var(--text-main)] focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_roi') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Activity class="w-4 h-4 text-orange-500" />
+                    <span class="text-sm font-black text-orange-500">{{ editingAgent.roi_score || 0 }}</span>
+                    <input v-model.number="editingAgent.roi_score" type="range" min="0" max="100" class="flex-1 accent-orange-500 h-1.5" />
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_efficiency') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Zap class="w-4 h-4 text-yellow-500" />
+                    <span class="text-sm font-black text-yellow-500">{{ editingAgent.efficiency_score || 0 }}</span>
+                    <input v-model.number="editingAgent.efficiency_score" type="range" min="0" max="100" class="flex-1 accent-yellow-500 h-1.5" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_autonomy') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Cpu class="w-4 h-4 text-cyan-500" />
+                    <span class="text-sm font-black text-cyan-500">{{ editingAgent.autonomy_score || 0 }}</span>
+                    <input v-model.number="editingAgent.autonomy_score" type="range" min="0" max="100" class="flex-1 accent-cyan-500 h-1.5" />
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_version') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Layers class="w-4 h-4 text-purple-500" />
+                    <input v-model="editingAgent.version" type="text" placeholder="v1.0.0" class="flex-1 bg-transparent border-none text-xs text-[var(--text-main)] focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_sandbox') }}</label>
+                  <select v-model="editingAgent.sandbox_type" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all appearance-none cursor-pointer">
+                    <option value="none">{{ 无None }}</option>
+                    <option value="docker">{{ Docker隔离沙箱 }}</option>
+                    <option value="local">{ t('ai.local_restricted') }</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_memory') }}</label>
+                  <select v-model="editingAgent.memory_type" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all appearance-none cursor-pointer">
+                    <option value="rag">{{ RAG知识库检索 }}</option>
+                    <option value="redis">{{ Redis长期记忆 }}</option>
+                    <option value="active">{{ Active主动记忆Ma }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_task_count') }}</label>
+                  <div class="bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs font-bold text-[var(--text-main)]">
+                    {{ editingAgent.task_count || 0 }}
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_success_rate') }}</label>
+                  <div class="bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs font-bold text-emerald-500">
+                    {{ Math.round((editingAgent.success_rate || 0) * 100) }}%
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_active_task') }}</label>
+                  <div class="bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs font-bold text-[var(--matrix-color)] truncate">
+                    {{ editingAgent.active_task_id || 'IDLE' }}
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_sop_id') }}</label>
+                  <input v-model="editingAgent.sop_id" type="text" placeholder="SOP-DEV-001" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_token_usage') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Hash class="w-4 h-4 text-[var(--text-muted)]" />
+                    <span class="text-xs font-black text-[var(--text-main)]">{{ (editingAgent.token_usage || 0).toLocaleString() }}</span>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_cost_saved') }}</label>
+                  <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                    <Coins class="w-4 h-4 text-emerald-500" />
+                    <span class="text-xs font-black text-emerald-500">¥ {{ (editingAgent.cost_saved || 0).toLocaleString() }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_mcp_tools') }} (MCP Tools - 逗号分隔)</label>
+                <div class="flex items-center gap-3 bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5">
+                  <Terminal class="w-4 h-4 text-purple-500" />
+                  <input :value="editingAgent.mcp_tools?.join(', ')" @input="e => editingAgent.mcp_tools = (e.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(s => s)" type="text" placeholder="sandbox_exec, memory_recall, browser_navigate..." class="flex-1 bg-transparent border-none text-xs text-[var(--text-main)] focus:outline-none" />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_bio') }} (Persona Bio)</label>
+                <textarea v-model="editingAgent.bio" rows="3" :placeholder="t(\t('ai.ai描述该数字员工的性格背景与'))" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all resize-none"></textarea>
+              </div>
+            </div>
+
             <!-- Voice Settings -->
             <div class="space-y-3 col-span-2 p-6 rounded-3xl bg-[var(--bg-body)]/30 border border-[var(--border-color)]">
               <div class="flex items-center justify-between mb-4">
-                <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-60">{{ t('ai_voice_settings') || '语音设置' }}</label>
+                <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-60">{{ t('ai_voice_settings') || t('ai.voice_settings') }}</label>
                 <div class="flex items-center gap-2">
-                  <span class="text-xs text-[var(--text-muted)]">{{ t('ai_voice_enable') || '开启语音播报' }}</span>
+                  <span class="text-xs text-[var(--text-muted)]">{{ t('ai_voice_enable') || t('ai.voice_enable') }}</span>
                   <button 
                     @click="editingAgent.is_voice = !editingAgent.is_voice"
                     :class="[
@@ -2222,10 +2583,10 @@ const filteredSessions = computed(() => {
 
               <div v-if="editingAgent.is_voice" class="grid grid-cols-2 gap-6">
                 <div class="space-y-2">
-                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_voice_role') || '语音角色' }}</label>
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_voice_role') || t('ai.voice_role') }}</label>
                   <div class="relative">
                     <select v-model="editingAgent.voice_id" class="w-full bg-[var(--bg-body)]/50 border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all appearance-none cursor-pointer">
-                      <option value="" class="bg-[var(--bg-card)]">默认中文女声</option>
+                      <option value="" class="bg-[var(--bg-card)]">{ t('ai.default_zh_female') }</option>
                       <option v-for="v in voices" :key="v.voiceURI" :value="v.voiceURI" class="bg-[var(--bg-card)]">
                         {{ v.name }} ({{ v.lang }})
                       </option>
@@ -2234,7 +2595,7 @@ const filteredSessions = computed(() => {
                   </div>
                 </div>
                 <div class="space-y-2">
-                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_voice_rate') || '语速' }} ({{ editingAgent.voice_rate || 1.0 }})</label>
+                  <label class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] opacity-40 px-1">{{ t('ai_voice_rate') || t('ai.voice_rate') }} ({{ editingAgent.voice_rate || 1.0 }})</label>
                   <input v-model.number="editingAgent.voice_rate" type="range" min="0.5" max="2" step="0.1" class="w-full accent-[var(--matrix-color)]" />
                 </div>
               </div>

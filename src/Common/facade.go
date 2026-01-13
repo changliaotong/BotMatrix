@@ -48,7 +48,7 @@ func InitDB() error {
 
 // --- gorm_compat.go ---
 func InitGORM() error {
-	db, err := database.InitGORM(GlobalConfig)
+	db, err := database.ConnectGORM(GlobalConfig)
 	if err != nil {
 		return err
 	}

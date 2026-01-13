@@ -1,94 +1,238 @@
-<template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-900 text-white p-4">
-    <div class="max-w-md w-full bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-2xl">
-      <div class="text-center mb-8">
-        <h2 class="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">用户注册</h2>
-        <p class="text-slate-400 mt-2">创建您的 BotMatrix 账号</p>
-      </div>
-
-      <form @submit.prevent="handleRegister" class="space-y-6">
-        <div>
-          <label class="block text-sm font-medium text-slate-300 mb-2">用户名</label>
-          <input 
-            v-model="form.username" 
-            type="text" 
-            required
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all outline-none"
-            placeholder="请输入用户名"
-          >
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-300 mb-2">密码</label>
-          <input 
-            v-model="form.password" 
-            type="password" 
-            required
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all outline-none"
-            placeholder="请输入密码"
-          >
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-300 mb-2">确认密码</label>
-          <input 
-            v-model="form.confirmPassword" 
-            type="password" 
-            required
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all outline-none"
-            placeholder="请再次输入密码"
-          >
-        </div>
-        
-        <div class="pt-2">
-          <button 
-            type="submit" 
-            :disabled="loading"
-            class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded-xl transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ loading ? '注册中...' : '立即注册' }}
-          </button>
-        </div>
-      </form>
-
-      <div class="mt-8 text-center text-slate-400 text-sm">
-        已有账号？ 
-        <router-link to="/login" class="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">立即登录</router-link>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useSystemStore } from '@/stores/system';
+import { Bot, Lock, User, ArrowRight, Loader2, Languages, Check, ShieldCheck } from 'lucide-vue-next';
+import { type Language } from '@/utils/i18n';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const systemStore = useSystemStore();
+
+const t = (key: string) => systemStore.t(key);
 
 const loading = ref(false);
+const error = ref('');
 const form = reactive({
   username: '',
   password: '',
   confirmPassword: ''
 });
 
+const showLangPicker = ref(false);
+const langPickerRef = ref<HTMLElement | null>(null);
+
+const languages: { id: Language; nameKey: string }[] = [
+  { id: 'zh-CN', nameKey: 'lang_zh_cn' },
+  { id: 'zh-TW', nameKey: 'lang_zh_tw' },
+  { id: 'en-US', nameKey: 'lang_en_us' },
+  { id: 'ja-JP', nameKey: 'lang_ja_jp' }
+];
+
+const toggleLangPicker = () => {
+  showLangPicker.value = !showLangPicker.value;
+};
+
+const selectLang = (lang: Language) => {
+  systemStore.setLang(lang);
+  showLangPicker.value = false;
+};
+
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as Node;
+  if (langPickerRef.value && !langPickerRef.value.contains(target)) {
+    showLangPicker.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleClickOutside);
+});
+
 const handleRegister = async () => {
+  const trimmedUsername = form.username.trim();
+  const trimmedPassword = form.password.trim();
+  
+  if (!trimmedUsername || !trimmedPassword) return;
+
   if (form.password !== form.confirmPassword) {
-    alert('两次输入的密码不一致');
+    error.value = t('password_mismatch');
     return;
   }
 
   loading.value = true;
+  error.value = '';
+  
   try {
-    const success = await authStore.register(form.username, form.password);
+    const success = await authStore.register(trimmedUsername, trimmedPassword);
     if (success) {
-      alert('注册成功，请登录');
-      router.push({ name: 'login' });
+      router.push({ 
+        name: 'login',
+        query: { 
+          redirect: router.currentRoute.value.query.redirect,
+          registered: 'true'
+        }
+      });
+    } else {
+      error.value = t('register_failed');
     }
   } catch (err: any) {
-    alert(err.response?.data?.error || '注册失败，请重试');
+    error.value = err.response?.data?.error || t('register_failed');
   } finally {
     loading.value = false;
   }
 };
 </script>
+
+<template>
+  <div class="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center p-4 relative overflow-hidden">
+    <!-- Matrix Rain Background Placeholder -->
+    <div class="absolute inset-0 opacity-10 pointer-events-none">
+      <div class="absolute inset-0 bg-gradient-to-b from-transparent via-matrix/20 to-transparent animate-pulse"></div>
+    </div>
+
+    <div class="w-full max-w-md relative">
+      <div class="p-8 sm:p-12 rounded-[2.5rem] bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 shadow-2xl space-y-8 relative">
+        <!-- i18n Selector -->
+        <div class="absolute right-6 top-6" ref="langPickerRef">
+          <button 
+            @click="toggleLangPicker"
+            class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-matrix transition-all flex items-center gap-2 group"
+          >
+            <Languages class="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <span class="text-[10px] font-bold uppercase tracking-widest hidden sm:block">{{ systemStore.currentLang }}</span>
+          </button>
+
+          <!-- Dropdown -->
+          <div 
+            v-if="showLangPicker"
+            class="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl border border-black/5 dark:border-white/5 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+          >
+            <div class="p-2">
+              <button 
+                v-for="lang in languages" 
+                :key="lang.id"
+                @click="selectLang(lang.id)"
+                class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all"
+                :class="[
+                  systemStore.currentLang === lang.id 
+                    ? 'bg-matrix/10 text-matrix' 
+                    : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-400'
+                ]"
+              >
+                {{ t(lang.nameKey) }}
+                <Check v-if="systemStore.currentLang === lang.id" class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logo -->
+        <div class="text-center space-y-4">
+          <div class="inline-flex p-5 rounded-3xl bg-matrix/10 text-matrix animate-bounce-slow">
+            <Bot class="w-10 h-10" />
+          </div>
+          <div class="space-y-1">
+            <h1 class="text-3xl font-black text-[var(--text-main)] tracking-tighter uppercase italic">{{ t('register_title') }}</h1>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">{{ t('register_subtitle') }}</p>
+          </div>
+        </div>
+
+        <!-- Form -->
+        <form @submit.prevent="handleRegister" class="space-y-6">
+          <div class="space-y-4">
+            <div class="relative group">
+              <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-matrix transition-colors">
+                <User class="w-5 h-5" />
+              </div>
+              <input 
+                v-model="form.username"
+                type="text" 
+                :placeholder="t('username')" 
+                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all text-[var(--text-main)] font-bold placeholder:text-gray-400"
+                required
+              />
+            </div>
+            <div class="relative group">
+              <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-matrix transition-colors">
+                <Lock class="w-5 h-5" />
+              </div>
+              <input 
+                v-model="form.password"
+                type="password" 
+                :placeholder="t('password')" 
+                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all text-[var(--text-main)] font-bold placeholder:text-gray-400"
+                required
+              />
+            </div>
+            <div class="relative group">
+              <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-matrix transition-colors">
+                <ShieldCheck class="w-5 h-5" />
+              </div>
+              <input 
+                v-model="form.confirmPassword"
+                type="password" 
+                :placeholder="t('confirm_password')" 
+                class="w-full bg-gray-50 dark:bg-black border border-black/5 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-matrix transition-all text-[var(--text-main)] font-bold placeholder:text-gray-400"
+                required
+              />
+            </div>
+          </div>
+
+          <div v-if="error" class="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold text-center">
+            {{ error }}
+          </div>
+
+          <button 
+            type="submit" 
+            :disabled="loading"
+            class="w-full bg-matrix hover:bg-matrix/90 disabled:opacity-50 text-black font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all group active:scale-95 shadow-lg shadow-matrix/20 uppercase tracking-widest"
+          >
+            <template v-if="loading">
+              <Loader2 class="w-5 h-5 animate-spin" /> {{ t('registering') }}
+            </template>
+            <template v-else>
+              {{ t('register_now') }} <ArrowRight class="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </template>
+          </button>
+        </form>
+
+        <div class="text-center space-y-4">
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">
+            {{ t('already_have_account') }} 
+            <router-link :to="{ name: 'login', query: { redirect: router.currentRoute.value.query.redirect } }" class="text-matrix hover:underline decoration-2 underline-offset-4 transition-all">
+              {{ t('login_now') }}
+            </router-link>
+          </p>
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest pt-4">
+            {{ t('copyright') }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.text-matrix {
+  color: var(--matrix-color);
+}
+.bg-matrix {
+  background-color: var(--matrix-color);
+}
+.bg-matrix\/10 {
+  background-color: rgba(0, 255, 65, 0.1);
+}
+.animate-bounce-slow {
+  animation: bounce 3s infinite;
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+</style>

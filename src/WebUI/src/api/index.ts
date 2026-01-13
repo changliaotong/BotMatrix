@@ -1,7 +1,23 @@
 import axios from 'axios';
 
+const getBaseURL = () => {
+  const envBaseURL = import.meta.env.VITE_API_BASE_URL;
+  if (envBaseURL) return envBaseURL;
+  
+  // 如果没有配置环境变量，则根据当前访问的域名动态生成
+  // 默认假设后端在 5000 端口
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    // 如果是开发环境且是通过 IP 访问，或者是非 localhost 访问
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `${protocol}//${hostname}:5000`;
+    }
+  }
+  return '/';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/',
+  baseURL: getBaseURL(),
   timeout: 10000,
 });
 

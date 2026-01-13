@@ -727,7 +727,7 @@ func (m *Manager) GetOrLoadUser(username string) (*types.User, bool) {
 	}
 
 	var u models.User
-	result := m.GORMDB.Where("username = ?", username).First(&u)
+	result := m.GORMDB.Where("\"Username\" = ?", username).First(&u)
 	if result.Error != nil {
 		return nil, false
 	}
@@ -767,7 +767,7 @@ func (m *Manager) EnsureAdminUser() error {
 	}
 
 	var existingAdmin models.User
-	result := m.GORMDB.Where("username = ?", "admin").First(&existingAdmin)
+	result := m.GORMDB.Where("\"Username\" = ?", "admin").First(&existingAdmin)
 	if result.Error == nil {
 		// 如果已存在，确保其为激活状态且是管理员，并更新密码以匹配配置
 		password := m.Config.DefaultAdminPassword
@@ -777,13 +777,13 @@ func (m *Manager) EnsureAdminUser() error {
 		hash, _ := utils.HashPassword(password)
 
 		updates := map[string]interface{}{
-			"active":   true,
-			"is_admin": true,
+			"Active":  true,
+			"IsAdmin": true,
 		}
 
 		// 只有当密码不匹配时才更新密码，避免不必要的哈希计算
 		if !utils.CheckPassword(password, existingAdmin.PasswordHash) {
-			updates["password_hash"] = hash
+			updates["PasswordHash"] = hash
 			log.Printf("Admin user 'admin' password updated to match config")
 		}
 
@@ -815,7 +815,7 @@ func (m *Manager) EnsureAdminUser() error {
 		user.Active = true
 		user.IsAdmin = true
 		user.SessionVersion = existingAdmin.SessionVersion
-		if h, ok := updates["password_hash"].(string); ok {
+		if h, ok := updates["PasswordHash"].(string); ok {
 			user.PasswordHash = h
 		} else {
 			user.PasswordHash = existingAdmin.PasswordHash

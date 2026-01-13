@@ -152,13 +152,13 @@ const getWorkerName = (worker: any) => {
     </div>
 
     <!-- Error State -->
-    <div v-if="error" class="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-500">
+    <div v-if="error" class="p-4 rounded-2xl bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 flex items-center gap-3 text-[var(--status-offline)]">
       <AlertCircle class="w-5 h-5" />
       <div class="flex-1">
         <p class="text-xs font-bold uppercase tracking-widest">{{ t('error') }}</p>
         <p class="text-sm font-black">{{ error }}</p>
       </div>
-      <button @click="fetchWorkers" class="px-3 py-1 rounded-lg bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
+      <button @click="fetchWorkers" class="px-3 py-1 rounded-lg bg-[var(--status-offline)] text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
         {{ t('retry') }}
       </button>
     </div>
@@ -179,7 +179,7 @@ const getWorkerName = (worker: any) => {
             <div>
               <h3 class="font-black text-[var(--text-main)] break-all">{{ getWorkerName(worker) }}</h3>
               <div class="flex items-center gap-2 mt-1">
-                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span class="w-2 h-2 rounded-full bg-[var(--status-online)] animate-pulse"></span>
                 <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t(worker.status.toLowerCase()) }}</span>
               </div>
             </div>

@@ -95,11 +95,11 @@ const handleBatchAction = async (action: 'start' | 'stop') => {
   );
 
   if (targets.length === 0) {
-    alert(`没有可${action === 'start' ? '启动' : '停止'}的插件`);
+    alert(`没有可${action === 'start' ? t('common.start') : t('common.stop')}的插件`);
     return;
   }
 
-  if (!confirm(`确定要${action === 'start' ? '批量启动' : '批量停止'} ${targets.length} 个插件吗？`)) {
+  if (!confirm(`确定要${action === 'start' ? t('plugins.batch_start') : t('plugins.batch_stop')} ${targets.length} 个插件吗？`)) {
     return;
   }
 
@@ -213,10 +213,10 @@ onUnmounted(() => {
 
 const getStatusColor = (status: string) => {
   switch (status?.toLowerCase()) {
-    case 'running': return 'text-green-500 bg-green-500/10 border-green-500/20';
-    case 'stopped': return 'text-gray-500 bg-gray-500/10 border-gray-500/20';
-    case 'error': return 'text-red-500 bg-red-500/10 border-red-500/20';
-    default: return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+    case 'running': return 'text-[var(--status-online)] bg-[var(--status-online)]/10 border-[var(--status-online)]/20';
+    case 'stopped': return 'text-[var(--text-muted)] bg-[var(--text-muted)]/10 border-[var(--text-muted)]/20';
+    case 'error': return 'text-[var(--status-offline)] bg-[var(--status-offline)]/10 border-[var(--status-offline)]/20';
+    default: return 'text-[var(--status-busy)] bg-[var(--status-busy)]/10 border-[var(--status-busy)]/20';
   }
 };
 
@@ -225,7 +225,7 @@ const getTypeLabel = (type: string) => {
 };
 
 const getTypeColor = (type: string) => {
-  return type === 'central' ? 'text-purple-500 bg-purple-500/10 border-purple-500/20' : 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+  return type === 'central' ? 'text-[var(--matrix-color)] bg-[var(--matrix-color)]/10 border-[var(--matrix-color)]/20' : 'text-blue-400 bg-blue-400/10 border-blue-400/20';
 };
 
 </script>
@@ -235,8 +235,8 @@ const getTypeColor = (type: string) => {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-black text-[var(--text-main)] tracking-tight">插件管理</h1>
-        <p class="text-sm font-bold text-[var(--text-muted)] uppercase tracking-widest">管理 Nexus 中心端和所有 Worker 节点的插件</p>
+        <h1 class="text-2xl font-black text-[var(--text-main)] tracking-tight">{ t('plugins.management') }</h1>
+        <p class="text-sm font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ 管理Nexus }}</p>
       </div>
       
       <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -245,7 +245,7 @@ const getTypeColor = (type: string) => {
           <input 
             v-model="searchQuery"
             type="text" 
-            placeholder="搜索插件..."
+            :placeholder="t(\t('plugins.plugins搜索插件'))"
             class="w-full pl-11 pr-4 py-3 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl text-xs font-bold text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all"
           >
         </div>
@@ -258,14 +258,14 @@ const getTypeColor = (type: string) => {
             :class="['px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all', 
               filterType === type ? 'bg-[var(--matrix-color)] text-black' : 'text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5']"
           >
-            {{ type === 'all' ? '全部' : (type === 'central' ? 'Nexus' : 'Worker') }}
+            {{ type === 'all' ? t('common.all') : (type === 'central' ? 'Nexus' : 'Worker') }}
           </button>
         </div>
 
         <button 
           @click="fetchPlugins"
           class="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[var(--matrix-color)]/30 transition-all group"
-          title="刷新列表"
+          :title="t('plugins.refresh_list')"
         >
           <RefreshCw class="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" :class="{ 'animate-spin': loading }" />
         </button>
@@ -307,32 +307,32 @@ const getTypeColor = (type: string) => {
           <button 
             @click="handleBatchAction('start')"
             :disabled="batchLoading"
-            class="px-4 py-3 rounded-2xl bg-green-500/10 hover:bg-green-500/20 text-green-500 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
+            class="px-4 py-3 rounded-2xl bg-[var(--status-online)]/10 hover:bg-[var(--status-online)]/20 text-[var(--status-online)] text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
           >
             <Play class="w-4 h-4" :class="{ 'animate-pulse': batchLoading }" />
-            全部启动
+            {{ tplugin }}
           </button>
           <button 
             @click="handleBatchAction('stop')"
             :disabled="batchLoading"
-            class="px-4 py-3 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
+            class="px-4 py-3 rounded-2xl bg-[var(--status-offline)]/10 hover:bg-[var(--status-offline)]/20 text-[var(--status-offline)] text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
           >
             <Square class="w-4 h-4" :class="{ 'animate-pulse': batchLoading }" />
-            全部停止
+            {{ tplugin }}
           </button>
         </div>
       </div>
     </div>
 
     <!-- Error State -->
-    <div v-if="error" class="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-500">
+    <div v-if="error" class="p-4 rounded-2xl bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 flex items-center gap-3 text-[var(--status-offline)]">
       <AlertCircle class="w-5 h-5" />
       <div class="flex-1">
-        <p class="text-xs font-bold uppercase tracking-widest">错误</p>
+        <p class="text-xs font-bold uppercase tracking-widest">{ t('common.error') }</p>
         <p class="text-sm font-black">{{ error }}</p>
       </div>
-      <button @click="fetchPlugins" class="px-3 py-1 rounded-lg bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
-        重试
+      <button @click="fetchPlugins" class="px-3 py-1 rounded-lg bg-[var(--status-offline)] text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
+        {{ t(\'common.retry\') }}
       </button>
     </div>
 
@@ -363,15 +363,15 @@ const getTypeColor = (type: string) => {
             <div :class="getStatusColor(plugin.state)" class="px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest">
               {{ plugin.state }}
             </div>
-            <div v-if="!plugin.online" class="px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/20 text-red-500 text-[8px] font-black uppercase tracking-widest">
-              节点离线
+            <div v-if="!plugin.online" class="px-2 py-0.5 rounded-md bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 text-[var(--status-offline)] text-[8px] font-black uppercase tracking-widest">
+              {{ tplugin }}
             </div>
           </div>
         </div>
 
         <!-- Description -->
         <p class="text-xs text-[var(--text-muted)] mb-6 line-clamp-2 flex-1">
-          {{ plugin.description || '暂无描述' }}
+          {{ plugin.description || t('plugins.no_description') }}
         </p>
 
         <!-- Metadata -->
@@ -392,40 +392,40 @@ const getTypeColor = (type: string) => {
             v-if="plugin.state !== 'running'"
             @click="handleAction(plugin, 'start')"
             :disabled="!plugin.online || actionLoading === `${plugin.source}-${plugin.id}-start`"
-            class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-500 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-[var(--status-online)]/10 hover:bg-[var(--status-online)]/20 text-[var(--status-online)] text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Play class="w-3 h-3" :class="{ 'animate-pulse': actionLoading === `${plugin.source}-${plugin.id}-start` }" />
-            启动
+            {{ t(\'common.start\') }}
           </button>
           <button 
             v-if="plugin.state === 'running'"
             @click="handleAction(plugin, 'stop')"
             :disabled="!plugin.online || actionLoading === `${plugin.source}-${plugin.id}-stop`"
-            class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-[var(--status-offline)]/10 hover:bg-[var(--status-offline)]/20 text-[var(--status-offline)] text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Square class="w-3 h-3" :class="{ 'animate-pulse': actionLoading === `${plugin.source}-${plugin.id}-stop` }" />
-            停止
+            {{ t(\'common.stop\') }}
           </button>
           <button 
             @click="handleAction(plugin, 'restart')"
             :disabled="!plugin.online || actionLoading === `${plugin.source}-${plugin.id}-restart`"
-            class="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            :title="plugin.online ? '重启' : '节点离线无法重启'"
+            class="p-2 rounded-xl bg-blue-400/10 hover:bg-blue-400/20 text-blue-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            :title="plugin.online ? t('common.restart') : t('plugins.node_offline_no_restart')"
           >
             <RotateCcw class="w-4 h-4" :class="{ 'animate-spin': actionLoading === `${plugin.source}-${plugin.id}-restart` }" />
           </button>
           <button 
             @click="handleAction(plugin, 'reload')"
             :disabled="!plugin.online || actionLoading === `${plugin.source}-${plugin.id}-reload`"
-            class="p-2 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            :title="plugin.online ? '重载配置' : '节点离线无法重载'"
+            class="p-2 rounded-xl bg-[var(--status-busy)]/10 hover:bg-[var(--status-busy)]/20 text-[var(--status-busy)] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            :title="plugin.online ? t('plugins.reload_config') : t('plugins.node_offline_no_reload')"
           >
             <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': actionLoading === `${plugin.source}-${plugin.id}-reload` }" />
           </button>
           <button 
             @click="handleDelete(plugin)"
             :disabled="!plugin.online || actionLoading === `${plugin.source}-${plugin.id}-delete`"
-            class="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            class="p-2 rounded-xl bg-[var(--status-offline)]/10 hover:bg-[var(--status-offline)]/20 text-[var(--status-offline)] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             :title="t('delete_plugin')"
           >
             <Trash2 class="w-4 h-4" :class="{ 'animate-pulse': actionLoading === `${plugin.source}-${plugin.id}-delete` }" />
@@ -434,7 +434,7 @@ const getTypeColor = (type: string) => {
 
         <div v-else class="flex items-center justify-center gap-2 mt-auto py-2 rounded-xl bg-gray-500/5 border border-dashed border-gray-500/20">
           <ShieldCheck class="w-3 h-3 text-gray-400" />
-          <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">核心组件 (只读)</span>
+          <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">{{ 核心组件只读 }}</span>
         </div>
       </div>
     </div>
@@ -442,7 +442,7 @@ const getTypeColor = (type: string) => {
     <!-- Empty State -->
     <div v-if="!loading && filteredPlugins.length === 0" class="flex flex-col items-center justify-center py-20 text-[var(--text-muted)]">
       <Box class="w-16 h-16 mb-4 opacity-20" />
-      <p class="text-sm font-bold uppercase tracking-widest">未找到插件</p>
+      <p class="text-sm font-bold uppercase tracking-widest">{ t('plugins.not_found') }</p>
     </div>
   </div>
 </template>

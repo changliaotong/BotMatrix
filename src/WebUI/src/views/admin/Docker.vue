@@ -83,9 +83,9 @@ const showLogs = async (containerId: string) => {
 };
 
 const getStatusColor = (status: string) => {
-  if (status.includes('Up')) return 'text-green-500 bg-green-500/10 border-green-500/20';
-  if (status.includes('Exited')) return 'text-red-500 bg-red-500/10 border-red-500/20';
-  return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+  if (status.includes('Up')) return 'text-[var(--status-online)] bg-[var(--status-online)]/10 border-[var(--status-online)]/20';
+  if (status.includes('Exited')) return 'text-[var(--status-offline)] bg-[var(--status-offline)]/10 border-[var(--status-offline)]/20';
+  return 'text-[var(--status-busy)] bg-[var(--status-busy)]/10 border-[var(--status-busy)]/20';
 };
 
 const filteredContainers = () => {
@@ -163,7 +163,7 @@ onUnmounted(() => {
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+          <div class="p-3 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)]">
             <Box class="w-6 h-6" />
           </div>
           <div>
@@ -174,7 +174,7 @@ onUnmounted(() => {
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-green-500/10 text-green-500">
+          <div class="p-3 rounded-2xl bg-[var(--status-online)]/10 text-[var(--status-online)]">
             <CheckCircle2 class="w-6 h-6" />
           </div>
           <div>
@@ -187,7 +187,7 @@ onUnmounted(() => {
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-red-500/10 text-red-500">
+          <div class="p-3 rounded-2xl bg-[var(--status-offline)]/10 text-[var(--status-offline)]">
             <XCircle class="w-6 h-6" />
           </div>
           <div>
@@ -200,7 +200,7 @@ onUnmounted(() => {
       </div>
       <div class="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]">
         <div class="flex items-center gap-4">
-          <div class="p-3 rounded-2xl bg-yellow-500/10 text-yellow-500">
+          <div class="p-3 rounded-2xl bg-[var(--status-busy)]/10 text-[var(--status-busy)]">
             <Activity class="w-6 h-6" />
           </div>
           <div>
@@ -240,7 +240,7 @@ onUnmounted(() => {
                   <span class="text-[10px] font-bold text-[var(--text-main)] opacity-60">{{ container.id.substring(0, 12) }}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('image') }}:</span>
+                  <span class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('docker_image') }}:</span>
                   <span class="text-[10px] font-bold text-[var(--text-main)] opacity-60">{{ container.image }}</span>
                 </div>
               </div>
@@ -263,7 +263,7 @@ onUnmounted(() => {
               <button 
                 v-if="!container.status.includes('Up')"
                 @click="handleAction(container.id, 'start')"
-                class="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500 hover:text-[var(--sidebar-text)] transition-all"
+                class="p-2.5 rounded-xl bg-[var(--status-online)]/10 border border-[var(--status-online)]/20 text-[var(--status-online)] hover:bg-[var(--status-online)] hover:text-[var(--sidebar-text-active)] transition-all"
                 :title="t('start')"
               >
                 <Play class="w-4 h-4" />
@@ -271,7 +271,7 @@ onUnmounted(() => {
               <button 
                 v-else
                 @click="handleAction(container.id, 'stop')"
-                class="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-[var(--sidebar-text)] transition-all"
+                class="p-2.5 rounded-xl bg-[var(--status-busy)]/10 border border-[var(--status-busy)]/20 text-[var(--status-busy)] hover:bg-[var(--status-busy)] hover:text-[var(--sidebar-text-active)] transition-all"
                 :title="t('stop')"
               >
                 <Square class="w-4 h-4" />
@@ -279,7 +279,7 @@ onUnmounted(() => {
               
               <button 
                 @click="handleAction(container.id, 'restart')"
-                class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500 hover:text-[var(--sidebar-text)] transition-all"
+                class="p-2.5 rounded-xl bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-[var(--sidebar-text-active)] transition-all"
                 :title="t('restart')"
               >
                 <RotateCcw class="w-4 h-4" />
@@ -295,7 +295,7 @@ onUnmounted(() => {
 
               <button 
                 @click="handleAction(container.id, 'delete')"
-                class="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-[var(--sidebar-text)] transition-all"
+                class="p-2.5 rounded-xl bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 text-[var(--status-offline)] hover:bg-[var(--status-offline)] hover:text-[var(--sidebar-text-active)] transition-all"
                 :title="t('delete')"
               >
                 <Trash2 class="w-4 h-4" />

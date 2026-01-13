@@ -1,21 +1,8 @@
 import { defineStore } from 'pinia';
-import { type Language, t } from '../utils/i18n';
+import { type Language, t, default as i18n } from '../utils/i18n';
 
-export type Style = 'classic' | 'matrix' | 'xp' | 'ios' | 'kawaii' | 'custom-style';
+export type Style = 'classic' | 'matrix' | 'industrial';
 export type Mode = 'light' | 'dark';
-
-export interface CustomStyleConfig {
-  '--custom-bg-body': string;
-  '--custom-bg-card': string;
-  '--custom-bg-header': string;
-  '--custom-bg-sidebar': string;
-  '--custom-text-main': string;
-  '--custom-text-muted': string;
-  '--custom-border-color': string;
-  '--custom-matrix-color': string;
-  '--custom-radius-main'?: string;
-  '--custom-radius-card'?: string;
-}
 
 export interface MenuItem {
   id: string;
@@ -46,15 +33,17 @@ export const useSystemStore = defineStore('system', {
       return 'en-US';
     };
 
-    const savedCustomStyle = localStorage.getItem('wxbot_custom_style_config');
+    const getInitialStyle = (): Style => {
+      const saved = localStorage.getItem('wxbot_style') as Style;
+      return (saved === 'classic' || saved === 'matrix' || saved === 'industrial') ? saved : 'industrial';
+    };
 
     return {
       uptime: '0m',
       currentTime: new Date().toLocaleTimeString(),
       lang: getInitialLang(),
-      style: (localStorage.getItem('wxbot_style') as Style) || 'matrix',
+      style: getInitialStyle(),
       mode: (localStorage.getItem('wxbot_mode') as Mode) || 'dark',
-      customStyleConfig: savedCustomStyle ? JSON.parse(savedCustomStyle) as CustomStyleConfig : null,
       neuralLinkActive: true,
       isSidebarCollapsed: localStorage.getItem('wxbot_sidebar_collapsed') === 'true',
       showMobileMenu: false,
@@ -66,6 +55,7 @@ export const useSystemStore = defineStore('system', {
           items: [
             { id: 'dashboard', icon: 'LayoutDashboard', titleKey: 'dashboard' },
             { id: 'bots', icon: 'Bot', titleKey: 'bots' },
+            { id: 'bot-setup', icon: 'Wrench', titleKey: 'bot_setup', adminOnly: true },
             { id: 'contacts', icon: 'Users', titleKey: 'contacts' },
             { id: 'messages', icon: 'MessageSquare', titleKey: 'messages' },
             { id: 'tasks', icon: 'ListTodo', titleKey: 'tasks' },
@@ -102,7 +92,7 @@ export const useSystemStore = defineStore('system', {
   getters: {
     isDark: (state) => state.mode === 'dark',
     t: (state) => (key: string) => {
-      const local = t(state.lang, key);
+      const local = t(key);
       if (local !== key) return local;
       return state.aiTranslations[`${state.lang}:${key}`] || key;
     },
@@ -145,6 +135,9 @@ export const useSystemStore = defineStore('system', {
     setLang(lang: Language) {
       this.lang = lang;
       localStorage.setItem('wxbot_lang', lang);
+      if (i18n && i18n.global) {
+        (i18n.global.locale as any).value = lang;
+      }
     },
     setStyle(style: Style) {
       this.style = style;
@@ -153,55 +146,16 @@ export const useSystemStore = defineStore('system', {
     },
     setMode(mode: Mode) {
       this.mode = mode;
+      localStorage.setItem('theme', mode); // Sync with EarlyMeow's key
       localStorage.setItem('wxbot_mode', mode);
       this.applyTheme();
     },
-    setCustomStyle(config: CustomStyleConfig) {
-      this.customStyleConfig = config;
-      localStorage.setItem('wxbot_custom_style_config', JSON.stringify(config));
-      this.setStyle('custom-style');
-    },
-    async generateAIColors(primaryColor: string) {
-      // Simulation of AI color generation
-      // In a real app, this would call an LLM or a color palette API
-      const isDark = this.mode === 'dark';
-      
-      const config: CustomStyleConfig = {
-        '--custom-matrix-color': primaryColor,
-        '--custom-bg-body': isDark ? '#000000' : '#ffffff',
-        '--custom-bg-card': isDark ? 'rgba(30, 30, 30, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-        '--custom-bg-header': isDark ? 'rgba(20, 20, 20, 0.9)' : 'rgba(240, 240, 240, 0.9)',
-        '--custom-bg-sidebar': isDark ? '#111111' : '#f8f8f8',
-        '--custom-text-main': isDark ? '#ffffff' : '#000000',
-        '--custom-text-muted': isDark ? '#888888' : '#666666',
-        '--custom-border-color': isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-        '--custom-radius-main': '16px',
-        '--custom-radius-card': '24px',
-      };
-
-      this.setCustomStyle(config);
-    },
     applyTheme() {
       // Update DOM classes
-      document.documentElement.classList.remove('classic', 'matrix', 'xp', 'ios', 'kawaii', 'custom-style', 'light', 'dark');
+      document.documentElement.classList.remove('classic', 'matrix', 'industrial', 'light', 'dark');
       document.documentElement.classList.add(this.style);
       document.documentElement.classList.add(this.mode);
       
-      // If custom style, apply variables to root
-      if (this.style === 'custom-style' && this.customStyleConfig) {
-        Object.entries(this.customStyleConfig).forEach(([key, value]) => {
-          document.documentElement.style.setProperty(key, value);
-        });
-      } else {
-        // Clear custom variables if not using custom style
-        const vars = [
-          '--custom-bg-body', '--custom-bg-card', '--custom-bg-header', '--custom-bg-sidebar',
-          '--custom-text-main', '--custom-text-muted', '--custom-border-color', '--custom-matrix-color',
-          '--custom-radius-main', '--custom-radius-card'
-        ];
-        vars.forEach(v => document.documentElement.style.removeProperty(v));
-      }
-
       // Also add 'dark' class if mode is dark for Tailwind
       if (this.mode === 'dark') {
         document.documentElement.classList.add('dark');

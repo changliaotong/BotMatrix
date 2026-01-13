@@ -1,102 +1,95 @@
-# BotMatrix 部署指南
+# 部署与系统运维指南 (Deployment & Operations)
 
-> [🌐 English](../en-US/DEPLOY.md) | [简体中文](DEPLOY.md)
 > [⬅️ 返回文档中心](README.md) | [🏠 返回项目主页](../../README.md)
 
-本指南介绍如何使用 Docker 部署 **BotMatrix** 生态系统。
+本指南详细介绍了 BotMatrix 生态系统的环境准备、容器化部署、系统配置、性能优化以及日常运维操作。
 
-## 1. 环境准备
+---
 
-*   安装 **Docker** 和 **Docker Compose**。
-*   安装 **Git**。
-*   (可选) **Redis** 服务器用于数据持久化 (生产环境推荐)。
+## 1. 环境准备与快速开始
 
-## 2. 快速开始
+### 1.1 环境要求
+- **Docker** & **Docker Compose**: 核心部署工具。
+- **Redis**: 用于数据持久化与异步任务队列 (生产环境推荐)。
+- **PostgreSQL**: 核心数据库存储。
 
+### 1.2 快速启动
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/changliaotong/BotMatrix.git
 cd BotMatrix
 
-# 2. 配置所需的机器人 (见第 3 节)
-# 示例: 配置 KookBot
+# 2. 配置机器人 (以 KookBot 为例)
 cp KookBot/config.sample.json KookBot/config.json
-# 编辑 KookBot/config.json 并填入你的 Token
+# 编辑 config.json 并填入 Token
 
 # 3. 启动系统
 docker-compose up -d --build
 ```
 
-## 3. 配置说明
+---
 
-BotMatrix 采用模块化架构。你只需要配置并启用你打算使用的机器人。
+## 2. 核心配置说明 (BotNexus)
 
-### 🧠 BotNexus (核心管理器)
-*   **文件**: `docker-compose.yml` (环境变量) 或 `config.json` (持久化配置)
-*   **端口**: `5000` (Web 管理后台), `3001` (WebSocket 网关 - 默认)
-*   **配置**:
-    *   **持久化配置**: 支持同目录下的 `config.json` 文件。该文件可以通过 WebUI (管理员设置) 进行管理。
-    *   **环境变量** (覆盖 `config.json`):
-        *   `WS_PORT`: WebSocket 网关端口 (例如 `:3001`)。
-        *   `WEBUI_PORT`: Web 管理后台端口 (例如 `:5000`)。
-        *   `REDIS_ADDR`: Redis 服务器地址 (例如 `127.0.0.1:6379`)。
-        *   `REDIS_PWD`: Redis 密码。
-        *   `JWT_SECRET`: 用于 JWT Token 生成的密钥。
-        *   **数据库配置** (PostgreSQL 必填):
-            *   `DB_HOST`: PostgreSQL 主机名
-            *   `DB_PORT`: PostgreSQL 端口
-            *   `DB_USER`: PostgreSQL 用户名
-            *   `DB_PASSWORD`: PostgreSQL 密码
-            *   `DB_NAME`: PostgreSQL 数据库名
-            *   `DB_SSL_MODE`: PostgreSQL SSL 模式 (例如 `disable`)
-    *   **WebUI 配置**: 以管理员身份登录后，你可以直接在 **系统设置** 选项卡中修改这些设置。大多数更改 (如 Redis) 会立即生效，而端口更改则需要重启服务。
+BotNexus 采用模块化架构，支持通过配置文件、环境变量或 WebUI 进行管理。
 
-### 🟢 WxBot (微信)
-*   **类型**: Python / OneBot
-*   **登录**: 通过日志或管理后台扫描二维码。
-*   **配置**: `docker-compose.yml` (`BOT_SELF_ID`)。
+- **Web 管理后台**: 默认端口 `5000`。
+- **WebSocket 网关**: 默认端口 `3001`。
+- **关键环境变量**:
+    - `REDIS_ADDR`: Redis 地址 (例: `127.0.0.1:6379`)。
+    - `DB_HOST`/`DB_USER`/`DB_PASSWORD`: 数据库连接信息。
+    - `JWT_SECRET`: 用于安全认证的密钥。
 
-### 🐧 TencentBot (腾讯官方 QQ)
-*   **类型**: Go / BotGo SDK
-*   **配置**: `TencentBot/config.json`
-    ```json
-    {
-      "app_id": 123456,
-      "secret": "YOUR_SECRET",
-      "sandbox": false
-    }
-    ```
+---
 
-### 🐱 NapCat (个人 QQ)
-*   **类型**: Docker / OneBot 11 (NTQQ)
-*   **配置**: `NapCat/config/onebot11.json` (已为 BotMatrix 预配置)
-*   **登录**: 通过 WebUI (`http://localhost:6099/webui`) 或日志扫描二维码。
+## 3. 服务端管理与运维 (Server Manual)
 
-### 钉 DingTalkBot (钉钉)
-*   **类型**: Go / Webhook & Stream
-*   **配置**: `DingTalkBot/config.json`
-    ```json
-    {
-      "client_id": "YOUR_CLIENT_ID",
-      "client_secret": "YOUR_CLIENT_SECRET"
-    }
-    ```
+系统内置了轻量级 Web 控制台与管理员指令系统。
 
-### ✈️ FeishuBot (飞书)
-*   **类型**: Go / WebSocket
-*   **配置**: `FeishuBot/config.json`
-    ```json
-    {
-      "app_id": "cli_xxx",
-      "app_secret": "xxx"
-    }
-    ```
+### 3.1 Web 控制台功能
+- **仪表盘 (Dashboard)**: 实时监控 CPU/内存、连接数及消息吞吐量。
+- **登录管理**: 提供二维码登录页面 (`/login`) 及状态检测。
 
-### ✈️ TelegramBot
-*   **类型**: Go / Long Polling
-*   **配置**: `TelegramBot/config.json`
-    ```json
-    {
-      "bot_token": "123456:ABC-DEF"
-    }
-    ```
+### 3.2 管理员指令 (仅限管理员使用)
+指令需以 `#` 开头：
+- `#status`: 查看服务器运行状态及网关连接数。
+- `#reload`: 热重载所有插件代码（无需重启服务）。
+- `#broadcast <msg>`: 向活跃群组发送系统通知。
+- `#db_clean <days>`: 清理指定天数前的历史聊天记录。
+
+---
+
+## 4. 性能优化措施
+
+为了支撑高并发消息处理，系统实现了多级优化：
+
+### 4.1 AI 解析器优化
+- **正则预编译**: 在插件报备能力时自动预编译正则表达式，避免运行时 CPU 密集计算。
+- **正则缓存**: 使用线程安全的 Map 缓存已编译的正则对象。
+
+### 4.2 Redis 交互策略
+- **ConfigCache (二级缓存)**: 每 30 秒从 Redis 同步一次配置，消息主流程仅读取本地内存，延迟近乎零。
+- **SessionCache (热点缓存)**: 活跃会话上下文存储在本地 `sync.Map` 中，采用“写穿式”同步，减少同步等待。
+
+---
+
+## 5. 容器化部署最佳实践
+
+### 5.1 核心理念：无状态 Worker + 有状态插件
+- **Stateless Worker**: BotWorker 实例不存储状态，支持水平扩容。
+- **Stateful Plugins**: 插件状态与用户会话存储在 Redis 或共享存储中。
+
+### 5.2 插件管理
+- **热更新**: 支持无需重启容器的插件热加载。
+- **灰度发布**: 利用 `canary_weight` 配置，根据 Session 粘滞性将部分流量导向新版本插件。
+
+---
+
+## 6. 移动端管理 (小程序)
+
+BotMatrix 提供配套的微信小程序，方便随时随地管理系统。
+- **功能**: 系统状态概览、机器人实时监控、远程指令执行、实时日志查看。
+- **集成**: 通过 Overmind REST API 与 WebSocket 服务实现数据同步。
+
+---
+*最后更新日期：2026-01-13*

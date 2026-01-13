@@ -94,13 +94,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-500">
+    <div v-if="error" class="p-4 rounded-2xl bg-[var(--status-offline)]/10 border border-[var(--status-offline)]/20 flex items-center gap-3 text-[var(--status-offline)]">
       <Shield class="w-5 h-5" />
       <div class="flex-1">
         <p class="text-xs font-bold uppercase tracking-widest">{{ t('error') }}</p>
         <p class="text-sm font-black">{{ error }}</p>
       </div>
-      <button @click="fetchNexus" class="px-3 py-1 rounded-lg bg-red-500 text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
+      <button @click="fetchNexus" class="px-3 py-1 rounded-lg bg-[var(--status-offline)] text-[var(--sidebar-text)] text-[10px] font-black uppercase tracking-widest">
         {{ t('retry') }}
       </button>
     </div>
@@ -120,7 +120,7 @@ onUnmounted(() => {
               <div>
                 <h2 class="text-2xl font-black text-[var(--text-main)] uppercase tracking-tight">{{ t('botnexus_core') }}</h2>
                 <div class="flex items-center gap-2 mt-1">
-                  <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <span class="w-2 h-2 rounded-full bg-[var(--status-online)] animate-pulse"></span>
                   <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('gateway_operational') }}</span>
                 </div>
               </div>
@@ -184,7 +184,7 @@ onUnmounted(() => {
             </div>
             <button 
               @click="toggleStrategy(s)"
-              :class="s.IsEnabled ? 'bg-[var(--matrix-color)] text-black' : 'bg-red-500/10 text-red-500'"
+              :class="s.IsEnabled ? 'bg-[var(--matrix-color)] text-black' : 'bg-[var(--status-offline)]/10 text-[var(--status-offline)]'"
               class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
             >
               {{ s.IsEnabled ? t('enabled') : t('disabled') }}
@@ -256,7 +256,7 @@ onUnmounted(() => {
                 {{ conn.uptime }}
               </td>
               <td class="py-4 px-4">
-                <span class="px-2 py-0.5 rounded-md text-[8px] font-black bg-green-500/10 text-green-500 border border-green-500/20 uppercase tracking-widest">{{ t('active') }}</span>
+                <span class="px-2 py-0.5 rounded-md text-[8px] font-black bg-[var(--status-online)]/10 text-[var(--status-online)] border border-[var(--status-online)]/20 uppercase tracking-widest">{{ t('active') }}</span>
               </td>
             </tr>
             <tr v-if="connections.length === 0">

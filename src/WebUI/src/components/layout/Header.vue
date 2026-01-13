@@ -4,7 +4,24 @@ import { useSystemStore, type Style } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { useBotStore } from '@/stores/bot';
 import { useRoute, useRouter } from 'vue-router';
-import { Menu, Github, Sun, Moon, LogOut, Palette, Check, Languages, Globe } from 'lucide-vue-next';
+import { 
+  Menu, 
+  Github, 
+  Sun, 
+  Moon, 
+  LogOut, 
+  Palette, 
+  Check, 
+  Languages, 
+  Globe,
+  User,
+  Settings,
+  Shield,
+  HelpCircle,
+  LayoutDashboard,
+  Bell,
+  ChevronDown
+} from 'lucide-vue-next';
 import { type Language } from '@/utils/i18n';
 
 const systemStore = useSystemStore();
@@ -17,6 +34,8 @@ const showStylePicker = ref(false);
 const stylePickerRef = ref<HTMLElement | null>(null);
 const showLangPicker = ref(false);
 const langPickerRef = ref<HTMLElement | null>(null);
+const showUserMenu = ref(false);
+const userMenuRef = ref<HTMLElement | null>(null);
 
 // Calculate uptime locally to ensure it updates every second
 const localUptime = ref('0s');
@@ -75,10 +94,7 @@ const langShortNameMap: Record<string, string> = {
 
 const styleIconMap: Record<string, string> = {
   'classic': 'CL',
-  'matrix': 'MX',
-  'xp': 'XP',
-  'ios': 'iOS',
-  'kawaii': 'KA'
+  'matrix': 'MX'
 };
 
 const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[] = [
@@ -86,8 +102,8 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
     id: 'classic', 
     nameKey: 'style_classic',
     colors: {
-      light: { bg: '#f3f4f6', sidebar: '#ffffff', header: '#ffffff', accent: '#3b82f6', text: '#111827', border: '#e5e7eb' },
-      dark: { bg: '#0f172a', sidebar: '#0f172a', header: '#0f172a', accent: '#f59e0b', text: '#f8fafc', border: '#1e293b' }
+      light: { bg: '#fdfaff', sidebar: '#ffffff', header: '#ffffff', accent: '#9333ea', text: '#1e1b4b', border: 'rgba(147, 51, 234, 0.1)' },
+      dark: { bg: '#020617', sidebar: '#020617', header: '#020617', accent: '#a855f7', text: '#f8fafc', border: 'rgba(168, 85, 247, 0.15)' }
     }
   },
   { 
@@ -96,30 +112,6 @@ const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[
     colors: {
       light: { bg: '#f0fff4', sidebar: '#ffffff', header: '#ffffff', accent: '#059669', text: '#064e3b', border: '#d1fae5' },
       dark: { bg: '#000000', sidebar: '#000000', header: '#000000', accent: '#00ff41', text: '#00ff41', border: '#003b00' }
-    }
-  },
-  { 
-    id: 'xp', 
-    nameKey: 'style_xp',
-    colors: {
-      light: { bg: '#ece9d8', sidebar: '#d6dff7', header: '#0058e6', accent: '#24a124', text: '#000000', border: '#0054e3' },
-      dark: { bg: '#1c1c1c', sidebar: '#1a1a1a', header: '#003399', accent: '#33cc33', text: '#ffffff', border: '#003399' }
-    }
-  },
-  { 
-    id: 'ios', 
-    nameKey: 'style_ios',
-    colors: {
-      light: { bg: '#ffffff', sidebar: 'rgba(255,255,255,0.7)', header: 'rgba(255,255,255,0.8)', accent: '#007aff', text: '#000000', border: 'rgba(0,0,0,0.1)' },
-      dark: { bg: '#000000', sidebar: 'rgba(28,28,30,0.7)', header: 'rgba(0,0,0,0.8)', accent: '#0a84ff', text: '#ffffff', border: 'rgba(255,255,255,0.15)' }
-    }
-  },
-  {
-    id: 'kawaii',
-    nameKey: 'style_kawaii',
-    colors: {
-      light: { bg: '#fff0f6', sidebar: '#ffffff', header: 'rgba(255,240,246,0.8)', accent: '#f06595', text: '#d6336c', border: '#ffdeeb' },
-      dark: { bg: '#2b0b1a', sidebar: '#1a050f', header: 'rgba(40,10,25,0.8)', accent: '#ff85b3', text: '#ff85b3', border: '#ff85b3' }
     }
   }
 ];
@@ -134,10 +126,18 @@ const languages: { id: Language; nameKey: string }[] = [
 const toggleStylePicker = () => {
   showStylePicker.value = !showStylePicker.value;
   showLangPicker.value = false;
+  showUserMenu.value = false;
 };
 
 const toggleLangPicker = () => {
   showLangPicker.value = !showLangPicker.value;
+  showStylePicker.value = false;
+  showUserMenu.value = false;
+};
+
+const toggleUserMenu = () => {
+  showUserMenu.value = !showUserMenu.value;
+  showLangPicker.value = false;
   showStylePicker.value = false;
 };
 
@@ -152,6 +152,7 @@ const selectLang = (lang: Language) => {
 };
 
 const handleLogout = () => {
+  showUserMenu.value = false;
   authStore.logout();
   botStore.reset();
   router.push('/login');
@@ -164,6 +165,9 @@ const handleClickOutside = (event: MouseEvent) => {
   }
   if (langPickerRef.value && !langPickerRef.value.contains(target)) {
     showLangPicker.value = false;
+  }
+  if (userMenuRef.value && !userMenuRef.value.contains(target)) {
+    showUserMenu.value = false;
   }
 };
 
@@ -189,10 +193,10 @@ onUnmounted(() => {
 <template>
   <header class="h-16 flex-shrink-0 flex items-center justify-between px-4 sm:px-6 bg-[var(--bg-header)] border-b border-[var(--border-color)] z-40 transition-colors duration-300">
     <div class="flex items-center gap-2 sm:gap-4">
-      <button @click="systemStore.toggleMobileMenu()" class="p-2 text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors lg:hidden">
+      <button @click="systemStore.toggleMobileMenu()" class="p-2 text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors md:hidden">
         <Menu class="w-5 h-5" />
       </button>
-      <button @click="systemStore.toggleSidebar()" class="hidden lg:block p-2 text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors">
+      <button @click="systemStore.toggleSidebar()" class="hidden md:block p-2 text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors">
         <Menu class="w-5 h-5" />
       </button>
       <h2 class="text-base sm:text-lg font-bold tracking-tight text-[var(--text-main)] truncate max-w-[120px] sm:max-w-none">{{ t(routeTitleMap[route.path] || 'dashboard') }}</h2>
@@ -202,18 +206,18 @@ onUnmounted(() => {
       <!-- Portal Link -->
       <router-link to="/" class="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-colors">
         <Globe class="w-4 h-4" />
-        官网门户
+        {{ t('nav_portal') }}
       </router-link>
 
       <!-- Uptime & Time (Hidden on small mobile) -->
       <div class="hidden sm:flex items-center gap-2 sm:gap-6 px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
         <div class="flex flex-col">
-          <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-tight">{{ t('system_uptime') }}</span>
+          <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-tight">{{ t('system_uptime') }}</span>
           <span class="text-xs sm:text-sm font-bold text-[var(--matrix-color)] mono">{{ localUptime }}</span>
         </div>
         <div class="h-4 sm:h-6 w-px bg-black/10 dark:bg-white/10"></div>
         <div class="flex flex-col text-right">
-          <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-tight">{{ t('current_time') }}</span>
+          <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] leading-tight">{{ t('current_time') }}</span>
           <span class="text-xs sm:text-sm font-bold text-[var(--text-main)] mono">{{ systemStore.currentTime }}</span>
         </div>
       </div>
@@ -237,14 +241,14 @@ onUnmounted(() => {
             ]"
             :title="t('switch_lang')"
           >
-            <span class="text-[10px] sm:text-xs font-bold">{{ t(langShortNameMap[systemStore.lang]) }}</span>
+            <span class="text-xs font-bold">{{ t(langShortNameMap[systemStore.lang]) }}</span>
           </button>
 
           <!-- Language Picker Panel -->
           <transition name="fade-slide">
             <div v-if="showLangPicker" class="absolute right-0 mt-2 w-40 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-xl z-50 overflow-hidden">
               <div class="px-3 py-2 border-b border-[var(--border-color)] mb-1">
-                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('language_region') }}</span>
+                <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('language_region') }}</span>
               </div>
               <button 
                 v-for="l in languages" 
@@ -273,14 +277,14 @@ onUnmounted(() => {
             :title="t('style_' + systemStore.style)"
           >
             <Palette class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
-            <span class="text-[10px] font-bold uppercase">{{ styleIconMap[systemStore.style] }}</span>
+            <span class="text-xs font-bold uppercase">{{ styleIconMap[systemStore.style] }}</span>
           </button>
 
           <!-- Style Picker Panel -->
           <transition name="fade-slide">
             <div v-if="showStylePicker" class="absolute right-0 mt-2 w-64 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-xl z-50 overflow-hidden">
               <div class="px-3 py-2 border-b border-[var(--border-color)] mb-1">
-                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('interface_theme') }}</span>
+                <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('interface_theme') }}</span>
               </div>
               <div class="grid grid-cols-1 gap-1 p-1">
                 <button 
@@ -309,7 +313,7 @@ onUnmounted(() => {
                     </span>
                     <div class="flex items-center gap-1">
                       <div class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: s.colors[systemStore.mode].accent }"></div>
-                      <span class="text-[8px] uppercase text-[var(--text-muted)] tracking-tighter">{{ s.id }}</span>
+                      <span class="text-[10px] uppercase text-[var(--text-muted)] tracking-tighter">{{ s.id }}</span>
                     </div>
                   </div>
 
@@ -329,10 +333,67 @@ onUnmounted(() => {
       
       <div class="h-6 w-px bg-black/5 dark:bg-white/5 hidden xs:block"></div>
       
-      <button @click="handleLogout" class="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-[var(--text-muted)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-        <LogOut class="w-4 h-4" />
-        <span class="text-xs font-bold hidden md:inline">{{ t('logout') }}</span>
-      </button>
+      <!-- User Avatar & Menu -->
+      <div class="relative" ref="userMenuRef">
+        <button 
+          @click="toggleUserMenu"
+          class="flex items-center gap-2 p-1 pr-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all group"
+          :class="{ 'bg-black/5 dark:bg-white/5': showUserMenu }"
+        >
+          <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 flex items-center justify-center text-[var(--matrix-color)] group-hover:scale-105 transition-transform">
+            <User class="w-5 h-5" />
+          </div>
+          <div class="hidden sm:flex flex-col items-start text-left">
+            <span class="text-xs font-bold text-[var(--text-main)] leading-none">{{ authStore.user?.username || 'Admin' }}</span>
+            <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-tighter">{{ authStore.role }}</span>
+          </div>
+          <ChevronDown class="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors" :class="{ 'rotate-180': showUserMenu }" />
+        </button>
+
+        <!-- User Menu Panel -->
+        <transition name="fade-slide">
+          <div v-if="showUserMenu" class="absolute right-0 mt-2 w-56 py-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-xl z-50 overflow-hidden">
+            <!-- User Info Header -->
+            <div class="px-4 py-3 border-b border-[var(--border-color)] mb-1">
+              <div class="flex flex-col gap-0.5">
+                <span class="text-xs font-bold text-[var(--text-main)]">{{ authStore.user?.username || 'Admin User' }}</span>
+                <span class="text-xs text-[var(--text-muted)]">{{ authStore.user?.email || 'admin@botmatrix.ai' }}</span>
+              </div>
+            </div>
+
+            <div class="p-1">
+              <router-link to="/console/settings" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group" @click="showUserMenu = false">
+                <User class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
+                <span class="text-xs font-bold">{{ t('personal_profile') }}</span>
+              </router-link>
+
+              <router-link to="/console/bots" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group" @click="showUserMenu = false">
+                <LayoutDashboard class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
+                <span class="text-xs font-bold">{{ t('my_bots') }}</span>
+              </router-link>
+
+              <router-link to="/console/system" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group" @click="showUserMenu = false">
+                <Settings class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
+                <span class="text-xs font-bold">{{ t('settings') }}</span>
+              </router-link>
+
+              <a href="https://docs.botmatrix.ai" target="_blank" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group">
+                <HelpCircle class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
+                <span class="text-xs font-bold">{{ t('help_center') }}</span>
+              </a>
+            </div>
+
+            <div class="h-px bg-[var(--border-color)] my-1"></div>
+
+            <div class="p-1">
+              <button @click="handleLogout" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-500/10 text-red-500 transition-colors group">
+                <LogOut class="w-4 h-4" />
+                <span class="text-xs font-bold">{{ t('logout') }}</span>
+              </button>
+            </div>
+          </div>
+        </transition>
+      </div>
     </div>
   </header>
 </template>
@@ -342,10 +403,10 @@ onUnmounted(() => {
   color: var(--matrix-color);
 }
 .bg-matrix\/10 {
-  background-color: rgba(0, 255, 65, 0.1);
+  background-color: color-mix(in srgb, var(--matrix-color) 10%, transparent);
 }
 .border-matrix\/20 {
-  border-color: rgba(0, 255, 65, 0.2);
+  border-color: color-mix(in srgb, var(--matrix-color) 20%, transparent);
 }
 
 /* Transitions */

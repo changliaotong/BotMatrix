@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useSystemStore } from '@/stores/system';
 import { useBotStore } from '@/stores/bot';
 import { getPlatformIcon, getPlatformColor, isPlatformAvatar, getPlatformFromAvatar } from '@/utils/avatar';
@@ -12,11 +13,13 @@ import {
   Filter,
   MoreVertical,
   Shield,
-  Bot
+  Bot,
+  Settings
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
 const botStore = useBotStore();
+const router = useRouter();
 const t = (key: string) => systemStore.t(key);
 
 const contacts = ref<any[]>([]);
@@ -163,9 +166,19 @@ const syncAll = async () => {
             </span>
             <span v-if="contact.source" class="text-[8px] font-bold text-[var(--text-muted)] uppercase">{{ t(contact.source) }}</span>
           </div>
-          <button class="p-2 rounded-xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-black transition-all">
-            <MessageSquare class="w-4 h-4" />
-          </button>
+          <div class="flex items-center gap-2">
+            <button 
+              v-if="contact.type === 'group'"
+              @click="router.push({ name: 'console-group-setup', query: { id: contact.id } })"
+              class="p-2 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all"
+              :title="t('common.settings')"
+            >
+              <Settings class="w-4 h-4" />
+            </button>
+            <button class="p-2 rounded-xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] hover:bg-[var(--matrix-color)] hover:text-black transition-all">
+              <MessageSquare class="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

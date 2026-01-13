@@ -1,4 +1,4 @@
-# BotMatrix 📚 文档中心
+# BotMatrix 📚 文档中心 (Documentation Center)
 
 > [🌐 English](../en-US/README.md) | [简体中文](README.md)
 > [🏠 返回项目主页](../../README.md)
@@ -7,37 +7,47 @@
 
 ---
 
-## ⚖️ 开源说明与服务声明
+## 🌈 核心愿景与蓝图 (Vision & Roadmap)
 
-- **核心开源**: BotMatrix 源代码遵循开源协议，您可以**免费下载、部署和使用**所有核心功能。
-- **商业服务**: 为了支持项目的持续进化，我们提供可选的**增值服务**（如：专业技术支持、定制开发等），相关服务可能涉及费用。
+### 1. 我们的使命
+BotMatrix 是一个 **AI 原生 (AI-Native)** 的分布式智能体操作系统 (Agent OS)。我们不仅仅是在做机器人适配器，我们正在构建 **智能体时代的互联网基础设施**。
+
+### 2. 进化路线图 (Evolution Roadmap)
+- **2025: Agent 元年**: 核心架构重塑，ReAct 自主循环，Docker 沙箱落地。
+- **2026: 连接与标准化 (当前阶段)**: 
+  - **Q1**: MCP 协议集成，统一 Skill 系统。
+  - **Q2**: 智能记忆层 (Cognitive Memory) 与 GraphRAG。
+  - **Q3-Q4**: Agent Swarm 多智能体编排，KPI 2.0 绩效系统。
+- **2027: 智能体经济**: BotMatrix Hub 能力市场，Mesh Swarm 跨组织协作。
 
 ---
 
 ## 🗺️ 文档地图 (Documentation Map)
 
 ### 🚀 1. 快速入门 (Quick Start)
-- **[用户入门指南](USER_GUIDE.md)** - **[新手必读]** 如何雇佣你的第一位“数字员工”并配置“技能机器人”。
-- **[高级功能指南](ADVANCED_FEATURES_GUIDE.md)** - **[进阶]** 详述 Mesh、MCP 与认知记忆如何赋能数字员工。
-- **[项目愿景与路线图](VISION.md)** - 了解我们的终极目标与技术进化路线。
-- **[系统架构概览](core/ARCHITECTURE.md)** - 宏观视角看系统的分层设计与组件关系。
-- **[快速部署指南](core/DEPLOY.md)** - 5 分钟内启动你的第一个 BotMatrix 节点。
+- **[用户全景指南](USER_GUIDE.md)** - **[新手必读]** 如何从零开始雇佣“数字员工”并配置技能。
+- **[系统架构全景](core/ARCHITECTURE.md)** - 宏观视角看系统的分层设计、组件关系与 AI 注入逻辑。
+- **[快速部署指南](core/DEPLOY.md)** - 支持 Docker、手机 Termux 等多种环境的快速启动方案。
 
-### 🧠 2. 核心理念 (Core Concepts)
-- **[数字员工系统](core/DIGITAL_EMPLOYEE_SYSTEM.md)** - 如何将 AI 升级为具备企业属性的虚拟雇员。
-- **[技能机器人网络 (Mesh)](core/GLOBAL_AGENT_MESH.md)** - 详解跨企业、跨域的智能协作机制。
-- **[概念深度解析：Mesh & MCP](core/AGENT_MESH_AND_MCP_RELATIONSHIP.md)** - 理解系统的底层逻辑与术语映射。
-- **[MCP 顶层设计](core/MCP_TOP_LEVEL_DESIGN.md)** - 了解标准化 AI 工具接入的技术实现。
+### 🔌 2. 插件与技能 (Skills & Plugins)
+- **[插件与技能系统](core/SKILL_AND_PLUGIN_SYSTEM.md)** - 详解 Skill Call、MCP 协议与插件隔离架构。
+- **[插件功能全景目录](plugins/PLUGINS_CATALOG.md)** - 系统内置的所有插件功能清单与指令说明。
+- **[接口与协议规范](core/INTERFACE_SPECIFICATIONS.md)** - OneBot v11 协议适配与 API 接口参考。
 
 ### 🏗️ 3. 系统组件 (Components)
-- **[BotNexus](components/BotNexus.md)**: 系统大脑，负责连接管理、路由分发与 MCP 调度。
-- **[BotWorker](components/BotWorker.md)**: 执行节点，负责插件运行与 AI 推理。
-- **[Overmind](components/Overmind.md)**: 监控与管理后台，提供可视化配置。
+- **[组件与适配器详解](components/ADAPTERS_AND_COMPONENTS.md)** - BotNexus, BotWorker, Overmind 等核心组件功能拆解。
+- **[WxBotGo 专用指南](components/WXBOTGO_GUIDE.md)** - 针对微信机器人的高性能适配器部署与排查手册。
 
-### 💻 4. 开发者与运维 (DevOps)
-- **[2026-01-03 开发进展](development/PROGRESS_2026_01_03.md)** - **[最新]** 数字员工闭环系统技术实现详情。
-- **[插件/技能开发手册](plugins/PLUGIN_DEVELOPMENT.md)** - 如何编写原生 Go 插件。
-- **[MCP Server 开发指南](core/DOMESTIC_MCP_GUIDE.md)** - 编写标准化 AI 工具的最佳实践。
-- **[API 接口参考](core/API_REFERENCE.md)** - 详细的 JSON 通信协议规范。
-- **[服务端使用手册](core/SERVER_MANUAL.md)** - 详细的配置指南与运维技巧。
+### 💻 4. 开发者手册 (Developer Guide)
+- **[开发者全景指南](development/DEVELOPMENT_GUIDE.md)** - 环境搭建、代码规范、数据库结构与 AI 接入细节。
+- **[插件开发全景指南](development/PLUGIN_DEVELOPMENT_GUIDE.md)** - 如何利用 SDK 或 JSON 协议开发跨平台插件。
+- **[项目日志与测试计划](development/PROJECT_LOGS.md)** - 实时追踪开发进度、里程碑与自动化测试方案。
 
+---
+## ⚖️ 开源说明与服务声明
+
+- **核心开源**: BotMatrix 源代码遵循开源协议，您可以**免费下载、部署和使用**所有核心功能。
+- **商业服务**: 为了支持项目的持续进化，我们提供可选的**增值服务**（如：专业技术支持、定制开发等）。
+
+---
+*最后更新日期：2026-01-13*

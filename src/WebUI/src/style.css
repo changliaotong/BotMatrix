@@ -1,11 +1,8 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Gaegu:wght@400;700&family=Cherry+Bomb+One&family=M+PLUS+Rounded+1c:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+SC:wght@300;400;500;700;900&family=Share+Tech+Mono&family=VT323&family=JetBrains+Mono&display=swap');
 
 :root {
-  --matrix-green: #00ff41;
-  --matrix-green-dark: #003b00;
-  --matrix-green-glow: 0 0 5px rgba(0, 255, 65, 0.5);
-  --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-main: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
   --text-transform: none;
   --font-size-base: 18px;
   --radius-main: 12px;
@@ -13,41 +10,49 @@
   --radius-sm: 8px;
 }
 
-/* --- Classic Style --- */
+/* --- Classic Style (Purple EarlyMeow Theme) --- */
 .classic.light {
-  --bg-body: #f3f4f6;
+  --bg-body: #fdfaff;
   --bg-card: #ffffff;
   --bg-header: rgba(255, 255, 255, 0.8);
   --bg-sidebar: #ffffff;
-  --text-main: #111827;
-  --text-muted: #6b7280;
-  --sidebar-text: #111827;
-  --sidebar-text-muted: #6b7280;
+  --text-main: #1e1b4b;
+  --text-muted: #6366f1;
+  --sidebar-text: #1e1b4b;
+  --sidebar-text-muted: #6366f1;
   --sidebar-text-active: #ffffff;
-  --border-color: rgba(0, 0, 0, 0.05);
-  --matrix-color: #3b82f6;
-  --matrix-glow: 0 0 10px rgba(59, 130, 246, 0.2);
+  --border-color: rgba(147, 51, 234, 0.1);
+  --matrix-color: #9333ea;
+  --matrix-color-rgb: 147, 51, 234;
+  --matrix-glow: 0 0 15px rgba(147, 51, 234, 0.3);
   --radius-main: 12px;
-  --radius-card: 16px;
+  --radius-card: 20px;
   --radius-sm: 8px;
+  --status-online: #10b981;
+  --status-busy: #f59e0b;
+  --status-offline: #ef4444;
 }
 
 .classic.dark {
-  --bg-body: #0f172a;
-  --bg-card: #1e293b;
-  --bg-header: rgba(15, 23, 42, 0.9);
-  --bg-sidebar: #0f172a;
+  --bg-body: #020617;
+  --bg-card: #0f172a;
+  --bg-header: rgba(2, 6, 23, 0.9);
+  --bg-sidebar: #020617;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --sidebar-text: #f8fafc;
   --sidebar-text-muted: #94a3b8;
   --sidebar-text-active: #ffffff;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --matrix-color: #f59e0b;
-  --matrix-glow: 0 0 15px rgba(245, 158, 11, 0.3);
+  --border-color: rgba(168, 85, 247, 0.15);
+  --matrix-color: #a855f7;
+  --matrix-color-rgb: 168, 85, 247;
+  --matrix-glow: 0 0 20px rgba(168, 85, 247, 0.4);
   --radius-main: 12px;
-  --radius-card: 16px;
+  --radius-card: 20px;
   --radius-sm: 8px;
+  --status-online: #22c55e;
+  --status-busy: #f59e0b;
+  --status-offline: #ef4444;
 }
 
 /* --- Matrix Style (The Matrix Redesign) --- */
@@ -63,8 +68,9 @@
   --sidebar-text-active: #064e3b; /* Dark emerald for active text on bright matrix color */
   --border-color: #d1fae5;
   --matrix-color: #10b981; /* Brighter emerald for better visibility */
+  --matrix-color-rgb: 16, 185, 129;
   --matrix-glow: 0 0 10px rgba(16, 185, 129, 0.2);
-  --font-main: 'Share Tech Mono', monospace;
+  --font-main: 'Share Tech Mono', 'Noto Sans SC', monospace;
   --text-transform: none;
   --font-size-base: 16px;
   --crt-flicker: none;
@@ -89,8 +95,9 @@
   --sidebar-text-active: #ffffff;
   --border-color: #003b00;
   --matrix-color: #00ff41;
+  --matrix-color-rgb: 0, 255, 65;
   --matrix-glow: 0 0 12px rgba(0, 255, 65, 0.7);
-  --font-main: 'Share Tech Mono', 'VT323', monospace;
+  --font-main: 'Share Tech Mono', 'VT323', 'Noto Sans SC', monospace;
   --text-transform: uppercase;
   --font-size-base: 20px;
   --crt-flicker: matrix-flicker 0.15s infinite;
@@ -112,372 +119,229 @@
   font-family: 'Share Tech Mono', monospace !important;
 }
 
-/* --- Custom Scrollbar --- */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* --- Industrial Style (Bright Space Sci-Fi / Future Space) --- */
+.industrial.dark {
+  --bg-body: #0f172a; /* Slightly brighter deep navy */
+  --bg-card: rgba(30, 41, 59, 0.45); /* High-transparency glass */
+  --bg-header: rgba(15, 23, 42, 0.85);
+  --bg-sidebar: rgba(7, 10, 20, 0.95);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --sidebar-text: #e2e8f0;
+  --sidebar-text-muted: #64748b;
+  --sidebar-text-active: #38bdf8;
+  --border-color: rgba(56, 189, 248, 0.35);
+  --matrix-color: #38bdf8; /* Electric Blue */
+  --matrix-color-rgb: 56, 189, 248;
+  --matrix-glow: 0 0 30px rgba(56, 189, 248, 0.5);
+  --accent-cyan: #22d3ee;
+  --accent-purple: #c084fc;
+  --gradient-highlight: linear-gradient(135deg, #38bdf8, #c084fc);
+  --font-main: 'Inter', 'Noto Sans SC', sans-serif;
+  --radius-main: 6px;
+  --radius-card: 12px;
+  --radius-sm: 4px;
+  --status-online: #22d3ee;
+  --status-busy: #fbbf24;
+  --status-offline: #f43f5e;
+  --industrial-grid: transparent; /* Removed grid background */
+  --sci-fi-glare: radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.15), transparent 70%);
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+.industrial.light {
+  --bg-body: #ffffff; /* Pure White Background */
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-header: rgba(255, 255, 255, 0.95);
+  --bg-sidebar: #f8fafc;
+  --text-main: #0f172a; /* Slate-900 for Contrast */
+  --text-muted: #475569; /* Slate-600 */
+  --sidebar-text: #1e293b;
+  --sidebar-text-muted: #64748b;
+  --sidebar-text-active: #3b82f6;
+  --border-color: rgba(148, 163, 184, 0.15);
+  --matrix-color: #2563eb; /* Vibrant Royal Blue */
+  --matrix-color-rgb: 37, 99, 235;
+  --matrix-glow: 0 0 25px rgba(37, 99, 235, 0.1);
+  --accent-cyan: #06b6d4; 
+  --accent-purple: #d946ef;
+  --accent-orange: #f97316;
+  --accent-emerald: #10b981;
+  --gradient-highlight: linear-gradient(135deg, #2563eb, #06b6d4, #d946ef);
+  --font-main: 'Inter', 'Noto Sans SC', sans-serif;
+  --radius-main: 6px;
+  --radius-card: 12px;
+  --radius-sm: 4px;
+  --status-online: #10b981;
+  --status-busy: #f59e0b;
+  --status-offline: #ef4444;
+  --industrial-grid: transparent;
+  --sci-fi-glare: radial-gradient(circle at 50% -20%, rgba(37, 99, 235, 0.05), transparent 70%);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 10px;
-  transition: background 0.3s;
+.industrial {
+  background-color: var(--bg-body);
+  background-attachment: fixed;
+  position: relative;
+  overflow-x: hidden;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+.industrial::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--sci-fi-glare);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Removed industrial::after scanline grid */
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.industrial .card-heavy {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-color);
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: var(--radius-card);
+}
+
+.industrial .card-heavy::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--matrix-color), transparent);
+  opacity: 0.3;
+}
+
+.industrial .card-heavy:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: var(--matrix-color);
+  box-shadow: 
+    0 12px 48px 0 rgba(0, 242, 255, 0.15),
+    inset 0 0 20px rgba(0, 242, 255, 0.05);
+}
+
+.industrial .rivet {
+  position: absolute;
+  width: 2px;
+  height: 2px;
   background: var(--matrix-color);
+  box-shadow: 0 0 8px var(--matrix-color);
   opacity: 0.5;
 }
 
-/* For Firefox */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) transparent;
+.industrial .machine-tag {
+  background: rgba(var(--matrix-color-rgb), 0.15);
+  color: var(--matrix-color);
+  padding: 2px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  border: 1px solid var(--border-color);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  backdrop-filter: blur(8px);
 }
 
-/* Global Text Glow for Matrix - Optimized for clarity */
-.matrix * {
-  text-shadow: none; /* Disable global shadow to prevent blurriness */
+.industrial .hologram-text {
+  color: var(--matrix-color);
+  text-shadow: 
+    0 0 5px rgba(var(--matrix-color-rgb), 0.5),
+    0 0 10px rgba(var(--matrix-color-rgb), 0.3);
+  position: relative;
+  display: inline-block;
 }
 
-.matrix .text-matrix, 
-.matrix .matrix-btn,
-.matrix h1,
-.matrix h2,
-.matrix h3 {
-  text-shadow: var(--matrix-glow); /* Only apply to headings and buttons */
-}
-
-/* Light mode should have even less glow for better readability */
-.matrix.light * {
-  text-shadow: none !important;
-}
-
-.matrix.light .text-matrix,
-.matrix.light h1 {
-  text-shadow: 0 0 5px rgba(16, 185, 129, 0.1) !important;
-}
-
-@keyframes matrix-flicker {
-  0% { opacity: 0.98; }
-  50% { opacity: 1; }
-  100% { opacity: 0.99; }
-}
-
-/* Matrix CRT Scanlines Overlay */
-.matrix-overlay {
-  display: none;
-}
-
-.matrix .matrix-overlay {
-  display: block;
-  position: fixed;
+.industrial .hologram-text::after {
+  content: "";
+  position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%,
-    rgba(0, 0, 0, 0.1) 50%
-  ), linear-gradient(
-    90deg,
-    rgba(255, 0, 0, 0.03),
-    rgba(0, 255, 0, 0.01),
-    rgba(0, 255, 0, 0.03)
-  );
-  background-size: 100% 3px, 3px 100%;
+  background: linear-gradient(transparent 0%, rgba(var(--matrix-color-rgb), 0.1) 50%, transparent 100%);
+  background-size: 100% 4px;
   pointer-events: none;
-  z-index: 9999;
+  animation: hologram-scan 2s linear infinite;
 }
 
-.matrix.light .matrix-overlay {
-  background: linear-gradient(
-    rgba(0, 50, 0, 0.02) 50%,
-    rgba(255, 255, 255, 0.02) 50%
-  ), linear-gradient(
-    90deg,
-    rgba(0, 255, 0, 0.01),
-    rgba(0, 255, 0, 0.005),
-    rgba(0, 255, 0, 0.01)
-  );
-  background-size: 100% 4px, 4px 100%;
-  opacity: 0.5; /* Further reduce overall intensity in light mode */
+@keyframes hologram-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
 }
 
-.matrix.light .matrix-overlay::after {
-  animation: none; /* Disable flicker in light mode to prevent eye strain */
-  background: transparent;
+.industrial .glow-border {
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 15px rgba(var(--matrix-color-rgb), 0.15);
+  transition: all 0.3s ease;
 }
 
-.matrix .matrix-overlay::after {
-  content: " ";
-  display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: rgba(18, 16, 16, 0.1);
-  opacity: 0;
-  z-index: 10000;
-  pointer-events: none;
-  animation: matrix-flicker 0.15s infinite;
+.industrial .glow-border:hover {
+  border-color: var(--matrix-color);
+  box-shadow: 0 0 25px rgba(var(--matrix-color-rgb), 0.3);
 }
 
-/* Sharp Borders for Matrix UI */
-.matrix .matrix-card {
-  border: 1px solid var(--matrix-color);
-  box-shadow: inset 0 0 15px rgba(0, 255, 65, 0.1), 0 0 10px rgba(0, 255, 65, 0.2);
+.industrial .bg-space-grid {
+  background-image: 
+    linear-gradient(rgba(var(--matrix-color-rgb), 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--matrix-color-rgb), 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.industrial .glass-card {
   background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
-.matrix.light .matrix-card {
-  box-shadow: inset 0 0 10px rgba(0, 100, 0, 0.05), 0 0 5px rgba(0, 100, 0, 0.1);
+.industrial .text-gradient-space {
+  background: linear-gradient(135deg, var(--matrix-color), var(--accent-cyan), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.matrix .matrix-btn {
-  background: transparent;
-  border: 1px solid var(--matrix-color);
+.industrial .bg-warning-stripe {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-red), transparent);
+  box-shadow: 0 0 10px var(--accent-red);
+}
+
+.industrial .btn-industrial {
+  background: rgba(0, 242, 255, 0.05);
+  border: 1px solid var(--border-color);
   color: var(--matrix-color);
-  text-shadow: var(--matrix-glow);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 1px;
   position: relative;
   overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(10px);
 }
 
-.matrix .matrix-btn::before {
-  content: "> ";
-}
-
-.matrix .matrix-btn:hover {
+.industrial .btn-industrial:hover {
   background: var(--matrix-color);
   color: #000;
-  box-shadow: 0 0 20px var(--matrix-color);
-  text-shadow: none;
+  box-shadow: 0 0 25px rgba(0, 242, 255, 0.4);
+  border-color: var(--matrix-color);
 }
 
-/* --- XP Style (Ultimate Bliss) --- */
-.xp.light {
-  --bg-body: #5a7edc; 
-  --bg-card: #ffffff;
-  --bg-header: #0058e6;
-  --bg-sidebar: #d6dff7;
-  --text-main: #000000;
-  --text-muted: #4d4d4d;
-  --border-color: #0054e3;
-  --matrix-color: #24a124;
-  --matrix-glow: none;
-  --radius-main: 0px; 
-  --radius-card: 0px;
-  --radius-sm: 0px;
-  --font-main: 'Tahoma', 'Segoe UI', sans-serif;
-  --font-size-base: 13px;
-}
-
-.xp body {
-  background-image: url('https://upload.wikimedia.org/wikipedia/en/2/27/Bliss_%28Windows_XP%29.png') !important;
-  background-size: cover !important;
-  background-position: center !important;
-  background-attachment: fixed !important;
-}
-
-.xp header {
-  background: linear-gradient(to bottom, #0058e6 0%, #3a93ff 10%, #0058e6 50%, #0046ad 100%) !important;
-  border-bottom: 2px solid #003399 !important;
-  height: 32px !important;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.4) !important;
-}
-
-.xp aside {
-  background: linear-gradient(to right, #d6dff7 0%, #f1f4ff 100%) !important;
-  border-right: 2px solid #0054e3 !important;
-}
-
-/* XP Taskbar Button Simulation */
-.xp header button {
-  background: linear-gradient(to bottom, #3a93ff 0%, #0058e6 50%, #0046ad 100%) !important;
-  border: 1px solid #003399 !important;
-  border-radius: 3px !important;
-  margin: 2px !important;
-  padding: 0 15px !important;
-  height: 26px !important;
-  color: white !important;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.3) !important;
-}
-
-.xp .matrix-btn, .xp button.bg-primary {
-  background: linear-gradient(to bottom, #3cc03c 0%, #24a124 45%, #197b19 55%, #3cc03c 100%) !important;
-  color: white !important;
-  border: 1px solid #104a10 !important;
-  border-radius: 3px !important;
-  font-weight: bold !important;
-  text-shadow: 1px 1px 1px rgba(0,0,0,0.5) !important;
-}
-
-/* XP Window Styles */
-.xp .matrix-card, .xp [class*="bg-card"], .xp .bg-white {
-  background-color: #ece9d8 !important;
-  border: 4px solid #0054e3 !important;
-  border-radius: 8px 8px 0 0 !important;
-  padding: 0 !important;
-  position: relative !important;
-  overflow: hidden !important;
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.4) !important;
-}
-
-.xp .matrix-card > *, .xp [class*="bg-card"] > *, .xp .bg-white > * {
-  padding: 15px !important;
-}
-
-/* XP Window Title Bar */
-.xp .matrix-card::before, .xp [class*="bg-card"]::before, .xp .bg-white::before {
-  content: "BotMatrix System Explorer";
-  display: block;
-  background: linear-gradient(to right, #0058e6 0%, #3a93ff 10%, #0058e6 50%, #0046ad 100%);
-  height: 28px;
-  width: 100%;
-  color: white;
-  font-weight: bold;
-  padding: 5px 10px;
-  font-size: 12px;
-  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
-  box-sizing: border-box;
-}
-
-/* XP Window Buttons (Close/Min/Max) */
-.xp .matrix-card::after, .xp [class*="bg-card"]::after, .xp .bg-white::after {
-  content: "";
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
-  background-image: radial-gradient(circle, #ff5f56 50%, transparent 50%);
-  background-color: #e04343;
-  border: 1px solid #fff;
-  border-radius: 3px;
-  box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-  z-index: 20;
-}
-
-/* --- Kawaii Style (Ultimate Magical Girl v2) --- */
-.kawaii.light {
-  --bg-body: #fff0f6;
-  --bg-card: rgba(255, 255, 255, 0.95);
-  --bg-header: rgba(255, 255, 255, 0.9);
-  --bg-sidebar: #fff9fb;
-  --text-main: #ff6b9d;
-  --text-muted: #ff9db4;
-  --sidebar-text: #ff6b9d;
-  --sidebar-text-muted: #ff9db4;
-  --sidebar-text-active: #ffffff;
-  --border-color: #ffdae9;
-  --matrix-color: #ff6b9d;
-  --matrix-glow: 0 0 20px rgba(255, 107, 157, 0.4);
-  --font-main: 'M PLUS Rounded 1c', 'Quicksand', 'Gaegu', cursive;
-  --font-header: 'Cherry Bomb One', cursive;
-  --radius-main: 25px;
-  --radius-card: 35px;
-  --radius-sm: 15px;
-  --font-size-base: 19px;
-  letter-spacing: 0.02em;
-  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'  width='32' height='32' style='font-size:24px'><text y='20'>💖</text></svg>"), auto;
-}
-
-.kawaii body {
-  background-image: 
-    radial-gradient(#ffdae9 2px, transparent 2px),
-    linear-gradient(135deg, #fff0f6 25%, #fff9fb 25%, #fff9fb 50%, #fff0f6 50%, #fff0f6 75%, #fff9fb 75%, #fff9fb 100%) !important;
-  background-size: 30px 30px, 100px 100px !important;
-  animation: kawaii-bg-move 20s linear infinite;
-}
-
-@keyframes kawaii-bg-move {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 30px 30px, 100px 100px; }
-}
-
-.kawaii .matrix-card {
-  border: 4px solid var(--border-color) !important;
-  box-shadow: 
-    0 10px 0 var(--border-color), 
-    0 20px 40px rgba(255, 107, 157, 0.15),
-    inset 0 0 20px rgba(255, 255, 255, 0.8) !important;
-  background: var(--bg-card) !important;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.4) !important;
-  overflow: visible !important;
-}
-
-/* Kawaii Card Decorations */
-.kawaii .matrix-card::after {
-  content: "✨";
-  position: absolute;
-  top: -15px;
-  right: -15px;
-  font-size: 24px;
-  animation: kawaii-sparkle 2s ease-in-out infinite;
-}
-
-@keyframes kawaii-sparkle {
-  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
-  50% { transform: scale(1.3) rotate(20deg); opacity: 0.7; }
-}
-
-.kawaii .matrix-btn, .kawaii button.bg-primary {
-  background: linear-gradient(45deg, #ff85a1, #ffb6d1, #ff85a1) !important;
-  background-size: 200% 200% !important;
-  animation: rainbow-bg 3s linear infinite !important;
-  border: 3px solid #fff !important;
-  color: white !important;
-  border-radius: 50px !important;
-  padding: 12px 30px !important;
-  font-weight: 800 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 1px !important;
-  box-shadow: 0 6px 0 #ff6b9d, 0 12px 20px rgba(255, 107, 157, 0.4) !important;
-  text-shadow: 2px 2px 0 rgba(0,0,0,0.1) !important;
-}
-
-@keyframes rainbow-bg {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-.kawaii .matrix-btn:active {
-  transform: translateY(4px) !important;
-  box-shadow: 0 2px 0 #ff6b9d !important;
-}
-
-.kawaii input, .kawaii textarea, .kawaii select {
-  background: #fff !important;
-  border: 3px solid #ffdae9 !important;
-  border-radius: 15px !important;
-  padding: 10px 15px !important;
-  color: #ff6b9d !important;
-  font-family: var(--font-main) !important;
-  transition: all 0.3s ease !important;
-}
-
-.kawaii input:focus {
-  border-color: #ff6b9d !important;
-  box-shadow: 0 0 15px rgba(255, 107, 157, 0.3) !important;
-  transform: scale(1.02) !important;
-}
-
-/* Kawaii Scrollbar */
-.kawaii ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #ff85a1, #ffb6d1) !important;
-  border: 2px solid #fff !important;
-  border-radius: 10px !important;
-}
-
-.kawaii ::-webkit-scrollbar-track {
-  background: #fff0f6 !important;
-}
+/* --- Custom Scrollbar --- */
 
 /* --- Matrix Style (Extreme Glitch v2) --- */
 .matrix .matrix-card:hover::before {
@@ -529,442 +393,7 @@
   background: var(--bg-header) !important;
 }
 
-/* --- XP Style (The Clippy Spirit v2) --- */
-.xp.light {
-  --bg-body: #5a7edc; 
-  --bg-card: #ffffff;
-  --bg-header: #0058e6;
-  --bg-sidebar: #7ba2e7; /* XP Sidebar Blue */
-  --text-main: #000000;
-  --text-muted: #4d4d4d;
-  --border-color: #0054e3;
-  --matrix-color: #24a124;
-  --matrix-glow: none;
-  --radius-main: 0px; 
-  --radius-card: 0px;
-  --radius-sm: 0px;
-  --font-main: 'Tahoma', 'Segoe UI', sans-serif;
-  --font-size-base: 13px;
-}
-
-.xp aside {
-  background: linear-gradient(to bottom, #7ba2e7 0%, #6382c5 100%) !important;
-  border-right: 2px solid #0054e3 !important;
-}
-
-.xp aside .border-b {
-  border-bottom: 1px solid rgba(255,255,255,0.3) !important;
-  background: linear-gradient(to right, #0058e6 0%, #3a93ff 100%) !important;
-}
-
-.xp aside nav > div > div:first-child {
-  background: linear-gradient(to right, #2151d1 0%, #7ba2e7 100%) !important;
-  color: white !important;
-  padding: 5px 12px !important;
-  margin: 0 -12px 8px -12px !important;
-  font-weight: bold !important;
-  border-radius: 4px 4px 0 0 !important;
-  border: 1px solid #0054e3 !important;
-  border-bottom: none !important;
-  text-transform: none !important;
-  letter-spacing: normal !important;
-  font-size: 11px !important;
-}
-
-.xp aside nav button {
-  border-radius: 0 !important;
-  margin: 0 !important;
-  padding: 4px 10px !important;
-  color: #2151d1 !important;
-  font-weight: normal !important;
-  border: 1px solid transparent !important;
-}
-
-.xp aside nav button:hover {
-  text-decoration: underline !important;
-  background: transparent !important;
-  color: #ff6600 !important; /* XP Link Hover Orange */
-}
-
-.xp aside nav button.bg-\[var\(--matrix-color\)\]\/10 {
-  background: rgba(255,255,255,0.3) !important;
-  border: 1px solid rgba(0,0,0,0.1) !important;
-  color: #000 !important;
-  font-weight: bold !important;
-}
-
-.xp aside nav button .absolute.left-0 {
-  display: none !important; /* Hide modern active indicator */
-}
-
-.xp aside .p-4.border-t {
-  background: #ece9d8 !important;
-  border-top: 2px solid #0054e3 !important;
-  color: black !important;
-}
-
-.xp aside .p-4.border-t .text-main {
-  color: black !important;
-}
-
-.xp .matrix-card {
-  border: 2px solid #0054e3 !important;
-  box-shadow: 3px 3px 0px rgba(0,0,0,0.2) !important;
-}
-
-.xp .matrix-card::before {
-  background: linear-gradient(to right, #0058e6 0%, #3a93ff 10%, #0058e6 50%, #0046ad 100%) !important;
-  border-bottom: 1px solid #003399 !important;
-}
-
-/* XP Taskbar detail */
-.xp header {
-  border-bottom: 2px solid #0831d9 !important;
-  background: linear-gradient(to bottom, #245edb 0%, #3f8cf3 9%, #245edb 18%, #245edb 92%, #333 100%) !important;
-}
-
-/* XP "Clippy" style tooltips (mock) */
-.xp [title]:hover::after {
-  content: attr(title);
-  position: absolute;
-  background: #ffffe1;
-  border: 1px solid #000;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #000;
-  z-index: 100;
-  box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
-}
-
-/* --- iOS Style (Glassmorphism) --- */
-.ios.light {
-  --bg-body: #f2f2f7;
-  --bg-card: rgba(255, 255, 255, 0.7);
-  --bg-header: rgba(249, 249, 249, 0.8);
-  --bg-sidebar: rgba(242, 242, 247, 0.8);
-  --text-main: #000000;
-  --text-muted: #8e8e93;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --matrix-color: #007aff;
-  --matrix-glow: 0 4px 12px rgba(0, 122, 255, 0.3);
-  --radius-main: 12px;
-  --radius-card: 20px;
-  --radius-sm: 8px;
-  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-}
-
-.ios.dark {
-  --bg-body: #000000;
-  --bg-card: rgba(28, 28, 30, 0.7);
-  --bg-header: rgba(28, 28, 30, 0.8);
-  --bg-sidebar: rgba(0, 0, 0, 0.8);
-  --text-main: #ffffff;
-  --text-muted: #8e8e93;
-  --border-color: rgba(255, 255, 255, 0.15);
-  --matrix-color: #0a84ff;
-  --matrix-glow: 0 4px 12px rgba(10, 132, 255, 0.4);
-  --radius-main: 12px;
-  --radius-card: 20px;
-  --radius-sm: 8px;
-  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-}
-
-.ios body {
-  background: var(--bg-body) !important;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(0, 122, 255, 0.05) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(0, 122, 255, 0.05) 0px, transparent 50%) !important;
-  background-attachment: fixed !important;
-}
-
-.ios aside, .ios header, .ios .matrix-card {
-  backdrop-filter: blur(20px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-  border: 1px solid var(--border-color) !important;
-}
-
-.ios .matrix-card {
-  background: var(--bg-card) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08) !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.ios .matrix-btn {
-  background: var(--matrix-color) !important;
-  color: #fff !important;
-  border: none !important;
-  font-weight: 600 !important;
-  border-radius: 12px !important;
-  padding: 10px 20px !important;
-  transition: all 0.2s ease !important;
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.2) !important;
-}
-
-.ios .matrix-btn:active {
-  transform: scale(0.96) !important;
-  opacity: 0.8 !important;
-}
-
-.ios aside nav button {
-  border-radius: 10px !important;
-  margin: 2px 8px !important;
-  transition: all 0.2s ease !important;
-}
-
-.ios aside nav button.active {
-  background: rgba(0, 122, 255, 0.1) !important;
-  color: var(--matrix-color) !important;
-}
-
-.ios input, .ios select, .ios textarea {
-  background: rgba(0, 0, 0, 0.05) !important;
-  border: 1px solid transparent !important;
-  border-radius: 10px !important;
-  padding: 10px 14px !important;
-  transition: all 0.2s ease !important;
-}
-
-.dark.ios input, .dark.ios select, .dark.ios textarea {
-  background: rgba(255, 255, 255, 0.05) !important;
-}
-
-.ios input:focus {
-  background: transparent !important;
-  border-color: var(--matrix-color) !important;
-  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1) !important;
-}
-
 /* --- Dynamic / Custom Style Support --- */
-.custom-style {
-  --bg-body: var(--custom-bg-body);
-  --bg-card: var(--custom-bg-card);
-  --bg-header: var(--custom-bg-header);
-  --bg-sidebar: var(--custom-bg-sidebar);
-  --text-main: var(--custom-text-main);
-  --text-muted: var(--custom-text-muted);
-  --border-color: var(--custom-border-color);
-  --matrix-color: var(--custom-matrix-color);
-  --radius-main: var(--custom-radius-main, 12px);
-  --radius-card: var(--custom-radius-card, 16px);
-}
-
-/* Matrix Text Glow */
-.matrix .text-main, .matrix h1, .matrix h2, .matrix h3, .matrix span {
-  text-shadow: 0 0 8px rgba(0, 255, 65, 0.6) !important;
-}
-
-.matrix .matrix-btn:hover {
-  background: #00ff41 !important;
-  box-shadow: 0 0 30px #00ff41 !important;
-}
-
-/* --- Classic Style (Modern Premium) --- */
-.classic.light {
-  --bg-body: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-header: rgba(255, 255, 255, 0.8);
-  --bg-sidebar: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --matrix-color: #3b82f6;
-  --radius-main: 12px;
-  --radius-card: 16px;
-  --radius-sm: 8px;
-}
-
-.classic.dark {
-  --bg-body: #020617;
-  --bg-card: #0f172a;
-  --bg-header: rgba(15, 23, 42, 0.8);
-  --bg-sidebar: #0f172a;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #1e293b;
-  --matrix-color: #f59e0b; /* Amber instead of blue for better contrast on dark blue */
-  --radius-main: 12px;
-  --radius-card: 16px;
-  --radius-sm: 8px;
-}
-
-.classic .matrix-card {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
-  border: 1px solid var(--border-color) !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.classic .matrix-card:hover {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
-  transform: translateY(-2px) !important;
-}
-
-/* 
-   ==========================================================================
-   EXTREME MATRIX REDESIGN (Minimalist & Cold)
-   ==========================================================================
-*/
-
-/* Force high contrast for all text in matrix mode - Dark Mode only */
-.matrix.dark .text-gray-400,
-.matrix.dark .text-gray-500,
-.matrix.dark .text-gray-600,
-.matrix.dark .text-slate-500 {
-  color: rgba(0, 255, 65, 0.6) !important;
-}
-
-.matrix.dark .text-black,
-.matrix.dark .text-gray-900,
-.matrix.dark .text-slate-900 {
-  color: #00ff41 !important;
-}
-
-/* Global Border Unification */
-.matrix * {
-  border-color: var(--border-color) !important;
-}
-
-/* Data Stream Borders & Enhanced Hierarchy */
-.matrix .card, 
-.matrix .bg-white, 
-.matrix .bg-gray-50,
-.matrix .bg-slate-50,
-.matrix [class*="bg-opacity"] {
-  background: var(--bg-card) !important;
-  border: 1px solid var(--matrix-color) !important;
-  box-shadow: var(--matrix-glow) !important;
-  backdrop-filter: blur(8px);
-  border-radius: var(--radius-card) !important;
-}
-
-/* Modal/Dropdown Elevation */
-.matrix .shadow-lg,
-.matrix .shadow-xl,
-.matrix .fixed.inset-0 {
-  background: var(--bg-card) !important;
-  border: 2px solid var(--matrix-color) !important;
-  box-shadow: 0 0 40px rgba(0, 255, 65, 0.3) !important;
-}
-
-/* Extreme Scanlines */
-.matrix-scanlines {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%,
-    rgba(0, 255, 65, 0.05) 50%
-  );
-  background-size: 100% 4px;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.3;
-}
-
-/* Hacker Buttons */
-.matrix button:not(.close-btn),
-.matrix .matrix-btn {
-  background: var(--matrix-color) !important;
-  color: var(--sidebar-text-active) !important;
-  border: 1px solid var(--matrix-color) !important;
-  text-transform: uppercase;
-  font-weight: bold;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.1s steps(2);
-  border-radius: var(--radius-sm) !important;
-  box-shadow: var(--matrix-glow);
-}
-
-.matrix button:not(.close-btn):hover,
-.matrix .matrix-btn:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 0 15px var(--matrix-color);
-}
-
-/* Inputs */
-.matrix input, 
-.matrix textarea, 
-.matrix select {
-  background: var(--bg-body) !important;
-  border: 1px solid var(--matrix-color) !important;
-  color: var(--text-main) !important;
-  border-radius: var(--radius-sm) !important;
-}
-
-.matrix input::placeholder {
-  color: var(--text-muted) !important;
-  opacity: 0.5;
-}
-
-.matrix input:focus {
-  outline: 2px solid var(--matrix-color) !important;
-  outline-offset: 2px;
-  background: var(--bg-card) !important;
-}
-
-/* Matrix Text Glow - Refined for both modes */
-.matrix.dark h1, .matrix.dark h2, .matrix.dark h3 {
-  text-shadow: 0 0 10px #00ff41, 0 0 20px rgba(0, 255, 65, 0.5);
-  color: #fff !important; /* High contrast for dark headers */
-}
-
-.matrix.light h1, .matrix.light h2, .matrix.light h3 {
-  text-shadow: none !important;
-  color: var(--text-main) !important;
-}
-
-/* Custom Scrollbar for Matrix */
-.matrix ::-webkit-scrollbar {
-  width: 6px;
-}
-.matrix ::-webkit-scrollbar-track {
-  background: var(--bg-body);
-}
-.matrix ::-webkit-scrollbar-thumb {
-  background: var(--matrix-color);
-}
-
-/* Kawaii Specific Text Overrides (Extreme Global) */
-.kawaii, .kawaii * {
-  font-family: var(--font-main) !important;
-}
-
-.kawaii h1, .kawaii h2, .kawaii h3, .kawaii .text-2xl, .kawaii .text-3xl {
-  font-family: var(--font-header) !important;
-  letter-spacing: 0.05em;
-}
-
-.kawaii .text-gray-500, 
-.kawaii .text-gray-400, 
-.kawaii .text-muted-foreground,
-.kawaii .text-[var(--text-muted)] {
-  color: #ff9db4 !important;
-}
-
-.kawaii .text-[var(--text-main)],
-.kawaii h4, .kawaii h5, .kawaii h6,
-.kawaii span, .kawaii p, .kawaii label, .kawaii b, .kawaii strong, .kawaii i,
-.kawaii input, .kawaii button, .kawaii textarea, .kawaii select {
-  color: var(--text-main) !important;
-}
-
-.kawaii * {
-  border-color: var(--border-color);
-}
-
-.kawaii aside {
-  background: linear-gradient(to bottom, #fff9fb 0%, #fff0f6 100%) !important;
-  border-right: 2px solid #ffdae9 !important;
-}
-
-.kawaii header {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-bottom: 3px solid #ffdae9 !important;
-}
-
 @theme {
   --color-matrix: var(--matrix-color);
   --color-matrix-dark: var(--matrix-green-dark);
@@ -1018,44 +447,7 @@ body {
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
-.matrix-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--matrix-green-glow);
-}
-
-.matrix-btn {
-  background: var(--matrix-green-dark);
-  border: 1px solid var(--matrix-color);
-  color: var(--matrix-color);
-  transition: all 0.3s ease;
-}
-
-.matrix-btn:hover {
-  background: var(--matrix-color);
-  color: black;
-  box-shadow: var(--matrix-green-glow);
-}
-
 .text-matrix {
   color: var(--matrix-color);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 255, 65, 0.1);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 255, 65, 0.2);
-}

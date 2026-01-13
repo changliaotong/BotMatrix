@@ -123,6 +123,67 @@ export const useBotStore = defineStore('bot', {
         return { success: false, message: 'Failed to fetch plugins' };
       }
     },
+
+    // --- Group Setup API ---
+    async fetchGroupSetup(robotOwner?: string, groupOwner?: string) {
+      try {
+        let url = '/api/admin/setup/groups';
+        const params = new URLSearchParams();
+        if (robotOwner) params.append('robot_owner', robotOwner);
+        if (groupOwner) params.append('group_owner', groupOwner);
+        if (params.toString()) url += `?${params.toString()}`;
+        
+        const { data } = await api.get(url);
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch group setup:', err);
+        return { success: false, message: 'Failed to fetch group setup' };
+      }
+    },
+    async updateGroupSetup(groupInfo: any) {
+      try {
+        const { data } = await api.put('/api/admin/setup/groups', groupInfo);
+        return data;
+      } catch (err) {
+        console.error('Failed to update group setup:', err);
+        return { success: false, message: 'Failed to update group setup' };
+      }
+    },
+
+    // --- Member Setup API ---
+    async fetchMemberSetup(adminId?: string) {
+      try {
+        let url = '/api/admin/setup/members';
+        if (adminId) url += `?admin_id=${adminId}`;
+        const { data } = await api.get(url);
+        if (data.success && data.data && data.data.bots) {
+          this.bots = data.data.bots;
+        }
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch member setup:', err);
+        return { success: false, message: 'Failed to fetch member setup' };
+      }
+    },
+    async updateMemberSetup(botInfo: any) {
+      try {
+        const { data } = await api.put('/api/admin/setup/members', botInfo);
+        return data;
+      } catch (err) {
+        console.error('Failed to update member setup:', err);
+        return { success: false, message: 'Failed to update member setup' };
+      }
+    },
+    async deleteMemberSetup(botUin: number) {
+      try {
+        const { data } = await api.delete(`/api/admin/setup/members?bot_uin=${botUin}`);
+        return data;
+      } catch (err) {
+        console.error('Failed to delete member setup:', err);
+        return { success: false, message: 'Failed to delete member setup' };
+      }
+    },
+
     async pluginAction(id: string, action: string, type: string, source: string) {
       try {
         const { data } = await api.post('/api/admin/plugins/action', {

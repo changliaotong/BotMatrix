@@ -29,8 +29,8 @@ import (
 // @Router /api/admin/employees/tasks [get]
 func HandleListEmployeeTasks(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var taskList []models.DigitalEmployeeTaskGORM
-		query := m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{})
+		var taskList []models.DigitalEmployeeTask
+		query := m.GORMDB.Model(&models.DigitalEmployeeTask{})
 
 		// 过滤条件
 		if employeeID := r.URL.Query().Get("employee_id"); employeeID != "" {
@@ -54,7 +54,7 @@ func HandleListEmployeeTasks(m *Manager) http.HandlerFunc {
 // HandleCreateEmployeeTask 创建数字员工任务
 func HandleCreateEmployeeTask(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var task models.DigitalEmployeeTaskGORM
+		var task models.DigitalEmployeeTask
 		if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 			utils.SendJSONResponse(w, false, "Invalid request body", nil)
 			return

@@ -8,54 +8,32 @@ repo_url: https://github.com/changliaotong/BotMatrix
 nav:
   - 🏠 首页: zh-CN/README.md
   - 🚀 快速开始:
-    - 部署指南: zh-CN/core/DEPLOY.md
-    - 开发指南 (编译/调试): zh-CN/development/DEVELOPMENT.md
+    - 用户全景指南: zh-CN/USER_GUIDE.md
+    - 系统架构全景: zh-CN/core/ARCHITECTURE.md
+    - 快速部署指南: zh-CN/core/DEPLOY.md
     - 更新日志: zh-CN/CHANGELOG.md
-  - 🏗️ 核心架构:
-    - 系统架构: zh-CN/core/ARCHITECTURE.md
-    - 消息路由规则: zh-CN/core/ROUTING_RULES.md
-    - OneBot 协议兼容性: zh-CN/core/ONEBOT_COMPATIBILITY.md
-    - API 接口参考: zh-CN/core/API_REFERENCE.md
-    - 系统详细设定: zh-CN/core/SYSTEM_DOCS.md
-  - 📖 使用手册:
-    - 服务端使用手册: zh-CN/core/SERVER_MANUAL.md
-    - 插件功能概览: zh-CN/plugins/README.md
-    - 技能开关与兼容性: zh-CN/core/SKILL_SWITCH_AND_COMPATIBILITY.md
-    - 小程序管理后台: zh-CN/core/MINIPROGRAM.md
+  - 🏗️ 核心系统:
+    - 插件与技能系统: zh-CN/core/SKILL_AND_PLUGIN_SYSTEM.md
+    - 接口与协议规范: zh-CN/core/INTERFACE_SPECIFICATIONS.md
+    - 组件与适配器详解: zh-CN/components/ADAPTERS_AND_COMPONENTS.md
+    - WxBotGo 专用指南: zh-CN/components/WXBOTGO_GUIDE.md
   - 🔌 插件开发:
-    - 插件开发手册: zh-CN/plugins/PLUGIN_DEVELOPMENT.md
-    - 插件 SDK 指南: zh-CN/plugins/sdk_guide.md
-    - 插件市场规范 (BMPK): zh-CN/plugins/market_spec.md
-    - 核心插件说明: zh-CN/plugins/CORE_PLUGIN.md
-    - 功能系统说明:
-      - 裂变系统: zh-CN/plugins/FISSION_SYSTEM.md
-      - 结婚与养娃系统: zh-CN/plugins/BABY_AND_MARRIAGE_SYSTEM.md
-      - QQ频道智能发送: zh-CN/plugins/QQ_GUILD_SMART_SEND.md
-  - 🤖 适配器组件:
-    - BotNexus: zh-CN/components/BotNexus.md
-    - BotWorker: zh-CN/components/BotWorker.md
-    - DingTalkBot: zh-CN/components/DingTalkBot.md
-    - DiscordBot: zh-CN/components/DiscordBot.md
-    - EmailBot: zh-CN/components/EmailBot_API.md
-    - FeishuBot: zh-CN/components/FeishuBot.md
-    - KookBot: zh-CN/components/KookBot.md
-    - SlackBot: zh-CN/components/SlackBot.md
-    - TelegramBot: zh-CN/components/TelegramBot.md
-    - TencentBot: zh-CN/components/TencentBot.md
-    - WeComBot: zh-CN/components/WeComBot.md
-    - WxBot: zh-CN/components/WxBot.md
-    - WxBotGo: zh-CN/components/WxBotGo/FEATURES.md
+    - 插件功能全景目录: zh-CN/plugins/PLUGINS_CATALOG.md
+    - 插件开发全景指南: zh-CN/development/PLUGIN_DEVELOPMENT_GUIDE.md
   - 🛠️ 开发者中心:
-    - 开发规划: zh-CN/development/README.md
-    - AI 助手指南: zh-CN/development/AI_GUIDE.md
-    - 国际化 (I18N) 指南: zh-CN/development/I18N_GUIDE.md
-    - 容器化最佳实践: zh-CN/deployment/CONTAINER_BEST_PRACTICES.md
-    - 测试计划: zh-CN/development/TESTING_PLAN.md
-  - 📜 历史与规划:
-    - Redis 升级说明: zh-CN/legacy/REDIS_UPGRADE.md
-    - WebUI 升级计划: zh-CN/legacy/WEBUI_UPGRADE_PLAN.md
-    - 文档冲突与改进: zh-CN/legacy/CONFLICT_PLAN.md
-    - 官方网站规划: zh-CN/legacy/WEBSITE_PLAN.md
+    - 开发者全景指南: zh-CN/development/DEVELOPMENT_GUIDE.md
+    - 项目日志与测试计划: zh-CN/development/PROJECT_LOGS.md
+  - 🇺🇸 English:
+    - Home: en-US/README.md
+    - Vision: en-US/VISION.md
+    - User Guide: en-US/USER_GUIDE.md
+    - Architecture: en-US/core/ARCHITECTURE.md
+    - Deployment: en-US/deployment/CONTAINER_BEST_PRACTICES.md
+  - 📁 归档 (Archive):
+    - 历史版本升级: archive/zh-CN/legacy/REDIS_UPGRADE.md
+    - 历史計畫文件: archive/zh-CN/legacy/CONFLICT_PLAN.md
+    - 2026 核心增强: archive/CORE_ENHANCEMENTS_20260103.md
+    - AI 重構總結: archive/REFACTOR_AI_SUMMARY.md
 
 
 theme:
