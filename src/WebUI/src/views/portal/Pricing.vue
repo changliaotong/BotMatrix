@@ -176,7 +176,7 @@
                 QR CODE<br/>{{ modalType === 'matrix' ? 'MATRIX' : 'BUSINESS' }}
               </div>
             </div>
-            <div class="text-xs font-bold tracking-widest text-[var(--matrix-color)] uppercase">WeChat：BotMatrix_Global</div>
+            <div class="text-xs font-bold tracking-widest text-[var(--matrix-color)] uppercase">WeChat：Kuang-HuiPeng</div>
           </div>
 
           <button @click="activeModal = null" class="w-full py-4 bg-[var(--matrix-color)] hover:bg-[var(--matrix-color)]/80 text-white rounded-xl font-bold transition-all">

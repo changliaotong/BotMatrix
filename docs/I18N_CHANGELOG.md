@@ -5,6 +5,9 @@ This update focuses on synchronizing and completing the localization for the **P
 
 ## Changes by Page
 
+### 0. Global Contact Information
+- **Change**: Updated WeChat contact ID from `Matrix_Revolution_AI` and `BotMatrix_Global` to `Kuang-HuiPeng` across all pages and locale files.
+
 ### 1. Portal Pricing Page
 - **Issue**: Missing price tags and inconsistent key structures across locales.
 - **Fixes**:
