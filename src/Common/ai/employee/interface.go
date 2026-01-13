@@ -8,22 +8,27 @@ import (
 
 // DigitalEmployeeService 数字员工核心服务接口
 type DigitalEmployeeService interface {
-	GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error)
+	GetEmployeeByBotID(botID string) (*models.DigitalEmployee, error)
 	RecordKpi(employeeID uint, metric string, score float64) error
 	UpdateOnlineStatus(botID string, status string) error
 	ConsumeSalary(botID string, tokens int64) error
 	CheckSalaryLimit(botID string) (bool, error)
 	UpdateSalary(botID string, salaryToken *int64, salaryLimit *int64) error
 	AutoEvolve(employeeID uint) error
+
+	// Lifecycle Management
+	Recruit(ctx context.Context, jobID uint, enterpriseID uint, name string, botID string) (*models.DigitalEmployee, error)
+	Fire(ctx context.Context, employeeID uint, reason string) error
+	Transfer(ctx context.Context, employeeID uint, newJobID uint) error
 }
 
 // CognitiveMemoryService 认知记忆服务接口
 type CognitiveMemoryService interface {
-	GetRelevantMemories(ctx context.Context, userID string, botID string, query string) ([]models.CognitiveMemoryGORM, error)
-	GetRoleMemories(ctx context.Context, botID string) ([]models.CognitiveMemoryGORM, error)
-	SaveMemory(ctx context.Context, memory *models.CognitiveMemoryGORM) error
+	GetRelevantMemories(ctx context.Context, userID string, botID string, query string) ([]models.CognitiveMemory, error)
+	GetRoleMemories(ctx context.Context, botID string) ([]models.CognitiveMemory, error)
+	SaveMemory(ctx context.Context, memory *models.CognitiveMemory) error
 	ForgetMemory(ctx context.Context, memoryID uint) error
-	SearchMemories(ctx context.Context, botID string, query string, category string) ([]models.CognitiveMemoryGORM, error)
+	SearchMemories(ctx context.Context, botID string, query string, category string) ([]models.CognitiveMemory, error)
 	SetEmbeddingService(svc any) // Use any to avoid import cycle if needed, or rag.EmbeddingService
 	ConsolidateMemories(ctx context.Context, userID string, botID string, aiSvc types.AIService) error
 	LearnFromURL(ctx context.Context, botID string, url string, category string) error
@@ -32,15 +37,15 @@ type CognitiveMemoryService interface {
 
 // DigitalEmployeeTaskService 数字员工任务服务接口
 type DigitalEmployeeTaskService interface {
-	CreateTask(ctx context.Context, task *models.DigitalEmployeeTaskGORM) error
+	CreateTask(ctx context.Context, task *models.DigitalEmployeeTask) error
 	UpdateTaskStatus(ctx context.Context, executionID string, status string, progress int) error
-	GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTaskGORM, error)
+	GetTaskByExecutionID(ctx context.Context, executionID string) (*models.DigitalEmployeeTask, error)
 	AssignTask(ctx context.Context, executionID string, assigneeID uint) error
 	PlanTask(ctx context.Context, executionID string) error
 	ExecuteTask(ctx context.Context, executionID string) error
 	ExecuteStep(ctx context.Context, executionID string, stepIndex int) error
 	ApproveTask(ctx context.Context, executionID string) error
-	CreateSubTask(ctx context.Context, parentExecutionID string, subTask *models.DigitalEmployeeTaskGORM) error
+	CreateSubTask(ctx context.Context, parentExecutionID string, subTask *models.DigitalEmployeeTask) error
 	RecordTaskResult(ctx context.Context, executionID string, result string, success bool) error
 }
 
