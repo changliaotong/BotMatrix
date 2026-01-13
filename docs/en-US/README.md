@@ -1,51 +1,37 @@
-# BotMatrix 📚 Documentation Hub
+# BotMatrix 📚 Documentation Center
 
 > [🌐 English](README.md) | [简体中文](../zh-CN/README.md)
-> [🏠 Back to Home](../../README.md)
+> [🏠 Back to Project Home](../../README.md)
 
-Welcome to the BotMatrix Documentation Hub. This includes detailed system architecture, development guides, deployment processes, and feature descriptions.
-
-## 🗺️ Documentation Navigation
-
-### 🚀 Getting Started & Deployment
-- **[Changelog](CHANGELOG.md)** - Project version iterations and change logs.
-- **[Architecture](core/ARCHITECTURE.md)** - Understand the core design and component collaboration.
-- **[Deployment Guide](core/DEPLOY.md)** - How to install and run BotMatrix in different environments.
-- **[Container Best Practices](deployment/CONTAINER_BEST_PRACTICES.md)** - Deploying BotWorker and plugins with Docker/K8s.
-- **[API Reference](core/API_REFERENCE.md)** - Detailed JSON message formats and communication protocols.
-- **[Redis Upgrade](legacy/REDIS_UPGRADE.md)** - Notes on Redis dependency upgrades and configuration.
-- **[WebUI Upgrade Plan](legacy/WEBUI_UPGRADE_PLAN.md)** - Roadmap for Web interface refactoring.
-
-### 📖 Manuals
-- **[Server Manual](core/SERVER_MANUAL.md)** - Detailed features, configuration, and admin commands.
-- **[Plugin Manual](plugins/README.md)** - Usage guides for all built-in plugins.
-- **[Plugin SDK Guide](plugins/sdk_guide.md)** - Develop efficient plugins with Go/Python/C# SDK.
-- **[Market Specification (BMPK)](plugins/market_spec.md)** - Standardized plugin distribution protocol.
-- **[Routing Rules](core/ROUTING_RULES.md)** - Detailed definition of message routing and distribution.
-- **[Skill Switch & Compatibility](core/SKILL_SWITCH_AND_COMPATIBILITY.md)** - Bot skill management and OneBot compatibility.
-
-### 🛠️ Core System Details
-- **[Conflict & Improvement Plan](legacy/CONFLICT_PLAN.md)** - Known conflicts and future document optimizations.
-- **[Component Documentation](components/README.md)** - Technical details of adapters and core components.
-- **[MiniProgram Backend](core/MINIPROGRAM.md)** - Description of the mobile management platform.
-- **[Fission System](plugins/FISSION_SYSTEM.md)** - Implementation of automated group growth.
-- **[Baby & Marriage System](plugins/BABY_AND_MARRIAGE_SYSTEM.md)** - Logic for interactive fun features.
-- **[Core Plugin](plugins/CORE_PLUGIN.md)** - Features and configuration of built-in core plugins.
-- **[QQ Guild Smart Send](plugins/QQ_GUILD_SMART_SEND.md)** - Optimized message sending for QQ Guilds.
-
-### 💻 Developer Guide
-- **[Dev & Planning Hub](development/README.md)** - Plugin development, protocol compatibility, and planning.
-- **[Plugin Development](plugins/PLUGIN_DEVELOPMENT.md)** - How to write custom plugins for BotMatrix.
-- **[OneBot Compatibility](core/ONEBOT_COMPATIBILITY.md)** - Protocol implementation details and coverage.
-- **[Website Plan](legacy/WEBSITE_PLAN.md)** - Construction plan for the official documentation site.
+Welcome to the BotMatrix documentation center. We aim to build a secure, collaborative, and infinitely scalable **Global Agent Mesh**, enabling every enterprise to easily deploy their own **Digital Employees** and **Skill Bots**.
 
 ---
 
-## 🏗️ System Components
-1. **BotNexus**: The system brain, responsible for connection management, routing, and plugin scheduling.
-2. **BotWorker**: Execution nodes, responsible for task processing and plugin execution.
-3. **WebUI**: Management interface based on Vue 3 for monitoring and configuration.
+## ⚖️ Open Source & Service Statement
+
+- **Core Open Source**: BotMatrix source code is open source; you can **download, deploy, and use** all core features for free.
+- **Commercial Services**: To support project evolution, we offer optional **value-added services** (e.g., technical support, custom development).
 
 ---
 
-[🏠 Back to Project Home](../../README.md)
+## 🗺️ Documentation Map
+
+### 🚀 1. Quick Start
+- **[Architecture](core/ARCHITECTURE.md)**: A high-level overview of the system's layered design and distributed architecture.
+- **[Deployment & Operations](core/DEPLOYMENT_AND_OPERATIONS.md)**: Quick setup, containerization best practices, and performance optimization.
+
+### � 2. Interfaces & Adapters
+- **[Interface Specifications](core/INTERFACE_SPECIFICATIONS.md)**: OneBot v11 compatibility, MCP protocol, and custom action specifications.
+- **[Adapters Catalog](core/ADAPTERS_CATALOG.md)**: Details on supported IM platforms (QQ, WeChat, DingTalk, Feishu, Discord).
+
+### 🧠 3. AI & Core Capabilities
+- **[AI, RAG & MCP Guide](core/AI_RAG_MCP_GUIDE.md)**: In-depth look at RAG 2.0, vector database integration, and the Digital Employee system.
+- **[Vision & Roadmap](core/VISION_AND_ROADMAP.md)**: Explore our project vision, business strategy, and technical evolution.
+
+### �️ 4. Developer Resources
+- **[Development Guide](core/DEVELOPMENT_GUIDE.md)**: Plugin development workflow, `bm-cli` usage, and coding standards.
+- **[Changelog](CHANGELOG.md)**: View version history and updates.
+
+---
+
+> **Note**: This documentation structure was reorganized on 2026-01-13. Legacy documents have been moved to the `archive/` directory.

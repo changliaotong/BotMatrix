@@ -66,9 +66,12 @@ BotMatrix 深度兼容 OneBot v11 标准，支持各类主流机器人客户端�
 - **双层调度**: 
     - **系统级**: 由 BotNexus 决定消息转发给哪个 Worker 或 AI 技能。
     - **用户侧**: 在群组中实现多机器人角色分工（如：群管机器人 A 识别技术问题后转发给技术机器人 B）。
+- **核心组件**:
+    - `AIIntentGORM`: 定义意图列表与识别码。
+    - `AIIntentRoutingGORM`: 维护意图与目标（Skill/Worker/Plugin）的映射关系。
 - **工作流程**: 
-    1. **意图判定**: 调用 `AIIntentGORM` 定义的意图列表，通过模型返回结构化意图 Code。
-    2. **路由查找**: 根据 `IntentID` 在 `AIIntentRoutingGORM` 表中查找目标（Skill/Worker/Plugin）。
+    1. **意图判定**: 匹配用户输入的特征或调用模型返回意图 Code。
+    2. **路由查找**: 根据 `IntentID` 查找目标分发路径。
     3. **任务分发**: 加载对应配置并执行。
 
 ### 4.3 技能训练中心 (Skill Training Center)
@@ -76,6 +79,7 @@ BotMatrix 深度兼容 OneBot v11 标准，支持各类主流机器人客户端�
 - **提示词 IDE**: 可视化编辑 System/User Prompt，支持变量动态注入（如 `{{.UserName}}`）。
 - **语料标注**: 自动抓取回复效果不佳的对话，转化为 Few-shot 示例进行纠错。
 - **RAG 实验室**: 在线上传知识库 (PDF/MD)，调试分段策略与检索准确度。
+- **绩效评估**: 结合数字员工 KPI 体系，自动评估技能执行成功率。
 
 ### 4.4 开关机制 (`ENABLE_SKILL`)
 - **默认关闭**: 生产环境默认不启动 GORM 与任务调度器。

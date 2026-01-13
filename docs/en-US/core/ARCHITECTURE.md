@@ -1,54 +1,67 @@
-# BotMatrix System Architecture
+# 🏗️ BotMatrix Architecture & Component Overview
 
-> [🌐 English](ARCHITECTURE.md) | [简体中文](../zh-CN/ARCHITECTURE.md)
+> **Version**: 2.0
+> **Status**: Core architecture established
+> [🌐 English](ARCHITECTURE.md) | [简体中文](../zh-CN/core/ARCHITECTURE.md)
 > [⬅️ Back to Docs](README.md) | [🏠 Back to Home](../../README.md)
 
-BotMatrix is a robot matrix management system with a distributed and decoupled design. It achieves high concurrency and scalability by collaborating a central message distribution hub with multiple execution nodes.
+BotMatrix is a distributed, high-concurrency bot orchestration framework built on a decoupled architecture of "Control Center + Execution Nodes".
 
-## 🏗️ Core Components
+---
 
-### 1. BotNexus (Central Control Node)
-BotNexus is the "brain" and "router" of the system.
-- **Responsibilities**:
-    - Maintain WebSocket connections with clients (e.g., WxBot, QQBot).
-    - Receive raw message events (Events).
-    - Determine message distribution based on **Routing Rules**.
-    - Manage registration and heartbeats of Worker nodes.
-    - Provide a Web Management Interface (WebUI).
-- **Tech Stack**: Go, Gin, WebSocket, Redis (Pub/Sub).
+## 1. System Topology
 
-### 2. BotWorker (Task Execution Node)
-BotWorker is the "limbs" that handle actual business logic.
-- **Responsibilities**:
-    - Listen to Redis task queues.
-    - Execute time-consuming tasks (e.g., AI text generation, image processing).
-    - Run Plugins.
-    - Return results to BotNexus or send directly.
-- **Tech Stack**: Go, Python, .NET (Multi-language support).
+```mermaid
+graph TD
+    A[IM Platforms: WeChat/QQ/Discord] <--> B[BotNexus: Control Center]
+    B <--> C[BotWorker: Task Execution]
+    C <--> D[Plugins/Skills: Business Logic]
+    B <--> E[WebUI: Management Dashboard]
+    B <--> F[Redis: Session & Routing]
+    B <--> G[PostgreSQL: Persistence & AI Memory]
+```
 
-### 3. Redis (Middleware)
-Redis plays a crucial role as the core communication bus.
-- **Responsibilities**:
-    - **Message Distribution**: Real-time communication between Nexus and Worker using Pub/Sub.
-    - **Task Queue**: Store asynchronous tasks waiting to be processed.
-    - **State Storage**: Store bot online status, rate limiting policies, and dynamic configurations.
-    - **Session Cache**: Maintain User Session Context.
+---
 
-### 4. PostgreSQL (Persistence Database)
-- **Responsibilities**:
-    - Store user data, routing rules, persistent configurations, and operation logs.
-    - Store complex business logic data (e.g., Baby system, Marriage system data).
+## 2. Core Components
 
-## 🔄 Message Flow
+### 2.1 BotNexus (Central Controller)
+The heart of the system, responsible for:
+- **Connection Hub**: Maintains WebSocket connections with IM adapters (OneBot v11).
+- **Dynamic Routing**: Dispatches messages to the appropriate Worker or AI Skill based on RTT and intent.
+- **3D Topology**: Visualizes the system network using Three.js.
+- **Security**: Handles JWT authentication and B2B Agent Mesh trust.
 
-1.  **Receive**: External bot clients send messages to **BotNexus** via WebSocket.
-2.  **Decision**: BotNexus filters via `CorePlugin` and matches target Workers based on `RoutingRules`.
-3.  **Dispatch**: BotNexus publishes the message to a specific **Redis** channel.
-4.  **Execution**: **BotWorker** subscribed to the channel receives the message and runs plugin logic.
-5.  **Feedback**: After processing, BotWorker sends response commands back to BotNexus or calls API interfaces directly.
+### 2.2 BotWorker (Task Executor)
+The execution engine for business logic:
+- **Plugin Host**: Runs multi-language plugins via JSON-STDIO.
+- **Built-in Skills**: Utilities (Weather, Translate), Entertainment (Social, Games), and Management (Group Admin).
+- **Stateless Design**: Allows easy horizontal scaling.
 
-## 📈 Scalability Design
+### 2.3 SystemWorker (Support Node)
+Handles background tasks and system maintenance:
+- **Cron Jobs**: Scheduled tasks like database cleanup or daily reports.
+- **Log Aggregation**: Collects and stores logs from all nodes.
 
-- **Horizontal Scaling**: Multiple BotWorker nodes can be started to share the load.
-- **High Availability**: BotNexus supports cluster deployment (with a load balancer).
-- **Pluginization**: Supports dynamic loading of plugins without downtime.
+### 2.4 Overmind (API Gateway)
+The management interface for the entire cluster:
+- **RESTful API**: Powers the WebUI and mobile miniprogram.
+- **Marketplace Sync**: Manages plugin installation and updates.
+
+---
+
+## 3. Communication Standards
+
+- **Internal**: Redis Pub/Sub and gRPC.
+- **External (IM)**: OneBot v11 (WebSocket).
+- **AI/Mesh**: Model Context Protocol (MCP) over SSE/HTTP.
+
+---
+
+## 4. Message Lifecycle
+
+1. **Ingress**: IM adapter sends OneBot event to BotNexus.
+2. **Intent Identification**: Nexus analyzes intent (AI or Keyword).
+3. **Routing**: Nexus dispatches task to an available Worker.
+4. **Execution**: Worker processes logic (via Plugin or Built-in Skill).
+5. **Egress**: Worker returns response to Nexus, which forwards it to the IM adapter.
