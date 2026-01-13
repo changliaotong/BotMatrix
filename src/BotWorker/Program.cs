@@ -3,6 +3,9 @@ using StackExchange.Redis;
 using BotWorker.Application.Messaging.Pipeline;
 using BotWorker.Common.Config;
 using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Repositories;
+using BotWorker.Modules.AI.Services;
+using BotWorker.Modules.AI.Skills;
 using BotWorker.Modules.AI.Tools;
 using BotWorker.Infrastructure.Communication.OneBot;
 
@@ -45,22 +48,51 @@ builder.Services.AddSingleton<IKnowledgeBaseService, BotWorker.Modules.AI.Plugin
 });
 
 // 注册核心业务服务
+builder.Services.AddSingleton<IDbInitializer, PostgresDbInitializer>();
 builder.Services.AddSingleton<IEventNexus, EventNexus>();
 builder.Services.AddSingleton<IToolAuditService, ToolAuditService>();
 builder.Services.AddSingleton<SandboxService>();
+
+// 注册 AI 存储层 (Repository) - 为 Go 迁移做准备
+builder.Services.AddSingleton<ILLMRepository, PostgresLLMRepository>();
+builder.Services.AddSingleton<IAgentRepository, PostgresAgentRepository>();
+builder.Services.AddSingleton<ILLMCallLogRepository, PostgresLLMCallLogRepository>();
+
+// 注册 Evolution 存储层
+builder.Services.AddSingleton<ISkillDefinitionRepository, PostgresSkillDefinitionRepository>();
+builder.Services.AddSingleton<IJobDefinitionRepository, PostgresJobDefinitionRepository>();
+builder.Services.AddSingleton<IEmployeeInstanceRepository, PostgresEmployeeInstanceRepository>();
+builder.Services.AddSingleton<ITaskRecordRepository, PostgresTaskRecordRepository>();
+builder.Services.AddSingleton<ITaskStepRepository, PostgresTaskStepRepository>();
+
+// 注册 Billing 存储层
+builder.Services.AddSingleton<IWalletRepository, PostgresWalletRepository>();
+builder.Services.AddSingleton<ILeaseResourceRepository, PostgresLeaseResourceRepository>();
+builder.Services.AddSingleton<ILeaseContractRepository, PostgresLeaseContractRepository>();
+builder.Services.AddSingleton<IBillingTransactionRepository, PostgresBillingTransactionRepository>();
+
 builder.Services.AddSingleton<LLMApp>();
 builder.Services.AddSingleton<IMcpService, MCPManager>();
 builder.Services.AddSingleton<IRagService, RagService>();
 builder.Services.AddSingleton<IAIService, AIService>();
+builder.Services.AddSingleton<ICodeRunnerService, CodeRunnerService>();
 builder.Services.AddSingleton<IImageGenerationService, ImageGenerationService>();
 builder.Services.AddSingleton<IJobService, JobService>();
+
+// 注册工具/技能系统
+builder.Services.AddSingleton<ISkill, FileSkills>();
+builder.Services.AddSingleton<ISkill, ShellSkills>();
+builder.Services.AddSingleton<ISkillService, SkillService>();
+
 builder.Services.AddSingleton<IEmployeeService, EmployeeService>();
+builder.Services.AddSingleton<IBillingService, BillingService>();
 builder.Services.AddSingleton<IEvaluationService, EvaluationService>();
 builder.Services.AddSingleton<IEvolutionService, BotWorker.Modules.AI.Services.EvolutionService>();
 builder.Services.AddSingleton<IDevWorkflowManager, DevWorkflowManager>();
+builder.Services.AddSingleton<IUniversalAgentManager, UniversalAgentManager>();
 builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
 builder.Services.AddHostedService<McpInitializationService>();
-builder.Services.AddHostedService<EvolutionBackgroundService>();
+builder.Services.AddHostedService<BotWorker.Modules.AI.Services.EvolutionBackgroundService>();
 builder.Services.AddSingleton<II18nService, I18nService>();
 builder.Services.AddSingleton<IOneBotApiClient, OneBotApiClient>();
 builder.Services.AddSingleton<IRobot, PluginManager>();
@@ -132,6 +164,17 @@ builder.Services.AddHostedService<BotWorker.Infrastructure.Messaging.RedisStream
 
 var app = builder.Build();
 
+// 初始化数据库
+using (var scope = app.Services.CreateScope())
+{
+    try {
+        var initializer = scope.ServiceProvider.GetRequiredService<IDbInitializer>();
+        await initializer.InitializeAsync();
+    } catch (Exception ex) {
+        Log.Warning("[Startup] Database initialization failed: {Message}. Continuing in offline mode...", ex.Message);
+    }
+}
+
 // 初始化 MetaData 缓存
 MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
 
@@ -142,6 +185,7 @@ BotMessage.ServiceProvider = app.Services;
 LLMApp.ServiceProvider = app.Services;
 BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
 
+// 配置 HTTP 请求管道
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -157,19 +201,22 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         Log.Information("[Startup] Starting StartupLoader...");
-        // 0. 确保内置指令存在
+        // 0. 确保内置指令存在 (这些目前还在用旧 ORM)
         await BotCmd.EnsureTableCreatedAsync();
         await BotWorker.Infrastructure.Tools.Todo.EnsureTableCreatedAsync();
         
-        // 初始化进化系统相关表
-        await BotWorker.Modules.AI.Models.Evolution.JobDefinition.EnsureTableCreatedAsync();
-        await BotWorker.Modules.AI.Models.Evolution.EmployeeInstance.EnsureTableCreatedAsync();
-        await BotWorker.Modules.AI.Models.Evolution.TaskRecord.EnsureTableCreatedAsync();
-        await BotWorker.Modules.AI.Models.Evolution.TaskExecution.EnsureTableCreatedAsync();
-
         // 注入初始岗位
         var jobService = BotMessage.ServiceProvider.GetRequiredService<IJobService>();
         await jobService.SeedJobsAsync();
+
+        // [TEST] 验证动态技能
+        try {
+            var skillService = BotMessage.ServiceProvider.GetRequiredService<ISkillService>();
+            var testResult = await skillService.ExecuteSkillAsync("PYTEST", "HelloTarget", "Testing dynamic python skill", new Dictionary<string, string>());
+            Log.Information("[TEST] Dynamic Skill Output: \n{Result}", testResult);
+        } catch (Exception ex) {
+            Log.Error(ex, "[TEST] Dynamic Skill Execution Failed");
+        }
 
         await BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
         await BotCmd.EnsureCommandExistsAsync("岗位任务", "岗位任务");

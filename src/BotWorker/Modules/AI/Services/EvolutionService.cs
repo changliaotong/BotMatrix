@@ -3,6 +3,10 @@ using BotWorker.Modules.AI.Models.Evolution;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.AI.Services
 {
@@ -10,12 +14,27 @@ namespace BotWorker.Modules.AI.Services
     {
         private readonly IAIService _aiService;
         private readonly IJobService _jobService;
+        private readonly IJobDefinitionRepository _jobRepository;
+        private readonly ITaskRecordRepository _taskRepository;
+        private readonly ITaskStepRepository _stepRepository;
+        private readonly IEmployeeInstanceRepository _employeeRepository;
         private readonly ILogger<EvolutionService> _logger;
 
-        public EvolutionService(IAIService aiService, IJobService jobService, ILogger<EvolutionService> logger)
+        public EvolutionService(
+            IAIService aiService, 
+            IJobService jobService, 
+            IJobDefinitionRepository jobRepository,
+            ITaskRecordRepository taskRepository,
+            ITaskStepRepository stepRepository,
+            IEmployeeInstanceRepository employeeRepository,
+            ILogger<EvolutionService> logger)
         {
             _aiService = aiService;
             _jobService = jobService;
+            _jobRepository = jobRepository;
+            _taskRepository = taskRepository;
+            _stepRepository = stepRepository;
+            _employeeRepository = employeeRepository;
             _logger = logger;
         }
 
@@ -24,12 +43,20 @@ namespace BotWorker.Modules.AI.Services
             var job = await _jobService.GetJobAsync(jobId);
             if (job == null) return false;
 
-            // 1. 获取最近未被进化的任务记录和执行详情
-            var recentTasks = await TaskRecord.QueryListAsync<TaskRecord>($@"
-                SELECT TOP 10 * FROM {TaskRecord.FullName} 
-                WHERE EmployeeId IN (SELECT EmployeeId FROM {EmployeeInstance.FullName} WHERE JobId = '{jobId}')
-                AND IsEvolved = 0 AND Status = 'Completed'
-                ORDER BY CreatedAt DESC");
+            // 1. 获取该岗位下的所有员工
+            var employees = await _employeeRepository.GetByJobIdAsync(job.Id);
+            var employeeIds = employees.Select(e => e.Id).ToList();
+
+            if (!employeeIds.Any()) return false;
+
+            // 2. 获取这些员工最近未被进化的已完成任务
+            // 注意：这里需要 Repository 支持按员工 ID 列表查询，或者循环查询
+            var recentTasks = new List<TaskRecord>();
+            foreach (var empId in employeeIds)
+            {
+                var tasks = await _taskRepository.GetByAssigneeIdAsync(empId);
+                recentTasks.AddRange(tasks.Where(t => t.Status == "completed").Take(5));
+            }
 
             if (recentTasks.Count < 3) 
             {
@@ -37,7 +64,7 @@ namespace BotWorker.Modules.AI.Services
                 return false;
             }
 
-            // 2. 收集执行反馈和失败案例
+            // 3. 收集执行反馈
             var sb = new StringBuilder();
             sb.AppendLine($"# 岗位当前定义");
             sb.AppendLine($"名称: {job.Name}");
@@ -49,19 +76,21 @@ namespace BotWorker.Modules.AI.Services
 
             foreach (var task in recentTasks)
             {
-                var executions = await TaskExecution.QueryListAsync<TaskExecution>($"SELECT * FROM {TaskExecution.FullName} WHERE TaskId = '{task.TaskId}'");
-                foreach (var exec in executions)
+                var steps = await _stepRepository.GetByTaskIdAsync(task.Id);
+                foreach (var step in steps)
                 {
-                    sb.AppendLine($"- [得分: {exec.EvaluationScore}] 反馈: {exec.EvaluationFeedback}");
-                    if (exec.EvaluationScore < 60)
+                    if (!string.IsNullOrEmpty(step.OutputData))
                     {
-                        sb.AppendLine($"  - 失败输入: {exec.InputData}");
-                        sb.AppendLine($"  - 错误内容: {exec.ErrorMessage}");
+                        sb.AppendLine($"- [步骤: {step.Name}] 状态: {step.Status}");
+                        if (step.Status == "failed")
+                        {
+                            sb.AppendLine($"  - 错误内容: {step.ErrorMessage}");
+                        }
                     }
                 }
             }
 
-            // 3. 调用 LLM 进行进化分析
+            // 4. 调用 LLM 进行进化分析
             var evolutionPrompt = $@"你现在是数字员工进化引擎 (Evolution Engine)。
 请分析以下岗位的执行数据，并提出优化建议。
 
@@ -73,39 +102,47 @@ namespace BotWorker.Modules.AI.Services
 
 ## 输出格式 (必须是 JSON)
 {{
-  ""needs_update"": true/false,
+  ""needs_update"": true,
   ""reason"": ""为什么要更新"",
   ""new_constraints"": ""优化后的约束条件"",
   ""new_workflow"": ""优化后的工作流 JSON 字符串""
 }}";
 
-            var response = await _aiService.ChatAsync(evolutionPrompt);
+            var response = await _aiService.ChatAsync(evolutionPrompt, job.ModelSelectionStrategy);
             
-            // 4. 解析并应用进化
+            // 5. 解析并应用进化
             var jsonStart = response.IndexOf("{");
             var jsonEnd = response.LastIndexOf("}");
             if (jsonStart >= 0 && jsonEnd > jsonStart)
             {
                 var jsonStr = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                var result = JsonSerializer.Deserialize<EvolutionProposal>(jsonStr, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                
-                if (result != null && result.Needs_Update)
+                try
                 {
-                    job.Constraints = result.New_Constraints;
-                    job.Workflow = result.New_Workflow;
-                    job.Version++;
-                    await job.SaveAsync();
+                    var result = JsonSerializer.Deserialize<EvolutionProposal>(jsonStr, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    
+                    if (result != null && result.Needs_Update)
+                    {
+                        job.Constraints = result.New_Constraints;
+                        job.Workflow = result.New_Workflow;
+                        
+                        // 允许进化建议修改模型选择策略
+                        if (!string.IsNullOrEmpty(result.New_Model_Strategy))
+                        {
+                            job.ModelSelectionStrategy = result.New_Model_Strategy;
+                        }
 
-                    _logger.LogInformation("[EvolutionService] Job {JobId} evolved to version {Version}. Reason: {Reason}", jobId, job.Version, result.Reason);
+                        job.Version++;
+                        await _jobRepository.UpdateAsync(job);
+
+                        _logger.LogInformation("[EvolutionService] Job {JobId} evolved to version {Version}. Strategy: {Strategy}. Reason: {Reason}", 
+                            jobId, job.Version, job.ModelSelectionStrategy, result.Reason);
+                    }
+                    return true;
                 }
-
-                // 标记任务为已进化
-                foreach (var task in recentTasks)
+                catch (Exception ex)
                 {
-                    task.IsEvolved = true;
-                    await task.SaveAsync();
+                    _logger.LogError(ex, "[EvolutionService] Error parsing evolution proposal: {Response}", response);
                 }
-                return true;
             }
 
             return false;
@@ -113,10 +150,11 @@ namespace BotWorker.Modules.AI.Services
 
         public async Task EvolveAllJobsAsync()
         {
-            var jobs = await JobDefinition.QueryListAsync<JobDefinition>($"SELECT * FROM {JobDefinition.FullName} WHERE IsActive = 1");
+            var jobs = await _jobRepository.GetActiveJobsAsync();
             foreach (var job in jobs)
             {
-                await EvolveJobAsync(job.JobId);
+                // 使用 JobKey 进行进化
+                await EvolveJobAsync(job.JobKey);
             }
         }
 
@@ -126,6 +164,7 @@ namespace BotWorker.Modules.AI.Services
             public string Reason { get; set; } = string.Empty;
             public string New_Constraints { get; set; } = string.Empty;
             public string New_Workflow { get; set; } = string.Empty;
+            public string New_Model_Strategy { get; set; } = string.Empty;
         }
     }
 }

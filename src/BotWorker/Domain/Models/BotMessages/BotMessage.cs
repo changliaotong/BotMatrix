@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Diagnostics;
 using BotWorker.Domain.Entities;
 using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Modules.AI.Models;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
@@ -135,7 +136,7 @@ public partial class BotMessage
         public bool IsCallAgent { get; set; } = false;
         public string AgentName { get; set; } = string.Empty;
         public int HistoryMessageCount { get; set; } = 3;
-        public int ModelId { get; set; } = 0;
+        public long ModelId { get; set; } = 0;
         public long InputTokens { get; set; } = 0;
         public long OutputTokens { get; set; } = 0;
         public int TokensTimes { get; set; } = 1;

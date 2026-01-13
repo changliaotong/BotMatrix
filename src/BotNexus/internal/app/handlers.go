@@ -83,7 +83,7 @@ func (m *Manager) handleBotWebSocket(w http.ResponseWriter, r *http.Request) {
 	if m.Bots == nil {
 		m.Bots = make(map[string]*types.BotClient)
 	}
-	botKey := bot.SelfID
+	botKey := fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID)
 	m.Bots[botKey] = bot
 	m.Mutex.Unlock()
 
@@ -243,7 +243,7 @@ func (m *Manager) handleBotConnection(bot *types.BotClient) {
 	defer func() {
 		close(stopHeartbeat) // Stop heartbeat
 		// Cleanup work when connection is closed
-		m.removeBot(bot.SelfID)
+		m.removeBot(fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID))
 		bot.Conn.Close()
 
 		// Update online status to offline
@@ -405,10 +405,12 @@ func (m *Manager) handleBotMessage(bot *types.BotClient, msg types.InternalMessa
 		if bot.SelfID != msgSelfID && strings.Contains(bot.SelfID, ":") {
 			// Current is temporary IP ID, received formal ID, updating
 			oldID := bot.SelfID
+			oldKey := fmt.Sprintf("%s:%s", bot.Platform, oldID)
 			m.Mutex.Lock()
-			delete(m.Bots, oldID)
+			delete(m.Bots, oldKey)
 			bot.SelfID = msgSelfID
-			m.Bots[bot.SelfID] = bot
+			newKey := fmt.Sprintf("%s:%s", bot.Platform, bot.SelfID)
+			m.Bots[newKey] = bot
 			m.Mutex.Unlock()
 			log.Printf("[Bot] Updated Bot ID from %s to %s", oldID, msgSelfID)
 		}
@@ -2204,7 +2206,7 @@ func (m *Manager) forwardWorkerRequestToBot(worker *types.WorkerClient, action t
 		log.Printf("[ROUTING] [ERROR] Failed to forward Worker %s request to Bot %s: %v. Attempting fallback...", worker.ID, targetBot.SelfID, err)
 
 		// Remove failed Bot and try another one
-		m.removeBot(targetBot.SelfID)
+		m.removeBot(fmt.Sprintf("%s:%s", targetBot.Platform, targetBot.SelfID))
 
 		// Simple retry logic: find another available Bot
 		var fallbackBot *types.BotClient

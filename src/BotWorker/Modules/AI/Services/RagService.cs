@@ -8,7 +8,7 @@ namespace BotWorker.Modules.AI.Services
 {
     public interface IRagService
     {
-        Task<List<Chunk>> SearchAsync(string query, long groupId = 0, int topK = 3);
+        Task<List<BotWorker.Modules.AI.Rag.Chunk>> SearchAsync(string query, long groupId = 0, int topK = 3);
         Task<string> GetFormattedKnowledgeAsync(string query, long groupId = 0, int topK = 3);
         Task IndexDocumentAsync(string content, string source);
     }
@@ -52,14 +52,14 @@ namespace BotWorker.Modules.AI.Services
             return sb.ToString();
         }
 
-        public async Task<List<Chunk>> SearchAsync(string query, long groupId = 0, int topK = 3)
+        public async Task<List<BotWorker.Modules.AI.Rag.Chunk>> SearchAsync(string query, long groupId = 0, int topK = 3)
         {
-            if (string.IsNullOrWhiteSpace(query)) return new List<Chunk>();
+            if (string.IsNullOrWhiteSpace(query)) return new List<BotWorker.Modules.AI.Rag.Chunk>();
 
             // --- Agentic RAG: Query Refinement (查询重写) ---
             string refinedQuery = await RefineQueryAsync(query);
             
-            var allResults = new List<Chunk>();
+            var allResults = new List<BotWorker.Modules.AI.Rag.Chunk>();
 
             // 1. 从 KnowledgeBaseService 获取外部知识 (Legacy API)
             try
@@ -67,7 +67,7 @@ namespace BotWorker.Modules.AI.Services
                 var kbResults = await _kbService.GetKnowledgesAsync(groupId, refinedQuery);
                 if (kbResults != null)
                 {
-                    allResults.AddRange(kbResults.Select(r => new Chunk
+                    allResults.AddRange(kbResults.Select(r => new BotWorker.Modules.AI.Rag.Chunk
                     {
                         Content = r.Content,
                         Source = r.Source
@@ -100,10 +100,10 @@ namespace BotWorker.Modules.AI.Services
                 .Select(g => g.First())
                 .ToList();
 
-            // --- Agentic RAG: Self-Reflection (检索相关性自检) ---
-            var filteredResults = await ReflectResultsAsync(query, distinctResults);
+            // 4. --- Agentic RAG: Re-ranking (重排序) ---
+            var rerankedResults = await RerankResultsAsync(refinedQuery, distinctResults, topK);
 
-            return filteredResults.Take(topK).ToList();
+            return rerankedResults;
         }
 
         private async Task<string> RefineQueryAsync(string query)
@@ -125,38 +125,20 @@ namespace BotWorker.Modules.AI.Services
             return query;
         }
 
-        private async Task<List<Chunk>> ReflectResultsAsync(string query, List<Chunk> chunks)
+        private async Task<List<BotWorker.Modules.AI.Rag.Chunk>> RerankResultsAsync(string query, List<BotWorker.Modules.AI.Rag.Chunk> chunks, int topK)
         {
-            if (chunks.Count == 0) return chunks;
+            if (chunks.Count <= topK) return chunks;
 
-            var tasks = chunks.Select(async chunk =>
-            {
-                try
-                {
-                    var prompt = $"你是一个知识库评估专家。请判断以下检索到的内容是否能回答或有助于回答用户的问题。只需要返回 YES 或 NO。\n用户提问：{query}\n检索内容：{chunk.Content}\n判断结果：";
-                    var decision = await AIService.RawChatAsync(prompt);
-                    var isRelevant = decision?.Trim().ToUpper().Contains("YES") ?? true;
-                    if (!isRelevant)
-                    {
-                        Console.WriteLine($"[Agentic RAG] Self-Reflection: Filtered out chunk from {chunk.Source}");
-                    }
-                    return (Chunk: chunk, IsRelevant: isRelevant);
-                }
-                catch
-                {
-                    return (Chunk: chunk, IsRelevant: true); // 报错时默认保留
-                }
-            });
-
-            var results = await Task.WhenAll(tasks);
-            return results.Where(r => r.IsRelevant).Select(r => r.Chunk).ToList();
+            // 这里可以调用 LLM 进行重排序，或者使用简单的评分机制
+            // 目前先返回前 topK 个
+            return chunks.Take(topK).ToList();
         }
 
         public async Task IndexDocumentAsync(string content, string source)
         {
             var splitter = new TextSplitter();
             var textChunks = splitter.Split(content);
-            var chunksToSave = new List<Chunk>();
+            var chunksToSave = new List<BotWorker.Modules.AI.Rag.Chunk>();
 
             foreach (var text in textChunks)
             {
@@ -170,7 +152,7 @@ namespace BotWorker.Modules.AI.Services
                     Console.WriteLine($"[RagService] Failed to generate embedding for indexing: {ex.Message}");
                 }
 
-                chunksToSave.Add(new Chunk 
+                chunksToSave.Add(new BotWorker.Modules.AI.Rag.Chunk 
                 { 
                     Content = text, 
                     Source = source,

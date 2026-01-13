@@ -127,7 +127,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 if (IsAtMe)
                 {
                     Answer = IsAgent || IsCallAgent
-                        ? Agent.GetValue("Info", AgentId)
+                        ? BotWorker.Modules.AI.Models.Agent.GetValue("Info", AgentId)
                         : "我在~";
                     IsCancelProxy = true;
                     return;

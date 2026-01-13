@@ -416,6 +416,36 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             if (trans is TransactionWrapper wrapper) return wrapper.Transaction;
             return trans;
         }
+
+        /// <summary>
+        /// 数据库连接作用域，用于动态切换连接字符串和数据库类型
+        /// </summary>
+        public class ConnectionScope : IDisposable
+        {
+            private readonly bool _switched;
+
+            public ConnectionScope(bool usePostgreSql)
+            {
+                if (usePostgreSql && Persistence.Database.DbProviderFactory.CurrentDbType != DatabaseType.PostgreSql)
+                {
+                    if (string.IsNullOrEmpty(GlobalConfig.KnowledgeBaseConnection))
+                    {
+                        // 如果没有配置 PG 连接，则不切换，保持默认
+                        return;
+                    }
+                    Persistence.Database.DbProviderFactory.SetContext(GlobalConfig.KnowledgeBaseConnection, DatabaseType.PostgreSql);
+                    _switched = true;
+                }
+            }
+
+            public void Dispose()
+            {
+                if (_switched)
+                {
+                    Persistence.Database.DbProviderFactory.ClearContext();
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -430,9 +460,10 @@ namespace BotWorker.Infrastructure.Persistence.ORM
     {
         private static bool _isTableChecked = false;
         private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _propertyCache = new();
+        private static readonly bool _usePostgreSql;
 
         [JsonIgnore]
-        public static string Limit1 => GlobalConfig.DbType == DatabaseType.SqlServer ? "TOP 1" : "LIMIT 1";
+        public static string Limit1 => IsPostgreSql ? "" : "TOP 1";
 
         [JsonIgnore]
         public static string SqlDate => IsPostgreSql ? "CURRENT_DATE" : "CONVERT(DATE, GETDATE())";
@@ -461,10 +492,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static string SqlDateAdd(string unit, object number, DateTime start) => MetaData.SqlDateAdd(unit, number, $"'{start:yyyy-MM-dd HH:mm:ss}'");
 
+        public static string SqlDateAdd(string unit, object number, DateTime? start) => MetaData.SqlDateAdd(unit, number, start?.ToString("yyyy-MM-dd HH:mm:ss") ?? (IsPostgreSql ? "CURRENT_TIMESTAMP" : "GETDATE()"));
+
         public static string SqlDateDiff(string unit, string start, string end) => MetaData.SqlDateDiff(unit, start, end);
 
         [JsonIgnore]
-        public static bool IsPostgreSql => MetaData.IsPostgreSql;
+        public static bool IsPostgreSql => _usePostgreSql || MetaData.IsPostgreSql;
 
         public static string Quote(string identifier) => MetaData.SqlQuote(identifier);
 
@@ -510,6 +543,9 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             Keys = [instance.KeyField, instance.KeyField2];
             Key = instance.KeyField;
             Key2 = instance.KeyField2;
+
+            // 检查是否标记了 [UsePostgreSql] 特性
+            _usePostgreSql = typeof(TDerived).GetCustomAttribute<UsePostgreSqlAttribute>() != null;
             
             if (IsPostgreSql)
                 FullName = $"\"{instance.DataBase.ToLower()}\".\"public\".\"{instance.TableName.ToLower()}\"";
@@ -600,6 +636,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<string> QueryResAsync(string sql, params object?[] args)
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -608,6 +645,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<string> QueryResAsync(string sql, string format, params object?[] args)
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -616,6 +654,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<List<T>> QueryAsync<T>(string sql, params object?[] args)
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -624,6 +663,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<T?> QueryScalarAsync<T>(string sql, params object?[] args)
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -632,6 +672,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<T?> QuerySingleAsync<T>(string sql, params object?[] args) where T : class, new()
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -640,6 +681,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<List<T>> QueryListAsync<T>(string sql, params object?[] args) where T : new()
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -648,6 +690,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<int> ExecAsync(string sql, params object?[] args)
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];
@@ -656,6 +699,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static async Task<T?> ExecScalarAsync<T>(string sql, params object?[] args)
         {
+            using var scope = new MetaData.ConnectionScope(_usePostgreSql);
             var (trans, actualArgs, explicitParams) = ParseArgs(args);
             var (resolvedSql, parameters) = ResolveSql(sql, actualArgs);
             if (explicitParams != null) parameters = [.. parameters, .. explicitParams];

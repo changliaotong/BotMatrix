@@ -1,6 +1,7 @@
 using System.Data;
 using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Modules.AI.Models;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
@@ -305,7 +306,7 @@ public partial class BotMessage : MetaData<BotMessage>
         public async Task<string> BatchInsertAgentAsync()
         {
             OutputTokens = Answer.GetTokensCount();
-            TokensMinus = (InputTokens * Agent.tokensTimes + OutputTokens * Agent.tokensTimesOutput) / 2;
+            TokensMinus = (InputTokens * CurrentAgent.tokensTimes + OutputTokens * CurrentAgent.tokensTimesOutput) / 2;
             await AgentLog.AppendAsync(this);
             return await MinusTokensResAsync($"使用AI");
         }
@@ -369,7 +370,7 @@ public partial class BotMessage : MetaData<BotMessage>
                         answer = answer.RegexReplace(@"^【\w*】", "");
                         long tokenCount = (question + answer).GetTokensCount();
 
-                        if (InputTokens + tokenCount < Agent.tokensLimit - Agent.tokensOutputLimit)
+                        if (InputTokens + tokenCount < CurrentAgent.tokensLimit - CurrentAgent.tokensOutputLimit)
                         {
                             History.AddAssistantMessage(answer);
                             History.AddUserMessage(question);

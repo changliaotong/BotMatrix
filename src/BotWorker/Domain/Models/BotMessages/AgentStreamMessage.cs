@@ -1,5 +1,6 @@
 using BotWorker.Modules.AI.Plugins;
 using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Models;
 
 namespace BotWorker.Domain.Models.BotMessages;
 

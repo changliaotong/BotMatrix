@@ -1,66 +1,43 @@
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using BotWorker.Modules.AI.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.AI.Models
 {
     public enum LLMModelType
     {
-        Chat = 0,
-        Image = 1,
-        Embedding = 2
+        Chat,
+        Image,
+        Embedding,
+        Audio
     }
 
-    public class LLMModel : MetaDataGuid<LLMModel>
+    [Table("ai_models")]
+    public class LLMModel
     {
-        public override string TableName => "LLMModel";
-        public override string KeyField => "Id";
-
+        public long Id { get; set; }
+        public long ProviderId { get; set; }
         public string Name { get; set; } = string.Empty;
-        public int ProviderId { get; set; }
-        public string Memo { get; set; } = string.Empty;
-        public int Status { get; set; } = 1;
-        public int ModelType { get; set; } = 0; // 0: Chat, 1: Image
+        public string Type { get; set; } = "chat"; // chat, image, embedding, audio
+        public int ContextWindow { get; set; } = 4096;
+        public int? MaxOutputTokens { get; set; }
+        public decimal InputPricePer1kTokens { get; set; } = 0;
+        public decimal OutputPricePer1kTokens { get; set; } = 0;
+        public string Config { get; set; } = "{}"; // JSONB
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        public static int Append(string name, int providerId, string memo = "", int modelType = 0)
+        public static (long ModelId, string? ProviderName, string? ModelName) GetModelInfo(long modelId)
         {
-            return Insert([
-                new Cov("Name", name),
-                new Cov("ProviderId", providerId),
-                new Cov("Memo", memo),
-                new Cov("Status", 1),
-                new Cov("ModelType", modelType)
-            ]);
-        }
+            using var scope = LLMApp.ServiceProvider.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<ILLMRepository>();
+            var model = repo.GetModelByIdAsync(modelId).GetAwaiter().GetResult();
+            if (model == null) return (0, null, null);
 
-        public static (int, string, string) GetModelInfo(int modelId)
-        {
-            // 检查模型是否可用（模型本身激活 且 关联的提供者也激活）
-            bool IsUsable(int id)
-            {
-                if (id <= 0) return false;
-                var sql = $"SELECT COUNT(*) FROM {FullName} m JOIN LLMProvider p ON m.ProviderId = p.Id WHERE m.Id = {id} AND m.Status = 1 AND p.Status = 1";
-                return QueryScalar<int>(sql) > 0;
-            }
-
-            if (!IsUsable(modelId))
-            {
-                // 随机选择一个模型激活的
-                var sql = $"SELECT {SqlTop(1)} m.Id FROM {FullName} m JOIN LLMProvider p ON m.ProviderId = p.Id WHERE m.Status = 1 AND p.Status = 1 ORDER BY {SqlRandomOrder}{SqlLimit(1)}";
-                modelId = QueryScalar<int>(sql);
-            }
-
-            if (modelId <= 0) return (0, "", "");
-
-            var providerId = GetInt("ProviderId", modelId);
-            var providerName = LLMProvider.GetValue("Name", providerId);
-            var modelName = GetValue("Name", modelId);
-
-            return (modelId, providerName, modelName);
-        }
-
-        public static async Task<List<LLMModel>> GetAllActiveAsync()
-        {
-            return await QueryListAsync<LLMModel>($"SELECT * FROM {FullName} WHERE Status = 1");
+            var provider = repo.GetProviderByIdAsync(model.ProviderId).GetAwaiter().GetResult();
+            return (model.Id, provider?.Name, model.Name);
         }
     }
 }

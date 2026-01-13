@@ -1,25 +1,47 @@
-﻿namespace BotWorker.Modules.AI.Models
+using System;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace BotWorker.Modules.AI.Models
 {
+    [Table("ai_llm_call_logs")]
     public class LLMCallLog
     {
         public long Id { get; set; }
-        public Guid? AgentId { get; set; }
-        public Guid? ConsumerUserId { get; set; }
-        public Guid? OwnerUserId { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("task_step_id")]
+        public long? TaskStepId { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("agent_id")]
+        public long? AgentId { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("model_id")]
+        public long? ModelId { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("prompt_tokens")]
+        public int PromptTokens { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("completion_tokens")]
+        public int CompletionTokens { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("total_cost")]
+        public decimal TotalCost { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("latency_ms")]
+        public int LatencyMs { get; set; }
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("is_success")]
+        public bool IsSuccess { get; set; } = true;
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("raw_request")]
+        public string? RawRequest { get; set; } // JSONB
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("raw_response")]
+        public string? RawResponse { get; set; } // JSONB
+        
+        [System.ComponentModel.DataAnnotations.Schema.Column("created_at")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        public string ModelId { get; set; } = "";
-        public string ProviderId { get; set; } = "";
-
-        public int InputTokens { get; set; }
-        public int OutputTokens { get; set; }
-        public decimal InputPrice { get; set; }
-        public decimal OutputPrice { get; set; }
-
-        public decimal TotalCost => InputPrice + OutputPrice;
-        //public decimal Earnings => Math.Round(TotalCost * PlatformConfig.AgentSplitRatio, 4);
-
-        public bool IsSuccess { get; set; }
-        public DateTime CreatedAt { get; set; }
+        [System.ComponentModel.DataAnnotations.Schema.Column("updated_at")]
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
-
 }

@@ -270,6 +270,29 @@ func NewManager() *Manager {
 	}
 }
 
+// GetBot 尝试通过多种 key 格式获取机器人实例
+func (m *Manager) GetBot(platform, selfID string) (*types.BotClient, bool) {
+	m.Mutex.RLock()
+	defer m.Mutex.RUnlock()
+
+	if m.Bots == nil {
+		return nil, false
+	}
+
+	// 1. 尝试使用 platform:selfID 格式 (新标准)
+	key := fmt.Sprintf("%s:%s", platform, selfID)
+	if bot, ok := m.Bots[key]; ok {
+		return bot, true
+	}
+
+	// 2. 尝试仅使用 selfID (旧标准)
+	if bot, ok := m.Bots[selfID]; ok {
+		return bot, true
+	}
+
+	return nil, false
+}
+
 // ValidateToken validates a JWT token
 func (m *Manager) ValidateToken(tokenString string) (*types.UserClaims, error) {
 	return utils.ValidateToken(tokenString, m.Config.JWTSecret)

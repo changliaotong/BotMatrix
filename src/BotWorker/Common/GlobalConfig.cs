@@ -17,6 +17,20 @@ namespace BotWorker.Common
         public static string SignalRConnString { get; set; } = string.Empty;
         public static string KnowledgeBaseConnection { get; set; } = string.Empty;
 
+        public static DatabaseType GetDatabaseType(string connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString)) return DatabaseType.SqlServer;
+
+            // Simple heuristic to detect database type
+            if (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase) ||
+                connectionString.Contains("Port=", StringComparison.OrdinalIgnoreCase) ||
+                connectionString.Contains("Username=", StringComparison.OrdinalIgnoreCase))
+            {
+                return DatabaseType.PostgreSql;
+            }
+
+            return DatabaseType.SqlServer;
+        }
 
         public static void Initialize(IConfiguration config)
         {

@@ -303,7 +303,6 @@ func HandleRegister(m *bot.Manager) http.HandlerFunc {
 	}
 }
 
-
 // HandleGetUserInfo 获取当前登录用户信息
 // @Summary 获取用户信息
 // @Description 获取当前登录用户的详细信息
@@ -1798,7 +1797,7 @@ func HandleDockerAddBot(m *bot.Manager) http.HandlerFunc {
 			if m.Bots == nil {
 				m.Bots = make(map[string]*types.BotClient)
 			}
-			m.Bots[botID] = &types.BotClient{
+			m.Bots["Online:"+botID] = &types.BotClient{
 				SelfID:    botID,
 				Nickname:  botName,
 				Platform:  "Online",
@@ -2904,7 +2903,7 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 					targetType := utils.ToString(target["type"])
 
 					m.Mutex.RLock()
-					bot, exists := m.Bots[targetBotID]
+					bot, exists := m.GetBot("", targetBotID)
 					m.Mutex.RUnlock()
 
 					if !exists {
@@ -2983,7 +2982,7 @@ func HandleSendAction(m *Manager) http.HandlerFunc {
 		m.Mutex.RLock()
 		var bot *types.BotClient
 		if req.BotID != "" {
-			bot = m.Bots[req.BotID]
+			bot, _ = m.GetBot("", req.BotID)
 		} else {
 			for _, b := range m.Bots {
 				bot = b

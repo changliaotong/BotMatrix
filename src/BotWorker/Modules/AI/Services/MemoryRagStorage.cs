@@ -9,9 +9,9 @@ namespace BotWorker.Modules.AI.Services
 {
     public class MemoryRagStorage : IRagStorage
     {
-        private readonly List<Chunk> _store = new();
+        private readonly List<BotWorker.Modules.AI.Rag.Chunk> _store = new();
 
-        public Task<List<Chunk>> SearchAsync(string query, float[]? queryVector, int topK = 5)
+        public Task<List<BotWorker.Modules.AI.Rag.Chunk>> SearchAsync(string query, float[]? queryVector, int topK = 5)
         {
             if (queryVector != null && queryVector.Length > 0)
             {
@@ -48,7 +48,7 @@ namespace BotWorker.Modules.AI.Services
             return Task.FromResult(keywordResults);
         }
 
-        public Task SaveChunksAsync(List<Chunk> chunks)
+        public Task SaveChunksAsync(List<BotWorker.Modules.AI.Rag.Chunk> chunks)
         {
             foreach (var chunk in chunks)
             {

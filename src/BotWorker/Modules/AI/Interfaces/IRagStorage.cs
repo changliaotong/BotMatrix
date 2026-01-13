@@ -6,7 +6,7 @@ namespace BotWorker.Modules.AI.Interfaces
 {
     public interface IRagStorage
     {
-        Task<List<Chunk>> SearchAsync(string query, float[]? queryVector, int topK = 5);
-        Task SaveChunksAsync(List<Chunk> chunks);
+        Task<List<BotWorker.Modules.AI.Rag.Chunk>> SearchAsync(string query, float[]? queryVector, int topK = 5);
+        Task SaveChunksAsync(List<BotWorker.Modules.AI.Rag.Chunk> chunks);
     }
 }

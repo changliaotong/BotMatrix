@@ -1,65 +1,54 @@
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using BotWorker.Infrastructure.Utils;
 
 namespace BotWorker.Modules.AI.Models
 {
-    public class LLMProvider : MetaDataGuid<LLMProvider>
+    [Table("ai_providers")]
+    public class LLMProvider
     {
-        public override string TableName => "LLMProvider";
+        private static readonly string _encryptKey = "AI_KEY_SECRET_2024_BOT_MATRIX";
 
-        public override string KeyField => "Id";
-
+        public long Id { get; set; }
         public string Name { get; set; } = string.Empty;
-        public string BaseUrl { get; set; } = string.Empty;
-        public string ApiKey { get; set; } = string.Empty;
-        public string ProviderType { get; set; } = "openai";
-        public string LogoUrl { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public int Status { get; set; } = 1;
+        public string Type { get; set; } = string.Empty; // openai, azure, ollama, etc.
+        public string? Endpoint { get; set; }
+        public string? ApiKey { get; set; }
+        public string Config { get; set; } = "{}"; // JSONB
+        public bool IsActive { get; set; } = true;
+        public long OwnerId { get; set; }
+        public bool IsShared { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        public static async Task<Dictionary<string, object>?> AppendAsync(LLMProvider llmProvider, params string[] fields)
-        { 
-            return await InsertReturnFieldsAsync(new
+        /// <summary>
+        /// 获取解密后的 API Key
+        /// </summary>
+        public string GetDecryptedApiKey()
+        {
+            if (string.IsNullOrEmpty(ApiKey)) return string.Empty;
+            try
             {
-                llmProvider.Name,
-                llmProvider.BaseUrl,
-                llmProvider.ApiKey,
-                llmProvider.ProviderType,
-                llmProvider.LogoUrl,
-                llmProvider.Description,
-                llmProvider.Status
-            }, fields);
-        }
-
-        public static async Task<int?> UpdateAsync(LLMProvider llmProvider)
-        {
-            return await UpdateObjectAsync(new
+                var decrypted = ApiKey.Decrypt3DES(_encryptKey.MD5().Substring(0, 24));
+                return string.IsNullOrEmpty(decrypted) ? ApiKey : decrypted;
+            }
+            catch
             {
-                llmProvider.Name,
-                llmProvider.BaseUrl,
-                llmProvider.ApiKey,
-                llmProvider.ProviderType,
-                llmProvider.LogoUrl,
-                llmProvider.Description,
-                llmProvider.Status,
-                UpdateAt = DateTime.Now,
-            }, llmProvider.Id);
+                return ApiKey;
+            }
         }
 
-        public static async Task<int?> RemoveAsync(LLMProvider llmProvider)
+        /// <summary>
+        /// 设置并加密 API Key
+        /// </summary>
+        public void SetEncryptedApiKey(string plainKey)
         {
-            return await DeleteAsync(llmProvider.Id);
-        }
-
-        public static async Task<List<LLMProvider>?> GetAllAsync()
-        {
-            var sql = $"SELECT * FROM {FullName}";
-            return await QueryListAsync<LLMProvider>(sql);
-        }
-
-        public static async Task<List<LLMProvider>?> GetAllActiveAsync()
-        {
-            var sql = $"SELECT * FROM {FullName} WHERE Status = 1";
-            return await QueryListAsync<LLMProvider>(sql);
+            if (string.IsNullOrEmpty(plainKey))
+            {
+                ApiKey = string.Empty;
+                return;
+            }
+            ApiKey = plainKey.Encrypt3DES(_encryptKey.MD5().Substring(0, 24));
         }
     }
 }

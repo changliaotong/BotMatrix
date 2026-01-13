@@ -51,4 +51,11 @@
     <ProjectReference Include="..\..\..\Mirai.Net-2.4\Mirai.Net\Mirai.Net.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\scripts\db\init_ai_pg.sql">
+      <Link>scripts\db\init_ai_pg.sql</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
