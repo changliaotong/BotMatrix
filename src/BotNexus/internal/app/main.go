@@ -1123,10 +1123,7 @@ func (m *Manager) handleWorkerAction(msg map[string]any) {
 		zap.Any("params", params))
 
 	// 查找对应的机器人
-	botKey := fmt.Sprintf("%s:%s", platform, selfID)
-	m.Mutex.RLock()
-	bot, exists := m.Bots[botKey]
-	m.Mutex.RUnlock()
+	bot, exists := m.GetBot(platform, selfID)
 
 	if !exists {
 		// 尝试从持久化缓存中查找以获取更多信息

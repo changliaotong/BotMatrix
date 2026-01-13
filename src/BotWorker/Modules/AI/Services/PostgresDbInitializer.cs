@@ -33,16 +33,6 @@ namespace BotWorker.Modules.AI.Services
                 using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
 
-                // 检查是否已经初始化（通过检查核心表是否存在）
-                var tableExists = await conn.ExecuteScalarAsync<bool>(
-                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ai_providers')");
-
-                if (tableExists)
-                {
-                    _logger.LogInformation("AI database already initialized. Skipping schema creation.");
-                    return;
-                }
-
                 // 读取初始化脚本
                 string scriptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "scripts", "db", "init_ai_pg.sql");
                 
