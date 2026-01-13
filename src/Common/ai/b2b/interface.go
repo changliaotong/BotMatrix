@@ -14,21 +14,21 @@ type B2BService interface {
 	SendCrossEnterpriseMessage(fromEmployeeID, toEmployeeID string, msg string) error
 	CallRemoteTool(sourceEntID, targetEntID uint, toolName string, arguments map[string]any) (any, error)
 	VerifyIdentity(entCode string, signature string) bool
-	VerifyB2BToken(tokenString string) (*models.Enterprise, error)
+	VerifyB2BToken(tokenString string) (*models.EnterpriseGORM, error)
 	RegisterEndpoint(entID uint, name, endpointType, url string) error
-	DiscoverEndpoints(query string) ([]models.MCPServer, error)
-	DiscoverMeshEndpoints(query string) ([]models.MCPServer, error)
+	DiscoverEndpoints(query string) ([]models.MCPServerGORM, error)
+	DiscoverMeshEndpoints(query string) ([]models.MCPServerGORM, error)
 	CheckDispatchPermission(employeeID, targetOrgID uint, action string) (bool, error)
 
 	// 技能共享
 	RequestSkillSharing(fromEntID, targetEntID uint, skillName string) error
 	ApproveSkillSharing(sharingID uint, status string) error
-	ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharing, error)
+	ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharingGORM, error)
 
 	// 员工外派
 	DispatchEmployee(employeeID, sourceEntID, targetEntID uint, permissions []string) error
 	ApproveDispatch(dispatchID uint, status string) error
-	ListDispatchedEmployees(entID uint, role string) ([]models.DigitalEmployeeDispatch, error)
+	ListDispatchedEmployees(entID uint, role string) ([]models.DigitalEmployeeDispatchGORM, error)
 }
 
 type HandshakeRequest struct {

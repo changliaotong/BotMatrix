@@ -7,11 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"BotMatrix/common/types"
 
@@ -179,44 +177,4 @@ func ContainsOne(s string, keywords ...string) bool {
 		}
 	}
 	return false
-}
-
-// ToPascalMap converts a struct to a map with PascalCase keys (matching struct field names)
-// This is useful for compatibility with C# systems that expect PascalCase JSON.
-func ToPascalMap(v any) map[string]any {
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
-		rv = rv.Elem()
-	}
-
-	if rv.Kind() != reflect.Struct {
-		return nil
-	}
-
-	res := make(map[string]any)
-	t := rv.Type()
-
-	for i := 0; i < rv.NumField(); i++ {
-		field := t.Field(i)
-		if field.PkgPath != "" { // Skip unexported fields
-			continue
-		}
-
-		// Skip fields with gorm:"-" or those marked as ignored in some way if needed
-		// For now, we just take all exported fields
-		val := rv.Field(i).Interface()
-
-		// Special handling for time.Time to match C# default JSON format (ISO 8601)
-		if t, ok := val.(time.Time); ok {
-			if t.IsZero() {
-				res[field.Name] = "0001-01-01T00:00:00"
-			} else {
-				res[field.Name] = t.Format("2006-01-02T15:04:05")
-			}
-		} else {
-			res[field.Name] = val
-		}
-	}
-
-	return res
 }

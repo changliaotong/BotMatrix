@@ -15,7 +15,7 @@ func InitDefaultRoleTemplates(db *gorm.DB) {
 		return
 	}
 
-	templates := []models.DigitalRoleTemplate{
+	templates := []models.DigitalRoleTemplateGORM{
 		{
 			Name:        "行政助理",
 			Description: "负责处理日常行政事务、文档整理、会议预约及通知分发。",
@@ -74,7 +74,7 @@ func InitDefaultRoleTemplates(db *gorm.DB) {
 
 	for _, t := range templates {
 		var count int64
-		db.Model(&models.DigitalRoleTemplate{}).Where("name = ?", t.Name).Count(&count)
+		db.Model(&models.DigitalRoleTemplateGORM{}).Where("name = ?", t.Name).Count(&count)
 		if count == 0 {
 			if err := db.Create(&t).Error; err != nil {
 				clog.Error("初始化岗位模板失败", zap.String("template", t.Name), zap.Error(err))

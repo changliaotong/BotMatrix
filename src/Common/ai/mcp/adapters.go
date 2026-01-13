@@ -2,7 +2,7 @@ package mcp
 
 import (
 	"BotMatrix/common/ai"
-	// "BotMatrix/common/ai/employee" // Removed to break cycle
+	"BotMatrix/common/ai/employee"
 	"BotMatrix/common/models"
 	"BotMatrix/common/types"
 	"context"
@@ -20,9 +20,9 @@ type CollaborationExecutionInfo struct {
 
 // CollaborationProvider 抽象智能体间协作所需的底层能力
 type CollaborationProvider interface {
-	GetEmployeesByOrg(ctx context.Context, orgID uint) ([]models.DigitalEmployee, error)
-	GetEmployeeByID(ctx context.Context, orgID uint, employeeID string) (*models.DigitalEmployee, error)
-	ChatWithEmployee(ctx context.Context, employee *models.DigitalEmployee, message *types.Message, orgID uint) (string, error)
+	GetEmployeesByOrg(ctx context.Context, orgID uint) ([]models.DigitalEmployeeGORM, error)
+	GetEmployeeByID(ctx context.Context, orgID uint, employeeID string) (*models.DigitalEmployeeGORM, error)
+	ChatWithEmployee(ctx context.Context, employee *models.DigitalEmployeeGORM, message *types.Message, orgID uint) (string, error)
 	CreateExecution(ctx context.Context, executionID, traceID string) error
 	UpdateExecution(ctx context.Context, executionID string, status string, result string) error
 	GetExecution(ctx context.Context, executionID string) (*CollaborationExecutionInfo, error)
@@ -527,10 +527,10 @@ func (h *KnowledgeMCPHost) GetPrompt(ctx context.Context, serverID string, promp
 
 // MemoryMCPHost 提供记忆管理工具
 type MemoryMCPHost struct {
-	memorySvc types.CognitiveMemoryService
+	memorySvc employee.CognitiveMemoryService
 }
 
-func NewMemoryMCPHost(memorySvc types.CognitiveMemoryService) *MemoryMCPHost {
+func NewMemoryMCPHost(memorySvc employee.CognitiveMemoryService) *MemoryMCPHost {
 	return &MemoryMCPHost{memorySvc: memorySvc}
 }
 
@@ -616,7 +616,7 @@ func (h *MemoryMCPHost) CallTool(ctx context.Context, serverID string, toolName 
 			importance = 5
 		}
 
-		memory := &models.CognitiveMemory{
+		memory := &models.CognitiveMemoryGORM{
 			BotID:      botID,
 			UserID:     userID,
 			Content:    content,

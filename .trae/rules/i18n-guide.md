@@ -1,4 +1,1 @@
----
-alwaysApply: false
----
 请注意：本项目严格遵守国际化规范。所有 UI 文本必须使用 `t('key')`，且必须先在 `src/WebUI/src/utils/i18n.ts` 中定义对应的 zh-CN, zh-TW, en-US, ja-JP 翻译后再在组件中使用。严禁直接书写中文或英文。

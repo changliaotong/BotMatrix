@@ -29,7 +29,7 @@ import (
 // @Router /api/admin/ai/providers [get]
 func HandleListAIProviders(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var providers []models.AIProvider
+		var providers []models.AIProviderGORM
 		db := m.GetGORMDB()
 		if err := db.Find(&providers).Error; err != nil {
 			utils.SendJSONResponse(w, false, "获取提供商失败: "+err.Error(), nil)
@@ -57,7 +57,7 @@ func HandleListAIProviders(m Manager) http.HandlerFunc {
 // @Router /api/admin/ai/providers [post]
 func HandleSaveAIProvider(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var provider models.AIProvider
+		var provider models.AIProviderGORM
 		if err := json.NewDecoder(r.Body).Decode(&provider); err != nil {
 			utils.SendJSONResponse(w, false, "请求格式错误", nil)
 			return
@@ -68,7 +68,7 @@ func HandleSaveAIProvider(m Manager) http.HandlerFunc {
 		if provider.ID > 0 {
 			// 如果是更新，且 APIKey 是 "********"，说明用户没有修改 Key，需要保留原有的 Key
 			if provider.APIKey == "********" {
-				var oldProvider models.AIProvider
+				var oldProvider models.AIProviderGORM
 				if err := db.First(&oldProvider, provider.ID).Error; err == nil {
 					provider.APIKey = oldProvider.APIKey
 				}
@@ -107,7 +107,7 @@ func HandleDeleteAIProvider(m Manager) http.HandlerFunc {
 		}
 
 		db := m.GetGORMDB()
-		if err := db.Delete(&models.AIProvider{}, id).Error; err != nil {
+		if err := db.Delete(&models.AIProviderGORM{}, id).Error; err != nil {
 			utils.SendJSONResponse(w, false, "删除失败: "+err.Error(), nil)
 			return
 		}
@@ -127,7 +127,7 @@ func HandleDeleteAIProvider(m Manager) http.HandlerFunc {
 // @Router /api/admin/ai/models [get]
 func HandleListAIModels(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var modelsList []models.AIModel
+		var modelsList []models.AIModelGORM
 		db := m.GetGORMDB()
 		if err := db.Preload("Provider").Find(&modelsList).Error; err != nil {
 			utils.SendJSONResponse(w, false, "获取模型失败: "+err.Error(), nil)
@@ -149,7 +149,7 @@ func HandleListAIModels(m Manager) http.HandlerFunc {
 // @Router /api/admin/ai/models [post]
 func HandleSaveAIModel(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var model models.AIModel
+		var model models.AIModelGORM
 		if err := json.NewDecoder(r.Body).Decode(&model); err != nil {
 			utils.SendJSONResponse(w, false, "请求格式错误", nil)
 			return
@@ -190,7 +190,7 @@ func HandleDeleteAIModel(m Manager) http.HandlerFunc {
 		}
 
 		db := m.GetGORMDB()
-		if err := db.Delete(&models.AIModel{}, id).Error; err != nil {
+		if err := db.Delete(&models.AIModelGORM{}, id).Error; err != nil {
 			utils.SendJSONResponse(w, false, "删除失败: "+err.Error(), nil)
 			return
 		}
@@ -220,14 +220,14 @@ func HandleListAIAgents(m Manager) http.HandlerFunc {
 			isAdmin = claims.IsAdmin
 		}
 
-		var agents []models.AIAgent
+		var agents []models.AIAgentGORM
 		// 获取所有字段，包含语音配置等，默认按使用量 (call_count) 降序排列
 		db := m.GetGORMDB()
-		query := db.Model(&models.AIAgent{}).Order("call_count DESC, created_at DESC")
+		query := db.Model(&models.AIAgentGORM{}).Order("call_count DESC, created_at DESC")
 
 		// 如果不是管理员，只返回公开的或自己创建的
 		if !isAdmin {
-			query = query.Where("is_public = ? OR owner_id = ?", true, userID)
+			query = query.Where("visibility = ? OR owner_id = ?", "public", userID)
 		}
 
 		if err := query.Find(&agents).Error; err != nil {
@@ -274,7 +274,7 @@ func HandleGetAIAgent(m Manager) http.HandlerFunc {
 			return
 		}
 
-		var agent models.AIAgent
+		var agent models.AIAgentGORM
 		db := m.GetGORMDB()
 		if err := db.Preload("Model").Preload("Model.Provider").First(&agent, id).Error; err != nil {
 			utils.SendJSONResponse(w, false, "获取智能体详情失败: "+err.Error(), nil)
@@ -300,7 +300,7 @@ func HandleGetAIAgent(m Manager) http.HandlerFunc {
 			isAdmin = claims.IsAdmin
 		}
 
-		if agent.Visibility != "public" && !isAdmin && agent.OwnerID != userID {
+		if agent.Visibility == "private" && !isAdmin && agent.OwnerID != userID {
 			utils.SendJSONResponse(w, false, "该智能体已设为私有，您没有访问权限", nil)
 			return
 		}
@@ -321,12 +321,12 @@ func HandleGetAIAgent(m Manager) http.HandlerFunc {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body models.AIAgent true "智能体信息"
+// @Param body body models.AIAgentGORM true "智能体信息"
 // @Success 200 {object} utils.JSONResponse "保存成功"
 // @Router /api/admin/ai/agents [post]
 func HandleSaveAIAgent(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var agent models.AIAgent
+		var agent models.AIAgentGORM
 		if err := json.NewDecoder(r.Body).Decode(&agent); err != nil {
 			utils.SendJSONResponse(w, false, "请求格式错误", nil)
 			return
@@ -344,7 +344,7 @@ func HandleSaveAIAgent(m Manager) http.HandlerFunc {
 		var err error
 		if agent.ID > 0 {
 			// 检查权限：只有所有者或管理员可以修改
-			var existing models.AIAgent
+			var existing models.AIAgentGORM
 			if err := db.First(&existing, agent.ID).Error; err != nil {
 				utils.SendJSONResponse(w, false, "未找到智能体", nil)
 				return
@@ -389,7 +389,7 @@ func HandleDeleteAIAgent(m Manager) http.HandlerFunc {
 		}
 
 		db := m.GetGORMDB()
-		if err := db.Delete(&models.AIAgent{}, id).Error; err != nil {
+		if err := db.Delete(&models.AIAgentGORM{}, id).Error; err != nil {
 			utils.SendJSONResponse(w, false, "删除失败: "+err.Error(), nil)
 			return
 		}
@@ -407,7 +407,7 @@ func HandleDeleteAIAgent(m Manager) http.HandlerFunc {
 // @Router /api/admin/ai/logs [get]
 func HandleListAIUsageLogs(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var logs []models.AIUsageLog
+		var logs []models.AIUsageLogGORM
 		// 默认返回最近 50 条记录
 		db := m.GetGORMDB()
 		if err := db.Order("id DESC").Limit(50).Find(&logs).Error; err != nil {
@@ -469,7 +469,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 		fmt.Printf("[DEBUG] AgentID: %d, SessionID: %s, UserID: %d, Messages: %d\n", req.AgentID, req.SessionID, userID, len(req.Messages))
 
 		// 获取 Agent 定义
-		var agent models.AIAgent
+		var agent models.AIAgentGORM
 		db := m.GetGORMDB()
 		if err := db.First(&agent, req.AgentID).Error; err != nil {
 			fmt.Printf("[DEBUG] Agent not found: %d\n", req.AgentID)
@@ -482,14 +482,14 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 		if claims != nil {
 			isAdmin = claims.IsAdmin
 		}
-		if agent.Visibility != "public" && !isAdmin && agent.OwnerID != userID {
+		if agent.Visibility == "private" && !isAdmin && agent.OwnerID != userID {
 			utils.SendJSONResponse(w, false, "该智能体已设为私有，您没有访问权限", nil)
 			return
 		}
 
 		// 获取或创建会话
 		sessionID := req.SessionID
-		var session models.AISession
+		var session models.AISessionGORM
 		if sessionID != "" {
 			// 先尝试通过 session_id 查找
 			db.Where("session_id = ?", sessionID).First(&session)
@@ -500,7 +500,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 			if sessionID == "" {
 				sessionID = uuid.New().String()
 			}
-			session = models.AISession{
+			session = models.AISessionGORM{
 				SessionID: sessionID,
 				UserID:    userID,
 				AgentID:   agent.ID,
@@ -516,7 +516,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 			// 如果会话已存在但没绑定用户（可能是匿名时创建的），现在绑定上
 			db.Model(&session).Update("user_id", userID)
 			// 同时更新该会话下所有历史消息的用户ID，确保用户能看到自己的历史记录
-			db.Model(&models.AIChatMessage{}).Where("session_id = ?", sessionID).Update("user_id", userID)
+			db.Model(&models.AIChatMessageGORM{}).Where("session_id = ?", sessionID).Update("user_id", userID)
 		}
 
 		// 保存用户消息
@@ -525,7 +525,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 			userMsg := req.Messages[len(req.Messages)-1]
 			contentStr, _ := userMsg.Content.(string)
 			lastUserContent = contentStr
-			if err := db.Create(&models.AIChatMessage{
+			if err := db.Create(&models.AIChatMessageGORM{
 				SessionID: sessionID,
 				UserID:    userID,
 				Role:      string(RoleUser),
@@ -548,11 +548,11 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 		}
 
 		// 获取 Model 和 Provider 详情
-		var model models.AIModel
+		var model models.AIModelGORM
 		modelID := agent.ModelID
 		if modelID == 0 {
 			// 如果智能体没绑定模型，尝试获取系统默认模型
-			var defaultModels []models.AIModel
+			var defaultModels []models.AIModelGORM
 			if err := db.Where("is_default = ?", true).Limit(1).Find(&defaultModels).Error; err == nil && len(defaultModels) > 0 {
 				modelID = defaultModels[0].ID
 			} else {
@@ -605,7 +605,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 			limit = 20 // 默认 20 条
 		}
 
-		var dbMessages []models.AIChatMessage
+		var dbMessages []models.AIChatMessageGORM
 		db.Where("session_id = ?", sessionID).Order("id desc").Limit(limit).Find(&dbMessages)
 
 		// 转换为 Message 格式并按时间正序排列
@@ -715,7 +715,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 		// 保存 AI 回复到数据库
 		if assistantContent != "" {
 			db := m.GetGORMDB()
-			if err := db.Create(&models.AIChatMessage{
+			if err := db.Create(&models.AIChatMessageGORM{
 				SessionID: sessionID,
 				UserID:    userID,
 				Role:      string(RoleAssistant),
@@ -727,7 +727,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 			}
 
 			// 更新会话最后一条消息
-			db.Model(&models.AISession{}).Where("session_id = ?", sessionID).Updates(map[string]interface{}{
+			db.Model(&models.AISessionGORM{}).Where("session_id = ?", sessionID).Updates(map[string]interface{}{
 				"last_msg": assistantContent,
 			})
 
@@ -745,7 +745,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 				}
 			}
 
-			db.Create(&models.AIUsageLog{
+			db.Create(&models.AIUsageLogGORM{
 				UserID:          userID,
 				AgentID:         agent.ID,
 				ModelName:       model.ModelName,
@@ -765,7 +765,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 		} else if lastUserContent != "" {
 			// 如果 AI 没回复，但也更新最后一条消息为用户的
 			db := m.GetGORMDB()
-			db.Model(&models.AISession{}).Where("session_id = ?", sessionID).Updates(map[string]interface{}{
+			db.Model(&models.AISessionGORM{}).Where("session_id = ?", sessionID).Updates(map[string]interface{}{
 				"last_msg": lastUserContent,
 			})
 		}
@@ -784,7 +784,7 @@ func HandleAIChatStream(m Manager) http.HandlerFunc {
 // @Param session_id query string true "会话 ID"
 // @Param limit query int false "获取条数，默认 20"
 // @Param before_id query int false "获取该 ID 之前的消息"
-// @Success 200 {array} models.AIChatMessage "消息列表"
+// @Success 200 {array} models.AIChatMessageGORM "消息列表"
 // @Router /api/ai/chat/history [get]
 func HandleGetAIChatHistory(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -820,13 +820,13 @@ func HandleGetAIChatHistory(m Manager) http.HandlerFunc {
 			isAdmin = claims.IsAdmin
 		}
 
-		var messages []models.AIChatMessage
+		var messages []models.AIChatMessageGORM
 		db := m.GetGORMDB()
 		query := db.Where("session_id = ?", sessionID).Order("id desc").Limit(limit)
 
 		// 检查会话归属
 		if !isAdmin && !strings.HasPrefix(sessionID, "agent:") {
-			var session models.AISession
+			var session models.AISessionGORM
 			if err := db.Where("session_id = ?", sessionID).First(&session).Error; err == nil {
 				if session.UserID != 0 && session.UserID != userID {
 					utils.SendJSONResponse(w, false, "无权访问该会话", nil)
@@ -862,7 +862,7 @@ func HandleGetAIChatHistory(m Manager) http.HandlerFunc {
 // @Tags AI Trial
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} models.AISession "会话列表"
+// @Success 200 {array} models.AISessionGORM "会话列表"
 // @Router /api/ai/chat/sessions [get]
 func HandleGetRecentSessions(m Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -877,7 +877,7 @@ func HandleGetRecentSessions(m Manager) http.HandlerFunc {
 			return
 		}
 
-		var sessions []models.AISession
+		var sessions []models.AISessionGORM
 		// 获取最近的 50 个会话，并关联智能体信息
 		db := m.GetGORMDB()
 		err := db.Preload("Agent").Where("user_id = ?", userID).Order("updated_at desc").Limit(50).Find(&sessions).Error

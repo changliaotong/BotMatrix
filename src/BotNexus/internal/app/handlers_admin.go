@@ -99,25 +99,25 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
-			log.Print(utils.T("", "login_request_failed")+": ", err)
+			log.Printf("%s: %v", utils.T("", "login_request_failed"), err)
 			w.WriteHeader(http.StatusBadRequest)
 			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request_format"), nil)
 			return
 		}
 
-		log.Print(utils.T("", "login_attempt", loginData.Username, r.RemoteAddr))
+		log.Printf("%s: %s, %s", utils.T("", "login_attempt"), loginData.Username, r.RemoteAddr)
 
 		user, exists := m.GetOrLoadUser(loginData.Username)
 
 		if !exists || !utils.CheckPassword(loginData.Password, user.PasswordHash) {
-			log.Print(utils.T("", "invalid_username_password|用户名或密码错误", loginData.Username))
+			log.Printf("%s: %s", utils.T("", "invalid_username_password|用户名或密码错误"), loginData.Username)
 			w.WriteHeader(http.StatusUnauthorized)
 			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_username_password|用户名或密码错误"), nil)
 			return
 		}
 
 		if !user.Active {
-			log.Print(utils.T("", "user_not_active", loginData.Username))
+			log.Printf("用户未激活: %s", loginData.Username)
 			w.WriteHeader(http.StatusForbidden)
 			utils.SendJSONResponse(w, false, utils.T(lang, "user_not_active|该账号已被禁用"), nil)
 			return
@@ -125,7 +125,7 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 
 		token, err := m.GenerateToken(user)
 		if err != nil {
-			log.Print(utils.T("", "token_generation_failed|Token生成失败")+": ", err)
+			log.Printf(utils.T("", "token_generation_failed|Token生成失败")+": %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			utils.SendJSONResponse(w, false, utils.T(lang, "token_generation_failed|Token生成失败"), nil)
 			return
@@ -136,7 +136,7 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 			role = "admin"
 		}
 
-		log.Print(utils.T("", "login_success", user.Username, role))
+		log.Printf(utils.T("", "login_success"), user.Username, role)
 
 		utils.SendJSONResponse(w, true, "", struct {
 			Token string `json:"token"`
@@ -190,7 +190,7 @@ func HandleTokenLogin(m *bot.Manager) http.HandlerFunc {
 		}
 
 		// 1. 验证 Token 是否有效且未过期
-		var tokenRecord models.UserLoginToken
+		var tokenRecord models.UserLoginTokenGORM
 		err := m.GORMDB.Where("platform = ? AND platform_id = ? AND token = ? AND expires_at > ?",
 			loginData.Platform, loginData.PlatformID, loginData.Token, time.Now()).First(&tokenRecord).Error
 
@@ -200,8 +200,8 @@ func HandleTokenLogin(m *bot.Manager) http.HandlerFunc {
 		}
 
 		// 2. 查找绑定的用户
-		var user models.User
-		err = m.GORMDB.Where("\"Platform\" = ? AND \"PlatformId\" = ?", loginData.Platform, loginData.PlatformID).First(&user).Error
+		var user models.UserGORM
+		err = m.GORMDB.Where("platform = ? AND platform_id = ?", loginData.Platform, loginData.PlatformID).First(&user).Error
 		if err != nil {
 			utils.SendJSONResponse(w, false, "该账号尚未绑定系统用户，请先注册并绑定 ID: "+loginData.PlatformID, nil)
 			return
@@ -268,7 +268,7 @@ func HandleRegister(m *bot.Manager) http.HandlerFunc {
 
 		// 1. 检查用户名是否已存在
 		var count int64
-		m.GORMDB.Model(&models.User{}).Where("\"Username\" = ?", regData.Username).Count(&count)
+		m.GORMDB.Model(&models.UserGORM{}).Where("username = ?", regData.Username).Count(&count)
 		if count > 0 {
 			utils.SendJSONResponse(w, false, "用户名已存在", nil)
 			return
@@ -276,7 +276,7 @@ func HandleRegister(m *bot.Manager) http.HandlerFunc {
 
 		// 2. 如果提供了 PlatformID，检查是否已被绑定
 		if regData.PlatformID != "" {
-			m.GORMDB.Model(&models.User{}).Where("\"Platform\" = ? AND \"PlatformId\" = ?", regData.Platform, regData.PlatformID).Count(&count)
+			m.GORMDB.Model(&models.UserGORM{}).Where("platform = ? AND platform_id = ?", regData.Platform, regData.PlatformID).Count(&count)
 			if count > 0 {
 				utils.SendJSONResponse(w, false, "该平台 ID 已被绑定", nil)
 				return
@@ -285,7 +285,7 @@ func HandleRegister(m *bot.Manager) http.HandlerFunc {
 
 		// 3. 创建用户
 		hash, _ := utils.HashPassword(regData.Password)
-		user := &models.User{
+		user := &models.UserGORM{
 			Username:     regData.Username,
 			PasswordHash: hash,
 			Platform:     regData.Platform,
@@ -302,6 +302,7 @@ func HandleRegister(m *bot.Manager) http.HandlerFunc {
 		utils.SendJSONResponse(w, true, "注册成功", nil)
 	}
 }
+
 
 // HandleGetUserInfo 获取当前登录用户信息
 // @Summary 获取用户信息
@@ -1654,7 +1655,7 @@ func HandleDockerAction(m *bot.Manager) http.HandlerFunc {
 
 				// 从数据库移除
 				if m.GORMDB != nil {
-					if err := m.GORMDB.Where("self_id = ? AND platform = ?", req.ContainerID, "Online").Delete(&models.BotEntity{}).Error; err != nil {
+					if err := m.GORMDB.Where("self_id = ? AND platform = ?", req.ContainerID, "Online").Delete(&models.BotEntityGORM{}).Error; err != nil {
 						log.Printf("[Admin] Failed to delete Online Bot from DB: %v", err)
 					}
 				}
@@ -3618,7 +3619,7 @@ func handleAdminDeleteUser(m *bot.Manager, w http.ResponseWriter, lang, username
 		return
 	}
 
-	if err := m.GORMDB.Where("\"Username\" = ?", username).Delete(&models.User{}).Error; err != nil {
+	if err := m.GORMDB.Where("username = ?", username).Delete(&models.UserGORM{}).Error; err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		utils.SendJSONResponse(w, false, fmt.Sprintf(utils.T(lang, "user_delete_failed"), err), nil)
 		return
@@ -3921,8 +3922,8 @@ func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 // @Router /api/admin/employees [get]
 func HandleListEmployees(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var employees []models.DigitalEmployee
-		query := m.GORMDB.Model(&models.DigitalEmployee{})
+		var employees []models.DigitalEmployeeGORM
+		query := m.GORMDB.Model(&models.DigitalEmployeeGORM{})
 
 		if dept := r.URL.Query().Get("department"); dept != "" {
 			query = query.Where("department = ?", dept)
@@ -3970,16 +3971,16 @@ func HandleGetEmployeeKPI(m *Manager) http.HandlerFunc {
 			AverageKPI     float64 `json:"average_kpi"`
 		}
 
-		m.GORMDB.Model(&models.DigitalEmployeeTask{}).Where("assignee_id = ?", id).Count(&stats.TotalTasks)
-		m.GORMDB.Model(&models.DigitalEmployeeTask{}).Where("assignee_id = ? AND status = ?", id, "completed").Count(&stats.CompletedTasks)
-		m.GORMDB.Model(&models.DigitalEmployeeTask{}).Where("assignee_id = ? AND status = ?", id, "failed").Count(&stats.FailedTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ?", id).Count(&stats.TotalTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ?", id, "completed").Count(&stats.CompletedTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id = ? AND status = ?", id, "failed").Count(&stats.FailedTasks)
 
 		if stats.TotalTasks > 0 {
 			stats.SuccessRate = float64(stats.CompletedTasks) / float64(stats.TotalTasks)
 		}
 
 		// 获取员工当前 KPI 分数
-		var emp models.DigitalEmployee
+		var emp models.DigitalEmployeeGORM
 		if err := m.GORMDB.First(&emp, id).Error; err != nil {
 			utils.SendJSONResponse(w, false, "Employee not found", nil)
 			return
@@ -4006,7 +4007,7 @@ func HandleGetDepartmentKPISummary(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		var employees []models.DigitalEmployee
+		var employees []models.DigitalEmployeeGORM
 		if err := m.GORMDB.Where("department = ?", dept).Find(&employees).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
@@ -4044,8 +4045,8 @@ func HandleGetDepartmentKPISummary(m *Manager) http.HandlerFunc {
 		}
 		summary.AverageKPI = totalKPI / float64(len(employees))
 
-		m.GORMDB.Model(&models.DigitalEmployeeTask{}).Where("assignee_id IN ?", employeeIDs).Count(&summary.TotalTasks)
-		m.GORMDB.Model(&models.DigitalEmployeeTask{}).Where("assignee_id IN ? AND status = ?", employeeIDs, "completed").Count(&summary.CompletedTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id IN ?", employeeIDs).Count(&summary.TotalTasks)
+		m.GORMDB.Model(&models.DigitalEmployeeTaskGORM{}).Where("assignee_id IN ? AND status = ?", employeeIDs, "completed").Count(&summary.CompletedTasks)
 
 		if summary.TotalTasks > 0 {
 			summary.SuccessRate = float64(summary.CompletedTasks) / float64(summary.TotalTasks)
@@ -4098,7 +4099,7 @@ func HandleOptimizeEmployee(m *Manager) http.HandlerFunc {
 func HandleListDepartments(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var departments []string
-		m.GORMDB.Model(&models.DigitalEmployee{}).Distinct().Pluck("department", &departments)
+		m.GORMDB.Model(&models.DigitalEmployeeGORM{}).Distinct().Pluck("department", &departments)
 		utils.SendJSONResponse(w, true, "", departments)
 	}
 }
@@ -4113,7 +4114,7 @@ func HandleListDepartments(m *Manager) http.HandlerFunc {
 // @Router /api/admin/employees/templates [get]
 func HandleListRoleTemplates(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var templates []models.DigitalRoleTemplate
+		var templates []models.DigitalRoleTemplateGORM
 		m.GORMDB.Find(&templates)
 		utils.SendJSONResponse(w, true, "", templates)
 	}
@@ -4131,7 +4132,7 @@ func HandleListRoleTemplates(m *Manager) http.HandlerFunc {
 // @Router /api/admin/employees [post]
 func HandleSaveEmployee(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var employee models.DigitalEmployee
+		var employee models.DigitalEmployeeGORM
 		if err := json.NewDecoder(r.Body).Decode(&employee); err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
@@ -4206,8 +4207,8 @@ func HandleListMemories(m *Manager) http.HandlerFunc {
 		userID := r.URL.Query().Get("user_id")
 		query := r.URL.Query().Get("q")
 
-		var memories []models.CognitiveMemory
-		db := m.GORMDB.Model(&models.CognitiveMemory{})
+		var memories []models.CognitiveMemoryGORM
+		db := m.GORMDB.Model(&models.CognitiveMemoryGORM{})
 
 		if botID != "" {
 			db = db.Where("bot_id = ?", botID)
@@ -4244,7 +4245,7 @@ func HandleDeleteMemory(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		if err := m.GORMDB.Delete(&models.CognitiveMemory{}, idStr).Error; err != nil {
+		if err := m.GORMDB.Delete(&models.CognitiveMemoryGORM{}, idStr).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
@@ -4262,7 +4263,7 @@ func HandleDeleteMemory(m *Manager) http.HandlerFunc {
 // @Router /api/admin/b2b/skills [get]
 func HandleListB2BSkills(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var sharings []models.B2BSkillSharing
+		var sharings []models.B2BSkillSharingGORM
 		if err := m.GORMDB.Find(&sharings).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
@@ -4283,7 +4284,7 @@ func HandleListB2BSkills(m *Manager) http.HandlerFunc {
 // @Router /api/admin/b2b/skills [post]
 func HandleSaveB2BSkill(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var sharing models.B2BSkillSharing
+		var sharing models.B2BSkillSharingGORM
 		if err := json.NewDecoder(r.Body).Decode(&sharing); err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
@@ -4321,7 +4322,7 @@ func HandleDeleteB2BSkill(m *Manager) http.HandlerFunc {
 			return
 		}
 
-		if err := m.GORMDB.Delete(&models.B2BSkillSharing{}, idStr).Error; err != nil {
+		if err := m.GORMDB.Delete(&models.B2BSkillSharingGORM{}, idStr).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
@@ -4339,7 +4340,7 @@ func HandleDeleteB2BSkill(m *Manager) http.HandlerFunc {
 // @Router /api/admin/b2b/connections [get]
 func HandleListB2BConnections(m *Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var connections []models.B2BConnection
+		var connections []models.B2BConnectionGORM
 		if err := m.GORMDB.Find(&connections).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return

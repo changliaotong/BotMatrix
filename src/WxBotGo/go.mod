@@ -8,4 +8,8 @@ require (
 	github.com/gorilla/websocket v1.5.3
 )
 
+<<<<<<< HEAD
 replace BotMatrix/common => ../Common
+=======
+replace BotMatrix/common => ../../common
+>>>>>>> 455bcfd (Finalize all changes: WeComBot to WeWorkBot renaming, WxBotGo fixes, DEPLOY_CN.md)

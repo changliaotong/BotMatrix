@@ -1,15 +1,241 @@
 package models
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"time"
+
+	"github.com/go-redis/redis/v8"
+	"gorm.io/gorm"
 )
 
-// UserInfo represents the User table
-type UserInfo struct {
-	Id             int64     `gorm:"primaryKey;column:Id" json:"id"`
+// ISz84Store defines the interface for sz84 data operations
+type ISz84Store interface {
+	GetLimiterLogs(userID int64, actionKey string) ([]LimiterLog, error)
+	AddLimiterLog(log *LimiterLog) error
+	// Add other methods as needed
+}
+
+// Sz84Store implements ISz84Store with dialect-aware logic and Redis caching
+type Sz84Store struct {
+	db      *gorm.DB
+	rdb     *redis.Client
+	dialect string
+}
+
+func NewSz84Store(db *gorm.DB, rdb *redis.Client) *Sz84Store {
+	dialect := db.Dialector.Name()
+	return &Sz84Store{
+		db:      db,
+		rdb:     rdb,
+		dialect: dialect,
+	}
+}
+
+// GetDateCondition returns a dialect-specific date comparison string
+// daysAgo: 0 for today, 1 for yesterday, etc.
+func (s *Sz84Store) GetDateCondition(columnName string, daysAgo int) string {
+	if s.dialect == "sqlserver" {
+		if daysAgo == 0 {
+			return fmt.Sprintf("CAST(%s AS DATE) = CAST(GETDATE() AS DATE)", columnName)
+		}
+		return fmt.Sprintf("CAST(%s AS DATE) = CAST(DATEADD(day, -%d, GETDATE()) AS DATE)", columnName, daysAgo)
+	}
+	// Default to Postgres
+	if daysAgo == 0 {
+		return fmt.Sprintf("%s::date = CURRENT_DATE", columnName)
+	}
+	return fmt.Sprintf("%s::date = CURRENT_DATE - INTERVAL '%d day'", columnName, daysAgo)
+}
+
+func (s *Sz84Store) NewSigninService() *SigninService {
+	return NewSigninService(s)
+}
+
+func (s *Sz84Store) GetLimiterLogs(userID int64, actionKey string) ([]LimiterLog, error) {
+	var logs []LimiterLog
+	err := s.db.Where("UserId = ? AND ActionKey = ?", userID, actionKey).Find(&logs).Error
+	return logs, err
+}
+
+func (s *Sz84Store) AddLimiterLog(log *LimiterLog) error {
+	return s.db.Create(log).Error
+}
+
+func (s *Sz84Store) GetGroup(groupID int64) (*Group, error) {
+	key := fmt.Sprintf("sz84:group:%d", groupID)
+	if s.rdb != nil {
+		if val, err := s.rdb.Get(context.Background(), key).Result(); err == nil {
+			var group Group
+			if json.Unmarshal([]byte(val), &group) == nil {
+				return &group, nil
+			}
+		}
+	}
+
+	var group Group
+	err := s.db.Where("GroupId = ?", groupID).First(&group).Error
+	if err == nil && s.rdb != nil {
+		data, _ := json.Marshal(group)
+		s.rdb.Set(context.Background(), key, data, time.Hour*24)
+	}
+	return &group, err
+}
+
+func (s *Sz84Store) GetMember(groupID, userID int64) (*GroupMember, error) {
+	key := fmt.Sprintf("sz84:member:%d:%d", groupID, userID)
+	if s.rdb != nil {
+		if val, err := s.rdb.Get(context.Background(), key).Result(); err == nil {
+			var member GroupMember
+			if json.Unmarshal([]byte(val), &member) == nil {
+				return &member, nil
+			}
+		}
+	}
+
+	var member GroupMember
+	err := s.db.Where("GroupId = ? AND UserId = ?", groupID, userID).First(&member).Error
+	if err == nil && s.rdb != nil {
+		data, _ := json.Marshal(member)
+		s.rdb.Set(context.Background(), key, data, time.Hour*2) // 成员信息缓存短一点
+	}
+	return &member, err
+}
+
+func (s *Sz84Store) GetUser(userID int64) (*User, error) {
+	key := fmt.Sprintf("sz84:user:%d", userID)
+	if s.rdb != nil {
+		if val, err := s.rdb.Get(context.Background(), key).Result(); err == nil {
+			var user User
+			if json.Unmarshal([]byte(val), &user) == nil {
+				return &user, nil
+			}
+		}
+	}
+
+	var user User
+	err := s.db.Where("Id = ?", userID).First(&user).Error
+	if err == nil && s.rdb != nil {
+		data, _ := json.Marshal(user)
+		s.rdb.Set(context.Background(), key, data, time.Hour*2)
+	}
+	return &user, err
+}
+
+// InvalidateMemberCache 清除特定成员的缓存，通常在数据更新后调用
+func (s *Sz84Store) InvalidateMemberCache(groupID, userID int64) {
+	if s.rdb != nil {
+		s.rdb.Del(context.Background(), fmt.Sprintf("sz84:member:%d:%d", groupID, userID))
+		s.rdb.Del(context.Background(), fmt.Sprintf("sz84:user:%d", userID))
+	}
+}
+
+// LimiterLog represents the LimiterLog table migrated from sz84
+type LimiterLog struct {
+	ID        int       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	GroupID   *int64    `gorm:"column:GroupId" json:"group_id"` // NULL for private chat
+	UserID    int64     `gorm:"not null;column:UserId" json:"user_id"`
+	ActionKey string    `gorm:"not null;column:ActionKey" json:"action_key"`
+	UsedAt    time.Time `gorm:"not null;column:UsedAt" json:"used_at"`
+}
+
+func (LimiterLog) TableName() string {
+	return "LimiterLog"
+}
+
+// Achievement represents the Achievements table migrated from sz84
+type Achievement struct {
+	ID            string `gorm:"primaryKey;column:Id" json:"id"`
+	Title         string `gorm:"column:Title" json:"title"`
+	Description   string `gorm:"column:Description" json:"description"`
+	MaxLevel      int    `gorm:"column:MaxLevel" json:"max_level"`
+	Category      string `gorm:"column:Category" json:"category"`
+	IconUrl       string `gorm:"column:IconUrl" json:"icon_url"`
+	Reward        string `gorm:"column:Reward" json:"reward"`
+	RequiredCount int    `gorm:"column:RequiredCount" json:"required_count"`
+	RewardCredit  int64  `gorm:"column:RewardCredit" json:"reward_credit"`
+	CounterKey    string `gorm:"column:CounterKey" json:"counter_key"`
+	// Rules is likely a JSON string or handled elsewhere in C#
+	RulesRaw string `gorm:"column:Rules" json:"rules_raw"`
+}
+
+func (Achievement) TableName() string {
+	return "Achievement"
+}
+
+// UserAchievement represents the UserAchievement table migrated from sz84
+type UserAchievement struct {
+	UserID             int64      `gorm:"primaryKey;column:UserId" json:"user_id"`
+	AchievementId      string     `gorm:"primaryKey;column:AchievementId" json:"achievement_id"`
+	CurrentLevel       int        `gorm:"column:CurrentLevel" json:"current_level"`
+	CurrentValue       int        `gorm:"column:CurrentValue" json:"current_value"`
+	LastActionDate     time.Time  `gorm:"column:LastActionDate" json:"last_action_date"`
+	CurrentStreakDays  int        `gorm:"column:CurrentStreakDays" json:"current_streak_days"`
+	LastActionDatePrev *time.Time `gorm:"column:LastActionDatePrev" json:"last_action_date_prev"`
+	LastUpdated        time.Time  `gorm:"column:LastUpdated" json:"last_updated"`
+}
+
+func (UserAchievement) TableName() string {
+	return "UserAchievement"
+}
+
+// UserTitle represents the Titles table migrated from sz84
+type UserTitle struct {
+	UserID     int64     `gorm:"primaryKey;column:UserId" json:"user_id"`
+	TitleId    string    `gorm:"primaryKey;column:TitleId" json:"title_id"`
+	UnlockTime time.Time `gorm:"column:UnlockTime" json:"unlock_time"`
+	IsEquipped bool      `gorm:"column:IsEquipped" json:"is_equipped"`
+	Title      string    `gorm:"column:Title" json:"title"`
+}
+
+func (UserTitle) TableName() string {
+	return "UserTitle"
+}
+
+// GroupMember represents the GroupMember table with all fields from legacy C#
+type GroupMember struct {
+	GroupID       int64      `gorm:"primaryKey;column:GroupId" json:"group_id"`
+	UserID        int64      `gorm:"primaryKey;column:UserId" json:"user_id"`
+	UserName      string     `gorm:"column:UserName" json:"user_name"`
+	DisplayName   string     `gorm:"column:DisplayName" json:"display_name"`
+	GroupCredit   int64      `gorm:"column:GroupCredit" json:"group_credit"`
+	GoldCoins     int64      `gorm:"column:GoldCoins" json:"gold_coins"`
+	PurpleCoins   int64      `gorm:"column:PurpleCoins" json:"purple_coins"`
+	BlackCoins    int64      `gorm:"column:BlackCoins" json:"black_coins"`
+	GameCoins     int64      `gorm:"column:GameCoins" json:"game_coins"`
+	SaveCredit    int64      `gorm:"column:SaveCredit" json:"save_credit"`
+	Status        int        `gorm:"column:Status" json:"status"`
+	ConfirmCode   string     `gorm:"column:ConfirmCode" json:"confirm_code"`
+	SignDate      *time.Time `gorm:"column:SignDate" json:"sign_date"`
+	SignTimes     int        `gorm:"column:SignTimes" json:"sign_times"`
+	SignLevel     int        `gorm:"column:SignLevel" json:"sign_level"`
+	SignTimesAll  int        `gorm:"column:SignTimesAll" json:"sign_times_all"`
+	Title         string     `gorm:"column:Title" json:"title"`
+	IsAdmin       bool       `gorm:"column:IsAdmin" json:"is_admin"`
+	LastMsgDate   *time.Time `gorm:"column:LastMsgDate" json:"last_msg_date"`
+	MsgCount      int        `gorm:"column:MsgCount" json:"msg_count"`
+	JoinDate      *time.Time `gorm:"column:JoinDate" json:"join_date"`
+	IsFans        bool       `gorm:"column:IsFans" json:"is_fans"`
+	FansDate      *time.Time `gorm:"column:FansDate" json:"fans_date"`
+	FansLevel     int        `gorm:"column:FansLevel" json:"fans_level"`
+	FansValue     int64      `gorm:"column:FansValue" json:"fans_value"`
+	LampDate      *time.Time `gorm:"column:LampDate" json:"lamp_date"`
+	InvitorUserId int64      `gorm:"column:InvitorUserId" json:"invitor_user_id"`
+	InviteCount   int        `gorm:"column:InviteCount" json:"invite_count"`
+	InsertDate    *time.Time `gorm:"column:InsertDate" json:"insert_date"`
+}
+
+func (GroupMember) TableName() string {
+	return "GroupMember"
+}
+
+// User represents the User table (UserInfo in C#) with all fields
+type User struct {
+	ID             int64     `gorm:"primaryKey;column:Id" json:"id"`
 	Name           string    `gorm:"column:Name" json:"name"`
-	UserOpenId     string    `gorm:"column:UserOpenId" json:"user_open_id"`
-	InsertDate     time.Time `gorm:"column:InsertDate;autoCreateTime" json:"insert_date"`
+	UserOpenId     string    `gorm:"column:UserOpenId" json:"user_openid"`
+	InsertDate     time.Time `gorm:"column:InsertDate" json:"insert_date"`
 	Credit         int64     `gorm:"column:Credit" json:"credit"`
 	CreditFreeze   int64     `gorm:"column:CreditFreeze" json:"credit_freeze"`
 	Coins          int64     `gorm:"column:Coins" json:"coins"`
@@ -67,49 +293,50 @@ type UserInfo struct {
 	IsSendHelpInfo bool      `gorm:"column:IsSendHelpInfo" json:"is_send_help_info"`
 	IsLog          bool      `gorm:"column:IsLog" json:"is_log"`
 	IsMusicLogo    bool      `gorm:"column:IsMusicLogo" json:"is_music_logo"`
-
-	// Csz related fields from Cov mapping
-	CszRes    int   `gorm:"column:CszRes" json:"csz_res"`
-	CszCredit int64 `gorm:"column:CszCredit" json:"csz_credit"`
-	CszTimes  int   `gorm:"column:CszTimes" json:"csz_times"`
-
-	// OpenID related
-	GroupOpenid string `gorm:"column:GroupOpenid" json:"group_openid"`
+	CszRes         int       `gorm:"column:CszRes" json:"csz_res"`
+	CszCredit      int64     `gorm:"column:CszCredit" json:"csz_credit"`
+	CszTimes       int       `gorm:"column:CszTimes" json:"csz_times"`
+	GroupOpenid    string    `gorm:"column:GroupOpenid" json:"group_openid"`
 }
 
-func (UserInfo) TableName() string {
+func (User) TableName() string {
 	return "User"
 }
 
-// GroupInfo represents the Group table
-type GroupInfo struct {
+// RobotWeibo represents the robot_weibo table used for sign-in logs
+type RobotWeibo struct {
+	WeiboID    int64     `gorm:"primaryKey;autoIncrement;column:Id" json:"weibo_id"`
+	RobotQQ    int64     `gorm:"column:RobotQQ" json:"robot_qq"`
+	WeiboQQ    int64     `gorm:"column:WeiboQQ" json:"weibo_qq"`
+	WeiboInfo  string    `gorm:"column:WeiboInfo" json:"weibo_info"`
+	WeiboType  int       `gorm:"column:WeiboType" json:"weibo_type"` // 1 for Sign-in
+	GroupID    int64     `gorm:"column:GroupId" json:"group_id"`
+	InsertDate time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP" json:"insert_date"`
+}
+
+func (RobotWeibo) TableName() string {
+	return "RobotWeibo"
+}
+
+// Group represents the GroupInfo table
+type Group struct {
 	Id                    int64     `gorm:"primaryKey;column:Id" json:"id"`
-	GroupOpenId           string    `gorm:"-" json:"group_open_id"` // DbIgnore
-	TargetGroup           int64     `gorm:"-" json:"target_group"`  // DbIgnore
 	GroupName             string    `gorm:"column:GroupName" json:"group_name"`
-	IsValid               bool      `gorm:"-" json:"is_valid"` // DbIgnore
-	IsProxy               bool      `gorm:"-" json:"is_proxy"` // DbIgnore
 	GroupMemo             string    `gorm:"column:GroupMemo" json:"group_memo"`
-	GroupOwner            int64     `gorm:"-" json:"group_owner"` // DbIgnore
 	GroupOwnerName        string    `gorm:"column:GroupOwnerName" json:"group_owner_name"`
 	GroupOwnerNickname    string    `gorm:"column:GroupOwnerNickname" json:"group_owner_nickname"`
 	GroupType             int       `gorm:"column:GroupType" json:"group_type"`
-	RobotOwner            int64     `gorm:"-" json:"robot_owner"` // DbIgnore
 	RobotOwnerName        string    `gorm:"column:RobotOwnerName" json:"robot_owner_name"`
 	WelcomeMessage        string    `gorm:"column:WelcomeMessage" json:"welcome_message"`
 	GroupState            int       `gorm:"column:GroupState" json:"group_state"`
-	BotUin                int64     `gorm:"-" json:"bot_uin"` // DbIgnore
 	BotName               string    `gorm:"column:BotName" json:"bot_name"`
 	LastDate              time.Time `gorm:"column:LastDate" json:"last_date"`
-	IsInGame              int       `gorm:"-" json:"is_in_game"` // DbIgnore
 	IsOpen                bool      `gorm:"column:IsOpen" json:"is_open"`
 	UseRight              int       `gorm:"column:UseRight" json:"use_right"`
 	TeachRight            int       `gorm:"column:TeachRight" json:"teach_right"`
 	AdminRight            int       `gorm:"column:AdminRight" json:"admin_right"`
-	QuietTime             time.Time `gorm:"-" json:"quiet_time"` // DbIgnore
 	IsCloseManager        bool      `gorm:"column:IsCloseManager" json:"is_close_manager"`
 	IsAcceptNewMember     int       `gorm:"column:IsAcceptNewMember" json:"is_accept_new_member"`
-	CloseRegex            string    `gorm:"-" json:"close_regex"` // DbIgnore
 	RegexRequestJoin      string    `gorm:"column:RegexRequestJoin" json:"regex_request_join"`
 	RejectMessage         string    `gorm:"column:RejectMessage" json:"reject_message"`
 	IsWelcomeHint         bool      `gorm:"column:IsWelcomeHint" json:"is_welcome_hint"`
@@ -128,8 +355,6 @@ type GroupInfo struct {
 	IsChangeEnter         bool      `gorm:"column:IsChangeEnter" json:"is_change_enter"`
 	IsMuteEnter           bool      `gorm:"column:IsMuteEnter" json:"is_mute_enter"`
 	IsChangeMessage       bool      `gorm:"column:IsChangeMessage" json:"is_change_message"`
-	IsSaveRecord          bool      `gorm:"-" json:"is_save_record"` // DbIgnore
-	IsPause               bool      `gorm:"-" json:"is_pause"`       // DbIgnore
 	RecallKeyword         string    `gorm:"column:RecallKeyword" json:"recall_keyword"`
 	WarnKeyword           string    `gorm:"column:WarnKeyword" json:"warn_keyword"`
 	MuteKeyword           string    `gorm:"column:MuteKeyword" json:"mute_keyword"`
@@ -143,17 +368,7 @@ type GroupInfo struct {
 	CardNamePrefixBoy     string    `gorm:"column:CardNamePrefixBoy" json:"card_name_prefix_boy"`
 	CardNamePrefixGirl    string    `gorm:"column:CardNamePrefixGirl" json:"card_name_prefix_girl"`
 	CardNamePrefixManager string    `gorm:"column:CardNamePrefixManager" json:"card_name_prefix_manager"`
-	LastAnswer            string    `gorm:"-" json:"last_answer"`         // DbIgnore
-	LastChengyu           string    `gorm:"-" json:"last_chengyu"`        // DbIgnore
-	LastChengyuDate       time.Time `gorm:"-" json:"last_chengyu_date"`   // DbIgnore
-	TrialStartDate        time.Time `gorm:"-" json:"trial_start_date"`    // DbIgnore
-	TrialEndDate          time.Time `gorm:"-" json:"trial_end_date"`      // DbIgnore
-	LastExitHintDate      time.Time `gorm:"-" json:"last_exit_hint_date"` // DbIgnore
-	BlockRes              string    `gorm:"-" json:"block_res"`           // DbIgnore
-	BlockType             int       `gorm:"-" json:"block_type"`          // DbIgnore
 	BlockMin              int       `gorm:"column:BlockMin" json:"block_min"`
-	BlockFee              int       `gorm:"-" json:"block_fee"`  // DbIgnore
-	GroupGuid             string    `gorm:"-" json:"group_guid"` // DbIgnore
 	IsBlock               bool      `gorm:"column:IsBlock" json:"is_block"`
 	IsWhite               bool      `gorm:"column:IsWhite" json:"is_white"`
 	CityName              string    `gorm:"column:CityName" json:"city_name"`
@@ -183,307 +398,118 @@ type GroupInfo struct {
 	IsMultAI              bool      `gorm:"column:IsMultAI" json:"is_mult_ai"`
 	IsAutoSignin          bool      `gorm:"column:IsAutoSignin" json:"is_auto_signin"`
 	IsUseKnowledgebase    bool      `gorm:"column:IsUseKnowledgebase" json:"is_use_knowledgebase"`
-	InsertDate            time.Time `gorm:"-" json:"insert_date"` // DbIgnore
 	IsSendHelpInfo        bool      `gorm:"column:IsSendHelpInfo" json:"is_send_help_info"`
 	IsRecall              bool      `gorm:"column:IsRecall" json:"is_recall"`
 	IsCreditSystem        bool      `gorm:"column:IsCreditSystem" json:"is_credit_system"`
+	GroupOpenid           string    `gorm:"column:GroupOpenid" json:"group_openid"`
+	GroupOwner            int64     `gorm:"column:GroupOwner" json:"group_owner"`
+	RobotOwner            int64     `gorm:"column:RobotOwner" json:"robot_owner"`
+	BotUin                int64     `gorm:"column:BotUin" json:"bot_uin"`
+	IsValid               bool      `gorm:"column:IsValid" json:"is_valid"`
+	IsProxy               bool      `gorm:"column:IsProxy" json:"is_proxy"`
+	QuietTime             time.Time `gorm:"column:QuietTime" json:"quiet_time"`
+	IsInGame              int       `gorm:"column:IsInGame" json:"is_in_game"`
+	CloseRegex            string    `gorm:"column:CloseRegex" json:"close_regex"`
+	IsSaveRecord          bool      `gorm:"column:IsSaveRecord" json:"is_save_record"`
+	IsPause               bool      `gorm:"column:IsPause" json:"is_pause"`
+	LastAnswer            string    `gorm:"column:LastAnswer" json:"last_answer"`
+	LastChengyu           string    `gorm:"column:LastChengyu" json:"last_chengyu"`
+	LastChengyuDate       time.Time `gorm:"column:LastChengyuDate" json:"last_chengyu_date"`
+	TrialStartDate        time.Time `gorm:"column:TrialStartDate" json:"trial_start_date"`
+	TrialEndDate          time.Time `gorm:"column:TrialEndDate" json:"trial_end_date"`
+	LastExitHintDate      time.Time `gorm:"column:LastExitHintDate" json:"last_exit_hint_date"`
+	BlockRes              string    `gorm:"column:BlockRes" json:"block_res"`
+	BlockType             int       `gorm:"column:BlockType" json:"block_type"`
+	BlockFee              int       `gorm:"column:BlockFee" json:"block_fee"`
+	GroupGuid             string    `gorm:"column:GroupGuid" json:"group_guid"`
+	InsertDate            time.Time `gorm:"column:InsertDate" json:"insert_date"`
 }
 
-func (GroupInfo) TableName() string {
+func (Group) TableName() string {
 	return "Group"
 }
 
-// GroupMember represents the GroupMember table
-type GroupMember struct {
-	GroupId         int64      `gorm:"primaryKey;column:GroupId" json:"group_id"`
-	UserId          int64      `gorm:"primaryKey;column:UserId" json:"user_id"`
-	UserName        string     `gorm:"column:UserName" json:"user_name"`
-	DisplayName     string     `gorm:"column:DisplayName" json:"display_name"`
-	GroupCredit     int64      `gorm:"column:GroupCredit" json:"group_credit"`
-	ConfirmCode     string     `gorm:"column:ConfirmCode" json:"confirm_code"`
-	Status          int        `gorm:"column:Status" json:"status"`
-	SignTimes       int        `gorm:"column:SignTimes" json:"sign_times"`
-	SignLevel       int        `gorm:"column:SignLevel" json:"sign_level"`
-	SignTimesAll    int        `gorm:"column:SignTimesAll" json:"sign_times_all"`
-	SignDate        *time.Time `gorm:"column:SignDate" json:"sign_date"`
-	IsFans          bool       `gorm:"column:IsFans" json:"is_fans"`
-	FansDate        time.Time  `gorm:"column:FansDate" json:"fans_date"`
-	FansLevel       int        `gorm:"column:FansLevel" json:"fans_level"`
-	FansValue       int64      `gorm:"column:FansValue" json:"fans_value"`
-	LampDate        time.Time  `gorm:"column:LampDate" json:"lamp_date"`
-	InvitorUserId   int64      `gorm:"column:InvitorUserId" json:"invitor_user_id"`
-	InviteCount     int        `gorm:"column:InviteCount" json:"invite_count"`
-	InviteExitCount int        `gorm:"column:InviteExitCount" json:"invite_exit_count"`
-	GoldCoins       int64      `gorm:"column:GoldCoins" json:"gold_coins"`
-	PurpleCoins     int64      `gorm:"column:PurpleCoins" json:"purple_coins"`
-	BlackCoins      int64      `gorm:"column:BlackCoins" json:"black_coins"`
-	GameCoins       int64      `gorm:"column:GameCoins" json:"game_coins"`
-	SaveCredit      int64      `gorm:"column:SaveCredit" json:"save_credit"`
-}
-
-func (GroupMember) TableName() string {
-	return "GroupMember"
-}
-
-// BlackList represents the BlackList table
-type BlackList struct {
-	BotUin    int64  `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId   int64  `gorm:"primaryKey;column:GroupId" json:"group_id"`
-	GroupName string `gorm:"column:GroupName" json:"group_name"`
-	UserId    int64  `gorm:"column:UserId" json:"user_id"`
-	UserName  string `gorm:"column:UserName" json:"user_name"`
-	BlackId   int64  `gorm:"primaryKey;column:BlackId" json:"black_id"`
-	BlackInfo string `gorm:"column:BlackInfo" json:"black_info"`
-}
-
-func (BlackList) TableName() string {
-	return "BlackList"
-}
-
-// WhiteList represents the WhiteList table
-type WhiteList struct {
-	BotUin    int64  `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId   int64  `gorm:"primaryKey;column:GroupId" json:"group_id"`
-	GroupName string `gorm:"column:GroupName" json:"group_name"`
-	UserId    int64  `gorm:"column:UserId" json:"user_id"`
-	UserName  string `gorm:"column:UserName" json:"user_name"`
-	WhiteId   int64  `gorm:"primaryKey;column:WhiteId" json:"white_id"`
-}
-
-func (WhiteList) TableName() string {
-	return "WhiteList"
-}
-
-// Friend represents the Friend table
-type Friend struct {
-	BotUin     int64  `gorm:"primaryKey;column:BotUin" json:"bot_uin"`
-	UserId     int64  `gorm:"primaryKey;column:UserId" json:"user_id"`
-	UserName   string `gorm:"column:UserName" json:"user_name"`
-	Credit     int64  `gorm:"column:Credit" json:"credit"`
-	SaveCredit int64  `gorm:"column:SaveCredit" json:"save_credit"`
-}
-
-func (Friend) TableName() string {
-	return "Friend"
-}
-
-// BotCmd represents the Cmd table
-type BotCmd struct {
-	Id      int    `gorm:"primaryKey;column:Id" json:"id"`
-	CmdName string `gorm:"column:CmdName" json:"cmd_name"`
-	CmdText string `gorm:"column:CmdText" json:"cmd_text"`
-	IsClose bool   `gorm:"column:IsClose" json:"is_close"`
-}
-
-func (BotCmd) TableName() string {
-	return "Cmd"
-}
-
-// GroupVip represents the VIP table
-type GroupVip struct {
-	GroupId   int64     `gorm:"primaryKey;column:GroupId" json:"group_id"`
-	GroupName string    `gorm:"column:GroupName" json:"group_name"`
-	FirstPay  float64   `gorm:"column:FirstPay" json:"first_pay"`
-	StartDate time.Time `gorm:"column:StartDate" json:"start_date"`
-	EndDate   time.Time `gorm:"column:EndDate" json:"end_date"`
-	VipInfo   string    `gorm:"column:VipInfo" json:"vip_info"`
-	UserId    int64     `gorm:"column:UserId" json:"user_id"`
-	IncomeDay float64   `gorm:"column:IncomeDay" json:"income_day"`
-	IsYearVip bool      `gorm:"column:IsYearVip" json:"is_year_vip"`
-	InsertBy  int       `gorm:"column:InsertBy" json:"insert_by"`
-	IsGoon    *bool     `gorm:"column:IsGoon" json:"is_goon"` // Nullable
-}
-
-func (GroupVip) TableName() string {
-	return "VIP"
-}
-
-// BotInfo represents the Member table (Bot information)
-type BotInfo struct {
-	BotUin         int64     `gorm:"primaryKey;column:BotUin" json:"bot_uin"`
-	Password       string    `gorm:"column:Password" json:"password"`
-	BotName        string    `gorm:"column:BotName" json:"bot_name"`
-	BotType        int       `gorm:"column:BotType" json:"bot_type"`
-	AdminId        int64     `gorm:"column:AdminId" json:"admin_id"`
-	InsertDate     time.Time `gorm:"column:InsertDate" json:"insert_date"`
-	BotMemo        string    `gorm:"column:BotMemo" json:"bot_memo"`
-	WemcomeMessage string    `gorm:"column:WemcomeMessage" json:"wemcome_message"`
-	ApiIP          string    `gorm:"column:ApiIP" json:"api_ip"`
-	ApiPort        string    `gorm:"column:ApiPort" json:"api_port"`
-	ApiKey         string    `gorm:"column:ApiKey" json:"api_key"`
-	WebUIToken     string    `gorm:"column:WebUIToken" json:"web_ui_token"`
-	WebUIPort      string    `gorm:"column:WebUIPort" json:"web_ui_port"`
-	IsSignalR      bool      `gorm:"column:IsSignalR" json:"is_signal_r"`
-	IsCredit       bool      `gorm:"column:IsCredit" json:"is_credit"`
-	IsGroup        bool      `gorm:"column:IsGroup" json:"is_group"`
-	IsPrivate      bool      `gorm:"column:IsPrivate" json:"is_private"`
-	Valid          int       `gorm:"column:Valid" json:"valid"`
-	IsFreeze       bool      `gorm:"column:IsFreeze" json:"is_freeze"`
-	FreezeTimes    int       `gorm:"column:FreezeTimes" json:"freeze_times"`
-	IsBlock        bool      `gorm:"column:IsBlock" json:"is_block"`
-	IsVip          bool      `gorm:"column:IsVip" json:"is_vip"`
-
-	// Ignored fields
-	ValidDate     time.Time `gorm:"-" json:"valid_date"`
-	LastDate      time.Time `gorm:"-" json:"last_date"`
-	FreezeDate    time.Time `gorm:"-" json:"freeze_date"`
-	BlockDate     time.Time `gorm:"-" json:"block_date"`
-	HeartbeatDate time.Time `gorm:"-" json:"heartbeat_date"`
-	ReceiveDate   time.Time `gorm:"-" json:"receive_date"`
-}
-
-func (BotInfo) TableName() string {
-	return "Member"
-}
-
-// CoinsLog represents the Coins table
-type CoinsLog struct {
-	ID         int       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	BotUin     int64     `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId    int64     `gorm:"column:GroupId" json:"group_id"`
-	GroupName  string    `gorm:"column:GroupName" json:"group_name"`
-	UserId     int64     `gorm:"column:UserId" json:"user_id"`
-	UserName   string    `gorm:"column:UserName" json:"user_name"`
-	CoinsType  int       `gorm:"column:CoinsType" json:"coins_type"`
-	CoinsAdd   int64     `gorm:"column:CoinsAdd" json:"coins_add"`
-	CoinsValue int64     `gorm:"column:CoinsValue" json:"coins_value"`
-	CoinsInfo  string    `gorm:"column:CoinsInfo" json:"coins_info"`
-	InsertDate time.Time `gorm:"column:InsertDate" json:"insert_date"`
-}
-
-func (CoinsLog) TableName() string {
-	return "Coins"
-}
-
-// CreditLog represents the Credit table
+// CreditLog represents the Credit table (CreditLog in C#)
 type CreditLog struct {
-	ID          int       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	BotUin      int64     `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId     int64     `gorm:"column:GroupId" json:"group_id"`
-	GroupName   string    `gorm:"column:GroupName" json:"group_name"`
-	UserId      int64     `gorm:"column:UserId" json:"user_id"`
-	UserName    string    `gorm:"column:UserName" json:"user_name"`
-	CreditAdd   int64     `gorm:"column:CreditAdd" json:"credit_add"`
-	CreditValue int64     `gorm:"column:CreditValue" json:"credit_value"`
-	CreditInfo  string    `gorm:"column:CreditInfo" json:"credit_info"`
-	InsertDate  time.Time `gorm:"column:InsertDate;autoCreateTime" json:"insert_date"`
+	ID          int64     `gorm:"primaryKey;autoIncrement;column:Id"`
+	BotUin      int64     `gorm:"column:BotUin"`
+	GroupID     int64     `gorm:"column:GroupId"`
+	GroupName   string    `gorm:"column:GroupName"`
+	UserID      int64     `gorm:"column:UserId"`
+	UserName    string    `gorm:"column:UserName"`
+	CreditAdd   int64     `gorm:"column:CreditAdd"`
+	CreditValue int64     `gorm:"column:CreditValue"`
+	CreditInfo  string    `gorm:"column:CreditInfo"`
+	InsertDate  time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP"`
 }
 
 func (CreditLog) TableName() string {
-	return "Credit"
+	return "CreditLog"
 }
 
-// TokensLog represents the Tokens table
+// TokensLog represents the Tokens table (TokensLog in C#)
 type TokensLog struct {
-	ID          int       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	BotUin      int64     `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId     int64     `gorm:"column:GroupId" json:"group_id"`
-	GroupName   string    `gorm:"column:GroupName" json:"group_name"`
-	UserId      int64     `gorm:"column:UserId" json:"user_id"`
-	UserName    string    `gorm:"column:UserName" json:"user_name"`
-	TokensAdd   int64     `gorm:"column:TokensAdd" json:"tokens_add"`
-	TokensValue int64     `gorm:"column:TokensValue" json:"tokens_value"`
-	TokensInfo  string    `gorm:"column:TokensInfo" json:"tokens_info"`
-	InsertDate  time.Time `gorm:"column:InsertDate;autoCreateTime" json:"insert_date"`
+	ID          int64     `gorm:"primaryKey;autoIncrement;column:Id"`
+	BotUin      int64     `gorm:"column:BotUin"`
+	GroupID     int64     `gorm:"column:GroupId"`
+	GroupName   string    `gorm:"column:GroupName"`
+	UserID      int64     `gorm:"column:UserId"`
+	UserName    string    `gorm:"column:UserName"`
+	TokensAdd   int64     `gorm:"column:TokensAdd"`
+	TokensValue int64     `gorm:"column:TokensValue"`
+	TokensInfo  string    `gorm:"column:TokensInfo"`
+	InsertDate  time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP"`
 }
 
 func (TokensLog) TableName() string {
-	return "Tokens"
+	return "TokensLog"
 }
 
 // MsgCount represents the MsgCount table
 type MsgCount struct {
-	Id        int       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	BotUin    int64     `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId   int64     `gorm:"column:GroupId" json:"group_id"`
-	GroupName string    `gorm:"column:GroupName" json:"group_name"`
-	UserId    int64     `gorm:"column:UserId" json:"user_id"`
-	UserName  string    `gorm:"column:UserName" json:"user_name"`
-	CDate     time.Time `gorm:"column:CDate" json:"c_date"`
-	CMsg      int       `gorm:"column:CMsg" json:"c_msg"`
-	MsgDate   time.Time `gorm:"column:MsgDate;autoCreateTime" json:"msg_date"`
+	ID        int64      `gorm:"primaryKey;autoIncrement;column:Id"`
+	BotUin    int64      `gorm:"column:BotUin"`
+	GroupID   int64      `gorm:"column:GroupId"`
+	GroupName string     `gorm:"column:GroupName"`
+	UserID    int64      `gorm:"column:UserId"`
+	UserName  string     `gorm:"column:UserName"`
+	CDate     time.Time  `gorm:"column:CDate;type:date"`
+	CMsg      int        `gorm:"column:CMsg"`
+	MsgDate   *time.Time `gorm:"column:MsgDate"`
 }
 
 func (MsgCount) TableName() string {
 	return "MsgCount"
 }
 
-// Gift represents the Gift table
-type Gift struct {
-	Id         int64  `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	GiftName   string `gorm:"column:GiftName" json:"gift_name"`
-	GiftCredit int64  `gorm:"column:GiftCredit" json:"gift_credit"`
-	GiftUrl    string `gorm:"column:GiftUrl" json:"gift_url"`
-	GiftImage  string `gorm:"column:GiftImage" json:"gift_image"`
-	GiftType   int    `gorm:"column:GiftType" json:"gift_type"` // 1: normal, 2: advanced
-	IsValid    bool   `gorm:"column:IsValid" json:"is_valid"`
+// BlackList represents the BlackList table
+type BlackList struct {
+	BotUin     int64     `gorm:"primaryKey;column:BotUin"`
+	GroupID    int64     `gorm:"primaryKey;column:GroupId"`
+	BlackID    int64     `gorm:"primaryKey;column:BlackId"`
+	BlackInfo  string    `gorm:"column:BlackInfo"`
+	InsertDate time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP"`
 }
 
-func (Gift) TableName() string {
-	return "Gift"
+func (BlackList) TableName() string {
+	return "BlackList"
 }
 
-// GiftLog represents the GiftLog table
-type GiftLog struct {
-	Id           int64     `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	BotUin       int64     `gorm:"column:BotUin" json:"bot_uin"`
-	GroupId      int64     `gorm:"column:GroupId" json:"group_id"`
-	GroupName    string    `gorm:"column:GroupName" json:"group_name"`
-	UserId       int64     `gorm:"column:UserId" json:"user_id"`
-	UserName     string    `gorm:"column:UserName" json:"user_name"`
-	RobotOwner   int64     `gorm:"column:RobotOwner" json:"robot_owner"`
-	OwnerName    string    `gorm:"column:OwnerName" json:"owner_name"`
-	GiftUserId   int64     `gorm:"column:GiftUserId" json:"gift_user_id"`
-	GiftUserName string    `gorm:"column:GiftUserName" json:"gift_user_name"`
-	GiftId       int64     `gorm:"column:GiftId" json:"gift_id"`
-	GiftName     string    `gorm:"column:GiftName" json:"gift_name"`
-	GiftCount    int       `gorm:"column:GiftCount" json:"gift_count"`
-	GiftCredit   int64     `gorm:"column:GiftCredit" json:"gift_credit"`
-	InsertDate   time.Time `gorm:"column:InsertDate;default:getdate()" json:"insert_date"`
+// VIPInfo represents the Vips table
+type VIPInfo struct {
+	GroupID    int64     `gorm:"primaryKey;column:GroupId"`
+	GroupName  string    `gorm:"column:GroupName"`
+	FirstPay   float64   `gorm:"column:FirstPay"`
+	StartDate  time.Time `gorm:"column:StartDate"`
+	EndDate    time.Time `gorm:"column:EndDate"`
+	VIPInfo    string    `gorm:"column:VipInfo"`
+	UserID     int64     `gorm:"column:UserId"`
+	IncomeDay  float64   `gorm:"column:IncomeDay"`
+	IsYearVIP  bool      `gorm:"column:IsYearVip"`
+	InsertBy   int       `gorm:"column:InsertBy"`
+	InsertDate time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP"`
 }
 
-func (GiftLog) TableName() string {
-	return "GiftLog"
-}
-
-// RobotWeibo represents the robot_weibo table (Sign-in log)
-type RobotWeibo struct {
-	WeiboId    int       `gorm:"primaryKey;autoIncrement;column:weibo_id" json:"weibo_id"`
-	RobotQQ    int64     `gorm:"column:robot_qq" json:"robot_qq"`
-	WeiboQQ    int64     `gorm:"column:weibo_qq" json:"weibo_qq"`
-	WeiboInfo  string    `gorm:"column:weibo_info" json:"weibo_info"`
-	WeiboType  int       `gorm:"column:weibo_type" json:"weibo_type"`
-	GroupId    int64     `gorm:"column:group_id" json:"group_id"`
-	InsertDate time.Time `gorm:"column:insert_date;autoCreateTime" json:"insert_date"`
-}
-
-func (RobotWeibo) TableName() string {
-	return "robot_weibo"
-}
-
-// Title represents the Title table
-type Title struct {
-	Id              string `gorm:"primaryKey;column:Id" json:"id"`
-	Name            string `gorm:"column:Name" json:"name"`
-	Description     string `gorm:"column:Description" json:"description"`
-	UnlockCondition string `gorm:"column:UnlockCondition" json:"unlock_condition"`
-	IsHidden        bool   `gorm:"column:IsHidden" json:"is_hidden"`
-	IsExclusive     bool   `gorm:"column:IsExclusive" json:"is_exclusive"`
-	Icon            string `gorm:"column:Icon" json:"icon"`
-}
-
-func (Title) TableName() string {
-	return "Title"
-}
-
-// UserTitle represents the UserTitle table
-type UserTitle struct {
-	UserId     int64     `gorm:"primaryKey;column:UserId" json:"user_id"`
-	TitleId    string    `gorm:"primaryKey;column:TitleId" json:"title_id"`
-	UnlockTime time.Time `gorm:"column:UnlockTime" json:"unlock_time"`
-	IsEquipped bool      `gorm:"column:IsEquipped" json:"is_equipped"`
-}
-
-func (UserTitle) TableName() string {
-	return "UserTitle"
+func (VIPInfo) TableName() string {
+	return "VIPInfo"
 }

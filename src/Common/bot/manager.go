@@ -191,22 +191,22 @@ func (m *Manager) PrepareQuery(query string) string {
 }
 
 // SaveGroupCache saves group cache to database
-func (m *Manager) SaveGroupCache(cache *models.GroupCache) error {
+func (m *Manager) SaveGroupCache(cache *models.GroupCacheGORM) error {
 	return database.SaveGroupCache(m.DB, m.PrepareQuery, cache)
 }
 
 // SaveFriendCache saves friend cache to database
-func (m *Manager) SaveFriendCache(cache *models.FriendCache) error {
+func (m *Manager) SaveFriendCache(cache *models.FriendCacheGORM) error {
 	return database.SaveFriendCache(m.DB, m.PrepareQuery, cache)
 }
 
 // SaveMemberCache saves member cache to database
-func (m *Manager) SaveMemberCache(cache *models.MemberCache) error {
+func (m *Manager) SaveMemberCache(cache *models.MemberCacheGORM) error {
 	return database.SaveMemberCache(m.DB, m.PrepareQuery, cache)
 }
 
 // LoadGroupCachesFromDB loads all group caches from database
-func (m *Manager) LoadGroupCachesFromDB() ([]*models.GroupCache, error) {
+func (m *Manager) LoadGroupCachesFromDB() ([]*models.GroupCacheGORM, error) {
 	return database.LoadGroupCachesFromDB(m.DB, m.PrepareQuery)
 }
 
@@ -226,7 +226,7 @@ func (m *Manager) DeleteMemberCache(groupID, userID string) error {
 }
 
 // LoadFriendCachesFromDB loads all friend caches from database
-func (m *Manager) LoadFriendCachesFromDB() ([]*models.FriendCache, error) {
+func (m *Manager) LoadFriendCachesFromDB() ([]*models.FriendCacheGORM, error) {
 	return database.LoadFriendCachesFromDB(m.DB, m.PrepareQuery)
 }
 
@@ -286,7 +286,7 @@ func (m *Manager) LoadUsersFromDB() error {
 		return fmt.Errorf("GORMDB is not initialized")
 	}
 
-	var dbUsers []models.User
+	var dbUsers []models.UserGORM
 	if err := m.GORMDB.Find(&dbUsers).Error; err != nil {
 		return fmt.Errorf("failed to load users from DB: %v", err)
 	}
@@ -300,7 +300,7 @@ func (m *Manager) LoadUsersFromDB() error {
 			version = 1
 			// 异步更新数据库，不阻塞加载
 			go func(id uint) {
-				m.GORMDB.Model(&models.User{}).Where("id = ?", id).Update("session_version", 1)
+				m.GORMDB.Model(&models.UserGORM{}).Where("id = ?", id).Update("session_version", 1)
 			}(u.ID)
 		}
 
@@ -326,7 +326,7 @@ func (m *Manager) LoadBotsFromDB() error {
 		return fmt.Errorf("GORMDB is not initialized")
 	}
 
-	var dbBots []models.BotEntity
+	var dbBots []models.BotEntityGORM
 	// 我们目前只自动加载 Online 平台的机器人，其他平台的由其自身的 client 连接
 	if err := m.GORMDB.Where("platform = ?", "Online").Find(&dbBots).Error; err != nil {
 		return fmt.Errorf("failed to load bots from DB: %v", err)
@@ -454,10 +454,10 @@ func (m *Manager) SaveBotToDB(selfID, nickname, platform, protocol string) error
 	if m.GORMDB == nil {
 		return fmt.Errorf("GORM database not initialized")
 	}
-	var bot models.BotEntity
+	var bot models.BotEntityGORM
 	result := m.GORMDB.Where("self_id = ?", selfID).First(&bot)
 	if result.Error != nil {
-		bot = models.BotEntity{
+		bot = models.BotEntityGORM{
 			SelfID:    selfID,
 			Nickname:  nickname,
 			Platform:  platform,
@@ -481,7 +481,7 @@ func (m *Manager) SaveGroupToDB(groupID, groupName, botID string) error {
 	if m.GORMDB == nil {
 		return fmt.Errorf("GORM database not initialized")
 	}
-	cache := &models.GroupCache{
+	cache := &models.GroupCacheGORM{
 		GroupID:   groupID,
 		GroupName: groupName,
 		BotID:     botID,
@@ -495,7 +495,7 @@ func (m *Manager) SaveMemberToDB(groupID, userID, nickname, card, role string) e
 	if m.GORMDB == nil {
 		return fmt.Errorf("GORM database not initialized")
 	}
-	cache := &models.MemberCache{
+	cache := &models.MemberCacheGORM{
 		GroupID:  groupID,
 		UserID:   userID,
 		Nickname: nickname,
@@ -511,7 +511,7 @@ func (m *Manager) SaveFriendToDB(userID, nickname, botID string) error {
 	if m.GORMDB == nil {
 		return fmt.Errorf("GORM database not initialized")
 	}
-	cache := &models.FriendCache{
+	cache := &models.FriendCacheGORM{
 		UserID:   userID,
 		Nickname: nickname,
 		BotID:    botID,
@@ -525,10 +525,10 @@ func (m *Manager) SaveMessageToDB(msgID, botID, userID, groupID, msgType, conten
 	if m.GORMDB == nil {
 		return fmt.Errorf("GORM database not initialized")
 	}
-	log := &models.MessageLog{
-		BotId:     botID,
-		UserId:    userID,
-		GroupId:   groupID,
+	log := &models.MessageLogGORM{
+		BotID:     botID,
+		UserID:    userID,
+		GroupID:   groupID,
 		Content:   content,
 		RawData:   rawData,
 		Direction: "incoming",
@@ -559,13 +559,13 @@ func (m *Manager) UpdateBotSentStats(botID string) {
 
 // SaveUserToDB persists user info to database
 func (m *Manager) SaveUserToDB(u any) error {
-	var userGORM *models.User
+	var userGORM *models.UserGORM
 
 	switch user := u.(type) {
-	case *models.User:
+	case *models.UserGORM:
 		userGORM = user
 	case *types.User:
-		userGORM = &models.User{
+		userGORM = &models.UserGORM{
 			ID:             uint(user.ID),
 			Username:       user.Username,
 			PasswordHash:   user.PasswordHash,
@@ -589,15 +589,15 @@ func (m *Manager) SaveConfig() error {
 
 // SaveRoutingRuleToDB persists routing rule to database
 func (m *Manager) SaveRoutingRuleToDB(pattern, targetWorkerID string) error {
-	rule := &models.RoutingRule{
+	rule := &models.RoutingRuleGORM{
 		Pattern:        pattern,
-		TargetWorkerId: targetWorkerID,
+		TargetWorkerID: targetWorkerID,
 	}
 	// Use Upsert logic
-	var existing models.RoutingRule
+	var existing models.RoutingRuleGORM
 	result := m.GORMDB.Where("pattern = ?", pattern).First(&existing)
 	if result.Error == nil {
-		existing.TargetWorkerId = targetWorkerID
+		existing.TargetWorkerID = targetWorkerID
 		return m.GORMDB.Save(&existing).Error
 	}
 	return m.GORMDB.Create(rule).Error
@@ -605,12 +605,12 @@ func (m *Manager) SaveRoutingRuleToDB(pattern, targetWorkerID string) error {
 
 // DeleteRoutingRuleFromDB deletes routing rule from database
 func (m *Manager) DeleteRoutingRuleFromDB(pattern string) error {
-	return m.GORMDB.Where("pattern = ?", pattern).Delete(&models.RoutingRule{}).Error
+	return m.GORMDB.Where("pattern = ?", pattern).Delete(&models.RoutingRuleGORM{}).Error
 }
 
 // LoadRoutingRulesFromDB loads all routing rules from database
 func (m *Manager) LoadRoutingRulesFromDB() error {
-	var rules []models.RoutingRule
+	var rules []models.RoutingRuleGORM
 	if err := m.GORMDB.Find(&rules).Error; err != nil {
 		return err
 	}
@@ -620,7 +620,7 @@ func (m *Manager) LoadRoutingRulesFromDB() error {
 
 	m.RoutingRules = make(map[string]string)
 	for _, rule := range rules {
-		m.RoutingRules[rule.Pattern] = rule.TargetWorkerId
+		m.RoutingRules[rule.Pattern] = rule.TargetWorkerID
 	}
 	return nil
 }
@@ -649,7 +649,7 @@ func (m *Manager) LoadCachesFromDB() error {
 	defer m.CacheMutex.Unlock()
 
 	// Load groups
-	var groups []models.GroupCache
+	var groups []models.GroupCacheGORM
 	if err := m.GORMDB.Find(&groups).Error; err == nil {
 		for _, g := range groups {
 			m.GroupCache[g.GroupID] = types.GroupInfo{
@@ -662,7 +662,7 @@ func (m *Manager) LoadCachesFromDB() error {
 	}
 
 	// Load members
-	var members []models.MemberCache
+	var members []models.MemberCacheGORM
 	if err := m.GORMDB.Find(&members).Error; err == nil {
 		for _, mem := range members {
 			m.MemberCache[fmt.Sprintf("%s:%s", mem.GroupID, mem.UserID)] = types.MemberInfo{
@@ -675,7 +675,7 @@ func (m *Manager) LoadCachesFromDB() error {
 	}
 
 	// Load friends
-	var friends []models.FriendCache
+	var friends []models.FriendCacheGORM
 	if err := m.GORMDB.Find(&friends).Error; err == nil {
 		for _, f := range friends {
 			m.FriendCache[f.UserID] = types.FriendInfo{
@@ -726,8 +726,8 @@ func (m *Manager) GetOrLoadUser(username string) (*types.User, bool) {
 		return nil, false
 	}
 
-	var u models.User
-	result := m.GORMDB.Where("\"Username\" = ?", username).First(&u)
+	var u models.UserGORM
+	result := m.GORMDB.Where("username = ?", username).First(&u)
 	if result.Error != nil {
 		return nil, false
 	}
@@ -738,7 +738,7 @@ func (m *Manager) GetOrLoadUser(username string) (*types.User, bool) {
 		version = 1
 		// 异步更新数据库，不阻塞加载
 		go func(id uint) {
-			m.GORMDB.Model(&models.User{}).Where("id = ?", id).Update("session_version", 1)
+			m.GORMDB.Model(&models.UserGORM{}).Where("id = ?", id).Update("session_version", 1)
 		}(u.ID)
 	}
 
@@ -766,8 +766,8 @@ func (m *Manager) EnsureAdminUser() error {
 		return fmt.Errorf("GORM database not initialized")
 	}
 
-	var existingAdmin models.User
-	result := m.GORMDB.Where("\"Username\" = ?", "admin").First(&existingAdmin)
+	var existingAdmin models.UserGORM
+	result := m.GORMDB.Where("username = ?", "admin").First(&existingAdmin)
 	if result.Error == nil {
 		// 如果已存在，确保其为激活状态且是管理员，并更新密码以匹配配置
 		password := m.Config.DefaultAdminPassword
@@ -777,13 +777,13 @@ func (m *Manager) EnsureAdminUser() error {
 		hash, _ := utils.HashPassword(password)
 
 		updates := map[string]interface{}{
-			"Active":  true,
-			"IsAdmin": true,
+			"active":   true,
+			"is_admin": true,
 		}
 
 		// 只有当密码不匹配时才更新密码，避免不必要的哈希计算
 		if !utils.CheckPassword(password, existingAdmin.PasswordHash) {
-			updates["PasswordHash"] = hash
+			updates["password_hash"] = hash
 			log.Printf("Admin user 'admin' password updated to match config")
 		}
 
@@ -815,7 +815,7 @@ func (m *Manager) EnsureAdminUser() error {
 		user.Active = true
 		user.IsAdmin = true
 		user.SessionVersion = existingAdmin.SessionVersion
-		if h, ok := updates["PasswordHash"].(string); ok {
+		if h, ok := updates["password_hash"].(string); ok {
 			user.PasswordHash = h
 		} else {
 			user.PasswordHash = existingAdmin.PasswordHash
@@ -835,7 +835,7 @@ func (m *Manager) EnsureAdminUser() error {
 		return fmt.Errorf("failed to hash default admin password: %v", err)
 	}
 
-	admin := &models.User{
+	admin := &models.UserGORM{
 		Username:       "admin",
 		PasswordHash:   hash,
 		IsAdmin:        true,

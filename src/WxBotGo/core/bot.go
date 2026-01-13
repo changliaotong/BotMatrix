@@ -1039,10 +1039,13 @@ func (b *WxBot) SendMessage(params *SendMessageParams) (*OneBotResponse, error) 
 <<<<<<< HEAD
 		Data: map[string]interface{}{
 			"message_id": msgID, // 返回真实的消息ID
+<<<<<<< HEAD
 =======
 		Data: map[string]any{
 			"message_id": "1", // WeChat doesn't return message ID, so we use a placeholder
 >>>>>>> e5150c2482302cbf3c41db97a64afb3fe5c878df
+=======
+>>>>>>> 455bcfd (Finalize all changes: WeComBot to WeWorkBot renaming, WxBotGo fixes, DEPLOY_CN.md)
 		},
 	}, nil
 }

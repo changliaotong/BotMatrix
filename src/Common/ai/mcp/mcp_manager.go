@@ -1,15 +1,10 @@
 package mcp
 
 import (
-	"BotMatrix/common/browser"
-	"BotMatrix/common/log"
 	"BotMatrix/common/models"
-	"BotMatrix/common/sandbox"
 	"BotMatrix/common/types"
-	"BotMatrix/common/utils"
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"gorm.io/gorm"
@@ -63,23 +58,23 @@ func NewCollaborationProviderImpl(m types.Manager) *CollaborationProviderImpl {
 	return &CollaborationProviderImpl{m: m}
 }
 
-func (p *CollaborationProviderImpl) GetEmployeesByOrg(ctx context.Context, orgID uint) ([]models.DigitalEmployee, error) {
-	var employees []models.DigitalEmployee
+func (p *CollaborationProviderImpl) GetEmployeesByOrg(ctx context.Context, orgID uint) ([]models.DigitalEmployeeGORM, error) {
+	var employees []models.DigitalEmployeeGORM
 	if err := p.m.GetGORMDB().WithContext(ctx).Where("enterprise_id = ?", orgID).Find(&employees).Error; err != nil {
 		return nil, err
 	}
 	return employees, nil
 }
 
-func (p *CollaborationProviderImpl) GetEmployeeByID(ctx context.Context, orgID uint, employeeID string) (*models.DigitalEmployee, error) {
-	var targetEmp models.DigitalEmployee
+func (p *CollaborationProviderImpl) GetEmployeeByID(ctx context.Context, orgID uint, employeeID string) (*models.DigitalEmployeeGORM, error) {
+	var targetEmp models.DigitalEmployeeGORM
 	if err := p.m.GetGORMDB().WithContext(ctx).Where("enterprise_id = ? AND employee_id = ?", orgID, employeeID).First(&targetEmp).Error; err != nil {
 		return nil, fmt.Errorf("未找到工号为 %s 的同事", employeeID)
 	}
 	return &targetEmp, nil
 }
 
-func (p *CollaborationProviderImpl) ChatWithEmployee(ctx context.Context, employee *models.DigitalEmployee, message *types.Message, orgID uint) (string, error) {
+func (p *CollaborationProviderImpl) ChatWithEmployee(ctx context.Context, employee *models.DigitalEmployeeGORM, message *types.Message, orgID uint) (string, error) {
 	return p.m.GetAIService().ChatWithEmployee(employee, types.InternalMessage{
 		RawMessage: fmt.Sprintf("%v", message.Content),
 	}, orgID)
@@ -140,44 +135,6 @@ func NewMCPManager(m types.Manager) *MCPManager {
 		manager:    m,
 	}
 
-	// Initialize Docker client and Sandbox Manager
-	dockerCli, err := utils.InitDockerClient()
-	if err == nil {
-		// Use a default image, e.g., python:3.10-slim
-		sandboxMgr := sandbox.NewSandboxManager(dockerCli, "python:3.10-slim")
-		mgr.RegisterServer(types.MCPServerInfo{
-			ID:    "sandbox",
-			Name:  "Code Sandbox",
-			Scope: types.ScopeGlobal,
-		}, NewSandboxMCPHost(sandboxMgr))
-	} else {
-		log.Warn(fmt.Sprintf("Docker client initialization failed, sandbox tool will be unavailable: %v", err))
-	}
-
-	// Register Local Developer Host (Safe File System & Git Access)
-	// Assuming current working directory is the project root
-	cwd, _ := os.Getwd()
-	mgr.RegisterServer(types.MCPServerInfo{
-		ID:    "local_dev",
-		Name:  "Local Developer Environment",
-		Scope: types.ScopeGlobal,
-	}, NewLocalDevMCPHost(cwd))
-
-	// Initialize Browser Manager
-	// 默认 headless=true，下载路径为空（使用系统默认）
-	browserMgr, err := browser.NewBrowserManager(true, "")
-	if err == nil {
-		// 尝试预启动，或者懒加载
-		// 这里注册 MCP Server，实际调用时会自动启动
-		mgr.RegisterServer(types.MCPServerInfo{
-			ID:    "browser",
-			Name:  "Web Browser",
-			Scope: types.ScopeGlobal,
-		}, NewBrowserMCPHost(browserMgr))
-	} else {
-		log.Warn(fmt.Sprintf("Browser manager initialization failed: %v", err))
-	}
-
 	// 添加演示用的自定义脱敏规则
 	mgr.PrivacyFilter.AddCustomPattern("PROJECT", `(BotMatrix|ProjectX|InternalPlan)`)
 
@@ -230,13 +187,6 @@ func NewMCPManager(m types.Manager) *MCPManager {
 		Scope: types.ScopeGlobal,
 	}, NewAgentCollaborationMCPHost(NewCollaborationProviderImpl(m)))
 
-	// Register System Administration Tools
-	mgr.RegisterServer(types.MCPServerInfo{
-		ID:    "sys_admin",
-		Name:  "System Administration",
-		Scope: types.ScopeGlobal,
-	}, NewSysAdminMCPHost(m.GetGORMDB()))
-
 	// 加载数据库配置
 	mgr.LoadFromDB()
 	return mgr
@@ -267,9 +217,8 @@ func (m *MCPManager) LoadFromDB() error {
 		return nil
 	}
 
-	var configs []models.MCPServer
-	// Use struct-based condition to handle column names automatically
-	if err := m.db.Where(&models.MCPServer{Status: "active"}).Find(&configs).Error; err != nil {
+	var configs []models.MCPServerGORM
+	if err := m.db.Where("status = ?", "active").Find(&configs).Error; err != nil {
 		return err
 	}
 

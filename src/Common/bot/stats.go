@@ -75,7 +75,7 @@ func (m *Manager) SaveAllStatsToDB() {
 			count := int64(z.Score)
 
 			// 写入数据库
-			stat := &models.MessageStat{
+			stat := &models.MessageStatGORM{
 				Date:    yesterday,
 				GroupID: groupID,
 				UserID:  userID,
@@ -83,11 +83,11 @@ func (m *Manager) SaveAllStatsToDB() {
 			}
 
 			// 使用 Upsert 逻辑，防止重复运行导致数据翻倍
-			m.GORMDB.Where(models.MessageStat{
+			m.GORMDB.Where(models.MessageStatGORM{
 				Date:    yesterday,
 				GroupID: groupID,
 				UserID:  userID,
-			}).Assign(models.MessageStat{Count: count}).FirstOrCreate(stat)
+			}).Assign(models.MessageStatGORM{Count: count}).FirstOrCreate(stat)
 		}
 	}
 

@@ -212,18 +212,9 @@ func Run() {
 
 	// 启动 Core Gateway (WebSocket 转发引擎 - 仅处理机器人和工作节点连接)
 	coreMux := manager.createCoreHandler()
-	wsPort := config.WS_PORT
-	if wsPort == "" {
-		wsPort = "0.0.0.0:8080"
-	} else if !strings.Contains(wsPort, ":") {
-		wsPort = "0.0.0.0:" + wsPort
-	} else if strings.HasPrefix(wsPort, ":") {
-		wsPort = "0.0.0.0" + wsPort
-	}
-
 	go func() {
-		clog.Info(utils.T("", "core_engine_starting", wsPort))
-		if err := http.ListenAndServe(wsPort, coreMux); err != nil {
+		clog.Info(utils.T("", "core_engine_starting", config.WS_PORT))
+		if err := http.ListenAndServe(config.WS_PORT, coreMux); err != nil {
 			clog.Error(utils.T("", "core_engine_failed", err))
 		}
 	}()
@@ -231,11 +222,7 @@ func Run() {
 	// 启动管理后台 HTTP 服务
 	webuiPort := manager.Config.WebUIPort
 	if webuiPort == "" {
-		webuiPort = "0.0.0.0:5000"
-	} else if !strings.Contains(webuiPort, ":") {
-		webuiPort = "0.0.0.0:" + webuiPort
-	} else if strings.HasPrefix(webuiPort, ":") {
-		webuiPort = "0.0.0.0" + webuiPort
+		webuiPort = ":5000"
 	}
 
 	mux := http.NewServeMux()
@@ -297,26 +284,6 @@ func Run() {
 	// 资源管理
 	mux.HandleFunc("/api/admin/bots", manager.AdminMiddleware(HandleGetBots(manager.Manager)))
 	mux.HandleFunc("/api/admin/workers", manager.AdminMiddleware(HandleGetWorkers(manager.Manager)))
-	mux.HandleFunc("/api/admin/setup/members", manager.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			HandleGetMemberSetup(manager.Manager)(w, r)
-		case http.MethodPut:
-			HandleUpdateMemberSetup(manager.Manager)(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	}))
-	mux.HandleFunc("/api/admin/setup/groups", manager.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			HandleGetGroupSetup(manager.Manager)(w, r)
-		case http.MethodPut:
-			HandleUpdateGroupSetup(manager.Manager)(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	}))
 	mux.HandleFunc("/api/admin/users", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -438,7 +405,7 @@ func Run() {
 
 	mux.HandleFunc("/api/admin/debug/fix-data", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// 将所有 agent 的 model_id 设置为 1 (假设 ID 1 的模型存在)
-		if err := manager.GORMDB.Model(&models.AIAgent{}).Where("model_id = ?", 0).Update("model_id", 1).Error; err != nil {
+		if err := manager.GORMDB.Model(&models.AIAgentGORM{}).Where("model_id = ?", 0).Update("model_id", 1).Error; err != nil {
 			utils.SendJSONResponse(w, false, err.Error(), nil)
 			return
 		}
@@ -581,33 +548,36 @@ func Run() {
 	// AI 试用接口 (流式)
 	// (已迁移到 Worker)
 
-	// 恢复静态文件服务，以便在没有 Node.js 环境下也能访问 WebUI
-	webDir := "../WebUI/dist"
-	if _, err := os.Stat("./web"); err == nil {
-		webDir = "./web"
-	} else if _, err := os.Stat("../WebUI/dist"); err == nil {
-		webDir = "../WebUI/dist"
-	} else if _, err := os.Stat("/app/web"); err == nil {
-		webDir = "/app/web"
-	}
-
-	// 统一处理 WebUI 路由
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// 排除 API 和 WS 路径
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/ws/") {
-			http.NotFound(w, r)
-			return
+	// 静态文件服务已移除，WebUI 彻底分离独立运行
+	// 如需 Nexus 托管静态文件，请恢复以下代码
+	/*
+		webDir := "../WebUI/web"
+		if _, err := os.Stat("./web"); err == nil {
+			webDir = "./web"
+		} else if _, err := os.Stat("../WebUI/dist"); err == nil {
+			webDir = "../WebUI/dist"
+		} else if _, err := os.Stat("/app/web"); err == nil {
+			webDir = "/app/web"
 		}
 
-		path := filepath.Join(webDir, r.URL.Path)
-		if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
-			// 物理文件存在，正常服务
-			http.ServeFile(w, r, path)
-			return
-		}
-		// 物理文件不存在或为目录，返回 index.html 支持 SPA 路由
-		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
-	})
+		// 统一处理 WebUI 路由
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			// 排除 API 和 WS 路径（理论上 ServeMux 会优先匹配更长的路径，但为了保险）
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/ws/") {
+				http.NotFound(w, r)
+				return
+			}
+
+			path := filepath.Join(webDir, r.URL.Path)
+			if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
+				// 物理文件存在，正常服务
+				http.ServeFile(w, r, path)
+				return
+			}
+			// 物理文件不存在或为目录，返回 index.html 支持 SPA 路由
+			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+		})
+	*/
 
 	clog.Info(utils.T("", "admin_starting", webuiPort))
 	// 使用 CORS 中间件包装 mux
@@ -812,7 +782,7 @@ func NewManager() *Manager {
 
 				// 初始化 RAG 知识库 (PostgreSQL + pgvector)
 				// 优先从配置中获取模型 ID，如果没有则尝试查找包含 embedding 关键字的模型
-				var embedModel models.AIModel
+				var embedModel models.AIModelGORM
 				var findErr error
 				if config.GlobalConfig.AIEmbeddingModel != "" {
 					findErr = m.GORMDB.Where("api_model_id = ?", config.GlobalConfig.AIEmbeddingModel).First(&embedModel).Error
@@ -822,13 +792,13 @@ func NewManager() *Manager {
 
 				if findErr == nil {
 					// 获取默认对话模型用于 RAG 2.0 (Query Refinement / Self-Reflection)
-					var chatModel models.AIModel
+					var chatModel models.AIModelGORM
 					m.GORMDB.Where("is_default = ?", true).First(&chatModel)
 					if chatModel.ID == 0 {
 						chatModel = embedModel // 兜底
 					}
 
-					es := rag.NewTaskAIEmbeddingService(m.AIIntegrationService, embedModel.ID, embedModel.ApiModelID)
+					es := rag.NewTaskAIEmbeddingService(m.AIIntegrationService, embedModel.ID, embedModel.ModelID)
 					kb := rag.NewPostgresKnowledgeBase(m.GORMDB, es, m.AIIntegrationService, chatModel.ID)
 
 					// 将向量服务注入认知记忆系统
@@ -846,7 +816,7 @@ func NewManager() *Manager {
 							aiSvc.SetKnowledgeBase(kb)
 						}
 
-						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ApiModelID))
+						clog.Info("[RAG] 知识库已就绪", zap.String("model", embedModel.ModelID))
 
 						// 自动同步系统文档
 						go m.SyncSystemKnowledge()

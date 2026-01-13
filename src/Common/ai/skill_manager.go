@@ -91,7 +91,7 @@ func (sm *SkillManager) GetAvailableSkillsForBot(ctx context.Context, botID stri
 
 	// 3. 获取 B2B 共享技能
 	if orgID > 0 {
-		var sharedSkills []models.B2BSkillSharing
+		var sharedSkills []models.B2BSkillSharingGORM
 		err := sm.db.WithContext(ctx).Where("target_ent_id = ? AND is_active = ?", orgID, true).Find(&sharedSkills).Error
 		if err == nil {
 			for _, ss := range sharedSkills {
@@ -114,7 +114,7 @@ func (sm *SkillManager) GetAvailableSkillsForBot(ctx context.Context, botID stri
 		if isDispatched && sourceOrgID > 0 {
 			// 此时 orgID 是接收企业，sourceOrgID 是输出企业
 			// 外派员工自动获得其所属企业已共享给接收企业的技能 (无需 b2b__ 前缀，直接调用)
-			var sourceSharedSkills []models.B2BSkillSharing
+			var sourceSharedSkills []models.B2BSkillSharingGORM
 			sm.db.WithContext(ctx).Where("source_ent_id = ? AND target_ent_id = ? AND is_active = ? AND status = ?",
 				sourceOrgID, orgID, true, "approved").Find(&sourceSharedSkills)
 
@@ -156,11 +156,9 @@ func (sm *SkillManager) CheckPermission(ctx context.Context, botID string, userI
 	if strings.Contains(skillName, "__") {
 		serverName := strings.Split(skillName, "__")[0]
 		// 检查该用户/组织是否挂载了该 MCP Server
-		var server models.MCPServer
-		// Use GORM struct-based query to handle column names automatically
+		var server models.MCPServerGORM
 		err := sm.db.WithContext(ctx).
-			Where(&models.MCPServer{Name: serverName}).
-			Where(sm.db.Where(&models.MCPServer{OwnerID: orgID}).Or(&models.MCPServer{Scope: "global"})).
+			Where("name = ? AND (owner_id = ? OR scope = 'global')", serverName, orgID).
 			First(&server).Error
 
 		if err != nil {
@@ -172,9 +170,9 @@ func (sm *SkillManager) CheckPermission(ctx context.Context, botID string, userI
 	}
 
 	// 3. 从数据库查询授权记录 (Bot 级别的精细化授权)
-	var permission models.BotSkillPermission
+	var permission models.BotSkillPermissionGORM
 	err := sm.db.WithContext(ctx).
-		Where(&models.BotSkillPermission{BotID: botID, SkillName: skillName}).
+		Where("bot_id = ? AND skill_name = ?", botID, skillName).
 		First(&permission).Error
 
 	if err == nil {
@@ -233,7 +231,7 @@ func (sm *SkillManager) ExecuteSkill(ctx context.Context, botID string, userID u
 	sourceOrgID, _ := ctx.Value("sourceOrgID").(uint)
 	if isDispatched && sourceOrgID > 0 && sm.b2bService != nil {
 		// 检查这是否是一个来自源企业的共享技能
-		var sharing models.B2BSkillSharing
+		var sharing models.B2BSkillSharingGORM
 		err := sm.db.WithContext(ctx).Where("source_ent_id = ? AND target_ent_id = ? AND skill_name = ? AND status = ?",
 			sourceOrgID, orgID, name, "approved").First(&sharing).Error
 		if err == nil {

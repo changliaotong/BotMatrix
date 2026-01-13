@@ -234,7 +234,7 @@ func (a *OpenAIAdapter) GenerateQueryEmbedding(ctx context.Context, query string
 	return a.GenerateEmbedding(ctx, query)
 }
 
-func (a *OpenAIAdapter) GetEmployeeByBotID(botID string) (*models.DigitalEmployee, error) {
+func (a *OpenAIAdapter) GetEmployeeByBotID(botID string) (*models.DigitalEmployeeGORM, error) {
 	return nil, fmt.Errorf("OpenAI adapter does not support local employee retrieval")
 }
 

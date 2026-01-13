@@ -8,35 +8,31 @@ repo_url: https://github.com/changliaotong/BotMatrix
 nav:
   - 🏠 首页: zh-CN/README.md
   - 🚀 快速开始:
-    - 用户全景指南: zh-CN/USER_GUIDE.md
-    - 系统架构全景: zh-CN/core/ARCHITECTURE.md
-    - 快速部署指南: zh-CN/core/DEPLOY.md
+    - 部署与运维: zh-CN/core/DEPLOYMENT_AND_OPERATIONS.md
+    - 用户指南: zh-CN/USER_GUIDE.md
     - 更新日志: zh-CN/CHANGELOG.md
-  - 🏗️ 核心系统:
-    - 插件与技能系统: zh-CN/core/SKILL_AND_PLUGIN_SYSTEM.md
+  - 🏗️ 核心架构:
+    - 系统架构: zh-CN/core/ARCHITECTURE.md
     - 接口与协议规范: zh-CN/core/INTERFACE_SPECIFICATIONS.md
-    - 组件与适配器详解: zh-CN/components/ADAPTERS_AND_COMPONENTS.md
-    - WxBotGo 专用指南: zh-CN/components/WXBOTGO_GUIDE.md
-  - 🔌 插件开发:
-    - 插件功能全景目录: zh-CN/plugins/PLUGINS_CATALOG.md
-    - 插件开发全景指南: zh-CN/development/PLUGIN_DEVELOPMENT_GUIDE.md
+    - AI, RAG 与 MCP: zh-CN/core/AI_RAG_MCP_GUIDE.md
+    - 数字员工系统: zh-CN/core/DIGITAL_EMPLOYEE_SYSTEM.md
+  - 🔌 插件与技能:
+    - 技能与插件系统: zh-CN/core/SKILL_AND_PLUGIN_SYSTEM.md
+    - 插件功能目录: zh-CN/plugins/PLUGINS_CATALOG.md
+    - 插件开发手册: zh-CN/plugins/PLUGIN_DEVELOPMENT.md
+  - 🤖 适配器组件:
+    - BotNexus: zh-CN/components/BotNexus.md
+    - BotWorker: zh-CN/components/BotWorker.md
+    - WxBotGo: zh-CN/components/WxBotGo/FEATURES.md
+    - 其他机器人适配器: zh-CN/components/README.md
   - 🛠️ 开发者中心:
-    - 开发者全景指南: zh-CN/development/DEVELOPMENT_GUIDE.md
-    - 项目日志与测试计划: zh-CN/development/PROJECT_LOGS.md
-  - 🌐 English Docs:
-    - Documentation Hub: en-US/README.md
-    - System Architecture: en-US/core/ARCHITECTURE.md
-    - Deployment Guide: en-US/core/DEPLOYMENT.md
-    - Core Components: en-US/core/COMPONENTS.md
-    - Plugin System: en-US/core/PLUGIN_SYSTEM.md
-    - Plugins Catalog: en-US/core/PLUGINS_CATALOG.md
-    - API Reference: en-US/core/API_REFERENCE.md
-    - Changelog: en-US/CHANGELOG.md
-  - 📁 归档 (Archive):
-    - 历史版本升级: archive/zh-CN/legacy/REDIS_UPGRADE.md
-    - 历史計畫文件: archive/zh-CN/legacy/CONFLICT_PLAN.md
-    - 2026 核心增强: archive/CORE_ENHANCEMENTS_20260103.md
-    - AI 重構總結: archive/REFACTOR_AI_SUMMARY.md
+    - 开发指南: zh-CN/development/DEVELOPMENT.md
+    - 愿景与演进规划: zh-CN/core/VISION_AND_ROADMAP.md
+    - 国际化 (I18N) 指南: zh-CN/development/I18N_GUIDE.md
+    - 测试与质量: zh-CN/development/TESTING_PLAN.md
+  - 📜 历史与存档:
+    - Redis 升级说明: zh-CN/legacy/REDIS_UPGRADE.md
+    - WebUI 升级计划: zh-CN/legacy/WEBUI_UPGRADE_PLAN.md
 
 
 theme:

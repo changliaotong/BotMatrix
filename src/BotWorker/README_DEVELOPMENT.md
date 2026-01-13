@@ -34,6 +34,9 @@ QQGuild 平台的 ID (OpenID/TinyID) 通常是长字符串或大数字，处理�
 
 ## 4. 关键技术实现
 
+### FlexibleInt64
+为了处理 JSON 中可能同时出现的字符串格式数字和原生数字数字，引入了 `FlexibleInt64` 自定义类型。它在 `UnmarshalJSON` 时会自动尝试将字符串解析为 `int64`，解析失败则回退到 `0`。
+
 ### 并发安全
 针对 WebSocket 的并发写入，在 `tencentBot/main.go` 中引入了 `sync.Mutex` 保护连接对象，防止在高并发下出现 `concurrent write to websocket connection` 的 panic。
 

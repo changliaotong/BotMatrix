@@ -48,7 +48,7 @@ func InitDB() error {
 
 // --- gorm_compat.go ---
 func InitGORM() error {
-	db, err := database.ConnectGORM(GlobalConfig)
+	db, err := database.InitGORM(GlobalConfig)
 	if err != nil {
 		return err
 	}
@@ -64,40 +64,37 @@ func NewGORMManager() *GORMManager {
 }
 
 // --- models & types ---
-type UserGORM = models.UserInfo
-type RoutingRuleGORM = models.RoutingRule
-
-// type FissionConfigGORM = models.FissionConfigGORM // Deprecated/Missing
-// type InvitationGORM = models.InvitationGORM // Deprecated/Missing
-// type FissionTaskGORM = models.FissionTaskGORM // Deprecated/Missing
-// type UserFissionRecordGORM = models.UserFissionRecordGORM // Deprecated/Missing
-// type FissionRewardLogGORM = models.FissionRewardLogGORM // Deprecated/Missing
-type GroupCacheGORM = models.GroupCache
-type MemberCacheGORM = models.MemberCache
-type FriendCacheGORM = models.FriendCache
-type AIProviderGORM = models.AIProvider
-type AIModelGORM = models.AIModel
-type AIAgentGORM = models.AIAgent
-type AIPromptTemplateGORM = models.AIPromptTemplate
-type AIKnowledgeBaseGORM = models.AIKnowledgeBase
-type AIUsageLogGORM = models.AIUsageLog
-type AISkillGORM = models.AISkill
-type AITrainingDataGORM = models.AITrainingData
-type AIIntentGORM = models.AIIntent
-type AIIntentRoutingGORM = models.AIIntentRouting
-type GroupBotRoleGORM = models.GroupBotRole
-type EnterpriseGORM = models.Enterprise
-
-// type PlatformAccountGORM = models.PlatformAccountGORM // Check if exists
-type DigitalEmployeeGORM = models.DigitalEmployee
-
-// type EnterpriseMemberGORM = models.EnterpriseMemberGORM // Check if exists
-// type B2BConnectionGORM = models.B2BConnectionGORM // Check if exists
-type DigitalEmployeeKpiGORM = models.DigitalEmployeeKpi
-type AISessionGORM = models.AISession
-type AIChatMessageGORM = models.AIChatMessage
-type BotEntityGORM = models.Member
-type MessageLogGORM = models.MessageLog
+type UserGORM = models.UserGORM
+type RoutingRuleGORM = models.RoutingRuleGORM
+type FissionConfigGORM = models.FissionConfigGORM
+type InvitationGORM = models.InvitationGORM
+type FissionTaskGORM = models.FissionTaskGORM
+type UserFissionRecordGORM = models.UserFissionRecordGORM
+type FissionRewardLogGORM = models.FissionRewardLogGORM
+type GroupCacheGORM = models.GroupCacheGORM
+type MemberCacheGORM = models.MemberCacheGORM
+type FriendCacheGORM = models.FriendCacheGORM
+type AIProviderGORM = models.AIProviderGORM
+type AIModelGORM = models.AIModelGORM
+type AIAgentGORM = models.AIAgentGORM
+type AIPromptTemplateGORM = models.AIPromptTemplateGORM
+type AIKnowledgeBaseGORM = models.AIKnowledgeBaseGORM
+type AIUsageLogGORM = models.AIUsageLogGORM
+type AISkillGORM = models.AISkillGORM
+type AITrainingDataGORM = models.AITrainingDataGORM
+type AIIntentGORM = models.AIIntentGORM
+type AIIntentRoutingGORM = models.AIIntentRoutingGORM
+type GroupBotRoleGORM = models.GroupBotRoleGORM
+type EnterpriseGORM = models.EnterpriseGORM
+type PlatformAccountGORM = models.PlatformAccountGORM
+type DigitalEmployeeGORM = models.DigitalEmployeeGORM
+type EnterpriseMemberGORM = models.EnterpriseMemberGORM
+type B2BConnectionGORM = models.B2BConnectionGORM
+type DigitalEmployeeKpiGORM = models.DigitalEmployeeKpiGORM
+type AISessionGORM = models.AISessionGORM
+type AIChatMessageGORM = models.AIChatMessageGORM
+type BotEntityGORM = models.BotEntityGORM
+type MessageLogGORM = models.MessageLogGORM
 
 type BotConfig = bot.BotConfig
 type ConnectionHandler = bot.ConnectionHandler

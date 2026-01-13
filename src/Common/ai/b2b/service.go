@@ -23,7 +23,7 @@ import (
 type B2BServiceImpl struct {
 	db       *gorm.DB
 	kb       types.KnowledgeBase // 通过依赖注入获取知识库
-	localEnt *models.Enterprise
+	localEnt *models.EnterpriseGORM
 	client   *http.Client
 	circuits map[uint]*circuitState
 	mu       sync.RWMutex
@@ -112,18 +112,18 @@ func (s *B2BServiceImpl) recordSuccess(targetEntID uint) {
 
 // Connect 建立企业间 B2B 连接
 func (s *B2BServiceImpl) Connect(sourceEntCode, targetEntCode string) error {
-	var sourceEnt models.Enterprise
+	var sourceEnt models.EnterpriseGORM
 	if err := s.db.Where("code = ?", sourceEntCode).First(&sourceEnt).Error; err != nil {
 		return fmt.Errorf("source enterprise not found: %w", err)
 	}
 
 	// 1. 获取目标企业的公共 MCP 端点作为握手入口
-	var targetEnt models.Enterprise
+	var targetEnt models.EnterpriseGORM
 	if err := s.db.Where("code = ?", targetEntCode).First(&targetEnt).Error; err != nil {
 		return fmt.Errorf("target enterprise not found: %w", err)
 	}
 
-	var apiServer models.MCPServer
+	var apiServer models.MCPServerGORM
 	if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", targetEnt.ID, "global", "active").First(&apiServer).Error; err != nil {
 		return fmt.Errorf("target enterprise has no public MCP endpoint for handshake: %w", err)
 	}
@@ -174,10 +174,10 @@ func (s *B2BServiceImpl) Connect(sourceEntCode, targetEntCode string) error {
 	}
 
 	// 5. 创建或更新连接记录
-	var conn models.B2BConnection
+	var conn models.B2BConnectionGORM
 	err = s.db.Where("source_ent_id = ? AND target_ent_id = ?", sourceEnt.ID, targetEnt.ID).First(&conn).Error
 	if err == gorm.ErrRecordNotFound {
-		conn = models.B2BConnection{
+		conn = models.B2BConnectionGORM{
 			SourceEntID:  sourceEnt.ID,
 			TargetEntID:  targetEnt.ID,
 			Status:       "active",
@@ -195,7 +195,7 @@ func (s *B2BServiceImpl) Connect(sourceEntCode, targetEntCode string) error {
 // HandleHandshake 处理来自外部企业的握手请求
 func (s *B2BServiceImpl) HandleHandshake(req HandshakeRequest) (*HandshakeResponse, error) {
 	// 1. 获取来源企业信息
-	var sourceEnt models.Enterprise
+	var sourceEnt models.EnterpriseGORM
 	if err := s.db.Where("code = ?", req.SourceEntCode).First(&sourceEnt).Error; err != nil {
 		return nil, fmt.Errorf("source enterprise not found: %w", err)
 	}
@@ -206,17 +206,17 @@ func (s *B2BServiceImpl) HandleHandshake(req HandshakeRequest) (*HandshakeRespon
 	}
 
 	// 3. 获取本地企业信息 (假设当前服务属于某个企业，这里需要动态获取或配置)
-	var localEnt models.Enterprise
+	var localEnt models.EnterpriseGORM
 	// 临时方案：获取 ID 为 1 的企业作为本地企业 (通常是系统默认企业)
 	if err := s.db.First(&localEnt, 1).Error; err != nil {
 		return nil, fmt.Errorf("local enterprise not found: %w", err)
 	}
 
 	// 4. 创建反向连接记录 (建立双向信任)
-	var conn models.B2BConnection
+	var conn models.B2BConnectionGORM
 	err := s.db.Where("source_ent_id = ? AND target_ent_id = ?", localEnt.ID, sourceEnt.ID).First(&conn).Error
 	if err == gorm.ErrRecordNotFound {
-		conn = models.B2BConnection{
+		conn = models.B2BConnectionGORM{
 			SourceEntID:  localEnt.ID,
 			TargetEntID:  sourceEnt.ID,
 			Status:       "active",
@@ -263,7 +263,7 @@ func (s *B2BServiceImpl) SearchMeshKnowledge(query string, limit int, filter *ty
 	allResults := localResults
 
 	// 2. 获取所有活跃的 B2B 连接
-	var connections []models.B2BConnection
+	var connections []models.B2BConnectionGORM
 	if err := s.db.Where("status = ?", "active").Find(&connections).Error; err != nil {
 		return allResults, nil
 	}
@@ -274,7 +274,7 @@ func (s *B2BServiceImpl) SearchMeshKnowledge(query string, limit int, filter *ty
 
 	for _, conn := range connections {
 		wg.Add(1)
-		go func(c models.B2BConnection) {
+		go func(c models.B2BConnectionGORM) {
 			defer wg.Done()
 
 			// 调用远程企业的 search_knowledge 工具
@@ -296,7 +296,7 @@ func (s *B2BServiceImpl) SearchMeshKnowledge(query string, limit int, filter *ty
 					if first, ok := content[0].(map[string]any); ok {
 						if text, ok := first["text"].(string); ok {
 							// 获取目标企业信息以标记来源
-							var targetEnt models.Enterprise
+							var targetEnt models.EnterpriseGORM
 							s.db.First(&targetEnt, c.TargetEntID)
 
 							mu.Lock()
@@ -352,19 +352,19 @@ func (s *B2BServiceImpl) verifyData(publicKeyStr, data, signature string) error 
 // SendCrossEnterpriseMessage 发送跨企业数字员工消息
 func (s *B2BServiceImpl) SendCrossEnterpriseMessage(fromEmployeeID, toEmployeeID string, msg string) error {
 	// 1. 获取发送者员工信息
-	var fromEmp models.DigitalEmployee
+	var fromEmp models.DigitalEmployeeGORM
 	if err := s.db.Where("employee_id = ?", fromEmployeeID).First(&fromEmp).Error; err != nil {
 		return err
 	}
 
 	// 2. 获取接收者员工信息
-	var toEmp models.DigitalEmployee
+	var toEmp models.DigitalEmployeeGORM
 	if err := s.db.Where("employee_id = ?", toEmployeeID).First(&toEmp).Error; err != nil {
 		return err
 	}
 
 	// 3. 检查企业间连接状态
-	var conn models.B2BConnection
+	var conn models.B2BConnectionGORM
 	if err := s.db.Where("source_ent_id = ? AND target_ent_id = ? AND status = ?", fromEmp.EnterpriseID, toEmp.EnterpriseID, "active").First(&conn).Error; err != nil {
 		return fmt.Errorf("no active B2B connection between enterprises: %w", err)
 	}
@@ -391,7 +391,7 @@ func (s *B2BServiceImpl) checkSkillSharing(sourceEntID, targetEntID uint, skillN
 		return nil
 	}
 
-	var sharing models.B2BSkillSharing
+	var sharing models.B2BSkillSharingGORM
 	err := s.db.Where("source_ent_id = ? AND target_ent_id = ? AND skill_name = ?",
 		targetEntID, sourceEntID, skillName).First(&sharing).Error
 
@@ -422,7 +422,7 @@ func (s *B2BServiceImpl) CallRemoteTool(sourceEntID, targetEntID uint, toolName 
 		return nil, fmt.Errorf("b2b skill authorization failed: %w", err)
 	}
 
-	var apiServer models.MCPServer
+	var apiServer models.MCPServerGORM
 	if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", targetEntID, "global", "active").First(&apiServer).Error; err != nil {
 		return nil, fmt.Errorf("target enterprise has no public MCP endpoint: %w", err)
 	}
@@ -498,7 +498,7 @@ func (s *B2BServiceImpl) CallRemoteTool(sourceEntID, targetEntID uint, toolName 
 }
 
 func (s *B2BServiceImpl) generateB2BToken(sourceEntID, targetEntID uint) (string, error) {
-	var sourceEnt models.Enterprise
+	var sourceEnt models.EnterpriseGORM
 	if err := s.db.First(&sourceEnt, sourceEntID).Error; err != nil {
 		return "", err
 	}
@@ -516,7 +516,7 @@ func (s *B2BServiceImpl) generateB2BToken(sourceEntID, targetEntID uint) (string
 
 // VerifyIdentity 验证企业身份
 func (s *B2BServiceImpl) VerifyIdentity(entCode string, signature string) bool {
-	var ent models.Enterprise
+	var ent models.EnterpriseGORM
 	if err := s.db.Where("code = ?", entCode).First(&ent).Error; err != nil {
 		return false
 	}
@@ -529,7 +529,7 @@ func (s *B2BServiceImpl) VerifyIdentity(entCode string, signature string) bool {
 }
 
 // VerifyB2BToken 验证 B2B JWT 令牌并返回企业信息
-func (s *B2BServiceImpl) VerifyB2BToken(tokenString string) (*models.Enterprise, error) {
+func (s *B2BServiceImpl) VerifyB2BToken(tokenString string) (*models.EnterpriseGORM, error) {
 	parser := jwt.NewParser()
 	token, _, err := parser.ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
@@ -546,7 +546,7 @@ func (s *B2BServiceImpl) VerifyB2BToken(tokenString string) (*models.Enterprise,
 		return nil, fmt.Errorf("missing issuer (iss) in token")
 	}
 
-	var ent models.Enterprise
+	var ent models.EnterpriseGORM
 	if err := s.db.Where("code = ?", entCode).First(&ent).Error; err != nil {
 		return nil, fmt.Errorf("enterprise %s not found: %w", entCode, err)
 	}
@@ -567,7 +567,7 @@ func (s *B2BServiceImpl) VerifyB2BToken(tokenString string) (*models.Enterprise,
 
 // RegisterEndpoint 注册企业公开的 MCP 端点
 func (s *B2BServiceImpl) RegisterEndpoint(entID uint, name, endpointType, url string) error {
-	server := models.MCPServer{
+	server := models.MCPServerGORM{
 		Name:     name,
 		Type:     endpointType,
 		Endpoint: url,
@@ -579,8 +579,8 @@ func (s *B2BServiceImpl) RegisterEndpoint(entID uint, name, endpointType, url st
 }
 
 // DiscoverEndpoints 发现公开的 MCP 端点
-func (s *B2BServiceImpl) DiscoverEndpoints(query string) ([]models.MCPServer, error) {
-	var servers []models.MCPServer
+func (s *B2BServiceImpl) DiscoverEndpoints(query string) ([]models.MCPServerGORM, error) {
+	var servers []models.MCPServerGORM
 	db := s.db.Where("scope = ? AND status = ?", "global", "active")
 	if query != "" {
 		db = db.Where("name LIKE ?", "%"+query+"%")
@@ -592,7 +592,7 @@ func (s *B2BServiceImpl) DiscoverEndpoints(query string) ([]models.MCPServer, er
 }
 
 // DiscoverMeshEndpoints 在全网（Mesh）范围内发现端点
-func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServer, error) {
+func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServerGORM, error) {
 	localServers, err := s.DiscoverEndpoints(query)
 	if err != nil {
 		clog.Error("[Mesh] Local discovery failed", zap.Error(err))
@@ -600,7 +600,7 @@ func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServer
 
 	allServers := localServers
 
-	var connections []models.B2BConnection
+	var connections []models.B2BConnectionGORM
 	if err := s.db.Where("status = ?", "active").Find(&connections).Error; err != nil {
 		return allServers, nil
 	}
@@ -610,15 +610,15 @@ func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServer
 
 	for _, conn := range connections {
 		wg.Add(1)
-		go func(c models.B2BConnection) {
+		go func(c models.B2BConnectionGORM) {
 			defer wg.Done()
 
-			var targetEnt models.Enterprise
+			var targetEnt models.EnterpriseGORM
 			if err := s.db.First(&targetEnt, c.TargetEntID).Error; err != nil {
 				return
 			}
 
-			var apiServer models.MCPServer
+			var apiServer models.MCPServerGORM
 			if err := s.db.Where("owner_id = ? AND scope = ? AND status = ?", c.TargetEntID, "global", "active").First(&apiServer).Error; err != nil {
 				return
 			}
@@ -642,8 +642,8 @@ func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServer
 
 			if resp.StatusCode == http.StatusOK {
 				var res struct {
-					Success bool               `json:"success"`
-					Data    []models.MCPServer `json:"data"`
+					Success bool                   `json:"success"`
+					Data    []models.MCPServerGORM `json:"data"`
 				}
 				if err := json.NewDecoder(resp.Body).Decode(&res); err == nil && res.Success {
 					mu.Lock()
@@ -660,7 +660,7 @@ func (s *B2BServiceImpl) DiscoverMeshEndpoints(query string) ([]models.MCPServer
 
 // RequestSkillSharing 请求技能共享
 func (s *B2BServiceImpl) RequestSkillSharing(fromEntID, targetEntID uint, skillName string) error {
-	sharing := models.B2BSkillSharing{
+	sharing := models.B2BSkillSharingGORM{
 		SourceEntID: targetEntID, // 提供方是目标企业
 		TargetEntID: fromEntID,   // 使用方是发起请求的企业
 		SkillName:   skillName,
@@ -672,12 +672,12 @@ func (s *B2BServiceImpl) RequestSkillSharing(fromEntID, targetEntID uint, skillN
 
 // ApproveSkillSharing 审批技能共享
 func (s *B2BServiceImpl) ApproveSkillSharing(sharingID uint, status string) error {
-	return s.db.Model(&models.B2BSkillSharing{}).Where("id = ?", sharingID).Update("status", status).Error
+	return s.db.Model(&models.B2BSkillSharingGORM{}).Where("id = ?", sharingID).Update("status", status).Error
 }
 
 // ListSkillSharings 列出技能共享
-func (s *B2BServiceImpl) ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharing, error) {
-	var sharings []models.B2BSkillSharing
+func (s *B2BServiceImpl) ListSkillSharings(entID uint, role string) ([]models.B2BSkillSharingGORM, error) {
+	var sharings []models.B2BSkillSharingGORM
 	db := s.db
 	if role == "source" {
 		db = db.Where("source_ent_id = ?", entID)
@@ -693,7 +693,7 @@ func (s *B2BServiceImpl) ListSkillSharings(entID uint, role string) ([]models.B2
 // DispatchEmployee 外派员工
 func (s *B2BServiceImpl) DispatchEmployee(employeeID, sourceEntID, targetEntID uint, permissions []string) error {
 	permJSON, _ := json.Marshal(permissions)
-	dispatch := models.DigitalEmployeeDispatch{
+	dispatch := models.DigitalEmployeeDispatchGORM{
 		EmployeeID:  employeeID,
 		SourceEntID: sourceEntID,
 		TargetEntID: targetEntID,
@@ -706,12 +706,12 @@ func (s *B2BServiceImpl) DispatchEmployee(employeeID, sourceEntID, targetEntID u
 
 // ApproveDispatch 审批外派
 func (s *B2BServiceImpl) ApproveDispatch(dispatchID uint, status string) error {
-	return s.db.Model(&models.DigitalEmployeeDispatch{}).Where("id = ?", dispatchID).Update("status", status).Error
+	return s.db.Model(&models.DigitalEmployeeDispatchGORM{}).Where("id = ?", dispatchID).Update("status", status).Error
 }
 
 // ListDispatchedEmployees 列出外派记录
-func (s *B2BServiceImpl) ListDispatchedEmployees(entID uint, role string) ([]models.DigitalEmployeeDispatch, error) {
-	var dispatches []models.DigitalEmployeeDispatch
+func (s *B2BServiceImpl) ListDispatchedEmployees(entID uint, role string) ([]models.DigitalEmployeeDispatchGORM, error) {
+	var dispatches []models.DigitalEmployeeDispatchGORM
 	db := s.db
 	if role == "source" {
 		db = db.Where("source_ent_id = ?", entID)

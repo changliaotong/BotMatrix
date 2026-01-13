@@ -2,6 +2,18 @@ go 1.25.5
 
 use (
 	./src/BotNexus
-	./src/BotWorker.Go
+	./src/BotWorker
 	./src/Common
+	./src/ConsoleBot
+	./src/DingTalkBot
+	./src/DiscordBot
+	./src/EmailBot
+	./src/FeishuBot
+	./src/KookBot
+	./src/SlackBot
+	./src/TelegramBot
+	./src/TencentBot
+	./src/WeComBot
+	./src/WxBotGo
+	./src/tools/bm-cli
 )

@@ -18,16 +18,6 @@ type AppConfig struct {
 	PGDBName   string `json:"pg_dbname"`
 	PGSSLMode  string `json:"pg_sslmode"`
 
-	// Compatibility for nested database config
-	Database struct {
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		User     string `json:"user"`
-		Password string `json:"password"`
-		DBName   string `json:"dbname"`
-		SSLMode  string `json:"sslmode"`
-	} `json:"database"`
-
 	// Legacy SQL Server Configuration (for migration)
 	MSSQLHost     string `json:"mssql_host"`
 	MSSQLPort     int    `json:"mssql_port"`
@@ -37,10 +27,6 @@ type AppConfig struct {
 
 	// AI Configuration
 	AIEmbeddingModel string `json:"ai_embedding_model"`
-	AIProviderType   string `json:"ai_provider_type"` // "mock", "openai", "deepseek"
-	AIApiKey         string `json:"ai_api_key"`
-	AIBaseURL        string `json:"ai_base_url"`
-	AIModelName      string `json:"ai_model_name"` // e.g., "gpt-4", "deepseek-chat"
 
 	// Feature Flags
 	EnableSkill           bool   `json:"enable_skill"`
