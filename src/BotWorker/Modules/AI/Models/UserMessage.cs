@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Modules.AI.Models
+namespace BotWorker.Modules.AI.Models
 {
     public class UserMessage
     {
@@ -6,7 +6,7 @@
         public long RobotQQ { get; set; }
         public long GroupId { get; set; }
         public string? GroupName { get; set; }
-        public Guid Guid => Agent.GetGuid(GroupId == 10084 ? 86 : GroupId - 9900000000);
+        public Guid Guid => BotWorker.Modules.AI.Models.Agent.GetGuid(GroupId == 10084 ? 86 : GroupId - 9900000000);
         public long QQ { get; set; }
         public string? ClientName { get; set; }
         public string? SendTime { get; set; }

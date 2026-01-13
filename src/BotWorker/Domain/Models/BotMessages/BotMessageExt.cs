@@ -47,7 +47,7 @@ public partial class BotMessage : MetaData<BotMessage>
     [JsonIgnore]
     public Func<Task>? ReplyMessageAsync { get; set; }
     [JsonIgnore]
-    public static LLMApp LLMApp { get; set; } = new();
+    public static LLMApp? LLMApp { get; set; }
     [JsonIgnore]
     public ChatHistory History { get; set; } = [];
     [JsonIgnore]

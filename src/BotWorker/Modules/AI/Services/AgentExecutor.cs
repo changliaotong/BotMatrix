@@ -1,90 +1,58 @@
-using BotWorker.Modules.AI.Models.Evolution;
 using BotWorker.Modules.AI.Interfaces;
-using BotWorker.Modules.AI.Tools;
-
+using BotWorker.Modules.AI.Models.Evolution;
+using BotWorker.Modules.AI.Models;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.AI.Services
 {
     public interface IAgentExecutor
     {
-        Task<string> ExecuteAsync(string prompt, Dictionary<string, object>? context = null);
-        Task<string> ExecuteAgentTaskAsync(string taskId, string staffId, string prompt, IPluginContext context);
+        Task<string> ExecuteByAgentAsync(Agent agent, string prompt);
+        Task<string> ExecuteByAgentGuidAsync(Guid guid, string prompt);
+        Task<string> ExecuteByJobAsync(string jobId, string prompt);
         Task<string> ExecuteJobTaskAsync(string jobId, string prompt, IPluginContext context, string? employeeId = null);
-        Task<string> ExecuteByJobAsync(string jobId, string prompt); // 增加一个更简单的内部调用接口
     }
 
     public class AgentExecutor : IAgentExecutor
     {
         private readonly IAIService _aiService;
-        private readonly IToolAuditService _auditService;
-        private readonly IServiceProvider _serviceProvider;
         private readonly IJobService _jobService;
         private readonly IEmployeeService _employeeService;
         private readonly IEvaluationService _evaluationService;
+        private readonly ITaskRecordRepository _taskRepository;
+        private readonly ITaskStepRepository _stepRepository;
+        private readonly ILogger<AgentExecutor> _logger;
 
         public AgentExecutor(
             IAIService aiService, 
-            IToolAuditService auditService, 
-            IServiceProvider serviceProvider,
-            IJobService jobService,
+            IJobService jobService, 
             IEmployeeService employeeService,
-            IEvaluationService evaluationService)
+            IEvaluationService evaluationService,
+            ITaskRecordRepository taskRepository,
+            ITaskStepRepository stepRepository,
+            ILogger<AgentExecutor> _logger)
         {
-            _aiService = aiService;
-            _auditService = auditService;
-            _serviceProvider = serviceProvider;
-            _jobService = jobService;
-            _employeeService = employeeService;
-            _evaluationService = evaluationService;
+            this._aiService = aiService;
+            this._jobService = jobService;
+            this._employeeService = employeeService;
+            this._evaluationService = evaluationService;
+            this._taskRepository = taskRepository;
+            this._stepRepository = stepRepository;
+            this._logger = _logger;
         }
 
-        public async Task<string> ExecuteAsync(string prompt, Dictionary<string, object>? context = null)
+        public async Task<string> ExecuteByAgentAsync(Agent agent, string prompt)
         {
-            // 如果 context 中包含 IPluginContext，则尝试使用更严格的 Agentic 流程
-            if (context != null && context.TryGetValue("PluginContext", out var ctx) && ctx is IPluginContext pluginContext)
-            {
-                var taskId = context.TryGetValue("TaskId", out var tid) ? tid.ToString() : Guid.NewGuid().ToString();
-                var staffId = context.TryGetValue("StaffId", out var sid) ? sid.ToString() : "system";
-                
-                return await ExecuteAgentTaskAsync(taskId!, staffId!, prompt, pluginContext);
-            }
+            var systemPrompt = agent.SystemPrompt ?? "You are a helpful assistant.";
+            return await _aiService.ChatAsync($"{systemPrompt}\n\nUser: {prompt}");
+        }
 
+        public async Task<string> ExecuteByAgentGuidAsync(Guid guid, string prompt)
+        {
+            // TODO: 从 AgentRepository 获取
             return await _aiService.ChatAsync(prompt);
-        }
-
-        /// <summary>
-        /// 遵循“数字员工工具接口规范 v1”的执行流程
-        /// </summary>
-        public async Task<string> ExecuteAgentTaskAsync(string taskId, string staffId, string prompt, IPluginContext context)
-        {
-            // 1. Planner: 任务分析与规划
-            // 在复杂任务中，Planner 负责将任务拆解。目前我们通过系统提示词引导 AI 进入规划状态
-            var planningPrompt = $@"
-[任务 ID: {taskId}]
-[员工 ID: {staffId}]
-你现在作为 'Planner' 角色。请分析以下用户需求，并规划执行步骤。
-如果需求简单，直接开始执行。
-如果需求复杂，请先在心中拆解步骤。
-
-用户需求：{prompt}";
-
-            // 2. Executor: 执行任务 (带审计拦截器)
-            // AIService 内部已经通过 DigitalEmployeeToolFilter 实现了 Executor 职责和风险控制
-            var result = await _aiService.ChatWithContextAsync(planningPrompt, context);
-
-            // 3. Reviewer: 结果校验与总结
-            // 规范要求 Reviewer 判定结果是否合规、是否完成了用户目标
-            var reviewPrompt = $@"
-你现在作为 'Reviewer' 角色。
-请评估以下任务执行结果是否完整且符合预期。
-如果结果中包含 'ERROR: 该操作属于高风险行为'，请向用户解释原因并引导其联系管理员审批。
-
-任务需求：{prompt}
-执行结果：{result}
-
-请给出最终的用户答复：";
-
-            return await _aiService.ChatAsync(reviewPrompt);
         }
 
         public async Task<string> ExecuteByJobAsync(string jobId, string prompt)
@@ -97,7 +65,7 @@ namespace BotWorker.Modules.AI.Services
 约束：{job.Constraints}
 工作流：{job.Workflow}";
 
-            return await _aiService.ChatAsync($"{systemPrompt}\n\n任务内容：{prompt}");
+            return await _aiService.ChatAsync($"{systemPrompt}\n\n任务内容：{prompt}", job.ModelSelectionStrategy);
         }
 
         public async Task<string> ExecuteJobTaskAsync(string jobId, string prompt, IPluginContext context, string? employeeId = null)
@@ -121,18 +89,19 @@ namespace BotWorker.Modules.AI.Services
             }
 
             // 更新员工状态为忙碌
-            await _employeeService.UpdateEmployeeStateAsync(employee.EmployeeId, "Working");
+            await _employeeService.UpdateEmployeeStateAsync(employee.EmployeeId, "working");
 
             // 记录任务
-            var taskId = Guid.NewGuid().ToString();
             var taskRecord = new TaskRecord
             {
-                TaskId = taskId,
-                EmployeeId = employee.EmployeeId,
-                InputPayload = prompt,
-                Status = "InProgress"
+                ExecutionId = Guid.NewGuid(),
+                AssigneeId = employee.Id,
+                Description = prompt,
+                Status = "in_progress",
+                StartedAt = DateTime.Now
             };
-            await taskRecord.SaveAsync();
+            var taskId = await _taskRepository.AddAsync(taskRecord);
+            taskRecord.Id = taskId;
 
             try
             {
@@ -154,39 +123,46 @@ namespace BotWorker.Modules.AI.Services
 当前用户任务请求：
 {prompt}";
 
-                // 记录执行开始
-                var execution = new TaskExecution
+                // 记录执行步骤
+                var step = new TaskStep
                 {
-                    ExecutionId = Guid.NewGuid().ToString(),
                     TaskId = taskId,
-                    StepName = "MainProcess",
-                    InputData = prompt,
-                    RawPrompt = jobSystemPrompt,
-                    StartedAt = DateTime.Now
+                    StepIndex = 0,
+                    Name = "MainProcess",
+                    Status = "running",
+                    InputData = prompt
                 };
+                var stepId = await _stepRepository.AddAsync(step);
+                step.Id = stepId;
 
-                // 使用岗位 Prompt 执行
-                var result = await _aiService.ChatWithContextAsync(jobSystemPrompt, context);
+                var startTime = DateTime.Now;
+                // 使用岗位 Prompt 执行，并尊重模型选择策略
+                var result = await _aiService.ChatWithContextAsync(jobSystemPrompt, context, job.ModelSelectionStrategy);
+                var duration = (int)(DateTime.Now - startTime).TotalMilliseconds;
 
-                // 记录执行结束
-                execution.FinishedAt = DateTime.Now;
-                execution.RawResponse = result;
-                execution.OutputData = result;
+                // 记录步骤结束
+                step.OutputData = result;
+                step.DurationMs = duration;
                 
                 // 自动化评估
-                await _evaluationService.EvaluateExecutionAsync(execution, prompt);
+                await _evaluationService.EvaluateStepAsync(step, prompt);
                 
                 // 更新任务记录
-                taskRecord.ResultOutput = result;
-                taskRecord.FinalScore = execution.EvaluationScore;
+                taskRecord.ResultData = result;
+                taskRecord.FinishedAt = DateTime.Now;
                 await _evaluationService.EvaluateTaskResultAsync(taskRecord);
 
                 return result;
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[AgentExecutor] Error executing job task {JobId}", jobId);
+                return $"❌ 错误：执行任务时发生异常 - {ex.Message}";
+            }
             finally
             {
                 // 恢复员工为空闲
-                await _employeeService.UpdateEmployeeStateAsync(employee.EmployeeId, "Idle");
+                await _employeeService.UpdateEmployeeStateAsync(employee.EmployeeId, "idle");
             }
         }
     }

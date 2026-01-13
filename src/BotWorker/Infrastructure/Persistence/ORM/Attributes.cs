@@ -13,4 +13,12 @@ namespace BotWorker.Infrastructure.Persistence.ORM
     {
         public bool Show { get; } = show;
     }
+
+    /// <summary>
+    /// 标记实体使用 PostgreSQL 数据库（AI 相关功能专用）
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+    public class UsePostgreSqlAttribute : Attribute
+    {
+    }
 }

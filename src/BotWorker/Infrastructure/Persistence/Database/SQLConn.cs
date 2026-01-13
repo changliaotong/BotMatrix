@@ -10,7 +10,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static partial class SQLConn
     {        
-        public static string ConnString => GlobalConfig.ConnString;
+        public static string ConnString => DbProviderFactory.CurrentConnString;
 
         private static void LogSql(string sql, IDataParameter[]? parameters)
         {

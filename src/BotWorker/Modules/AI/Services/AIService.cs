@@ -38,6 +38,9 @@ namespace BotWorker.Modules.AI.Services
         private readonly IRagService _ragService;
         private readonly IToolAuditService _auditService;
         private readonly IImageGenerationService _imageService;
+        private readonly IBillingService _billingService;
+        private readonly ILLMRepository _llmRepository;
+        private readonly ILLMCallLogRepository _callLogRepository;
         private readonly LLMApp _llmApp;
         private readonly ILogger<AIService> _logger;
         private readonly IServiceProvider _serviceProvider;
@@ -48,6 +51,9 @@ namespace BotWorker.Modules.AI.Services
             IRagService ragService,
             IToolAuditService auditService,
             IImageGenerationService imageService,
+            IBillingService billingService,
+            ILLMRepository llmRepository,
+            ILLMCallLogRepository callLogRepository,
             LLMApp llmApp, 
             ILogger<AIService> logger,
             IServiceProvider serviceProvider)
@@ -56,6 +62,9 @@ namespace BotWorker.Modules.AI.Services
             _ragService = ragService;
             _auditService = auditService;
             _imageService = imageService;
+            _billingService = billingService;
+            _llmRepository = llmRepository;
+            _callLogRepository = callLogRepository;
             _llmApp = llmApp;
             _logger = logger;
             _serviceProvider = serviceProvider;
@@ -67,40 +76,82 @@ namespace BotWorker.Modules.AI.Services
             return await ChatWithContextAsync(prompt, null!, model);
         }
 
-        public async Task<string> ChatWithContextAsync(string prompt, IPluginContext? context, string? model = null)
-        {            try
+        private async Task<(IModelProvider? Provider, string? ModelId, long? ProviderId)> GetEffectiveProviderAsync(string? model, IPluginContext? context, LLMModelType type = LLMModelType.Chat)
+        {
+            var (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", type);
+
+            long currentUserId = 0;
+            if (context != null && !string.IsNullOrEmpty(context.UserId))
             {
-                // 使用新的模型管理方法获取 Provider 和 ModelId
-                var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
+                long.TryParse(context.UserId, out currentUserId);
+            }
 
-                // 1. 优先检查用户是否提供了自己的 Key
-                if (context is PluginContext pc && pc.Event is BotMessageEvent bme)
+            // 1. 优先检查用户是否提供了自己的 Key (BYOK)
+            if (currentUserId > 0)
+            {
+                var providerName = provider?.ProviderName ?? model ?? "Doubao";
+                var userProvider = await _llmRepository.GetUserProviderAsync(currentUserId, providerName);
+
+                if (userProvider != null && !string.IsNullOrEmpty(userProvider.ApiKey))
                 {
-                    var userId = bme.BotMessage.UserId;
-                    var providerName = provider?.ProviderName ?? model ?? "Doubao";
-                    var userConfig = await UserAIConfig.GetUserConfigAsync(userId, providerName);
-                    if (userConfig != null && !string.IsNullOrEmpty(userConfig.ApiKey))
+                    var decryptedKey = userProvider.GetDecryptedApiKey();
+                    var effectiveProvider = new GenericOpenAIProvider(providerName, decryptedKey, userProvider.Endpoint, modelId ?? providerName);
+                    _logger.LogInformation("[AIService] Using BYOK for user {UserId}, provider {ProviderName}", currentUserId, providerName);
+                    return (effectiveProvider, modelId, userProvider.Id);
+                }
+            }
+
+            // 2. 如果没有用户 Key，尝试从租赁池中随机选择
+            if (provider == null || (currentUserId > 0 && provider.ProviderName == "Doubao" && model == null)) // 默认 Provider 且没有指定模型时，尝试寻找共享 Key
+            {
+                var providerName = model ?? "Doubao";
+                var sharedProviders = (await _llmRepository.GetSharedProvidersAsync(providerName)).ToList();
+
+                if (sharedProviders.Count > 0)
+                {
+                    var config = sharedProviders[_random.Next(sharedProviders.Count)];
+                    var decryptedKey = config.GetDecryptedApiKey();
+                    var effectiveProvider = new GenericOpenAIProvider(providerName, decryptedKey, config.Endpoint, modelId ?? providerName);
+                    _logger.LogInformation("[AIService] Using Shared Key from provider {ProviderId} for user {UserId}", config.Id, currentUserId);
+                    return (effectiveProvider, modelId, config.Id);
+                }
+            }
+
+            return (provider, modelId, null);
+        }
+
+        public async Task<string> ChatWithContextAsync(string prompt, IPluginContext? context, string? model = null)
+        {
+            try
+            {
+                // 0. 基础计费与租赁检查
+                long currentUserId = 0;
+                long tenantId = 0;
+                if (context != null)
+                {
+                    if (!string.IsNullOrEmpty(context.UserId)) long.TryParse(context.UserId, out currentUserId);
+                    if (!string.IsNullOrEmpty(context.GroupId)) long.TryParse(context.GroupId, out tenantId);
+                }
+
+                // 如果在群组中，优先检查群组（租户）是否有租赁
+                long billingId = tenantId > 0 ? tenantId : currentUserId;
+
+                if (billingId > 0)
+                {
+                    // 检查是否有活跃租赁
+                    var hasLease = await _billingService.HasActiveLeaseAsync(billingId, "ai_service");
+                    if (!hasLease)
                     {
-                        provider = new GenericOpenAIProvider(providerName, userConfig.GetDecryptedApiKey(), userConfig.BaseUrl, modelId ?? providerName);
-                        _ = UserAIConfig.UpdateUsageAsync(userConfig.Id);
+                        // 检查余额
+                        if (!await _billingService.HasSufficientBalanceAsync(billingId, 0.01m))
+                        {
+                            return "您的账户余额不足且没有有效的 AI 服务租赁，请充值或租赁后再尝试。";
+                        }
                     }
                 }
 
-                // 2. 如果没有用户 Key，且允许租赁，尝试从租赁池中随机选择
-                if (provider == null)
-                {
-                    var providerName = model ?? "Doubao";
-                    var leasedConfigs = await UserAIConfig.GetLeasedConfigsAsync(providerName);
-                    if (leasedConfigs.Count > 0)
-                    {
-                        var config = leasedConfigs[_random.Next(leasedConfigs.Count)];
-                        provider = new GenericOpenAIProvider(providerName, config.GetDecryptedApiKey(), config.BaseUrl, modelId ?? providerName);
-                        _ = UserAIConfig.UpdateUsageAsync(config.Id);
-                        
-                        // 奖励出租者：增加少量算力
-                        _ = UserInfo.AddTokensAsync(0, 0, "算力租赁奖励", config.UserId, "系统", 100, $"您的 API Key 被使用，获得算力奖励");
-                    }
-                }
+                // 1. 获取有效 Provider (支持 BYOK 和共享 Key)
+                var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
 
                 if (provider == null)
                 {
@@ -162,7 +213,46 @@ namespace BotWorker.Modules.AI.Services
                     CancellationToken = default
                 };
 
-                return await provider.ExecuteAsync(history, options);
+                var startTime = DateTime.UtcNow;
+                var result = await provider.ExecuteAsync(history, options);
+                var duration = (int)(DateTime.UtcNow - startTime).TotalMilliseconds;
+
+                // 4. 记录消费与使用情况
+                int inputTokens = EstimateTokens(prompt);
+                int outputTokens = EstimateTokens(result);
+
+                if (billingId > 0)
+                {
+                    // 计算 Token 消耗并计费
+                    decimal cost = await CalculateCostAsync(inputTokens, outputTokens, modelId ?? provider.ProviderName);
+                    await _billingService.ConsumeAsync(billingId, cost, relatedType: "ai_chat", remark: $"AI 聊天调用: {modelId ?? provider.ProviderName} (Token 计费)");
+                    
+                    // 记录审计日志
+                    long? agentId = null;
+                    if (context is PluginContext pc && pc.Event is BotMessageEvent bme)
+                    {
+                        agentId = bme.BotMessage.AgentId;
+                    }
+
+                    await _callLogRepository.AddAsync(new LLMCallLog
+                    {
+                        AgentId = agentId,
+                        ModelId = (await _llmRepository.GetModelByNameAsync(modelId ?? provider.ProviderName))?.Id,
+                        PromptTokens = inputTokens,
+                        CompletionTokens = outputTokens,
+                        TotalCost = cost,
+                        LatencyMs = duration,
+                        IsSuccess = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                if (providerId.HasValue)
+                {
+                    await _llmRepository.UpdateUsageAsync(providerId.Value);
+                }
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -175,7 +265,7 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
+                var (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", LLMModelType.Chat);
                 if (provider == null) return "没有可用的 AI 提供商。";
 
                 var history = new ChatHistory();
@@ -200,11 +290,11 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Embedding);
+                var (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", LLMModelType.Embedding);
                 if (provider == null)
                 {
                     // 如果没找到专用的 Embedding 模型，尝试用默认 Chat 模型（SK 通常支持）
-                    (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
+                    (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", LLMModelType.Chat);
                 }
 
                 if (provider == null) return Array.Empty<float>();
@@ -222,10 +312,39 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
+                // 0. 基础计费与租赁检查
+                long currentUserId = 0;
+                long tenantId = 0;
+                if (context != null)
+                {
+                    if (!string.IsNullOrEmpty(context.UserId)) long.TryParse(context.UserId, out currentUserId);
+                    if (!string.IsNullOrEmpty(context.GroupId)) long.TryParse(context.GroupId, out tenantId);
+                }
+
+                // 如果在群组中，优先检查群组（租户）是否有租赁
+                long billingId = tenantId > 0 ? tenantId : currentUserId;
+
+                if (billingId > 0)
+                {
+                    // 检查是否有活跃租赁
+                    var hasLease = await _billingService.HasActiveLeaseAsync(billingId, "ai_image");
+                    if (!hasLease)
+                    {
+                        // 检查余额 (生图费用较高，默认 0.1)
+                        if (!await _billingService.HasSufficientBalanceAsync(billingId, 0.1m))
+                        {
+                            return "❌ 您的账户余额不足且没有有效的 AI 生图租赁，请充值或租赁后再尝试。";
+                        }
+                    }
+                }
+
+                string result = string.Empty;
+                string usedModel = model ?? "Doubao";
+
                 // 如果指定了模型，且不是默认的生图模型，则走原有逻辑
                 if (!string.IsNullOrEmpty(model) && model != "Doubao")
                 {
-                    var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Image);
+                    var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Image);
                     if (provider != null)
                     {
                         var options = new ModelExecutionOptions
@@ -236,17 +355,34 @@ namespace BotWorker.Modules.AI.Services
                         _logger.LogInformation("[AIService] Generating image with provider {ProviderName}, model {ModelId}, prompt: {Prompt}", 
                             provider.ProviderName, modelId, prompt);
                         var imageUrl = await provider.GenerateImageAsync(prompt, options);
-                        return imageUrl.StartsWith("http") ? $"[CQ:image,file={imageUrl}]" : imageUrl;
+
+                        if (providerId.HasValue)
+                        {
+                            await _llmRepository.UpdateUsageAsync(providerId.Value);
+                        }
+
+                        result = imageUrl.StartsWith("http") ? $"[CQ:image,file={imageUrl}]" : imageUrl;
+                        usedModel = modelId ?? provider.ProviderName;
                     }
                 }
-
-                // 默认使用新封装的 ImageGenerationService (带 Prompt 优化)
-                var result = await _imageService.GenerateImageAsync(prompt, true);
-                if (string.IsNullOrEmpty(result))
+                else
                 {
-                    return "❌ 图像生成失败。";
+                    // 默认使用新封装 of ImageGenerationService (带 Prompt 优化)
+                    var imageResult = await _imageService.GenerateImageAsync(prompt, true);
+                    if (string.IsNullOrEmpty(imageResult))
+                    {
+                        return "❌ 图像生成失败。";
+                    }
+                    result = imageResult.StartsWith("[CQ:image") ? imageResult : $"[CQ:image,file={imageResult}]";
                 }
-                return result.StartsWith("[CQ:image") ? result : $"[CQ:image,file={result}]";
+
+                // 4. 记录消费与使用情况
+                if (billingId > 0 && !string.IsNullOrEmpty(result))
+                {
+                    await _billingService.ConsumeAsync(billingId, 0.1m, relatedType: "ai_image", remark: $"AI 生图: {usedModel}");
+                }
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -257,7 +393,34 @@ namespace BotWorker.Modules.AI.Services
 
         public async IAsyncEnumerable<string> StreamChatAsync(string prompt, IPluginContext? context = null, string? model = null)
         {
-            var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
+            // 0. 基础计费与租赁检查
+            long currentUserId = 0;
+            long tenantId = 0;
+            if (context != null)
+            {
+                if (!string.IsNullOrEmpty(context.UserId)) long.TryParse(context.UserId, out currentUserId);
+                if (!string.IsNullOrEmpty(context.GroupId)) long.TryParse(context.GroupId, out tenantId);
+            }
+
+            // 如果在群组中，优先检查群组（租户）是否有租赁
+            long billingId = tenantId > 0 ? tenantId : currentUserId;
+
+            if (billingId > 0)
+            {
+                // 检查是否有活跃租赁
+                var hasLease = await _billingService.HasActiveLeaseAsync(billingId, "ai_service");
+                if (!hasLease)
+                {
+                    // 检查余额
+                    if (!await _billingService.HasSufficientBalanceAsync(billingId, 0.01m))
+                    {
+                        yield return "❌ 您的账户余额不足且没有有效的 AI 服务租赁，请充值或租赁后再尝试。";
+                        yield break;
+                    }
+                }
+            }
+
+            var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
 
             if (provider == null)
             {
@@ -311,9 +474,47 @@ namespace BotWorker.Modules.AI.Services
                 Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null
             };
 
+            var fullContent = new System.Text.StringBuilder();
+            var startTime = DateTime.UtcNow;
             await foreach (var chunk in provider.StreamExecuteAsync(history, options))
             {
+                fullContent.Append(chunk);
                 yield return chunk;
+            }
+            var duration = (int)(DateTime.UtcNow - startTime).TotalMilliseconds;
+
+            // 4. 记录消费与使用情况
+            int inputTokens = EstimateTokens(prompt);
+            int outputTokens = EstimateTokens(fullContent.ToString());
+
+            if (billingId > 0)
+            {
+                decimal cost = await CalculateCostAsync(inputTokens, outputTokens, modelId ?? provider.ProviderName);
+                await _billingService.ConsumeAsync(billingId, cost, relatedType: "ai_chat_stream", remark: $"AI 流式对话: {modelId ?? provider.ProviderName}");
+
+                // 记录审计日志
+                long? agentId = null;
+                if (context is PluginContext pc && pc.Event is BotMessageEvent bme)
+                {
+                    agentId = bme.BotMessage.AgentId;
+                }
+
+                await _callLogRepository.AddAsync(new LLMCallLog
+                {
+                    AgentId = agentId,
+                    ModelId = (await _llmRepository.GetModelByNameAsync(modelId ?? provider.ProviderName))?.Id,
+                    PromptTokens = inputTokens,
+                    CompletionTokens = outputTokens,
+                    TotalCost = cost,
+                    LatencyMs = duration,
+                    IsSuccess = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            if (providerId.HasValue)
+            {
+                await _llmRepository.UpdateUsageAsync(providerId.Value);
             }
         }
 
@@ -349,6 +550,27 @@ namespace BotWorker.Modules.AI.Services
             }
 
             return new List<KernelPlugin> { KernelPluginFactory.CreateFromFunctions("MCP", functions) };
+        }
+
+        private async Task<decimal> CalculateCostAsync(int inputTokens, int outputTokens, string modelName)
+        {
+            var model = await _llmRepository.GetModelByNameAsync(modelName);
+            if (model == null) return 0.01m; // 找不到模型信息，使用保底费用
+
+            decimal inputCost = (inputTokens / 1000m) * model.InputPricePer1kTokens;
+            decimal outputCost = (outputTokens / 1000m) * model.OutputPricePer1kTokens;
+
+            decimal totalCost = inputCost + outputCost;
+            return totalCost > 0 ? totalCost : 0.01m; // 至少扣 0.01
+        }
+
+        private int EstimateTokens(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            // 简单估算：中文字符计 1.5 token，英文字符/数字/标点计 0.3 token
+            int chineseChars = text.Count(c => c >= 0x4E00 && c <= 0x9FFF);
+            int otherChars = text.Length - chineseChars;
+            return (int)Math.Ceiling(chineseChars * 1.5 + otherChars * 0.3);
         }
     }
 

@@ -5,9 +5,9 @@ namespace BotWorker.Modules.AI.Interfaces
     public interface IEvaluationService
     {
         /// <summary>
-        /// 对单次执行结果进行评估
+        /// 对单次执行步骤进行评估
         /// </summary>
-        Task<bool> EvaluateExecutionAsync(TaskExecution execution, string taskPrompt);
+        Task<bool> EvaluateStepAsync(TaskStep step, string taskPrompt);
         
         /// <summary>
         /// 对整个任务结果进行最终评估

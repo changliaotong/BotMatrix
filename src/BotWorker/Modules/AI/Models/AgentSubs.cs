@@ -25,7 +25,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static bool IsSub(long userId, Guid guid)
         {
-            return GetBool("IsSub", userId, Agent.GetId(guid));
+            return GetBool("IsSub", userId, BotWorker.Modules.AI.Models.Agent.GetId(guid));
         } 
 
         public static async Task<int> SubAsync(long userId, long id, bool isSub = true)
@@ -38,7 +38,7 @@ namespace BotWorker.Modules.AI.Models
                 i = await UpdateObjectAsync(new { IsSub = isSub.AsInt(), UnsubDate = DateTime.MinValue }, userId, id);
 
             if (i == 0) return i;
-            var sqlInfo = Agent.GetSqlPlusCount(id, isSub ? 1 : -1);
+            var sqlInfo = BotWorker.Modules.AI.Models.Agent.GetSqlPlusCount(id, isSub ? 1 : -1);
             return await ExecAsync(sqlInfo);
         }
     }

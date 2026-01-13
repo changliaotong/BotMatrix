@@ -2,21 +2,31 @@ using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Models.Evolution;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.AI.Services
 {
     public class EvaluationService : IEvaluationService
     {
         private readonly IAIService _aiService;
+        private readonly ITaskRecordRepository _taskRepository;
+        private readonly ITaskStepRepository _stepRepository;
         private readonly ILogger<EvaluationService> _logger;
 
-        public EvaluationService(IAIService aiService, ILogger<EvaluationService> logger)
+        public EvaluationService(
+            IAIService aiService, 
+            ITaskRecordRepository taskRepository,
+            ITaskStepRepository stepRepository,
+            ILogger<EvaluationService> logger)
         {
             _aiService = aiService;
+            _taskRepository = taskRepository;
+            _stepRepository = stepRepository;
             _logger = logger;
         }
 
-        public async Task<bool> EvaluateExecutionAsync(TaskExecution execution, string taskPrompt)
+        public async Task<bool> EvaluateStepAsync(TaskStep step, string taskPrompt)
         {
             try
             {
@@ -27,10 +37,10 @@ namespace BotWorker.Modules.AI.Services
 {taskPrompt}
 
 ## 执行步骤
-{execution.StepName}
+{step.Name}
 
 ## LLM 输出内容
-{execution.RawResponse}
+{step.OutputData}
 
 ## 评价标准
 1. 是否完成了用户要求的目标？
@@ -56,30 +66,39 @@ namespace BotWorker.Modules.AI.Services
                     
                     if (result != null)
                     {
-                        execution.EvaluationScore = result.Score;
-                        execution.EvaluationFeedback = result.Feedback;
-                        execution.Status = result.Is_Success ? "Success" : "Fail";
-                        await execution.SaveAsync();
+                        // 映射评估结果到 TaskStep (原本 TaskExecution 的字段在 TaskStep 中可能需要对应)
+                        step.Status = result.Is_Success ? "completed" : "failed";
+                        if (!result.Is_Success)
+                        {
+                            step.ErrorMessage = result.Feedback;
+                        }
+                        await _stepRepository.UpdateAsync(step);
                         return true;
                     }
                 }
                 
-                _logger.LogWarning("[EvaluationService] Failed to parse evaluation response for Execution {Id}", execution.ExecutionId);
+                _logger.LogWarning("[EvaluationService] Failed to parse evaluation response for Step {Id}", step.Id);
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[EvaluationService] Error evaluating execution {Id}", execution.ExecutionId);
+                _logger.LogError(ex, "[EvaluationService] Error evaluating step {Id}", step.Id);
                 return false;
             }
         }
 
         public async Task<bool> EvaluateTaskResultAsync(TaskRecord task)
         {
-            // TODO: 实现汇总多次执行结果的最终评估
-            task.Status = "Completed";
-            await task.SaveAsync();
-            return true;
+            try
+            {
+                task.Status = "completed";
+                return await _taskRepository.UpdateAsync(task);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[EvaluationService] Error completing task {Id}", task.Id);
+                return false;
+            }
         }
 
         private class EvaluationResult

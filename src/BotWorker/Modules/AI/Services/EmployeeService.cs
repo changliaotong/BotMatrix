@@ -1,6 +1,10 @@
 using BotWorker.Modules.AI.Models.Evolution;
-using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Modules.AI.Interfaces;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.AI.Services
 {
@@ -8,20 +12,20 @@ namespace BotWorker.Modules.AI.Services
     {
         private readonly ILogger<EmployeeService> _logger;
         private readonly IJobService _jobService;
+        private readonly IEmployeeInstanceRepository _employeeRepository;
 
-        public EmployeeService(ILogger<EmployeeService> logger, IJobService jobService)
+        public EmployeeService(ILogger<EmployeeService> logger, IJobService jobService, IEmployeeInstanceRepository employeeRepository)
         {
             _logger = logger;
             _jobService = jobService;
+            _employeeRepository = employeeRepository;
         }
 
         public async Task<EmployeeInstance?> GetEmployeeAsync(string employeeId)
         {
             try
             {
-                var sql = $"SELECT * FROM {EmployeeInstance.FullName} WHERE EmployeeId = {employeeId.Quotes()}";
-                var list = await EmployeeInstance.QueryListAsync<EmployeeInstance>(sql);
-                return list.FirstOrDefault();
+                return await _employeeRepository.GetByEmployeeIdAsync(employeeId);
             }
             catch (Exception ex)
             {
@@ -41,14 +45,18 @@ namespace BotWorker.Modules.AI.Services
             var instance = new EmployeeInstance
             {
                 EmployeeId = employeeId ?? $"de_{Guid.NewGuid():N}",
-                JobId = job.JobId,
-                SkillSet = job.Workflow, // 默认技能集可以从 Workflow 或其它字段推导
-                PermissionSet = job.Constraints,
-                State = "Idle",
-                Version = job.Version
+                BotId = "system", // 默认系统机器人
+                JobId = job.Id,
+                Name = job.Name,
+                Title = job.Name,
+                OnlineStatus = "online",
+                State = "idle",
+                SalaryTokenLimit = 1000000,
+                ExperienceData = "{}"
             };
 
-            await instance.SaveAsync();
+            var id = await _employeeRepository.AddAsync(instance);
+            instance.Id = id;
             return instance;
         }
 
@@ -56,9 +64,11 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                var sql = $"UPDATE {EmployeeInstance.FullName} SET State = {state.Quotes()} WHERE EmployeeId = {employeeId.Quotes()}";
-                var res = await EmployeeInstance.ExecAsync(sql);
-                return res > 0;
+                var employee = await _employeeRepository.GetByEmployeeIdAsync(employeeId);
+                if (employee == null) return false;
+                
+                employee.State = state;
+                return await _employeeRepository.UpdateAsync(employee);
             }
             catch (Exception ex)
             {

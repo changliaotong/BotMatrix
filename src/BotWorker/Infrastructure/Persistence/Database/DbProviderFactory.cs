@@ -8,33 +8,66 @@ namespace BotWorker.Infrastructure.Persistence.Database
 {
     public static class DbProviderFactory
     {
+        private static readonly System.Threading.AsyncLocal<DatabaseType?> _contextDbType = new();
+        private static readonly System.Threading.AsyncLocal<string?> _contextConnString = new();
+
+        public static void SetContext(string connectionString, DatabaseType dbType)
+        {
+            _contextDbType.Value = dbType;
+            _contextConnString.Value = connectionString;
+        }
+
+        public static void ClearContext()
+        {
+            _contextDbType.Value = null;
+            _contextConnString.Value = null;
+        }
+
+        public static DatabaseType CurrentDbType => _contextDbType.Value ?? GlobalConfig.DbType;
+        public static string CurrentConnString => _contextConnString.Value ?? GlobalConfig.ConnString;
+
         public static IDbConnection CreateConnection()
         {
-            return GlobalConfig.DbType switch
+            return CreateConnection(CurrentConnString, CurrentDbType);
+        }
+
+        public static IDbConnection CreateConnection(string connectionString, DatabaseType dbType)
+        {
+            return dbType switch
             {
-                DatabaseType.SqlServer => new SqlConnection(GlobalConfig.ConnString),
-                DatabaseType.PostgreSql => new NpgsqlConnection(GlobalConfig.ConnString),
-                _ => throw new NotSupportedException($"Unsupported database type: {GlobalConfig.DbType}")
+                DatabaseType.SqlServer => new SqlConnection(connectionString),
+                DatabaseType.PostgreSql => new NpgsqlConnection(connectionString),
+                _ => throw new NotSupportedException($"Unsupported database type: {dbType}")
             };
         }
 
         public static IDataParameter CreateParameter(string name, object? value)
         {
-            return GlobalConfig.DbType switch
+            return CreateParameter(name, value, CurrentDbType);
+        }
+
+        public static IDataParameter CreateParameter(string name, object? value, DatabaseType dbType)
+        {
+            return dbType switch
             {
                 DatabaseType.SqlServer => new SqlParameter(FormatParameterName(name), value ?? DBNull.Value),
                 DatabaseType.PostgreSql => new NpgsqlParameter(FormatParameterName(name), value ?? DBNull.Value),
-                _ => throw new NotSupportedException($"Unsupported database type: {GlobalConfig.DbType}")
+                _ => throw new NotSupportedException($"Unsupported database type: {dbType}")
             };
         }
 
         public static DbDataAdapter CreateDataAdapter(IDbCommand command)
         {
-            return GlobalConfig.DbType switch
+            return CreateDataAdapter(command, CurrentDbType);
+        }
+
+        public static DbDataAdapter CreateDataAdapter(IDbCommand command, DatabaseType dbType)
+        {
+            return dbType switch
             {
                 DatabaseType.SqlServer => new SqlDataAdapter((SqlCommand)command),
                 DatabaseType.PostgreSql => new NpgsqlDataAdapter((NpgsqlCommand)command),
-                _ => throw new NotSupportedException($"Unsupported database type: {GlobalConfig.DbType}")
+                _ => throw new NotSupportedException($"Unsupported database type: {dbType}")
             };
         }
 
