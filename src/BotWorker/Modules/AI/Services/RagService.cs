@@ -17,12 +17,22 @@ namespace BotWorker.Modules.AI.Services
     {
         private readonly IKnowledgeBaseService _kbService;
         private readonly IServiceProvider _serviceProvider;
-        private readonly List<Chunk> _store = new(); // 简化版内存存储
+        private readonly IRagStorage _storage;
 
         public RagService(IKnowledgeBaseService kbService, IServiceProvider serviceProvider)
         {
             _kbService = kbService;
             _serviceProvider = serviceProvider;
+            
+            // 优先使用 PostgreSQL 存储，如果没有配置则回退到内存存储
+            if (!string.IsNullOrEmpty(GlobalConfig.KnowledgeBaseConnection))
+            {
+                _storage = new PostgresRagStorage();
+            }
+            else
+            {
+                _storage = new MemoryRagStorage();
+            }
         }
 
         private IAIService AIService => _serviceProvider.GetRequiredService<IAIService>();
@@ -51,7 +61,7 @@ namespace BotWorker.Modules.AI.Services
             
             var allResults = new List<Chunk>();
 
-            // 1. 从 KnowledgeBaseService 获取知识
+            // 1. 从 KnowledgeBaseService 获取外部知识 (Legacy API)
             try
             {
                 var kbResults = await _kbService.GetKnowledgesAsync(groupId, refinedQuery);
@@ -66,22 +76,22 @@ namespace BotWorker.Modules.AI.Services
             }
             catch
             {
-                // 忽略 KB 服务错误，继续使用本地存储
+                // 忽略 KB 服务错误
             }
 
-            // 2. 从本地存储搜索并合并
-            var keywords = refinedQuery.ToLower().Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
-            var localResults = _store
-                .Select(chunk => new
-                {
-                    Chunk = chunk,
-                    Score = keywords.Count(k => chunk.Content.ToLower().Contains(k))
-                })
-                .Where(x => x.Score > 0)
-                .OrderByDescending(x => x.Score)
-                .Select(x => x.Chunk)
-                .ToList();
+            // 2. 从本地存储搜索 (向量搜索 + 关键词搜索)
+            float[]? queryVector = null;
+            try
+            {
+                // 尝试生成查询向量
+                queryVector = await AIService.GenerateEmbeddingAsync(refinedQuery);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RagService] Failed to generate embedding: {ex.Message}");
+            }
 
+            var localResults = await _storage.SearchAsync(refinedQuery, queryVector, topK * 2);
             allResults.AddRange(localResults);
 
             // 3. 去重
@@ -146,11 +156,30 @@ namespace BotWorker.Modules.AI.Services
         {
             var splitter = new TextSplitter();
             var textChunks = splitter.Split(content);
+            var chunksToSave = new List<Chunk>();
+
             foreach (var text in textChunks)
             {
-                _store.Add(new Chunk { Content = text, Source = source });
+                float[]? embedding = null;
+                try
+                {
+                    embedding = await AIService.GenerateEmbeddingAsync(text);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[RagService] Failed to generate embedding for indexing: {ex.Message}");
+                }
+
+                chunksToSave.Add(new Chunk 
+                { 
+                    Content = text, 
+                    Source = source,
+                    Embedding = embedding,
+                    Metadata = new Dictionary<string, object> { { "indexed_at", DateTime.UtcNow } }
+                });
             }
-            await Task.CompletedTask;
+
+            await _storage.SaveChunksAsync(chunksToSave);
         }
     }
 }
