@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -650,7 +651,13 @@ func handleNexusCommand(data []byte) {
 
 		if s != nil {
 			go func() {
-				result, err := s.InvokeSkill(skillName, params)
+				// 尝试提取 ID 用于创建 Context
+				userID, _ := strconv.ParseInt(params["user_id"], 10, 64)
+				groupID, _ := strconv.ParseInt(params["group_id"], 10, 64)
+				botUin, _ := strconv.ParseInt(params["self_id"], 10, 64)
+				ctx := s.CreateBaseContext(botUin, groupID, userID)
+
+				result, err := s.InvokeSkill(ctx, skillName, params)
 				// 如果有 echo，则将结果发送回 Nexus (通过 Redis 或 WebSocket)
 				if req.Echo != "" {
 					resp := map[string]any{
@@ -778,17 +785,34 @@ func reportWorkerStatus() {
 			}
 
 			// 收集插件能力
-			if sc, ok := p.(core.SkillCapable); ok {
-				var skills []types.WorkerCapability
-				for _, skill := range sc.GetSkills() {
+			var skills []types.WorkerCapability
+			// 1. Intents
+			for _, intent := range p.Config.Intents {
+				skills = append(skills, types.WorkerCapability{
+					Name:        intent.Name,
+					Description: p.Config.Description,
+					Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
+					Regex:       intent.Regex,
+				})
+			}
+			// 2. Capabilities
+			for _, capName := range p.Config.Capabilities {
+				alreadyAdded := false
+				for _, s := range skills {
+					if s.Name == capName {
+						alreadyAdded = true
+						break
+					}
+				}
+				if !alreadyAdded {
 					skills = append(skills, types.WorkerCapability{
-						Name:        skill.Name,
-						Description: skill.Description,
-						Usage:       skill.Usage,
-						Params:      skill.Params,
-						Regex:       skill.Regex,
+						Name:        capName,
+						Description: fmt.Sprintf("Capability: %s", capName),
+						Usage:       fmt.Sprintf("Directly call capability %s", capName),
 					})
 				}
+			}
+			if len(skills) > 0 {
 				pluginEntry["skills"] = skills
 			}
 

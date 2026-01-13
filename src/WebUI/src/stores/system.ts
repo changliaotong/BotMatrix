@@ -55,7 +55,8 @@ export const useSystemStore = defineStore('system', {
           items: [
             { id: 'dashboard', icon: 'LayoutDashboard', titleKey: 'dashboard' },
             { id: 'bots', icon: 'Bot', titleKey: 'bots' },
-            { id: 'bot-setup', icon: 'Wrench', titleKey: 'bot_setup', adminOnly: true },
+            { id: 'bot-setup', icon: 'Wrench', titleKey: 'bot_setup' },
+            { id: 'group-setup', icon: 'Settings2', titleKey: 'group_setup' },
             { id: 'contacts', icon: 'Users', titleKey: 'contacts' },
             { id: 'messages', icon: 'MessageSquare', titleKey: 'messages' },
             { id: 'tasks', icon: 'ListTodo', titleKey: 'tasks' },

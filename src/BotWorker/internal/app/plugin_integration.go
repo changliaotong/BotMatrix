@@ -263,7 +263,13 @@ func (pb *PluginBridge) LoadExternalPlugins() error {
 				for k, v := range payload {
 					params[k] = fmt.Sprintf("%v", v)
 				}
-				result, err := pb.server.InvokeSkill(action, params)
+				// 尝试提取 ID 用于创建 Context
+				userID, _ := strconv.ParseInt(params["user_id"], 10, 64)
+				groupID, _ := strconv.ParseInt(params["group_id"], 10, 64)
+				botUin, _ := strconv.ParseInt(params["self_id"], 10, 64)
+				ctx := pb.server.CreateBaseContext(botUin, groupID, userID)
+
+				result, err := pb.server.InvokeSkill(ctx, action, params)
 				if err == nil {
 					return result, nil
 				}
@@ -303,7 +309,13 @@ func (pb *PluginBridge) LoadExternalPlugins() error {
 					params[k] = fmt.Sprintf("%v", v)
 				}
 
-				result, err := pb.server.InvokeSkill(skillName, params)
+				// 尝试提取 ID 用于创建 Context
+				userID, _ := strconv.ParseInt(params["user_id"], 10, 64)
+				groupID, _ := strconv.ParseInt(params["group_id"], 10, 64)
+				botUin, _ := strconv.ParseInt(params["self_id"], 10, 64)
+				ctx := pb.server.CreateBaseContext(botUin, groupID, userID)
+
+				result, err := pb.server.InvokeSkill(ctx, skillName, params)
 
 				// 发送响应回插件
 				correlationID := a.CorrelationID
@@ -605,7 +617,7 @@ func (w *ExternalPluginWrapper) Init(robot core.Robot) {
 
 func (w *ExternalPluginWrapper) registerSkill(robot core.Robot, capability core.SkillCapability) {
 	skillName := capability.Name
-	robot.RegisterSkill(capability, func(params map[string]string) (string, error) {
+	robot.RegisterSkill(capability, func(ctx core.BaseContext, params map[string]string) (string, error) {
 		log.Printf("[Skill] Triggered skill: %s, params: %+v", skillName, params)
 
 		eventID := fmt.Sprintf("skill_%d", core.NextID())

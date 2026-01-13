@@ -23,7 +23,8 @@ import {
   BookOpen,
   Activity,
   Sparkles,
-  Wrench
+  Wrench,
+  Settings2
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
@@ -50,7 +51,8 @@ const iconMap: Record<string, any> = {
   BookOpen,
   Activity,
   Sparkles,
-  Wrench
+  Wrench,
+  Settings2
 };
 
 // Map item IDs to routes
@@ -58,6 +60,7 @@ const routeMap: Record<string, string> = {
   'dashboard': '/console',
   'bots': '/console/bots',
   'bot-setup': '/console/bot-setup',
+  'group-setup': '/console/group-setup',
   'contacts': '/console/contacts',
   'messages': '/console/messages',
   'tasks': '/console/tasks',

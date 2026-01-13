@@ -12,8 +12,8 @@ import (
 
 // ISz84Store defines the interface for sz84 data operations
 type ISz84Store interface {
-	GetLimiterLogs(userID int64, actionKey string) ([]LimiterLog, error)
-	AddLimiterLog(log *LimiterLog) error
+	GetLimiterLogs(userID int64, actionKey string) ([]Sz84LimiterLog, error)
+	AddLimiterLog(log *Sz84LimiterLog) error
 	// Add other methods as needed
 }
 
@@ -31,6 +31,15 @@ func NewSz84Store(db *gorm.DB, rdb *redis.Client) *Sz84Store {
 		rdb:     rdb,
 		dialect: dialect,
 	}
+}
+
+// SigninService handles signin related operations
+type SigninService struct {
+	store *Sz84Store
+}
+
+func NewSigninService(store *Sz84Store) *SigninService {
+	return &SigninService{store: store}
 }
 
 // GetDateCondition returns a dialect-specific date comparison string
@@ -53,29 +62,29 @@ func (s *Sz84Store) NewSigninService() *SigninService {
 	return NewSigninService(s)
 }
 
-func (s *Sz84Store) GetLimiterLogs(userID int64, actionKey string) ([]LimiterLog, error) {
-	var logs []LimiterLog
+func (s *Sz84Store) GetLimiterLogs(userID int64, actionKey string) ([]Sz84LimiterLog, error) {
+	var logs []Sz84LimiterLog
 	err := s.db.Where("UserId = ? AND ActionKey = ?", userID, actionKey).Find(&logs).Error
 	return logs, err
 }
 
-func (s *Sz84Store) AddLimiterLog(log *LimiterLog) error {
+func (s *Sz84Store) AddLimiterLog(log *Sz84LimiterLog) error {
 	return s.db.Create(log).Error
 }
 
-func (s *Sz84Store) GetGroup(groupID int64) (*Group, error) {
+func (s *Sz84Store) GetGroup(groupID int64) (*Sz84Group, error) {
 	key := fmt.Sprintf("sz84:group:%d", groupID)
 	if s.rdb != nil {
 		if val, err := s.rdb.Get(context.Background(), key).Result(); err == nil {
-			var group Group
+			var group Sz84Group
 			if json.Unmarshal([]byte(val), &group) == nil {
 				return &group, nil
 			}
 		}
 	}
 
-	var group Group
-	err := s.db.Where("GroupId = ?", groupID).First(&group).Error
+	var group Sz84Group
+	err := s.db.Where("Id = ?", groupID).First(&group).Error
 	if err == nil && s.rdb != nil {
 		data, _ := json.Marshal(group)
 		s.rdb.Set(context.Background(), key, data, time.Hour*24)
@@ -83,38 +92,38 @@ func (s *Sz84Store) GetGroup(groupID int64) (*Group, error) {
 	return &group, err
 }
 
-func (s *Sz84Store) GetMember(groupID, userID int64) (*GroupMember, error) {
+func (s *Sz84Store) GetMember(groupID, userID int64) (*Sz84GroupMember, error) {
 	key := fmt.Sprintf("sz84:member:%d:%d", groupID, userID)
 	if s.rdb != nil {
 		if val, err := s.rdb.Get(context.Background(), key).Result(); err == nil {
-			var member GroupMember
+			var member Sz84GroupMember
 			if json.Unmarshal([]byte(val), &member) == nil {
 				return &member, nil
 			}
 		}
 	}
 
-	var member GroupMember
+	var member Sz84GroupMember
 	err := s.db.Where("GroupId = ? AND UserId = ?", groupID, userID).First(&member).Error
 	if err == nil && s.rdb != nil {
 		data, _ := json.Marshal(member)
-		s.rdb.Set(context.Background(), key, data, time.Hour*2) // 成员信息缓存短一点
+		s.rdb.Set(context.Background(), key, data, time.Hour*2)
 	}
 	return &member, err
 }
 
-func (s *Sz84Store) GetUser(userID int64) (*User, error) {
+func (s *Sz84Store) GetUser(userID int64) (*Sz84User, error) {
 	key := fmt.Sprintf("sz84:user:%d", userID)
 	if s.rdb != nil {
 		if val, err := s.rdb.Get(context.Background(), key).Result(); err == nil {
-			var user User
+			var user Sz84User
 			if json.Unmarshal([]byte(val), &user) == nil {
 				return &user, nil
 			}
 		}
 	}
 
-	var user User
+	var user Sz84User
 	err := s.db.Where("Id = ?", userID).First(&user).Error
 	if err == nil && s.rdb != nil {
 		data, _ := json.Marshal(user)
@@ -131,8 +140,8 @@ func (s *Sz84Store) InvalidateMemberCache(groupID, userID int64) {
 	}
 }
 
-// LimiterLog represents the LimiterLog table migrated from sz84
-type LimiterLog struct {
+// Sz84LimiterLog represents the LimiterLog table migrated from sz84
+type Sz84LimiterLog struct {
 	ID        int       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
 	GroupID   *int64    `gorm:"column:GroupId" json:"group_id"` // NULL for private chat
 	UserID    int64     `gorm:"not null;column:UserId" json:"user_id"`
@@ -140,7 +149,7 @@ type LimiterLog struct {
 	UsedAt    time.Time `gorm:"not null;column:UsedAt" json:"used_at"`
 }
 
-func (LimiterLog) TableName() string {
+func (Sz84LimiterLog) TableName() string {
 	return "LimiterLog"
 }
 
@@ -193,8 +202,8 @@ func (UserTitle) TableName() string {
 	return "UserTitle"
 }
 
-// GroupMember represents the GroupMember table with all fields from legacy C#
-type GroupMember struct {
+// Sz84GroupMember represents the GroupMember table with all fields from legacy C#
+type Sz84GroupMember struct {
 	GroupID       int64      `gorm:"primaryKey;column:GroupId" json:"group_id"`
 	UserID        int64      `gorm:"primaryKey;column:UserId" json:"user_id"`
 	UserName      string     `gorm:"column:UserName" json:"user_name"`
@@ -226,12 +235,12 @@ type GroupMember struct {
 	InsertDate    *time.Time `gorm:"column:InsertDate" json:"insert_date"`
 }
 
-func (GroupMember) TableName() string {
+func (Sz84GroupMember) TableName() string {
 	return "GroupMember"
 }
 
-// User represents the User table (UserInfo in C#) with all fields
-type User struct {
+// Sz84User represents the User table (UserInfo in C#) with all fields
+type Sz84User struct {
 	ID             int64     `gorm:"primaryKey;column:Id" json:"id"`
 	Name           string    `gorm:"column:Name" json:"name"`
 	UserOpenId     string    `gorm:"column:UserOpenId" json:"user_openid"`
@@ -299,7 +308,7 @@ type User struct {
 	GroupOpenid    string    `gorm:"column:GroupOpenid" json:"group_openid"`
 }
 
-func (User) TableName() string {
+func (Sz84User) TableName() string {
 	return "User"
 }
 
@@ -318,8 +327,8 @@ func (RobotWeibo) TableName() string {
 	return "RobotWeibo"
 }
 
-// Group represents the GroupInfo table
-type Group struct {
+// Sz84Group represents the GroupInfo table
+type Sz84Group struct {
 	Id                    int64     `gorm:"primaryKey;column:Id" json:"id"`
 	GroupName             string    `gorm:"column:GroupName" json:"group_name"`
 	GroupMemo             string    `gorm:"column:GroupMemo" json:"group_memo"`
@@ -425,60 +434,60 @@ type Group struct {
 	InsertDate            time.Time `gorm:"column:InsertDate" json:"insert_date"`
 }
 
-func (Group) TableName() string {
+func (Sz84Group) TableName() string {
 	return "Group"
 }
 
-// CreditLog represents the Credit table (CreditLog in C#)
-type CreditLog struct {
-	ID          int64     `gorm:"primaryKey;autoIncrement;column:Id"`
-	BotUin      int64     `gorm:"column:BotUin"`
-	GroupID     int64     `gorm:"column:GroupId"`
-	GroupName   string    `gorm:"column:GroupName"`
-	UserID      int64     `gorm:"column:UserId"`
-	UserName    string    `gorm:"column:UserName"`
-	CreditAdd   int64     `gorm:"column:CreditAdd"`
-	CreditValue int64     `gorm:"column:CreditValue"`
-	CreditInfo  string    `gorm:"column:CreditInfo"`
-	InsertDate  time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP"`
+// Sz84CreditLog represents the Credit table (CreditLog in C#)
+type Sz84CreditLog struct {
+	ID          int64     `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	BotUin      int64     `gorm:"column:BotUin" json:"bot_uin"`
+	GroupID     int64     `gorm:"column:GroupId" json:"group_id"`
+	GroupName   string    `gorm:"column:GroupName" json:"group_name"`
+	UserID      int64     `gorm:"column:UserId" json:"user_id"`
+	UserName    string    `gorm:"column:UserName" json:"user_name"`
+	CreditAdd   int64     `gorm:"column:CreditAdd" json:"credit_add"`
+	CreditValue int64     `gorm:"column:CreditValue" json:"credit_value"`
+	CreditInfo  string    `gorm:"column:CreditInfo" json:"credit_info"`
+	InsertDate  time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP" json:"insert_date"`
 }
 
-func (CreditLog) TableName() string {
+func (Sz84CreditLog) TableName() string {
 	return "CreditLog"
 }
 
-// TokensLog represents the Tokens table (TokensLog in C#)
-type TokensLog struct {
-	ID          int64     `gorm:"primaryKey;autoIncrement;column:Id"`
-	BotUin      int64     `gorm:"column:BotUin"`
-	GroupID     int64     `gorm:"column:GroupId"`
-	GroupName   string    `gorm:"column:GroupName"`
-	UserID      int64     `gorm:"column:UserId"`
-	UserName    string    `gorm:"column:UserName"`
-	TokensAdd   int64     `gorm:"column:TokensAdd"`
-	TokensValue int64     `gorm:"column:TokensValue"`
-	TokensInfo  string    `gorm:"column:TokensInfo"`
-	InsertDate  time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP"`
+// Sz84TokensLog represents the Tokens table (TokensLog in C#)
+type Sz84TokensLog struct {
+	ID          int64     `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	BotUin      int64     `gorm:"column:BotUin" json:"bot_uin"`
+	GroupID     int64     `gorm:"column:GroupId" json:"group_id"`
+	GroupName   string    `gorm:"column:GroupName" json:"group_name"`
+	UserID      int64     `gorm:"column:UserId" json:"user_id"`
+	UserName    string    `gorm:"column:UserName" json:"user_name"`
+	TokensAdd   int64     `gorm:"column:TokensAdd" json:"tokens_add"`
+	TokensValue int64     `gorm:"column:TokensValue" json:"tokens_value"`
+	TokensInfo  string    `gorm:"column:TokensInfo" json:"tokens_info"`
+	InsertDate  time.Time `gorm:"column:InsertDate;default:CURRENT_TIMESTAMP" json:"insert_date"`
 }
 
-func (TokensLog) TableName() string {
+func (Sz84TokensLog) TableName() string {
 	return "TokensLog"
 }
 
-// MsgCount represents the MsgCount table
-type MsgCount struct {
-	ID        int64      `gorm:"primaryKey;autoIncrement;column:Id"`
-	BotUin    int64      `gorm:"column:BotUin"`
-	GroupID   int64      `gorm:"column:GroupId"`
-	GroupName string     `gorm:"column:GroupName"`
-	UserID    int64      `gorm:"column:UserId"`
-	UserName  string     `gorm:"column:UserName"`
-	CDate     time.Time  `gorm:"column:CDate;type:date"`
-	CMsg      int        `gorm:"column:CMsg"`
-	MsgDate   *time.Time `gorm:"column:MsgDate"`
+// Sz84MsgCount represents the MsgCount table
+type Sz84MsgCount struct {
+	ID        int64      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	BotUin    int64      `gorm:"column:BotUin" json:"bot_uin"`
+	GroupID   int64      `gorm:"column:GroupId" json:"group_id"`
+	GroupName string     `gorm:"column:GroupName" json:"group_name"`
+	UserID    int64      `gorm:"column:UserId" json:"user_id"`
+	UserName  string     `gorm:"column:UserName" json:"user_name"`
+	CDate     time.Time  `gorm:"column:CDate;type:date" json:"c_date"`
+	CMsg      int        `gorm:"column:CMsg" json:"c_msg"`
+	MsgDate   *time.Time `gorm:"column:MsgDate" json:"msg_date"`
 }
 
-func (MsgCount) TableName() string {
+func (Sz84MsgCount) TableName() string {
 	return "MsgCount"
 }
 

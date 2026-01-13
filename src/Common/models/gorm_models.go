@@ -49,10 +49,10 @@ func (Member) TableName() string {
 
 // MessageLog represents a message log in the database
 type MessageLog struct {
-	Id        uint      `gorm:"primaryKey;column:Id" json:"id"`
-	BotId     string    `gorm:"index;size:64;column:BotId" json:"bot_id"`
-	UserId    string    `gorm:"index;size:64;column:UserId" json:"user_id"`
-	GroupId   string    `gorm:"index;size:64;column:GroupId" json:"group_id"`
+	ID        uint      `gorm:"primaryKey;column:Id" json:"id"`
+	BotID     string    `gorm:"index;size:64;column:BotId" json:"bot_id"`
+	UserID    string    `gorm:"index;size:64;column:UserId" json:"user_id"`
+	GroupID   string    `gorm:"index;size:64;column:GroupId" json:"group_id"`
 	Content   string    `gorm:"type:text;column:Content" json:"content"`
 	RawData   string    `gorm:"type:text;column:RawData" json:"raw_data"`
 	Platform  string    `gorm:"size:32;column:Platform" json:"platform"`
@@ -66,10 +66,10 @@ func (MessageLog) TableName() string {
 
 // Session represents a session in the database
 type Session struct {
-	Id        uint      `gorm:"primaryKey;column:Id" json:"id"`
-	SessionId string    `gorm:"uniqueIndex;size:128;column:SessionId" json:"session_id"`
-	UserId    int64     `gorm:"index;column:UserId" json:"user_id"`
-	GroupId   int64     `gorm:"index;column:GroupId" json:"group_id"`
+	ID        uint      `gorm:"primaryKey;column:Id" json:"id"`
+	SessionID string    `gorm:"uniqueIndex;size:128;column:SessionId" json:"session_id"`
+	UserID    int64     `gorm:"index;column:UserId" json:"user_id"`
+	GroupID   int64     `gorm:"index;column:GroupId" json:"group_id"`
 	State     string    `gorm:"size:64;column:State" json:"state"`
 	Data      string    `gorm:"type:text;column:Data" json:"data"`
 	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
@@ -82,9 +82,9 @@ func (Session) TableName() string {
 
 // RoutingRule 路由规则表模型
 type RoutingRule struct {
-	Id             uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	ID             uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
 	Pattern        string    `gorm:"uniqueIndex;not null;size:500;column:Pattern" json:"pattern"`
-	TargetWorkerId string    `gorm:"not null;size:255;column:TargetWorkerId" json:"target_worker_id"`
+	TargetWorkerID string    `gorm:"not null;size:255;column:TargetWorkerId" json:"target_worker_id"`
 	CreatedAt      time.Time `gorm:"column:CreatedAt" json:"created_at"`
 	UpdatedAt      time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
 }
@@ -134,19 +134,7 @@ func (MessageStat) TableName() string {
 	return "MessageStat"
 }
 
-// UserLoginToken 临时登录验证码表
-type UserLoginToken struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	Platform   string    `gorm:"size:32;not null;column:Platform" json:"platform"`
-	PlatformID string    `gorm:"index;size:64;not null;column:PlatformId" json:"platform_id"`
-	Token      string    `gorm:"size:16;not null;column:Token" json:"token"`
-	ExpiresAt  time.Time `gorm:"column:ExpiresAt" json:"expires_at"`
-	CreatedAt  time.Time `gorm:"column:CreatedAt" json:"created_at"`
-}
-
-func (UserLoginToken) TableName() string {
-	return "UserLoginToken"
-}
+// AppConfigGORM represents a config entry
 
 // FriendCache 好友缓存表模型
 type FriendCache struct {
@@ -187,7 +175,7 @@ type AIModel struct {
 	ID           uint       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
 	ProviderID   uint       `gorm:"index;column:ProviderId" json:"provider_id"`
 	Provider     AIProvider `gorm:"foreignKey:ProviderID" json:"provider"`
-	APIModelID   string     `gorm:"size:100;column:ApiModelId" json:"model_id"`       // 实际 API 调用的模型 ID (如 gpt-4)
+	ModelID      string     `gorm:"size:100;column:ModelId" json:"model_id"`          // 实际 API 调用的模型 ID (如 gpt-4)
 	ModelName    string     `gorm:"size:100;column:ModelName" json:"model_name"`      // 展示名称 (如 GPT-4 Turbo)
 	Capabilities string     `gorm:"size:255;column:Capabilities" json:"capabilities"` // JSON array: ["chat", "vision"]
 	BaseURL      string     `gorm:"size:255;column:BaseUrl" json:"base_url"`          // 模型级别 BaseURL 覆盖
@@ -458,30 +446,30 @@ func (AIAgentTrace) TableName() string {
 
 // AIAgent AI 智能体配置
 type AIAgent struct {
-	ID          uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	Name        string         `gorm:"size:100;not null;column:Name" json:"name"`
-	Description string         `gorm:"size:500;column:Description" json:"description"`
-	Type        string         `gorm:"size:50;column:Type" json:"type"` // chat, task, assistant
-	ModelID     uint           `gorm:"index;column:ModelId" json:"model_id"`
-	Model       AIModel        `gorm:"foreignKey:ModelID" json:"model"`
-	Prompt      string         `gorm:"type:text;column:Prompt" json:"prompt"`
-	Temperature float32        `gorm:"default:0.7;column:Temperature" json:"temperature"`
-	TopP        float32        `gorm:"default:1.0;column:TopP" json:"top_p"`
-	MaxTokens   int            `gorm:"default:2000;column:MaxTokens" json:"max_tokens"`
-	Tools       string         `gorm:"type:text;column:Tools" json:"tools"`         // JSON array of tool IDs
-	Knowledge   string         `gorm:"type:text;column:Knowledge" json:"knowledge"` // JSON array of KB IDs
-	IsPublic    bool           `gorm:"default:false;column:IsPublic" json:"is_public"`
-	OwnerID     uint           `gorm:"index;column:OwnerId" json:"owner_id"`
-	CallCount   int            `gorm:"default:0;column:CallCount" json:"call_count"`
-	IsVoice     bool           `gorm:"default:false;column:IsVoice" json:"is_voice"`
-	VoiceID     string         `gorm:"size:100;column:VoiceId" json:"voice_id"`
-	VoiceName   string         `gorm:"size:100;column:VoiceName" json:"voice_name"`
-	VoiceLang   string         `gorm:"size:20;column:VoiceLang" json:"voice_lang"`
-	VoiceRate   float64        `gorm:"default:1.0;column:VoiceRate" json:"voice_rate"`
-	RevenueRate float64        `gorm:"default:0.0;column:RevenueRate" json:"revenue_rate"` // 费率 (点数/1k token)
-	CreatedAt   time.Time      `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
+	ID           uint           `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	Name         string         `gorm:"size:100;not null;column:Name" json:"name"`
+	Description  string         `gorm:"size:500;column:Description" json:"description"`
+	Type         string         `gorm:"size:50;column:Type" json:"type"` // chat, task, assistant
+	ModelID      uint           `gorm:"index;column:ModelId" json:"model_id"`
+	Model        AIModel        `gorm:"foreignKey:ModelID" json:"model"`
+	SystemPrompt string         `gorm:"type:text;column:SystemPrompt" json:"system_prompt"`
+	Temperature  float32        `gorm:"default:0.7;column:Temperature" json:"temperature"`
+	TopP         float32        `gorm:"default:1.0;column:TopP" json:"top_p"`
+	MaxTokens    int            `gorm:"default:2000;column:MaxTokens" json:"max_tokens"`
+	Tools        string         `gorm:"type:text;column:Tools" json:"tools"`         // JSON array of tool IDs
+	Knowledge    string         `gorm:"type:text;column:Knowledge" json:"knowledge"` // JSON array of KB IDs
+	Visibility   string         `gorm:"size:20;default:'public';column:Visibility" json:"visibility"`
+	OwnerID      uint           `gorm:"index;column:OwnerId" json:"owner_id"`
+	CallCount    int            `gorm:"default:0;column:CallCount" json:"call_count"`
+	IsVoice      bool           `gorm:"default:false;column:IsVoice" json:"is_voice"`
+	VoiceID      string         `gorm:"size:100;column:VoiceId" json:"voice_id"`
+	VoiceName    string         `gorm:"size:100;column:VoiceName" json:"voice_name"`
+	VoiceLang    string         `gorm:"size:20;column:VoiceLang" json:"voice_lang"`
+	VoiceRate    float64        `gorm:"default:1.0;column:VoiceRate" json:"voice_rate"`
+	RevenueRate  float64        `gorm:"default:0.0;column:RevenueRate" json:"revenue_rate"` // 费率 (点数/1k token)
+	CreatedAt    time.Time      `gorm:"column:CreatedAt" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"column:UpdatedAt" json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index;column:DeletedAt" json:"-"`
 }
 
 func (AIAgent) TableName() string {
@@ -590,38 +578,6 @@ type EnterpriseMember struct {
 // TableName 设置表名
 func (EnterpriseMember) TableName() string {
 	return "EnterpriseMember"
-}
-
-// User represents a system user (admin/dashboard)
-type User struct {
-	ID             uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	Username       string    `gorm:"uniqueIndex;size:100;not null;column:Username" json:"username"`
-	PasswordHash   string    `gorm:"size:255;not null;column:PasswordHash" json:"-"`
-	IsAdmin        bool      `gorm:"default:false;column:IsAdmin" json:"is_admin"`
-	Active         bool      `gorm:"default:true;column:Active" json:"active"`
-	SessionVersion int       `gorm:"default:0;column:SessionVersion" json:"session_version"`
-	CreatedAt      time.Time `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
-}
-
-func (User) TableName() string {
-	return "AppUser"
-}
-
-// BotEntity represents a bot instance (unified)
-type BotEntity struct {
-	SelfID    string    `gorm:"primaryKey;size:64;column:SelfId" json:"self_id"`
-	Nickname  string    `gorm:"size:100;column:Nickname" json:"nickname"`
-	Platform  string    `gorm:"size:50;column:Platform" json:"platform"`
-	Status    string    `gorm:"size:20;column:Status" json:"status"`
-	Connected bool      `gorm:"column:Connected" json:"connected"`
-	LastSeen  time.Time `gorm:"column:LastSeen" json:"last_seen"`
-	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:UpdatedAt" json:"updated_at"`
-}
-
-func (BotEntity) TableName() string {
-	return "BotEntity"
 }
 
 // B2BConnection 企业间连接表
@@ -738,17 +694,58 @@ func (DigitalEmployeeTodo) TableName() string {
 	return "DigitalEmployeeTodo"
 }
 
-// LimiterLog 限流日志
-type LimiterLog struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
-	Key       string    `gorm:"index;size:255;not null;column:Key" json:"key"`
-	Action    string    `gorm:"size:50;column:Action" json:"action"`
-	Count     int       `gorm:"column:Count" json:"count"`
-	Limit     int       `gorm:"column:Limit" json:"limit"`
-	Blocked   bool      `gorm:"column:Blocked" json:"blocked"`
-	CreatedAt time.Time `gorm:"column:CreatedAt" json:"created_at"`
+// ToolAuditLog 工具调用审计日志
+type ToolAuditLog struct {
+	Id              uint       `gorm:"primaryKey;autoIncrement;column:Id" json:"id"`
+	BotID           string     `gorm:"size:64;column:BotId" json:"bot_id"`
+	UserID          string     `gorm:"size:64;column:UserId" json:"user_id"`
+	ToolName        string     `gorm:"size:100;column:ToolName" json:"tool_name"`
+	Arguments       string     `gorm:"type:text;column:Arguments" json:"arguments"`
+	RiskLevel       string     `gorm:"size:20;column:RiskLevel" json:"risk_level"`
+	Status          string     `gorm:"size:50;column:Status" json:"status"` // PendingApproval, Approved, Rejected
+	RejectionReason string     `gorm:"type:text;column:RejectionReason" json:"rejection_reason"`
+	CreateTime      time.Time  `gorm:"column:CreateTime" json:"create_time"`
+	ApprovedAt      *time.Time `gorm:"column:ApprovedAt" json:"approved_at"`
+	ApprovedBy      string     `gorm:"size:100;column:ApprovedBy" json:"approved_by"`
 }
 
-func (LimiterLog) TableName() string {
-	return "LimiterLog"
+func (ToolAuditLog) TableName() string {
+	return "ToolAuditLog"
 }
+
+// Aliases for backward compatibility and facade consistency
+type AIProviderGORM = AIProvider
+type AIModelGORM = AIModel
+type AIAgentGORM = AIAgent
+type AISessionGORM = AISession
+type AIChatMessageGORM = AIChatMessage
+type AIUsageLogGORM = AIUsageLog
+type DigitalEmployeeGORM = DigitalEmployee
+type DigitalEmployeeKpiGORM = DigitalEmployeeKpi
+type MessageLogGORM = MessageLog
+type RoutingRuleGORM = RoutingRule
+type GroupCacheGORM = GroupCache
+type MemberCacheGORM = MemberCache
+type FriendCacheGORM = FriendCache
+type DigitalRoleTemplateGORM = DigitalRoleTemplate
+type CognitiveMemoryGORM = CognitiveMemory
+type AIAgentTraceGORM = AIAgentTrace
+type BotSkillPermissionGORM = BotSkillPermission
+type MCPServerGORM = MCPServer
+type MCPToolGORM = MCPTool
+type MessageStatGORM = MessageStat
+type GroupBotRoleGORM = GroupBotRole
+type EnterpriseGORM = Enterprise
+type EnterpriseMemberGORM = EnterpriseMember
+type PlatformAccountGORM = PlatformAccount
+type B2BConnectionGORM = B2BConnection
+type DigitalEmployeeDispatchGORM = DigitalEmployeeDispatch
+type DigitalEmployeeTodoGORM = DigitalEmployeeTodo
+type DigitalEmployeeTaskGORM = DigitalEmployeeTask
+type AIPromptTemplateGORM = AIPromptTemplate
+type AIKnowledgeBaseGORM = AIKnowledgeBase
+type AISkillGORM = AISkill
+type AITrainingDataGORM = AITrainingData
+type AIIntentGORM = AIIntent
+type AIIntentRoutingGORM = AIIntentRouting
+type B2BSkillSharingGORM = B2BSkillSharing

@@ -105,8 +105,12 @@ func (r *TestRobot) ClearSessionState(platform, userID string) error {
 }
 
 // HandleSkill implements plugin.Robot
-func (r *TestRobot) HandleSkill(skillName string, skill func(params map[string]string) (string, error)) {
+func (r *TestRobot) HandleSkill(skillName string, skill func(ctx core.BaseContext, params map[string]string) (string, error)) {
 	r.skills[skillName] = skill
+}
+
+func (r *TestRobot) RegisterSkill(capability core.SkillCapability, skill func(ctx core.BaseContext, params map[string]string) (string, error)) {
+	r.skills[capability.Name] = skill
 }
 
 func (r *TestRobot) CallSkill(skillName string, params map[string]string) (string, error) {
@@ -114,7 +118,7 @@ func (r *TestRobot) CallSkill(skillName string, params map[string]string) (strin
 	if !ok {
 		return "", fmt.Errorf("skill %s not found", skillName)
 	}
-	return skill(params)
+	return skill(nil, params)
 }
 
 func (r *TestRobot) CallPluginAction(pluginID string, action string, payload map[string]any) (any, error) {

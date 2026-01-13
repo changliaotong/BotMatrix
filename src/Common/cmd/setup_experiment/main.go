@@ -84,8 +84,8 @@ func main() {
 	var aiModel models.AIModel
 	if err := db.FirstOrCreate(&aiModel, models.AIModel{
 		ProviderID:   provider.ID,
-		APIModelID:   "gpt-4",
-		ModelName:    "GPT-4 Turbo",
+		ModelID:      "gpt-3.5-turbo",
+		ModelName:    "GPT-3.5 Turbo",
 		Capabilities: `["chat"]`,
 		IsDefault:    true,
 	}).Error; err != nil {

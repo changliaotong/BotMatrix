@@ -769,14 +769,14 @@ func (s *CombinedServer) ClearSessionState(platform, userID string) error {
 }
 
 // HandleSkill 注册技能处理器
-func (s *CombinedServer) HandleSkill(skillName string, fn func(params map[string]string) (string, error)) {
+func (s *CombinedServer) HandleSkill(skillName string, fn func(ctx core.BaseContext, params map[string]string) (string, error)) {
 	s.skillsMu.Lock()
 	defer s.skillsMu.Unlock()
 	s.skills[skillName] = fn
 }
 
 // RegisterSkill 注册带有元数据的技能
-func (s *CombinedServer) RegisterSkill(capability core.SkillCapability, fn func(params map[string]string) (string, error)) {
+func (s *CombinedServer) RegisterSkill(capability core.SkillCapability, fn func(ctx core.BaseContext, params map[string]string) (string, error)) {
 	s.skillsMu.Lock()
 	defer s.skillsMu.Unlock()
 	s.skills[capability.Name] = fn
@@ -794,6 +794,32 @@ func (s *CombinedServer) RegisterSkill(capability core.SkillCapability, fn func(
 		s.skillCapabilities = append(s.skillCapabilities, capability)
 	}
 	log.Printf("[Worker] Registered skill: %s (Regex: %s)", capability.Name, capability.Regex)
+}
+
+func (s *CombinedServer) CreateBaseContext(botUin int64, groupID int64, userID int64) core.BaseContext {
+	botInfo := &core.BotInfo{
+		Uin:      botUin,
+		Platform: s.lastPlatform,
+	}
+
+	var group *models.Sz84Group
+	var member *models.Sz84GroupMember
+	var user *models.Sz84User
+
+	if plugins.GlobalStore != nil {
+		if groupID != 0 {
+			group, _ = plugins.GlobalStore.Groups.GetByID(groupID)
+			member, _ = plugins.GlobalStore.Members.Get(groupID, userID)
+		}
+		user, _ = plugins.GlobalStore.Users.GetByID(userID)
+	}
+
+	var sz84Store *models.Sz84Store
+	if plugins.GlobalGORMDB != nil {
+		sz84Store = models.NewSz84Store(plugins.GlobalGORMDB, nil) // Redis can be added if needed
+	}
+
+	return NewBaseContext(botInfo, group, member, user, sz84Store)
 }
 
 // routeMessageToSkill 尝试将消息路由到特定插件技能
@@ -823,7 +849,8 @@ func (s *CombinedServer) routeMessageToSkill(e *onebot.Event) (bool, error) {
 						"platform": e.Platform,
 						"self_id":  fmt.Sprintf("%v", e.SelfID),
 					}
-					_, err := s.InvokeSkill(skillName, params)
+					baseCtx := s.CreateBaseContext(int64(e.SelfID), int64(e.GroupID), int64(e.UserID))
+					_, err := s.InvokeSkill(baseCtx, skillName, params)
 					if err != nil {
 						return true, fmt.Errorf("failed to invoke dynamic skill %s: %v", skillName, err)
 					}
@@ -849,7 +876,8 @@ func (s *CombinedServer) routeMessageToSkill(e *onebot.Event) (bool, error) {
 				"platform": e.Platform,
 				"self_id":  fmt.Sprintf("%v", e.SelfID),
 			}
-			_, err := s.InvokeSkill(cap.Name, params)
+			baseCtx := s.CreateBaseContext(int64(e.SelfID), int64(e.GroupID), int64(e.UserID))
+			_, err := s.InvokeSkill(baseCtx, cap.Name, params)
 			if err != nil {
 				return true, fmt.Errorf("failed to invoke skill %s: %v", cap.Name, err)
 			}
@@ -867,7 +895,8 @@ func (s *CombinedServer) routeMessageToSkill(e *onebot.Event) (bool, error) {
 			"platform": e.Platform,
 			"self_id":  fmt.Sprintf("%v", e.SelfID),
 		}
-		_, err := handler(params)
+		baseCtx := s.CreateBaseContext(int64(e.SelfID), int64(e.GroupID), int64(e.UserID))
+		_, err := handler(baseCtx, params)
 		if err != nil {
 			return true, fmt.Errorf("failed to invoke fallback sz84 skill: %v", err)
 		}
@@ -878,7 +907,7 @@ func (s *CombinedServer) routeMessageToSkill(e *onebot.Event) (bool, error) {
 }
 
 // InvokeSkill 调用已注册的技能
-func (s *CombinedServer) InvokeSkill(skillName string, params map[string]string) (string, error) {
+func (s *CombinedServer) InvokeSkill(ctx core.BaseContext, skillName string, params map[string]string) (string, error) {
 	s.skillsMu.RLock()
 	fn, ok := s.skills[skillName]
 	s.skillsMu.RUnlock()
@@ -887,7 +916,7 @@ func (s *CombinedServer) InvokeSkill(skillName string, params map[string]string)
 		return "", fmt.Errorf("skill %s not found", skillName)
 	}
 
-	return fn(params)
+	return fn(ctx, params)
 }
 
 func (s *CombinedServer) CallPluginAction(pluginID string, action string, payload map[string]any) (any, error) {
@@ -1073,7 +1102,20 @@ func (s *CombinedServer) handleSkillCall(msg map[string]any) {
 		return
 	}
 
-	result, err := handler(params)
+	// 从参数中提取上下文信息 (如果存在)
+	var botUin, groupID, userID int64
+	if v, ok := params["bot_uin"]; ok {
+		botUin, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, ok := params["group_id"]; ok {
+		groupID, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v, ok := params["user_id"]; ok {
+		userID, _ = strconv.ParseInt(v, 10, 64)
+	}
+
+	baseCtx := s.CreateBaseContext(botUin, groupID, userID)
+	result, err := handler(baseCtx, params)
 	if err != nil {
 		log.Printf("[SkillCall] Error executing skill %s: %v", skillName, err)
 		s.reportSkillResult(taskID, executionID, skillName, "", err)

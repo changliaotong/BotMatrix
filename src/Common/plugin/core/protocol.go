@@ -60,6 +60,7 @@ type PluginConfig struct {
 	Permissions  []string      `json:"permissions"` // List of allowed actions
 	Events       []string      `json:"events"`      // List of events to subscribe to
 	Intents      []Intent      `json:"intents"`
+	Capabilities []string      `json:"capabilities"`
 	UI           []UIComponent `json:"ui,omitempty"`
 	MaxRestarts  int           `json:"max_restarts"`
 	CanaryWeight int           `json:"canary_weight,omitempty"` // 0-100
