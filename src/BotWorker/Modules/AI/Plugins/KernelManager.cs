@@ -87,7 +87,8 @@ namespace BotWorker.Modules.AI.Plugins
             var client = GetHttpClient(baseUrl);
 
             var builder = Kernel.CreateBuilder()
-                .AddOpenAIChatCompletion(modelId, apiKey, httpClient: client); // ✅ 使用共享连接
+                .AddOpenAIChatCompletion(modelId, apiKey, httpClient: client) // ✅ 使用共享连接
+                .AddOpenAITextEmbeddingGeneration(modelId, apiKey, httpClient: client); // ✅ 同时也支持向量生成
 
             foreach (var name in pluginNames)
             {

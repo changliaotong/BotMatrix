@@ -52,3 +52,8 @@ BotWorker 是一个使用 C# ( .NET 10) 编写的兼容 OneBot 协议的机器�
    ```bash
    dotnet run --project src/BotWorker/BotWorker.csproj
    ```
+
+## 📖 更多文档
+
+详细的项目文档（包括架构设计、AI 规划、测试策略等）请参阅：
+- [**BotWorker 文档索引**](./docs/DOCS_INDEX.md)

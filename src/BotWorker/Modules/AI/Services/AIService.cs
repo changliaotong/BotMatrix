@@ -29,6 +29,7 @@ namespace BotWorker.Modules.AI.Services
         IAsyncEnumerable<string> StreamChatAsync(string prompt, IPluginContext? context = null, string? model = null);
         Task<string> GenerateImageAsync(string prompt, IPluginContext? context = null, string? model = null);
         Task<string> RawChatAsync(string prompt, string? model = null);
+        Task<float[]> GenerateEmbeddingAsync(string text, string? model = null);
     }
 
     public class AIService : IAIService
@@ -192,6 +193,28 @@ namespace BotWorker.Modules.AI.Services
             {
                 _logger.LogError(ex, "AIService RawChat Error");
                 return $"AI Error: {ex.Message}";
+            }
+        }
+
+        public async Task<float[]> GenerateEmbeddingAsync(string text, string? model = null)
+        {
+            try
+            {
+                var (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Embedding);
+                if (provider == null)
+                {
+                    // 如果没找到专用的 Embedding 模型，尝试用默认 Chat 模型（SK 通常支持）
+                    (provider, modelId) = _llmApp._manager.GetProviderAndModel(model, LLMModelType.Chat);
+                }
+
+                if (provider == null) return Array.Empty<float>();
+
+                return await provider.GenerateEmbeddingAsync(text, new ModelExecutionOptions { ModelId = modelId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GenerateEmbeddingAsync error");
+                return Array.Empty<float>();
             }
         }
 

@@ -6,7 +6,8 @@ namespace BotWorker.Modules.AI.Models
     public enum LLMModelType
     {
         Chat = 0,
-        Image = 1
+        Image = 1,
+        Embedding = 2
     }
 
     public class LLMModel : MetaDataGuid<LLMModel>
