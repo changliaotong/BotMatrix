@@ -200,25 +200,25 @@ const technicalPhilosophy = computed(() => [
     icon: Cpu,
     title: tt('portal.docs.philosophy.employee_title'),
     desc: tt('portal.docs.philosophy.employee_desc'),
-    items: ['IdentityGORM', 'Intent Dispatcher', 'Cognitive Memory', 'MCP Toolset', 'Agent Mesh', 'Auto-Learning']
+    items: ['IdentityGORM', 'Intent Dispatcher', 'KPI-Driven Evolution', 'MCP Toolset', 'Global Agent Mesh', 'Auto-Learning']
   },
   {
     icon: Layers,
     title: tt('portal.docs.philosophy.loop_title'),
     desc: tt('portal.docs.philosophy.loop_desc'),
-    items: ['Short-term Memory', 'Long-term Memory', 'RAG Retrieval', 'HITL Mechanism']
+    items: ['Short-term Memory', 'RAG 2.0', 'Cognitive Memory', 'HITL Mechanism']
   },
   {
     icon: Zap,
     title: tt('portal.docs.philosophy.a2a_title'),
     desc: tt('portal.docs.philosophy.a2a_desc'),
-    items: ['JWT Signature', 'B2B Gateway', 'DID Identity', 'Traceability']
+    items: ['JWT Signature', 'B2B Collaboration', 'DID Identity', 'Traceability']
   },
   {
     icon: ShieldAlert,
     title: tt('portal.docs.philosophy.security_title'),
     desc: tt('portal.docs.philosophy.security_desc'),
-    items: ['PII Identification', 'Audit Logging', 'RBAC Control', 'Ethics Guardrail']
+    items: ['PII Desensitization', 'Nexus Privacy Bastion', 'RBAC Control', 'Audit Logging']
   }
 ]);
 
@@ -227,13 +227,13 @@ const roadmap = computed(() => [
     time: '2026 Q1',
     title: tt('portal.docs.roadmap.q1_title'),
     desc: tt('portal.docs.roadmap.q1_desc'),
-    tags: ['Worker v2.0', 'MCP SDK', 'Basic Agent Mesh']
+    tags: ['Worker v2.0', 'MCP SDK', 'Global Agent Mesh']
   },
   {
     time: '2026 Q2',
     title: tt('portal.docs.roadmap.q2_title'),
     desc: tt('portal.docs.roadmap.q2_desc'),
-    tags: ['Autonomous Memory', 'RAG v3.0', 'Fact Extraction']
+    tags: ['Autonomous Memory', 'RAG 2.0', 'Fact Extraction']
   },
   {
     time: '2026 Q3',

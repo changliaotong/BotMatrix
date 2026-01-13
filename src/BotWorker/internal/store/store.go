@@ -43,8 +43,8 @@ type UserStore struct {
 	db *gorm.DB
 }
 
-func (s *UserStore) GetByID(id int64) (*models.User, error) {
-	var user models.User
+func (s *UserStore) GetByID(id int64) (*models.Sz84User, error) {
+	var user models.Sz84User
 	err := s.db.First(&user, "Id = ?", id).Error
 	if err != nil {
 		return nil, err
@@ -52,11 +52,11 @@ func (s *UserStore) GetByID(id int64) (*models.User, error) {
 	return &user, nil
 }
 
-func (s *UserStore) GetOrCreate(id int64, name string) (*models.User, error) {
-	var user models.User
+func (s *UserStore) GetOrCreate(id int64, name string) (*models.Sz84User, error) {
+	var user models.Sz84User
 	err := s.db.First(&user, "Id = ?", id).Error
 	if err == gorm.ErrRecordNotFound {
-		user = models.User{
+		user = models.Sz84User{
 			ID:   id,
 			Name: name,
 		}
@@ -69,10 +69,10 @@ func (s *UserStore) GetOrCreate(id int64, name string) (*models.User, error) {
 }
 
 func (s *UserStore) AddCredit(id int64, amount int64) error {
-	return s.db.Model(&models.User{}).Where("Id = ?", id).Update("Credit", gorm.Expr("Credit + ?", amount)).Error
+	return s.db.Model(&models.Sz84User{}).Where("Id = ?", id).Update("Credit", gorm.Expr("Credit + ?", amount)).Error
 }
 
-func (s *UserStore) Update(user *models.User) error {
+func (s *UserStore) Update(user *models.Sz84User) error {
 	return s.db.Save(user).Error
 }
 
@@ -81,21 +81,21 @@ type GroupStore struct {
 	db *gorm.DB
 }
 
-func (s *GroupStore) GetByID(id int64) (*models.Group, error) {
-	var group models.Group
-	err := s.db.First(&group, "GroupId = ?", id).Error
+func (s *GroupStore) GetByID(id int64) (*models.Sz84Group, error) {
+	var group models.Sz84Group
+	err := s.db.First(&group, "Id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &group, nil
 }
 
-func (s *GroupStore) GetOrCreate(id int64) (*models.Group, error) {
-	var group models.Group
-	err := s.db.First(&group, "GroupId = ?", id).Error
+func (s *GroupStore) GetOrCreate(id int64) (*models.Sz84Group, error) {
+	var group models.Sz84Group
+	err := s.db.First(&group, "Id = ?", id).Error
 	if err == gorm.ErrRecordNotFound {
-		group = models.Group{
-			GroupID: id,
+		group = models.Sz84Group{
+			Id: id,
 		}
 		if err := s.db.Create(&group).Error; err != nil {
 			return nil, err
@@ -105,12 +105,12 @@ func (s *GroupStore) GetOrCreate(id int64) (*models.Group, error) {
 	return &group, err
 }
 
-func (s *GroupStore) Update(group *models.Group) error {
+func (s *GroupStore) Update(group *models.Sz84Group) error {
 	return s.db.Save(group).Error
 }
 
-func (s *GroupStore) GetAdmins(groupID int64) ([]models.GroupMember, error) {
-	var admins []models.GroupMember
+func (s *GroupStore) GetAdmins(groupID int64) ([]models.Sz84GroupMember, error) {
+	var admins []models.Sz84GroupMember
 	err := s.db.Where("GroupId = ? AND IsAdmin = ?", groupID, true).Find(&admins).Error
 	return admins, err
 }
@@ -120,8 +120,8 @@ type MemberStore struct {
 	db *gorm.DB
 }
 
-func (s *MemberStore) Get(groupID, userID int64) (*models.GroupMember, error) {
-	var member models.GroupMember
+func (s *MemberStore) Get(groupID, userID int64) (*models.Sz84GroupMember, error) {
+	var member models.Sz84GroupMember
 	err := s.db.First(&member, "GroupId = ? AND UserId = ?", groupID, userID).Error
 	if err != nil {
 		return nil, err
@@ -129,11 +129,11 @@ func (s *MemberStore) Get(groupID, userID int64) (*models.GroupMember, error) {
 	return &member, nil
 }
 
-func (s *MemberStore) GetOrCreate(groupID, userID int64, name string) (*models.GroupMember, error) {
-	var member models.GroupMember
+func (s *MemberStore) GetOrCreate(groupID, userID int64, name string) (*models.Sz84GroupMember, error) {
+	var member models.Sz84GroupMember
 	err := s.db.First(&member, "GroupId = ? AND UserId = ?", groupID, userID).Error
 	if err == gorm.ErrRecordNotFound {
-		member = models.GroupMember{
+		member = models.Sz84GroupMember{
 			GroupID:  groupID,
 			UserID:   userID,
 			UserName: name,
@@ -147,23 +147,23 @@ func (s *MemberStore) GetOrCreate(groupID, userID int64, name string) (*models.G
 }
 
 func (s *MemberStore) AddCredit(groupID, userID int64, amount int64) error {
-	return s.db.Model(&models.GroupMember{}).
+	return s.db.Model(&models.Sz84GroupMember{}).
 		Where("GroupId = ? AND UserId = ?", groupID, userID).
 		Update("GroupCredit", gorm.Expr("GroupCredit + ?", amount)).Error
 }
 
-func (s *MemberStore) Update(member *models.GroupMember) error {
+func (s *MemberStore) Update(member *models.Sz84GroupMember) error {
 	return s.db.Save(member).Error
 }
 
-func (s *MemberStore) GetTopByCredit(groupID int64, limit int) ([]models.GroupMember, error) {
-	var members []models.GroupMember
+func (s *MemberStore) GetTopByCredit(groupID int64, limit int) ([]models.Sz84GroupMember, error) {
+	var members []models.Sz84GroupMember
 	err := s.db.Where("GroupId = ?", groupID).Order("GroupCredit DESC").Limit(limit).Find(&members).Error
 	return members, err
 }
 
-func (s *MemberStore) GetTopByMsgCount(groupID int64, limit int) ([]models.GroupMember, error) {
-	var members []models.GroupMember
+func (s *MemberStore) GetTopByMsgCount(groupID int64, limit int) ([]models.Sz84GroupMember, error) {
+	var members []models.Sz84GroupMember
 	err := s.db.Where("GroupId = ?", groupID).Order("MsgCount DESC").Limit(limit).Find(&members).Error
 	return members, err
 }
@@ -173,11 +173,11 @@ type LogStore struct {
 	db *gorm.DB
 }
 
-func (s *LogStore) AddCreditLog(log *models.CreditLog) error {
+func (s *LogStore) AddCreditLog(log *models.Sz84CreditLog) error {
 	return s.db.Create(log).Error
 }
 
-func (s *LogStore) AddTokensLog(log *models.TokensLog) error {
+func (s *LogStore) AddTokensLog(log *models.Sz84TokensLog) error {
 	return s.db.Create(log).Error
 }
 
@@ -186,10 +186,10 @@ func (s *LogStore) RecordMessageStat(botUin, groupID, userID int64, name string)
 	date := now.Truncate(24 * time.Hour)
 
 	// Update MsgCount
-	var msgCount models.MsgCount
+	var msgCount models.Sz84MsgCount
 	err := s.db.Where("BotUin = ? AND GroupId = ? AND UserId = ? AND CDate = ?", botUin, groupID, userID, date).First(&msgCount).Error
 	if err == gorm.ErrRecordNotFound {
-		msgCount = models.MsgCount{
+		msgCount = models.Sz84MsgCount{
 			BotUin:   botUin,
 			GroupID:  groupID,
 			UserID:   userID,
@@ -199,13 +199,15 @@ func (s *LogStore) RecordMessageStat(botUin, groupID, userID int64, name string)
 			MsgDate:  &now,
 		}
 		return s.db.Create(&msgCount).Error
-	} else if err == nil {
-		return s.db.Model(&msgCount).Updates(map[string]interface{}{
-			"CMsg":    gorm.Expr("CMsg + 1"),
-			"MsgDate": now,
-		}).Error
 	}
-	return err
+	if err != nil {
+		return err
+	}
+
+	return s.db.Model(&msgCount).Updates(map[string]interface{}{
+		"CMsg":    gorm.Expr("CMsg + 1"),
+		"MsgDate": &now,
+	}).Error
 }
 
 // VIPStore handles VIP-related database operations

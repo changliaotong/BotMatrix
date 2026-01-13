@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue';
+import { ref, onMounted, reactive, computed, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useBotStore } from '@/stores/bot';
+import { useAuthStore } from '@/stores/auth';
 import { getPlatformIcon, getPlatformColor, isPlatformAvatar, getPlatformFromAvatar } from '@/utils/avatar';
 import { 
   Bot, 
@@ -23,13 +25,17 @@ import {
   Search,
   CheckCircle2,
   Circle,
-  Send
+  Send,
+  User as UserIcon,
+  Filter
 } from 'lucide-vue-next';
 
 import { useSystemStore } from '@/stores/system';
 
 const systemStore = useSystemStore();
 const botStore = useBotStore();
+const authStore = useAuthStore();
+const router = useRouter();
 
 // Translation function
 const t = (key: string) => systemStore.t(key);
@@ -37,6 +43,11 @@ const isLoading = ref(false);
 const searchQuery = ref('');
 const sortBy = ref<'id' | 'nickname' | 'msg_count' | 'connected'>('id');
 const sortOrder = ref<'asc' | 'desc'>('asc');
+
+// User filtering for admins
+const users = ref<any[]>([]);
+const selectedUserId = ref<string>('');
+const isUserLoading = ref(false);
 
 const filteredBots = computed(() => {
   let result = [...botStore.bots];
@@ -219,8 +230,44 @@ const updatePlatform = (p: any) => {
 };
 
 onMounted(async () => {
-  await botStore.fetchBots();
+  if (authStore.isAdmin) {
+    fetchUsers();
+  }
+  loadBots();
   updatePlatform(platforms[0]);
+});
+
+const fetchUsers = async () => {
+  try {
+    isUserLoading.value = true;
+    const res = await botStore.fetchUsers();
+    if (res.success) {
+      users.value = res.users || [];
+    }
+  } catch (err) {
+    console.error('Failed to fetch users:', err);
+  } finally {
+    isUserLoading.value = false;
+  }
+};
+
+const loadBots = async () => {
+  try {
+    isLoading.value = true;
+    if (selectedUserId.value) {
+      await botStore.fetchMemberSetup(selectedUserId.value);
+    } else {
+      await botStore.fetchBots();
+    }
+  } catch (err) {
+    console.error('Failed to fetch bots:', err);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+watch(selectedUserId, () => {
+  loadBots();
 });
 
 const getStatusColor = (connected: boolean) => {
@@ -256,9 +303,13 @@ const handleAddBot = async () => {
         ...newBot.env
       }
     };
+    // Include user_id if an admin has selected a specific user
+    if (selectedUserId.value) {
+      config.user_id = selectedUserId.value;
+    }
     await botStore.addBot(config);
     showAddModal.value = false;
-    await botStore.fetchBots();
+    await loadBots();
   } catch (err) {
     alert(t('add_failed') + ': ' + err);
   } finally {
@@ -270,6 +321,7 @@ const handleDeleteBot = async (botId: string) => {
   if (confirm(t('confirm_delete_bot'))) {
     try {
       await botStore.removeBot(botId);
+      await loadBots();
     } catch (err) {
       alert(t('delete_failed') + ': ' + err);
     }
@@ -310,6 +362,17 @@ const closeLogModal = () => {
     clearInterval(logTimer.value);
     logTimer.value = null;
   }
+};
+
+const goToSetup = (bot: any) => {
+  const query: any = { bot_uin: bot.id };
+  if (selectedUserId.value) {
+    query.admin_id = selectedUserId.value;
+  }
+  router.push({
+    name: 'console-bot-setup',
+    query
+  });
 };
 
 const updateImage = () => {
@@ -525,6 +588,21 @@ const filteredFriends = computed(() => {
       </div>
       
       <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+        <!-- User Filter (Admin Only) -->
+        <div v-if="authStore.isAdmin" class="relative w-full sm:w-48 group">
+          <UserIcon class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] group-focus-within:text-[var(--matrix-color)] transition-colors" />
+          <select 
+            v-model="selectedUserId"
+            class="w-full pl-11 pr-4 py-3 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl text-xs font-bold text-[var(--text-main)] focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all appearance-none cursor-pointer"
+          >
+            <option value="">{{ t('all_users') }}</option>
+            <option v-for="user in users" :key="user.id" :value="user.id">{{ user.username || user.id }}</option>
+          </select>
+          <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+            <Filter class="w-3 h-3 text-[var(--text-muted)]" />
+          </div>
+        </div>
+
         <div class="relative w-full sm:w-64 group">
           <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] group-focus-within:text-[var(--matrix-color)] transition-colors" />
           <input 
@@ -624,7 +702,11 @@ const filteredFriends = computed(() => {
             >
               <Terminal class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
-            <button class="p-1.5 sm:p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-colors" :title="t('settings')">
+            <button 
+              @click="goToSetup(bot)"
+              class="p-1.5 sm:p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--matrix-color)] transition-colors" 
+              :title="t('settings')"
+            >
               <SettingsIcon class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button 

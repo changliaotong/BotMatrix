@@ -78,7 +78,7 @@ func (s *EmployeeServiceImpl) Transfer(ctx context.Context, employeeID uint, new
 	if err := s.db.WithContext(ctx).Create(&newRelation).Error; err != nil {
 		return err
 	}
-	
+
 	// 3. Update employee title/dept cache
 	var job models.DigitalJob
 	if err := s.db.First(&job, newJobID).Error; err == nil {
@@ -250,7 +250,7 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 	instruction = strings.ReplaceAll(instruction, "{{.Title}}", employee.Title)
 	instruction = strings.ReplaceAll(instruction, "{{.Department}}", employee.Department)
 	instruction = strings.ReplaceAll(instruction, "{{.Bio}}", employee.Bio)
-	instruction = strings.ReplaceAll(instruction, "{{.CurrentPrompt}}", employee.Agent.Prompt)
+	instruction = strings.ReplaceAll(instruction, "{{.CurrentPrompt}}", employee.Agent.SystemPrompt)
 	instruction = strings.ReplaceAll(instruction, "{{.AvgScore}}", fmt.Sprintf("%.2f", avgScore))
 	instruction = strings.ReplaceAll(instruction, "{{.Feedback}}", feedback)
 
@@ -272,11 +272,11 @@ func (s *EmployeeServiceImpl) AutoEvolve(employeeID uint) error {
 		}
 	}
 
-	if newPrompt == "" || newPrompt == employee.Agent.Prompt {
+	if newPrompt == "" || newPrompt == employee.Agent.SystemPrompt {
 		return nil
 	}
 
-	if err := s.db.Model(&models.AIAgent{}).Where("id = ?", employee.AgentID).Update("prompt", newPrompt).Error; err != nil {
+	if err := s.db.Model(&models.AIAgent{}).Where("id = ?", employee.AgentID).Update("SystemPrompt", newPrompt).Error; err != nil {
 		return err
 	}
 

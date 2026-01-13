@@ -88,5 +88,5 @@ func printEmployeeDetails(db *gorm.DB, emp *models.DigitalEmployee) {
 
 	fmt.Printf("  Agent: %s\n", agent.Name)
 	fmt.Printf("  Temperature: %.2f\n", agent.Temperature)
-	fmt.Printf("  System Prompt Preview: %.100s...\n", agent.Prompt)
+	fmt.Printf("  System Prompt Preview: %.100s...\n", agent.SystemPrompt)
 }

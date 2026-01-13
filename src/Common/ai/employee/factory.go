@@ -75,14 +75,15 @@ func (f *DigitalEmployeeFactory) Recruit(ctx context.Context, params RecruitPara
 
 	// 6. 创建 Agent 实体 (大脑)
 	agent := models.AIAgent{
-		Name:        name + "_Brain",
-		Description: fmt.Sprintf("AI Brain for %s (%s)", name, job.Name),
-		Type:        "digital_employee",
-		Prompt:      systemPrompt,
-		ModelID:     modelID,
-		Temperature: temperature,
-		Tools:       "[]", // 初始为空，稍后填充
-		IsPublic:    false,
+		Name:         name + "_Brain",
+		Description:  fmt.Sprintf("AI Brain for %s (%s)", name, job.Name),
+		Type:         "digital_employee",
+		SystemPrompt: systemPrompt,
+		ModelID:      modelID,
+		Temperature:  temperature,
+		Tools:        "[]", // 初始为空，稍后填充
+		Visibility:   "private",
+		OwnerID:      1, // System default owner
 	}
 	if err := f.db.WithContext(ctx).Create(&agent).Error; err != nil {
 		return nil, fmt.Errorf("failed to create agent brain: %w", err)

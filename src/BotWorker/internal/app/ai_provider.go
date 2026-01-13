@@ -3,7 +3,7 @@ package app
 import (
 	"BotMatrix/common/ai"
 	"BotMatrix/common/ai/rag"
-	"BotMatrix/common/core"
+	"BotMatrix/common/plugin/core"
 	"BotMatrix/common/types"
 	"botworker/internal/config"
 	"botworker/plugins"
@@ -57,15 +57,33 @@ func (p *WorkerAIProvider) GetWorkers() []types.WorkerInfo {
 	// 1. 外部插件
 	for _, versions := range pm.GetPlugins() {
 		for _, p := range versions {
-			if sc, ok := p.(core.SkillCapable); ok {
-				for _, skill := range sc.GetSkills() {
+			// 外部插件通过 Config 提取技能
+			if p.Config != nil {
+				// Intents
+				for _, intent := range p.Config.Intents {
 					capabilities = append(capabilities, types.WorkerCapability{
-						Name:        skill.Name,
-						Description: skill.Description,
-						Usage:       skill.Usage,
-						Params:      skill.Params,
-						Regex:       skill.Regex,
+						Name:        intent.Name,
+						Description: p.Config.Description,
+						Usage:       fmt.Sprintf("Keywords: %v", intent.Keywords),
+						Regex:       intent.Regex,
 					})
+				}
+				// Capabilities
+				for _, capName := range p.Config.Capabilities {
+					alreadyAdded := false
+					for _, c := range capabilities {
+						if c.Name == capName {
+							alreadyAdded = true
+							break
+						}
+					}
+					if !alreadyAdded {
+						capabilities = append(capabilities, types.WorkerCapability{
+							Name:        capName,
+							Description: fmt.Sprintf("Capability: %s", capName),
+							Usage:       fmt.Sprintf("Directly call capability %s", capName),
+						})
+					}
 				}
 			}
 		}

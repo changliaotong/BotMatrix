@@ -65,6 +65,33 @@
       </div>
     </section>
 
+    <!-- 2.5 TECHNOLOGY HIGHLIGHTS (HORIZONTAL SCROLL OR FLEX) -->
+    <section class="py-32 relative overflow-hidden">
+      <div class="container mx-auto max-w-7xl px-6 mb-20 text-center">
+        <h2 class="text-5xl md:text-7xl font-black italic uppercase tracking-tighter mb-8">
+          {{ tt('botmatrix_home_flagship') }} <span class="text-[var(--matrix-color)]">TECH</span>
+        </h2>
+      </div>
+      <div class="flex gap-8 px-6 animate-scroll-x hover:[animation-play-state:paused] w-max">
+        <div 
+          v-for="item in [...highlights, ...highlights]" 
+          :key="item.title"
+          class="w-[450px] p-12 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[3.5rem] relative group"
+        >
+          <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-20 transition-opacity">
+            <component :is="item.icon" class="w-32 h-32" />
+          </div>
+          <div class="w-14 h-14 rounded-2xl bg-[var(--matrix-color)]/10 text-[var(--matrix-color)] flex items-center justify-center mb-10">
+            <component :is="item.icon" class="w-7 h-7" />
+          </div>
+          <h3 class="text-3xl font-bold mb-6 tracking-tight leading-tight">{{ item.title }}</h3>
+          <p class="text-lg text-[var(--text-muted)] leading-relaxed font-light italic">
+            "{{ item.desc }}"
+          </p>
+        </div>
+      </div>
+    </section>
+
     <!-- 3. FEATURED: EARLYMEOW -->
     <section class="py-32 bg-[var(--bg-card)]/30">
       <div class="container mx-auto max-w-7xl px-6">
@@ -195,13 +222,50 @@ import {
   Workflow,
   BarChart3,
   Globe2,
-  Gauge
+  Gauge,
+  Database,
+  Puzzle,
+  ShieldCheck,
+  TrendingUp
 } from 'lucide-vue-next';
 
 const router = useRouter();
 const systemStore = useSystemStore();
 const authStore = useAuthStore();
 const { t: tt } = useI18n();
+
+const highlights = computed(() => [
+  {
+    title: tt('botmatrix_highlight_mesh_title'),
+    desc: tt('botmatrix_highlight_mesh_desc'),
+    icon: Network,
+    color: 'var(--matrix-color)'
+  },
+  {
+    title: tt('botmatrix_highlight_rag_title'),
+    desc: tt('botmatrix_highlight_rag_desc'),
+    icon: Database,
+    color: 'var(--matrix-color)'
+  },
+  {
+    title: tt('botmatrix_highlight_mcp_title'),
+    desc: tt('botmatrix_highlight_mcp_desc'),
+    icon: Puzzle,
+    color: 'var(--matrix-color)'
+  },
+  {
+    title: tt('botmatrix_highlight_privacy_title'),
+    desc: tt('botmatrix_highlight_privacy_desc'),
+    icon: ShieldCheck,
+    color: 'var(--matrix-color)'
+  },
+  {
+    title: tt('botmatrix_highlight_kpi_title'),
+    desc: tt('botmatrix_highlight_kpi_desc'),
+    icon: TrendingUp,
+    color: 'var(--matrix-color)'
+  }
+]);
 
 const architectureFeatures = computed(() => [
   {
@@ -289,5 +353,13 @@ const monitorStats = computed(() => [
 
 .perspective-2000 {
   perspective: 2000px;
+}
+
+@keyframes scroll-x {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-50% - 1rem)); }
+}
+.animate-scroll-x {
+  animation: scroll-x 40s linear infinite;
 }
 </style>

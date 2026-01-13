@@ -123,7 +123,7 @@ func (p *AIPlugin) GetSkills() []core.SkillCapability {
 	}
 }
 
-func (p *AIPlugin) handleEmployeeGetInfo(params map[string]string) (string, error) {
+func (p *AIPlugin) handleEmployeeGetInfo(ctx core.BaseContext, params map[string]string) (string, error) {
 	if p.employeeSvc == nil {
 		return "", fmt.Errorf("employee service not available")
 	}
@@ -136,7 +136,7 @@ func (p *AIPlugin) handleEmployeeGetInfo(params map[string]string) (string, erro
 	return string(respBytes), nil
 }
 
-func (p *AIPlugin) handleEmployeePlanTask(params map[string]string) (string, error) {
+func (p *AIPlugin) handleEmployeePlanTask(ctx core.BaseContext, params map[string]string) (string, error) {
 	if p.taskSvc == nil {
 		return "", fmt.Errorf("task service not available")
 	}
@@ -148,7 +148,7 @@ func (p *AIPlugin) handleEmployeePlanTask(params map[string]string) (string, err
 	return "success", nil
 }
 
-func (p *AIPlugin) handleChat(params map[string]string) (string, error) {
+func (p *AIPlugin) handleChat(ctx core.BaseContext, params map[string]string) (string, error) {
 	reqStr := params["request"]
 	var req ai.ChatRequest
 	if err := json.Unmarshal([]byte(reqStr), &req); err != nil {
@@ -164,7 +164,7 @@ func (p *AIPlugin) handleChat(params map[string]string) (string, error) {
 	return string(respBytes), nil
 }
 
-func (p *AIPlugin) handleEmbedding(params map[string]string) (string, error) {
+func (p *AIPlugin) handleEmbedding(ctx core.BaseContext, params map[string]string) (string, error) {
 	reqStr := params["request"]
 	var req ai.EmbeddingRequest
 	if err := json.Unmarshal([]byte(reqStr), &req); err != nil {
@@ -180,7 +180,7 @@ func (p *AIPlugin) handleEmbedding(params map[string]string) (string, error) {
 	return string(respBytes), nil
 }
 
-func (p *AIPlugin) handleRagSearch(params map[string]string) (string, error) {
+func (p *AIPlugin) handleRagSearch(ctx core.BaseContext, params map[string]string) (string, error) {
 	kbID := params["kb_id"]
 	query := params["query"]
 	if query == "" {
@@ -220,7 +220,7 @@ func (p *AIPlugin) handleRagSearch(params map[string]string) (string, error) {
 	return string(respBytes), nil
 }
 
-func (p *AIPlugin) handleMcpListTools(params map[string]string) (string, error) {
+func (p *AIPlugin) handleMcpListTools(ctx core.BaseContext, params map[string]string) (string, error) {
 	type McpCapable interface {
 		GetMCPManager() *ai.MCPManager
 	}
@@ -242,7 +242,7 @@ func (p *AIPlugin) handleMcpListTools(params map[string]string) (string, error) 
 	return string(respBytes), nil
 }
 
-func (p *AIPlugin) handleMcpCallTool(params map[string]string) (string, error) {
+func (p *AIPlugin) handleMcpCallTool(ctx core.BaseContext, params map[string]string) (string, error) {
 	type McpCapable interface {
 		GetMCPManager() *ai.MCPManager
 	}
