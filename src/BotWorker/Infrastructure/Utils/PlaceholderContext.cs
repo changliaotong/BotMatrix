@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 
 namespace BotWorker.Infrastructure.Utils
 {
@@ -96,90 +96,46 @@ namespace BotWorker.Infrastructure.Utils
         }
 
         // 核心替换入口（异步，支持递归）
-        public async Task ReplaceAsync(BotMessage bm, int maxDepth = 5)
+        public async Task ReplaceAsync(BotMessage bm, int maxDepth = 10)
         {
             if (string.IsNullOrEmpty(bm.Answer) || maxDepth <= 0)
                 return;
 
-            // 先替换条件语法 {if:cond?trueVal:falseVal}
-            await ReplaceIfAsync(bm);
-
-            // 再替换普通占位符 {key|default}
-            await ReplacePlaceholdersAsync(bm);
-
-            // 递归替换，避免无限循环，递归深度控制
-            await ReplaceAsync(bm, maxDepth - 1);
-        }
-
-        public async Task ReplaceAsync(BotMessage bm)
-        {
-            string result = bm.Answer;
-            int safetyCounter = 10;
-
-            while (safetyCounter-- > 0 && Regex.IsMatch(result, Pattern))
+            string oldAnswer;
+            do
             {
+                oldAnswer = bm.Answer;
+
                 // Step 1: 替换 if 条件表达式
-                await ReplaceIfAsync(bm);
+                bm.Answer = await ReplaceIfAsync(bm);
 
-                // Step 2: 替换常规占位符
-                var matches = Regex.Matches(bm.Answer, Pattern);
-                var replacements = new Dictionary<string, string>();
+                // Step 2: 替换常规占位符 {key|default}
+                await ReplacePlaceholdersAsync(bm);
 
-                foreach (Match match in matches)
-                {
-                    string full = match.Groups[0].Value;
-                    if (replacements.ContainsKey(full)) continue;
-
-                    string name = match.Groups["key"].Value;
-                    string? defaultValue = match.Groups["default"].Success ? match.Groups["default"].Value : null;
-                    string replacement;
-
-                    var func = Get(name);
-                    if (func != null)
-                    {
-                        try
-                        {
-                            replacement = await func();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[占位符异常] {name}: {ex.Message}");
-                            replacement = defaultValue ?? full;
-                        }
-                    }
-                    else
-                    {
-                        replacement = defaultValue ?? full;
-                    }
-
-                    replacements[full] = replacement;
-                }
-
-                foreach (var pair in replacements)
-                {
-                    // InfoMessage($"[占位符] {pair.Key} -> {pair.Value}");
-                    bm.Answer = bm.Answer.Replace(pair.Key, pair.Value);
-                }
-            }             
+                maxDepth--;
+            } while (maxDepth > 0 && bm.Answer != oldAnswer && Regex.IsMatch(bm.Answer, Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled));
         }
-
 
         private static readonly string IfPattern = @"\{if:(?<cond>[^{}?]+)\?(?<trueVal>[^:{}]*)\:(?<falseVal>[^\}]+)\}";
 
         private static async Task<string> ReplaceIfAsync(BotMessage context)
         {
-            return await Task.Run(() =>
-            {
-                return Regex.Replace(context.Answer, IfPattern, match =>
-                {
-                    string cond = match.Groups["cond"].Value.Trim();
-                    string trueVal = match.Groups["trueVal"].Value;
-                    string falseVal = match.Groups["falseVal"].Value;
+            if (string.IsNullOrEmpty(context.Answer)) return string.Empty;
 
-                    bool result = EvaluateCondition(cond, context);
-                    return result ? trueVal : falseVal;
-                });
-            });
+            var matches = Regex.Matches(context.Answer, IfPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            if (matches.Count == 0) return context.Answer;
+
+            string output = context.Answer;
+            foreach (Match match in matches)
+            {
+                string cond = match.Groups["cond"].Value.Trim();
+                string trueVal = match.Groups["trueVal"].Value;
+                string falseVal = match.Groups["falseVal"].Value;
+
+                bool result = EvaluateCondition(cond, context);
+                output = output.Replace(match.Value, result ? trueVal : falseVal);
+            }
+            return output;
         }
 
         private static bool EvaluateCondition(string condition, BotMessage context)
@@ -197,7 +153,7 @@ namespace BotWorker.Infrastructure.Utils
                     var prop = typeof(BotMessage).GetProperty(left, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
                     if (prop == null) return false;
 
-                    var value = prop.GetValue(context.Answer);
+                    var value = prop.GetValue(context);
                     string leftVal = value?.ToString() ?? "";
 
                     // Bool 特别处理
@@ -220,8 +176,8 @@ namespace BotWorker.Infrastructure.Utils
                             "<" => lv < rv,
                             ">=" => lv >= rv,
                             "<=" => lv <= rv,
-                            "=" or "==" => lv == rv,
-                            "!=" or "<>" => lv != rv,
+                            "=" or "==" => Math.Abs(lv - rv) < 0.000001,
+                            "!=" or "<>" => Math.Abs(lv - rv) >= 0.000001,
                             _ => false
                         };
                     }
@@ -236,22 +192,11 @@ namespace BotWorker.Infrastructure.Utils
                 }
             }
 
-            // 简写支持：!IsOffical
-            if (condition.StartsWith("!"))
+            // 单个布尔字段判断
+            var p = typeof(BotMessage).GetProperty(condition, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+            if (p?.PropertyType == typeof(bool))
             {
-                var prop = typeof(BotMessage).GetProperty(condition[1..], BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-                if (prop?.PropertyType == typeof(bool))
-                {
-                    return !(bool)(prop.GetValue(context.Answer) ?? false);
-                }
-            }
-            else
-            {
-                var prop = typeof(BotMessage).GetProperty(condition, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-                if (prop?.PropertyType == typeof(bool))
-                {
-                    return (bool)(prop.GetValue(context.Answer) ?? false);
-                }
+                return (bool)(p.GetValue(context) ?? false);
             }
 
             return false;
@@ -260,43 +205,51 @@ namespace BotWorker.Infrastructure.Utils
         // 替换普通占位符
         private async Task ReplacePlaceholdersAsync(BotMessage bm)
         {
-            var regex = new Regex(Pattern, RegexOptions.IgnoreCase);
+            if (string.IsNullOrEmpty(bm.Answer)) return;
 
-            var result = await Task.Run(async () =>
+            var matches = Regex.Matches(bm.Answer, Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            if (matches.Count == 0) return;
+
+            // 由于我们需要执行异步操作，不能直接使用 Regex.Replace(..., MatchEvaluator)
+            // 我们先收集所有不重复的 match.Value 及其对应的替换值
+            var replacementMap = new Dictionary<string, string>();
+
+            foreach (Match match in matches)
             {
-                var matches = regex.Matches(bm.Answer);
-                var output = bm.Answer;
+                string matchValue = match.Value;
+                if (replacementMap.ContainsKey(matchValue)) continue;
 
-                foreach (Match match in matches)
+                string key = match.Groups["key"].Value;
+                string defaultVal = match.Groups["default"].Success ? match.Groups["default"].Value : "";
+
+                // 如果占位符未启用，跳过
+                if (_enabled.TryGetValue(key, out var enabled) && !enabled)
+                    continue;
+
+                string? val = null;
+                if (_asyncHandlers.TryGetValue(key, out var func))
                 {
-                    string key = match.Groups["key"].Value;
-                    string defaultVal = match.Groups["default"].Success ? match.Groups["default"].Value : "";
+                    val = await func();
+                }
+                else if (_syncHandlers.TryGetValue(key, out var syncFunc))
+                {
+                    val = syncFunc();
+                }
 
-                    // 如果占位符未启用，跳过
-                    if (!_enabled.ContainsKey(key) || !_enabled[key])
-                        continue;
+                if (string.IsNullOrEmpty(val))
+                    val = defaultVal;
 
-                    if (_asyncHandlers.TryGetValue(key, out var func))
-                    {
-                        string val = await func();
-                        if (string.IsNullOrEmpty(val))
-                            val = defaultVal;
-                        if (!string.IsNullOrEmpty(val))
-                            output = output.Replace(match.Value, val);
-                    }
+                replacementMap[matchValue] = val ?? "";
+            }
 
-                    if (_syncHandlers.TryGetValue(key, out var syncFunc))
-                    {
-                        string val = syncFunc();
-                        if (string.IsNullOrEmpty(val))
-                            val = defaultVal;
-                        if (!string.IsNullOrEmpty(val))
-                            output = output.Replace(match.Value, val);
-                    }
-                }                
-                
-                return bm.Answer = output;
-            });
+            // 执行替换
+            string output = bm.Answer;
+            foreach (var kvp in replacementMap)
+            {
+                output = output.Replace(kvp.Key, kvp.Value);
+            }
+
+            bm.Answer = output;
         }
     }
 

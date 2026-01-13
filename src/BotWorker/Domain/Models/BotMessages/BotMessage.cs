@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Diagnostics;
+using BotWorker.Domain.Entities;
+using BotWorker.Infrastructure.Persistence.ORM;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
@@ -87,6 +89,9 @@ public partial class BotMessage
         public bool IsSent { get; set; } = false;
 
         public bool InGame() => Group.IsInGame == 1;
+
+        public string 积分类型 => UserInfo.GetCreditTypeAsync(SelfId, GroupId, UserId).GetAwaiter().GetResult();
+        public string 积分 => UserInfo.GetCreditAsync(SelfId, GroupId, UserId).GetAwaiter().GetResult().ToString("N0");
 
         public void AddClient()
         {

@@ -109,6 +109,23 @@ class BotSimulator:
         target = f"Group {message_event.get('group_id')}" if msg_type == "group" else "Private"
         logger.info(f"<<< User Input [{target}]: {content}")
 
+    async def auto_refill_credits(self, msg_type="private", group_id=None):
+        """当检测到积分不足时，自动执行取分操作"""
+        logger.info("Intelligence: Detected insufficient credits, attempting to auto-refill...")
+        # 清空之前的回复队列
+        while not self.pending_responses.empty():
+            self.pending_responses.get_nowait()
+            
+        await self.send_message("取分 1000", msg_type, group_id)
+        try:
+            # 等待取分结果
+            response = await asyncio.wait_for(self.pending_responses.get(), timeout=10)
+            logger.info(f"Intelligence: Refill response: {response}")
+            return True
+        except asyncio.TimeoutError:
+            logger.error("Intelligence: Refill timed out")
+            return False
+
     async def run_test_case(self, case):
         if case['name'] in self.passed_tests:
             logger.info(f"Skipping passed test: {case['name']}")
@@ -116,14 +133,10 @@ class BotSimulator:
 
         if not self.auto:
             print(f"\nReady to test: {case['name']} (Input: {case['input']})")
-            user_choice = input("Run this test? [Y/n/s(kip)/q(uit)]: ").lower()
-            if user_choice == 'n' or user_choice == 's':
-                logger.info(f"Skipped by user: {case['name']}")
-                return
-            if user_choice == 'q':
-                logger.info("Quitting tests...")
-                return "quit"
-
+            # 默认 3 秒后自动运行，如果用户没输入
+            logger.info("Auto-running in 1s...")
+            await asyncio.sleep(1)
+        
         logger.info(f"Running Test Case: {case['name']}")
         
         # 清空之前的回复
@@ -136,16 +149,22 @@ class BotSimulator:
         start_time = time.time()
         msg_type = case.get("type", "private")
         group_id = case.get("group_id")
-        await self.send_message(case['input'], msg_type, group_id)
         
-        try:
-            # 等待回复，带超时
-            timeout = case.get('timeout', 10)
-            success = True
-            reason = ""
-            
+        async def perform_test():
+            await self.send_message(case['input'], msg_type, group_id)
             try:
+                # 等待回复，带超时
+                timeout = case.get('timeout', 10)
                 response = await asyncio.wait_for(self.pending_responses.get(), timeout=timeout)
+                
+                # 智能化检测：如果回复中包含“不足”或“只有0分”
+                if any(kw in response for kw in ["不足", "只有0", "只有 0", "积分不够", "用完", "不够"]):
+                    if await self.auto_refill_credits(msg_type, group_id):
+                        logger.info(f"Intelligence: Credits refilled, retrying test '{case['name']}'...")
+                        return await perform_test() # 递归重试一次
+
+                success = True
+                reason = ""
                 
                 if case.get('expected_no_response'):
                     success = False
@@ -164,14 +183,18 @@ class BotSimulator:
                     elif 'expected_not_empty' in case and not response:
                         success = False
                         reason = "Expected non-empty response"
+                
+                return success, reason
+                
             except asyncio.TimeoutError:
                 if case.get('expected_no_response'):
-                    success = True
-                    logger.info(f"PASS (No response as expected): {case['name']}")
+                    return True, ""
                 else:
-                    success = False
-                    reason = "Timeout"
+                    return False, "Timeout"
 
+        try:
+            success, reason = await perform_test()
+            
             if success:
                 if not case.get('expected_no_response'):
                     logger.info(f"PASS: {case['name']}")

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Data;
 using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Entities
@@ -148,70 +149,70 @@ namespace BotWorker.Domain.Entities
         public string CreditName => "积分";
 
         //本群积分
-        public static async Task<bool> GetIsCreditAsync(long groupId)
+        public static async Task<bool> GetIsCreditAsync(long groupId, IDbTransaction? trans = null)
         {
-            return groupId != 0 && await GetBoolAsync("IsCredit", groupId);
+            return groupId != 0 && await GetBoolAsync("IsCredit", groupId, null, trans);
         }
 
-        public static async Task<bool> GetIsPetAsync(long groupId)
+        public static async Task<bool> GetIsPetAsync(long groupId, IDbTransaction? trans = null)
         {
-            return groupId != 0 && await GetBoolAsync("IsPet", groupId);
+            return groupId != 0 && await GetBoolAsync("IsPet", groupId, null, trans);
         }
 
         // 关机
-        public static async Task<int> SetPowerOffAsync(long groupId)
+        public static async Task<int> SetPowerOffAsync(long groupId, IDbTransaction? trans = null)
         {
-            return await SetValueAsync("IsPowerOn", false, groupId);
+            return await SetValueAsync("IsPowerOn", false, groupId, null, trans);
         }
 
         /// 开机
-        public static async Task<int> SetPowerOnAsync(long groupId)
+        public static async Task<int> SetPowerOnAsync(long groupId, IDbTransaction? trans = null)
         {
-            return await SetValueAsync("IsPowerOn", true, groupId);
+            return await SetValueAsync("IsPowerOn", true, groupId, null, trans);
         }
 
         // 是否开机
-        public static async Task<bool> GetPowerOnAsync(long groupId)
+        public static async Task<bool> GetPowerOnAsync(long groupId, IDbTransaction? trans = null)
         {
-            return await GetBoolAsync("IsPowerOn", groupId);
+            return await GetBoolAsync("IsPowerOn", groupId, null, trans);
         }
 
-        public static async Task<long> GetGroupOwnerAsync(long groupId, long def = 0)
+        public static async Task<long> GetGroupOwnerAsync(long groupId, long def = 0, IDbTransaction? trans = null)
         {
-            return await GetLongAsync("GroupOwner", groupId, def);
+            return await GetLongAsync("GroupOwner", groupId, def, trans);
         }
 
         public static int SetRobotOwner(long groupId, long ownerId) => SetRobotOwnerAsync(groupId, ownerId).GetAwaiter().GetResult();
 
-        public static async Task<int> SetRobotOwnerAsync(long groupId, long ownerId)
+        public static async Task<int> SetRobotOwnerAsync(long groupId, long ownerId, IDbTransaction? trans = null)
         {
-            return await SetValueAsync("RobotOwner", ownerId, groupId);
+            return await SetValueAsync("RobotOwner", ownerId, groupId, null, trans);
         }
 
         public static long GetRobotOwner(long groupId) => GetRobotOwnerAsync(groupId).GetAwaiter().GetResult();
 
-        public static async Task<long> GetRobotOwnerAsync(long groupId, long def = 0)
+        public static async Task<long> GetRobotOwnerAsync(long groupId, long def = 0, IDbTransaction? trans = null)
         {
-            return await GetLongAsync("RobotOwner", groupId, def);
+            return await GetLongAsync("RobotOwner", groupId, def, trans);
         }
 
         public static bool IsOwner(long groupId, long userId) => IsOwnerAsync(groupId, userId).GetAwaiter().GetResult();
 
-        public static async Task<bool> IsOwnerAsync(long groupId, long userId)
+        public static async Task<bool> IsOwnerAsync(long groupId, long userId, IDbTransaction? trans = null)
         {
-            return userId == await GetRobotOwnerAsync(groupId);
+            return userId == await GetRobotOwnerAsync(groupId, 0, trans);
         }
 
         public static bool IsPowerOff(long groupId) => IsPowerOffAsync(groupId).GetAwaiter().GetResult();
 
-        public static async Task<bool> IsPowerOffAsync(long groupId)
+        public static async Task<bool> IsPowerOffAsync(long groupId, IDbTransaction? trans = null)
         {
-            return !await GetPowerOnAsync(groupId);
+            return !await GetPowerOnAsync(groupId, trans);
         }
 
-        public static async Task<bool> GetIsValidAsync(long groupId)
+        public static async Task<bool> GetIsValidAsync(long groupId, IDbTransaction? trans = null)
         {
-            return await GetBoolAsync("IsValid", groupId);
+            return await GetBoolAsync("IsValid", groupId, null, trans);
         }
 
         public static async Task<string> GetRobotOwnerNameAsync(long groupId)

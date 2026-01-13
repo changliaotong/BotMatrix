@@ -27,6 +27,7 @@
         { "name": "Draw 100", "input": "抽奖 100", "expected_not_empty": true, "timeout": 10 },
         { "name": "Sangong 100", "input": "三公 100", "expected_not_empty": true, "timeout": 10 },
         { "name": "Suoha 9", "input": "梭哈 9", "expected_not_empty": true, "timeout": 10 },
+        { "name": "Withdraw Credits After Suoha", "input": "取分 1000", "expected_not_empty": true, "timeout": 10 },
         { "name": "Guess Size 10", "input": "猜大小 10", "expected_not_empty": true, "timeout": 10 },
         
         { "name": "Deposit Credits", "input": "存分 10", "expected_not_empty": true, "timeout": 10 },

@@ -6,11 +6,8 @@ namespace BotWorker.Domain.Entities
         public override string KeyField => "Id";
         private static readonly Dictionary<string, string> _baseCommandMap = new(StringComparer.OrdinalIgnoreCase)
         {
-            { "菜单", "菜单" }, { "menu", "菜单" },
             { "帮助", "帮助" }, { "help", "帮助" }, { "指令", "帮助" },
             { "签到", "签到" }, { "checkin", "签到" },
-            { "积分", "积分" }, { "credit", "积分" },
-            { "金币", "金币" }, { "coins", "金币" },
             { "计算", "计算" }, { "calc", "计算" },
             { "钓鱼", "钓鱼" }, { "fish", "钓鱼" },
             { "抛竿", "抛竿" }, { "收竿", "收竿" },
@@ -23,11 +20,18 @@ namespace BotWorker.Domain.Entities
             { "早安", "早安" }, { "午安", "午安" }, { "晚安", "晚安" },
             { "闲聊", "闲聊" }, { "chat", "闲聊" }, { "ai", "闲聊" },
             { "成语", "成语" },
-            { "提示词", "提示词" },
-            { "报时", "报时" },
             { "点歌", "点歌" },
-            { "倒计时", "倒计时" }
         };
+
+        private static readonly HashSet<string> _extraCommandKeywords = new(StringComparer.OrdinalIgnoreCase);
+
+        public static void RegisterExtraCommands(IEnumerable<string> commands)
+        {
+            foreach (var cmd in commands)
+            {
+                _extraCommandKeywords.Add(cmd);
+            }
+        }
 
         public static string GetRegexCmd()
         {
@@ -35,7 +39,10 @@ namespace BotWorker.Domain.Entities
             var res = QueryRes(sql, "{0}|").Trim('|');
             
             var dbCommands = string.IsNullOrEmpty(res) ? Array.Empty<string>() : res.Split('|');
-            var allCommands = dbCommands.Concat(_baseCommandMap.Keys).Distinct()
+            var allCommands = dbCommands
+                .Concat(_baseCommandMap.Keys)
+                .Concat(_extraCommandKeywords)
+                .Distinct()
                 .OrderByDescending(cmd => cmd.Length)
                 .ToArray();
 

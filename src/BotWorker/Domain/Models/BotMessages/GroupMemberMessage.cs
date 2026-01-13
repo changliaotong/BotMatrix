@@ -5,7 +5,7 @@ public partial class BotMessage : MetaData<BotMessage>
         // 兑换本群积分/金币/紫币等
         public async Task<string> ExchangeCoinsAsync(string cmdPara, string cmdPara2)
         {
-            if (!cmdPara2.IsNum())
+            if (string.IsNullOrEmpty(cmdPara2) || !cmdPara2.IsNum())
                 return "数量不正确";
 
             long coinsValue = cmdPara2.AsLong();

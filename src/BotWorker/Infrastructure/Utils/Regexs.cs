@@ -70,13 +70,13 @@ namespace BotWorker.Infrastructure.Utils
         public static string CreditUserId => @"^#?((查|查询)?积分|jf)[+＋ ]*(\[?@:?)?(?<UserId>[1-9]\d{4,10})(\])?$";
         public static string CreditUserId2 => @"^#?(\[?@:?)?(?<UserId>[1-9]\d{4,10})(\])?[+＋ ]*(查?积分|jf) *$";
         public static string CoinsUserId => @"^#?(c?jb|查?金币)[+＋ ]*(\[?@:?)?(?<UserId>[1-9]\d{4,10})(\])?$";
-        public static string SaveCredit => @"^#?(?<CmdName>(存入?(积?分)?|取出?(积?分)?|cr?(j?f)?|qc?(j?f)?))[+＋ ]*(?<credit_value>\d+) *$";
+        public static string SaveCredit => @"^\s*#?(?<CmdName>(存入?(积?分)?|取出?(积?分)?|取分|cr?(j?f)?|qc?(j?f)?))[+＋ ]*(?<credit_value>\d*) *$";
         public static string WarnCmd => @"^[#\s]*(?<CmdName>(kq|kaiqi|开启|gb|guanbi|关闭|sz|shezhi|设置))\s*(?<cmdPara>([\s+]*(sp|shuaping|刷屏|tp|tupian|图片|wz|wangzhi|网址|zh|zhanghua|脏话|gg|guanggao|广告|tjq|推荐群|tjhy|推荐好友|hbzf|合并转发)\s*(ch|chehui|撤回|kf|koufen|扣分|jg|jinggao|警告|jy|jinyan|禁言|tc|tichu|踢出|jh|jiahei|加黑|lh|lahei|拉黑)+)+)";
         public static string WarnPara => @"(?<cmdPara>(sp|shuaping|刷屏|tp|tupian|图片|wz|wangzhi|网址|zh|zanghua|脏话|gg|guanggao|广告|tjq|推荐群|tjhy|推荐好友|hbzf|合并转发))\s*(?<cmdPara2>(ch|chehui|撤回|kf|koufen|扣分|jg|jinggao|警告|jy|jinyan|禁言|tc|tichu|踢出|jh|jiahei|加黑|lh|lahei|拉黑)+)";
         public static string WarnPara2 => "(?<cmdPara2>(ch|chehui|撤回|kf|koufen|扣分|jg|jinggao|警告|jy|jinyan|禁言|tc|tichu|踢出|jh|jiahei|加黑|lh|lahei|拉黑))";
         public static string BindToken => @"TOKEN:(?<token_type>MP|WX)(?<bind_token>[0-9a-zA-Z]{16})";
         public static string Cid => @"(?<cid>(?<=\D|\b)(\d{6}[12]+[90]+\d{2}[01]+\d[0123]+\d\d{3}[\d|x|X]+)(?=\D|\b))";
-        public static string Todo => @"^#?(?<CmdName>td|todo)(?<cmd_oper>[\+\- ]*)(?<cmdPara>[\s\S]*)";
+        public static string Todo => @"^\s*#?(?<CmdName>td|todo)(?<cmd_oper>[\+\- ]*)(?<cmdPara>[\s\S]*)";
 
 
         public static string NewFace => "/(扯一扯|崇拜|菜汪|吃糖|生气|打脸|狂笑|口罩护体|摸锦鲤|吃瓜|啵啵|牛啊|摸鱼|汪汪|捂脸|问号脸|睁眼|哦|头秃|emm|元宝|哦哟|期待|胖三斤|牛气冲天|喵喵" +

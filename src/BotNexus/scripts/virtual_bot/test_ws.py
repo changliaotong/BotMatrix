@@ -2,7 +2,7 @@ import asyncio
 import websockets
 
 async def test():
-    uri = "ws://localhost:8080/ws/bots"
+    uri = "ws://localhost:8081/ws/bots"
     headers = {"X-Self-ID": "test", "X-Platform": "qq"}
     try:
         # 尝试使用 additional_headers

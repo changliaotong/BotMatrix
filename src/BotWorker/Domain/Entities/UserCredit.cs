@@ -10,7 +10,7 @@ namespace BotWorker.Domain.Entities
             try
             {
                 // 1. 确保用户存在
-                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId);
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, trans);
                 await AppendAsync(botUin, groupId, qq, name, ownerId, trans: trans);
 
                 // 2. 获取当前准确分值（在事务内获取，并加锁防止并发修改）
@@ -101,11 +101,11 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<(string, IDataParameter[])> SqlAddCreditAsync(long botUin, long groupId, long userId, long creditPlus, IDbTransaction? trans = null)
         {
-            if (await GroupInfo.GetIsCreditAsync(groupId))
+            if (await GroupInfo.GetIsCreditAsync(groupId, trans))
             {
                 return await GroupMember.SqlAddCreditAsync(groupId, userId, creditPlus, trans);
             }
-            else if (await BotInfo.GetIsCreditAsync(botUin))
+            else if (await BotInfo.GetIsCreditAsync(botUin, trans))
             {
                 return await Friend.SqlAddCreditAsync(botUin, userId, creditPlus, trans);
             }
@@ -137,22 +137,44 @@ namespace BotWorker.Domain.Entities
             using var wrapper = await BeginTransactionAsync(trans);
             try
             {
-                // 2. 获取发送者当前准确分值（加锁）
-                long senderCredit = await GetCreditForUpdateAsync(botUin, groupId, senderId, wrapper.Transaction);
+                // 2. 确保用户存在 (按 ID 从小到大执行，防止 User 表死锁)
+                long firstId = senderId < receiverId ? senderId : receiverId;
+                long secondId = senderId < receiverId ? receiverId : senderId;
+                string firstName = firstId == senderId ? senderName : receiverName;
+                string secondName = secondId == senderId ? senderName : receiverName;
+
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                await AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
+                await AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
+
+                // 3. 统一加锁顺序，防止 GroupMember 表死锁 (按 ID 从小到大锁定)
+                if (firstId == senderId)
+                {
+                    await GetCreditForUpdateAsync(botUin, groupId, senderId, wrapper.Transaction);
+                    await GetCreditForUpdateAsync(botUin, groupId, receiverId, wrapper.Transaction);
+                }
+                else
+                {
+                    await GetCreditForUpdateAsync(botUin, groupId, receiverId, wrapper.Transaction);
+                    await GetCreditForUpdateAsync(botUin, groupId, senderId, wrapper.Transaction);
+                }
+
+                // 获取发送者当前分值
+                long senderCredit = await GetCreditAsync(botUin, groupId, senderId, wrapper.Transaction);
                 if (senderCredit < creditMinus)
                     return (-1, senderCredit, 0);
 
-                // 3. 链式调用业务方法，全部复用同一个 trans
+                // 4. 链式调用业务方法，全部复用同一个 trans
                 // 扣除发送者积分 (内部会自动记录日志)
                 var res1 = await AddCreditAsync(botUin, groupId, groupName, senderId, senderName, -creditMinus, $"{transferInfo}扣分：{receiverId}", wrapper.Transaction);
                 
                 // 增加接收者积分 (内部会自动记录日志)
                 var res2 = await AddCreditAsync(botUin, groupId, groupName, receiverId, receiverName, creditAdd, $"{transferInfo}加分：{senderId}", wrapper.Transaction);
 
-                // 4. 提交事务
+                // 5. 提交事务
                 await wrapper.CommitAsync();
 
-                // 5. 同步缓存 (仅在自身开启事务时同步)
+                // 6. 同步缓存 (仅在自身开启事务时同步)
                 if (trans == null)
                 {
                     await SyncCreditCacheAsync(botUin, groupId, senderId, res1.CreditValue);
@@ -172,12 +194,12 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<long> GetCreditAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
-            if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId))
+            if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId, trans))
             {
                 // Logger.Debug($"[UserInfo] GetCredit - Type: Group, GroupId: {groupId}, QQ: {qq}");
                 return await GroupMember.GetGroupCreditAsync(groupId, qq, trans);
             }
-            else if (await BotInfo.GetIsCreditAsync(botUin))
+            else if (await BotInfo.GetIsCreditAsync(botUin, trans))
             {
                 // Logger.Debug($"[UserInfo] GetCredit - Type: Friend, BotUin: {botUin}, QQ: {qq}");
                 return await Friend.GetCreditAsync(botUin, qq, trans);
@@ -191,12 +213,12 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<long> GetCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
-            if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId))
+            if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId, trans))
             {
                 // Logger.Debug($"[UserInfo] GetCreditForUpdate - Type: Group, GroupId: {groupId}, QQ: {qq}");
                 return await GroupMember.GetGroupCreditForUpdateAsync(groupId, qq, trans);
             }
-            else if (await BotInfo.GetIsCreditAsync(botUin))
+            else if (await BotInfo.GetIsCreditAsync(botUin, trans))
             {
                 // Logger.Debug($"[UserInfo] GetCreditForUpdate - Type: Friend, BotUin: {botUin}, QQ: {qq}");
                 return await Friend.GetCreditForUpdateAsync(botUin, qq, trans);
@@ -244,11 +266,11 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<long> GetSaveCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
         {
-            if (await GroupInfo.GetIsCreditAsync(groupId))
+            if (await GroupInfo.GetIsCreditAsync(groupId, trans))
             {
-                return await GroupMember.GetForUpdateAsync<long>("SaveCredit", groupId, qq, 0, trans);
+                return await GroupMember.GetSaveCreditForUpdateAsync(groupId, qq, trans);
             }
-            else if (await BotInfo.GetIsCreditAsync(botUin))
+            else if (await BotInfo.GetIsCreditAsync(botUin, trans))
             {
                 return await Friend.GetForUpdateAsync<long>("SaveCredit", botUin, qq, 0, trans);
             }
@@ -258,11 +280,11 @@ namespace BotWorker.Domain.Entities
             }
         }
 
-        public static async Task<(string, IDataParameter[])> SqlSaveCreditAsync(long botUin, long groupId, long userId, long creditSave)
+        public static async Task<(string, IDataParameter[])> SqlSaveCreditAsync(long botUin, long groupId, long userId, long creditSave, IDbTransaction? trans = null)
         {
-            return await GroupInfo.GetIsCreditAsync(groupId)
+            return await GroupInfo.GetIsCreditAsync(groupId, trans)
                 ? GroupMember.SqlSaveCredit(groupId, userId, creditSave)
-                : await BotInfo.GetIsCreditAsync(botUin) ? Friend.SqlSaveCredit(botUin, userId, creditSave)
+                : await BotInfo.GetIsCreditAsync(botUin, trans) ? Friend.SqlSaveCredit(botUin, userId, creditSave)
                                  : SqlSetValues($"Credit = Credit - ({creditSave}), SaveCredit = {SqlIsNull("SaveCredit", "0")} + ({creditSave})", userId);
         }
 

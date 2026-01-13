@@ -210,9 +210,48 @@ namespace BotWorker.Modules.Plugins
         public async Task RegisterSkillAsync(SkillCapability capability, Func<IPluginContext, string[], Task<string>> handler)
         {
             var pluginId = _currentLoadingPlugin?.Metadata.Id ?? "system";
+
+            // 如果能力中没有定义意图，且当前正在加载插件，尝试从插件中获取
+            if ((capability.Intents == null || capability.Intents.Count == 0) && _currentLoadingPlugin != null)
+            {
+                capability.Intents = _currentLoadingPlugin.Intents;
+            }
+
             _skills.Add(new Skill { PluginId = pluginId, Capability = capability, Handler = handler });
-            _logger.LogInformation("Skill registered: {Name} (Plugin: {PluginId}, Commands: {Commands})", 
-                capability.Name, pluginId, string.Join(", ", capability.Commands));
+            
+            // 提取命令关键词并注册到 BotCmd
+            var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
+            if (capability.Commands != null)
+            {
+                foreach (var cmd in capability.Commands)
+                {
+                    var k = cmd.Split(' ')[0].Trim();
+                    if (!string.IsNullOrEmpty(k)) keywords.Add(k);
+                }
+            }
+
+            if (capability.Intents != null)
+            {
+                foreach (var intent in capability.Intents)
+                {
+                    if (intent.Keywords != null)
+                    {
+                        foreach (var k in intent.Keywords)
+                        {
+                            if (!string.IsNullOrEmpty(k)) keywords.Add(k.Trim());
+                        }
+                    }
+                }
+            }
+
+            if (keywords.Count > 0)
+            {
+                Domain.Entities.BotCmd.RegisterExtraCommands(keywords);
+            }
+
+            _logger.LogInformation("Skill registered: {Name} (Plugin: {PluginId}, Commands: {Commands}, Keywords: {Keywords})", 
+                capability.Name, pluginId, string.Join(", ", capability.Commands), string.Join(", ", keywords));
             await Task.CompletedTask;
         }
 
@@ -395,10 +434,15 @@ namespace BotWorker.Modules.Plugins
                 {
                     foreach (var cmd in skill.Capability.Commands)
                     {
-                        if (message.StartsWith(cmd, StringComparison.OrdinalIgnoreCase))
+                        // 提取命令的核心关键词（第一个空格前的部分）
+                        var cmdKey = cmd.Split(' ')[0].Trim();
+                        if (string.IsNullOrEmpty(cmdKey)) continue;
+
+                        if (message.StartsWith(cmdKey, StringComparison.OrdinalIgnoreCase))
                         {
-                            var args = message.Substring(cmd.Length).Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                            _logger.LogInformation("[Dispatch] Command match: Skill '{SkillName}' matched command '{Command}'", skill.Capability.Name, cmd);
+                            var args = message.Substring(cmdKey.Length).Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            _logger.LogInformation("[Dispatch] Command match: Skill '{SkillName}' matched command keyword '{CommandKey}' (from '{FullCommand}')", 
+                                skill.Capability.Name, cmdKey, cmd);
                             var result = await skill.Handler(ctx, args);
                             return result;
                         }

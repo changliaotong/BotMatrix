@@ -32,7 +32,8 @@ namespace BotWorker.Domain.Entities
             try
             {
                 // 1. 确保用户存在
-                await AppendAsync(botUin, groupId, qq, name, await GroupInfo.GetGroupOwnerAsync(groupId), trans: wrapper.Transaction);
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                await AppendAsync(botUin, groupId, qq, name, ownerId, trans: wrapper.Transaction);
                 
                 // 2. 获取当前分值并加锁
                 var balanceValue = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
@@ -44,14 +45,14 @@ namespace BotWorker.Domain.Entities
                 await ExecAsync(sql, wrapper.Transaction, paras);
                 await ExecAsync(sql2, wrapper.Transaction, paras2);
 
-                wrapper.Commit();
+                await wrapper.CommitAsync();
 
                 SyncCacheField(qq, "Balance", newValue);
                 return new AddBalanceResult(0, newValue);
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 Logger.Error($"[AddBalance Error] {ex.Message}");
                 return new AddBalanceResult(-1, await GetBalanceAsync(qq));
             }
@@ -68,23 +69,37 @@ namespace BotWorker.Domain.Entities
             using var wrapper = await BeginTransactionAsync();
             try
             {
-                // 1. 获取发送者余额并加锁，检查是否足够
-                var currentBalance = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
+                // 1. 确保用户存在 (按 ID 从小到大执行，防止 User 表死锁)
+                long firstId = qq < qqTo ? qq : qqTo;
+                long secondId = qq < qqTo ? qqTo : qq;
+                string firstName = firstId == qq ? name : nameTo;
+                string secondName = secondId == qq ? name : nameTo;
+
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                await AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
+                await AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
+
+                // 2. 统一加锁顺序，防止死锁 (按 ID 从小到大锁定)
+                await GetBalanceForUpdateAsync(firstId, wrapper.Transaction);
+                await GetBalanceForUpdateAsync(secondId, wrapper.Transaction);
+
+                // 获取发送者余额并检查是否足够
+                var currentBalance = await GetBalanceAsync(qq, wrapper.Transaction);
                 if (currentBalance < balanceMinus)
                 {
-                    wrapper.Rollback();
+                    await wrapper.RollbackAsync();
                     return (-2, currentBalance, 0); // -2 表示余额不足
                 }
 
                 var res1 = await MinusBalanceAsync(botUin, groupId, groupName, qq, name, balanceMinus, $"转账给：{qqTo}", wrapper.Transaction);
                 var res2 = await AddBalanceAsync(botUin, groupId, groupName, qqTo, nameTo, balanceAdd, $"转账来自：{qq}", wrapper.Transaction);
 
-                wrapper.Commit();
+                await wrapper.CommitAsync();
                 return (0, res1.BalanceValue, res2.BalanceValue);
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 Logger.Error($"[Transfer Error] {ex.Message}");
                 return (-1, 0, 0);
             }

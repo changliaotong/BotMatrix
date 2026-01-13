@@ -1,4 +1,4 @@
-﻿namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages
 {
     public partial class BotMessage : MetaData<BotMessage>
     {

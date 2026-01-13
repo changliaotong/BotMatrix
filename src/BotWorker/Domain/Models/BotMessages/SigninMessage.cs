@@ -59,7 +59,7 @@ public partial class BotMessage : MetaData<BotMessage>
             try
             {
                 // 1. 记录签到流水 (robot_weibo)
-                await GroupSignIn.AppendAsync(SelfId, GroupId, UserId, CmdPara);
+                await GroupSignIn.AppendAsync(SelfId, GroupId, UserId, CmdPara, trans);
 
                 // 2. 更新 GroupMember 签到信息
                 var (sql1, paras1) = GroupMember.SqlUpdateSignInfo(GroupId, UserId, signTimes, signLevel);
@@ -82,7 +82,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 await GroupMember.SyncCacheFieldAsync(GroupId, UserId, "SignTimesAll", signTimesAll + 1);
 
                 var result = $"{GetHeadCQ()}✅ {(isAuto ? "自动" : "")}签到成功！\n";
-                result += Group.IsCreditSystem ? $"💎 {{积分类型}}：+{creditAdd}→{{积分}}\n" : "";
+                result += Group.IsCreditSystem ? $"💎 {积分类型}：+{creditAdd}→{积分}\n" : "";
                 result += BuildSignedMessage(signTimes, signLevel, signTimesAll + 1);
                 return result;
             }
@@ -96,7 +96,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
         private string BuildSignedMessage(int signTimes = 0, int signLevel = 1, int signTimesAll = 0, bool alreadySigned = false)
         {
-            var res = alreadySigned ? $"{GetHeadCQ()}✅ 今天签过了，明天再来！\n{(Group.IsCreditSystem ? $"💎 {{积分类型}}：{{积分}}\n" : "")}" : "";
+            var res = alreadySigned ? $"{GetHeadCQ()}✅ 今天签过了，明天再来！\n{(Group.IsCreditSystem ? $"💎 {积分类型}：{积分}\n" : "")}" : "";
             var nextLevelDays = signLevel switch
             {
                 10 => 0,

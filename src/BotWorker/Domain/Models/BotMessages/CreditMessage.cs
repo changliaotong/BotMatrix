@@ -12,8 +12,8 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!Group.IsCreditSystem)
                 return CreditSystemClosed;
 
-            if (CmdPara == "")
-                return "📄 命令格式：卖分 + 数值\n📌 使用示例：卖分 1000\n💎 超级积分：10,000→4R\n🎁 普通积分：10,000→1R\n📦 您的{{积分类型}}：{{积分}}";
+            if (string.IsNullOrEmpty(CmdPara))
+                return "📄 命令格式：卖分 + 数值\n📌 使用示例：卖分 1000\n💎 超级积分：10,000→4R\n🎁 普通积分：10,000→1R\n📦 您的{积分类型}：{积分}";
 
             if (await BotInfo.GetIsCreditAsync(SelfId))
                 return "本机积分不能兑换余额";
@@ -42,18 +42,18 @@ public partial class BotMessage : MetaData<BotMessage>
             if (!Group.IsCreditSystem)
                 return CreditSystemClosed;
 
-            if (CmdPara == "")
+            if (string.IsNullOrEmpty(CmdPara))
                 return "格式:存分 + 积分数\n取分 + 积分数\n例如：存分 100";
 
             if (!CmdPara.IsNum())
                 return "参数不正确";
 
             long credit_oper = CmdPara.AsLong();
+            string originalCmdName = CmdName;
             CmdName = CmdName.ToLower();
-            if (CmdName.StartsWith('存') | CmdName.StartsWith('c'))
+            if (CmdName.StartsWith("存") || CmdName.StartsWith("c"))
                 CmdName = "存分";
-
-            if (CmdName.StartsWith('取') | CmdName.StartsWith('q'))
+            else if (CmdName.StartsWith("取") || CmdName.StartsWith("q"))
                 CmdName = "取分";
 
             string res = "";
@@ -76,6 +76,20 @@ public partial class BotMessage : MetaData<BotMessage>
                 var saveRes = await DoSaveCreditAsync(-credit_oper);
                 res = saveRes.Res;
             }
+            else
+            {
+                // 如果 CmdName 不是存分或取分，但匹配了正则（可能是因为 regex 比较宽泛），则尝试根据 originalCmdName 再次判断
+                if (originalCmdName.Contains("取"))
+                {
+                    var saveRes = await DoSaveCreditAsync(-credit_oper);
+                    res = saveRes.Res;
+                }
+                else if (originalCmdName.Contains("存"))
+                {
+                    var saveRes = await DoSaveCreditAsync(credit_oper);
+                    res = saveRes.Res;
+                }
+            }
             return res;
         }
 
@@ -85,7 +99,10 @@ public partial class BotMessage : MetaData<BotMessage>
             using var wrapper = await BeginTransactionAsync();
             try
             {
-                // 1. 获取当前准确分值（加锁）
+                // 1. 确保用户存在且获取当前准确分值（加锁）
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(GroupId, 0, wrapper.Transaction);
+                await UserInfo.AppendAsync(SelfId, GroupId, UserId, Name, ownerId, trans: wrapper.Transaction);
+
                 long creditValue = await UserInfo.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
                 long creditSave = await UserInfo.GetSaveCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
                 
@@ -116,10 +133,10 @@ public partial class BotMessage : MetaData<BotMessage>
                 await CreditLog.AddLogAsync(SelfId, GroupId, GroupName, UserId, Name, -creditOper, creditValue, cmdName, wrapper.Transaction);
 
                 // 3. 更新存分
-                var (sql, paras) = await UserInfo.SqlSaveCreditAsync(SelfId, GroupId, UserId, creditOper);
+                var (sql, paras) = await UserInfo.SqlSaveCreditAsync(SelfId, GroupId, UserId, creditOper, wrapper.Transaction);
                 await ExecAsync(sql, wrapper.Transaction, paras);
 
-                wrapper.Commit();
+                await wrapper.CommitAsync();
 
                 creditSave += creditOper;
                 creditValue -= creditOper;
@@ -136,7 +153,7 @@ public partial class BotMessage : MetaData<BotMessage>
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 Logger.Error($"[DoSaveCredit Error] {ex.Message}");
                 return (-1, 0, 0, RetryMsg);
             }
@@ -207,7 +224,7 @@ public partial class BotMessage : MetaData<BotMessage>
             else if (Group.IsCredit)
             {
                 // 使用异步事务版本
-                var res = await GroupMember.TransferCoinsAsync(SelfId, GroupId, GroupName, UserId, Name, rewardQQ, "", (int)CoinsLog.CoinsType.groupCredit, creditMinus, rewardCredit, "打赏");
+                var res = await GroupMember.TransferCoinsAsync(SelfId, GroupId, UserId, Name, rewardQQ, "", (int)CoinsLog.CoinsType.groupCredit, creditMinus, rewardCredit, "打赏");
                 i = res.Result;
                 senderCredit = res.SenderCoins;
                 receiverCredit = res.ReceiverCoins;
@@ -251,7 +268,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 ? await QueryResAsync($"select top {top} UserId, credit from {Friend.FullName} where BotUin = {SelfId} order by Credit desc", format)
                 : await QueryResAsync($"select top {top} Id, credit from {UserInfo.FullName} order by Credit desc", format);
             if (!res.Contains(qq.ToString()))
-                res += $"{{积分总排名}} {qq}：{{积分}}\n";
+                res += $"\n{{积分总排名}} {qq}：{{积分}}";
             return res;
         }
 

@@ -154,6 +154,22 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("Name", Name.ToString);
             Ctx.Register("BotUin", SelfId.ToString);
             Ctx.Register("BotName", SelfName.ToString); 
+            
+            var dt = SQLConn.GetDate();
+            var yinli = new Yinli(dt);
+            Ctx.Register("年", () => dt.ToString("yyyy"));
+            Ctx.Register("月", () => dt.ToString("MM"));
+            Ctx.Register("日", () => dt.ToString("dd"));
+            Ctx.Register("时", () => dt.ToString("HH"));
+            Ctx.Register("点", () => dt.ToString("HH"));
+            Ctx.Register("分", () => dt.ToString("mm"));
+            Ctx.Register("秒", () => dt.ToString("ss"));
+            Ctx.Register("星期", () => "日一二三四五六"[(int)dt.DayOfWeek].ToString());
+            Ctx.Register("农历年", () => yinli.GanzhiYearName);
+            Ctx.Register("农历月", () => yinli.MonthName);
+            Ctx.Register("农历日", () => yinli.DayName);
+            Ctx.Register("农历", () => $"{yinli.GanzhiYearName}年{yinli.MonthName}月{yinli.DayName}");
+
             Ctx.Register("SystemPrompt", () => GroupInfo.GetSystemPromptAsync(GroupId));
             Ctx.Register("系统提示词", () => GroupInfo.GetSystemPromptAsync(GroupId));
 
@@ -170,8 +186,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 if (evt != GroupEventType.撤回)
                     Ctx.Register($"{evt}计数", () => GetEventCountAsync(evt));
             }
-
-            Ctx.Register("菜单", GetMenuResAsync);
+            
             Ctx.Register("后台", GetSetupUrlAsync);
             Ctx.Register("签到", () => TrySignInAsync(false));
             Ctx.Register("客服QQ", () => IsGuild || IsProxy ? "1653346663" : "1653346663");

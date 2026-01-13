@@ -5,7 +5,7 @@ namespace BotWorker.Domain.Entities
         public override string TableName => "robot_weibo";
         public override string KeyField => "weibo_id";
 
-        public static async Task<int> AppendAsync(long botUin, long groupId, long qq, string weiboInfo)
+        public static async Task<int> AppendAsync(long botUin, long groupId, long qq, string weiboInfo, System.Data.IDbTransaction? trans = null)
         {
             return await InsertAsync(new List<Cov> {
                             new Cov("robot_qq", botUin),
@@ -14,7 +14,7 @@ namespace BotWorker.Domain.Entities
                             new Cov("weibo_type", 1),
                             new Cov("group_id", groupId),
                             new Cov("insert_date", DateTime.MinValue),
-                        });
+                        }, trans);
         }
 
         // 今日签到人数

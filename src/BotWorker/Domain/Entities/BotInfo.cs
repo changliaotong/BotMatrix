@@ -74,9 +74,9 @@ namespace BotWorker.Domain.Entities
         public static bool GetIsCredit(long botUin)
             => GetIsCreditAsync(botUin).GetAwaiter().GetResult();
 
-        public static async Task<bool> GetIsCreditAsync(long botUin)
+        public static async Task<bool> GetIsCreditAsync(long botUin, IDbTransaction? trans = null)
         {
-            return await GetBoolAsync("IsCredit", botUin);
+            return await GetBoolAsync("IsCredit", botUin, null, trans);
         }
 
         // 超级管理员

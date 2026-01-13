@@ -551,7 +551,7 @@ namespace BotWorker.Common.Extensions
         // 去除文本中指定的QQ号码
         public static string RemoveUserId(this string text, long qq)
         {
-            return text.Replace($"[@:{qq}]", "").Replace($"@{qq}", "").Replace($"{qq}", "").Trim();
+            return text.Replace($"[@:{qq}]", "").Replace($"@{qq}", "").Replace($"[CQ:at,qq={qq}]", "").Trim();
         }
 
         /// <summary>

@@ -92,8 +92,14 @@ namespace BotWorker.Domain.Models.BotMessages
             regexCmd = Regexs.Todo;
             if (CurrentMessage.IsMatch(regexCmd))
             {
-                CmdName = CurrentMessage.RegexGetValue(regexCmd, "cmd_oper");
+                string cmdName = CurrentMessage.RegexGetValue(regexCmd, "CmdName");
+                string cmdOper = CurrentMessage.RegexGetValue(regexCmd, "cmd_oper").Trim();
                 CmdPara = CurrentMessage.RegexGetValue(regexCmd, "cmdPara");
+                
+                // 如果 cmd_oper 为空，则保持 cmdName 为 "todo"
+                // 如果 cmd_oper 不为空 (如 + 或 -)，则将其作为 cmdName 传递
+                CmdName = string.IsNullOrEmpty(cmdOper) ? cmdName : cmdOper;
+                
                 Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
             }
             else if (CurrentMessage.IsMatch(Regexs.LeaveGroup) && IsSuperAdmin) //退群

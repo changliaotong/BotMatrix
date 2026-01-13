@@ -76,13 +76,36 @@ namespace BotWorker.Domain.Entities
             using var wrapper = await BeginTransactionAsync();
             try
             {
-                // 在事务内部获取分值并加锁
-                long credit_value_locked = await UserInfo.GetCreditForUpdateAsync(botUin, credit_group, qq, wrapper.Transaction);
+                // 1. 确保用户存在 (按 ID 从小到大执行，防止 User 表死锁)
+                long firstId = qq < coins_qq ? qq : coins_qq;
+                long secondId = qq < coins_qq ? coins_qq : qq;
+                string firstName = firstId == qq ? name : await UserInfo.GetValueAsync("Name", firstId, trans: wrapper.Transaction); 
+                string secondName = secondId == qq ? name : await UserInfo.GetValueAsync("Name", secondId, trans: wrapper.Transaction);
+
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                await UserInfo.AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
+                await UserInfo.AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
+
+                // 2. 统一加锁顺序，防止 GroupMember 表死锁 (按 ID 从小到大锁定)
+                if (firstId == qq)
+                {
+                    await UserInfo.GetCreditForUpdateAsync(botUin, credit_group, qq, wrapper.Transaction);
+                    if (qq != coins_qq)
+                        await GetCoinsForUpdateAsync(coins_type, groupId, coins_qq, wrapper.Transaction);
+                }
+                else
+                {
+                    await GetCoinsForUpdateAsync(coins_type, groupId, coins_qq, wrapper.Transaction);
+                    await UserInfo.GetCreditForUpdateAsync(botUin, credit_group, qq, wrapper.Transaction);
+                }
+
+                // 在事务内部获取分值
+                long credit_value_locked = await UserInfo.GetCreditAsync(botUin, credit_group, qq, wrapper.Transaction);
                 if (cmdName == "充值")
                 {
                     if (credit_value_locked < minus_credit)
                     {
-                        wrapper.Rollback();
+                        await wrapper.RollbackAsync();
                         return $"您有{credit_value_locked}分不足{minus_credit}，请先兑换";
                     }
                 }
@@ -91,7 +114,7 @@ namespace BotWorker.Domain.Entities
                     long coins_value_locked = await GetCoinsAsync(coins_type, groupId, coins_qq, wrapper.Transaction);
                     if (coins_value_locked < coins_oper)
                     {
-                        wrapper.Rollback();
+                        await wrapper.RollbackAsync();
                         return $"[@:{coins_qq}]{cmdPara}{coins_value_locked}不足{coins_oper}，无法扣除";
                     }
 
@@ -99,13 +122,11 @@ namespace BotWorker.Domain.Entities
                     coins_oper = -coins_oper;
                 }
 
-                // 1. 扣除/增加发送者积分
+                // 3. 执行业务操作
                 var res1 = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
-                
-                // 2. 增加/扣除目标用户金币
                 var res2 = await AddCoinsAsync(botUin, groupId, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
 
-                wrapper.Commit();
+                await wrapper.CommitAsync();
 
                 // 同步缓存
                 await UserInfo.SyncCreditCacheAsync(botUin, credit_group, qq, res1.CreditValue);
@@ -115,7 +136,7 @@ namespace BotWorker.Domain.Entities
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 Logger.Error($"[AddCoinsRes Error] {ex.Message}");
                 return RetryMsg;
             }
@@ -124,9 +145,8 @@ namespace BotWorker.Domain.Entities
         public static async Task<string> ExchangeCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, int coins_type, string cmdName, string cmdPara, long minus_credit, long coins_oper, long coins_qq)
         {
             long credit_group = groupId; // 简化处理，通常积分群就是当前群
-            long credit_value = await UserInfo.GetCreditAsync(botUin, credit_group, qq);
             if (coins_type == (int)CoinsLog.CoinsType.groupCredit)
-            { 
+            {
                 if (!await GroupInfo.GetIsCreditAsync(groupId))
                     return $"没有开启本群积分";
             }
@@ -134,13 +154,36 @@ namespace BotWorker.Domain.Entities
             using var wrapper = await BeginTransactionAsync();
             try
             {
-                // 在事务内部获取分值并加锁
-                long credit_value_locked = await UserInfo.GetCreditForUpdateAsync(botUin, credit_group, qq, wrapper.Transaction);
+                // 1. 确保用户存在 (按 ID 从小到大执行，防止 User 表死锁)
+                long firstId = qq < coins_qq ? qq : coins_qq;
+                long secondId = qq < coins_qq ? coins_qq : qq;
+                string firstName = firstId == qq ? name : await UserInfo.GetValueAsync("Name", firstId, trans: wrapper.Transaction);
+                string secondName = secondId == qq ? name : await UserInfo.GetValueAsync("Name", secondId, trans: wrapper.Transaction);
+
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                await UserInfo.AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
+                await UserInfo.AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
+
+                // 2. 统一加锁顺序，防止 GroupMember 表死锁 (按 ID 从小到大锁定)
+                if (firstId == qq)
+                {
+                    await UserInfo.GetCreditForUpdateAsync(botUin, credit_group, qq, wrapper.Transaction);
+                    if (qq != coins_qq)
+                        await GetCoinsForUpdateAsync(coins_type, groupId, coins_qq, wrapper.Transaction);
+                }
+                else
+                {
+                    await GetCoinsForUpdateAsync(coins_type, groupId, coins_qq, wrapper.Transaction);
+                    await UserInfo.GetCreditForUpdateAsync(botUin, credit_group, qq, wrapper.Transaction);
+                }
+
+                // 在事务内部获取分值
+                long credit_value_locked = await UserInfo.GetCreditAsync(botUin, credit_group, qq, wrapper.Transaction);
                 if (cmdName == "充值")
                 {
                     if (credit_value_locked < minus_credit)
                     {
-                        wrapper.Rollback();
+                        await wrapper.RollbackAsync();
                         return $"您有{credit_value_locked}分不足{minus_credit}，请先兑换";
                     }
                 }
@@ -149,7 +192,7 @@ namespace BotWorker.Domain.Entities
                     long coins_value_locked = await GetCoinsAsync(coins_type, groupId, coins_qq, wrapper.Transaction);
                     if (coins_value_locked < minus_credit)
                     {
-                        wrapper.Rollback();
+                        await wrapper.RollbackAsync();
                         return $"[@:{coins_qq}]{cmdPara}{coins_value_locked}不足{coins_oper}，无法扣除";
                     }
 
@@ -157,13 +200,11 @@ namespace BotWorker.Domain.Entities
                     coins_oper = -coins_oper;
                 }
 
-                // 1. 扣除发送者积分
+                // 3. 执行业务操作
                 var res1 = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
-
-                // 2. 增加目标用户金币
                 var res2 = await AddCoinsAsync(botUin, groupId, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
 
-                wrapper.Commit();
+                await wrapper.CommitAsync();
 
                 // 同步缓存
                 await UserInfo.SyncCreditCacheAsync(botUin, credit_group, qq, res1.CreditValue);
@@ -173,7 +214,7 @@ namespace BotWorker.Domain.Entities
             }
             catch (Exception ex)
             {
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 Logger.Error($"[ExchangeCoins Error] {ex.Message}");
                 return RetryMsg;
             }
@@ -188,6 +229,11 @@ namespace BotWorker.Domain.Entities
         public static async Task<long> GetGroupCreditForUpdateAsync(long groupId, long qq, IDbTransaction? trans = null)
         {
             return await GetForUpdateAsync<long>(CoinsLog.conisFields[(int)CoinsLog.CoinsType.groupCredit], groupId, qq, 0, trans);
+        }
+
+        public static async Task<long> GetSaveCreditForUpdateAsync(long groupId, long qq, IDbTransaction? trans = null)
+        {
+            return await GetForUpdateAsync<long>("SaveCredit", groupId, qq, 0, trans);
         }
 
         // 金币余额
@@ -266,7 +312,7 @@ namespace BotWorker.Domain.Entities
             try
             {
                 var res = await AddCoinsAsync(botUin, groupId, qq, name, coinsType, coinsAdd, coinsInfo, wrapper.Transaction);
-                wrapper.Commit();
+                await wrapper.CommitAsync();
 
                 SyncCacheField(groupId, qq, CoinsLog.conisFields[coinsType], res.CoinsValue);
                 return res;
@@ -274,30 +320,53 @@ namespace BotWorker.Domain.Entities
             catch (Exception ex)
             {
                 Logger.Error($"[AddCoinsTrans Error] {ex.Message}");
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 if (trans != null) throw;
                 return (-1, 0, 0);
             }
         }
 
-        // 虚拟币转账 (异步事务版)
-        public static async Task<(int Result, long SenderCoins, long ReceiverCoins)> TransferCoinsAsync(long botUin, long groupId, string groupName, long qq, string name, long qqTo, string nameTo, int coinsType, long coinsMinus, long coinsAdd, string transferInfo)
+        //转账金币
+        public static async Task<(int Result, long SenderCoins, long ReceiverCoins)> TransferCoinsAsync(long botUin, long groupId, long qq, string name, long qqTo, string nameTo, int coinsType, long coinsMinus, long coinsAdd, string transferInfo)
         {
             using var wrapper = await BeginTransactionAsync();
             try
             {
-                // 1. 获取发送者金币并加锁，检查是否足够
-                var currentCoins = await GetCoinsForUpdateAsync(coinsType, groupId, qq, wrapper.Transaction);
+                // 1. 确保用户存在 (按 ID 从小到大执行，防止 User 表死锁)
+                long firstId = qq < qqTo ? qq : qqTo;
+                long secondId = qq < qqTo ? qqTo : qq;
+                string firstName = firstId == qq ? name : await UserInfo.GetValueAsync("Name", firstId, trans: wrapper.Transaction);
+                string secondName = secondId == qq ? name : await UserInfo.GetValueAsync("Name", secondId, trans: wrapper.Transaction);
+
+                long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                await UserInfo.AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
+                await UserInfo.AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
+
+                // 2. 统一加锁顺序，防止 GroupMember 表死锁 (按 ID 从小到大锁定)
+                if (firstId == qq)
+                {
+                    await GetCoinsForUpdateAsync(coinsType, groupId, qq, wrapper.Transaction);
+                    await GetCoinsForUpdateAsync(coinsType, groupId, qqTo, wrapper.Transaction);
+                }
+                else
+                {
+                    await GetCoinsForUpdateAsync(coinsType, groupId, qqTo, wrapper.Transaction);
+                    await GetCoinsForUpdateAsync(coinsType, groupId, qq, wrapper.Transaction);
+                }
+
+                // 获取发送者金币，检查是否足够
+                var currentCoins = await GetCoinsAsync(coinsType, groupId, qq, wrapper.Transaction);
                 if (currentCoins < coinsMinus)
                 {
-                    wrapper.Rollback();
+                    await wrapper.RollbackAsync();
                     return (-2, currentCoins, 0); // -2 表示余额不足
                 }
 
+                // 3. 执行业务操作
                 var res1 = await AddCoinsAsync(botUin, groupId, qq, name, coinsType, -coinsMinus, $"{transferInfo}转出:{qqTo}", wrapper.Transaction);
                 var res2 = await AddCoinsAsync(botUin, groupId, qqTo, nameTo, coinsType, coinsAdd, $"{transferInfo}转入:{qq}", wrapper.Transaction);
 
-                wrapper.Commit();
+                await wrapper.CommitAsync();
 
                 SyncCacheField(groupId, qq, CoinsLog.conisFields[coinsType], res1.CoinsValue);
                 SyncCacheField(groupId, qqTo, CoinsLog.conisFields[coinsType], res2.CoinsValue);
@@ -307,7 +376,7 @@ namespace BotWorker.Domain.Entities
             catch (Exception ex)
             {
                 Logger.Error($"[TransferCoins Error] {ex.Message}");
-                wrapper.Rollback();
+                await wrapper.RollbackAsync();
                 return (-1, 0, 0);
             }
         }
@@ -387,13 +456,17 @@ namespace BotWorker.Domain.Entities
                 using var wrapper = await BeginTransactionAsync();
                 try
                 {
+                    // 1. 确保用户存在
+                    long ownerId = await GroupInfo.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
+                    await UserInfo.AppendAsync(botUin, groupId, creditQQ, "", ownerId, trans: wrapper.Transaction);
+
                     var creditValue = await UserInfo.GetCreditForUpdateAsync(botUin, groupId, creditQQ, wrapper.Transaction);
 
                     if (cmdName == "下分")
                     {
                         if (creditValue < creditAdd)
                         {
-                            wrapper.Rollback();
+                            await wrapper.RollbackAsync();
                             return $"对方只有{creditValue}分";
                         }
                         creditAdd = -creditAdd;
@@ -402,18 +475,18 @@ namespace BotWorker.Domain.Entities
                     var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, creditQQ, "", creditAdd, cmdName, wrapper.Transaction);
                     if (res.Result == -1)
                     {
-                        wrapper.Rollback();
+                        await wrapper.RollbackAsync();
                         return RetryMsg;
                     }
 
-                    wrapper.Commit();
+                    await wrapper.CommitAsync();
                     await UserInfo.SyncCreditCacheAsync(botUin, groupId, creditQQ, res.CreditValue);
 
                     return $"[@:{creditQQ}] {cmdName}成功！\n积分：{Math.Abs(creditAdd)}，累计：{res.CreditValue}";
                 }
                 catch (Exception ex)
                 {
-                    wrapper.Rollback();
+                    await wrapper.RollbackAsync();
                     Logger.Error($"[GetShangFen Error] {ex.Message}");
                     return RetryMsg;
                 }

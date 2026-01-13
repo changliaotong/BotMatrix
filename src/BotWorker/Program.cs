@@ -92,7 +92,7 @@ builder.Services.AddSingleton<MessagePipeline>(sp =>
     var pipeline = new MessagePipeline(sp);
     // 1. 全局异常处理
     pipeline.Use(sp.GetRequiredService<ExceptionMiddleware>());
-    // 2. 最终消息加工
+    // 2. 最终消息加工 (占位符替换等，作为一个包裹整个管道的后置处理器)
     pipeline.Use(sp.GetRequiredService<FriendlyMessageMiddleware>());
     // 3. 消息清洗与预处理
     pipeline.Use(sp.GetRequiredService<PreProcessMiddleware>());
@@ -179,7 +179,7 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : 
         await BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");
         await BotCmd.EnsureCommandExistsAsync("积分榜", "积分榜");
         await BotCmd.EnsureCommandExistsAsync("后台", "后台");
-
+        
         Log.Information("[Startup] Initializing AI App...");
         // 1. 初始化 AI 提供商
         await llmApp.InitializeAsync();

@@ -261,6 +261,9 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
         return await GetCreditAsync(userId);
     }
 
+    public static long GetCredit(long groupId, long userId)
+        => GetCreditAsync(groupId, userId).GetAwaiter().GetResult();
+
     public static async Task<int> AppendUserAsync(long botUin, long groupId, long userId, string name, string userOpenid = "", string groupOpenid = "")
     {
         if (userId.In(2107992324, 3677524472, 3662527857, 2174158062, 2188157235, 3375620034, 1611512438, 3227607419, 3586811032,

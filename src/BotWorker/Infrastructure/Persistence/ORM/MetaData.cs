@@ -301,6 +301,37 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             public IDbConnection? Connection => _inner.Connection;
             public IsolationLevel IsolationLevel => _inner.IsolationLevel;
 
+            public static async Task<T> ExecuteAsync<T>(Func<TransactionWrapper, Task<T>> action, IDbTransaction? trans = null, IsolationLevel level = IsolationLevel.ReadCommitted)
+            {
+                await using var wrapper = await BeginTransactionAsync(trans, level);
+                try
+                {
+                    var result = await action(wrapper);
+                    await wrapper.CommitAsync();
+                    return result;
+                }
+                catch
+                {
+                    await wrapper.RollbackAsync();
+                    throw;
+                }
+            }
+
+            public static async Task ExecuteAsync(Func<TransactionWrapper, Task> action, IDbTransaction? trans = null, IsolationLevel level = IsolationLevel.ReadCommitted)
+            {
+                await using var wrapper = await BeginTransactionAsync(trans, level);
+                try
+                {
+                    await action(wrapper);
+                    await wrapper.CommitAsync();
+                }
+                catch
+                {
+                    await wrapper.RollbackAsync();
+                    throw;
+                }
+            }
+
             public void Commit()
             {
                 if (_disposed || _committed || _rolledBack) return;

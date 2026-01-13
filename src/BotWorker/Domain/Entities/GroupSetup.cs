@@ -1,37 +1,43 @@
+using BotWorker.Infrastructure.Persistence.ORM;
+using static BotWorker.Infrastructure.Persistence.ORM.MetaData;
+
 namespace BotWorker.Domain.Entities
 {
     public partial class GroupInfo : MetaDataGuid<GroupInfo>
     {
         public static async Task<string> SetPowerOnOffAsync(long botUin, long groupId, long userId, string cmdName)
         {
-            var powerOnMsg = $"✅[启动序列初始化……]\r\n" +
-                    $"✅→ 系统时间同步中……✓\r\n" +
-                    $"✅→ 语言引擎加载中……✓\r\n" +
-                    $"✅→ 自适应语义模块校准……完成\r\n" +
-                    $"✅→ 神经网络连接中枢……已建立连接\r\n" +
-                    $"✅→ 情感限制器 …… 安全锁定\r\n" +
-                    $"✅→ 用户授权验证……通过\r\n\r\n" +
-                    $"✅>>> [Core Online] 智能核心已上线\r\n" +
-                    $"✅>>> 所有子系统运行正常，等待主指令";
-            var powerOffMsg = $"🔴[接收关机指令……]\r\n" +
-                   $"🔴→ 会话上下文打包中……完成\r\n" +
-                   $"🔴→ 缓存清理中……✓\r\n" +
-                   $"🔴→ 数据备份已写入安全存储节点\r\n" +
-                   $"🔴→ 神经连接桥断开……成功\r\n" +
-                   $"🔴→ 权限链路回收……已完成\r\n\r\n" +
-                   $"🔴>>> [Core Offline] 智能核心现已下线\r\n" +
-                   $"🔴>>> 所有子系统安全脱机，期待下一次唤醒";
+            return await TransactionWrapper.ExecuteAsync(async (wrapper) =>
+            {
+                var powerOnMsg = $"✅[启动序列初始化……]\r\n" +
+                        $"✅→ 系统时间同步中……✓\r\n" +
+                        $"✅→ 语言引擎加载中……✓\r\n" +
+                        $"✅→ 自适应语义模块校准……完成\r\n" +
+                        $"✅→ 神经网络连接中枢……已建立连接\r\n" +
+                        $"✅→ 情感限制器 …… 安全锁定\r\n" +
+                        $"✅→ 用户授权验证……通过\r\n\r\n" +
+                        $"✅>>> [Core Online] 智能核心已上线\r\n" +
+                        $"✅>>> 所有子系统运行正常，等待主指令";
+                var powerOffMsg = $"🔴[接收关机指令……]\r\n" +
+                       $"🔴→ 会话上下文打包中……完成\r\n" +
+                       $"🔴→ 缓存清理中……✓\r\n" +
+                       $"🔴→ 数据备份已写入安全存储节点\r\n" +
+                       $"🔴→ 神经连接桥断开……成功\r\n" +
+                       $"🔴→ 权限链路回收……已完成\r\n\r\n" +
+                       $"🔴>>> [Core Offline] 智能核心现已下线\r\n" +
+                       $"🔴>>> 所有子系统安全脱机，期待下一次唤醒";
 
-            var isPowerOn = cmdName == "开机";
-            if (!await IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
-                return OwnerOnlyMsg;
-            if (!await IsPowerOffAsync(groupId) && cmdName == "开机")
-                return powerOnMsg;
-            else if (await IsPowerOffAsync(groupId) && cmdName == "关机")
-                return powerOffMsg;
-            return await SetValueAsync("IsPowerOn", isPowerOn, groupId) == -1 
-                ? RetryMsg 
-                : cmdName == "开机" ? powerOnMsg : powerOffMsg;
+                var isPowerOn = cmdName == "开机";
+                if (!await IsOwnerAsync(groupId, userId, wrapper.Transaction) && !BotInfo.IsAdmin(botUin, userId))
+                    return OwnerOnlyMsg;
+                if (!await IsPowerOffAsync(groupId, wrapper.Transaction) && cmdName == "开机")
+                    return powerOnMsg;
+                else if (await IsPowerOffAsync(groupId, wrapper.Transaction) && cmdName == "关机")
+                    return powerOffMsg;
+                return await SetValueAsync("IsPowerOn", isPowerOn, groupId, null, wrapper.Transaction) == -1
+                    ? RetryMsg
+                    : cmdName == "开机" ? powerOnMsg : powerOffMsg;
+            });
         }
 
         public static string SetPowerOnOff(long botUin, long groupId, long userId, string cmdName)

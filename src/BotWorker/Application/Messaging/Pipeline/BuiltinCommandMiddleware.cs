@@ -21,13 +21,21 @@ namespace BotWorker.Application.Messaging.Pipeline
                 var botMsg = botMsgEvent.BotMessage;
                 
                 // 处理内置指令 (复刻自 CommandMessage.cs)
+                var isHot = botMsg.IsHot();
                 var isCmdMsg = botMsg.CurrentMessage.IsMatch(BotCmd.GetRegexCmd());
-                botMsg.IsCmd = isCmdMsg;
+                botMsg.IsCmd = isHot || isCmdMsg;
 
                 if (botMsg.IsCmd)
                 {
-                    (botMsg.CmdName, botMsg.CmdPara) = BotMessage.GetCmdPara(botMsg.CurrentMessage, BotCmd.GetRegexCmd());
-                    context.Logger?.LogInformation("[BuiltinCommand] Identified command: {CmdName} for message {MessageId}", botMsg.CmdName, context.EventId);
+                    if (isCmdMsg)
+                    {
+                        (botMsg.CmdName, botMsg.CmdPara) = BotMessage.GetCmdPara(botMsg.CurrentMessage, BotCmd.GetRegexCmd());
+                        context.Logger?.LogInformation("[BuiltinCommand] Identified command: {CmdName} for message {MessageId}", botMsg.CmdName, context.EventId);
+                    }
+                    else
+                    {
+                        context.Logger?.LogInformation("[BuiltinCommand] Identified hot command for message {MessageId}", context.EventId);
+                    }
 
                     // 如果是已迁移到插件的管理指令，则跳过内置处理，让插件系统处理
                     if (botMsg.CmdName.In("踢", "禁言", "取消禁言", "设置头衔", "开机", "关机", "设置欢迎语", "欢迎语", "改名提示", "拉黑", "取消拉黑", "黑名单", "被踢拉黑", "退群拉黑", "敏感词系统",
@@ -52,10 +60,12 @@ namespace BotWorker.Application.Messaging.Pipeline
                         if (botMsg.IsRefresh) await botMsg.HandleRefreshAsync();
                         else 
                         {
-                            await botMsg.GetCmdResAsync();
+                            // 优先尝试快捷指令，因为快捷指令通常比普通指令更具体（如：取分 1000）
+                            await botMsg.GetHotCmdAsync();
+                            
                             if (string.IsNullOrEmpty(botMsg.Answer))
                             {
-                                await botMsg.GetHotCmdAsync();
+                                await botMsg.GetCmdResAsync();
                             }
                         }
 
