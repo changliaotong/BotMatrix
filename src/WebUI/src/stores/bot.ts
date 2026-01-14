@@ -140,21 +140,34 @@ export const useBotStore = defineStore('bot', {
         return { success: false, message: 'Failed to fetch group setup' };
       }
     },
-    async updateGroupSetup(groupInfo: any) {
+    async updateGroupSetup(setup: any) {
       try {
-        const { data } = await api.put('/api/admin/setup/groups', groupInfo);
+        const { data } = await api.post('/api/admin/setup/groups', setup);
         return data;
       } catch (err) {
         console.error('Failed to update group setup:', err);
         return { success: false, message: 'Failed to update group setup' };
       }
     },
+    async deleteGroupSetup(botUin: number, groupId: number) {
+      try {
+        const { data } = await api.delete(`/api/admin/setup/groups?bot_uin=${botUin}&group_id=${groupId}`);
+        return data;
+      } catch (err) {
+        console.error('Failed to delete group setup:', err);
+        return { success: false, message: 'Failed to delete group setup' };
+      }
+    },
 
     // --- Member Setup API ---
-    async fetchMemberSetup(adminId?: string) {
+    async fetchMemberSetup(adminId?: string, adminQQ?: string) {
       try {
         let url = '/api/admin/setup/members';
-        if (adminId) url += `?admin_id=${adminId}`;
+        const params = new URLSearchParams();
+        if (adminId) params.append('admin_id', adminId);
+        if (adminQQ) params.append('admin_qq', adminQQ);
+        if (params.toString()) url += `?${params.toString()}`;
+        
         const { data } = await api.get(url);
         if (data.success && data.data && data.data.bots) {
           this.bots = data.data.bots;
@@ -557,6 +570,15 @@ export const useBotStore = defineStore('bot', {
         return data;
       } catch (err) {
         console.error('Failed to manage user:', err);
+        throw err;
+      }
+    },
+    async updateUserProfile(profileData: { qq: string }) {
+      try {
+        const { data } = await api.post('/api/user/profile', profileData);
+        return data;
+      } catch (err) {
+        console.error('Failed to update user profile:', err);
         throw err;
       }
     },

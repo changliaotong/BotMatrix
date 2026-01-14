@@ -74,10 +74,10 @@ export const useSystemStore = defineStore('system', {
             { id: 'logs', icon: 'Terminal', titleKey: 'logs' },
             { id: 'monitor', icon: 'Activity', titleKey: 'sidebar_monitor' },
             { id: 'nexus', icon: 'Network', titleKey: 'nexus' },
-            { id: 'ai', icon: 'Sparkles', titleKey: 'ai_nexus' },
+            { id: 'ai', icon: 'Zap', titleKey: 'ai_nexus' },
             { id: 'routing', icon: 'Route', titleKey: 'routing' },
             { id: 'docker', icon: 'Box', titleKey: 'docker' },
-            { id: 'plugins', icon: 'Box', titleKey: 'plugins' },
+            { id: 'plugins', icon: 'Package', titleKey: 'plugins' },
           ]
         },
         {

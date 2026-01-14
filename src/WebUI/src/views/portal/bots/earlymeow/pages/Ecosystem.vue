@@ -69,7 +69,7 @@ const filteredPlugins = computed(() => {
 </script>
 
 <template>
-  <div class="py-20 px-6 max-w-7xl mx-auto relative z-10">
+  <div class="pt-40 pb-20 px-6 max-w-7xl mx-auto relative z-10">
     <!-- Header -->
     <div class="mb-20 space-y-6">
       <div class="inline-flex items-center gap-2 text-[var(--matrix-color)] font-black text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20">

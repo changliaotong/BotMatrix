@@ -10,12 +10,19 @@ const router = createRouter({
     {
       path: '/meow',
       component: () => import('@/views/portal/bots/earlymeow/Layout.vue'),
-      meta: { layout: 'blank', title: 'title.meow' },
+      meta: { layout: 'blank', title: 'title.meow', requiresAuth: false },
       children: [
         {
           path: '',
+          alias: ['index'],
           name: 'early-meow-home',
           component: () => import('@/views/portal/bots/earlymeow/pages/Home.vue'),
+        },
+        {
+          path: 'guide-angel',
+          name: 'early-meow-guide-angel',
+          component: () => import('@/views/portal/bots/earlymeow/pages/GuideAngel.vue'),
+          meta: { title: 'title.guide_angel' }
         },
         {
           path: 'tech',
@@ -51,6 +58,10 @@ const router = createRouter({
       redirect: '/'
     },
     {
+      path: '/bots/guide-angel',
+      redirect: '/meow/guide-angel'
+    },
+    {
       path: '/bots/early-meow',
       redirect: '/meow'
     },
@@ -69,6 +80,11 @@ const router = createRouter({
           path: '',
           name: 'bot-digital-employee',
           component: () => import('@/views/portal/bots/digital-employee/pages/Home.vue'),
+        },
+        {
+          path: 'dashboard',
+          name: 'bot-digital-employee-dashboard',
+          component: () => import('@/views/portal/bots/digital-employee/pages/Dashboard.vue'),
         }
       ]
     },
@@ -121,6 +137,11 @@ const router = createRouter({
       component: RouterView,
       meta: { requiresAuth: true, layout: 'blank', title: 'title.setup' },
       children: [
+        {
+          path: 'bots',
+          name: 'portal-bot-list',
+          component: () => import('@/views/portal/setup/BotList.vue'),
+        },
         {
           path: 'bot',
           name: 'portal-bot-setup',
@@ -189,6 +210,16 @@ const router = createRouter({
           path: 'fission',
           name: 'console-fission',
           component: () => import('@/views/console/Fission.vue'),
+        },
+        {
+          path: 'setup/bot',
+          name: 'console-bot-setup',
+          component: () => import('@/views/portal/setup/BotSetup.vue'),
+        },
+        {
+          path: 'setup/group',
+          name: 'console-group-setup',
+          component: () => import('@/views/portal/setup/GroupSetup.vue'),
         },
         {
           path: 'manual',

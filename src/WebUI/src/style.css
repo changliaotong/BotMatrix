@@ -37,7 +37,7 @@
   --bg-body: #020617;
   --bg-card: #0f172a;
   --bg-header: rgba(2, 6, 23, 0.9);
-  --bg-sidebar: #020617;
+  --bg-sidebar: rgba(2, 6, 23, 0.85);
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --sidebar-text: #f8fafc;
@@ -87,7 +87,7 @@
   --bg-body: #000000;
   --bg-card: rgba(0, 15, 0, 0.4);
   --bg-header: rgba(0, 5, 0, 0.9);
-  --bg-sidebar: rgba(0, 0, 0, 1);
+  --bg-sidebar: rgba(0, 0, 0, 0.9);
   --text-main: #00ff41;
   --text-muted: #008f11;
   --sidebar-text: #00ff41;
@@ -124,12 +124,12 @@
   --bg-body: #0f172a; /* Slightly brighter deep navy */
   --bg-card: rgba(30, 41, 59, 0.45); /* High-transparency glass */
   --bg-header: rgba(15, 23, 42, 0.85);
-  --bg-sidebar: rgba(7, 10, 20, 0.95);
+  --bg-sidebar: rgba(7, 10, 20, 0.75);
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --sidebar-text: #e2e8f0;
   --sidebar-text-muted: #64748b;
-  --sidebar-text-active: #38bdf8;
+  --sidebar-text-active: #ffffff;
   --border-color: rgba(56, 189, 248, 0.35);
   --matrix-color: #38bdf8; /* Electric Blue */
   --matrix-color-rgb: 56, 189, 248;

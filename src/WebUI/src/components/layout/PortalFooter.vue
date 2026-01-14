@@ -8,7 +8,13 @@
       <div class="grid grid-cols-2 md:grid-cols-5 gap-16 mb-20">
         <div class="col-span-2">
           <div class="flex items-center gap-3 mb-8">
-            <div class="w-10 h-10 bg-gradient-to-br from-[var(--matrix-color)] to-indigo-600 rounded-xl flex items-center justify-center font-black text-white shadow-lg shadow-[var(--matrix-glow)]">M</div>
+            <!-- Orbital Logo Effect -->
+            <div class="flex items-center gap-1.5 h-10">
+              <div v-for="i in 3" :key="i" 
+                   class="w-1.5 h-6 bg-[var(--matrix-color)] rounded-full animate-bounce shadow-[0_0_15px_rgba(var(--matrix-color-rgb),0.5)]" 
+                   :style="{ animationDelay: i * 0.15 + 's', animationDuration: '1s' }">
+              </div>
+            </div>
             <div class="flex flex-col">
               <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ tt('common.project_name') }}</span>
               <span class="text-[8px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ tt('common.nexus_os') }}</span>

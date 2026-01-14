@@ -24,7 +24,9 @@ import {
   Activity,
   Sparkles,
   Wrench,
-  Settings2
+  Settings2,
+  Zap,
+  Package
 } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
@@ -52,15 +54,18 @@ const iconMap: Record<string, any> = {
   Activity,
   Sparkles,
   Wrench,
-  Settings2
+  Settings2,
+  Zap,
+  Package
 };
 
 // Map item IDs to routes
 const routeMap: Record<string, string> = {
   'dashboard': '/console',
   'bots': '/console/bots',
-  'bot-setup': '/setup/bot',
-  'group-setup': '/setup/group',
+  'guide-angel': '/console/bots/guide-angel',
+  'bot-setup': '/console/setup/bot',
+  'group-setup': '/console/setup/group',
   'contacts': '/console/contacts',
   'messages': '/console/messages',
   'tasks': '/console/tasks',
@@ -155,7 +160,7 @@ const filteredMenuGroups = computed(() => {
        class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"></div>
 
   <!-- Sidebar -->
-  <aside class="fixed md:static inset-y-0 left-0 flex-shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-sidebar)] flex flex-col z-50 transition-all duration-300 overflow-hidden"
+  <aside class="fixed md:static inset-y-0 left-0 flex-shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-sidebar)] backdrop-blur-xl flex flex-col z-50 transition-all duration-300 overflow-hidden"
      :class="[
          systemStore.isSidebarCollapsed ? 'w-64 md:w-20' : 'w-64 md:w-64',
          systemStore.showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
@@ -165,8 +170,12 @@ const filteredMenuGroups = computed(() => {
     <div class="h-16 flex items-center border-b border-[var(--border-color)] overflow-hidden transition-all duration-300"
          :class="systemStore.isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-6'">
         <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)] flex items-center justify-center shadow-lg shadow-[var(--matrix-color)]/20 flex-shrink-0">
-                <Cpu class="w-5 h-5 text-black" />
+            <!-- Orbital Logo Effect -->
+            <div class="flex items-center gap-1 h-8 px-1">
+                <div v-for="i in 3" :key="i" 
+                     class="w-1 h-5 bg-[var(--matrix-color)] rounded-full animate-bounce shadow-[0_0_10px_rgba(var(--matrix-color-rgb),0.4)]" 
+                     :style="{ animationDelay: i * 0.15 + 's', animationDuration: '1s' }">
+                </div>
             </div>
             <span v-show="!systemStore.isSidebarCollapsed" class="font-bold tracking-tight text-[var(--sidebar-text)] whitespace-nowrap">{{ t('botmatrix') }}</span>
         </div>

@@ -26,7 +26,7 @@ export const useAuthStore = defineStore('auth', {
         const { data } = await api.get('/api/me');
         if (data && data.success && data.data?.user) {
           this.user = data.data.user;
-          const role = data.data.user.is_admin ? (this.role === 'super' ? 'super' : 'admin') : 'user';
+          const role = data.data.role || (data.data.user.is_admin ? (this.role === 'super' ? 'super' : 'admin') : 'user');
           this.setRole(role);
           return true;
         }

@@ -75,7 +75,7 @@ const sectors = [
 
     <PortalHeader />
     
-    <main class="max-w-[1600px] mx-auto px-6 lg:px-12 py-12 pt-28 relative z-10">
+    <main class="max-w-[1600px] mx-auto px-6 lg:px-12 py-12 pt-32 relative z-10">
       <!-- Main Header: Holographic Station Status -->
       <header class="mb-16 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 relative">
         <div class="space-y-4 relative">

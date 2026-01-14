@@ -145,6 +145,7 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 				ID        int64     `json:"id"`
 				Username  string    `json:"username"`
 				IsAdmin   bool      `json:"is_admin"`
+				QQ        string    `json:"qq"`
 				Role      string    `json:"role"`
 				CreatedAt time.Time `json:"created_at"`
 			} `json:"user"`
@@ -155,12 +156,14 @@ func HandleLogin(m *bot.Manager) http.HandlerFunc {
 				ID        int64     `json:"id"`
 				Username  string    `json:"username"`
 				IsAdmin   bool      `json:"is_admin"`
+				QQ        string    `json:"qq"`
 				Role      string    `json:"role"`
 				CreatedAt time.Time `json:"created_at"`
 			}{
-				ID:        user.ID,
+				ID:        int64(user.ID),
 				Username:  user.Username,
 				IsAdmin:   user.IsAdmin,
+				QQ:        user.QQ,
 				Role:      role,
 				CreatedAt: user.CreatedAt,
 			},
@@ -236,9 +239,12 @@ func HandleTokenLogin(m *bot.Manager) http.HandlerFunc {
 			"token": jwtToken,
 			"role":  role,
 			"user": map[string]interface{}{
-				"username": user.Username,
-				"is_admin": user.IsAdmin,
-				"role":     role,
+				"id":        int64(user.ID),
+				"username":  user.Username,
+				"is_admin":  user.IsAdmin,
+				"qq":        user.QQ,
+				"role":      role,
+				"createdAt": user.CreatedAt,
 			},
 		})
 	}
@@ -341,6 +347,7 @@ func HandleGetUserInfo(m *bot.Manager) http.HandlerFunc {
 				ID        int64     `json:"id"`
 				Username  string    `json:"username"`
 				IsAdmin   bool      `json:"is_admin"`
+				QQ        string    `json:"qq"`
 				Role      string    `json:"role"`
 				CreatedAt time.Time `json:"created_at"`
 				UpdatedAt time.Time `json:"updated_at"`
@@ -350,6 +357,7 @@ func HandleGetUserInfo(m *bot.Manager) http.HandlerFunc {
 				ID        int64     `json:"id"`
 				Username  string    `json:"username"`
 				IsAdmin   bool      `json:"is_admin"`
+				QQ        string    `json:"qq"`
 				Role      string    `json:"role"`
 				CreatedAt time.Time `json:"created_at"`
 				UpdatedAt time.Time `json:"updated_at"`
@@ -357,6 +365,7 @@ func HandleGetUserInfo(m *bot.Manager) http.HandlerFunc {
 				ID:        user.ID,
 				Username:  user.Username,
 				IsAdmin:   user.IsAdmin,
+				QQ:        user.QQ,
 				Role:      role,
 				CreatedAt: user.CreatedAt,
 				UpdatedAt: user.UpdatedAt,
@@ -2146,6 +2155,161 @@ func HandleChangePassword(m *bot.Manager) http.HandlerFunc {
 	}
 }
 
+// HandleUpdateUserProfile 更新当前登录用户的个人资料
+func HandleUpdateUserProfile(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lang := utils.GetLangFromRequest(r)
+
+		claims, ok := r.Context().Value(types.UserClaimsKey).(*types.UserClaims)
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			utils.SendJSONResponse(w, false, utils.T(lang, "not_logged_in"), nil)
+			return
+		}
+
+		var data struct {
+			QQ string `json:"qq"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			utils.SendJSONResponse(w, false, utils.T(lang, "invalid_request_format"), nil)
+			return
+		}
+
+		user, exists := m.GetOrLoadUser(claims.Username)
+		if !exists {
+			w.WriteHeader(http.StatusNotFound)
+			utils.SendJSONResponse(w, false, utils.T(lang, "user_not_found"), nil)
+			return
+		}
+
+		user.QQ = data.QQ
+		user.UpdatedAt = time.Now()
+
+		if err := m.SaveUserToDB(user); err != nil {
+			log.Printf("更新用户资料失败: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			utils.SendJSONResponse(w, false, utils.T(lang, "user_update_failed"), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, utils.T(lang, "user_info_updated"), nil)
+	}
+}
+
+// HandleGetMemberSetup 获取机器人设置列表 (Legacy Member Table)
+// @Summary 获取机器人设置列表
+// @Description 获取所有机器人设置信息 (Member表)
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} utils.JSONResponse "机器人设置列表"
+// @Router /api/admin/setup/members [get]
+func HandleGetMemberSetup(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var bots []models.Member
+
+		// 检查是否有查询参数
+		adminId := r.URL.Query().Get("admin_id")
+		adminQQ := r.URL.Query().Get("admin_qq")
+
+		query := m.GORMDB.Model(&models.Member{})
+		if adminQQ != "" {
+			// 优先使用个人QQ过滤，对应 Member 表的 AdminId
+			query = query.Where("AdminId = ?", adminQQ)
+		} else if adminId != "" {
+			// 如果没有提供 QQ，则尝试使用系统用户 ID (兼容逻辑)
+			query = query.Where("AdminId = ?", adminId)
+		}
+
+		// 只查询未删除的 (如果使用了 DeletedAt)
+		// Member 表结构中包含了 DeletedAt gorm.DeletedAt
+
+		if err := query.Find(&bots).Error; err != nil {
+			utils.SendJSONResponse(w, false, "查询失败: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "获取成功", map[string]interface{}{
+			"bots": bots,
+		})
+	}
+}
+
+// HandleUpdateMemberSetup 更新机器人设置
+func HandleUpdateMemberSetup(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var botInfo models.Member
+		if err := json.NewDecoder(r.Body).Decode(&botInfo); err != nil {
+			utils.SendJSONResponse(w, false, "无效的请求数据", nil)
+			return
+		}
+
+		if botInfo.BotUin == 0 {
+			utils.SendJSONResponse(w, false, "机器人UIN不能为空", nil)
+			return
+		}
+
+		if err := m.GORMDB.Save(&botInfo).Error; err != nil {
+			utils.SendJSONResponse(w, false, "保存失败: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "保存成功", nil)
+	}
+}
+
+// HandleGetGroupSetup 获取群组设置列表
+func HandleGetGroupSetup(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var groups []models.Sz84Group
+
+		robotOwner := r.URL.Query().Get("robot_owner")
+		groupOwner := r.URL.Query().Get("group_owner")
+
+		query := m.GORMDB.Model(&models.Sz84Group{})
+		if robotOwner != "" {
+			query = query.Where("RobotOwner = ?", robotOwner)
+		}
+		if groupOwner != "" {
+			query = query.Where("GroupOwner = ?", groupOwner)
+		}
+
+		if err := query.Find(&groups).Error; err != nil {
+			utils.SendJSONResponse(w, false, "查询失败: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "获取成功", map[string]interface{}{
+			"groups": groups,
+		})
+	}
+}
+
+// HandleUpdateGroupSetup 更新群组设置
+func HandleUpdateGroupSetup(m *bot.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var groupInfo models.Sz84Group
+		if err := json.NewDecoder(r.Body).Decode(&groupInfo); err != nil {
+			utils.SendJSONResponse(w, false, "无效的请求数据", nil)
+			return
+		}
+
+		if groupInfo.Id == 0 {
+			utils.SendJSONResponse(w, false, "群组ID不能为空", nil)
+			return
+		}
+
+		if err := m.GORMDB.Save(&groupInfo).Error; err != nil {
+			utils.SendJSONResponse(w, false, "保存失败: "+err.Error(), nil)
+			return
+		}
+
+		utils.SendJSONResponse(w, true, "保存成功", nil)
+	}
+}
+
 // HandleGetMessages 获取最新消息列表
 // @Summary 获取消息列表
 // @Description 从数据库获取最新的聊天消息记录，包括私聊和群聊
@@ -3513,6 +3677,7 @@ func HandleAdminManageUsers(m *bot.Manager) http.HandlerFunc {
 			Password      string `json:"password"`
 			IsAdmin       bool   `json:"is_admin"`
 			IsSuperPoints bool   `json:"is_super_points"`
+			QQ            string `json:"qq"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -3523,9 +3688,9 @@ func HandleAdminManageUsers(m *bot.Manager) http.HandlerFunc {
 
 		switch req.Action {
 		case "create":
-			handleAdminCreateUser(m, w, lang, req.Username, req.Password, req.IsAdmin, req.IsSuperPoints)
+			handleAdminCreateUser(m, w, lang, req.Username, req.Password, req.IsAdmin, req.IsSuperPoints, req.QQ)
 		case "edit":
-			handleAdminUpdateUser(m, w, lang, req.Username, req.IsAdmin, req.IsSuperPoints)
+			handleAdminUpdateUser(m, w, lang, req.Username, req.IsAdmin, req.IsSuperPoints, req.QQ)
 		case "delete":
 			handleAdminDeleteUser(m, w, lang, req.Username)
 		case "reset_password":
@@ -3539,7 +3704,7 @@ func HandleAdminManageUsers(m *bot.Manager) http.HandlerFunc {
 	}
 }
 
-func handleAdminCreateUser(m *bot.Manager, w http.ResponseWriter, lang, username, password string, isAdmin bool, isSuperPoints bool) {
+func handleAdminCreateUser(m *bot.Manager, w http.ResponseWriter, lang, username, password string, isAdmin bool, isSuperPoints bool, qq string) {
 	if username == "" || password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		utils.SendJSONResponse(w, false, utils.T(lang, "user_pwd_empty"), nil)
@@ -3558,6 +3723,7 @@ func handleAdminCreateUser(m *bot.Manager, w http.ResponseWriter, lang, username
 		PasswordHash:   hash,
 		IsAdmin:        isAdmin,
 		IsSuperPoints:  isSuperPoints,
+		QQ:             qq,
 		Active:         true,
 		SessionVersion: 1, // 初始化会话版本
 		CreatedAt:      time.Now(),
@@ -3577,7 +3743,7 @@ func handleAdminCreateUser(m *bot.Manager, w http.ResponseWriter, lang, username
 	utils.SendJSONResponse(w, true, utils.T(lang, "user_created"), nil)
 }
 
-func handleAdminUpdateUser(m *bot.Manager, w http.ResponseWriter, lang, username string, isAdmin bool, isSuperPoints bool) {
+func handleAdminUpdateUser(m *bot.Manager, w http.ResponseWriter, lang, username string, isAdmin bool, isSuperPoints bool, qq string) {
 	if username == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		utils.SendJSONResponse(w, false, utils.T(lang, "username_empty"), nil)
@@ -3599,6 +3765,7 @@ func handleAdminUpdateUser(m *bot.Manager, w http.ResponseWriter, lang, username
 
 	user.IsAdmin = isAdmin
 	user.IsSuperPoints = isSuperPoints
+	user.QQ = qq
 	user.SessionVersion++
 	user.UpdatedAt = time.Now()
 

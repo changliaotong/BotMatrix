@@ -31,7 +31,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-6 max-w-7xl mx-auto min-h-screen relative z-10">
+  <div class="pt-40 pb-20 p-6 max-w-7xl mx-auto min-h-screen relative z-10">
     <!-- Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
       <div class="space-y-1">

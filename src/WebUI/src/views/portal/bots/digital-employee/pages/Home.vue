@@ -24,11 +24,11 @@
           {{ tt('portal.digital_employee.subtitle') }}
         </p>
         <div class="flex flex-col sm:flex-row gap-6 justify-center items-center">
-          <button @click="openAction('join')" class="px-10 py-5 bg-[var(--matrix-color)] hover:bg-[var(--matrix-color)]/80 text-white rounded-2xl text-xl font-bold transition-all shadow-[0_0_40px_rgba(var(--matrix-color-rgb),0.3)] flex items-center gap-3 group">
+          <router-link to="/bots/digital-employee/dashboard" class="px-10 py-5 bg-[var(--matrix-color)] hover:bg-[var(--matrix-color)]/80 text-white rounded-2xl text-xl font-bold transition-all shadow-[0_0_40px_rgba(var(--matrix-color-rgb),0.3)] flex items-center gap-3 group">
+            {{ tt('portal.digital_employee.cta_dashboard', '查看看板') }} <LayoutDashboard class="w-6 h-6 group-hover:rotate-12 transition-transform" />
+          </router-link>
+          <button @click="openAction('join')" class="px-10 py-5 bg-[var(--bg-body)]/50 hover:bg-[var(--bg-body)]/80 text-[var(--text-main)] rounded-2xl text-xl font-bold transition-all border border-[var(--border-color)] backdrop-blur-sm flex items-center gap-3 group">
             {{ tt('portal.digital_employee.cta_primary') }} <ArrowRight class="w-6 h-6 group-hover:translate-x-2 transition-transform" />
-          </button>
-          <button @click="scrollTo('vision')" class="px-10 py-5 bg-[var(--bg-body)]/50 hover:bg-[var(--bg-body)]/80 text-[var(--text-main)] rounded-2xl text-xl font-bold transition-all border border-[var(--border-color)] backdrop-blur-sm">
-            {{ tt('portal.digital_employee.cta_secondary') }}
           </button>
         </div>
       </div>
@@ -357,7 +357,7 @@
 import { 
   BrainCircuit, Sparkles, ArrowRight, UserCheck, Zap, MessageCircle, X, Target, 
   ShieldCheck, Cpu, TrendingUp, Briefcase, Activity, Headphones, Calculator, 
-  Calendar, ListTree, Eye, Lock, Network, Workflow, Monitor, Users
+  Calendar, ListTree, Eye, Lock, Network, Workflow, Monitor, Users, LayoutDashboard
 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import { useI18n } from '@/utils/i18n';

@@ -10,7 +10,13 @@
     <div class="max-w-7xl mx-auto px-6 lg:px-8">
       <div class="flex justify-between h-12 items-center">
         <router-link to="/" class="flex items-center gap-3 group cursor-pointer">
-          <div class="w-10 h-10 bg-[var(--matrix-color)] rounded-xl flex items-center justify-center font-black text-white group-hover:rotate-12 transition-transform shadow-[var(--matrix-glow)]">M</div>
+          <!-- Main Logo with Orbital Effect -->
+          <div class="flex items-center gap-1.5 h-10">
+            <div v-for="i in 3" :key="i" 
+                 class="w-1.5 h-6 bg-[var(--matrix-color)] rounded-full animate-bounce shadow-[0_0_15px_rgba(var(--matrix-color-rgb),0.5)]" 
+                 :style="{ animationDelay: i * 0.15 + 's', animationDuration: '1s' }">
+            </div>
+          </div>
           <div class="flex flex-col">
             <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ tt('common.project_name') }}</span>
             <span class="text-[10px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ tt('common.nexus_os') }}</span>
@@ -26,8 +32,8 @@
           
           <!-- Bots Dropdown -->
           <div class="relative group">
-            <button class="flex items-center gap-1 hover:text-[var(--matrix-color)] transition-colors py-4" :class="{ 'text-[var(--matrix-color)]': route.path.startsWith('/bots') || route.path.startsWith('/meow') }">
-              {{ tt('common.nav_official_bots') }}
+            <button class="flex items-center gap-1 hover:text-[var(--matrix-color)] transition-colors py-4" :class="{ 'text-[var(--matrix-color)]': route.path.startsWith('/bots') || route.path.startsWith('/meow') || route.path.startsWith('/bots/guide-angel') }">
+              {{ officialBotsLabel }}
               <ChevronDown class="w-3 h-3 group-hover:rotate-180 transition-transform" />
             </button>
             <div class="absolute top-full left-1/2 -translate-x-1/2 w-64 p-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl opacity-0 translate-y-4 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all backdrop-blur-xl">
@@ -36,8 +42,17 @@
                   <Cat class="w-4 h-4" />
                 </div>
                 <div class="flex flex-col text-left">
-                  <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('common.earlymeow', tt('botmatrix_showcase_earlymeow_title')) }}</span>
+                  <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('common.earlymeow') }}</span>
                   <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('common.nav_earlymeow_desc') }}</span>
+                </div>
+              </router-link>
+              <router-link to="/meow/guide-angel" class="flex items-center gap-3 px-4 py-3 hover:bg-pink-500/5 rounded-xl transition-colors group/item">
+                <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-500 group-hover/item:scale-110 transition-transform">
+                  <Heart class="w-4 h-4 fill-current" />
+                </div>
+                <div class="flex flex-col text-left">
+                  <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('earlymeow.nav.guide_angel') }}</span>
+                  <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('guide_angel.description') }}</span>
                 </div>
               </router-link>
               <router-link to="/bots/nexus-guard" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item">
@@ -49,15 +64,25 @@
                   <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('common.nav_nexus_guard_desc') }}</span>
                 </div>
               </router-link>
-              <router-link to="/bots/digital-employee" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item border-t border-[var(--border-color)] mt-1 pt-3">
-                <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
-                  <User class="w-4 h-4" />
-                </div>
-                <div class="flex flex-col text-left">
-                  <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('common.digital_employee') }}</span>
-                  <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('common.nav_digital_employee_desc') }}</span>
-                </div>
-              </router-link>
+              <div class="border-t border-[var(--border-color)] mt-1 pt-1">
+                <router-link to="/bots/digital-employee" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item">
+                  <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
+                    <User class="w-4 h-4" />
+                  </div>
+                  <div class="flex flex-col text-left">
+                    <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('common.digital_employee') }}</span>
+                    <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('common.nav_digital_employee_desc') }}</span>
+                  </div>
+                </router-link>
+                <router-link to="/bots/digital-employee/dashboard" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item ml-4">
+                  <div class="w-6 h-6 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
+                    <LayoutDashboard class="w-3 h-3" />
+                  </div>
+                  <div class="flex flex-col text-left">
+                    <span class="text-[10px] font-black text-[var(--text-main)] uppercase">{{ tt('common.dashboard') }}</span>
+                  </div>
+                </router-link>
+              </div>
             </div>
           </div>
 
@@ -66,11 +91,11 @@
             <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/docs' }"></div>
           </router-link>
           <router-link to="/news" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/news' }">
-            {{ tt('common.nav_news', tt('portal.更新')) }}
+            {{ tt('common.nav_news') }}
             <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/news' }"></div>
           </router-link>
           <router-link to="/pricing" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/pricing' }">
-            {{ tt('common.nav_pricing', tt('portal.方案')) }}
+            {{ tt('common.nav_pricing') }}
             <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/pricing' }"></div>
           </router-link>
           <router-link to="/about" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/about' }">
@@ -156,7 +181,7 @@
           <!-- Login/User Menu -->
           <template v-if="!authStore.isAuthenticated">
             <router-link to="/login" class="px-6 py-2 bg-[var(--text-main)] hover:bg-[var(--matrix-color)] hover:text-white text-[var(--bg-body)] rounded-full transition-all font-black text-xs tracking-widest shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[var(--matrix-glow)]">
-              {{ tt('common.start_now', tt('earlymeow.nav.start_now')) }}
+              {{ tt('common.start_now') }}
             </router-link>
           </template>
           <template v-else>
@@ -185,27 +210,27 @@
                   <div class="p-2">
                     <router-link to="/console" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <LayoutDashboard class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
-                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.control_center', tt('portal.控制中心')) }}</span>
+                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.control_center') }}</span>
                     </router-link>
 
-                    <router-link to="/setup/bot" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
+                    <router-link to="/setup/bots" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <Bot class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
-                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.bot_setup', tt('portal.小号设置')) }}</span>
+                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.my_bots') }}</span>
                     </router-link>
 
                     <router-link to="/setup/group" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <Users class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
-                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.group_setup', tt('portal.群聊设置')) }}</span>
+                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.group_setup') }}</span>
                     </router-link>
 
                     <router-link to="/console/settings" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <User class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
-                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.profile', tt('personal_profile')) }}</span>
+                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.profile') }}</span>
                     </router-link>
 
                     <router-link to="/console/settings" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[var(--matrix-color)]/5 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all group" @click="showUserMenu = false">
                       <Settings class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
-                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.settings', tt('common.system_settings')) }}</span>
+                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.settings') }}</span>
                     </router-link>
                   </div>
 
@@ -214,7 +239,7 @@
                   <div class="p-2">
                     <button @click="handleLogout" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-red-500 transition-all group">
                       <LogOut class="w-4 h-4" />
-                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.logout', tt('portal.退出登录')) }}</span>
+                      <span class="text-sm font-black uppercase tracking-widest">{{ tt('common.logout') }}</span>
                     </button>
                   </div>
                 </div>
@@ -241,7 +266,11 @@
           <div class="text-xs font-black text-[var(--text-muted)]/40 uppercase tracking-[0.4em]">{{ tt('common.nav_official_bots') }}</div>
           <router-link to="/meow" class="flex items-center gap-4 text-xl font-black hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">
             <Cat class="w-6 h-6 text-[var(--matrix-color)]" />
-            {{ tt('common.earlymeow', tt('botmatrix_showcase_earlymeow_title')) }}
+            {{ tt('common.earlymeow') }}
+          </router-link>
+          <router-link to="/meow/guide-angel" class="flex items-center gap-4 text-xl font-black hover:text-pink-500 text-[var(--text-main)]" @click="isMobileMenuOpen = false">
+            <Heart class="w-6 h-6 text-pink-500 fill-current" />
+            {{ tt('earlymeow.nav.guide_angel') }}
           </router-link>
           <router-link to="/bots/nexus-guard" class="flex items-center gap-4 text-xl font-black hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">
             <Shield class="w-6 h-6 text-[var(--matrix-color)]" />
@@ -251,16 +280,20 @@
             <User class="w-6 h-6 text-[var(--matrix-color)]" />
             {{ tt('common.digital_employee') }}
           </router-link>
+          <router-link to="/bots/digital-employee/dashboard" class="flex items-center gap-4 text-lg font-black hover:text-[var(--matrix-color)] text-[var(--text-main)] ml-10" @click="isMobileMenuOpen = false">
+            <LayoutDashboard class="w-5 h-5 text-[var(--matrix-color)]/60" />
+            {{ tt('common.dashboard', '看板') }}
+          </router-link>
         </div>
         <div class="h-px bg-[var(--border-color)]"></div>
-        <router-link to="/docs" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_docs', tt('portal.文档中心')) }}</router-link>
-        <router-link to="/news" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_news', tt('portal.动态更新')) }}</router-link>
+        <router-link to="/docs" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_docs') }}</router-link>
+        <router-link to="/news" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_news') }}</router-link>
 
-        <router-link to="/pricing" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_pricing', tt('portal.版本计划')) }}</router-link>
-        <router-link to="/about" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_about', tt('portal.关于我们')) }}</router-link>
+        <router-link to="/pricing" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_pricing') }}</router-link>
+        <router-link to="/about" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_about') }}</router-link>
         
         <router-link :to="authStore.isAuthenticated ? '/console' : '/login'" class="block w-full py-5 bg-white text-black text-center rounded-2xl font-black text-lg tracking-widest shadow-xl" @click="isMobileMenuOpen = false">
-          {{ authStore.isAuthenticated ? tt('common.control_center', tt('earlymeow.nav.enter_console')) : tt('common.start_now', tt('portal.开始使用')) }}
+          {{ authStore.isAuthenticated ? tt('common.control_center') : tt('common.start_now') }}
         </router-link>
       </div>
     </transition>
@@ -291,7 +324,8 @@ import {
   Users,
   Sun,
   Moon,
-  Github
+  Github,
+  Heart
 } from 'lucide-vue-next';
 import { type Language, useI18n } from '@/utils/i18n';
 import type { Style } from '@/stores/system';
@@ -313,6 +347,17 @@ const userMenuRef = ref<HTMLElement | null>(null);
 const isScrolled = ref(false);
 const isVisible = ref(true);
 let lastScrollY = 0;
+
+const officialBotsLabel = computed(() => {
+  if (route.path.startsWith('/meow') || route.path.startsWith('/bots/guide-angel')) {
+    return tt('common.earlymeow');
+  } else if (route.path.startsWith('/bots/nexus-guard')) {
+    return tt('common.nav_nexus_guard');
+  } else if (route.path.startsWith('/bots/digital-employee')) {
+    return tt('common.digital_employee');
+  }
+  return tt('common.earlymeow'); // Default to EarlyMeow Bot
+});
 
 const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[] = [
   { 

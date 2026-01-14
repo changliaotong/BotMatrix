@@ -2,19 +2,25 @@
 import { ref } from 'vue';
 import { useSystemStore, type Style, type Mode } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
+import { useBotStore } from '@/stores/bot';
 import { type Language } from '@/utils/i18n';
-import { Settings, Shield, Bell, Globe, Save, Palette, Languages, Sun, Moon } from 'lucide-vue-next';
+import { Settings, Shield, Bell, Globe, Save, Palette, Languages, Sun, Moon, User } from 'lucide-vue-next';
 
 const systemStore = useSystemStore();
 const authStore = useAuthStore();
+const botStore = useBotStore();
 const t = (key: string) => systemStore.t(key);
+
+const profile = ref({
+  qq: authStore.user?.qq || '',
+});
 
 const settings = ref({
   systemName: 'BotMatrix',
   notifications: true,
 });
 
-const activeTab = ref('general');
+const activeTab = ref('profile');
 
 const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[] = [
   { 
@@ -54,6 +60,30 @@ const languages: { id: Language; nameKey: string }[] = [
   { id: 'en-US', nameKey: 'lang_en_us' },
   { id: 'ja-JP', nameKey: 'lang_ja_jp' }
 ];
+
+const saving = ref(false);
+
+const handleSave = async () => {
+  saving.value = true;
+  try {
+    if (activeTab.value === 'profile') {
+      const res = await botStore.updateUserProfile({ qq: profile.value.qq });
+      if (res.success) {
+        await authStore.checkAuth(); // Refresh user data in store
+        alert(t('save_success'));
+      } else {
+        alert(res.message || t('save_failed'));
+      }
+    } else {
+      // Handle other settings save if needed
+      alert(t('save_success'));
+    }
+  } catch (err: any) {
+    alert(err.message || t('save_failed'));
+  } finally {
+    saving.value = false;
+  }
+};
 </script>
 
 <template>
@@ -65,14 +95,24 @@ const languages: { id: Language; nameKey: string }[] = [
         </h1>
         <p class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('system_settings_desc') }}</p>
       </div>
-      <button class="w-full sm:w-auto px-6 py-2 bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-[var(--matrix-color)]/20">
-        <Save class="w-4 h-4" /> {{ t('save_changes') }}
+      <button 
+        @click="handleSave"
+        :disabled="saving"
+        class="w-full sm:w-auto px-6 py-2 bg-[var(--matrix-color)] text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-[var(--matrix-color)]/20 disabled:opacity-50"
+      >
+        <Save class="w-4 h-4" :class="{ 'animate-spin': saving }" /> {{ t('save_changes') }}
       </button>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
       <!-- Sidebar Tabs -->
       <div class="flex md:flex-col overflow-x-auto pb-2 md:pb-0 gap-2 md:col-span-1 no-scrollbar">
+        <button 
+          @click="activeTab = 'profile'"
+          :class="activeTab === 'profile' ? 'bg-[var(--matrix-color)] text-black' : 'hover:bg-[var(--matrix-color)]/10 text-[var(--text-muted)]'"
+          class="flex-shrink-0 md:w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap">
+          <User class="w-5 h-5" /> {{ t('profile') }}
+        </button>
         <button 
           @click="activeTab = 'general'"
           :class="activeTab === 'general' ? 'bg-[var(--matrix-color)] text-black' : 'hover:bg-[var(--matrix-color)]/10 text-[var(--text-muted)]'"

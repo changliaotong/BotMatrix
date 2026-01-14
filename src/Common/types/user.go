@@ -15,6 +15,7 @@ type User struct {
 	PasswordHash   string    `json:"-"` // 密码哈希，不序列化到JSON
 	IsAdmin        bool      `json:"is_admin"`
 	IsSuperPoints  bool      `json:"is_super_points"`
+	QQ             string    `json:"qq"`
 	SessionVersion int       `json:"session_version"` // 用于同步登录状态和强制登出
 	Active         bool      `json:"active"`          // 用户状态：启用/禁用
 	CreatedAt      time.Time `json:"created_at"`

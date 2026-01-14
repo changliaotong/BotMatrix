@@ -23,6 +23,11 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		return fmt.Errorf("failed to connect gorm: %v", err)
 	}
 
+	// Manual migration: Ensure users table has qq column
+	if err := db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS qq VARCHAR(20)").Error; err != nil {
+		log.Printf("[DB] Warning: Failed to add qq column to users table: %v", err)
+	}
+
 	// Auto migrate in batches to handle potential failures better
 	modelsToMigrate := []any{
 		&models.AIProviderGORM{},
@@ -48,6 +53,8 @@ func (m *GORMManager) InitGORM(cfg *config.AppConfig) error {
 		&models.MCPToolGORM{},
 		&models.MessageStatGORM{},
 		&models.UserLoginTokenGORM{},
+		&models.Member{},
+		&models.Sz84Group{},
 	}
 
 	for _, model := range modelsToMigrate {

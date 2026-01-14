@@ -43,6 +43,7 @@ const newUser = ref({
   id: '',
   username: '',
   password: '',
+  qq: '',
   role: 'user',
   status: 'active'
 });
@@ -129,7 +130,11 @@ const resetIdentityForm = () => {
 
 const handleEditUser = (user: any) => {
   isEditing.value = true;
-  newUser.value = { ...user, password: '' }; // Don't prefill password
+  newUser.value = { 
+    ...user, 
+    password: '',
+    qq: user.qq || ''
+  }; // Don't prefill password
   showModal.value = true;
 };
 
@@ -147,7 +152,7 @@ const handleDeleteUser = async (userId: string) => {
 
 const resetForm = () => {
   isEditing.value = false;
-  newUser.value = { id: '', username: '', password: '', role: 'user', status: 'active' };
+  newUser.value = { id: '', username: '', password: '', qq: '', role: 'user', status: 'active' };
 };
 
 const filteredUsers = () => {
@@ -267,6 +272,9 @@ onMounted(fetchUsers);
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full" :class="user.status === 'active' ? 'bg-[var(--status-online)]' : 'bg-[var(--status-offline)]'"></span>
                   <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t(user.status) }}</span>
+                </div>
+                <div v-if="user.qq" class="flex items-center gap-1.5">
+                  <span class="text-[10px] font-bold text-[var(--matrix-color)] uppercase tracking-widest">QQ: {{ user.qq }}</span>
                 </div>
                 <div class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ t('last_login') }}: {{ user.last_login || t('never') }}</div>
               </div>
@@ -451,7 +459,20 @@ onMounted(fetchUsers);
 
             <div class="grid grid-cols-2 gap-4">
               <div class="space-y-2">
-                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('role') }}</label>
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">QQ</label>
+              <div class="relative">
+                <Users class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input 
+                  v-model="newUser.qq"
+                  type="text"
+                  placeholder="QQ 号码"
+                  class="w-full pl-12 pr-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                />
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('role') }}</label>
                 <div class="relative">
                   <select 
                     v-model="newUser.role"

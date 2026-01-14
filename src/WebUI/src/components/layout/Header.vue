@@ -72,10 +72,12 @@ const routeTitleMap: Record<string, string> = {
   '/console/fission': 'fission',
   '/console/manual': 'manual',
   '/console/settings': 'settings',
+  '/console/setup/bot': 'bot_setup',
+  '/console/setup/group': 'group_setup',
   '/admin/workers': 'workers',
   '/admin/users': 'users',
   '/admin/logs': 'logs',
-  '/admin/monitor': 'monitor',
+  '/admin/monitor': 'sidebar_monitor',
   '/admin/nexus': 'nexus',
   '/admin/ai': 'ai_nexus',
   '/admin/routing': 'routing',
@@ -368,11 +370,11 @@ onUnmounted(() => {
               </router-link>
 
               <router-link to="/console/bots" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group" @click="showUserMenu = false">
-                <LayoutDashboard class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
+                <Bot class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
                 <span class="text-xs font-bold">{{ t('my_bots') }}</span>
               </router-link>
 
-              <router-link to="/console/system" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group" @click="showUserMenu = false">
+              <router-link to="/console/settings" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--matrix-color)]/10 text-[var(--text-main)] transition-colors group" @click="showUserMenu = false">
                 <Settings class="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--matrix-color)]" />
                 <span class="text-xs font-bold">{{ t('settings') }}</span>
               </router-link>

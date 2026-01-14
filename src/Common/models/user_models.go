@@ -14,6 +14,7 @@ type User struct {
 	Platform       string         `gorm:"size:32;column:platform" json:"platform"`
 	PlatformID     string         `gorm:"size:64;column:platform_id" json:"platform_id"`
 	IsAdmin        bool           `gorm:"default:false;column:is_admin" json:"is_admin"`
+	QQ             string         `gorm:"size:20;column:qq" json:"qq"`
 	Active         bool           `gorm:"default:true;column:active" json:"active"`
 	SessionVersion int            `gorm:"default:1;column:session_version" json:"session_version"`
 	CreatedAt      time.Time      `gorm:"column:created_at" json:"created_at"`

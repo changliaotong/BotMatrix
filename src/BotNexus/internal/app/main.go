@@ -246,6 +246,7 @@ func Run() {
 	// 用户个人信息
 	mux.HandleFunc("/api/me", manager.JWTMiddleware(HandleGetUserInfo(manager.Manager)))
 	mux.HandleFunc("/api/user/info", manager.JWTMiddleware(HandleGetUserInfo(manager.Manager)))
+	mux.HandleFunc("/api/user/profile", manager.JWTMiddleware(HandleUpdateUserProfile(manager.Manager)))
 	mux.HandleFunc("/api/user/password", manager.JWTMiddleware(HandleChangePassword(manager.Manager)))
 
 	// 基础统计与状态 (用户可见版本)
@@ -283,6 +284,26 @@ func Run() {
 
 	// 资源管理
 	mux.HandleFunc("/api/admin/bots", manager.AdminMiddleware(HandleGetBots(manager.Manager)))
+	mux.HandleFunc("/api/admin/setup/members", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleGetMemberSetup(manager.Manager)(w, r)
+		case http.MethodPut:
+			HandleUpdateMemberSetup(manager.Manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/admin/setup/groups", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			HandleGetGroupSetup(manager.Manager)(w, r)
+		case http.MethodPut:
+			HandleUpdateGroupSetup(manager.Manager)(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
 	mux.HandleFunc("/api/admin/workers", manager.AdminMiddleware(HandleGetWorkers(manager.Manager)))
 	mux.HandleFunc("/api/admin/users", manager.AdminMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

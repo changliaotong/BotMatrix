@@ -9,7 +9,7 @@ import PortalHeader from '@/components/layout/PortalHeader.vue';
 import PortalFooter from '@/components/layout/PortalFooter.vue';
 import { 
   Home, LayoutDashboard, 
-  Layers, Compass, DollarSign, ChevronRight
+  Layers, Compass, DollarSign, ChevronRight, Sparkles
 } from 'lucide-vue-next';
 
 const route = useRoute();
@@ -35,10 +35,11 @@ onUnmounted(() => {
 });
 
 const navLinks = computed(() => [
-  { name: t('earlymeow.nav.home', t('common.nav_home')), path: '/meow', icon: Home },
-  { name: t('earlymeow.nav.tech', t('earlymeow.nav.tech')), path: '/meow/tech', icon: Layers },
-  { name: t('earlymeow.nav.ecosystem', t('earlymeow.nav.ecosystem')), path: '/meow/ecosystem', icon: Compass },
-  { name: t('earlymeow.nav.pricing', t('earlymeow.nav.pricing')), path: '/meow/pricing', icon: DollarSign },
+  { name: t('earlymeow.nav.home'), path: '/meow', icon: Home },
+  { name: t('earlymeow.nav.guide_angel'), path: '/meow/guide-angel', icon: Sparkles },
+  { name: t('earlymeow.nav.tech'), path: '/meow/tech', icon: Layers },
+  { name: t('earlymeow.nav.ecosystem'), path: '/meow/ecosystem', icon: Compass },
+  { name: t('earlymeow.nav.pricing'), path: '/meow/pricing', icon: DollarSign },
 ]);
 </script>
 
