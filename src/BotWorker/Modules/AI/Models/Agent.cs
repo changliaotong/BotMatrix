@@ -61,14 +61,47 @@ namespace BotWorker.Modules.AI.Models
             // 这是一个简化实现，用于兼容旧代码
             using var scope = LLMApp.ServiceProvider.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
-            // 这里需要更复杂的逻辑，但由于我们要重构，先做一个最基础的实现
-            // 假设 where 是 "Name = 'xxx' and private <> 2" 这种格式
-            // 这里的实现需要根据实际的 repository 接口来调整
+            
+            // 处理常见的模式: Name = 'xxx' and private <> 2
+            if (where.Contains("Name =") && typeof(T) == typeof(Guid))
+            {
+                var parts = where.Split('\'');
+                if (parts.Length >= 2)
+                {
+                    var name = parts[1];
+                    var agent = repo.GetByNameAsync(name).GetAwaiter().GetResult();
+                    if (agent != null) return (T)(object)agent.Guid;
+                }
+            }
+            
             return default;
         }
 
         public static string QueryWhere(string field, string where, string order, string format)
         {
+            using var scope = LLMApp.ServiceProvider.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
+
+            if (where.Contains("Name ="))
+            {
+                var parts = where.Split('\'');
+                if (parts.Length >= 2)
+                {
+                    var name = parts[1];
+                    var agent = repo.GetByNameAsync(name).GetAwaiter().GetResult();
+                    if (agent != null)
+                    {
+                        return field.ToLower() switch
+                        {
+                            "id" => agent.Id.ToString(),
+                            "guid" => agent.Guid.ToString(),
+                            "name" => agent.Name,
+                            "info" => agent.Info,
+                            _ => string.Empty
+                        };
+                    }
+                }
+            }
             return string.Empty;
         }
 

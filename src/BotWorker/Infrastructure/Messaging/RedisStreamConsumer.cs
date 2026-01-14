@@ -5,6 +5,7 @@ using StackExchange.Redis;
 using BotWorker.Application.Messaging.Pipeline;
 using BotWorker.Infrastructure.Communication.OneBot;
 using System.Text.Json;
+using Serilog;
 
 namespace BotWorker.Infrastructure.Messaging
 {
@@ -28,6 +29,7 @@ namespace BotWorker.Infrastructure.Messaging
             IOneBotApiClient apiClient,
             IConfiguration configuration)
         {
+            Console.WriteLine("DEBUG: RedisStreamConsumer constructor started");
             _logger = logger;
             _redis = redis;
             _pipeline = pipeline;
@@ -39,43 +41,43 @@ namespace BotWorker.Infrastructure.Messaging
             _consumerName = $"{workerId}-{Guid.NewGuid().ToString().Substring(0, 8)}";
             _batchSize = configuration.GetValue<int>("Redis:Streams:BatchSize", 10);
             _blockTimeMs = configuration.GetValue<int>("Redis:Streams:BlockTimeMs", 2000);
+            
+            Log.Information("RedisStreamConsumer initialized. Stream: {StreamName}, Group: {GroupName}", _streamName, _groupName);
+            Console.WriteLine($"DEBUG: RedisStreamConsumer initialized. Stream: {_streamName}");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var db = _redis.GetDatabase();
-
-            // Try to fix MISCONF error on Redis side (self-healing)
-            try
-            {
-                var server = _redis.GetServer(_redis.GetEndPoints()[0]);
-                if (server != null)
-                {
-                    await server.ConfigSetAsync("stop-writes-on-bgsave-error", "no");
-                    _logger.LogInformation("Attempted to set stop-writes-on-bgsave-error to no for self-healing");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Failed to set stop-writes-on-bgsave-error (self-healing): {Message}", ex.Message);
+            Console.WriteLine("DEBUG: RedisStreamConsumer.ExecuteAsync starting");
+            Log.Information("RedisStreamConsumer.ExecuteAsync started");
+            
+            IDatabase db;
+            try {
+                db = _redis.GetDatabase();
+                Log.Information("Successfully got Redis database instance");
+            } catch (Exception ex) {
+                Log.Error(ex, "Failed to get Redis database instance");
+                return;
             }
 
             // Ensure consumer group exists
             try
             {
+                Log.Information("Ensuring consumer group {GroupName} exists for stream {StreamName}", _groupName, _streamName);
                 await db.StreamCreateConsumerGroupAsync(_streamName, _groupName, "0", createStream: true);
-                _logger.LogInformation("Created consumer group {GroupName} for stream {StreamName}", _groupName, _streamName);
+                Log.Information("Created consumer group {GroupName} for stream {StreamName}", _groupName, _streamName);
             }
             catch (RedisServerException ex) when (ex.Message.Contains("BUSYGROUP"))
             {
-                _logger.LogInformation("Consumer group {GroupName} already exists", _groupName);
+                Log.Information("Consumer group {GroupName} already exists", _groupName);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to create consumer group {GroupName}", _groupName);
+                Log.Error(ex, "Failed to create consumer group {GroupName}", _groupName);
             }
 
-            _logger.LogInformation("Started Redis Stream consumer {ConsumerName} on stream {StreamName}", _consumerName, _streamName);
+            Log.Information("Started Redis Stream consumer {ConsumerName} on stream {StreamName}", _consumerName, _streamName);
+            Console.WriteLine($"DEBUG: Redis Stream consumer {_consumerName} started");
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -83,20 +85,32 @@ namespace BotWorker.Infrastructure.Messaging
                 {
                     if (!_redis.IsConnected)
                     {
-                        _logger.LogWarning("Redis is not connected, waiting for connection...");
+                        Log.Warning("Redis is not connected, waiting for connection...");
                         await Task.Delay(5000, stoppingToken);
                         continue;
                     }
 
                     // Read from group
-                    // Using ">" to read new messages
-                    var messages = await db.StreamReadGroupAsync(_streamName, _groupName, _consumerName, ">", _batchSize);
+                    // 1. First, check for pending messages that weren't ACKed (e.g. if the worker crashed)
+                    // We use "0" as the ID to get pending messages for THIS consumer
+                    var pendingMessages = await db.StreamReadGroupAsync(_streamName, _groupName, _consumerName, "0", _batchSize);
+                    
+                    // 2. Then, read NEW messages
+                    var newMessages = await db.StreamReadGroupAsync(_streamName, _groupName, _consumerName, ">", _batchSize);
 
-                    if (messages == null || messages.Length == 0)
+                    var messages = (pendingMessages ?? Array.Empty<StreamEntry>())
+                        .Concat(newMessages ?? Array.Empty<StreamEntry>())
+                        .ToArray();
+
+                    if (messages.Length == 0)
                     {
                         await Task.Delay(_blockTimeMs, stoppingToken);
                         continue;
                     }
+
+                    Log.Information("[RedisStream] Received {Count} messages (Pending: {Pending}, New: {New})", 
+                        messages.Length, pendingMessages?.Length ?? 0, newMessages?.Length ?? 0);
+                    Console.WriteLine($"DEBUG: [RedisStream] Received {messages.Length} messages");
 
                     foreach (var msg in messages)
                     {
@@ -111,47 +125,14 @@ namespace BotWorker.Infrastructure.Messaging
                             try
                             {
                                 string payloadStr = payload.ToString();
-                                // _logger.LogDebug("Processing message from stream {StreamName}, ID: {MsgId}. Payload: {Payload}", _streamName, msg.Id, payloadStr);
+                                Log.Information("Processing message {MsgId}. Payload length: {Length}", msg.Id, payloadStr.Length);
 
                                 var botMessage = await BotMessageMapper.MapToOneBotEventAsync(payloadStr, _apiClient);
                                 if (botMessage != null)
                                 {
-                                    // 检查消息是否过旧（例如超过 60 秒）或是在程序启动前的缓存消息
-                                    var now = DateTimeOffset.Now.ToUnixTimeSeconds();
-                                    if (botMessage.Time > 0)
-                                    {
-                                        if (botMessage.Time < _startTime)
-                                        {
-                                            /*
-                                            _logger.LogWarning("Skipping cached message sent before startup: {MsgId}, Time: {Time}, StartTime: {StartTime}", 
-                                                botMessage.MsgId, botMessage.Time, _startTime);
-                                            */
-                                            await db.StreamAcknowledgeAsync(_streamName, _groupName, msg.Id);
-                                            continue;
-                                        }
-                                        
-                                        if (now - botMessage.Time > 60) // 超过 60 秒的消息不再处理
-                                        {
-                                            /*
-                                            _logger.LogWarning("Skipping expired message: {MsgId}, Time: {Time}, Age: {Age}s", 
-                                                botMessage.MsgId, botMessage.Time, now - botMessage.Time);
-                                            */
-                                            await db.StreamAcknowledgeAsync(_streamName, _groupName, msg.Id);
-                                            continue;
-                                        }
-                                    }
-
-                                    /*
-                                    if (botMessage.EventType != "meta_event")
-                                    {
-                                        _logger.LogInformation("Mapped message: {MsgId}, Type: {EventType}, From: {UserId}, Group: {GroupId}, Content: {Message}", 
-                                            botMessage.MsgId, botMessage.EventType, botMessage.UserId, botMessage.GroupId, botMessage.Message);
-                                    }
-                                    else
-                                    {
-                                        _logger.LogDebug("Mapped meta event: {MsgId}", botMessage.MsgId);
-                                    }
-                                    */
+                                    Log.Information("Mapped message: {MsgId}, Type: {EventType}, From: {UserId}, Group: {GroupId}", 
+                                        botMessage.MsgId, botMessage.EventType, botMessage.UserId, botMessage.GroupId);
+                                    
                                     await _pipeline.ExecuteAsync(botMessage);
                                 }
                                 else
@@ -159,7 +140,7 @@ namespace BotWorker.Infrastructure.Messaging
                                     // 检查是否是元事件或其它可以忽略的事件
                                     if (!payloadStr.Contains("\"post_type\":\"meta_event\""))
                                     {
-                                        _logger.LogWarning("Failed to map payload to BotMessage: {Payload}", payloadStr);
+                                        Log.Warning("Failed to map payload to BotMessage: {Payload}", payloadStr);
                                     }
                                 }
 
@@ -168,19 +149,19 @@ namespace BotWorker.Infrastructure.Messaging
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogError(ex, "Error processing stream message {MsgId}", msg.Id);
+                                Log.Error(ex, "Error processing stream message {MsgId}", msg.Id);
                             }
                         }
                         else
                         {
-                            _logger.LogWarning("Received stream message {MsgId} without payload", msg.Id);
+                            Log.Warning("Received stream message {MsgId} without payload", msg.Id);
                             await db.StreamAcknowledgeAsync(_streamName, _groupName, msg.Id);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error in Redis Stream consumer loop");
+                    Log.Error(ex, "Error in Redis Stream consumer loop");
                     await Task.Delay(5000, stoppingToken);
                 }
             }

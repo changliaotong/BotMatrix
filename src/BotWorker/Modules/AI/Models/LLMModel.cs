@@ -19,6 +19,7 @@ namespace BotWorker.Modules.AI.Models
         public long Id { get; set; }
         public long ProviderId { get; set; }
         public string Name { get; set; } = string.Empty;
+        public string? ApiModelId { get; set; }
         public string Type { get; set; } = "chat"; // chat, image, embedding, audio
         public int ContextWindow { get; set; } = 4096;
         public int? MaxOutputTokens { get; set; }

@@ -18,21 +18,24 @@ namespace BotWorker.Modules.AI.Services
     {
         private readonly string _connectionString;
         private readonly int _vectorSize;
+        private readonly NpgsqlDataSource _dataSource;
 
         public PostgresRagStorage(string? connectionString = null, int vectorSize = 1536)
         {
             _connectionString = connectionString ?? GlobalConfig.KnowledgeBaseConnection;
             _vectorSize = vectorSize;
             
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
+            dataSourceBuilder.UseVector();
+            _dataSource = dataSourceBuilder.Build();
+            
             // 显式使用命名空间避免 CS0234
             SqlMapper.AddTypeHandler(new Pgvector.Dapper.VectorTypeHandler());
         }
 
-        private async Task<IDbConnection> CreateConnectionAsync()
+        private async Task<NpgsqlConnection> CreateConnectionAsync()
         {
-            var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-            return conn;
+            return await _dataSource.OpenConnectionAsync();
         }
 
         public async Task EnsureInitializedAsync()
@@ -57,26 +60,26 @@ namespace BotWorker.Modules.AI.Services
             await conn.ExecuteAsync($@"
                 CREATE TABLE IF NOT EXISTS knowledge_chunks (
                     id BIGSERIAL PRIMARY KEY,
-                    kb_id BIGINT REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+                    doc_id BIGINT,
                     content TEXT NOT NULL,
                     embedding VECTOR({_vectorSize}),
                     metadata JSONB DEFAULT '{{}}',
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 )");
-
-            // 创建 HNSW 索引
-            await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)");
         }
 
         public async Task<List<BotWorker.Modules.AI.Rag.Chunk>> SearchAsync(string query, float[]? queryVector, int topK = 5)
         {
-            if (queryVector == null) return new List<BotWorker.Modules.AI.Rag.Chunk>();
+            if (queryVector == null || queryVector.Length == 0)
+            {
+                return new List<BotWorker.Modules.AI.Rag.Chunk>();
+            }
 
             using var conn = await CreateConnectionAsync();
             
             // 使用 pgvector 的余弦距离进行检索 (<=>)
             const string sql = @"
-                SELECT id, kb_id as KbId, content, metadata, created_at as CreatedAt,
+                SELECT id, doc_id as DocId, content, metadata, created_at as CreatedAt,
                        1 - (embedding <=> @vector) as Score
                 FROM knowledge_chunks
                 ORDER BY embedding <=> @vector
@@ -102,18 +105,23 @@ namespace BotWorker.Modules.AI.Services
             try
             {
                 const string sql = @"
-                    INSERT INTO knowledge_chunks (kb_id, content, embedding, metadata)
-                    VALUES (@KbId, @Content, @Embedding, @MetadataJson::jsonb)";
+                    INSERT INTO knowledge_chunks (doc_id, content, embedding, metadata)
+                    VALUES (@DocId, @Content, @Embedding, @MetadataJson::jsonb)";
 
                 foreach (var chunk in chunks)
                 {
-                    var kbId = chunk.Metadata.ContainsKey("kb_id") ? Convert.ToInt64(chunk.Metadata["kb_id"]) : 0;
+                    if (chunk.Embedding == null || chunk.Embedding.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var docId = chunk.Metadata.ContainsKey("doc_id") ? Convert.ToInt64(chunk.Metadata["doc_id"]) : 0;
                     var metadataJson = JsonSerializer.Serialize(chunk.Metadata);
                     
                     await conn.ExecuteAsync(sql, new { 
-                        KbId = kbId, 
+                        DocId = docId, 
                         Content = chunk.Content, 
-                        Embedding = new Vector(chunk.Embedding ?? new float[0]),
+                        Embedding = new Vector(chunk.Embedding),
                         MetadataJson = metadataJson
                     }, transaction);
                 }
@@ -129,7 +137,7 @@ namespace BotWorker.Modules.AI.Services
         public async Task DeleteChunksAsync(long groupId)
         {
             using var conn = await CreateConnectionAsync();
-            await conn.ExecuteAsync("DELETE FROM knowledge_chunks WHERE kb_id = @groupId", new { groupId });
+            await conn.ExecuteAsync("DELETE FROM knowledge_chunks WHERE doc_id = @groupId", new { groupId });
         }
     }
 }

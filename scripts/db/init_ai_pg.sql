@@ -315,6 +315,9 @@ BEGIN
         AND table_name LIKE 'ai_%' 
     ) 
     LOOP
+        -- 先尝试删除已存在的触发器
+        EXECUTE format('DROP TRIGGER IF EXISTS update_at_trigger ON %I', t);
+        -- 重新创建触发器
         EXECUTE format('CREATE TRIGGER update_at_trigger BEFORE UPDATE ON %I FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column()', t);
     END LOOP;
 END $$;
