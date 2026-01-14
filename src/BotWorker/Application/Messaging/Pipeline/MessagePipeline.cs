@@ -57,8 +57,8 @@ namespace BotWorker.Application.Messaging.Pipeline
                 if (index < _middlewares.Count)
                 {
                     var middleware = _middlewares[index++];
-                    // logger.LogInformation("[Pipeline] Step {Step}/{Total}: Executing {MiddlewareName} for message {MessageId}", 
-                    //    index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
+                    logger.LogInformation("[Pipeline] Step {Step}/{Total}: Executing {MiddlewareName} for message {MessageId}", 
+                        index, _middlewares.Count, middleware.GetType().Name, context.MsgId);
                     
                     try
                     {
@@ -67,12 +67,12 @@ namespace BotWorker.Application.Messaging.Pipeline
                     catch (Exception ex)
                     {
                         logger.LogError(ex, "[Pipeline] Error in middleware {MiddlewareName} for message {MessageId}", 
-                            middleware.GetType().Name, ctx.EventId);
+                            middleware.GetType().Name, context.MsgId);
                         throw;
                     }
 
-                    // logger.LogInformation("[Pipeline] Step {Step}/{Total}: Completed {MiddlewareName} for message {MessageId}", 
-                    //    index, _middlewares.Count, middleware.GetType().Name, ctx.EventId);
+                    logger.LogInformation("[Pipeline] Step {Step}/{Total}: Completed {MiddlewareName} for message {MessageId}", 
+                        index, _middlewares.Count, middleware.GetType().Name, context.MsgId);
                 }
             }
 

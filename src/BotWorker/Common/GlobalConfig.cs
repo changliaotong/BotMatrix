@@ -38,7 +38,11 @@ namespace BotWorker.Common
 
             Jwt = config.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
             ConnString = config.GetConnectionString("DefaultConnection") ?? string.Empty;
-            Console.WriteLine($"[CONFIG INFO] Database connection string loaded. Length: {ConnString.Length}");
+            KnowledgeBaseConnection = config.GetConnectionString("KnowledgeBaseConnection") ?? string.Empty;
+            
+            Console.WriteLine($"[CONFIG INFO] Default DB connection string loaded. Length: {ConnString.Length}");
+            Console.WriteLine($"[CONFIG INFO] KnowledgeBase connection string loaded. Length: {KnowledgeBaseConnection.Length}");
+            
             if (ConnString.Length > 0)
             {
                 var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = ConnString };
@@ -53,7 +57,6 @@ namespace BotWorker.Common
             }
             RedisConnection = config.GetConnectionString("RedisConnection") ?? string.Empty;
             SignalRConnString = config["SignalR:HubUrl"] ?? string.Empty;
-            KnowledgeBaseConnection = config.GetConnectionString("KnowledgeBaseConnection") ?? string.Empty;
         }
         public static string? Get(string key)
         {

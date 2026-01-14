@@ -89,6 +89,7 @@ builder.Services.AddSingleton<IJobService, JobService>();
 // 注册工具/技能系统
 builder.Services.AddSingleton<ISkill, FileSkills>();
 builder.Services.AddSingleton<ISkill, ShellSkills>();
+builder.Services.AddSingleton<ISkill, PlanSkills>();
 builder.Services.AddSingleton<ISkillService, SkillService>();
 
 builder.Services.AddSingleton<IEmployeeService, EmployeeService>();

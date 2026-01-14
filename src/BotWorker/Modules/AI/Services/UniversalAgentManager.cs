@@ -112,6 +112,7 @@ namespace BotWorker.Modules.AI.Services
 
                 var prompt = BuildPrompt(job, skills, state);
                 var response = await _aiService.ChatWithContextAsync(prompt, context, job.ModelSelectionStrategy);
+                _logger.LogInformation("[UniversalAgent] Raw response: {Response}", response);
 
                 var decision = ParseDecision(response);
                 _logger.LogInformation("[UniversalAgent] {JobKey} Decision: {Action} on {Target} ({Reason})", 
@@ -120,11 +121,14 @@ namespace BotWorker.Modules.AI.Services
                 // 如果有 TaskId，记录详细步骤
                 if (long.TryParse(taskId, out var tid))
                 {
+                    var stepName = $"{decision.Action}: {decision.Target}";
+                    if (stepName.Length > 100) stepName = stepName.Substring(0, 97) + "...";
+
                     await _stepRepository.AddAsync(new TaskStep
                     {
                         TaskId = tid,
                         StepIndex = currentStep,
-                        Name = $"{decision.Action}: {decision.Target}",
+                        Name = stepName,
                         InputData = JsonSerializer.Serialize(new { Reason = decision.Reason, Prompt = prompt }),
                         Status = "executing",
                         CreatedAt = DateTime.Now
@@ -146,6 +150,8 @@ namespace BotWorker.Modules.AI.Services
                 {
                     try {
                         var commitMsg = $"Step {currentStep}: {decision.Action} {decision.Target}";
+                        if (commitMsg.Length > 100) commitMsg = commitMsg.Substring(0, 97) + "...";
+                        
                         // 先尝试 add
                         await _skillService.ExecuteSkillAsync("GIT", "git add .", "添加变更", agentMetadata);
                         // 再尝试 commit，如果没有任何变更 commit 会失败，我们忽略它
@@ -160,7 +166,7 @@ namespace BotWorker.Modules.AI.Services
                     var currentTaskStep = steps.FirstOrDefault(s => s.StepIndex == currentStep);
                     if (currentTaskStep != null)
                     {
-                        currentTaskStep.OutputData = observation;
+                        currentTaskStep.OutputData = JsonSerializer.Serialize(new { result = observation });
                         currentTaskStep.Status = "completed";
                         currentTaskStep.UpdatedAt = DateTime.Now;
                         await _stepRepository.UpdateAsync(currentTaskStep);

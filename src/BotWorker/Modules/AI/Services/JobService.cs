@@ -164,7 +164,7 @@ namespace BotWorker.Modules.AI.Services
                     SystemPrompt = "你是一个全能的数字员工团队领导者。你负责协调复杂的软件开发任务。你需要通过 LIST 和 READ 了解项目，通过 PLAN 规划步骤，然后调用子岗位(如 dev_coder)或直接使用 WRITE 编写代码。编写完代码后，必须调用 BUILD 检查结果，最后使用 GIT 提交。你的目标是实现稳定、可编译的代码交付。",
                     ToolSchema = "[\"list_dir\", \"file_read\", \"file_write\", \"build_check\", \"git_op\", \"manage_plan\"]",
                     Workflow = "[{\"step\": 1, \"action\": \"分析当前状态并制定PLAN\"}, {\"step\": 2, \"action\": \"调度工具或岗位执行任务\"}]",
-                    ModelSelectionStrategy = "specified"
+                    ModelSelectionStrategy = "random"
                 },
                 new JobDefinition
                 {
@@ -175,7 +175,7 @@ namespace BotWorker.Modules.AI.Services
                     SystemPrompt = "你是一个精通 Git 工作流的版本管理专家。你负责确保代码仓库的整洁和提交记录的规范。你会根据开发进度执行 commit、branch、merge 等操作，并妥善处理可能出现的冲突。",
                     ToolSchema = "[\"git_op\"]",
                     Workflow = "[{\"step\": 1, \"action\": \"检查状态\"}, {\"step\": 2, \"action\": \"执行提交/分支操作\"}]",
-                    ModelSelectionStrategy = "specified"
+                    ModelSelectionStrategy = "random"
                 },
                 new JobDefinition
                 {
@@ -186,7 +186,7 @@ namespace BotWorker.Modules.AI.Services
                     SystemPrompt = "你是一位擅长沟通与分析的需求分析师。你能精准捕捉用户模糊意图中的核心价值，并将其转化为开发团队可理解、可执行的技术需求规格。你注重细节，善于发现需求中的矛盾点和遗漏点。",
                     ToolSchema = "[\"file_read\", \"file_write\"]",
                     Workflow = "[{\"step\": 1, \"action\": \"需求提取\"}, {\"step\": 2, \"action\": \"边界定义\"}, {\"step\": 3, \"action\": \"JSON 规格化\"}]",
-                    ModelSelectionStrategy = "specified"
+                    ModelSelectionStrategy = "random"
                 },
                 new JobDefinition
                 {
@@ -197,7 +197,7 @@ namespace BotWorker.Modules.AI.Services
                     SystemPrompt = "你是一位经验丰富的系统架构师。你擅长设计可扩展、高可用、低耦合的 system 架构。你会根据需求选择最合适的技术栈和设计模式，并规划出清晰的代码组织结构。",
                     ToolSchema = "[\"file_read\", \"file_write\", \"list_dir\"]",
                     Workflow = "[{\"step\": 1, \"action\": \"模块划分\"}, {\"step\": 2, \"action\": \"接口设计\"}, {\"step\": 3, \"action\": \"生成文件清单\"}]",
-                    ModelSelectionStrategy = "specified"
+                    ModelSelectionStrategy = "random"
                 },
                 new JobDefinition
                 {

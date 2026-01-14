@@ -114,13 +114,19 @@ namespace BotWorker.Modules.AI.Skills
                 switch (cmd)
                 {
                     case "BUILD":
-                        var buildResult = await _codeRunner.ExecuteCommandAsync("dotnet build", projectPath);
-                        return buildResult.Success ? "编译成功" : $"编译失败：\n{buildResult.CombinedOutput}";
+                        var buildCmd = string.IsNullOrWhiteSpace(target) ? "dotnet build" : target;
+                        var buildResult = await _codeRunner.ExecuteCommandAsync(buildCmd, projectPath);
+                        return buildResult.Success ? "编译/运行成功" : $"执行失败：\n{buildResult.CombinedOutput}";
 
                     case "GIT":
-                        // target 可能是完整的 git 命令
-                        var gitResult = await _codeRunner.ExecuteCommandAsync(target, projectPath);
-                        return gitResult.Success ? $"Git 执行成功: {target}" : $"Git 执行失败: {gitResult.CombinedOutput}";
+                        // 如果 target 不以 git 开头，自动补全
+                        var gitCmd = target.Trim();
+                        if (!gitCmd.StartsWith("git ", StringComparison.OrdinalIgnoreCase) && !gitCmd.Equals("git", StringComparison.OrdinalIgnoreCase))
+                        {
+                            gitCmd = "git " + gitCmd;
+                        }
+                        var gitResult = await _codeRunner.ExecuteCommandAsync(gitCmd, projectPath);
+                        return gitResult.Success ? $"Git 执行成功: {gitCmd}" : $"Git 执行失败: {gitResult.CombinedOutput}";
 
                     case "COMMAND":
                         var cmdResult = await _codeRunner.ExecuteCommandAsync(target, projectPath);
@@ -134,6 +140,47 @@ namespace BotWorker.Modules.AI.Skills
             {
                 return $"命令执行失败：{ex.Message}";
             }
+        }
+    }
+
+    public class PlanSkills : ISkill
+    {
+        public string Name => "PlanTools";
+        public string Description => "计划管理工具，支持 PLAN";
+        public string[] SupportedActions => new[] { "PLAN" };
+
+        public async Task<string> ExecuteAsync(string action, string target, string reason, Dictionary<string, string> metadata)
+        {
+            var projectPath = metadata.GetValueOrDefault("ProjectPath");
+            if (string.IsNullOrEmpty(projectPath))
+            {
+                var tenantId = metadata.GetValueOrDefault("TenantId") ?? "default_tenant";
+                var userId = metadata.GetValueOrDefault("UserId") ?? "default_user";
+                var taskId = metadata.GetValueOrDefault("TaskId") ?? "unknown_task";
+                projectPath = Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces", tenantId, userId, taskId);
+            }
+
+            if (!Directory.Exists(projectPath))
+            {
+                Directory.CreateDirectory(projectPath);
+            }
+
+            if (action.ToUpper() == "PLAN")
+            {
+                try
+                {
+                    var planPath = Path.Combine(projectPath, "plan.md");
+                    var content = metadata.GetValueOrDefault("Content") ?? target;
+                    await File.WriteAllTextAsync(planPath, content);
+                    return $"计划已更新：plan.md";
+                }
+                catch (Exception ex)
+                {
+                    return $"更新计划失败：{ex.Message}";
+                }
+            }
+
+            return $"PlanSkill 不支持行动：{action}";
         }
     }
 }

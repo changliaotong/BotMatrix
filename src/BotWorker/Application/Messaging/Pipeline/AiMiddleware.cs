@@ -1,4 +1,5 @@
 using BotWorker.Infrastructure.Communication.OneBot;
+using BotWorker.Modules.AI.Interfaces;
 
 namespace BotWorker.Application.Messaging.Pipeline
 {
@@ -7,17 +8,26 @@ namespace BotWorker.Application.Messaging.Pipeline
     /// </summary>
     public class AiMiddleware : IMiddleware
     {
+        private readonly IAgentExecutor _agentExecutor;
+
+        public AiMiddleware(IAgentExecutor agentExecutor)
+        {
+            _agentExecutor = agentExecutor;
+        }
+
         public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
             if (context is PluginContext pluginCtx && pluginCtx.Event is BotMessageEvent botMsgEvent)
             {
                 var botMsg = botMsgEvent.BotMessage;
+                Serilog.Log.Information("[AiMiddleware] Processing message: {MessageId}, Content: {Content}", botMsg.MsgId, botMsg.Message);
 
-                // 1. 尝试解析智能体呼�?
+                // 1. 尝试解析智能体呼?
                 await botMsg.TryParseAgentCall();
 
                 if (botMsg.IsCallAgent)
                 {
+                    Serilog.Log.Information("[AiMiddleware] Agent call detected: {AgentName}, Params: {Params}", botMsg.CurrentAgent?.Name, botMsg.CmdPara);
                     if (botMsg.CmdPara.Trim().IsNull())
                     {
                         // 仅切换智能体，不生成响应
@@ -28,7 +38,19 @@ namespace BotWorker.Application.Messaging.Pipeline
                     else if (!botMsg.IsWeb)
                     {
                         // 既切换又生成响应
-                        await botMsg.GetAgentResAsync();
+                        Serilog.Log.Information("[AiMiddleware] Calling agent: {AgentName}", botMsg.CurrentAgent?.Name);
+                        
+                        // 特殊处理：如果是 dev_orchestrator，启动自主开发循环
+                        if (botMsg.CurrentAgent?.Name == "dev_orchestrator")
+                        {
+                            Serilog.Log.Information("[AiMiddleware] Triggering autonomous loop for dev_orchestrator");
+                            botMsg.Answer = await _agentExecutor.ExecuteJobTaskAsync("dev_orchestrator", botMsg.CmdPara, context);
+                        }
+                        else
+                        {
+                            Serilog.Log.Information("[AiMiddleware] Calling GetAgentResAsync for agent: {AgentName}", botMsg.CurrentAgent?.Name);
+                            await botMsg.GetAgentResAsync();
+                        }
                     }
                     return; // 拦截，由 AI 负责后续处理
                 }
