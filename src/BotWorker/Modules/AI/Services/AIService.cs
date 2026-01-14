@@ -129,26 +129,43 @@ namespace BotWorker.Modules.AI.Services
                 long tenantId = 0;
                 if (context != null)
                 {
+                    _logger.LogInformation("[AIService] Context details: UserId={UserId}, GroupId={GroupId}", context.UserId, context.GroupId);
                     if (!string.IsNullOrEmpty(context.UserId)) long.TryParse(context.UserId, out currentUserId);
                     if (!string.IsNullOrEmpty(context.GroupId)) long.TryParse(context.GroupId, out tenantId);
                 }
 
                 // 如果在群组中，优先检查群组（租户）是否有租赁
-                long billingId = tenantId > 0 ? tenantId : currentUserId;
+                bool hasAccess = false;
+                long billingId = 0;
 
-                if (billingId > 0)
+                if (tenantId > 0)
                 {
-                    // 检查是否有活跃租赁
-                    var hasLease = await _billingService.HasActiveLeaseAsync(billingId, "ai_service");
-                    if (!hasLease)
+                    _logger.LogInformation("[AIService] Checking tenant billing: {TenantId}", tenantId);
+                    if (await _billingService.HasActiveLeaseAsync(tenantId, "ai_service") || 
+                        await _billingService.HasSufficientBalanceAsync(tenantId, 0.01m))
                     {
-                        // 检查余额
-                        if (!await _billingService.HasSufficientBalanceAsync(billingId, 0.01m))
-                        {
-                            return "您的账户余额不足且没有有效的 AI 服务租赁，请充值或租赁后再尝试。";
-                        }
+                        hasAccess = true;
+                        billingId = tenantId;
                     }
                 }
+
+                if (!hasAccess && currentUserId > 0)
+                {
+                    _logger.LogInformation("[AIService] Checking user billing: {UserId}", currentUserId);
+                    if (await _billingService.HasActiveLeaseAsync(currentUserId, "ai_service") || 
+                        await _billingService.HasSufficientBalanceAsync(currentUserId, 0.01m))
+                    {
+                        hasAccess = true;
+                        billingId = currentUserId;
+                    }
+                }
+
+                if (!hasAccess && (tenantId > 0 || currentUserId > 0))
+                {
+                    return "您的账户余额不足且没有有效的 AI 服务租赁，请充值或租赁后再尝试。";
+                }
+
+                _logger.LogInformation("[AIService] Billing confirmed. Using ID: {BillingId}", billingId);
 
                 // 1. 获取有效 Provider (支持 BYOK 和共享 Key)
                 var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
@@ -192,13 +209,20 @@ namespace BotWorker.Modules.AI.Services
                 // --- RAG 预检索优化 ---
                 if (context != null)
                 {
-                    // 在调用大模型之前，先尝试检索相关知识并注入上下文
-                    // 这样可以减少一次大模型的 Tool Call 回合，提高响应速度
-                    var knowledge = await _ragService.GetFormattedKnowledgeAsync(prompt, groupId);
-                    if (!string.IsNullOrEmpty(knowledge))
+                    try
                     {
-                        history.AddSystemMessage(knowledge);
-                        _logger.LogInformation("RAG pre-retrieval success for group {GroupId}", groupId);
+                        // 在调用大模型之前，先尝试检索相关知识并注入上下文
+                        // 这样可以减少一次大模型的 Tool Call 回合，提高响应速度
+                        var knowledge = await _ragService.GetFormattedKnowledgeAsync(prompt, groupId);
+                        if (!string.IsNullOrEmpty(knowledge))
+                        {
+                            history.AddSystemMessage(knowledge);
+                            _logger.LogInformation("RAG pre-retrieval success for group {GroupId}", groupId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "RAG pre-retrieval failed for group {GroupId}, continuing without RAG.", groupId);
                     }
                 }
                 
@@ -243,6 +267,8 @@ namespace BotWorker.Modules.AI.Services
                         TotalCost = cost,
                         LatencyMs = duration,
                         IsSuccess = true,
+                        RawRequest = System.Text.Json.JsonSerializer.Serialize(new { prompt = prompt }),
+                        RawResponse = System.Text.Json.JsonSerializer.Serialize(new { result = result }),
                         CreatedAt = DateTime.UtcNow
                     });
                 }

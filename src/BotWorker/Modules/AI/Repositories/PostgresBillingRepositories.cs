@@ -74,10 +74,10 @@ namespace BotWorker.Modules.AI.Repositories
         public async Task<IEnumerable<LeaseResource>> GetAvailableResourcesAsync(string? resourceType = null)
         {
             using var conn = CreateConnection();
-            var sql = $"SELECT * FROM {_tableName} WHERE is_active = true AND available_units > 0";
+            var sql = $"SELECT * FROM {_tableName} WHERE is_active = true AND status = 'available'";
             if (!string.IsNullOrEmpty(resourceType))
             {
-                sql += " AND resource_type = @resourceType";
+                sql += " AND type = @resourceType";
             }
             return await conn.QueryAsync<LeaseResource>(sql, new { resourceType });
         }
@@ -91,8 +91,8 @@ namespace BotWorker.Modules.AI.Repositories
         public async Task<long> AddAsync(LeaseResource entity)
         {
             const string sql = @"
-                INSERT INTO ai_lease_resources (resource_type, name, provider_id, model_id, total_units, available_units, unit_price, unit_type, config, is_active)
-                VALUES (@ResourceType, @Name, @ProviderId, @ModelId, @TotalUnits, @AvailableUnits, @UnitPrice, @UnitType, @Config::jsonb, @IsActive)
+                INSERT INTO ai_lease_resources (name, type, description, provider_id, price_per_hour, unit_name, max_capacity, current_usage, status, config, is_active)
+                VALUES (@Name, @Type, @Description, @ProviderId, @PricePerHour, @UnitName, @MaxCapacity, @CurrentUsage, @Status, @Config::jsonb, @IsActive)
                 RETURNING id";
             using var conn = CreateConnection();
             return await conn.ExecuteScalarAsync<long>(sql, entity);
@@ -102,8 +102,10 @@ namespace BotWorker.Modules.AI.Repositories
         {
             const string sql = @"
                 UPDATE ai_lease_resources SET 
-                    name = @Name, total_units = @TotalUnits, available_units = @AvailableUnits, 
-                    unit_price = @UnitPrice, is_active = @IsActive, config = @Config::jsonb
+                    name = @Name, type = @Type, description = @Description,
+                    price_per_hour = @PricePerHour, is_active = @IsActive, 
+                    max_capacity = @MaxCapacity, current_usage = @CurrentUsage,
+                    status = @Status, config = @Config::jsonb
                 WHERE id = @Id";
             using var conn = CreateConnection();
             return await conn.ExecuteAsync(sql, entity) > 0;
@@ -120,7 +122,7 @@ namespace BotWorker.Modules.AI.Repositories
         public async Task<IEnumerable<LeaseContract>> GetActiveContractsAsync()
         {
             using var conn = CreateConnection();
-            return await conn.QueryAsync<LeaseContract>($"SELECT * FROM {_tableName} WHERE status = 'active' AND end_at > CURRENT_TIMESTAMP");
+            return await conn.QueryAsync<LeaseContract>($"SELECT * FROM {_tableName} WHERE status = 'active' AND end_time > CURRENT_TIMESTAMP");
         }
 
         public async Task<IEnumerable<LeaseContract>> GetByTenantIdAsync(long tenantId)
@@ -132,8 +134,8 @@ namespace BotWorker.Modules.AI.Repositories
         public async Task<long> AddAsync(LeaseContract entity)
         {
             const string sql = @"
-                INSERT INTO ai_lease_contracts (tenant_id, resource_id, units, start_at, end_at, status, config)
-                VALUES (@TenantId, @ResourceId, @Units, @StartAt, @EndAt, @Status, @Config::jsonb)
+                INSERT INTO ai_lease_contracts (tenant_id, resource_id, start_time, end_time, status, auto_renew, total_paid, config)
+                VALUES (@TenantId, @ResourceId, @StartTime, @EndTime, @Status, @AutoRenew, @TotalPaid, @Config::jsonb)
                 RETURNING id";
             using var conn = CreateConnection();
             return await conn.ExecuteScalarAsync<long>(sql, entity);
@@ -143,7 +145,8 @@ namespace BotWorker.Modules.AI.Repositories
         {
             const string sql = @"
                 UPDATE ai_lease_contracts SET 
-                    status = @Status, end_at = @EndAt, config = @Config::jsonb
+                    status = @Status, end_time = @EndTime, auto_renew = @AutoRenew,
+                    total_paid = @TotalPaid, config = @Config::jsonb
                 WHERE id = @Id";
             using var conn = CreateConnection();
             return await conn.ExecuteAsync(sql, entity) > 0;
@@ -166,8 +169,8 @@ namespace BotWorker.Modules.AI.Repositories
         public async Task<long> AddAsync(BillingTransaction entity)
         {
             const string sql = @"
-                INSERT INTO ai_billing_transactions (wallet_id, type, amount, balance_after, related_id, remark)
-                VALUES (@WalletId, @Type, @Amount, @BalanceAfter, @RelatedId, @Remark)
+                INSERT INTO ai_billing_transactions (wallet_id, type, amount, related_id, related_type, remark)
+                VALUES (@WalletId, @Type, @Amount, @RelatedId, @RelatedType, @Remark)
                 RETURNING id";
             using var conn = CreateConnection();
             return await conn.ExecuteScalarAsync<long>(sql, entity);

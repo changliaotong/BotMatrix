@@ -3,6 +3,7 @@ using BotWorker.Modules.AI.Models.Evolution;
 using BotWorker.Modules.AI.Models;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace BotWorker.Modules.AI.Services
@@ -21,8 +22,10 @@ namespace BotWorker.Modules.AI.Services
         private readonly IJobService _jobService;
         private readonly IEmployeeService _employeeService;
         private readonly IEvaluationService _evaluationService;
+        private readonly IUniversalAgentManager _agentManager;
         private readonly ITaskRecordRepository _taskRepository;
         private readonly ITaskStepRepository _stepRepository;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
         private readonly ILogger<AgentExecutor> _logger;
 
         public AgentExecutor(
@@ -30,17 +33,21 @@ namespace BotWorker.Modules.AI.Services
             IJobService jobService, 
             IEmployeeService employeeService,
             IEvaluationService evaluationService,
+            IUniversalAgentManager agentManager,
             ITaskRecordRepository taskRepository,
             ITaskStepRepository stepRepository,
-            ILogger<AgentExecutor> _logger)
+            Microsoft.Extensions.Configuration.IConfiguration configuration,
+            ILogger<AgentExecutor> logger)
         {
             this._aiService = aiService;
             this._jobService = jobService;
             this._employeeService = employeeService;
             this._evaluationService = evaluationService;
+            this._agentManager = agentManager;
             this._taskRepository = taskRepository;
             this._stepRepository = stepRepository;
-            this._logger = _logger;
+            this._configuration = configuration;
+            this._logger = logger;
         }
 
         public async Task<string> ExecuteByAgentAsync(Agent agent, string prompt)
@@ -128,27 +135,48 @@ namespace BotWorker.Modules.AI.Services
                 {
                     TaskId = taskId,
                     StepIndex = 0,
-                    Name = "MainProcess",
-                    Status = "running",
-                    InputData = prompt
-                };
-                var stepId = await _stepRepository.AddAsync(step);
-                step.Id = stepId;
+                Name = "MainProcess",
+                Status = "running",
+                InputData = JsonSerializer.Serialize(prompt)
+            };
+            var stepId = await _stepRepository.AddAsync(step);
+            step.Id = stepId;
 
-                var startTime = DateTime.Now;
-                // 使用岗位 Prompt 执行，并尊重模型选择策略
-                var result = await _aiService.ChatWithContextAsync(jobSystemPrompt, context, job.ModelSelectionStrategy);
-                var duration = (int)(DateTime.Now - startTime).TotalMilliseconds;
+            var startTime = DateTime.Now;
+            
+            // 计算分布式工作区路径
+            var workspaceRoot = _configuration["WorkspaceRoot"] ?? Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces");
+            var tenantId = context.GroupId ?? "default_tenant";
+            var userId = context.UserId ?? "default_user";
+            var projectPath = Path.Combine(workspaceRoot, tenantId, userId, taskId.ToString());
+            
+            // 确保目录存在
+            if (!Directory.Exists(projectPath))
+            {
+                Directory.CreateDirectory(projectPath);
+            }
 
-                // 记录步骤结束
-                step.OutputData = result;
-                step.DurationMs = duration;
-                
-                // 自动化评估
-                await _evaluationService.EvaluateStepAsync(step, prompt);
-                
-                // 更新任务记录
-                taskRecord.ResultData = result;
+            var metadata = new Dictionary<string, string>
+            {
+                { "ProjectPath", projectPath },
+                { "TaskId", taskId.ToString() },
+                { "TenantId", tenantId },
+                { "UserId", userId }
+            };
+
+            // 使用 UniversalAgentManager 执行自主循环
+            var result = await _agentManager.RunLoopAsync(jobId, prompt, context, metadata);
+            var duration = (int)(DateTime.Now - startTime).TotalMilliseconds;
+
+            // 记录步骤结束
+            step.OutputData = JsonSerializer.Serialize(result);
+            step.DurationMs = duration;
+            
+            // 自动化评估
+            await _evaluationService.EvaluateStepAsync(step, prompt);
+            
+            // 更新任务记录
+            taskRecord.ResultData = JsonSerializer.Serialize(result);
                 taskRecord.FinishedAt = DateTime.Now;
                 await _evaluationService.EvaluateTaskResultAsync(taskRecord);
 

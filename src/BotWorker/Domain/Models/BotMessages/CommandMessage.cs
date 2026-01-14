@@ -229,7 +229,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 else
                     await GetAnswerAsync();
             }
-            else if (CmdName.In("设置Key", "开启租赁", "关闭租赁", "我的Key"))
+            else if (CmdName.In("设置Key", "开启租赁", "关闭租赁", "我的Key", "岗位任务"))
                 Answer = await GetAiConfigResAsync();
             else if (CmdName == "尚未实现")
                 Answer = $"尚未实现";
@@ -254,9 +254,12 @@ public partial class BotMessage : MetaData<BotMessage>
                     return;
                 }
 
-                Answer = SetupPrivate(true);
-                if (Answer != "")
-                    return;
+                if (!CmdName.In("岗位任务", "设置Key", "我的Key"))
+                {
+                    Answer = SetupPrivate(true);
+                    if (Answer != "")
+                        return;
+                }
 
                 if (CmdName.In("开机", "关机") && CmdPara.IsNull())                
                     Answer = await GroupInfo.SetPowerOnOffAsync(SelfId, GroupId, UserId, CmdName);               

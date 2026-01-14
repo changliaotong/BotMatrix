@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Models.Evolution;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace BotWorker.Modules.AI.Services
@@ -16,6 +17,8 @@ namespace BotWorker.Modules.AI.Services
         private readonly IJobService _jobService;
         private readonly ISkillService _skillService;
         private readonly ISkillDefinitionRepository _skillRepository;
+        private readonly ITaskStepRepository _stepRepository;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<UniversalAgentManager> _logger;
 
         public UniversalAgentManager(
@@ -23,12 +26,16 @@ namespace BotWorker.Modules.AI.Services
             IJobService jobService, 
             ISkillService skillService,
             ISkillDefinitionRepository skillRepository,
+            ITaskStepRepository stepRepository,
+            IConfiguration configuration,
             ILogger<UniversalAgentManager> logger)
         {
             _aiService = aiService;
             _jobService = jobService;
             _skillService = skillService;
             _skillRepository = skillRepository;
+            _stepRepository = stepRepository;
+            _configuration = configuration;
             _logger = logger;
         }
 
@@ -40,6 +47,40 @@ namespace BotWorker.Modules.AI.Services
                 return $"Error: Job {jobKey} not found.";
             }
 
+            // 生成隔离的工作区路径
+            var workspaceRoot = _configuration["WorkspaceRoot"] ?? Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces");
+            var tenantId = context.GroupId ?? "default_tenant";
+            var userId = context.UserId ?? "default_user";
+            var sessionId = Guid.NewGuid().ToString("N").Substring(0, 8); // 简短会话ID
+            
+            // 尝试从 metadata 中获取 TaskId，如果没有则使用 sessionId
+            var taskId = metadata?.GetValueOrDefault("TaskId") ?? sessionId;
+            var projectPath = Path.Combine(workspaceRoot, tenantId, userId, taskId);
+            
+            bool isNewProject = !Directory.Exists(projectPath);
+            if (isNewProject)
+            {
+                Directory.CreateDirectory(projectPath);
+                _logger.LogInformation("[UniversalAgent] Created isolated workspace: {Path}", projectPath);
+                
+                // 自动初始化 Git
+                try {
+                    await _skillService.ExecuteSkillAsync("GIT", "git init", "初始化项目仓库", new Dictionary<string, string> { ["ProjectPath"] = projectPath });
+                    await _skillService.ExecuteSkillAsync("WRITE", ".gitignore", "初始化 gitignore", new Dictionary<string, string> { 
+                        ["ProjectPath"] = projectPath,
+                        ["Content"] = "bin/\nobj/\n.vs/\n*.log\n"
+                    });
+                } catch (Exception ex) {
+                    _logger.LogWarning("[UniversalAgent] Git init failed: {Message}", ex.Message);
+                }
+            }
+
+            var agentMetadata = metadata ?? new Dictionary<string, string>();
+            agentMetadata["ProjectPath"] = projectPath;
+            agentMetadata["TenantId"] = tenantId;
+            agentMetadata["UserId"] = userId;
+            agentMetadata["TaskId"] = taskId;
+
             // 获取岗位关联的技能详情
             var skillKeys = JsonSerializer.Deserialize<List<string>>(job.ToolSchema) ?? new List<string>();
             var skills = await _skillRepository.GetByKeysAsync(skillKeys);
@@ -49,12 +90,12 @@ namespace BotWorker.Modules.AI.Services
             var state = new AgentState
             {
                 InitialTask = initialTask,
-                Metadata = metadata ?? new Dictionary<string, string>(),
+                Metadata = agentMetadata,
                 History = new List<string>(),
                 Files = new Dictionary<string, string>()
             };
 
-            int maxSteps = 15;
+            int maxSteps = 20; // 增加步数上限
             int currentStep = 0;
             string finalResult = "任务超时或未完成";
 
@@ -63,12 +104,32 @@ namespace BotWorker.Modules.AI.Services
                 currentStep++;
                 _logger.LogInformation("[UniversalAgent] {JobKey} Step {Step}/{Max}", jobKey, currentStep, maxSteps);
 
+                // 强化：如果是第一步，要求 Agent 必须先写规划
+                if (currentStep == 1 && !state.Files.ContainsKey("plan.md"))
+                {
+                    state.InitialTask = "请首先根据目标，在工作区根目录创建一个 plan.md 文件，详细列出执行计划。\n目标内容：" + initialTask;
+                }
+
                 var prompt = BuildPrompt(job, skills, state);
                 var response = await _aiService.ChatWithContextAsync(prompt, context, job.ModelSelectionStrategy);
 
                 var decision = ParseDecision(response);
                 _logger.LogInformation("[UniversalAgent] {JobKey} Decision: {Action} on {Target} ({Reason})", 
                     jobKey, decision.Action, decision.Target, decision.Reason);
+
+                // 如果有 TaskId，记录详细步骤
+                if (long.TryParse(taskId, out var tid))
+                {
+                    await _stepRepository.AddAsync(new TaskStep
+                    {
+                        TaskId = tid,
+                        StepIndex = currentStep,
+                        Name = $"{decision.Action}: {decision.Target}",
+                        InputData = JsonSerializer.Serialize(new { Reason = decision.Reason, Prompt = prompt }),
+                        Status = "executing",
+                        CreatedAt = DateTime.Now
+                    });
+                }
 
                 if (decision.Action == "DONE")
                 {
@@ -79,6 +140,32 @@ namespace BotWorker.Modules.AI.Services
                 var observation = await ExecuteActionAsync(decision, state, context);
                 state.LastObservation = observation;
                 state.History.Add($"Step {currentStep}: {decision.Action} {decision.Target} -> {observation}");
+
+                // 自动化：执行成功后自动 Git Commit
+                if (!observation.StartsWith("错误") && decision.Action.ToUpper() != "READ" && decision.Action.ToUpper() != "LIST" && decision.Action.ToUpper() != "DONE")
+                {
+                    try {
+                        var commitMsg = $"Step {currentStep}: {decision.Action} {decision.Target}";
+                        // 先尝试 add
+                        await _skillService.ExecuteSkillAsync("GIT", "git add .", "添加变更", agentMetadata);
+                        // 再尝试 commit，如果没有任何变更 commit 会失败，我们忽略它
+                        await _skillService.ExecuteSkillAsync("GIT", $"git commit -m \"{commitMsg}\"", "自动提交", agentMetadata);
+                    } catch { /* 忽略 Git 错误，例如没有变更可提交 */ }
+                }
+
+                // 更新步骤结果
+                if (long.TryParse(taskId, out var tid2))
+                {
+                    var steps = await _stepRepository.GetByTaskIdAsync(tid2);
+                    var currentTaskStep = steps.FirstOrDefault(s => s.StepIndex == currentStep);
+                    if (currentTaskStep != null)
+                    {
+                        currentTaskStep.OutputData = observation;
+                        currentTaskStep.Status = "completed";
+                        currentTaskStep.UpdatedAt = DateTime.Now;
+                        await _stepRepository.UpdateAsync(currentTaskStep);
+                    }
+                }
             }
 
             return finalResult;
@@ -87,7 +174,7 @@ namespace BotWorker.Modules.AI.Services
         private string BuildPrompt(JobDefinition job, IEnumerable<SkillDefinition> skills, AgentState state)
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"# {job.Name} 执行指令");
+            sb.AppendLine($"# {job.Name} 执行指令 (Autonomous Mode)");
             sb.AppendLine();
             sb.AppendLine("## 你的身份");
             sb.AppendLine(job.SystemPrompt);
@@ -95,13 +182,19 @@ namespace BotWorker.Modules.AI.Services
             sb.AppendLine("## 核心目标");
             sb.AppendLine(job.Purpose);
             sb.AppendLine();
+            sb.AppendLine("## 自动化行为规范 (Manus Protocol)");
+            sb.AppendLine("1. **自主规划**: 必须在工作区维护 plan.md，记录已完成和待办事项。");
+            sb.AppendLine("2. **自给自足**: 遇到错误（如缺少依赖、编译失败）时，应尝试通过命令行工具自行解决。");
+            sb.AppendLine("3. **增量开发**: 每次修改后应通过 BUILD 或 COMMAND 验证。");
+            sb.AppendLine("4. **版本控制**: 你的所有文件变更都会被自动 git commit，请确保代码逻辑清晰。");
+            sb.AppendLine();
             sb.AppendLine("## 执行约束");
             sb.AppendLine(job.Constraints);
             sb.AppendLine();
             sb.AppendLine("## 可用工具 (Tools)");
             if (!skills.Any())
             {
-                sb.AppendLine("无可用特定工具。");
+                sb.AppendLine("无可用特定工具。使用 COMMAND 执行系统命令。");
             }
             foreach (var skill in skills)
             {
@@ -112,12 +205,13 @@ namespace BotWorker.Modules.AI.Services
             sb.AppendLine("## 初始任务");
             sb.AppendLine(state.InitialTask);
             sb.AppendLine();
-            sb.AppendLine("## 当前状态总结");
+            sb.AppendLine("## 当前工作区状态");
             sb.AppendLine(state.GetSummary());
             sb.AppendLine();
-            sb.AppendLine("## 请决定下一步行动");
-            sb.AppendLine("必须输出合法的 JSON 格式：{\"action\": \"工具名\", \"target\": \"目标/参数\", \"reason\": \"原因\"}");
-            sb.AppendLine("如果任务已完成，请使用 action: \"DONE\"。");
+            sb.AppendLine("## 决策要求");
+            sb.AppendLine("请分析当前进度，决定下一步行动。");
+            sb.AppendLine("输出 JSON 格式：{\"action\": \"工具名\", \"target\": \"目标/参数\", \"reason\": \"原因\", \"content\": \"(可选) 写入内容\"}");
+            sb.AppendLine("完成所有目标后，使用 action: \"DONE\"。");
 
             return sb.ToString();
         }
@@ -204,7 +298,31 @@ namespace BotWorker.Modules.AI.Services
                 
                 if (jsonMatch.Success)
                 {
-                    decision = JsonSerializer.Deserialize<AgentDecision>(jsonMatch.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new AgentDecision();
+                    using var doc = JsonDocument.Parse(jsonMatch.Value);
+                    var root = doc.RootElement;
+                    
+                    decision = new AgentDecision();
+                    if (root.TryGetProperty("action", out var actionProp)) decision.Action = actionProp.GetString() ?? "DONE";
+                    if (root.TryGetProperty("target", out var targetProp))
+                    {
+                        decision.Target = targetProp.ValueKind == JsonValueKind.String ? targetProp.GetString() ?? "" : targetProp.GetRawText();
+                    }
+                    if (root.TryGetProperty("reason", out var reasonProp)) decision.Reason = reasonProp.GetString() ?? "";
+                    if (root.TryGetProperty("content", out var contentProp)) decision.Content = contentProp.GetString();
+                    
+                    // 额外处理：如果 Target 中包含换行符，且 Action 是 WRITE，说明模型把内容错放到了 Target 里
+                    if (decision.Action.ToUpper() == "WRITE" && decision.Target.Contains("\n"))
+                    {
+                        var lines = decision.Target.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (lines.Length > 0)
+                        {
+                            decision.Target = lines[0].Trim();
+                            if (string.IsNullOrEmpty(decision.Content))
+                            {
+                                decision.Content = string.Join("\n", lines.Skip(1)).Trim();
+                            }
+                        }
+                    }
                 }
                 else
                 {
@@ -214,15 +332,29 @@ namespace BotWorker.Modules.AI.Services
                 // 2. 如果是 WRITE 行动，尝试提取内容块 (``` ... ```)
                 if (decision.Action.ToUpper() == "WRITE" || decision.Action.ToUpper().Contains("CODER"))
                 {
-                    var codeMatch = System.Text.RegularExpressions.Regex.Match(content, @"```(?:\w+)?\n?(.*?)```", System.Text.RegularExpressions.RegexOptions.Singleline);
+                    // 支持多种代码块格式，包括带语言标识的和不带的
+                    var codeMatch = System.Text.RegularExpressions.Regex.Match(content, @"```(?:\w+)?\s*\n?(.*?)```", System.Text.RegularExpressions.RegexOptions.Singleline);
                     if (codeMatch.Success)
                     {
                         decision.Content = codeMatch.Groups[1].Value.Trim();
                     }
                     else if (string.IsNullOrEmpty(decision.Content))
                     {
-                        // 如果没有代码块，但 JSON 里也没有 content，则尝试从 reason 提取（兼容模式）
-                        decision.Content = decision.Reason;
+                        // 兜底方案：如果 JSON 里没有 content，也没有代码块，但有明显的代码特征
+                        if (content.Contains("{") && content.Contains("}") && (content.Contains("using ") || content.Contains("import ")))
+                        {
+                             // 提取 JSON 之后的所有文本作为 content
+                             var index = content.LastIndexOf('}');
+                             if (index > 0 && index < content.Length - 1)
+                             {
+                                 decision.Content = content.Substring(index + 1).Trim();
+                             }
+                        }
+                        
+                        if (string.IsNullOrEmpty(decision.Content))
+                        {
+                            decision.Content = decision.Reason;
+                        }
                     }
                 }
 

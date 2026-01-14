@@ -83,8 +83,10 @@ namespace BotWorker.Modules.AI.Services
                         foreach (var model in providerModels)
                         {
                             var modelType = MapStringToType(model.Type);
-                            _modelMapping[model.Name] = (apiProvider, model.Name, modelType);
-                            Console.WriteLine($"[AI] Registered Model: {model.Name} (Type: {modelType}) for Provider: {provider.Name}");
+                            // 优先使用 ApiModelId，如果没有则使用 Name
+                            var actualModelId = !string.IsNullOrWhiteSpace(model.ApiModelId) ? model.ApiModelId : model.Name;
+                            _modelMapping[model.Name] = (apiProvider, actualModelId, modelType);
+                            Console.WriteLine($"[AI] Registered Model: {model.Name} (Internal ID: {actualModelId}, Type: {modelType}) for Provider: {provider.Name}");
                         }
                     }
                 }

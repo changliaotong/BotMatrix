@@ -15,7 +15,25 @@ namespace BotWorker.Modules.AI.Skills
 
         public async Task<string> ExecuteAsync(string action, string target, string reason, Dictionary<string, string> metadata)
         {
-            var projectPath = metadata.GetValueOrDefault("ProjectPath") ?? Directory.GetCurrentDirectory();
+            // 强制要求 ProjectPath，如果没有则使用安全的隔离目录，禁止污染运行目录
+            var projectPath = metadata.GetValueOrDefault("ProjectPath");
+            if (string.IsNullOrEmpty(projectPath))
+            {
+                // 如果没有提供 ProjectPath，根据元数据生成一个默认隔离路径
+                var tenantId = metadata.GetValueOrDefault("TenantId") ?? "default_tenant";
+                var userId = metadata.GetValueOrDefault("UserId") ?? "default_user";
+                var taskId = metadata.GetValueOrDefault("TaskId") ?? "unknown_task";
+                
+                projectPath = Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces", tenantId, userId, taskId);
+                
+                // 可以在这里记录警告，说明技能调用缺少明确的项目路径
+            }
+            
+            if (!Directory.Exists(projectPath))
+            {
+                Directory.CreateDirectory(projectPath);
+            }
+
             var cmd = action.ToUpper();
 
             try
@@ -72,7 +90,23 @@ namespace BotWorker.Modules.AI.Skills
 
         public async Task<string> ExecuteAsync(string action, string target, string reason, Dictionary<string, string> metadata)
         {
-            var projectPath = metadata.GetValueOrDefault("ProjectPath") ?? Directory.GetCurrentDirectory();
+            // 强制要求 ProjectPath，如果没有则使用安全的隔离目录，禁止污染运行目录
+            var projectPath = metadata.GetValueOrDefault("ProjectPath");
+            if (string.IsNullOrEmpty(projectPath))
+            {
+                // 如果没有提供 ProjectPath，根据元数据生成一个默认隔离路径
+                var tenantId = metadata.GetValueOrDefault("TenantId") ?? "default_tenant";
+                var userId = metadata.GetValueOrDefault("UserId") ?? "default_user";
+                var taskId = metadata.GetValueOrDefault("TaskId") ?? "unknown_task";
+                
+                projectPath = Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces", tenantId, userId, taskId);
+            }
+
+            if (!Directory.Exists(projectPath))
+            {
+                Directory.CreateDirectory(projectPath);
+            }
+
             var cmd = action.ToUpper();
 
             try

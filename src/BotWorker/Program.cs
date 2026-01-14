@@ -8,6 +8,12 @@ using BotWorker.Modules.AI.Services;
 using BotWorker.Modules.AI.Skills;
 using BotWorker.Modules.AI.Tools;
 using BotWorker.Infrastructure.Communication.OneBot;
+using Npgsql;
+using Dapper;
+using Microsoft.Extensions.Configuration;
+using BotWorker.Modules.AI.Models;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Modules.AI.Providers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,7 +38,8 @@ builder.Services.AddHttpClient();
 var redisHost = builder.Configuration["redis:host"] ?? "localhost";
 var redisPort = builder.Configuration["redis:port"] ?? "6379";
 var redisPassword = builder.Configuration["redis:password"];
-var redisConn = $"{redisHost}:{redisPort},abortConnect=false,allowAdmin=true";
+// 增加超时设置，减少 ConnectionAborted 错误
+var redisConn = $"{redisHost}:{redisPort},abortConnect=false,allowAdmin=true,connectTimeout=10000,syncTimeout=10000,keepAlive=60";
 if (!string.IsNullOrEmpty(redisPassword))
 {
     redisConn += $",password={redisPassword}";
@@ -91,6 +98,7 @@ builder.Services.AddSingleton<IEvolutionService, BotWorker.Modules.AI.Services.E
 builder.Services.AddSingleton<IDevWorkflowManager, DevWorkflowManager>();
 builder.Services.AddSingleton<IUniversalAgentManager, UniversalAgentManager>();
 builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
+// builder.Services.AddHostedService<BotWorker.Infrastructure.Messaging.RedisStreamConsumer>();
 builder.Services.AddHostedService<McpInitializationService>();
 builder.Services.AddHostedService<BotWorker.Modules.AI.Services.EvolutionBackgroundService>();
 builder.Services.AddSingleton<II18nService, I18nService>();
@@ -164,6 +172,8 @@ builder.Services.AddHostedService<BotWorker.Infrastructure.Messaging.RedisStream
 
 var app = builder.Build();
 
+Log.Information("[Startup] Application built. Starting host...");
+
 // 初始化数据库
 using (var scope = app.Services.CreateScope())
 {
@@ -196,7 +206,7 @@ app.MapControllers();
 app.Run();
 
 // 简单的启动加载器
-public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : BackgroundService
+public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp, ILLMRepository llmRepository) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -208,6 +218,9 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : 
         // 注入初始岗位
         var jobService = BotMessage.ServiceProvider.GetRequiredService<IJobService>();
         await jobService.SeedJobsAsync();
+
+        // 注入初始 AI 模型
+        await SeedAiModelsAsync();
 
         // [TEST] 验证动态技能
         try {
@@ -235,5 +248,99 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp) : 
         // 2. 加载插件
         await loaderService.LoadAllPluginsAsync();
         Log.Information("[Startup] StartupLoader finished.");
+    }
+
+    private async Task SeedAiModelsAsync()
+    {
+        Log.Information("[Startup] Entering SeedAiModelsAsync...");
+        try
+        {
+            // 尝试修复数据库架构：确保 ai_models 有 type 列
+            try
+            {
+                var connString = GlobalConfig.KnowledgeBaseConnection;
+                Log.Information("[Startup] Checking database schema for ai_models using connection string: {ConnString}", 
+                    string.IsNullOrEmpty(connString) ? "EMPTY" : "Provided");
+                
+                if (string.IsNullOrEmpty(connString))
+                {
+                    Log.Warning("[Startup] KnowledgeBaseConnection is empty, skipping schema fix");
+                }
+                else
+                {
+                    using var conn = new NpgsqlConnection(connString);
+                    await conn.OpenAsync();
+                    var checkColumnSql = "SELECT count(*) FROM information_schema.columns WHERE table_name='ai_models' AND column_name='type'";
+                    var count = await conn.ExecuteScalarAsync<long>(checkColumnSql);
+                    if (count == 0)
+                    {
+                        Log.Information("[Startup] Adding missing 'type' column to 'ai_models' table...");
+                        await conn.ExecuteAsync("ALTER TABLE ai_models ADD COLUMN type VARCHAR(20) DEFAULT 'chat' NOT NULL");
+                    }
+                    else
+                    {
+                        Log.Information("[Startup] 'type' column already exists in 'ai_models' table.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Startup] Failed to check/fix database schema for ai_models");
+            }
+
+            var providers = (await llmRepository.GetActiveProvidersAsync()).ToList();
+            Log.Information("[Startup] Found {Count} active providers: {Names}", providers.Count, string.Join(", ", providers.Select(p => p.Name)));
+            
+            var doubao = providers.FirstOrDefault(p => p.Name.Equals("Doubao", StringComparison.OrdinalIgnoreCase));
+            if (doubao != null)
+            {
+                var models = (await llmRepository.GetModelsByProviderIdAsync(doubao.Id)).ToList();
+                Log.Information("[Startup] Found {Count} models for Doubao provider. Active count: {ActiveCount}", 
+                    models.Count, models.Count(m => m.IsActive));
+                
+                // 无论是否有激活的模型，都尝试激活或添加我们需要的核心模型
+                var defaultModels = new[] 
+                { 
+                    "doubao-1-5-pro-32k-250115", 
+                    "doubao-embedding-v2", 
+                    "doubao-seed-1-8-251228" 
+                };
+                foreach (var modelName in defaultModels)
+                {
+                    // 尝试匹配，优先全名匹配
+                    var existing = models.FirstOrDefault(m => m.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase))
+                                ?? models.FirstOrDefault(m => m.Name.StartsWith(modelName.Split('-')[0], StringComparison.OrdinalIgnoreCase));
+                    
+                    if (existing != null)
+                    {
+                        if (!existing.IsActive)
+                        {
+                            existing.IsActive = true;
+                            await llmRepository.UpdateModelAsync(existing);
+                            Log.Information("[Startup] Activated existing Doubao model: {ModelName}", existing.Name);
+                        }
+                    }
+                    else
+                    {
+                        await llmRepository.AddModelAsync(new LLMModel 
+                        { 
+                            ProviderId = doubao.Id, 
+                            Name = modelName, 
+                            Type = modelName.Contains("embedding") ? "embedding" : "chat", 
+                            IsActive = true 
+                        });
+                        Log.Information("[Startup] Added and activated new default Doubao model: {ModelName}", modelName);
+                    }
+                }
+            }
+            else
+            {
+                Log.Warning("[Startup] Doubao provider not found in active providers");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Startup] Failed to seed AI models");
+        }
     }
 }
