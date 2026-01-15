@@ -9,6 +9,8 @@ using BotWorker.Modules.AI.Models;
 using Dapper;
 using Npgsql;
 
+using BotWorker.Infrastructure.Persistence.Repositories;
+
 namespace BotWorker.Modules.AI.Repositories
 {
     public class PostgresLLMRepository : BasePostgresRepository<LLMProvider>, ILLMRepository
@@ -66,7 +68,7 @@ namespace BotWorker.Modules.AI.Repositories
         {
             using var conn = CreateConnection();
             return await conn.QueryAsync<LLMModel>(
-                "SELECT * FROM ai_models WHERE is_active = true ORDER BY id ASC");
+                "SELECT * FROM ai_models WHERE is_active = true AND is_paused = false ORDER BY id ASC");
         }
 
         public async Task<LLMModel?> GetModelByIdAsync(long id)
@@ -86,8 +88,8 @@ namespace BotWorker.Modules.AI.Repositories
         public async Task<long> AddModelAsync(LLMModel model)
         {
             const string sql = @"
-                INSERT INTO ai_models (provider_id, name, type, context_window, max_output_tokens, input_price_per_1k_tokens, output_price_per_1k_tokens, config, is_active) 
-                VALUES (@ProviderId, @Name, @Type, @ContextWindow, @MaxOutputTokens, @InputPricePer1kTokens, @OutputPricePer1kTokens, @Config::jsonb, @IsActive) 
+                INSERT INTO ai_models (provider_id, name, api_model_id, type, context_window, max_output_tokens, input_price_per_1k_tokens, output_price_per_1k_tokens, base_url, api_key, config, is_active, is_paused) 
+                VALUES (@ProviderId, @Name, @ApiModelId, @Type, @ContextWindow, @MaxOutputTokens, @InputPricePer1kTokens, @OutputPricePer1kTokens, @BaseUrl, @ApiKey, @Config::jsonb, @IsActive, @IsPaused) 
                 RETURNING id";
             using var conn = CreateConnection();
             return await conn.ExecuteScalarAsync<long>(sql, model);
@@ -97,10 +99,10 @@ namespace BotWorker.Modules.AI.Repositories
         {
             const string sql = @"
                 UPDATE ai_models SET 
-                    provider_id = @ProviderId, name = @Name, type = @Type, 
+                    provider_id = @ProviderId, name = @Name, api_model_id = @ApiModelId, type = @Type, 
                     context_window = @ContextWindow, max_output_tokens = @MaxOutputTokens, 
                     input_price_per_1k_tokens = @InputPricePer1kTokens, output_price_per_1k_tokens = @OutputPricePer1kTokens, 
-                    config = @Config::jsonb, is_active = @IsActive
+                    base_url = @BaseUrl, api_key = @ApiKey, config = @Config::jsonb, is_active = @IsActive, is_paused = @IsPaused
                 WHERE id = @Id";
             using var conn = CreateConnection();
             return await conn.ExecuteAsync(sql, model) > 0;
@@ -151,7 +153,7 @@ namespace BotWorker.Modules.AI.Repositories
         {
             using var conn = CreateConnection();
             return await conn.QueryFirstOrDefaultAsync<LLMModel>(
-                "SELECT * FROM ai_models WHERE name = @modelName AND is_active = true", new { modelName });
+                "SELECT * FROM ai_models WHERE name = @modelName AND is_active = true AND is_paused = false", new { modelName });
         }
 
         public async Task<bool> UpdateUsageAsync(long providerId)

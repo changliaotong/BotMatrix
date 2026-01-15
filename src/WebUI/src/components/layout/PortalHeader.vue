@@ -18,43 +18,48 @@
             </div>
           </div>
           <div class="flex flex-col">
-            <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ tt('common.project_name') }}</span>
-            <span class="text-[10px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ tt('common.nexus_os') }}</span>
+            <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ isEarlyMeowPage ? '早喵机器人' : tt('common.project_name') }}</span>
+            <span class="text-[10px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ isEarlyMeowPage ? 'EARLY MEOW' : tt('common.nexus_os') }}</span>
           </div>
         </router-link>
         
-        <!-- Desktop Nav -->
         <div class="hidden md:flex items-center gap-6 text-sm font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">
-          <router-link to="/" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/' }">
-            {{ tt('common.nav_home') }}
-            <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/' }"></div>
-          </router-link>
+          <template v-if="isEarlyMeowPage">
+            <router-link 
+             v-for="link in earlyMeowLinks" 
+             :key="link.path" 
+             :to="link.path"
+             class="hover:text-[var(--matrix-color)] transition-colors relative group"
+             :class="{ 'text-[var(--matrix-color)]': route.path === link.path }"
+           >
+             {{ link.name }}
+             <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === link.path }"></div>
+           </router-link>
+          </template>
+
+          <template v-else>
+            <router-link to="/" class="hover:text-[var(--matrix-color)] transition-colors relative group flex items-center h-full" :class="{ 'text-[var(--matrix-color)]': route.path === '/' }">
+              <span class="text-sm font-black">{{ tt('common.earlymeow') }}</span>
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/' }"></div>
+            </router-link>
+
+            <router-link to="/guide-angel" class="hover:text-pink-500 transition-colors relative group flex items-center h-full" :class="{ 'text-pink-500': route.path === '/guide-angel' }">
+              <span class="text-sm font-black">{{ tt('earlymeow.nav.guide_angel') }}</span>
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-pink-500 group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/guide-angel' }"></div>
+            </router-link>
+
+            <router-link to="/digital-employee" class="hover:text-[var(--matrix-color)] transition-colors relative group flex items-center h-full" :class="{ 'text-[var(--matrix-color)]': route.path === '/digital-employee' }">
+              <span class="text-sm font-black">{{ tt('common.digital_employee') }}</span>
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/digital-employee' }"></div>
+            </router-link>
           
           <!-- Bots Dropdown -->
-          <div class="relative group">
-            <button class="flex items-center gap-1 hover:text-[var(--matrix-color)] transition-colors py-4" :class="{ 'text-[var(--matrix-color)]': route.path.startsWith('/bots') || route.path.startsWith('/meow') || route.path.startsWith('/bots/guide-angel') }">
-              {{ officialBotsLabel }}
+          <div class="relative group flex items-center">
+            <button class="flex items-center gap-1 hover:text-[var(--matrix-color)] transition-colors h-full" :class="{ 'text-[var(--matrix-color)]': route.path.startsWith('/bots') || route.path.startsWith('/digital-employee') || route.path.startsWith('/botmatrix') }">
+              <span class="text-sm font-black">{{ officialBotsLabel }}</span>
               <ChevronDown class="w-3 h-3 group-hover:rotate-180 transition-transform" />
             </button>
-            <div class="absolute top-full left-1/2 -translate-x-1/2 w-64 p-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl opacity-0 translate-y-4 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all backdrop-blur-xl">
-              <router-link to="/meow" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item">
-                <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
-                  <Cat class="w-4 h-4" />
-                </div>
-                <div class="flex flex-col text-left">
-                  <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('common.earlymeow') }}</span>
-                  <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('common.nav_earlymeow_desc') }}</span>
-                </div>
-              </router-link>
-              <router-link to="/meow/guide-angel" class="flex items-center gap-3 px-4 py-3 hover:bg-pink-500/5 rounded-xl transition-colors group/item">
-                <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-500 group-hover/item:scale-110 transition-transform">
-                  <Heart class="w-4 h-4 fill-current" />
-                </div>
-                <div class="flex flex-col text-left">
-                  <span class="text-sm font-black text-[var(--text-main)] uppercase">{{ tt('earlymeow.nav.guide_angel') }}</span>
-                  <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('guide_angel.description') }}</span>
-                </div>
-              </router-link>
+            <div class="absolute top-full left-1/2 -translate-x-1/2 w-64 p-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl opacity-0 translate-y-4 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all backdrop-blur-xl z-50">
               <router-link to="/bots/nexus-guard" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item">
                 <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
                   <Shield class="w-4 h-4" />
@@ -65,7 +70,7 @@
                 </div>
               </router-link>
               <div class="border-t border-[var(--border-color)] mt-1 pt-1">
-                <router-link to="/bots/digital-employee" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item">
+                <router-link to="/digital-employee" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item">
                   <div class="w-8 h-8 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
                     <User class="w-4 h-4" />
                   </div>
@@ -74,7 +79,7 @@
                     <span class="text-xs text-[var(--text-muted)] lowercase">{{ tt('common.nav_digital_employee_desc') }}</span>
                   </div>
                 </router-link>
-                <router-link to="/bots/digital-employee/dashboard" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item ml-4">
+                <router-link to="/digital-employee/dashboard" class="flex items-center gap-3 px-4 py-3 hover:bg-[var(--matrix-color)]/5 rounded-xl transition-colors group/item ml-4">
                   <div class="w-6 h-6 rounded-lg bg-[var(--matrix-color)]/10 flex items-center justify-center text-[var(--matrix-color)] group-hover/item:scale-110 transition-transform">
                     <LayoutDashboard class="w-3 h-3" />
                   </div>
@@ -86,23 +91,24 @@
             </div>
           </div>
 
-          <router-link to="/docs" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/docs' }">
-            {{ tt('common.nav_docs') }}
-            <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/docs' }"></div>
-          </router-link>
-          <router-link to="/news" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/news' }">
-            {{ tt('common.nav_news') }}
-            <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/news' }"></div>
-          </router-link>
-          <router-link to="/pricing" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/pricing' }">
-            {{ tt('common.nav_pricing') }}
-            <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/pricing' }"></div>
-          </router-link>
-          <router-link to="/about" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/about' }">
-            {{ tt('common.nav_about') }}
-            <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/about' }"></div>
-          </router-link>
-          
+          <router-link to="/botmatrix/docs" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/botmatrix/docs' }">
+              {{ tt('common.nav_docs') }}
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/botmatrix/docs' }"></div>
+            </router-link>
+            <router-link to="/botmatrix/news" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/botmatrix/news' }">
+              {{ tt('common.nav_news') }}
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/botmatrix/news' }"></div>
+            </router-link>
+            <router-link to="/botmatrix/pricing" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/botmatrix/pricing' }">
+              {{ tt('common.nav_pricing') }}
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/botmatrix/pricing' }"></div>
+            </router-link>
+            <router-link to="/botmatrix/about" class="hover:text-[var(--matrix-color)] transition-colors relative group" :class="{ 'text-[var(--matrix-color)]': route.path === '/botmatrix/about' }">
+              {{ tt('common.nav_about') }}
+              <div class="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--matrix-color)] group-hover:w-full transition-all" :class="{ 'w-full': route.path === '/botmatrix/about' }"></div>
+            </router-link>
+          </template>
+
           <!-- System Controls -->
           <div class="flex items-center gap-1.5 ml-4">
             <!-- Style Picker -->
@@ -261,36 +267,35 @@
     <!-- Mobile Menu -->
     <transition name="fade">
       <div v-if="isMobileMenuOpen" class="md:hidden bg-[var(--bg-body)]/95 backdrop-blur-3xl border-b border-[var(--border-color)] py-10 px-6 space-y-8 h-screen overflow-y-auto">
-        <router-link to="/" class="block text-2xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_home') }}</router-link>
-        <div class="space-y-4">
-          <div class="text-xs font-black text-[var(--text-muted)]/40 uppercase tracking-[0.4em]">{{ tt('common.nav_official_bots') }}</div>
-          <router-link to="/meow" class="flex items-center gap-4 text-xl font-black hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">
-            <Cat class="w-6 h-6 text-[var(--matrix-color)]" />
-            {{ tt('common.earlymeow') }}
+        <template v-if="isEarlyMeowPage">
+          <router-link 
+            v-for="link in earlyMeowLinks" 
+            :key="link.path" 
+            :to="link.path"
+            class="block text-2xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors"
+            @click="isMobileMenuOpen = false"
+          >
+            {{ link.name }}
           </router-link>
-          <router-link to="/meow/guide-angel" class="flex items-center gap-4 text-xl font-black hover:text-pink-500 text-[var(--text-main)]" @click="isMobileMenuOpen = false">
-            <Heart class="w-6 h-6 text-pink-500 fill-current" />
-            {{ tt('earlymeow.nav.guide_angel') }}
-          </router-link>
-          <router-link to="/bots/nexus-guard" class="flex items-center gap-4 text-xl font-black hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">
-            <Shield class="w-6 h-6 text-[var(--matrix-color)]" />
-            {{ tt('common.nav_nexus_guard') }}
-          </router-link>
-          <router-link to="/bots/digital-employee" class="flex items-center gap-4 text-xl font-black hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">
-            <User class="w-6 h-6 text-[var(--matrix-color)]" />
-            {{ tt('common.digital_employee') }}
-          </router-link>
-          <router-link to="/bots/digital-employee/dashboard" class="flex items-center gap-4 text-lg font-black hover:text-[var(--matrix-color)] text-[var(--text-main)] ml-10" @click="isMobileMenuOpen = false">
-            <LayoutDashboard class="w-5 h-5 text-[var(--matrix-color)]/60" />
-            {{ tt('common.dashboard', '看板') }}
-          </router-link>
-        </div>
-        <div class="h-px bg-[var(--border-color)]"></div>
-        <router-link to="/docs" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_docs') }}</router-link>
-        <router-link to="/news" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_news') }}</router-link>
+        </template>
 
-        <router-link to="/pricing" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_pricing') }}</router-link>
-        <router-link to="/about" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)]" @click="isMobileMenuOpen = false">{{ tt('common.nav_about') }}</router-link>
+        <template v-else>
+          <router-link to="/" class="block text-2xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('common.earlymeow') }}</router-link>
+          <router-link to="/guide-angel" class="block text-2xl font-black uppercase tracking-tighter hover:text-pink-500 text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('earlymeow.nav.guide_angel') }}</router-link>
+          <router-link to="/digital-employee" class="block text-2xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('common.digital_employee') }}</router-link>
+          <div class="space-y-4">
+            <div class="text-xs font-black text-[var(--text-muted)]/40 uppercase tracking-[0.4em]">{{ tt('common.nav_official_bots') }}</div>
+            <router-link to="/bots/nexus-guard" class="flex items-center gap-4 text-xl font-black hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">
+              <Shield class="w-6 h-6 text-[var(--matrix-color)]" />
+              {{ tt('common.nav_nexus_guard') }}
+            </router-link>
+          </div>
+          <div class="h-px bg-[var(--border-color)]"></div>
+          <router-link to="/botmatrix/docs" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('common.nav_docs') }}</router-link>
+          <router-link to="/botmatrix/news" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('common.nav_news') }}</router-link>
+          <router-link to="/botmatrix/pricing" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('common.nav_pricing') }}</router-link>
+          <router-link to="/botmatrix/about" class="block text-xl font-black uppercase tracking-tighter hover:text-[var(--matrix-color)] text-[var(--text-main)] transition-colors" @click="isMobileMenuOpen = false">{{ tt('common.nav_about') }}</router-link>
+        </template>
         
         <router-link :to="authStore.isAuthenticated ? '/console' : '/login'" class="block w-full py-5 bg-white text-black text-center rounded-2xl font-black text-lg tracking-widest shadow-xl" @click="isMobileMenuOpen = false">
           {{ authStore.isAuthenticated ? tt('common.control_center') : tt('common.start_now') }}
@@ -348,15 +353,32 @@ const isScrolled = ref(false);
 const isVisible = ref(true);
 let lastScrollY = 0;
 
+const earlyMeowPaths = ['/', '/guide-angel', '/manual', '/tech', '/ecosystem', '/pricing', '/console', '/digital-employee', '/digital-employee/dashboard'];
+const isEarlyMeowPage = computed(() => {
+  return earlyMeowPaths.includes(route.path);
+});
+
+const earlyMeowLinks = computed(() => [
+  { name: tt('earlymeow.nav.home'), enName: 'HOME', path: '/' },
+  { name: tt('earlymeow.nav.guide_angel'), enName: 'ANGEL', path: '/guide-angel' },
+  { name: tt('common.digital_employee'), enName: 'STAFF', path: '/digital-employee' },
+  { name: tt('earlymeow.nav.manual'), enName: 'MANUAL', path: '/manual' },
+  { name: tt('earlymeow.nav.tech'), enName: 'TECH', path: '/tech' },
+  { name: tt('earlymeow.nav.ecosystem'), enName: 'ECOSYSTEM', path: '/ecosystem' },
+  { name: tt('earlymeow.nav.pricing'), enName: 'PRICING', path: '/pricing' },
+]);
+
 const officialBotsLabel = computed(() => {
-  if (route.path.startsWith('/meow') || route.path.startsWith('/bots/guide-angel')) {
-    return tt('common.earlymeow');
+  if (route.path.startsWith('/guide-angel')) {
+    return tt('earlymeow.nav.guide_angel');
   } else if (route.path.startsWith('/bots/nexus-guard')) {
     return tt('common.nav_nexus_guard');
-  } else if (route.path.startsWith('/bots/digital-employee')) {
+  } else if (route.path.startsWith('/digital-employee')) {
     return tt('common.digital_employee');
+  } else if (route.path.startsWith('/botmatrix') || route.path.startsWith('/matrix')) {
+    return tt('common.botmatrix');
   }
-  return tt('common.earlymeow'); // Default to EarlyMeow Bot
+  return tt('common.nav_official_bots'); 
 });
 
 const styles: { id: Style; nameKey: string; colors: { light: any; dark: any } }[] = [

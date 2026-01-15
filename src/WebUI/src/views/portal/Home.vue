@@ -14,18 +14,18 @@
         <div class="flex flex-col items-center text-center">
           <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 text-[var(--matrix-color)] text-xs font-bold mb-10 animate-pulse shadow-[var(--matrix-glow)]">
             <Sparkles class="w-4 h-4" />
-            {{ tt('botmatrix_hero_subtitle') }}
+            {{ tt('earlymeow_hero_subtitle') }}
           </div>
 
           <h1 class="text-6xl md:text-9xl font-black mb-12 tracking-tighter leading-none" :style="{ fontFamily: systemStore.style === 'matrix' ? 'var(--font-main)' : 'inherit' }">
-            {{ tt('botmatrix_hero_title') }}<br/>
+            {{ tt('earlymeow_hero_title') }}<br/>
             <span class="text-transparent bg-clip-text bg-gradient-to-r from-[var(--matrix-color)] to-blue-500">
-              {{ tt('botmatrix_hero_title_accent') }}
+              {{ tt('earlymeow_hero_title_accent') }}
             </span>
           </h1>
 
           <p class="text-xl md:text-2xl text-[var(--text-muted)] mb-16 max-w-4xl mx-auto font-light leading-relaxed">
-            {{ tt('botmatrix_hero_desc') }}
+            {{ tt('earlymeow_hero_desc') }}
           </p>
 
           <div class="flex flex-col sm:flex-row gap-6 justify-center items-center">
@@ -69,7 +69,7 @@
     <section class="py-32 relative overflow-hidden">
       <div class="container mx-auto max-w-7xl px-6 mb-20 text-center">
         <h2 class="text-5xl md:text-7xl font-black italic uppercase tracking-tighter mb-8">
-          {{ tt('botmatrix_home_flagship') }} <span class="text-[var(--matrix-color)]">TECH</span>
+          {{ tt('earlymeow_home_flagship') }} <span class="text-[var(--matrix-color)]">TECH</span>
         </h2>
       </div>
       <div class="flex gap-8 px-6 animate-scroll-x hover:[animation-play-state:paused] w-max">
@@ -101,19 +101,19 @@
           <div class="flex flex-col lg:flex-row gap-20 items-center relative z-10">
             <div class="flex-1 space-y-10">
               <div class="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 text-[var(--matrix-color)] text-xs font-bold uppercase tracking-widest">
-                <Cat class="w-4 h-4" /> {{ tt('botmatrix_home_flagship') }}
+                <Cat class="w-4 h-4" /> {{ tt('earlymeow_home_flagship') }}
               </div>
               <h2 class="text-5xl md:text-7xl font-black italic uppercase tracking-tighter leading-tight text-[var(--text-main)]">
-                {{ tt('botmatrix_showcase_earlymeow_title') }}
+                {{ tt('earlymeow_showcase_earlymeow_title') }}
               </h2>
               <p class="text-xl text-[var(--text-muted)] leading-relaxed">
-                {{ tt('botmatrix_showcase_earlymeow_desc') }}
+                {{ tt('earlymeow_showcase_earlymeow_desc') }}
               </p>
               <router-link 
-                to="/meow" 
+                to="/" 
                 class="inline-flex items-center gap-4 px-8 py-4 bg-[var(--matrix-color)] hover:bg-[var(--matrix-color)]/80 text-white font-bold rounded-2xl transition-all shadow-[0_0_30px_rgba(var(--matrix-color-rgb),0.2)]"
               >
-                {{ tt('botmatrix_home_explore_meow') }} <ArrowRight class="w-5 h-5" />
+                {{ tt('earlymeow_home_explore_meow') }} <ArrowRight class="w-5 h-5" />
               </router-link>
             </div>
             
@@ -137,9 +137,9 @@
     <section class="py-40 relative">
       <div class="container mx-auto max-w-7xl px-6">
         <div class="text-center mb-24">
-          <h2 class="text-5xl md:text-7xl font-black mb-8 italic uppercase tracking-tighter">{{ tt('botmatrix_workforce_title') }}</h2>
+          <h2 class="text-5xl md:text-7xl font-black mb-8 italic uppercase tracking-tighter">{{ tt('earlymeow_workforce_title') }}</h2>
           <p class="text-xl text-[var(--text-muted)] max-w-3xl mx-auto font-light leading-relaxed">
-            {{ tt('botmatrix_workforce_subtitle') }}
+            {{ tt('earlymeow_workforce_subtitle') }}
           </p>
         </div>
 
@@ -185,7 +185,7 @@
     <section class="py-48 text-center px-6 relative">
       <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--matrix-color),transparent_70%)] opacity-5"></div>
       <h2 class="text-6xl md:text-9xl font-black mb-12 tracking-tighter leading-none italic uppercase">
-        {{ tt('botmatrix_home_ready_title') }}
+        {{ tt('earlymeow_home_ready_title') }}
       </h2>
       <button 
         @click="router.push('/login')"
@@ -236,32 +236,32 @@ const { t: tt } = useI18n();
 
 const highlights = computed(() => [
   {
-    title: tt('botmatrix_highlight_mesh_title'),
-    desc: tt('botmatrix_highlight_mesh_desc'),
+    title: tt('earlymeow_highlight_mesh_title'),
+    desc: tt('earlymeow_highlight_mesh_desc'),
     icon: Network,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_highlight_rag_title'),
-    desc: tt('botmatrix_highlight_rag_desc'),
+    title: tt('earlymeow_highlight_rag_title'),
+    desc: tt('earlymeow_highlight_rag_desc'),
     icon: Database,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_highlight_mcp_title'),
-    desc: tt('botmatrix_highlight_mcp_desc'),
+    title: tt('earlymeow_highlight_mcp_title'),
+    desc: tt('earlymeow_highlight_mcp_desc'),
     icon: Puzzle,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_highlight_privacy_title'),
-    desc: tt('botmatrix_highlight_privacy_desc'),
+    title: tt('earlymeow_highlight_privacy_title'),
+    desc: tt('earlymeow_highlight_privacy_desc'),
     icon: ShieldCheck,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_highlight_kpi_title'),
-    desc: tt('botmatrix_highlight_kpi_desc'),
+    title: tt('earlymeow_highlight_kpi_title'),
+    desc: tt('earlymeow_highlight_kpi_desc'),
     icon: TrendingUp,
     color: 'var(--matrix-color)'
   }
@@ -269,20 +269,20 @@ const highlights = computed(() => [
 
 const architectureFeatures = computed(() => [
   {
-    title: tt('botmatrix_arch_onebot_title'),
-    desc: tt('botmatrix_arch_onebot_desc'),
+    title: tt('earlymeow_arch_onebot_title'),
+    desc: tt('earlymeow_arch_onebot_desc'),
     icon: Share2,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_arch_proxy_title'),
-    desc: tt('botmatrix_arch_proxy_desc'),
+    title: tt('earlymeow_arch_proxy_title'),
+    desc: tt('earlymeow_arch_proxy_desc'),
     icon: Cloud,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_arch_router_title'),
-    desc: tt('botmatrix_arch_router_desc'),
+    title: tt('earlymeow_arch_router_title'),
+    desc: tt('earlymeow_arch_router_desc'),
     icon: Route,
     color: 'var(--matrix-color)'
   }
@@ -290,20 +290,20 @@ const architectureFeatures = computed(() => [
 
 const workforceFeatures = computed(() => [
   {
-    title: tt('botmatrix_workforce_ai_title'),
-    desc: tt('botmatrix_workforce_ai_desc'),
+    title: tt('earlymeow_workforce_ai_title'),
+    desc: tt('earlymeow_workforce_ai_desc'),
     icon: BrainCircuit,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_workforce_cluster_title'),
-    desc: tt('botmatrix_workforce_cluster_desc'),
+    title: tt('earlymeow_workforce_cluster_title'),
+    desc: tt('earlymeow_workforce_cluster_desc'),
     icon: Box,
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_workforce_automation_title'),
-    desc: tt('botmatrix_workforce_automation_desc'),
+    title: tt('earlymeow_workforce_automation_title'),
+    desc: tt('earlymeow_workforce_automation_desc'),
     icon: Workflow,
     color: 'var(--matrix-color)'
   }
@@ -311,22 +311,22 @@ const workforceFeatures = computed(() => [
 
 const monitorStats = computed(() => [
   {
-    title: tt('botmatrix_monitor_rtt_title'),
-    desc: tt('botmatrix_monitor_rtt_desc'),
+    title: tt('earlymeow_monitor_rtt_title'),
+    desc: tt('earlymeow_monitor_rtt_desc'),
     icon: Gauge,
     value: '12ms',
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_monitor_throughput_title'),
-    desc: tt('botmatrix_monitor_throughput_desc'),
+    title: tt('earlymeow_monitor_throughput_title'),
+    desc: tt('earlymeow_monitor_throughput_desc'),
     icon: BarChart3,
     value: '1.2 PB/s',
     color: 'var(--matrix-color)'
   },
   {
-    title: tt('botmatrix_monitor_cluster_title'),
-    desc: tt('botmatrix_monitor_cluster_desc'),
+    title: tt('earlymeow_monitor_cluster_title'),
+    desc: tt('earlymeow_monitor_cluster_desc'),
     icon: Globe2,
     value: '99.99%',
     color: 'var(--matrix-color)'

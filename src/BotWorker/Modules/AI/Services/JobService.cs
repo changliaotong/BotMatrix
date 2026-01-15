@@ -108,6 +108,7 @@ namespace BotWorker.Modules.AI.Services
                 new SkillDefinition { SkillKey = "git_op", Name = "Git操作", Description = "执行 Git 相关操作", ActionName = "GIT", ParameterSchema = "{\"type\": \"string\", \"description\": \"git命令\"}", IsBuiltin = true },
                 new SkillDefinition { SkillKey = "build_check", Name = "编译检查", Description = "执行项目编译并检查错误", ActionName = "BUILD", ParameterSchema = "{\"type\": \"string\", \"description\": \"编译命令\"}", IsBuiltin = true },
                 new SkillDefinition { SkillKey = "manage_plan", Name = "计划管理", Description = "制定或更新开发计划", ActionName = "PLAN", ParameterSchema = "{\"type\": \"string\", \"description\": \"计划内容(Markdown格式)\"}", IsBuiltin = true },
+                new SkillDefinition { SkillKey = "code_review", Name = "代码评审", Description = "对代码或结果进行深度评审并提供改进建议", ActionName = "REVIEW", ParameterSchema = "{\"type\": \"string\", \"description\": \"评审原因/背景\"}", IsBuiltin = true },
                 new SkillDefinition 
                 { 
                     SkillKey = "python_test", 
@@ -151,7 +152,7 @@ namespace BotWorker.Modules.AI.Services
                     Purpose = "对提交的代码进行安全、性能和规范性审查。",
                     Constraints = "[\"必须指出潜在的内存泄漏风险\", \"检查命名规范\", \"给出优化后的代码示例\"]",
                     SystemPrompt = "你是一位资深的软件架构师和代码审查专家。你需要审查用户提交的代码片段或文件，找出其中的 Bug、性能瓶颈、安全隐患以及不符合最佳实践的地方。请以专业、严谨且建设性的态度提供反馈。",
-                    ToolSchema = "[\"file_read\"]",
+                    ToolSchema = "[\"file_read\", \"code_review\"]",
                     Workflow = "[{\"step\": 1, \"action\": \"安全检查\"}, {\"step\": 2, \"action\": \"性能评估\"}, {\"step\": 3, \"action\": \"输出报告\"}]",
                     ModelSelectionStrategy = "random"
                 },
@@ -160,9 +161,9 @@ namespace BotWorker.Modules.AI.Services
                     JobKey = "dev_orchestrator",
                     Name = "开发调度官",
                     Purpose = "作为开发流程的核心，协调需求、架构、编码和测试，根据当前项目状态决定下一步行动。",
-                    Constraints = "[\"必须输出合法的 JSON 格式行动建议\", \"在执行任何修改前必须先执行 PLAN 制定步骤\", \"每次 WRITE 或子岗位调用后必须执行 BUILD 检查编译\"]",
-                    SystemPrompt = "你是一个全能的数字员工团队领导者。你负责协调复杂的软件开发任务。你需要通过 LIST 和 READ 了解项目，通过 PLAN 规划步骤，然后调用子岗位(如 dev_coder)或直接使用 WRITE 编写代码。编写完代码后，必须调用 BUILD 检查结果，最后使用 GIT 提交。你的目标是实现稳定、可编译的代码交付。",
-                    ToolSchema = "[\"list_dir\", \"file_read\", \"file_write\", \"build_check\", \"git_op\", \"manage_plan\"]",
+                    Constraints = "[\"必须输出合法的 JSON 格式行动建议\", \"在执行任何修改前必须先执行 PLAN 制定步骤\", \"每次 WRITE 或子岗位调用后必须执行 BUILD 检查编译\", \"当任务执行失败或评估未通过时，应使用 REVIEW 工具分析原因并尝试修复\"]",
+                    SystemPrompt = "你是一个全能的数字员工团队领导者。你负责协调复杂的软件开发任务。你需要通过 LIST 和 READ 了解项目，通过 PLAN 规划步骤，然后调用子岗位(如 dev_coder)或直接使用 WRITE 编写代码。编写完代码后，必须调用 BUILD 检查结果，最后使用 GIT 提交。如果遇到错误，请使用 REVIEW 工具进行诊断。",
+                    ToolSchema = "[\"list_dir\", \"file_read\", \"file_write\", \"build_check\", \"git_op\", \"manage_plan\", \"code_review\"]",
                     Workflow = "[{\"step\": 1, \"action\": \"分析当前状态并制定PLAN\"}, {\"step\": 2, \"action\": \"调度工具或岗位执行任务\"}]",
                     ModelSelectionStrategy = "random"
                 },

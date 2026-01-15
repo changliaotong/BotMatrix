@@ -1,101 +1,78 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using BotWorker.Common;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using BotWorker.Infrastructure.Extensions;
+
 namespace BotWorker.Domain.Entities
 {
-    public class QuestionInfo : MetaDataGuid<QuestionInfo>
+    [Table("Question")]
+    public class QuestionInfo
     {
-        public override string TableName => "Question";
-        public override string KeyField => "Id";
-
-        public long QuestionId { get; set; }
+        [Key]
+        public long Id { get; set; }
+        public Guid Guid { get; set; } = Guid.NewGuid();
+        public long BotUin { get; set; }
+        public long GroupId { get; set; }
+        public long UserId { get; set; }
         public string Question { get; set; } = string.Empty;
-        public long UserId { get; set; }        
-        public long GroupID { get; set; }
         public int CUsed { get; set; }
         public int Audit2 { get; set; }
+        public DateTime? Audit2Date { get; set; }
+        public long Audit2By { get; set; }
         public bool IsSystem { get; set; }
+        public DateTime InsertDate { get; set; } = DateTime.Now;
 
+        // Static wrappers for compatibility
         public static bool IsExists(string question)
         {
-            return ExistsWhere($"question = {GetNew(question).Quotes()}");
+            var repo = GlobalConfig.ServiceProvider.GetService<IQuestionInfoRepository>();
+            return repo.ExistsByQuestionAsync(question).GetAwaiter().GetResult();
         }
 
-        // 新增问题
-        public static long Append(long botUin, long groupId, long qq, string question) => AppendAsync(botUin, groupId, qq, question).GetAwaiter().GetResult();
+        public static long Append(long botUin, long groupId, long qq, string question) 
+            => AppendAsync(botUin, groupId, qq, question).GetAwaiter().GetResult();
 
         public static async Task<long> AppendAsync(long botUin, long groupId, long qq, string question)
         {
-            question = GetNew(question);
-            if (question.IsNull())
-                return 0;
-            else
-            {
-                long questionId = await GetQIdAsync(question);
-                if (questionId == 0)
-                {
-                    if (question.Length < 200)
-                    {
-                        if (await InsertAsync([
-                            new Cov("BotUin", botUin),
-                            new Cov("GroupId", groupId),
-                            new Cov("UserId", qq),
-                            new Cov("question", question)
-                            ]) == -1)
-                            Logger.Error("添加问答问题失败");
-                        else
-                            questionId = await GetAutoIdAsync(FullName);
-                    }
-                    else
-                        questionId = 0;
-                }
-                return questionId;
-            }
+            var repo = GlobalConfig.ServiceProvider.GetService<IQuestionInfoRepository>();
+            return await repo.AddQuestionAsync(botUin, groupId, qq, question);
         }
 
-        // 使用次数+1
         public static async Task<int> PlusUsedTimesAsync(long questionId)
         {
-            return await PlusAsync("CUsed", 1, questionId);
+            var repo = GlobalConfig.ServiceProvider.GetService<IQuestionInfoRepository>();
+            return await repo.IncrementUsedTimesAsync(questionId);
         }
 
-        // 是否系统问题
-        public static bool GetIsSystem(long QuestionId) => GetIsSystemAsync(QuestionId).GetAwaiter().GetResult();
+        public static bool GetIsSystem(long questionId) 
+            => GetIsSystemAsync(questionId).GetAwaiter().GetResult();
 
-        public static async Task<bool> GetIsSystemAsync(long QuestionId)
+        public static async Task<bool> GetIsSystemAsync(long questionId)
         {
-            return await GetBoolAsync("IsSystem", QuestionId);
+            var repo = GlobalConfig.ServiceProvider.GetService<IQuestionInfoRepository>();
+            return await repo.IsSystemAsync(questionId);
         }
 
-      
-        /// 审核完成并升级为系统问题
-        public static int Audit(long questionId, int audit2, int isSystem) => AuditAsync(questionId, audit2, isSystem).GetAwaiter().GetResult();
+        public static int Audit(long questionId, int audit2, int isSystem) 
+            => AuditAsync(questionId, audit2, isSystem).GetAwaiter().GetResult();
 
         public static async Task<int> AuditAsync(long questionId, int audit2, int isSystem)
-        {            
-            return await UpdateAsync($"Audit2 = {audit2}, Audit2Date = {SqlDateTime}, Audit2By = {BotInfo.SystemUid}, IsSystem = {isSystem}", questionId);
+        {
+            var repo = GlobalConfig.ServiceProvider.GetService<IQuestionInfoRepository>();
+            return await repo.AuditAsync(questionId, audit2, isSystem);
         }
 
-
-        // 学习功能之问题是否存在
-        public static long GetQId(string text) => GetQIdAsync(text).GetAwaiter().GetResult();
+        public static long GetQId(string text) 
+            => GetQIdAsync(text).GetAwaiter().GetResult();
 
         public static async Task<long> GetQIdAsync(string text)
         {
-            if (text.Length > 200)
-                return 0;
-            else
-                return (await GetWhereAsync(Key, $"question = {text.Quotes()}", "Id")).AsLong();
+            var repo = GlobalConfig.ServiceProvider.GetService<IQuestionInfoRepository>();
+            return await repo.GetIdByQuestionAsync(text);
         }
-
-        // 去掉标点符号、表情 如果全是标点或全是表情则不去掉
-        //public static string GetNew(string text)
-        //{            
-        //    text = text.RemoveWhiteSpaces();
-        //    var res = text.RemoveBiaodian();
-        //    if (res.IsNull()) return text;
-
-        //    text = res;
-        //    res = text.RemoveQqFace();
-        //    return res.IsNull() ? text : res;
-        //}
 
         public static string GetNew(string text)
         {
@@ -132,6 +109,5 @@ namespace BotWorker.Domain.Entities
             bool isAllRemoved = temp.RemoveQqFace().RemoveBiaodian().IsNull();
             return isAllRemoved ? text : temp;
         }
-
     }
 }

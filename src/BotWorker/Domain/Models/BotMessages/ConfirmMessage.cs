@@ -13,7 +13,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 if (confirmCode.IsNull())
                 {
                     confirmCode = RandomInt(100, 999).ToString();
-                    int i = AddGroupMember(50, confirmCode);
+                    int i = await AddGroupMemberAsync(50, confirmCode);
                     if (i == -1)
                         return res;
                 }

@@ -8,13 +8,12 @@ const router = createRouter({
   routes: [
     // --- EarlyMeow (Standalone) ---
     {
-      path: '/meow',
+      path: '/',
       component: () => import('@/views/portal/bots/earlymeow/Layout.vue'),
       meta: { layout: 'blank', title: 'title.meow', requiresAuth: false },
       children: [
         {
           path: '',
-          alias: ['index'],
           name: 'early-meow-home',
           component: () => import('@/views/portal/bots/earlymeow/pages/Home.vue'),
         },
@@ -23,6 +22,12 @@ const router = createRouter({
           name: 'early-meow-guide-angel',
           component: () => import('@/views/portal/bots/earlymeow/pages/GuideAngel.vue'),
           meta: { title: 'title.guide_angel' }
+        },
+        {
+          path: 'manual',
+          name: 'early-meow-manual',
+          component: () => import('@/views/portal/bots/earlymeow/pages/Manual.vue'),
+          meta: { title: 'earlymeow.nav.manual' }
         },
         {
           path: 'tech',
@@ -40,6 +45,23 @@ const router = createRouter({
           component: () => import('@/views/portal/bots/earlymeow/pages/Ecosystem.vue'),
         },
         {
+          path: 'digital-employee',
+          component: RouterView,
+          meta: { title: 'title.digital_employee' },
+          children: [
+            {
+              path: '',
+              name: 'early-meow-digital-employee',
+              component: () => import('@/views/portal/bots/earlymeow/pages/DigitalEmployee.vue'),
+            },
+            {
+              path: 'dashboard',
+              name: 'early-meow-digital-employee-dashboard',
+              component: () => import('@/views/portal/bots/earlymeow/pages/Dashboard.vue'),
+            }
+          ]
+        },
+        {
           path: 'console',
           name: 'early-meow-console',
           component: () => import('@/views/portal/bots/earlymeow/Console.vue'),
@@ -48,87 +70,76 @@ const router = createRouter({
       ]
     },
     {
-      path: '/',
-      name: 'home',
-      component: () => import('@/views/portal/Home.vue'),
-      meta: { layout: 'blank', title: 'title.home' }
+      path: '/botmatrix',
+      component: RouterView,
+      children: [
+        {
+          path: '',
+          name: 'botmatrix-home',
+          component: () => import('@/views/portal/Home.vue'),
+          meta: { layout: 'blank', title: 'title.home' }
+        },
+        {
+          path: 'about',
+          name: 'about',
+          component: () => import('@/views/portal/About.vue'),
+          meta: { layout: 'blank', title: 'title.about' }
+        },
+        {
+          path: 'pricing',
+          name: 'pricing',
+          component: () => import('@/views/portal/Pricing.vue'),
+          meta: { layout: 'blank', title: 'title.pricing' }
+        },
+        {
+          path: 'docs',
+          name: 'docs',
+          component: () => import('@/views/portal/Docs.vue'),
+          meta: { layout: 'blank', title: 'title.docs' }
+        },
+        {
+          path: 'docs/:id',
+          name: 'docs-detail',
+          component: () => import('@/views/portal/DocsDetail.vue'),
+          meta: { layout: 'blank', title: 'title.docs' }
+        },
+        {
+          path: 'news',
+          name: 'news',
+          component: () => import('@/views/portal/News.vue'),
+          meta: { layout: 'blank', title: 'title.news' }
+        },
+        {
+          path: 'news/:id',
+          name: 'news-detail',
+          component: () => import('@/views/portal/NewsDetail.vue'),
+          meta: { layout: 'blank', title: 'title.news' }
+        },
+        {
+          path: 'industrial-test',
+          name: 'industrial-test',
+          component: () => import('@/views/portal/IndustrialTest.vue'),
+          meta: { layout: 'blank', title: 'title.test' }
+        },
+      ]
     },
     {
       path: '/matrix',
-      redirect: '/'
+      redirect: '/botmatrix'
     },
     {
       path: '/bots/guide-angel',
-      redirect: '/meow/guide-angel'
+      redirect: '/guide-angel'
     },
     {
       path: '/bots/early-meow',
-      redirect: '/meow'
+      redirect: '/'
     },
     {
       path: '/bots/nexus-guard',
       name: 'bot-nexus-guard',
       component: () => import('@/views/portal/bots/NexusGuard.vue'),
       meta: { layout: 'blank', title: 'title.home' }
-    },
-    {
-      path: '/bots/digital-employee',
-      component: () => import('@/views/portal/bots/digital-employee/Layout.vue'),
-      meta: { layout: 'blank', title: 'title.digital_employee' },
-      children: [
-        {
-          path: '',
-          name: 'bot-digital-employee',
-          component: () => import('@/views/portal/bots/digital-employee/pages/Home.vue'),
-        },
-        {
-          path: 'dashboard',
-          name: 'bot-digital-employee-dashboard',
-          component: () => import('@/views/portal/bots/digital-employee/pages/Dashboard.vue'),
-        }
-      ]
-    },
-    {
-      path: '/about',
-      name: 'about',
-      component: () => import('@/views/portal/About.vue'),
-      meta: { layout: 'blank', title: 'title.about' }
-    },
-    {
-      path: '/pricing',
-      name: 'pricing',
-      component: () => import('@/views/portal/Pricing.vue'),
-      meta: { layout: 'blank', title: 'title.pricing' }
-    },
-    {
-      path: '/docs',
-      name: 'docs',
-      component: () => import('@/views/portal/Docs.vue'),
-      meta: { layout: 'blank', title: 'title.docs' }
-    },
-    {
-      path: '/docs/:id',
-      name: 'docs-detail',
-      component: () => import('@/views/portal/DocsDetail.vue'),
-      meta: { layout: 'blank', title: 'title.docs' }
-    },
-    {
-      path: '/news',
-      name: 'news',
-      component: () => import('@/views/portal/News.vue'),
-      meta: { layout: 'blank', title: 'title.news' }
-    },
-    {
-      path: '/news/:id',
-      name: 'news-detail',
-      component: () => import('@/views/portal/NewsDetail.vue'),
-      meta: { layout: 'blank', title: 'title.news' }
-    },
-    {
-      path: '/industrial-test',
-      name: 'industrial-test',
-      component: () => import('@/views/portal/IndustrialTest.vue'),
-      meta: { layout: 'blank', title: 'title.test' }
     },
 
     // --- Portal Setup ---
@@ -240,6 +251,11 @@ const router = createRouter({
       component: RouterView,
       meta: { requiresAuth: true, requiresAdmin: true, title: 'title.admin' },
       children: [
+        {
+          path: 'global-dashboard',
+          name: 'admin-global-dashboard',
+          component: () => import('@/views/admin/GlobalDashboard.vue'),
+        },
         {
           path: 'workers',
           name: 'admin-workers',

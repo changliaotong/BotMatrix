@@ -71,11 +71,6 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
         }
 
         // 推荐人积分处理
-        public static string GetRecRes(long botUin, long groupId, string groupName, long userId, string name, string botKey, string clientKey, string message)
-        {
-            return GetRecResAsync(botUin, groupId, groupName, userId, name, botKey, clientKey, message).GetAwaiter().GetResult();
-        }
-
         public static async Task<string> GetRecResAsync(long botUin, long groupId, string groupName, long userId, string name, string botKey, string clientKey, string message)
         {
             if (!IsBind(userId))
@@ -139,11 +134,6 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
             }
         }
 
-        public static string GetBindToken(BotMessage bm, string tokenType, string bindToken)
-        {
-            return GetBindTokenAsync(bm, tokenType, bindToken).GetAwaiter().GetResult();
-        }
-
         public static async Task<string> GetBindTokenAsync(BotMessage bm, string tokenType, string bindToken)
         {
             string res = "";
@@ -172,7 +162,7 @@ namespace BotWorker.Infrastructure.Communication.Platforms.BotPublic
                 if (IsBind(bindUserId))
                     return "此TOKEN已失效，请重新获取";
 
-                bm.AddClient();
+                await bm.AddClientAsync();
 
                 //更新绑定信息，加入事务运行 更新积分记录 发送消息记录
                 long creditValue = await UserInfo.GetCreditAsync(groupId, UserId);

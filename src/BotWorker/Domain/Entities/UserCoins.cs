@@ -1,12 +1,13 @@
 
+using System.Threading.Tasks;
+
 namespace BotWorker.Domain.Entities
 {
-    public partial class UserInfo : MetaDataGuid<UserInfo>
+    public partial class UserInfo
     {
-
-        public static async Task<long> GetCoinsAsync(long UserId)
+        public static async Task<long> GetCoinsAsync(long userId)
         {
-            return await GetLongAsync("Coins", UserId);
+            return await Repository.GetCoinsAsync(userId);
         }
     }
 }

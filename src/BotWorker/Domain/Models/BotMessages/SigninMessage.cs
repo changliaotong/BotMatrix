@@ -1,6 +1,8 @@
+using System.Reflection;
+
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 { 
         public async Task<string> TrySignInAsync(bool isAuto = false)
         {
@@ -10,19 +12,16 @@ public partial class BotMessage : MetaData<BotMessage>
             if (await AddGroupMemberAsync() == -1)
                 return RetryMsg;            
 
-            var member = await GroupMember.GetDictAsync(GroupId, UserId, "SignTimes", "SignLevel", "SignTimesAll");
-            var signTimes = member?["SignTimes"].AsInt() ?? 0;
-            var signLevel = member?["SignLevel"].AsInt() ?? 0;
-            var signTimesAll = member?["SignTimesAll"].AsInt() ?? 0;
+            var member = await GroupMember.LoadAsync(GroupId, UserId);
+            var signTimes = member.SignTimes;
+            var signLevel = member.SignLevel;
+            var signTimesAll = member.SignTimesAll;
 
-            bool isSignedToday = await GroupMember.IsSignInAsync(GroupId, UserId);
-            // Logger.Debug($"[SignIn Check] GroupId: {GroupId}, UserId: {UserId}, isSignedToday: {isSignedToday}");
+            bool isSignedToday = member.SignDate.Date == DateTime.Today;           
             if (isSignedToday)
                 return isAuto ? "" : BuildSignedMessage(signTimes, signLevel, signTimesAll, true);
                                     
-            var dateDiff = await GroupMember.GetSignDateDiffAsync(GroupId, UserId);
-            // Logger.Debug($"[SignIn Diff] GroupId: {GroupId}, UserId: {UserId}, DateDiff: {dateDiff}");
-            
+            int dateDiff = (DateTime.Today - member.SignDate.Date).Days;
             if (dateDiff == 1)
             {
                 // 昨天签到过，连签天数+1
@@ -58,12 +57,11 @@ public partial class BotMessage : MetaData<BotMessage>
             using var trans = await BeginTransactionAsync();
             try
             {
-                // 1. 记录签到流水 (robot_weibo)
-                await GroupSignIn.AppendAsync(SelfId, GroupId, UserId, CmdPara, trans);
+                // 1. 记录签到流水 (group_signin)
+                await SignInRepository.AddSignInAsync(SelfId, GroupId, UserId, CmdPara, trans);
 
                 // 2. 更新 GroupMember 签到信息
-                var (sql1, paras1) = GroupMember.SqlUpdateSignInfo(GroupId, UserId, signTimes, signLevel);
-                await ExecAsync(sql1, trans, paras1);
+                await GroupMember.UpdateSignInfoAsync(GroupId, UserId, signTimes, signLevel, trans);
 
                 // 3. 增加积分 (UserInfo/GroupMember/Friend)
                 var res = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "签到加分", trans);
@@ -77,12 +75,10 @@ public partial class BotMessage : MetaData<BotMessage>
                 await UserInfo.SyncCreditCacheAsync(SelfId, GroupId, UserId, res.CreditValue);
                 await UserInfo.SyncTokensCacheAsync(UserId, resTokens.TokensValue);
 
-                await GroupMember.SyncCacheFieldAsync(GroupId, UserId, "SignTimes", signTimes);
-                await GroupMember.SyncCacheFieldAsync(GroupId, UserId, "SignLevel", signLevel);
-                await GroupMember.SyncCacheFieldAsync(GroupId, UserId, "SignTimesAll", signTimesAll + 1);
+                await GroupMember.InvalidateAllCachesAsync(GroupId, UserId);
 
                 var result = $"{GetHeadCQ()}✅ {(isAuto ? "自动" : "")}签到成功！\n";
-                result += Group.IsCreditSystem ? $"💎 {积分类型}：+{creditAdd}→{积分}\n" : "";
+                result += Group.IsCreditSystem ? $"💎 {{积分类型}}：+{creditAdd}→{{积分}}\n" : "";
                 result += BuildSignedMessage(signTimes, signLevel, signTimesAll + 1);
                 return result;
             }
@@ -96,7 +92,7 @@ public partial class BotMessage : MetaData<BotMessage>
 
         private string BuildSignedMessage(int signTimes = 0, int signLevel = 1, int signTimesAll = 0, bool alreadySigned = false)
         {
-            var res = alreadySigned ? $"{GetHeadCQ()}✅ 今天签过了，明天再来！\n{(Group.IsCreditSystem ? $"💎 {积分类型}：{积分}\n" : "")}" : "";
+            var res = alreadySigned ? $"{GetHeadCQ()}✅ 今天签过了，明天再来！\n{(Group.IsCreditSystem ? $"💎 {{积分类型}}：{{积分}}\n" : "")}" : "";
             var nextLevelDays = signLevel switch
             {
                 10 => 0,

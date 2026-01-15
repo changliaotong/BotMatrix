@@ -1,16 +1,30 @@
+using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
+
 namespace BotWorker.Domain.Entities
 {
     //问答系统
-    public partial class AnswerInfo : MetaDataGuid<AnswerInfo>
+    [Dapper.Contrib.Extensions.Table("Answer")]
+    public partial class AnswerInfo
     {
-        public override string TableName => "Answer";
-        public override string KeyField => "Id";
+        private static IAnswerRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IAnswerRepository>() 
+            ?? throw new InvalidOperationException("IAnswerRepository not registered");
+
+        [ExplicitKey]
+        public long Id { get; set; }
         public long QuestionId { get; set; }
         public string Question { get; set; } = string.Empty;
         public string Answer { get; set; } = string.Empty;
         public string AnswerBak { get; set; } = string.Empty;
-        [DbIgnore]
+        
+        [Write(false)]
         public DateTime InsertDate { get; set; }
+        
         public long UserId { get; set; }        
         public long GroupId { get; set; }
         public long RobotId { get; set; }
@@ -24,16 +38,22 @@ namespace BotWorker.Domain.Entities
         public DateTime Audit2Date { get; set; }        
         public string Audit2Info { get; set; } = string.Empty;
         public DateTime UpdateDate { get; set; }
-        [DbIgnore]
+        
+        [Write(false)]
         public int UsedTimes { get; set; }
-        [DbIgnore]
+        
+        [Write(false)]
         public int GoonTimes { get; set; }
-        [DbIgnore]
+        
+        [Write(false)]
         public int UsedTimesGroup { get; set; }
-        [DbIgnore]
+        
+        [Write(false)]
         public int GoonTimesGroup { get; set; }
-        [DbIgnore]
+        
+        [Write(false)]
         public int Credit { get; set; }
+        
         public static long Rid => BotInfo.DefaultRobotId;     
     }
 }

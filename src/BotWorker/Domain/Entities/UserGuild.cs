@@ -1,47 +1,52 @@
+using System;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace BotWorker.Domain.Entities
 {
-    public class UserGuild : MetaData<UserGuild>
+    public class UserGuild
     {
-        public override string TableName => "User";
-        public override string KeyField => "UserOpenid";
+        private static IUserRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IUserRepository>() 
+            ?? throw new InvalidOperationException("IUserRepository not registered");
 
         public const long MIN_USER_ID = 980000000000;
         public const long MAX_USER_ID = 990000000000;
 
-        public static long GetUserId(long botUin, string userOpenid, string groupOpenid)
+        public static async Task<long> GetUserIdAsync(long botUin, string userOpenid, string groupOpenid)
         {
-            if (userOpenid.IsNull()) 
+            if (string.IsNullOrEmpty(userOpenid)) 
                 return 0;
 
-            var userId = GetTargetUserId(userOpenid);
+            var userId = await GetTargetUserIdAsync(userOpenid);
             if (userId != 0)
             {
-                var bot = GetLong($"{SqlIsNull("BotUin", "0")}", userOpenid);
+                var bot = await Repository.GetBotUinByOpenidAsync(userOpenid);
                 if (bot != botUin)
-                    SetValue("BotUin", botUin, userOpenid);
+                    await Repository.SetValueAsync("bot_uin", botUin, userId);
                 return userId;
             }
 
-            userId = GetMaxUserId();
-            int i = UserInfo.Append(botUin, 0, userId, "", 0, userOpenid, groupOpenid);
+            userId = await GetMaxUserIdAsync();
+            int i = await UserInfo.AppendAsync(botUin, 0, userId, "", 0, userOpenid, groupOpenid);
             return i == -1 ? 0 : userId;
         }
 
-        public static long GetTargetUserId(string userOpenid)
+        public static async Task<long> GetTargetUserIdAsync(string userOpenid)
         {
-            return GetLong($"{SqlIsNull("TargetUserId", "Id")}", userOpenid);
+            return await Repository.GetTargetUserIdAsync(userOpenid);
         }
 
-        private static long GetMaxUserId()
+        private static async Task<long> GetMaxUserIdAsync()
         {
-            var userId = GetWhere("max(Id)", $"Id > {MIN_USER_ID} and Id < {MAX_USER_ID}").AsLong();
+            var userId = await Repository.GetMaxIdInRangeAsync(MIN_USER_ID, MAX_USER_ID);
             return userId <= MIN_USER_ID ? MIN_USER_ID + 1 : userId + 1;
         }
 
-        public static string GetUserOpenid(long selfId, long user)
+        public static async Task<string> GetUserOpenidAsync(long selfId, long user)
         {
-            return GetValueAandB<string>("UserOpenid", "TargetUserId", user, "BotUin", selfId);
+            return await Repository.GetUserOpenidAsync(selfId, user);
         }
-
     }
 }

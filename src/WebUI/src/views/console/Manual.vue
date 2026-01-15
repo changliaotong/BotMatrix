@@ -28,7 +28,14 @@ const fetchManual = async () => {
   loading.value = true;
   try {
     const data = await botStore.fetchManual();
-    if (data.success && data.content) {
+    if (data.success && data.data) {
+      // 如果后端返回的是结构化数据，则提取内容或根据第一个章节显示
+      if (data.data.sections && data.data.sections.length > 0) {
+        manualContent.value = data.data.sections[0].content;
+      } else if (data.data.content) {
+        manualContent.value = data.data.content;
+      }
+    } else if (data.success && data.content) {
       manualContent.value = data.content;
     }
   } finally {

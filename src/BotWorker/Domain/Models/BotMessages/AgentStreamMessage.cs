@@ -64,7 +64,7 @@ public partial class BotMessage : MetaData<BotMessage>
             try
             {
                 (ModelId, var providerName, var modelId) = LLMModel.GetModelInfo(CurrentAgent.ModelId);
-                var provider = LLMApp._manager.GetProvider(providerName ?? "Doubao");
+                var provider = LLMApp?._manager.GetProvider(providerName ?? "Doubao");
                 if (provider == null)
                 {
                     Answer = "模型提供者不存在";

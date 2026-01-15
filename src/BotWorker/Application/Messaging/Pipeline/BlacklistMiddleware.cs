@@ -13,19 +13,18 @@ namespace BotWorker.Application.Messaging.Pipeline
             {
                 var botMsg = botMsgEvent.BotMessage;
 
-                // 检查新的全局黑名单表
-                if (Domain.Entities.BlackList.IsSystemBlack(botMsg.UserId))
-                {
-                    botMsg.Answer = $"检测到黑名单用户 {botMsg.UserId}，已拦截其请求。";
+                // 官方黑名单
+                if (botMsg.IsBlackSystem)
+                {                    
                     context.Logger?.LogInformation("[Blacklist] Intercepted system black user {UserId}, message {MessageId}", botMsg.UserId, context.EventId);
-                    if (botMsg.IsGroup)
+                    if (botMsg.IsGroup && botMsg.Group.IsCloudBlack)
                     {
                          await botMsg.KickOutAsync(botMsg.SelfId, botMsg.RealGroupId, botMsg.UserId);
                     }
                     return;
                 }
 
-                // 用户黑名单拦截(参考原 HandleBlackWarnAsync)
+                // 群黑名单拦截
                 if (botMsg.IsBlack)
                 {
                     context.Logger?.LogInformation("[Blacklist] Intercepted black user {UserId}, message {MessageId}", botMsg.UserId, context.EventId);
@@ -43,7 +42,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                     }
                     else
                     {
-                        // 私聊：返回拉黑提示
+                        // 私聊
                         botMsg.Answer = $"您已被群({botMsg.GroupId})拉黑";
                         return;
                     }

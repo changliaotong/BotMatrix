@@ -1,12 +1,15 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Embeddings;
+using Microsoft.SemanticKernel.TextToImage;
+using Microsoft.Extensions.AI;
 using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Plugins;
 using Microsoft.Extensions.Logging;
@@ -27,10 +30,26 @@ namespace BotWorker.Modules.AI.Providers.Helpers
         protected OpenAIBaseProvider(string providerName, string apiKey, string url, string defaultModelId, ILogger? logger = null)
         {
             _providerName = providerName;
-            _apiKey = apiKey;
-            _url = url;
-            _defaultModelId = defaultModelId;
+            _apiKey = SanitizeHeaderValue(apiKey?.Trim() ?? string.Empty);
+            _url = url?.Trim() ?? string.Empty;
+            _defaultModelId = SanitizeHeaderValue(defaultModelId?.Trim() ?? string.Empty);
             _logger = logger;
+
+            if (apiKey != null && apiKey != _apiKey)
+            {
+                _logger?.LogWarning("[{ProviderName}] API Key contained non-ASCII characters and was sanitized.", _providerName);
+            }
+            if (defaultModelId != null && defaultModelId != _defaultModelId)
+            {
+                _logger?.LogWarning("[{ProviderName}] Default Model ID contained non-ASCII characters and was sanitized.", _providerName);
+            }
+        }
+
+        private static string SanitizeHeaderValue(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            // 仅保留 ASCII 字符 (32-126)
+            return new string(value.Where(c => c >= 32 && c <= 126).ToArray());
         }
 
         public virtual async Task<string> ExecuteAsync(ChatHistory history, ModelExecutionOptions options)
@@ -91,80 +110,24 @@ namespace BotWorker.Modules.AI.Providers.Helpers
         {
             try
             {
-                var modelId = options.ModelId ?? _defaultModelId;
-                var httpClient = KernelManager.GetHttpClient(_url);
-
-                // 豆包 (Ark) 的生图接口通常是 api/v3/images/generations
-                // 如果 _url 包含 ark.cn-beijing.volces.com，则需要特殊处理路径
-                var endpoint = _url.TrimEnd('/');
-                if (endpoint.Contains("ark.cn-beijing.volces.com"))
-                {
-                    // 如果 baseUrl 只是到 v3，则补齐
-                    if (!endpoint.EndsWith("/v3")) endpoint += "/v3";
-                    endpoint += "/images/generations";
-                }
-                else
-                {
-                    // 通用 OpenAI 路径
-                    endpoint += "/images/generations";
-                }
-
-                var isArk = endpoint.Contains("ark.cn-beijing.volces.com");
-                
-                var requestData = new Dictionary<string, object>
-                {
-                    { "model", modelId },
-                    { "prompt", prompt },
-                    { "response_format", "url" }
-                };
+                var kernel = BuildKernel(options);
+                var imageService = kernel.GetRequiredService<ITextToImageService>();
 
                 // 处理尺寸
+                int width = 1024;
+                int height = 1024;
                 if (options.ExtraParameters.TryGetValue("size", out var size) && size != null)
                 {
-                    requestData["size"] = size.ToString() ?? "1024x1024";
-                }
-                else if (isArk)
-                {
-                    requestData["size"] = "2K"; // 豆包默认使用 2K
-                }
-                else
-                {
-                    requestData["size"] = "1024x1024";
-                }
-
-                // 处理豆包特有参数
-                if (isArk)
-                {
-                    requestData["sequential_image_generation"] = options.ExtraParameters.TryGetValue("sequential_image_generation", out var sig) ? sig : "disabled";
-                    requestData["watermark"] = options.ExtraParameters.TryGetValue("watermark", out var wm) ? wm : true;
-                }
-
-                // 合并其他额外参数
-                foreach (var param in options.ExtraParameters)
-                {
-                    if (!requestData.ContainsKey(param.Key))
+                    var sizeStr = size.ToString() ?? "1024x1024";
+                    var parts = sizeStr.Split('x');
+                    if (parts.Length == 2 && int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h))
                     {
-                        requestData[param.Key] = param.Value;
+                        width = w;
+                        height = h;
                     }
                 }
 
-                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
-                request.Content = JsonContent.Create(requestData);
-
-                var response = await httpClient.SendAsync(request, options.CancellationToken);
-                var content = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger?.LogError("[{ProviderName}] GenerateImageAsync error: {StatusCode} - {Content}", ProviderName, response.StatusCode, content);
-                    return $"❌ 错误：{response.StatusCode} - {content}";
-                }
-
-                var json = JsonDocument.Parse(content);
-                var url = json.RootElement.GetProperty("data")[0].GetProperty("url").GetString();
-                
-                return url ?? "❌ 错误：解析返回内容失败。";
+                return await imageService.GenerateImageAsync(prompt, width, height, kernel: kernel, cancellationToken: options.CancellationToken);
             }
             catch (Exception ex)
             {
@@ -178,9 +141,9 @@ namespace BotWorker.Modules.AI.Providers.Helpers
             try
             {
                 var kernel = BuildKernel(options);
-                var embeddingService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
-                var result = await embeddingService.GenerateEmbeddingAsync(text, kernel, options.CancellationToken);
-                return result.ToArray();
+                var embeddingGenerator = kernel.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
+                var result = await embeddingGenerator.GenerateAsync(new List<string> { text }, cancellationToken: options.CancellationToken);
+                return result.Count > 0 ? result[0].Vector.ToArray() : Array.Empty<float>();
             }
             catch (Exception ex)
             {
@@ -189,15 +152,42 @@ namespace BotWorker.Modules.AI.Providers.Helpers
             }
         }
 
-        protected virtual Kernel BuildKernel(ModelExecutionOptions options)
+        public virtual Kernel BuildKernel(ModelExecutionOptions options)
         {
-            var modelId = options.ModelId ?? _defaultModelId;
+            var modelId = (options.ModelId ?? _defaultModelId)?.Trim();
+            var chatModelId = (options.ChatModelId ?? modelId)?.Trim();
+            var embeddingModelId = (options.EmbeddingModelId ?? (options.ModelId == null ? null : modelId))?.Trim();
+            var imageModelId = (options.ImageModelId ?? (options.ModelId == null ? null : modelId))?.Trim();
             
-            // 使用 KernelManager 获取共享的 HttpClient
-            var httpClient = KernelManager.GetHttpClient(_url);
+            var baseUrl = (options.BaseUrl ?? _url)?.Trim();
+            var chatBaseUrl = (options.ChatBaseUrl ?? baseUrl)?.Trim();
+            var embeddingBaseUrl = (options.EmbeddingBaseUrl ?? baseUrl)?.Trim();
+            var imageBaseUrl = (options.ImageBaseUrl ?? baseUrl)?.Trim();
 
-            var builder = Kernel.CreateBuilder()
-                .AddOpenAIChatCompletion(modelId, _apiKey, httpClient: httpClient);
+            var apiKey = (options.ApiKey ?? _apiKey)?.Trim();
+            var chatApiKey = (options.ChatApiKey ?? apiKey)?.Trim();
+            var embeddingApiKey = (options.EmbeddingApiKey ?? apiKey)?.Trim();
+            var imageApiKey = (options.ImageApiKey ?? apiKey)?.Trim();
+
+            var builder = Kernel.CreateBuilder();
+
+            if (!string.IsNullOrEmpty(chatBaseUrl) && !string.IsNullOrEmpty(chatModelId))
+            {
+                _logger?.LogDebug("[{ProviderName}] Adding Chat Completion: Model={ModelId}, Url={Url}", ProviderName, chatModelId, chatBaseUrl);
+                builder.AddOpenAIChatCompletion(chatModelId, chatApiKey ?? string.Empty, httpClient: KernelManager.GetHttpClient(chatBaseUrl));
+            }
+
+            if (!string.IsNullOrEmpty(embeddingBaseUrl) && !string.IsNullOrEmpty(embeddingModelId))
+            {
+                _logger?.LogDebug("[{ProviderName}] Adding Embedding Generator: Model={ModelId}, Url={Url}", ProviderName, embeddingModelId, embeddingBaseUrl);
+                builder.AddOpenAIEmbeddingGenerator(embeddingModelId, embeddingApiKey ?? string.Empty, httpClient: KernelManager.GetHttpClient(embeddingBaseUrl));
+            }
+
+            if (!string.IsNullOrEmpty(imageBaseUrl) && !string.IsNullOrEmpty(imageModelId))
+            {
+                _logger?.LogDebug("[{ProviderName}] Adding Text-to-Image: Model={ModelId}, Url={Url}", ProviderName, imageModelId, imageBaseUrl);
+                builder.AddOpenAITextToImage(imageModelId, imageApiKey ?? string.Empty, httpClient: KernelManager.GetHttpClient(imageBaseUrl));
+            }
 
             if (options.Plugins != null)
             {

@@ -9,7 +9,7 @@ namespace BotWorker.Domain.Models.BotMessages
     {
         public async Task<string> GetAiConfigResAsync()
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var sp = scope.ServiceProvider;
             var llmRepository = sp.GetRequiredService<ILLMRepository>();
 

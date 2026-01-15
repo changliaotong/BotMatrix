@@ -9,6 +9,8 @@ using BotWorker.Modules.AI.Models.Evolution;
 using Dapper;
 using Npgsql;
 
+using BotWorker.Infrastructure.Persistence.Repositories;
+
 namespace BotWorker.Modules.AI.Repositories
 {
     public class PostgresJobDefinitionRepository : BasePostgresRepository<JobDefinition>, IJobDefinitionRepository
@@ -193,6 +195,18 @@ namespace BotWorker.Modules.AI.Repositories
         {
             using var conn = CreateConnection();
             return await conn.QueryAsync<TaskRecord>($"SELECT * FROM {_tableName} WHERE assignee_id = @assigneeId ORDER BY id DESC", new { assigneeId });
+        }
+
+        public async Task<IEnumerable<TaskRecord>> GetRecentAsync(int limit)
+        {
+            using var conn = CreateConnection();
+            return await conn.QueryAsync<TaskRecord>($"SELECT * FROM {_tableName} ORDER BY id DESC LIMIT @limit", new { limit });
+        }
+
+        public async Task<IEnumerable<TaskRecord>> GetByParentIdAsync(long parentId)
+        {
+            using var conn = CreateConnection();
+            return await conn.QueryAsync<TaskRecord>($"SELECT * FROM {_tableName} WHERE parent_task_id = @parentId ORDER BY id ASC", new { parentId });
         }
 
         public async Task<long> AddAsync(TaskRecord entity)

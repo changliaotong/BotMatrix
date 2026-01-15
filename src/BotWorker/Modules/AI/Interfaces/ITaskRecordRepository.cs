@@ -9,6 +9,8 @@ namespace BotWorker.Modules.AI.Interfaces
     {
         Task<TaskRecord?> GetByExecutionIdAsync(Guid executionId);
         Task<IEnumerable<TaskRecord>> GetByAssigneeIdAsync(long assigneeId);
+        Task<IEnumerable<TaskRecord>> GetRecentAsync(int limit);
+        Task<IEnumerable<TaskRecord>> GetByParentIdAsync(long parentId);
         Task<bool> UpdateStatusAsync(long id, string status, int progress);
     }
 }

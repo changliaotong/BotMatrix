@@ -44,14 +44,14 @@ namespace BotWorker.Modules.AI.Models
 
         public static async Task<Agent?> LoadAsync(long id)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             return await repo.GetByIdAsync(id);
         }
 
         public static async Task<Agent?> LoadAsync(Guid guid)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             return await repo.GetByGuidAsync(guid);
         }
@@ -59,7 +59,7 @@ namespace BotWorker.Modules.AI.Models
         public static T? GetWhere<T>(string field, string where)
         {
             // 这是一个简化实现，用于兼容旧代码
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             
             // 处理常见的模式: Name = 'xxx' and private <> 2
@@ -79,7 +79,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static string QueryWhere(string field, string where, string order, string format)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
 
             if (where.Contains("Name ="))
@@ -107,7 +107,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static long GetIdByName(string name)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             var agent = repo.GetByNameAsync(name).GetAwaiter().GetResult();
             return agent?.Id ?? 0;
@@ -115,7 +115,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static Guid GetGuid(long id)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             var agent = repo.GetByIdAsync(id).GetAwaiter().GetResult();
             return agent?.Guid ?? Guid.Empty;
@@ -123,7 +123,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static long GetId(Guid guid)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             var agent = repo.GetByGuidAsync(guid).GetAwaiter().GetResult();
             return agent?.Id ?? 0;
@@ -136,7 +136,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static string GetValue(string field, long id)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             var agent = repo.GetByIdAsync(id).GetAwaiter().GetResult();
             if (agent == null) return string.Empty;
@@ -153,7 +153,7 @@ namespace BotWorker.Modules.AI.Models
 
         public static async Task UsedTimesIncrementAsync(long id)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAgentRepository>();
             await repo.IncrementUsedTimesAsync(id);
         }
@@ -199,6 +199,12 @@ namespace BotWorker.Modules.AI.Models
             Id: 86,
             Name: "早喵",
             GroupId: 10084
+        );
+
+        public static readonly AgentInfo DallEAgent = new(
+            Guid: Guid.Parse("F1C8423E-F36B-1410-8AEF-0025F3E1B0BD"),
+            Id: 14,
+            Name: "文生图提示词生成器"
         );
     }
 }

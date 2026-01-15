@@ -91,14 +91,6 @@ public partial class BotMessage
 
         public bool InGame() => Group.IsInGame == 1;
 
-        public string 积分类型 => UserInfo.GetCreditTypeAsync(SelfId, GroupId, UserId).GetAwaiter().GetResult();
-        public string 积分 => UserInfo.GetCreditAsync(SelfId, GroupId, UserId).GetAwaiter().GetResult().ToString("N0");
-
-        public void AddClient()
-        {
-            // TODO: Implement AddClient logic or leave it empty if it's just a marker
-        }
-
         public virtual async Task SendMusicAsync(string title, string artist, string jumpUrl, string coverUrl, string audioUrl)
         {
             if (IsQQ)

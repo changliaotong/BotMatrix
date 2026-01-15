@@ -1,29 +1,44 @@
 namespace BotWorker.Domain.Entities
 {
-    public partial class UserInfo : MetaDataGuid<UserInfo>
+    public partial class UserInfo
     {
+        private static IIncomeRepository IncomeRepository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IIncomeRepository>() 
+            ?? throw new InvalidOperationException("IIncomeRepository not registered");
+
         // 购买积分 (异步事务版)
         public static async Task<int> BuyCreditAsync(long botUin, long groupId, string groupName, long buyerQQ, string buyerName, decimal payMoney, long creditAdd, string payMethod, string trade, string memo, int insertBy)
         {
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await Repository.BeginTransactionAsync();
             try
             {
                 // 1. 记录收入
-                var (sql, paras) = Income.SqlInsert(groupId, creditAdd, "积分", payMoney, payMethod, trade, memo, buyerQQ, insertBy);
-                await ExecAsync(sql, trans, paras);
+                await IncomeRepository.AddAsync(new Income
+                {
+                    GroupId = groupId,
+                    GoodsCount = creditAdd,
+                    GoodsName = "积分",
+                    UserId = buyerQQ,
+                    IncomeMoney = payMoney,
+                    PayMethod = payMethod,
+                    IncomeTrade = trade,
+                    IncomeInfo = memo,
+                    InsertBy = insertBy,
+                    IncomeDate = DateTime.Now
+                }, wrapper.Transaction);
 
                 // 2. 通用加积分函数 (含日志记录)
-                var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, buyerQQ, buyerName, creditAdd, "买分", trans);
+                var res = await AddCreditAsync(botUin, groupId, groupName, buyerQQ, buyerName, creditAdd, "买分", wrapper.Transaction);
                 if (res.Result == -1) throw new Exception("更新积分失败");
 
-                await trans.CommitAsync();
+                await wrapper.CommitAsync();
                 
-                SyncCacheField(buyerQQ, groupId, "Credit", res.CreditValue);
+                await SyncCacheFieldAsync(buyerQQ, "Credit", res.CreditValue);
                 return 0;
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
                 Console.WriteLine($"[BuyCredit Error] {ex.Message}");
                 return -1;
             }
@@ -32,25 +47,36 @@ namespace BotWorker.Domain.Entities
         // 充值余额 (异步事务版)
         public static async Task<int> BuyBalanceAsync(long botUin, long groupId, string groupName, long buyerQQ, string buyerName, decimal payMoney, decimal balanceAdd, string payMethod, string trade, string memo, int insertBy)
         {
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await Repository.BeginTransactionAsync();
             try
             {
                 // 1. 记录收入
-                var (sql1, paras1) = Income.SqlInsert(groupId, 1, "余额", payMoney, payMethod, trade, memo, buyerQQ, insertBy);
-                await ExecAsync(sql1, trans, paras1);
+                await IncomeRepository.AddAsync(new Income
+                {
+                    GroupId = groupId,
+                    GoodsCount = 1,
+                    GoodsName = "余额",
+                    UserId = buyerQQ,
+                    IncomeMoney = payMoney,
+                    PayMethod = payMethod,
+                    IncomeTrade = trade,
+                    IncomeInfo = memo,
+                    InsertBy = insertBy,
+                    IncomeDate = DateTime.Now
+                }, wrapper.Transaction);
 
                 // 2. 增加余额 (含日志记录)
-                var res = await UserInfo.AddBalanceAsync(botUin, groupId, groupName, buyerQQ, buyerName, balanceAdd, "充值余额", trans);
+                var res = await AddBalanceAsync(botUin, groupId, groupName, buyerQQ, buyerName, balanceAdd, "充值余额", wrapper.Transaction);
                 if (res.Result == -1) throw new Exception("更新余额失败");
 
-                await trans.CommitAsync();
+                await wrapper.CommitAsync();
 
-                SyncCacheField(buyerQQ, "Balance", res.BalanceValue);
+                await SyncCacheFieldAsync(buyerQQ, "Balance", res.BalanceValue);
                 return 0;
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
                 Console.WriteLine($"[BuyBalance Error] {ex.Message}");
                 return -1;
             }
@@ -59,25 +85,36 @@ namespace BotWorker.Domain.Entities
         // 购买算力 (异步事务版)
         public static async Task<int> BuyTokensAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, decimal payMoney, long tokensAdd, string payMethod, string trade, string memo, int insertBy)
         {
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await Repository.BeginTransactionAsync();
             try
             {
                 // 1. 记录收入
-                var (sql1, paras1) = Income.SqlInsert(groupId, tokensAdd, "TOKENS", payMoney, payMethod, trade, memo, qqBuyer, insertBy);
-                await ExecAsync(sql1, trans, paras1);
+                await IncomeRepository.AddAsync(new Income
+                {
+                    GroupId = groupId,
+                    GoodsCount = tokensAdd,
+                    GoodsName = "TOKENS",
+                    UserId = qqBuyer,
+                    IncomeMoney = payMoney,
+                    PayMethod = payMethod,
+                    IncomeTrade = trade,
+                    IncomeInfo = memo,
+                    InsertBy = insertBy,
+                    IncomeDate = DateTime.Now
+                }, wrapper.Transaction);
 
-                // 2. 增加算力 (含日志记录) - 使用统一的 AddTokensAsync
-                var res = await AddTokensAsync(botUin, groupId, groupName, qqBuyer, buyerName, tokensAdd, "购买算力", trans.Transaction);
+                // 2. 增加算力 (含日志记录)
+                var res = await AddTokensAsync(botUin, groupId, groupName, qqBuyer, buyerName, tokensAdd, "购买算力", wrapper.Transaction);
                 if (res.Result == -1) throw new Exception("更新算力失败");
 
-                await trans.CommitAsync();
+                await wrapper.CommitAsync();
 
-                SyncCacheField(qqBuyer, "Tokens", res.TokensValue);
+                await SyncCacheFieldAsync(qqBuyer, "Tokens", res.TokensValue);
                 return 0;
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
                 Console.WriteLine($"[BuyTokens Error] {ex.Message}");
                 return -1;
             }
@@ -103,43 +140,40 @@ namespace BotWorker.Domain.Entities
             if (balanceMinus > balanceValue)
                 return $"您的余额{balanceValue:N}不足{balanceMinus:N}";
 
-            decimal balanceNew = balanceValue - balanceMinus;
             long creditAdd = Convert.ToInt32(balanceMinus * 1200);
             bool isPartner = await Partner.IsPartnerAsync(qq);
             if (isPartner) creditAdd *= 2;
 
-            using var trans = await BeginTransactionAsync();
+            using var wrapper = await Repository.BeginTransactionAsync();
             try
             {
                 // 1. 获取准确余额并锁定
-                decimal balanceValueTrans = await GetBalanceForUpdateAsync(qq, trans.Transaction);
+                decimal balanceValueTrans = await GetBalanceForUpdateAsync(qq, wrapper.Transaction);
                 if (balanceValueTrans < balanceMinus)
                 {
-                    await trans.RollbackAsync();
+                    await wrapper.RollbackAsync();
                     return $"您的余额{balanceValueTrans:N}不足{balanceMinus:N}";
                 }
                 decimal balanceNewTrans = balanceValueTrans - balanceMinus;
 
                 // 2. 扣除余额 (含日志记录)
-                var (sql1, paras1) = await SqlAddBalanceAsync(qq, -balanceMinus, trans.Transaction);
-                var (sql2, paras2) = BalanceLog.SqlLog(botUin, groupId, groupName, qq, name, -balanceMinus, "买分", balanceNewTrans);
-                await ExecAsync(sql1, trans, paras1);
-                await ExecAsync(sql2, trans, paras2);
+                var resBalance = await AddBalanceAsync(botUin, groupId, groupName, qq, name, -balanceMinus, "买分", wrapper.Transaction);
+                if (resBalance.Result == -1) throw new Exception("更新余额失败");
 
-                // 3. 通用加积分函数 (含日志记录)
-                var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, qq, name, creditAdd, "买分", trans);
-                if (res.Result == -1) throw new Exception("更新积分失败");
+                // 3. 增加积分 (含日志记录)
+                var resCredit = await AddCreditAsync(botUin, groupId, groupName, qq, name, creditAdd, "买分", wrapper.Transaction);
+                if (resCredit.Result == -1) throw new Exception("更新积分失败");
 
-                await trans.CommitAsync();
+                await wrapper.CommitAsync();
 
-                SyncCacheField(qq, "Balance", balanceNewTrans);
-                SyncCacheField(qq, groupId, "Credit", res.CreditValue);
+                await SyncCacheFieldAsync(qq, "Balance", balanceNewTrans);
+                await SyncCacheFieldAsync(qq, groupId, "Credit", resCredit.CreditValue);
 
-                return $"✅ 买分成功！\n积分：+{creditAdd}，累计：{res.CreditValue}\n余额：-{balanceMinus:N}，累计：{balanceNewTrans:N}";
+                return $"✅ 买分成功！\n积分：+{creditAdd}，累计：{resCredit.CreditValue}\n余额：-{balanceMinus:N}，累计：{balanceNewTrans:N}";
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                await wrapper.RollbackAsync();
                 Console.WriteLine($"[GetBuyCredit Error] {ex.Message}");
                 return RetryMsg;
             }

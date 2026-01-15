@@ -12,8 +12,8 @@ namespace BotWorker.Application.Messaging.Pipeline
             if (context is PluginContext pluginCtx && pluginCtx.Event is Infrastructure.Communication.OneBot.BotMessageEvent botMsgEvent)
             {
                 var botMsg = botMsgEvent.BotMessage;
-                Serilog.Log.Information("[VipMiddleware] Checking rights for message {MessageId}. IsGroup: {IsGroup}, GroupId: {GroupId}, UseRight: {UseRight}", 
-                    botMsg.MsgId, botMsg.IsGroup, botMsg.GroupId, botMsg.Group?.UseRight);
+                    Serilog.Log.Information("[VipMiddleware] Checking rights for message {MessageId}. IsGroup: {IsGroup}, GroupId: {GroupId}, UseRight: {UseRight}", 
+                        botMsg.MsgId, botMsg.IsGroup, botMsg.GroupId, botMsg.Group?.UseRight);
 
                 // 1. 检查使用权限 (私聊与频道默认有权，群聊需检查配置)
                 var isHaveUseRight = !botMsg.IsGroup || botMsg.IsGuild || botMsg.HaveUseRight();
@@ -39,7 +39,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                     }
 
                     // 2. Sz84 特殊群组逻辑 (管理权限与关注官号检查)
-                    if (botMsg.Group.IsSz84)
+                    if (botMsg.Group?.IsSz84 == true)
                     {
                         if (botMsg.SelfPerm < 2)
                         {
@@ -82,7 +82,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 else if (!botMsg.IsGuild && !botMsg.IsGroup)
                 {
                     // 私聊时的过期检查
-                    if (!botMsg.Group.IsValid)
+                    if (botMsg.Group?.IsValid == false)
                     {
                         Serilog.Log.Warning("[VipMiddleware] Private message group invalid for message {MessageId}", botMsg.MsgId);
                         botMsg.Answer = GroupVip.IsVipOnce(botMsg.GroupId)

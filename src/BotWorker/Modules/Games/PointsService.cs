@@ -218,7 +218,7 @@ namespace BotWorker.Modules.Games
                        $"获得奖励：{finalReward} 积分 (含 {((multiplier * globalBuff - 1) * 100):F0}% 复合加成)\n" +
                        $"当前总额：{balance}";
             }
-            return "❌ 签到失败，请稍后再试。";
+            return "签到失败，请稍后再试。";
         }
 
         private string GetPlaneName(int level)

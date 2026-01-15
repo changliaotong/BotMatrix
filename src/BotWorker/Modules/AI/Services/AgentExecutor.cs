@@ -23,6 +23,7 @@ namespace BotWorker.Modules.AI.Services
         private readonly IEmployeeService _employeeService;
         private readonly IEvaluationService _evaluationService;
         private readonly IUniversalAgentManager _agentManager;
+        private readonly IAgentRepository _agentRepository;
         private readonly ITaskRecordRepository _taskRepository;
         private readonly ITaskStepRepository _stepRepository;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
@@ -34,6 +35,7 @@ namespace BotWorker.Modules.AI.Services
             IEmployeeService employeeService,
             IEvaluationService evaluationService,
             IUniversalAgentManager agentManager,
+            IAgentRepository agentRepository,
             ITaskRecordRepository taskRepository,
             ITaskStepRepository stepRepository,
             Microsoft.Extensions.Configuration.IConfiguration configuration,
@@ -44,6 +46,7 @@ namespace BotWorker.Modules.AI.Services
             this._employeeService = employeeService;
             this._evaluationService = evaluationService;
             this._agentManager = agentManager;
+            this._agentRepository = agentRepository;
             this._taskRepository = taskRepository;
             this._stepRepository = stepRepository;
             this._configuration = configuration;
@@ -58,8 +61,10 @@ namespace BotWorker.Modules.AI.Services
 
         public async Task<string> ExecuteByAgentGuidAsync(Guid guid, string prompt)
         {
-            // TODO: 从 AgentRepository 获取
-            return await _aiService.ChatAsync(prompt);
+            var agent = await _agentRepository.GetByGuidAsync(guid);
+            if (agent == null) return "❌ 错误：未找到指定的智能体。";
+
+            return await ExecuteByAgentAsync(agent, prompt);
         }
 
         public async Task<string> ExecuteByJobAsync(string jobId, string prompt)

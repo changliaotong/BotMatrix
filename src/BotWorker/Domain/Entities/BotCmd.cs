@@ -1,9 +1,32 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using BotWorker.Common.Extensions;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace BotWorker.Domain.Entities
 {
-    public partial class BotCmd : MetaData<BotCmd>
+    [Table("Cmd")]
+    public partial class BotCmd
     {
-        public override string TableName => "Cmd";
-        public override string KeyField => "Id";
+        private static IBotCmdRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBotCmdRepository>() 
+            ?? throw new InvalidOperationException("IBotCmdRepository not registered");
+
+        private static IGroupRepository GroupRepository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGroupRepository>() 
+            ?? throw new InvalidOperationException("IGroupRepository not registered");
+
+        [Key]
+        public long Id { get; set; }
+        public string CmdName { get; set; } = string.Empty;
+        public string CmdText { get; set; } = string.Empty;
+        public int IsClose { get; set; }
+
         private static readonly Dictionary<string, string> _baseCommandMap = new(StringComparer.OrdinalIgnoreCase)
         {
             { "帮助", "帮助" }, { "help", "帮助" }, { "指令", "帮助" },
@@ -33,13 +56,12 @@ namespace BotWorker.Domain.Entities
             }
         }
 
-        public static string GetRegexCmd()
+        public static async Task<string> GetRegexCmdAsync()
         {
-            var sql = $"SELECT {Quote("CmdText")} FROM {FullName} WHERE {Quote("IsClose")} = 0 ORDER BY {SqlLen(Quote("CmdText"))} DESC";
-            var res = QueryRes(sql, "{0}|").Trim('|');
-            
-            var dbCommands = string.IsNullOrEmpty(res) ? Array.Empty<string>() : res.Split('|');
+            var dbCommands = await Repository.GetAllCommandNamesAsync();
             var allCommands = dbCommands
+                .SelectMany(c => c.Split('|'))
+                .Where(c => !string.IsNullOrEmpty(c))
                 .Concat(_baseCommandMap.Keys)
                 .Concat(_extraCommandKeywords)
                 .Distinct()
@@ -49,7 +71,7 @@ namespace BotWorker.Domain.Entities
             return @$"^[#＃﹟/／ ]*(?<cmdName>({string.Join('|', allCommands)}))\s*(?<cmdPara>.*)";            
         }
 
-        public static string GetCmdName(string cmdText)
+        public static async Task<string> GetCmdNameAsync(string cmdText)
         {
             if (string.IsNullOrEmpty(cmdText)) return "";
 
@@ -58,52 +80,35 @@ namespace BotWorker.Domain.Entities
                 return baseName;
 
             // 再从数据库中查找
-            return QueryScalar<string>($"SELECT CmdName FROM {FullName} WHERE CmdText = {cmdText.Quotes()} OR CmdText LIKE '%|{cmdText}|%' OR CmdText LIKE '{cmdText}|%' OR CmdText LIKE '%|{cmdText}'") ?? "";
+            return await Repository.GetCmdNameAsync(cmdText) ?? "";
         }
 
-        public static string GetClosedCmd()
+        public static async Task<string> GetClosedCmdAsync()
         {
-            string res = QueryRes($"SELECT CmdName FROM {FullName} WHERE IsClose = 1", "{0} ");
-            return res == "" ? "没有功能被关闭" : res;
+            var closed = await Repository.GetClosedCommandsAsync();
+            var res = string.Join(" ", closed);
+            return string.IsNullOrEmpty(res) ? "没有功能被关闭" : res;
         }
 
-        public static bool IsClosedCmd(long groupId, string message)
+        public static async Task<bool> IsClosedCmdAsync(long groupId, string message)
         {
-            var regex = GroupInfo.GetClosedRegex(groupId).Trim();
-            return !regex.IsNull() && message.RemoveQqAds().IsMatch(regex);
+            var regex = (await GroupRepository.GetClosedRegexAsync(groupId))?.Trim();
+            return !string.IsNullOrEmpty(regex) && message.RemoveQqAds().IsMatch(regex);
         }
 
-
-        public static bool IsCmdCloseAll(string cmdName)
+        public static async Task<bool> IsCmdCloseAllAsync(string cmdName)
         {
-            return GetWhere("IsClose", $"CmdName = {cmdName.Quotes()}").AsBool();
+            return await Repository.IsCmdCloseAllAsync(cmdName);
+        }
+
+        public static async Task<string> GetCmdTextAsync(string cmdName)
+        {
+            return await Repository.GetCmdTextAsync(cmdName);
         }
 
         public static async Task EnsureCommandExistsAsync(string name, string text)
         {
-            try
-            {
-                if (!await ExistsWhereAsync($"CmdName = {name.Quotes()}"))
-                {
-                    Console.WriteLine($"[BotCmd] Command '{name}' not found, inserting...");
-                    await InsertAsync(new List<Cov>
-                    {
-                        new Cov("CmdName", name),
-                        new Cov("CmdText", text),
-                        new Cov("IsClose", 0)
-                    });
-                    Console.WriteLine($"[BotCmd] Command '{name}' inserted.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[BotCmd] Error ensuring command '{name}': {ex.Message}");
-            }
-        }
-
-        public static int SetCmdCloseAll(string cmdName, int isClose)
-        {
-            return UpdateWhere($"IsClose = {isClose}", $"CmdName = {cmdName.Quotes()}");
+            await Repository.EnsureCommandExistsAsync(name, text);
         }
     }
 }

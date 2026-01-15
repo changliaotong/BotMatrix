@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useSystemStore, type Style, type Mode } from '@/stores/system';
 import { useAuthStore } from '@/stores/auth';
 import { useBotStore } from '@/stores/bot';
@@ -14,6 +14,13 @@ const t = (key: string) => systemStore.t(key);
 const profile = ref({
   qq: authStore.user?.qq || '',
 });
+
+// Watch for user data changes to update profile
+watch(() => authStore.user, (newUser) => {
+  if (newUser && !profile.value.qq) {
+    profile.value.qq = newUser.qq || '';
+  }
+}, { immediate: true });
 
 const settings = ref({
   systemName: 'BotMatrix',
@@ -141,6 +148,39 @@ const handleSave = async () => {
 
       <!-- Content Area -->
       <div class="md:col-span-3 space-y-6">
+        <!-- Profile Settings -->
+        <div v-if="activeTab === 'profile'" class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+          <div class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-6">
+            <div class="flex items-center gap-4">
+              <div class="w-16 h-16 rounded-2xl bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 flex items-center justify-center">
+                <User class="w-8 h-8 text-[var(--matrix-color)]" />
+              </div>
+              <div>
+                <h3 class="text-lg font-black text-[var(--text-main)] uppercase tracking-tight">{{ authStore.user?.username }}</h3>
+                <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">{{ authStore.role === 'super' ? t('role_super_admin') : authStore.role === 'admin' ? t('role_admin') : t('role_user') }}</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6">
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest ml-1">{{ t('qq_number') }}</label>
+                <div class="relative group">
+                  <input 
+                    v-model="profile.qq"
+                    type="text" 
+                    :placeholder="t('enter_qq_number')"
+                    class="w-full px-4 py-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-[var(--border-color)] focus:border-[var(--matrix-color)] outline-none text-[var(--text-main)] transition-all font-bold text-sm"
+                  />
+                  <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none opacity-20 group-focus-within:opacity-100 transition-opacity">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-[var(--matrix-color)]">QQ</span>
+                  </div>
+                </div>
+                <p class="text-[10px] font-medium text-[var(--text-muted)] px-1">{{ t('qq_number_desc') }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div v-if="activeTab === 'general'" class="space-y-6">
           <div v-if="authStore.isAdmin" class="p-4 sm:p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm space-y-4">
             <h3 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">

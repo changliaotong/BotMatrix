@@ -10,6 +10,8 @@ using BotWorker.Modules.AI.Models;
 using Dapper;
 using Npgsql;
 
+using BotWorker.Infrastructure.Persistence.Repositories;
+
 namespace BotWorker.Modules.AI.Repositories
 {
     public class PostgresAgentRepository : BasePostgresRepository<Agent>, IAgentRepository

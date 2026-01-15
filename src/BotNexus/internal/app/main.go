@@ -253,6 +253,7 @@ func Run() {
 	mux.HandleFunc("/api/stats", manager.JWTMiddleware(HandleGetStats(manager.Manager)))
 	mux.HandleFunc("/api/stats/chat", manager.JWTMiddleware(HandleGetChatStats(manager.Manager)))
 	mux.HandleFunc("/api/nexus/status", manager.JWTMiddleware(HandleGetNexusStatus(manager.Manager)))
+	mux.HandleFunc("/api/manual", HandleGetManual(manager.Manager))
 
 	// 机器人与联系人 (用户可见版本)
 	mux.HandleFunc("/api/bots", manager.JWTMiddleware(HandleGetBots(manager.Manager)))

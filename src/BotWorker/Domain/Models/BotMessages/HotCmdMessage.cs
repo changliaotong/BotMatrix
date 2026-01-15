@@ -64,7 +64,7 @@ namespace BotWorker.Domain.Models.BotMessages
             //微信公众号绑定QQ
             regexCmd = Regexs.BindToken;
             if (Regex.IsMatch(CurrentMessage, regexCmd))
-                Answer += ClientPublic.GetBindToken(this, Message.RegexGetValue(regexCmd, "token_type"), CurrentMessage.RegexGetValue(regexCmd, "bind_token"));
+                Answer += await ClientPublic.GetBindTokenAsync(this, Message.RegexGetValue(regexCmd, "token_type"), CurrentMessage.RegexGetValue(regexCmd, "bind_token"));
 
             //宠物
             regexCmd = Regexs.BuyBet;

@@ -35,7 +35,7 @@ namespace BotWorker.Domain.Models.BotMessages
                     }
                     else if (Message.IsMatch(ClientPublic.regexRec))
                     {
-                        Answer = ClientPublic.GetRecRes(SelfId, GroupId, GroupName, UserId, Name, robotKey, clientKey, Message);
+                        Answer = await ClientPublic.GetRecResAsync(SelfId, GroupId, GroupName, UserId, Name, robotKey, clientKey, Message);
                         GroupSendMessage.Append(this);
                     }
                     else
@@ -48,7 +48,7 @@ namespace BotWorker.Domain.Models.BotMessages
                     }
                 }
 
-                if (AddGroupMember() != -1)
+                if (await AddGroupMemberAsync() != -1)
                 {
                     GroupMember.UpdateWhere($"LastMsgId={MsgId.Quotes()}, LastTime={SqlDateTime}", $"GroupId={GroupId} AND UserId = {UserId}");
                 }

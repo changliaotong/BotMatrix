@@ -46,8 +46,12 @@ CREATE TABLE IF NOT EXISTS ai_models (
     max_output_tokens INT,
     input_price_per_1k_tokens DECIMAL(12, 8) DEFAULT 0,
     output_price_per_1k_tokens DECIMAL(12, 8) DEFAULT 0,
+    base_url VARCHAR(255),
+    api_key TEXT,
+    api_model_id VARCHAR(100),
     config JSONB DEFAULT '{}', -- 存储默认 temperature, top_p 等
     is_active BOOLEAN DEFAULT TRUE,
+    is_paused BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(provider_id, name)
@@ -208,6 +212,43 @@ CREATE TABLE IF NOT EXISTS ai_knowledge_chunks (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 知识库文件
+CREATE TABLE IF NOT EXISTS ai_knowledge_files (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    display_name VARCHAR(255),
+    description TEXT,
+    storage_path VARCHAR(512) NOT NULL,
+    enabled BOOLEAN DEFAULT TRUE,
+    upload_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    file_hash VARCHAR(64),
+    is_embedded BOOLEAN DEFAULT FALSE,
+    embedded_time TIMESTAMPTZ,
+    embedding_error TEXT,
+    user_id BIGINT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 工具调用审计日志
+CREATE TABLE IF NOT EXISTS ai_tool_audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    guid VARCHAR(64) UNIQUE NOT NULL,
+    task_id VARCHAR(64),
+    staff_id VARCHAR(64),
+    tool_name VARCHAR(128),
+    input_args TEXT,
+    output_result TEXT,
+    risk_level INT DEFAULT 0,
+    status VARCHAR(32) DEFAULT 'Success',
+    approved_by VARCHAR(64),
+    rejection_reason TEXT,
+    approved_at TIMESTAMPTZ,
+    create_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 -- =============================================================================
 -- 6. 对话与记忆模块 (Conversation & Memory)
 -- =============================================================================
@@ -298,6 +339,34 @@ CREATE TABLE IF NOT EXISTS ai_billing_transactions (
     remark TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 智能体订阅
+CREATE TABLE IF NOT EXISTS ai_agent_subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    agent_id BIGINT REFERENCES ai_agents(id) ON DELETE CASCADE,
+    is_sub BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, agent_id)
+);
+
+-- 智能体标签
+CREATE TABLE IF NOT EXISTS ai_agent_tags (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    owner_id BIGINT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 智能体与标签关联
+CREATE TABLE IF NOT EXISTS ai_agent_tag_relations (
+    agent_id BIGINT REFERENCES ai_agents(id) ON DELETE CASCADE,
+    tag_id BIGINT REFERENCES ai_agent_tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (agent_id, tag_id)
 );
 
 -- =============================================================================

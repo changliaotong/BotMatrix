@@ -1,24 +1,20 @@
-using System.Data;
+using System;
+using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Domain.Entities;
 
-public class BalanceLog : MetaData<BalanceLog>
+[Table("Balance")]
+public class BalanceLog
 {
-    public override string TableName => "Balance";
-    public override string KeyField => "Id";
-
-    public static (string, IDataParameter[]) SqlLog(long botUin, long groupId, string groupName, long userId, string name, decimal balanceAdd, string balanceInfo, decimal balanceValue)
-    {
-        return SqlInsert(new
-        {
-            BotUin = botUin,
-            GroupId = groupId,
-            GroupName = groupName,
-            UserId = userId,
-            UserName = name,
-            BalanceAdd = balanceAdd,
-            BalanceValue = balanceValue,
-            BalanceInfo = balanceInfo
-        });
-    }
+    [Key]
+    public long Id { get; set; }
+    public long BotUin { get; set; }
+    public long GroupId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public long UserId { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public decimal BalanceAdd { get; set; }
+    public decimal BalanceValue { get; set; }
+    public string BalanceInfo { get; set; } = string.Empty;
+    public DateTime InsertDate { get; set; } = DateTime.Now;
 }

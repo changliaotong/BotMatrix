@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         public async Task GetCmdResAsync()
         {
@@ -96,7 +96,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 Answer = await ChangeAgentAsync();
             else if (CmdName == "自动开发")
             {
-                var devManager = ServiceProvider.GetRequiredService<BotWorker.Modules.AI.Interfaces.IDevWorkflowManager>();
+                var devManager = ServiceProvider!.GetRequiredService<BotWorker.Modules.AI.Interfaces.IDevWorkflowManager>();
                 var projectPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GeneratedProjects", Guid.NewGuid().ToString("N"));
                 var success = await devManager.StartDevProjectAsync(CmdPara, projectPath);
                 Answer = success ? $"✅ 自动化开发任务已完成！项目路径：{projectPath}" : "❌ 自动化开发任务执行失败，请检查日志。";

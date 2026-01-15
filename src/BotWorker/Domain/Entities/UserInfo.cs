@@ -1,13 +1,22 @@
+using System;
 using System.Data;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Entities;
 
-public partial class UserInfo : MetaDataGuid<UserInfo>
+[Table("user_info")]
+public partial class UserInfo
 {
-    public override string TableName => "User";
-    public override string KeyField => "Id";
+    private static IUserRepository Repository => 
+        BotMessage.ServiceProvider?.GetRequiredService<IUserRepository>() 
+        ?? throw new InvalidOperationException("IUserRepository not registered");
 
+    [Key]
+    public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string UserOpenId { get; set; } = string.Empty;
     public DateTime InsertDate { get; set; }
@@ -88,6 +97,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     [JsonIgnore]
     [HighFrequency]
     public long Tokens { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public bool IsAgent { get; set; }
     public bool IsAI { get; set; }
     public bool Xxian { get; set; }
@@ -98,7 +108,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
 
     public static async Task<UserInfo?> GetByOpenIdAsync(string openId, long botUin)
     {
-        return (await QueryWhere("UserOpenId = {0} AND BotUin = {1}", openId, botUin)).FirstOrDefault();
+        return await Repository.GetByOpenIdAsync(openId, botUin);
     }
 
     //用户头像CQ
@@ -120,17 +130,17 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
 
     public static async Task<bool> GetIsBlackAsync(long qq)
     {
-        return await GetBoolAsync("IsBlack", qq);
+        return await Repository.GetIsBlackAsync(qq);
     }
 
     public static async Task<bool> GetIsFreezeAsync(long qq)
     {
-        return await GetBoolAsync("IsFreeze", qq);
+        return await Repository.GetIsFreezeAsync(qq);
     }
 
     public static async Task<bool> GetIsShutupAsync(long qq)
     {
-        return await GetBoolAsync("IsShutup", qq);
+        return await Repository.GetIsShutupAsync(qq);
     }
 
     public static bool SubscribedPublic(long qq)
@@ -155,7 +165,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
     public static async Task<bool> GetIsSuperAsync(long qq)
     {
         if (qq == 0) return false;
-        return await GetBoolAsync("IsSuper", qq);
+        return await Repository.GetIsSuperAsync(qq);
     }
 
     public static async Task<int> NewGuessNumGameAsync(int csz_res, long csz_credit, long qq, IDbTransaction? trans = null)
@@ -165,12 +175,7 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
 
     public static async Task<int> UpdateCszGameAsync(int csz_res, long csz_credit, int csz_times, long qq, IDbTransaction? trans = null)
     {
-        return await UpdateAsync(new
-        {
-            CszRes = csz_res,
-            CszCredit = csz_credit,
-            CszTimes = csz_times,
-        }, qq, trans: trans);
+        return await Repository.UpdateCszGameAsync(qq, csz_res, csz_credit, csz_times) ? 1 : -1;
     }
 
     public static async Task<bool> IsOwnerAsync(long groupId, long qq)
@@ -249,14 +254,14 @@ public partial class UserInfo : MetaDataGuid<UserInfo>
 
     public static async Task<long> GetCreditAsync(long userId)
     {
-        return await GetLongAsync("Credit", userId);
+        return await Repository.GetCreditAsync(0, 0, userId);
     }
 
     public static async Task<long> GetCreditAsync(long groupId, long userId)
     {
         if (groupId != 0 && await GroupInfo.GetIsCreditAsync(groupId))
         {
-            return await GroupMember.GetLongAsync("GroupCredit", groupId, userId);
+            return await GroupMember.GetCoinsAsync((int)CoinsLog.CoinsType.groupCredit, groupId, userId);
         }
         return await GetCreditAsync(userId);
     }

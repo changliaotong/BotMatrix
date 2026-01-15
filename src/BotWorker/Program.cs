@@ -14,6 +14,8 @@ using Microsoft.Extensions.Configuration;
 using BotWorker.Modules.AI.Models;
 using BotWorker.Domain.Models.BotMessages;
 using BotWorker.Modules.AI.Providers;
+using BotWorker.Domain.Repositories;
+using BotWorker.Infrastructure.Persistence.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +35,17 @@ builder.Host.UseSerilog();
 // 添加基础服务
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+
+// 添加 CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 
 // 注册 Redis
 var redisHost = builder.Configuration["redis:host"] ?? "localhost";
@@ -64,6 +77,16 @@ builder.Services.AddSingleton<SandboxService>();
 builder.Services.AddSingleton<ILLMRepository, PostgresLLMRepository>();
 builder.Services.AddSingleton<IAgentRepository, PostgresAgentRepository>();
 builder.Services.AddSingleton<ILLMCallLogRepository, PostgresLLMCallLogRepository>();
+builder.Services.AddSingleton<IAgentLogRepository, PostgresAgentLogRepository>();
+builder.Services.AddSingleton<IAgentSubscriptionRepository, PostgresAgentSubscriptionRepository>();
+builder.Services.AddSingleton<IAgentTagRepository, PostgresAgentTagRepository>();
+builder.Services.AddSingleton<IKnowledgeFileRepository, PostgresKnowledgeFileRepository>();
+builder.Services.AddSingleton<IToolAuditRepository, PostgresToolAuditRepository>();
+
+// 注册模型提供商系统
+builder.Services.AddSingleton<IModelProviderFactory, ModelProviderFactory>();
+builder.Services.AddSingleton<ModelProviderManager>();
+builder.Services.AddSingleton<LLMApp>();
 
 // 注册 Evolution 存储层
 builder.Services.AddSingleton<ISkillDefinitionRepository, PostgresSkillDefinitionRepository>();
@@ -75,10 +98,46 @@ builder.Services.AddSingleton<ITaskStepRepository, PostgresTaskStepRepository>()
 // 注册 Billing 存储层
 builder.Services.AddSingleton<IWalletRepository, PostgresWalletRepository>();
 builder.Services.AddSingleton<ILeaseResourceRepository, PostgresLeaseResourceRepository>();
+
+// 注册 BaseInfo 存储层 (Dapper)
+builder.Services.AddSingleton<IBotHintsRepository, BotHintsRepository>();
+builder.Services.AddSingleton<IChengyuRepository, ChengyuRepository>();
+builder.Services.AddSingleton<ICidianRepository, CidianRepository>();
+builder.Services.AddSingleton<ICityRepository, CityRepository>();
+builder.Services.AddSingleton<ITokensLogRepository, TokensLogRepository>();
 builder.Services.AddSingleton<ILeaseContractRepository, PostgresLeaseContractRepository>();
 builder.Services.AddSingleton<IBillingTransactionRepository, PostgresBillingTransactionRepository>();
 
-builder.Services.AddSingleton<LLMApp>();
+// 注册 BaseInfo 存储层
+builder.Services.AddSingleton<IChengyuRepository, PostgresChengyuRepository>();
+builder.Services.AddSingleton<ICidianRepository, PostgresCidianRepository>();
+builder.Services.AddSingleton<ICityRepository, PostgresCityRepository>();
+builder.Services.AddSingleton<IUserRepository, PostgresUserRepository>();
+builder.Services.AddSingleton<IGroupRepository, PostgresGroupRepository>();
+builder.Services.AddSingleton<IGroupMemberRepository, PostgresGroupMemberRepository>();
+builder.Services.AddSingleton<ICoinsLogRepository, PostgresCoinsLogRepository>();
+builder.Services.AddSingleton<ICreditLogRepository, PostgresCreditLogRepository>();
+builder.Services.AddSingleton<IBalanceLogRepository, BalanceLogRepository>();
+builder.Services.AddSingleton<ITokensLogRepository, PostgresTokensLogRepository>();
+builder.Services.AddSingleton<IBotLogRepository, PostgresBotLogRepository>();
+builder.Services.AddSingleton<IBlackListRepository, PostgresBlackListRepository>();
+builder.Services.AddSingleton<IWhiteListRepository, PostgresWhiteListRepository>();
+builder.Services.AddSingleton<IGreyListRepository, PostgresGreyListRepository>();
+builder.Services.AddSingleton<IBugRepository, PostgresBugRepository>();
+builder.Services.AddSingleton<IBotHintsRepository, PostgresBotHintsRepository>();
+builder.Services.AddSingleton<ITokenRepository, PostgresTokenRepository>();
+builder.Services.AddSingleton<IGroupOfficalRepository, PostgresGroupOfficalRepository>();
+builder.Services.AddSingleton<IGroupEventRepository, PostgresGroupEventRepository>();
+builder.Services.AddSingleton<IFriendRepository, PostgresFriendRepository>();
+builder.Services.AddSingleton<IJielongRepository, JielongRepository>();
+builder.Services.AddSingleton<IFishingUserRepository, FishingUserRepository>();
+builder.Services.AddSingleton<IFishingBagRepository, FishingBagRepository>();
+builder.Services.AddSingleton<IIncomeRepository, IncomeRepository>();
+builder.Services.AddSingleton<IGroupVipRepository, GroupVipRepository>();
+builder.Services.AddSingleton<IQuestionInfoRepository, QuestionInfoRepository>();
+builder.Services.AddSingleton<IBotCmdRepository, BotCmdRepository>();
+builder.Services.AddSingleton<ITodoRepository, TodoRepository>();
+
 builder.Services.AddSingleton<IMcpService, MCPManager>();
 builder.Services.AddSingleton<IRagService, RagService>();
 builder.Services.AddSingleton<IAIService, AIService>();
@@ -90,6 +149,7 @@ builder.Services.AddSingleton<IJobService, JobService>();
 builder.Services.AddSingleton<ISkill, FileSkills>();
 builder.Services.AddSingleton<ISkill, ShellSkills>();
 builder.Services.AddSingleton<ISkill, PlanSkills>();
+builder.Services.AddSingleton<ISkill, ReviewSkills>();
 builder.Services.AddSingleton<ISkillService, SkillService>();
 
 builder.Services.AddSingleton<IEmployeeService, EmployeeService>();
@@ -97,6 +157,7 @@ builder.Services.AddSingleton<IBillingService, BillingService>();
 builder.Services.AddSingleton<IEvaluationService, EvaluationService>();
 builder.Services.AddSingleton<IEvolutionService, BotWorker.Modules.AI.Services.EvolutionService>();
 builder.Services.AddSingleton<IDevWorkflowManager, DevWorkflowManager>();
+builder.Services.AddSingleton<ITaskDecompositionService, TaskDecompositionService>();
 builder.Services.AddSingleton<IUniversalAgentManager, UniversalAgentManager>();
 builder.Services.AddSingleton<IAgentExecutor, AgentExecutor>();
 // builder.Services.AddHostedService<BotWorker.Infrastructure.Messaging.RedisStreamConsumer>();
@@ -193,6 +254,7 @@ MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
 BotMessage.LLMApp = app.Services.GetRequiredService<LLMApp>();
 BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
 BotMessage.ServiceProvider = app.Services;
+GlobalConfig.ServiceProvider = app.Services;
 LLMApp.ServiceProvider = app.Services;
 BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
 
@@ -202,7 +264,9 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseCors("AllowAll");
 app.UseRouting();
+app.UseStaticFiles();
 app.MapControllers();
 app.Run();
 
@@ -213,11 +277,11 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp, IL
     {
         Log.Information("[Startup] Starting StartupLoader...");
         // 0. 确保内置指令存在 (这些目前还在用旧 ORM)
-        await BotCmd.EnsureTableCreatedAsync();
+        // await BotCmd.EnsureTableCreatedAsync(); // Removed after refactoring to POCO
         await BotWorker.Infrastructure.Tools.Todo.EnsureTableCreatedAsync();
         
         // 注入初始岗位
-        var jobService = BotMessage.ServiceProvider.GetRequiredService<IJobService>();
+        var jobService = BotMessage.ServiceProvider!.GetRequiredService<IJobService>();
         await jobService.SeedJobsAsync();
 
         // 注入初始 AI 模型
@@ -225,7 +289,7 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp, IL
 
         // [TEST] 验证动态技能
         try {
-            var skillService = BotMessage.ServiceProvider.GetRequiredService<ISkillService>();
+            var skillService = BotMessage.ServiceProvider!.GetRequiredService<ISkillService>();
             var testResult = await skillService.ExecuteSkillAsync("PYTEST", "HelloTarget", "Testing dynamic python skill", new Dictionary<string, string>());
             Log.Information("[TEST] Dynamic Skill Output: \n{Result}", testResult);
         } catch (Exception ex) {

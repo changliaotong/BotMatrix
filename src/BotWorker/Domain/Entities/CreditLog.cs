@@ -1,37 +1,39 @@
+using System;
 using System.Data;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
+using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Domain.Entities;
-public class CreditLog : MetaData<CreditLog>
+
+[Table("credit_log")]
+public class CreditLog
 {
-    public override string TableName => "Credit";
-    public override string KeyField => "Id";
+    private static ICreditLogRepository Repository => 
+        BotMessage.ServiceProvider?.GetRequiredService<ICreditLogRepository>() 
+        ?? throw new InvalidOperationException("ICreditLogRepository not registered");
+
+    [Key]
+    public long Id { get; set; }
+    public long BotUin { get; set; }
+    public long GroupId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public long UserId { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public long CreditAdd { get; set; }
+    public long CreditValue { get; set; }
+    public string CreditInfo { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     //异步增加日志 (支持事务)
     public static async Task<int> AddLogAsync(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, long creditValue, string creditInfo, IDbTransaction? trans = null)
     {
-        var (sql, paras) = SqlHistory(botUin, groupId, groupName, qq, name, creditAdd, creditValue, creditInfo);
-        string identitySql = IsPostgreSql ? " RETURNING Id" : ";SELECT SCOPE_IDENTITY();";
-        return (await QueryScalarAsync<int>(sql + identitySql, trans, paras));
-    }
-
-    public static (string, IDataParameter[]) SqlHistory(long botUin, long groupId, string groupName, long qq, string name, long creditAdd, long creditValue, string creditInfo)
-    {
-        return SqlInsert(new
-        {
-            BotUin = botUin,
-            GroupId = groupId,
-            GroupName = groupName,
-            UserId = qq,
-            UserName = name,
-            CreditAdd = creditAdd,
-            CreditValue = creditValue + creditAdd,
-            CreditInfo = creditInfo
-        });
+        return await Repository.AddLogAsync(botUin, groupId, groupName, qq, name, creditAdd, creditValue, creditInfo, trans);
     }
 
     public static async Task<int> CreditCountAsync(long userId, string creditInfo, int second = 60)
     {
-        return await QueryScalarAsync<int>($"select count(Id) from {FullName} where UserId = {{0}} and CreditInfo like {{1}} and abs({SqlDateDiff("second", SqlDateTime, "InsertDate")}) <= {{2}}", userId, $"%{creditInfo}%", second);
+        return await Repository.CreditCountAsync(userId, creditInfo, second);
     }
-
 }

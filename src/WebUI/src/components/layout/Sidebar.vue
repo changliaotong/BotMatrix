@@ -62,6 +62,7 @@ const iconMap: Record<string, any> = {
 // Map item IDs to routes
 const routeMap: Record<string, string> = {
   'dashboard': '/console',
+  'global-dashboard': '/admin/global-dashboard',
   'bots': '/console/bots',
   'guide-angel': '/console/bots/guide-angel',
   'bot-setup': '/console/setup/bot',

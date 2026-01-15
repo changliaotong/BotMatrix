@@ -251,7 +251,7 @@ namespace BotWorker.Modules.Plugins
             }
 
             _logger.LogInformation("Skill registered: {Name} (Plugin: {PluginId}, Commands: {Commands}, Keywords: {Keywords})", 
-                capability.Name, pluginId, string.Join(", ", capability.Commands), string.Join(", ", keywords));
+                capability.Name, pluginId, string.Join(", ", capability.Commands ?? Array.Empty<string>()), string.Join(", ", keywords));
             await Task.CompletedTask;
         }
 

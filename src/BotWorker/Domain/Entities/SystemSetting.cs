@@ -1,14 +1,24 @@
-﻿namespace BotWorker.Domain.Entities
+using System.Threading.Tasks;
+using BotWorker.Common;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BotWorker.Domain.Entities
 {
-    public class SystemSetting : MetaData<SystemSetting>
+    [Table("SystemSetting")]
+    public class SystemSetting
     {
-        public override string TableName => "SystemSetting";
+        [ExplicitKey]
+        public string Key { get; set; }
+        public string Value { get; set; }
 
-        public override string KeyField => "Key";
+        private static ISystemSettingRepository Repo => GlobalConfig.ServiceProvider!.GetRequiredService<ISystemSettingRepository>();
 
+        public static bool IsCloudLimited => GetBool("IsCloudLimited");
 
-        public static bool IsCloudLimited => GetBool("Value", "IsCloudLimited");
+        public static bool IsPrefixNameProxy => GetBool("IsPrefixNameProxy");
 
-        public static bool IsPrefixNameProxy => GetBool("Value", "IsPrefixNameProxy");
+        private static bool GetBool(string key) => Repo.GetBoolAsync(key).GetAwaiter().GetResult();
     }
 }

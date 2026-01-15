@@ -1,16 +1,16 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Data;
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Infrastructure.Persistence.Database;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Domain.Models.BotMessages;
 
 namespace BotWorker.Modules.AI.Models
 {
-    public class KnowledgeFile : MetaDataGuid<KnowledgeFile>
+    public class KnowledgeFile
     {
-        public override string TableName => "KnowledgeFiles";
-
-        public override string KeyField => "Id";
-
+        public long Id { get; set; }
         public long GroupId { get; set; }
         public string FileName { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
@@ -39,75 +39,41 @@ namespace BotWorker.Modules.AI.Models
             }
         }
 
+        private static IKnowledgeFileRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IKnowledgeFileRepository>() 
+            ?? throw new InvalidOperationException("IKnowledgeFileRepository not registered");
+
         // 获取指定群组的文件列表
-        public static async Task<List<KnowledgeFile>> GetFilesByGroupAsync(long groupId)
+        public static async Task<IEnumerable<KnowledgeFile>> GetFilesByGroupAsync(long groupId)
         {
-            var sql = $"SELECT * FROM {FullName} WHERE GroupId = {groupId} ORDER BY UploadTime DESC";
-            return await QueryListAsync<KnowledgeFile>(sql);
+            return await Repository.GetFilesByGroupAsync(groupId);
         }
 
         // 新增文件记录
-        public static async Task<Dictionary<string, object>?> AddAsync(KnowledgeFile file)
+        public static async Task<long> AddAsync(KnowledgeFile file)
         {
-            return await InsertReturnFieldsAsync(new
-            {
-                file.GroupId,
-                file.FileName,
-                file.StoragePath,
-                file.Enabled,
-                file.UploadTime,
-                file.FileHash,
-                file.UserId
-            }, "Id", "Guid");
+            return await Repository.AddAsync(file);
         }
 
-        public static void MarkFileEmbedded(string fileId)
+        public static void MarkFileEmbedded(long fileId)
         {
-            var sql = $"UPDATE {FullName} SET IsEmbedded = 1, EmbeddedTime = {SqlDateTime} WHERE Id = @fileId";
-            var parameters = new[]
-            {
-                DbProviderFactory.CreateParameter("@fileId", fileId),
-            };
-            Exec(sql, null, parameters);
+            Repository.MarkFileEmbeddedAsync(fileId).GetAwaiter().GetResult();
         }
 
         public static void MarkEmbeddingFailed(long fileId, string error)
         {
-            var sql = $"UPDATE {FullName} SET EmbeddingError = @Error, EmbeddedTime = {SqlDateTime} WHERE Id = @fileId";
-            var parameters = new[]
-            {
-                DbProviderFactory.CreateParameter("@error", error),
-                DbProviderFactory.CreateParameter("@fileId", fileId),
-            };
-
-            Exec(sql, null, parameters);
+            Repository.MarkEmbeddingFailedAsync(fileId, error).GetAwaiter().GetResult();
         }
 
-        public static async Task<List<KnowledgeFile>> GetPendingEmbeddingFilesAsync(long groupId)
+        public static async Task<IEnumerable<KnowledgeFile>> GetPendingEmbeddingFilesAsync(long groupId)
         {
-            string sql = $"SELECT * FROM {FullName} WHERE GroupId = @GroupId AND IsEmbedded = 0";
-            IDataParameter[] paras = {  DbProviderFactory.CreateParameter("@GroupId", groupId) };
-            return await QueryListAsync<KnowledgeFile>(sql, null, paras);
+            return await Repository.GetPendingEmbeddingFilesAsync(groupId);
         }
 
         // 修改启用状态
-        public static async Task<int?> SetEnabledAsync(string id, bool enabled)
+        public static async Task<bool> SetEnabledAsync(long fileId, bool enabled)
         {
-            var sql = $"UPDATE {FullName} SET Enabled = @Enabled WHERE Id = @Id";
-            var parameters = new[]
-            {
-                DbProviderFactory.CreateParameter("@Enabled", enabled),
-                DbProviderFactory.CreateParameter("@Id", id),
-            };
-            return await ExecAsync(sql, null, parameters);
+            return await Repository.SetEnabledAsync(fileId, enabled);
         }
-    }
-
-    public class KnowledgeVectors : MetaData<KnowledgeVectors>
-    {
-        public override string TableName => "KnowledgeVectors";
-
-        public override string KeyField => "Id";
-
     }
 }

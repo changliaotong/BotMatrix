@@ -32,7 +32,8 @@ namespace BotWorker.Application.Messaging.Pipeline
                     botMsg.CurrentMessage = botMsg.CurrentMessage.RemoveUserId(botMsg.SelfId);
                 }
 
-                // 3. 识别是否 @ 其它�?                botMsg.IsAtOthers = botMsg.IsGroup && botMsg.CurrentMessage.RemoveQqImage().IsHaveUserId();
+                // 3. 识别是否 @ 其它
+                botMsg.IsAtOthers = botMsg.IsGroup && botMsg.CurrentMessage.RemoveQqImage().IsHaveUserId();
 
                 // 4. 强制前缀检查
                 if (botMsg.Group.IsRequirePrefix)

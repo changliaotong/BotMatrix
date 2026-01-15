@@ -18,6 +18,7 @@ namespace BotWorker.Modules.AI.Services
         private readonly ISkillService _skillService;
         private readonly ISkillDefinitionRepository _skillRepository;
         private readonly ITaskStepRepository _stepRepository;
+        private readonly IEvaluationService _evaluationService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<UniversalAgentManager> _logger;
 
@@ -27,6 +28,7 @@ namespace BotWorker.Modules.AI.Services
             ISkillService skillService,
             ISkillDefinitionRepository skillRepository,
             ITaskStepRepository stepRepository,
+            IEvaluationService evaluationService,
             IConfiguration configuration,
             ILogger<UniversalAgentManager> logger)
         {
@@ -35,6 +37,7 @@ namespace BotWorker.Modules.AI.Services
             _skillService = skillService;
             _skillRepository = skillRepository;
             _stepRepository = stepRepository;
+            _evaluationService = evaluationService;
             _configuration = configuration;
             _logger = logger;
         }
@@ -47,39 +50,39 @@ namespace BotWorker.Modules.AI.Services
                 return $"Error: Job {jobKey} not found.";
             }
 
-            // 生成隔离的工作区路径
-            var workspaceRoot = _configuration["WorkspaceRoot"] ?? Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces");
-            var tenantId = context.GroupId ?? "default_tenant";
-            var userId = context.UserId ?? "default_user";
-            var sessionId = Guid.NewGuid().ToString("N").Substring(0, 8); // 简短会话ID
-            
-            // 尝试从 metadata 中获取 TaskId，如果没有则使用 sessionId
-            var taskId = metadata?.GetValueOrDefault("TaskId") ?? sessionId;
-            var projectPath = Path.Combine(workspaceRoot, tenantId, userId, taskId);
-            
-            bool isNewProject = !Directory.Exists(projectPath);
-            if (isNewProject)
+            // 生成工作区路径：支持隔离沙箱或本地代码库模式
+            string projectPath;
+            bool isLocalMode = metadata?.ContainsKey("IsLocalMode") == true && metadata["IsLocalMode"] == "true";
+            var taskIdStr = metadata?.GetValueOrDefault("TaskId") ?? Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            if (isLocalMode)
             {
-                Directory.CreateDirectory(projectPath);
-                _logger.LogInformation("[UniversalAgent] Created isolated workspace: {Path}", projectPath);
-                
-                // 自动初始化 Git
-                try {
-                    await _skillService.ExecuteSkillAsync("GIT", "git init", "初始化项目仓库", new Dictionary<string, string> { ["ProjectPath"] = projectPath });
-                    await _skillService.ExecuteSkillAsync("WRITE", ".gitignore", "初始化 gitignore", new Dictionary<string, string> { 
-                        ["ProjectPath"] = projectPath,
-                        ["Content"] = "bin/\nobj/\n.vs/\n*.log\n"
-                    });
-                } catch (Exception ex) {
-                    _logger.LogWarning("[UniversalAgent] Git init failed: {Message}", ex.Message);
+                // 本地代码库模式：直接定位到项目根目录 (D:\projects\BotMatrix)
+                projectPath = _configuration["ProjectRoot"] ?? Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", ".."));
+                _logger.LogWarning("[UniversalAgent] ENTERING LOCAL CODEBASE MODE: {Path}", projectPath);
+            }
+            else
+            {
+                // 隔离沙箱模式
+                var workspaceRoot = _configuration["WorkspaceRoot"] ?? Path.Combine(Directory.GetCurrentDirectory(), "BotWorkspaces");
+                var tenantId = context.GroupId ?? "default_tenant";
+                var userId = context.UserId ?? "default_user";
+                projectPath = Path.Combine(workspaceRoot, tenantId, userId, taskIdStr);
+
+                if (!Directory.Exists(projectPath))
+                {
+                    Directory.CreateDirectory(projectPath);
+                    _logger.LogInformation("[UniversalAgent] Created isolated workspace: {Path}", projectPath);
+                    
+                    // 自动初始化 Git (仅沙箱模式需要)
+                    try {
+                        await _skillService.ExecuteSkillAsync("GIT", "git init", "初始化项目仓库", new Dictionary<string, string> { ["ProjectPath"] = projectPath });
+                    } catch { }
                 }
             }
 
             var agentMetadata = metadata ?? new Dictionary<string, string>();
             agentMetadata["ProjectPath"] = projectPath;
-            agentMetadata["TenantId"] = tenantId;
-            agentMetadata["UserId"] = userId;
-            agentMetadata["TaskId"] = taskId;
 
             // 获取岗位关联的技能详情
             var skillKeys = JsonSerializer.Deserialize<List<string>>(job.ToolSchema) ?? new List<string>();
@@ -119,7 +122,7 @@ namespace BotWorker.Modules.AI.Services
                     jobKey, decision.Action, decision.Target, decision.Reason);
 
                 // 如果有 TaskId，记录详细步骤
-                if (long.TryParse(taskId, out var tid))
+                if (long.TryParse(taskIdStr, out var tid))
                 {
                     var stepName = $"{decision.Action}: {decision.Target}";
                     if (stepName.Length > 100) stepName = stepName.Substring(0, 97) + "...";
@@ -142,11 +145,41 @@ namespace BotWorker.Modules.AI.Services
                 }
 
                 var observation = await ExecuteActionAsync(decision, state, context);
+                
+                // 自动化评估：如果是写入或命令操作，进行质量评估
+                bool isSuccess = !observation.StartsWith("错误");
+                if (isSuccess && (decision.Action.ToUpper() == "WRITE" || decision.Action.ToUpper() == "COMMAND" || decision.Action.ToUpper() == "BUILD"))
+                {
+                    if (long.TryParse(taskIdStr, out var tidEval))
+                    {
+                        var tempStep = new TaskStep { Name = decision.Action, OutputData = observation };
+                        var evalResult = await _evaluationService.EvaluateStepAsync(tempStep, state.InitialTask);
+                        if (!evalResult || tempStep.Status == "failed")
+                        {
+                            observation = $"[系统评估失败] {tempStep.ErrorMessage ?? "执行结果未达到预期目标，请检查代码逻辑或尝试其他方案。"}\n原始输出：{observation}";
+                            isSuccess = false;
+                        }
+                    }
+                }
+
+                // 自修复逻辑：如果执行失败，触发 REVIEW 技能进行深度诊断
+                if (!isSuccess && decision.Action.ToUpper() != "REVIEW")
+                {
+                    _logger.LogInformation("[UniversalAgent] Action failed, triggering REVIEW for self-repair: {Action}", decision.Action);
+                    var reviewReason = $"执行行动 {decision.Action} 失败，目标：{decision.Target}。错误详情：{observation}";
+                    var reviewResult = await _skillService.ExecuteSkillAsync("REVIEW", decision.Target, reviewReason, agentMetadata);
+                    
+                    if (!reviewResult.StartsWith("错误"))
+                    {
+                        observation += $"\n\n### 深度诊断建议 (REVIEW):\n{reviewResult}\n\n请根据以上诊断建议，重新规划并执行修复步骤。";
+                    }
+                }
+
                 state.LastObservation = observation;
                 state.History.Add($"Step {currentStep}: {decision.Action} {decision.Target} -> {observation}");
 
                 // 自动化：执行成功后自动 Git Commit
-                if (!observation.StartsWith("错误") && decision.Action.ToUpper() != "READ" && decision.Action.ToUpper() != "LIST" && decision.Action.ToUpper() != "DONE")
+                if (isSuccess && decision.Action.ToUpper() != "READ" && decision.Action.ToUpper() != "LIST" && decision.Action.ToUpper() != "DONE")
                 {
                     try {
                         var commitMsg = $"Step {currentStep}: {decision.Action} {decision.Target}";
@@ -160,7 +193,7 @@ namespace BotWorker.Modules.AI.Services
                 }
 
                 // 更新步骤结果
-                if (long.TryParse(taskId, out var tid2))
+                if (long.TryParse(taskIdStr, out var tid2))
                 {
                     var steps = await _stepRepository.GetByTaskIdAsync(tid2);
                     var currentTaskStep = steps.FirstOrDefault(s => s.StepIndex == currentStep);

@@ -46,7 +46,7 @@ public partial class BotMessage : MetaData<BotMessage>
                     throw new Exception("换群操作失败");
 
                 wrapper.Commit();
-                return $"✅ 换群成功！将机器人加入新群即可使用\n{积分类型}：-12000，累计：{newValue}";
+                return $"✅ 换群成功！将机器人加入新群即可使用\n积分：-12000，累计：{newValue}";
             }
             catch (Exception ex)
             {
@@ -93,7 +93,7 @@ public partial class BotMessage : MetaData<BotMessage>
                 await GroupVip.SetValueAsync("UserId", newUserId, GroupId, wrapper.Transaction);
 
                 wrapper.Commit();
-                return $"✅ 换主人成功！\n{积分类型}：-12000，累计：{newValue}";
+                return $"✅ 换主人成功！\n积分：-12000，累计：{newValue}";
             }
             catch (Exception ex)
             {
@@ -168,7 +168,7 @@ public partial class BotMessage : MetaData<BotMessage>
         public async Task<string> GetGoodsCreditAsync()
         {
             if (!User.IsSuper)
-                return $"仅超级积分可兑换礼品，你的积分类型：{积分类型}";
+                return $"仅超级积分可兑换礼品，你的积分类型：{{积分类型}}";
 
             if (CmdPara == "")
                 return "红富士苹果包邮12斤：\n 24个装（中果）：119,520分\n换中果发送【兑换礼品 119520】\n您的{积分类型}：{积分}";

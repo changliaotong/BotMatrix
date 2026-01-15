@@ -10,7 +10,7 @@ const getBaseURL = () => {
     const { protocol, hostname } = window.location;
     // 如果是开发环境且是通过 IP 访问，或者是非 localhost 访问
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `${protocol}//${hostname}:5000`;
+      return `${protocol}//${hostname}:8080`;
     }
   }
   return '/';

@@ -1,24 +1,38 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace BotWorker.Domain.Entities
 {
-    public class BlackList : MetaData<BlackList>
+    public class BlackList
     {
-        public override string TableName => "BlackList";
-        public override string KeyField => "GroupId";
-        public override string KeyField2 => "BlackId";
+        private static IBlackListRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBlackListRepository>() 
+            ?? throw new InvalidOperationException("IBlackListRepository not registered");
+
+        public long BotUin { get; set; }
+        public long GroupId { get; set; }
+        public string GroupName { get; set; } = string.Empty;
+        public long UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public long BlackId { get; set; }
+        public string BlackInfo { get; set; } = string.Empty;
+        public DateTime InsertDate { get; set; }
 
         public const string regexBlack = @"^(?<cmdName>(取消|解除|删除)?(黑名单|拉黑|加黑|删黑))(?<cmdPara>([ ]*(\[?@:?)?[1-9]+\d*(\]?))+)$";
 
-        public static async Task<List<long>> GetSystemBlackListAsync()
+        public static async Task<IEnumerable<long>> GetSystemBlackListAsync()
         {
-            var (sql, parameters) = SqlSelect("BlackId", BotInfo.GroupIdDef);
-            return await QueryListAsync<long>(sql, null, parameters);
+            return await Repository.GetSystemBlackListAsync();
         }
 
         public static bool IsSystemBlack(long userId) => IsSystemBlackAsync(userId).GetAwaiter().GetResult();
 
         public static async Task<bool> IsSystemBlackAsync(long userId)
         {
-            return await ExistsAsync(BotInfo.GroupIdDef, userId);
+            return await Repository.IsExistsAsync(BotInfo.GroupIdDef, userId);
         }
 
         public static int AddBlackList(long botUin, long groupId, string groupName, long qq, string name, long blackQQ, string blackInfo)
@@ -27,17 +41,31 @@ namespace BotWorker.Domain.Entities
         // 加入黑名单
         public static async Task<int> AddBlackListAsync(long botUin, long groupId, string groupName, long qq, string name, long blackQQ, string blackInfo)
         {
-            return await ExistsAsync(groupId, blackQQ)
-                ? 0
-                : await InsertAsync([
-                            new Cov("BotUin", botUin),
-                            new Cov("GroupId", groupId),
-                            new Cov("GroupName", groupName),
-                            new Cov("UserId", qq),
-                            new Cov("UserName", name),
-                            new Cov("BlackId", blackQQ),
-                            new Cov("BlackInfo", blackInfo),
-                        ]);
+            if (await Repository.IsExistsAsync(groupId, blackQQ))
+                return 0;
+
+            var blackList = new BlackList
+            {
+                BotUin = botUin,
+                GroupId = groupId,
+                GroupName = groupName,
+                UserId = qq,
+                UserName = name,
+                BlackId = blackQQ,
+                BlackInfo = blackInfo
+            };
+
+            return await Repository.AddAsync(blackList);
+        }
+
+        public static async Task<bool> ExistsAsync(long groupId, long blackId)
+        {
+            return await Repository.IsExistsAsync(groupId, blackId);
+        }
+
+        public static async Task<int> DeleteAsync(long groupId, long blackId)
+        {
+            return await Repository.DeleteAsync(groupId, blackId);
         }
 
         /// <summary>
@@ -47,7 +75,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> ClearGroupBlacklistAsync(long groupId)
         {
-            return await ExecAsync($"DELETE FROM BlackList WHERE GroupId = {groupId}");
+            return await Repository.ClearGroupAsync(groupId);
         }
     }
 }

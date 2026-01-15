@@ -26,13 +26,16 @@ namespace BotWorker.Modules.AI.Models
         public decimal InputPricePer1kTokens { get; set; } = 0;
         public decimal OutputPricePer1kTokens { get; set; } = 0;
         public string Config { get; set; } = "{}"; // JSONB
+        public string? BaseUrl { get; set; }
+        public string? ApiKey { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool IsPaused { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public static (long ModelId, string? ProviderName, string? ModelName) GetModelInfo(long modelId)
         {
-            using var scope = LLMApp.ServiceProvider.CreateScope();
+            using var scope = LLMApp.ServiceProvider!.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<ILLMRepository>();
             var model = repo.GetModelByIdAsync(modelId).GetAwaiter().GetResult();
             if (model == null) return (0, null, null);

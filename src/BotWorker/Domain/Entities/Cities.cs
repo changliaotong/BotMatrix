@@ -1,13 +1,17 @@
-﻿namespace BotWorker.Domain.Entities
+﻿using System;
+using Microsoft.Extensions.DependencyInjection;
+using BotWorker.Domain.Repositories;
+using BotWorker.Domain.Models.BotMessages;
+
+namespace BotWorker.Domain.Entities
 {
     /// <summary>
     /// 中国城市数据
     /// </summary>
-    public class Cities : MetaData<Cities>
+    public partial class Cities
     {
-        public override string DataBase => "baseinfo";
-        public override string TableName => "cities";
-        public override string KeyField => "city_name";
+        private static ICityRepository? _repository;
+        private static ICityRepository Repository => _repository ??= BotMessage.ServiceProvider?.GetRequiredService<ICityRepository>() ?? throw new InvalidOperationException("ICityRepository not registered");
     }
 }
 

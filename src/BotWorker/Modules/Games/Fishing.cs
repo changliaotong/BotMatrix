@@ -2,12 +2,14 @@ using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Models.BotMessages;
 using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
-using static BotWorker.Infrastructure.Persistence.ORM.MetaData;
+using Microsoft.Extensions.DependencyInjection;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Modules.Games
 {
@@ -76,12 +78,14 @@ namespace BotWorker.Modules.Games
 
     #region 数据实体
 
-    public class FishingUser : MetaData<FishingUser>
+    [Table("fishing_user")]
+    public class FishingUser
     {
-        public override string TableName => "FishingUser";
-        public override string KeyField => "UserId";
+        private static IFishingUserRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IFishingUserRepository>() 
+            ?? throw new InvalidOperationException("IFishingUserRepository not registered");
 
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        [ExplicitKey]
         public long UserId { get; set; }
         public int Level { get; set; } = 1;
         public long Exp { get; set; } = 0;
@@ -94,32 +98,49 @@ namespace BotWorker.Modules.Games
 
         public static async Task<FishingUser> GetOrCreateAsync(long userId)
         {
-            var user = await GetSingleAsync(userId);
+            var user = await Repository.GetByIdAsync(userId);
             if (user == null)
             {
-                user = new FishingUser { UserId = userId, Gold = 500, Level = 1, RodLevel = 1 };
-                await InsertAsync([
-                    new Cov("UserId", userId),
-                    new Cov("Level", 1),
-                    new Cov("Exp", 0),
-                    new Cov("Gold", 500), 
-                    new Cov("RodLevel", 1),
-                    new Cov("State", 0),
-                    new Cov("CurrentLocation", 0),
-                    new Cov("LastActionTime", DateTime.Now),
-                    new Cov("WaitMinutes", 0)
-                ]);
+                user = new FishingUser { UserId = userId, Gold = 500, Level = 1, RodLevel = 1, LastActionTime = DateTime.Now };
+                await Repository.AddAsync(user);
             }
             return user;
         }
+
+        public static async Task UpdateStateAsync(long userId, int state, int waitMinutes)
+        {
+            await Repository.UpdateStateAsync(userId, state, waitMinutes);
+        }
+
+        public static async Task UpdateStateAsync(long userId, int state)
+        {
+            await Repository.UpdateStateAsync(userId, state);
+        }
+
+        public static async Task AddExpAndResetStateAsync(long userId, int exp)
+        {
+            await Repository.AddExpAndResetStateAsync(userId, exp);
+        }
+
+        public static async Task UpgradeRodAsync(long userId, long cost)
+        {
+            await Repository.UpgradeRodAsync(userId, cost);
+        }
+
+        public static async Task SellFishAsync(long userId, long totalGold)
+        {
+            await Repository.SellFishAsync(userId, totalGold);
+        }
     }
 
-    public class FishingBag : MetaData<FishingBag>
+    [Table("fishing_bag")]
+    public class FishingBag
     {
-        public override string TableName => "FishingBag";
-        public override string KeyField => "Id";
+        private static IFishingBagRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IFishingBagRepository>() 
+            ?? throw new InvalidOperationException("IFishingBagRepository not registered");
 
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        [Key]
         public long Id { get; set; }
         public long UserId { get; set; }
         public string FishName { get; set; } = "";
@@ -130,14 +151,25 @@ namespace BotWorker.Modules.Games
 
         public static async Task AddFishAsync(long userId, FishDef fish, double weight, long value)
         {
-            await InsertAsync([
-                new Cov("UserId", userId),
-                new Cov("FishName", fish.Name),
-                new Cov("Weight", weight),
-                new Cov("Quality", (int)fish.Quality),
-                new Cov("Value", value),
-                new Cov("CatchTime", DateTime.Now)
-            ]);
+            await Repository.AddAsync(new FishingBag
+            {
+                UserId = userId,
+                FishName = fish.Name,
+                Weight = weight,
+                Quality = (int)fish.Quality,
+                Value = value,
+                CatchTime = DateTime.Now
+            });
+        }
+
+        public static async Task<IEnumerable<FishingBag>> GetByUserIdAsync(long userId, int limit)
+        {
+            return await Repository.GetByUserIdAsync(userId, limit);
+        }
+
+        public static async Task<IEnumerable<FishingBag>> GetAllByUserIdAsync(long userId)
+        {
+            return await Repository.GetAllByUserIdAsync(userId);
         }
     }
 
@@ -199,8 +231,9 @@ namespace BotWorker.Modules.Games
 
         public static async Task EnsureTablesCreatedAsync()
         {
-            await FishingUser.EnsureTableCreatedAsync();
-            await FishingBag.EnsureTableCreatedAsync();
+            // await FishingUser.EnsureTableCreatedAsync();
+            // await FishingBag.EnsureTableCreatedAsync();
+            await Task.CompletedTask;
         }
 
         public static async Task<string> GetStatusAsync(long userId, string nickname)
@@ -209,7 +242,7 @@ namespace BotWorker.Modules.Games
             var loc = Locations[user.CurrentLocation];
             var stateStr = user.State == 1 ? "🎣 正在垂钓中... (输入 收竿/收杆 看看收获)" : "💤 闲逛中 (输入 抛竿 开始钓鱼)";
             
-            return $"【{nickname}的钓鱼执照】\n" +
+            return $"【钓鱼执照】\n" +
                    $"等级：Lv.{user.Level} (XP: {user.Exp})\n" +
                    $"金币：{user.Gold} 💰\n" +
                    $"鱼竿：{user.RodLevel}级 (最大承重: {user.RodLevel * 10}kg)\n" +
@@ -223,7 +256,7 @@ namespace BotWorker.Modules.Games
             if (user.State == 1) return "你已经在钓鱼了，耐心一点！";
 
             int wait = new Random().Next(1, 4); // 1-3分钟
-            await FishingUser.UpdateAsync($"State = 1, LastActionTime = {MetaData.SqlDateTime}, WaitMinutes = {wait}", userId);
+            await FishingUser.UpdateStateAsync(userId, 1, wait);
             
             return $"✅ 成功抛竿到 {Locations[user.CurrentLocation].Name}！\n静静等待鱼儿上钩吧...";
         }
@@ -236,7 +269,7 @@ namespace BotWorker.Modules.Games
             var diff = (DateTime.Now - user.LastActionTime).TotalMinutes;
             if (diff < user.WaitMinutes)
             {
-                await FishingUser.UpdateAsync($"State = 0", userId);
+                await FishingUser.UpdateStateAsync(userId, 0);
                 return "💨 哎呀，收竿太快，鱼被惊走了！";
             }
 
@@ -253,7 +286,7 @@ namespace BotWorker.Modules.Games
             double maxWeight = user.RodLevel * 10.0;
             if (weight > maxWeight)
             {
-                await FishingUser.UpdateAsync($"State = 0", userId);
+                await FishingUser.UpdateStateAsync(userId, 0);
                 return $"💔 糟糕！钓到了一头巨物({fish.Name} {weight}kg)，但是鱼竿承受不住，断线了！建议升级鱼竿。";
             }
 
@@ -265,7 +298,7 @@ namespace BotWorker.Modules.Games
 
             // 增加经验
             int expGained = (int)fish.Quality * 10 + 5;
-            await FishingUser.UpdateAsync($"State = 0, Exp = Exp + {expGained}", userId);
+            await FishingUser.AddExpAndResetStateAsync(userId, expGained);
 
             string qualityStar = new string('⭐', (int)fish.Quality + 1);
             return $"🎊 恭喜！你收竿成功，钓到了：\n" +
@@ -277,7 +310,7 @@ namespace BotWorker.Modules.Games
 
         public static async Task<string> GetBagAsync(long userId)
         {
-            var fishList = await FishingBag.QueryListAsync(new QueryOptions { FilterSql = $"UserId={userId}", OrderBy = "CatchTime DESC" });
+            var fishList = (await FishingBag.GetByUserIdAsync(userId, 1000)).ToList();
             if (fishList.Count == 0) return "你的鱼篓空空如也。";
 
             var sb = new System.Text.StringBuilder();
@@ -296,23 +329,19 @@ namespace BotWorker.Modules.Games
 
         public static async Task<string> SellFishAsync(long userId)
         {
-            var fishList = await FishingBag.QueryListAsync(new QueryOptions { FilterSql = $"UserId={userId}" });
+            var fishList = (await FishingBag.GetAllByUserIdAsync(userId)).ToList();
             if (fishList.Count == 0) return "没什么好卖的。";
 
             long totalGold = fishList.Sum(f => f.Value);
             
-            using var trans = await MetaData.BeginTransactionAsync();
             try {
-                await FishingUser.ExecAsync($"UPDATE {FishingUser.FullName} SET Gold = Gold + {totalGold} WHERE UserId = {userId}", trans);
-                await FishingBag.ExecAsync($"DELETE FROM {FishingBag.FullName} WHERE UserId = {userId}", trans);
-                MetaData.CommitTransaction(trans);
+                await FishingUser.SellFishAsync(userId, totalGold);
 
                 // 上报金币成就指标
                 _ = AchievementPlugin.ReportMetricAsync(userId.ToString(), "fishing.total_gold", totalGold);
 
                 return $"💰 所有的鱼已售出，获得 {totalGold} 金币！";
             } catch {
-                MetaData.RollbackTransaction(trans);
                 return "交易失败，请稍后再试。";
             }
         }
@@ -334,7 +363,7 @@ namespace BotWorker.Modules.Games
             long upgradeCost = user.RodLevel * 1000;
             if (user.Gold < upgradeCost) return $"你的金币不足！需要 {upgradeCost} 💰";
 
-            await FishingUser.UpdateAsync($"Gold = Gold - {upgradeCost}, RodLevel = RodLevel + 1", userId);
+            await FishingUser.UpgradeRodAsync(userId, upgradeCost);
             return $"✅ 升级成功！当前鱼竿等级：Lv.{user.RodLevel + 1}，最大承重：{(user.RodLevel + 1) * 10}kg";
         }
     }

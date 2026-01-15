@@ -41,7 +41,7 @@ const features = [
 </script>
 
 <template>
-  <div class="relative w-full min-h-full pt-32">
+  <div class="relative w-full min-h-full pt-12">
     <!-- Background Effects (Contained) -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
       <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-pink-500/5 blur-[120px] rounded-full"></div>
@@ -49,18 +49,7 @@ const features = [
     </div>
 
     <div class="relative z-10 p-6 md:p-12 max-w-7xl mx-auto">
-      <!-- Header / Breadcrumb -->
-      <div class="flex items-center gap-2 mb-12 text-[var(--text-muted)]">
-        <router-link to="/meow" class="flex items-center gap-1 hover:text-[var(--text-main)] transition-colors">
-          <ArrowLeft class="w-4 h-4" />
-          <span class="text-xs font-black uppercase tracking-widest">{{ t('common.back') }}</span>
-        </router-link>
-        <span class="opacity-20">/</span>
-        <div class="flex items-center gap-2">
-          <Heart class="w-3 h-3 text-pink-500" />
-          <span class="text-xs font-black uppercase tracking-widest text-[var(--text-main)]">{{ t('guide_angel.nostalgia') }}</span>
-        </div>
-      </div>
+
 
       <!-- Hero Section -->
       <div class="text-center mb-16">
@@ -78,7 +67,7 @@ const features = [
         </p>
 
         <div class="flex flex-wrap justify-center gap-4">
-          <router-link to="/meow" class="px-8 py-4 bg-pink-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-pink-600 transition-all shadow-xl shadow-pink-500/20 group">
+          <router-link to="/" class="px-8 py-4 bg-pink-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-pink-600 transition-all shadow-xl shadow-pink-500/20 group">
             <span class="flex items-center gap-3">
               {{ t('guide_angel.enter_earlymeow') }}
               <ChevronRight class="w-4 h-4 group-hover:translate-x-1 transition-transform" />

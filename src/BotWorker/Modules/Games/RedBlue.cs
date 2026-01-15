@@ -49,115 +49,143 @@ namespace BotWorker.Modules.Games
             var cmdName = ctx.RawMessage.Trim().Split(' ')[0];
             var cmdPara = args.Length > 0 ? args[0] : "";
 
-            long creditValue = await UserInfo.GetCreditAsync(groupId, userId);
-            
-            if (string.IsNullOrEmpty(cmdPara))
-                return "请押积分，您的积分：" + creditValue;
-
-            if (cmdPara.ToUpper() == "梭哈" || cmdPara.ToUpper() == "SH")
-                cmdPara = creditValue.ToString();
-
-            if (!long.TryParse(cmdPara, out long blockCredit))
-                return "押注积分必须是数字";
-
-            if (blockCredit < ctx.Group.BlockMin)
-                return $"至少押{ctx.Group.BlockMin}分";
-
-            if (creditValue < blockCredit)
-                return $"您只有{creditValue}分";
-
-            List<Card> deck;
-            if (!await ShuffledDeck.IsShuffledDeckExistsAsync(groupId))
+            using var wrapper = await ShuffledDeck.BeginTransactionAsync();
+            try
             {
-                deck = RedBlue.InitializeDeck();
-                RedBlue.ShuffleDeck(deck);
-                await ShuffledDeck.SaveShuffledDeckAsync(groupId, deck);
-            }
-            else
-            {
-                deck = await ShuffledDeck.ReadShuffledDeckAsync(groupId);
-            }
+                // 1. 获取积分并锁定用户
+                long creditValue = await UserInfo.GetCreditForUpdateAsync(long.Parse(ctx.BotId), groupId, userId, wrapper.Transaction);
 
-            // 发牌
-            List<Card> playerHand = [deck[0], deck[2]];
-            List<Card> bankerHand = [deck[1], deck[3]];
-
-            string result;
-            int payout;
-
-            bool isNatural = RedBlue.HasNatural(playerHand) || RedBlue.HasNatural(bankerHand);
-            if (!isNatural)
-            {
-                int playerTotal = RedBlue.CalculateTotal(playerHand);
-                int bankerTotal = RedBlue.CalculateTotal(bankerHand);
-                int playerThirdCard = -1;
-
-                if (playerTotal <= 5)
+                if (string.IsNullOrEmpty(cmdPara))
                 {
-                    playerHand.Add(deck[4]);
-                    playerThirdCard = RedBlue.CalculatePoint(deck[4]);
-                    playerTotal = RedBlue.CalculateTotal(playerHand);
+                    await wrapper.RollbackAsync();
+                    return $"请押积分，您的积分：{creditValue:N0}";
                 }
 
-                bool bankerDrawCard = false;
-                if (playerThirdCard != -1)
+                if (cmdPara.ToUpper().In("梭哈", "SH"))
+                    cmdPara = creditValue.ToString();
+
+                if (!long.TryParse(cmdPara, out long blockCredit))
                 {
-                    if (bankerTotal <= 2) bankerDrawCard = true;
-                    else if (bankerTotal == 3 && playerThirdCard != 8) bankerDrawCard = true;
-                    else if (bankerTotal == 4 && (playerThirdCard >= 2 && playerThirdCard <= 7)) bankerDrawCard = true;
-                    else if (bankerTotal == 5 && (playerThirdCard >= 4 && playerThirdCard <= 7)) bankerDrawCard = true;
-                    else if (bankerTotal == 6 && (playerThirdCard == 6 || playerThirdCard == 7)) bankerDrawCard = true;
-                }
-                else if (bankerTotal <= 5)
-                {
-                    bankerDrawCard = true;
+                    await wrapper.RollbackAsync();
+                    return "押注积分必须是数字";
                 }
 
-                if (bankerDrawCard)
-                    bankerHand.Add(deck[5]);
-            }
+                if (blockCredit < ctx.Group.BlockMin)
+                {
+                    await wrapper.RollbackAsync();
+                    return $"至少押{ctx.Group.BlockMin}分";
+                }
 
-            result = RedBlue.CalculateResult(playerHand, bankerHand);
-            payout = RedBlue.CalculatePayout(result);
+                if (creditValue < blockCredit)
+                {
+                    await wrapper.RollbackAsync();
+                    return $"您只有{creditValue:N0}分";
+                }
 
-            foreach (var card in playerHand.Concat(bankerHand))
-                await ShuffledDeck.ClearShuffledDeckAsync(groupId, card.Id);
+                // 2. 加载并锁定牌堆
+                List<Card> deck = await ShuffledDeck.ReadShuffledDeckAsync(groupId, wrapper.Transaction, true);
 
-            var sb = new StringBuilder();
-            sb.AppendLine($"蓝：{string.Join(" ", playerHand.Select(c => c.Suit + c.Rank))}【{RedBlue.CalculateTotal(playerHand)}】");
-            sb.AppendLine($"红：{string.Join(" ", bankerHand.Select(c => c.Suit + c.Rank))}【{RedBlue.CalculateTotal(bankerHand)}】");
-            sb.AppendLine($"结果：{result}");
+                if (deck.Count < 6)
+                {
+                    deck = RedBlue.InitializeDeck();
+                    RedBlue.ShuffleDeck(deck);
+                    await ShuffledDeck.SaveShuffledDeckAsync(groupId, deck, wrapper.Transaction);
+                }
 
-            bool isWin = result.Contains(cmdName);
-            long creditAdd = 0;
-            if (isWin)
-            {
-                if (cmdName == "红" && RedBlue.CalculateTotal(bankerHand) == 6)
-                    creditAdd = blockCredit / 2;
+                // 发牌
+                List<Card> playerHand = [deck[0], deck[2]];
+                List<Card> bankerHand = [deck[1], deck[3]];
+
+                string result;
+                int payout;
+
+                // 判断是否出现自然赢
+                bool isNatural = RedBlue.HasNatural(playerHand) || RedBlue.HasNatural(bankerHand);
+                if (!isNatural)
+                {
+                    int playerTotal = RedBlue.CalculateTotal(playerHand);
+                    int bankerTotal = RedBlue.CalculateTotal(bankerHand);
+                    int playerThirdCard = -1;
+
+                    // 蓝方补牌
+                    if (playerTotal <= 5)
+                    {
+                        playerHand.Add(deck[4]);
+                        playerThirdCard = RedBlue.CalculatePoint(deck[4]);
+                        playerTotal = RedBlue.CalculateTotal(playerHand);
+                    }
+
+                    // 红方补牌
+                    bool bankerDrawCard = false;
+                    if (playerThirdCard != -1)
+                    {
+                        if (bankerTotal <= 2) bankerDrawCard = true;
+                        else if (bankerTotal == 3 && playerThirdCard != 8) bankerDrawCard = true;
+                        else if (bankerTotal == 4 && (playerThirdCard >= 2 && playerThirdCard <= 7)) bankerDrawCard = true;
+                        else if (bankerTotal == 5 && (playerThirdCard >= 4 && playerThirdCard <= 7)) bankerDrawCard = true;
+                        else if (bankerTotal == 6 && (playerThirdCard == 6 || playerThirdCard == 7)) bankerDrawCard = true;
+                    }
+                    else if (bankerTotal <= 5)
+                    {
+                        bankerDrawCard = true;
+                    }
+
+                    if (bankerDrawCard)
+                        bankerHand.Add(deck[5]);
+                }
+
+                // 结算
+                result = RedBlue.CalculateResult(playerHand, bankerHand);
+                payout = RedBlue.CalculatePayout(result);
+
+                // 批量清除已使用的牌
+                var usedCardIds = playerHand.Concat(bankerHand).Select(c => c.Id).ToList();
+                await ShuffledDeck.ClearShuffledDeckAsync(groupId, usedCardIds, wrapper.Transaction);
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"蓝：{string.Join(" ", playerHand.Select(c => c.Suit + c.Rank))}【{RedBlue.CalculateTotal(playerHand)}】");
+                sb.AppendLine($"红：{string.Join(" ", bankerHand.Select(c => c.Suit + c.Rank))}【{RedBlue.CalculateTotal(bankerHand)}】");
+                sb.AppendLine($"结果：{result}");
+
+                bool isWin = result.Contains(cmdName);
+                long creditAdd = 0;
+                if (isWin)
+                {
+                    if (cmdName == "红" && RedBlue.CalculateTotal(bankerHand) == 6)
+                        creditAdd = blockCredit / 2;
+                    else
+                        creditAdd = blockCredit * payout;
+                }
+                else if (result == "和")
+                    creditAdd = 0;
                 else
-                    creditAdd = blockCredit * payout;
-            }
-            else if (result == "和")
-                creditAdd = 0;
-            else
-                creditAdd = -blockCredit;
+                    creditAdd = -blockCredit;
 
-            if (creditAdd != 0)
+                if (creditAdd != 0)
+                {
+                    var addRes = await UserInfo.AddCreditAsync(long.Parse(ctx.BotId), groupId, ctx.Group.GroupName, userId, ctx.User?.Name ?? "", creditAdd, "红和蓝得分", wrapper.Transaction);
+                    if (addRes.Result == -1)
+                    {
+                        await wrapper.RollbackAsync();
+                        return "操作失败，请稍后重试";
+                    }
+                    creditValue = addRes.CreditValue;
+                }
+
+                await wrapper.CommitAsync();
+
+                // 同步缓存
+                await UserInfo.SyncCreditCacheAsync(long.Parse(ctx.BotId), groupId, userId, creditValue);
+
+                sb.Append($"✅ 得分：{(isWin ? blockCredit + creditAdd : (result == "和" ? blockCredit : 0)):N0}，累计：{creditValue:N0}");
+
+                return sb.ToString();
+            }
+            catch (Exception ex)
             {
-                var addRes = await UserInfo.AddCreditAsync(long.Parse(ctx.BotId), groupId, ctx.Group.GroupName, userId, ctx.User?.Name ?? "", creditAdd, "红和蓝得分");
-                creditValue = addRes.CreditValue;
+                await wrapper.RollbackAsync();
+                return "游戏出错，请稍后重试";
             }
-
-            sb.Append($"✅ 得分：{(isWin ? blockCredit + creditAdd : (result == "和" ? blockCredit : 0))}，累计：{creditValue}");
-
-            if (deck.Count < 6)
-            {
-                deck = RedBlue.InitializeDeck();
-                RedBlue.ShuffleDeck(deck);
-                await ShuffledDeck.SaveShuffledDeckAsync(groupId, deck);
-            }
-
-            return sb.ToString();
         }
     }
 

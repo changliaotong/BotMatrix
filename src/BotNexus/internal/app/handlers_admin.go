@@ -4034,20 +4034,78 @@ func HandleDockerLogs(m *bot.Manager) http.HandlerFunc {
 // @Security BearerAuth
 // @Success 200 {object} utils.JSONResponse "帮助手册内容"
 // @Router /api/admin/manual [get]
+type ManualSection struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type ManualInfo struct {
+	Title    string          `json:"title"`
+	Sections []ManualSection `json:"sections"`
+	Version  string          `json:"version"`
+}
+
+func getBotWorkerManuals() []ManualSection {
+	var sections []ManualSection
+
+	// 定义要读取的文件列表及其标题映射
+	files := []struct {
+		Name  string
+		Title string
+	}{
+		{"用户手册.md", "📖 用户手册"},
+		{"MANUAL_ADMIN.md", "🛡️ 管理员手册"},
+		{"MANUAL_CHAT.md", "🧠 聊天与对话"},
+		{"MANUAL_ECONOMY.md", "💰 经济与金融"},
+		{"MANUAL_GAMES.md", "🎮 游戏与娱乐"},
+		{"MANUAL_PLUGINS.md", "🛠️ 插件系统"},
+		{"MANUAL_VARIABLES.md", "{} 系统变量"},
+		{"DEVELOPER_GUIDE.md", "💻 开发指南"},
+		{"DOCS_INDEX.md", "🗂️ 文档索引"},
+	}
+
+	// 尝试查找 BotWorker/docs 目录
+	possiblePaths := []string{
+		filepath.Join("..", "BotWorker", "docs"),
+		filepath.Join("src", "BotWorker", "docs"),
+		filepath.Join("..", "..", "BotWorker", "docs"),
+		filepath.Join("..", "..", "src", "BotWorker", "docs"),
+		filepath.Join("BotWorker", "docs"),
+	}
+
+	var docsPath string
+	for _, p := range possiblePaths {
+		if _, err := os.Stat(p); err == nil {
+			docsPath = p
+			break
+		}
+	}
+
+	if docsPath == "" {
+		log.Printf("[WARN] Could not find BotWorker/docs directory")
+		return sections
+	}
+
+	for _, f := range files {
+		path := filepath.Join(docsPath, f.Name)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("[WARN] Failed to read manual file %s: %v", path, err)
+			continue
+		}
+
+		sections = append(sections, ManualSection{
+			Title:   f.Title,
+			Content: string(content),
+		})
+	}
+
+	return sections
+}
+
 func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := utils.GetLangFromRequest(r)
-
-		type ManualSection struct {
-			Title   string `json:"title"`
-			Content string `json:"content"`
-		}
-
-		type ManualInfo struct {
-			Title    string          `json:"title"`
-			Sections []ManualSection `json:"sections"`
-			Version  string          `json:"version"`
-		}
 
 		manual := ManualInfo{
 			Title: utils.T(lang, "manual_title"),
@@ -4070,6 +4128,48 @@ func HandleGetManual(m *bot.Manager) http.HandlerFunc {
 				},
 			},
 			Version: "1.0.0", // 使用硬编码版本号或从配置中获取
+		}
+
+		// 加载 BotWorker/docs 目录下的所有文档
+		botWorkerSections := getBotWorkerManuals()
+		if len(botWorkerSections) > 0 {
+			manual.Sections = append(manual.Sections, botWorkerSections...)
+		} else {
+			// 如果没有找到 MD 文件，则保留原有的硬编码简要说明
+			manual.Sections = append(manual.Sections, []ManualSection{
+				{
+					Title:   utils.T(lang, "manual_section_botworker_core_title"),
+					Content: utils.T(lang, "manual_section_botworker_core_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_adventure_title"),
+					Content: utils.T(lang, "manual_section_botworker_adventure_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_social_title"),
+					Content: utils.T(lang, "manual_section_botworker_social_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_games_title"),
+					Content: utils.T(lang, "manual_section_botworker_games_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_admin_title"),
+					Content: utils.T(lang, "manual_section_botworker_admin_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_chat_title"),
+					Content: utils.T(lang, "manual_section_botworker_chat_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_economy_title"),
+					Content: utils.T(lang, "manual_section_botworker_economy_content"),
+				},
+				{
+					Title:   utils.T(lang, "manual_section_botworker_variables_title"),
+					Content: utils.T(lang, "manual_section_botworker_variables_content"),
+				},
+			}...)
 		}
 
 		utils.SendJSONResponse(w, true, "", manual)

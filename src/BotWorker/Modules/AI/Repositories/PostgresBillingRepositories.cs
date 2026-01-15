@@ -9,6 +9,8 @@ using BotWorker.Modules.AI.Models.Billing;
 using Dapper;
 using Npgsql;
 
+using BotWorker.Infrastructure.Persistence.Repositories;
+
 namespace BotWorker.Modules.AI.Repositories
 {
     public class PostgresWalletRepository : BasePostgresRepository<Wallet>, IWalletRepository

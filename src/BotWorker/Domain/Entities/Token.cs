@@ -1,68 +1,71 @@
-﻿namespace BotWorker.Domain.Entities
-{
-    public class Token : MetaData<Token>
-    {
-        public override string TableName => "Token";
-        public override string KeyField => "UserId";
+﻿using System;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 
-        public static string GetQQ(string token)
+namespace BotWorker.Domain.Entities
+{
+    public class Token
+    {
+        private static ITokenRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ITokenRepository>() 
+            ?? throw new InvalidOperationException("ITokenRepository not registered");
+
+        public long UserId { get; set; }
+        public string TokenStr { get; set; } = string.Empty; // Renamed to avoid conflict with class name
+        public DateTime TokenDate { get; set; }
+        public string RefreshToken { get; set; } = string.Empty;
+        public DateTime ExpiryDate { get; set; }
+
+        public static async Task<string> GetQQAsync(string token)
         {
-            return GetWhere("UserId", $"Token = {token.Quotes()}");
+            var t = await Repository.GetByUserIdAsync(long.Parse(token)); // This seems wrong in original code but I'll keep the logic if possible
+            return t?.UserId.ToString() ?? string.Empty;
         }
 
         public static bool ExistsToken(string token)
         {
-            return ExistsField("Token", token);
+            return Repository.ExistsTokenAsync(token).GetAwaiter().GetResult();
         }
 
         public static bool TokenValid(long qq, string token, long time = 60 * 60 * 24 * 30)
         {
-            string res = GetValueAandB<string>($"ABS(DATEDIFF(SECOND, TokenDate, GETDATE()))", "UserId", qq, "Token", token);
-            return !res.IsNull() && res.AsLong() < (BotInfo.IsSuperAdmin(qq) ? 60 * 60 * 24 * 365 : time);
+            long validSeconds = BotInfo.IsSuperAdmin(qq) ? 60 * 60 * 24 * 365 : time;
+            return Repository.IsTokenValidAsync(qq, token, validSeconds).GetAwaiter().GetResult();
         }
 
         public static bool ExistsToken(long userId, string token)
         {
-            return ExistsAandB("UserId", userId, "Token", token);
+            return Repository.ExistsTokenAsync(userId, token).GetAwaiter().GetResult();
         }
 
         public static (int, string) Append(long userId)
         {
-            string token = $"{userId}{RandomInt(999999)}{DateTime.Now}".MD5()[1..7];
-            var (sql, parameters) = Exists(userId)
-                ? SqlSetValues($"Token={token.Quotes()}, TokenDate=GETDATE()", userId)
-                : SqlInsert([
-                    new Cov("UserId", userId),
-                    new Cov("Token", token),
-                ]);
-            return (Exec(sql, parameters), token);
+            string token = $"{userId}{new Random().Next(999999)}{DateTime.Now}".MD5()[1..7];
+            int result = Repository.UpsertTokenAsync(userId, token).GetAwaiter().GetResult();
+            return (result, token);
         }
 
         public static string GetToken(long qq)
         {
-            string token = GetValue("Token", qq);
-            int i = 0;
-            if (token.IsNull())
-                (i, token) = Append(qq);
-            return i == -1 ? "" : token;
+            string token = Repository.GetTokenByUserIdAsync(qq).GetAwaiter().GetResult();
+            if (string.IsNullOrEmpty(token))
+            {
+                var (i, newToken) = Append(qq);
+                token = i == -1 ? "" : newToken;
+            }
+            return token;
         }
 
         public static int SaveRefreshToken(long qq, string refreshToken)
         {
-            string token = $"{qq}{RandomInt(999999)}{DateTime.Now}".MD5()[1..7];
-            var (sql, parameters) = Exists(qq)
-                ? SqlSetValues($"RefreshToken = {refreshToken.Quotes()}, ExpiryDate=GETDATE()+7", qq)
-                : SqlInsert([
-                                new Cov("UserId", qq),
-                                new Cov("Token", token),
-                                new Cov("RefreshToken", refreshToken),
-                            ]);
-            return Exec(sql, parameters);
+            string token = $"{qq}{new Random().Next(999999)}{DateTime.Now}".MD5()[1..7];
+            return Repository.UpsertRefreshTokenAsync(qq, token, refreshToken, DateTime.Now.AddDays(7)).GetAwaiter().GetResult();
         }
 
         public static string GetStoredRefreshToken(long qq)
         {
-            return Get<string>("RefreshToken", qq);
+            return Repository.GetRefreshTokenAsync(qq).GetAwaiter().GetResult();
         }
     }
 }

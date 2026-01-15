@@ -1,23 +1,30 @@
-﻿
+using System;
+using System.Threading.Tasks;
+using BotWorker.Common;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace BotWorker.Domain.Entities
 {
-    public class KnowledgeHistory : MetaData<KnowledgeHistory>
+    [Table("KnowledgeHistory")]
+    public class KnowledgeHistory
     {
-        public override string TableName => "KnowledgeHistory";
+        private static IKnowledgeHistoryRepository Repo => GlobalConfig.ServiceProvider!.GetRequiredService<IKnowledgeHistoryRepository>();
 
-        public override string KeyField => "Id";
+        [Key]
+        public long Id { get; set; }
+        public string Question { get; set; } = string.Empty;
+        public string TargetQuestion { get; set; } = string.Empty;
+        public long TargetQuestionId { get; set; }
+        public float Similarity { get; set; }
+        public long AnswerId { get; set; }
+        public string Answer { get; set; } = string.Empty;
+        public DateTime InsertDate { get; set; }
 
-        public static int AddKnowledgeHistroy(string question, string targetQuestion, long targetQuestionId, float Similarity, long answerId, string answer)
+        public static int AddKnowledgeHistroy(string question, string targetQuestion, long targetQuestionId, float similarity, long answerId, string answer)
         {
-            var (sql, paras) = SqlInsert([
-                                new Cov("Question", question),
-                                new Cov("TargetQuestion", targetQuestion),
-                                new Cov("TargetQuestionId", targetQuestionId),
-                                new Cov("Similarity", Similarity),
-                                new Cov("AnswerId", answerId),
-                                new Cov("Answer", answer),
-                            ]);
-            return Exec(sql, paras);
+            return Repo.AddAsync(question, targetQuestion, targetQuestionId, similarity, answerId, answer).GetAwaiter().GetResult();
         }
     }
 }

@@ -165,9 +165,9 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("分", () => dt.ToString("mm"));
             Ctx.Register("秒", () => dt.ToString("ss"));
             Ctx.Register("星期", () => "日一二三四五六"[(int)dt.DayOfWeek].ToString());
-            Ctx.Register("农历年", () => yinli.GanzhiYearName);
-            Ctx.Register("农历月", () => yinli.MonthName);
-            Ctx.Register("农历日", () => yinli.DayName);
+            Ctx.Register("农历年", () => yinli.GanzhiYearName ?? "");
+            Ctx.Register("农历月", () => yinli.MonthName ?? "");
+            Ctx.Register("农历日", () => yinli.DayName ?? "");
             Ctx.Register("农历", () => $"{yinli.GanzhiYearName}年{yinli.MonthName}月{yinli.DayName}");
 
             Ctx.Register("SystemPrompt", () => GroupInfo.GetSystemPromptAsync(GroupId));
@@ -352,11 +352,11 @@ public partial class BotMessage : MetaData<BotMessage>
             Ctx.Register("VIP", () => GetVipResAsync());
 
             // 签到相关
-            Ctx.Register("今日签到人数", async () => (await GroupSignIn.SignCountAsync(GroupId)).AsString());
-            Ctx.Register("昨日签到人数", async () => (await GroupSignIn.SignCountYAsync(GroupId)).AsString());
+            Ctx.Register("今日签到人数", async () => (await SignInRepository.GetTodaySignCountAsync(GroupId)).AsString());
+            Ctx.Register("昨日签到人数", async () => (await SignInRepository.GetYesterdaySignCountAsync(GroupId)).AsString());
             Ctx.Register("连续签到天数", async () => (await GroupMember.GetSignTimesAsync(GroupId, UserId)).ToString());
             Ctx.Register("连续签到等级", () => GroupMember.GetValueAsync("SignLevel", GroupId, UserId));
-            Ctx.Register("本月签到次数", async () => (await GroupSignIn.SignCountThisMonthAsync(GroupId, UserId)).AsString());
+            Ctx.Register("本月签到次数", async () => (await SignInRepository.GetUserMonthSignCountAsync(GroupId, UserId)).AsString());
             Ctx.Register("签到榜", () => GroupMember.GetSignListAsync(GroupId, 3));
             Ctx.Register("自动签到开关", () => Group.IsAutoSignin ? "已开启" : "已关闭");
 

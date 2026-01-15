@@ -37,11 +37,11 @@ namespace BotWorker.Modules.AI.Services
         private readonly IMcpService _mcpService;
         private readonly IRagService _ragService;
         private readonly IToolAuditService _auditService;
-        private readonly IImageGenerationService _imageService;
         private readonly IBillingService _billingService;
         private readonly ILLMRepository _llmRepository;
         private readonly ILLMCallLogRepository _callLogRepository;
         private readonly LLMApp _llmApp;
+        private readonly IModelProviderFactory _providerFactory;
         private readonly ILogger<AIService> _logger;
         private readonly IServiceProvider _serviceProvider;
         private static readonly Random _random = new();
@@ -50,22 +50,22 @@ namespace BotWorker.Modules.AI.Services
             IMcpService mcpService, 
             IRagService ragService,
             IToolAuditService auditService,
-            IImageGenerationService imageService,
             IBillingService billingService,
             ILLMRepository llmRepository,
             ILLMCallLogRepository callLogRepository,
             LLMApp llmApp, 
+            IModelProviderFactory providerFactory,
             ILogger<AIService> logger,
             IServiceProvider serviceProvider)
         {
             _mcpService = mcpService;
             _ragService = ragService;
             _auditService = auditService;
-            _imageService = imageService;
             _billingService = billingService;
             _llmRepository = llmRepository;
             _callLogRepository = callLogRepository;
             _llmApp = llmApp;
+            _providerFactory = providerFactory;
             _logger = logger;
             _serviceProvider = serviceProvider;
         }
@@ -76,9 +76,9 @@ namespace BotWorker.Modules.AI.Services
             return await ChatWithContextAsync(prompt, null!, model);
         }
 
-        private async Task<(IModelProvider? Provider, string? ModelId, long? ProviderId)> GetEffectiveProviderAsync(string? model, IPluginContext? context, LLMModelType type = LLMModelType.Chat)
+        private async Task<(IModelProvider? Provider, string? ModelId, long? ProviderId, string? BaseUrl, string? ApiKey)> GetEffectiveProviderAsync(string? model, IPluginContext? context, LLMModelType type = LLMModelType.Chat)
         {
-            var (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", type);
+            var (provider, modelId, baseUrl, apiKey) = _llmApp._manager.SelectByStrategy(model ?? "random", type);
 
             long currentUserId = 0;
             if (context != null && !string.IsNullOrEmpty(context.UserId))
@@ -92,12 +92,14 @@ namespace BotWorker.Modules.AI.Services
                 var providerName = provider?.ProviderName ?? model ?? "Doubao";
                 var userProvider = await _llmRepository.GetUserProviderAsync(currentUserId, providerName);
 
-                if (userProvider != null && !string.IsNullOrEmpty(userProvider.ApiKey))
+                if (userProvider != null)
                 {
-                    var decryptedKey = userProvider.GetDecryptedApiKey();
-                    var effectiveProvider = new GenericOpenAIProvider(providerName, decryptedKey, userProvider.Endpoint, modelId ?? providerName);
-                    _logger.LogInformation("[AIService] Using BYOK for user {UserId}, provider {ProviderName}", currentUserId, providerName);
-                    return (effectiveProvider, modelId, userProvider.Id);
+                    var effectiveProvider = _providerFactory.CreateProvider(userProvider, modelId ?? providerName);
+                    if (effectiveProvider != null)
+                    {
+                        _logger.LogInformation("[AIService] Using BYOK for user {UserId}, provider {ProviderName}", currentUserId, providerName);
+                        return (effectiveProvider, modelId, userProvider.Id, null, null);
+                    }
                 }
             }
 
@@ -110,14 +112,16 @@ namespace BotWorker.Modules.AI.Services
                 if (sharedProviders.Count > 0)
                 {
                     var config = sharedProviders[_random.Next(sharedProviders.Count)];
-                    var decryptedKey = config.GetDecryptedApiKey();
-                    var effectiveProvider = new GenericOpenAIProvider(providerName, decryptedKey, config.Endpoint, modelId ?? providerName);
-                    _logger.LogInformation("[AIService] Using Shared Key from provider {ProviderId} for user {UserId}", config.Id, currentUserId);
-                    return (effectiveProvider, modelId, config.Id);
+                    var effectiveProvider = _providerFactory.CreateProvider(config, modelId ?? providerName);
+                    if (effectiveProvider != null)
+                    {
+                        _logger.LogInformation("[AIService] Using Shared Key from provider {ProviderId} for user {UserId}", config.Id, currentUserId);
+                        return (effectiveProvider, modelId, config.Id, null, null);
+                    }
                 }
             }
 
-            return (provider, modelId, null);
+            return (provider, modelId, null, baseUrl, apiKey);
         }
 
         public async Task<string> ChatWithContextAsync(string prompt, IPluginContext? context, string? model = null)
@@ -168,7 +172,7 @@ namespace BotWorker.Modules.AI.Services
                 _logger.LogInformation("[AIService] Billing confirmed. Using ID: {BillingId}", billingId);
 
                 // 1. 获取有效 Provider (支持 BYOK 和共享 Key)
-                var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
+                var (provider, modelId, providerId, baseUrl, apiKeyOverride) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
 
                 if (provider == null)
                 {
@@ -197,7 +201,7 @@ namespace BotWorker.Modules.AI.Services
                 plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
                 plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
                 plugins.Add(KernelPluginFactory.CreateFromObject(new SystemAdminPlugin(), "SystemAdmin"));
-                plugins.Add(KernelPluginFactory.CreateFromObject(new ImageGenerationPlugin(_imageService), "ImageGeneration"));
+                plugins.Add(KernelPluginFactory.CreateFromObject(new ImageGenerationPlugin(_serviceProvider.GetRequiredService<IImageGenerationService>()), "ImageGeneration"));
 
                 // 1.3 注入 MCP 插件 (从 IMcpService 获取工具并转换为插件)
                 var mcpPlugins = await GetMcpPluginsAsync(context);
@@ -226,19 +230,35 @@ namespace BotWorker.Modules.AI.Services
                     }
                 }
                 
-                history.AddSystemMessage("你是一个全能的机器人助手。你可以调用本地技能、查询知识库或使用外部工具来回答问题。");
+                history.AddSystemMessage("你是一个全能的机器人助手。你可以调用本地技能、查询知识库或使用外部工具来回答问题.");
                 history.AddUserMessage(prompt);
 
                 // 3. 执行
                 var options = new ModelExecutionOptions
-                {                    ModelId = modelId, // 使用映射到的具体模型 ID
+                {
+                    ModelId = modelId, // 使用映射到的具体模型 ID
+                    ChatModelId = modelId,
+                    ChatBaseUrl = baseUrl,
+                    ChatApiKey = apiKeyOverride,
                     Plugins = plugins,
                     Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null,
                     CancellationToken = default
                 };
 
+                // 补充 Embedding 模型 ID (如果可用)
+                if (provider != null)
+                {
+                    var (_, embId, embBaseUrl, embApiKey) = _llmApp._manager.GetProviderAndModel($"Random:{provider.ProviderName}", LLMModelType.Embedding);
+                    if (!string.IsNullOrEmpty(embId))
+                    {
+                        options.EmbeddingModelId = embId;
+                        options.EmbeddingBaseUrl = embBaseUrl;
+                        options.EmbeddingApiKey = embApiKey;
+                    }
+                }
+
                 var startTime = DateTime.UtcNow;
-                var result = await provider.ExecuteAsync(history, options);
+                var result = await provider!.ExecuteAsync(history, options);
                 var duration = (int)(DateTime.UtcNow - startTime).TotalMilliseconds;
 
                 // 4. 记录消费与使用情况
@@ -291,7 +311,7 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                var (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", LLMModelType.Chat);
+                var (provider, modelId, _, baseUrl, apiKeyOverride) = await GetEffectiveProviderAsync(model, null, LLMModelType.Chat);
                 if (provider == null) return "没有可用的 AI 提供商。";
 
                 var history = new ChatHistory();
@@ -300,6 +320,9 @@ namespace BotWorker.Modules.AI.Services
                 var options = new ModelExecutionOptions
                 {
                     ModelId = modelId,
+                    ChatModelId = modelId,
+                    ChatBaseUrl = baseUrl,
+                    ChatApiKey = apiKeyOverride,
                     CancellationToken = default
                 };
 
@@ -316,16 +339,38 @@ namespace BotWorker.Modules.AI.Services
         {
             try
             {
-                var (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", LLMModelType.Embedding);
-                if (provider == null)
+                var (provider, modelId, _, baseUrl, apiKeyOverride) = await GetEffectiveProviderAsync(model, null, LLMModelType.Embedding);
+                
+                // 如果没找到专用的 Embedding 模型，且没有指定具体模型名称，尝试查找默认 Chat 模型
+                if (provider == null || string.IsNullOrEmpty(modelId))
                 {
-                    // 如果没找到专用的 Embedding 模型，尝试用默认 Chat 模型（SK 通常支持）
-                    (provider, modelId) = _llmApp._manager.SelectByStrategy(model ?? "random", LLMModelType.Chat);
+                    _logger.LogWarning("[AIService] No specific embedding model found, checking fallback...");
+                    (provider, modelId, _, baseUrl, apiKeyOverride) = await GetEffectiveProviderAsync(model, null, LLMModelType.Chat);
+                    
+                    // 对于豆包等提供商，Chat 模型 ID 不能用于 Embedding
+                    if (provider != null && provider.ProviderName.Contains("Doubao", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogError("[AIService] Doubao provider requires a specific endpoint for embeddings. Chat endpoint ID cannot be used.");
+                        return Array.Empty<float>();
+                    }
                 }
 
-                if (provider == null) return Array.Empty<float>();
+                if (provider == null || string.IsNullOrEmpty(modelId)) 
+                {
+                    _logger.LogError("[AIService] No suitable provider or model ID found for embedding.");
+                    return Array.Empty<float>();
+                }
 
-                return await provider.GenerateEmbeddingAsync(text, new ModelExecutionOptions { ModelId = modelId });
+                var options = new ModelExecutionOptions
+                {
+                    ModelId = modelId,
+                    EmbeddingModelId = modelId,
+                    EmbeddingBaseUrl = baseUrl,
+                    EmbeddingApiKey = apiKeyOverride
+                };
+
+                _logger.LogInformation("[AIService] Generating embedding with model {ModelId} on {Url}", modelId, baseUrl ?? "default");
+                return await provider.GenerateEmbeddingAsync(text, options);
             }
             catch (Exception ex)
             {
@@ -370,12 +415,15 @@ namespace BotWorker.Modules.AI.Services
                 // 如果指定了模型，且不是默认的生图模型，则走原有逻辑
                 if (!string.IsNullOrEmpty(model) && model != "Doubao")
                 {
-                    var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Image);
+                    var (provider, modelId, providerId, baseUrl, apiKeyOverride) = await GetEffectiveProviderAsync(model, context, LLMModelType.Image);
                     if (provider != null)
                     {
                         var options = new ModelExecutionOptions
                         {
                             ModelId = modelId,
+                            ImageModelId = modelId,
+                            ImageBaseUrl = baseUrl,
+                            ImageApiKey = apiKeyOverride,
                             CancellationToken = default
                         };
                         _logger.LogInformation("[AIService] Generating image with provider {ProviderName}, model {ModelId}, prompt: {Prompt}", 
@@ -394,7 +442,8 @@ namespace BotWorker.Modules.AI.Services
                 else
                 {
                     // 默认使用新封装 of ImageGenerationService (带 Prompt 优化)
-                    var imageResult = await _imageService.GenerateImageAsync(prompt, true);
+                    var imageService = _serviceProvider.GetRequiredService<IImageGenerationService>();
+                    var imageResult = await imageService.GenerateImageAsync(prompt, true);
                     if (string.IsNullOrEmpty(imageResult))
                     {
                         return "❌ 图像生成失败。";
@@ -446,7 +495,7 @@ namespace BotWorker.Modules.AI.Services
                 }
             }
 
-            var (provider, modelId, providerId) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
+            var (provider, modelId, providerId, baseUrl, apiKeyOverride) = await GetEffectiveProviderAsync(model, context, LLMModelType.Chat);
 
             if (provider == null)
             {
@@ -472,7 +521,7 @@ namespace BotWorker.Modules.AI.Services
             plugins.Add(KernelPluginFactory.CreateFromObject(new RagPlugin(_ragService, groupId), "RAG"));
             plugins.Add(KernelPluginFactory.CreateFromObject(new SystemToolPlugin(), "SystemTools"));
             plugins.Add(KernelPluginFactory.CreateFromObject(new SystemAdminPlugin(), "SystemAdmin"));
-            plugins.Add(KernelPluginFactory.CreateFromObject(new ImageGenerationPlugin(_imageService), "ImageGeneration"));
+            plugins.Add(KernelPluginFactory.CreateFromObject(new ImageGenerationPlugin(_serviceProvider.GetRequiredService<IImageGenerationService>()), "ImageGeneration"));
             var mcpPlugins = await GetMcpPluginsAsync(context);
             if (mcpPlugins != null) plugins.AddRange(mcpPlugins);
 
@@ -496,13 +545,29 @@ namespace BotWorker.Modules.AI.Services
             var options = new ModelExecutionOptions
             {
                 ModelId = modelId,
+                ChatModelId = modelId,
+                ChatBaseUrl = baseUrl,
+                ChatApiKey = apiKeyOverride,
                 Plugins = plugins,
-                Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null
+                Filters = context != null ? new[] { new DigitalEmployeeToolFilter(_auditService, context.UserId ?? "system", "staff") } : null,
+                CancellationToken = default
             };
+
+            // 补充 Embedding 模型 ID (如果可用)
+            if (provider != null)
+            {
+                var (_, embId, embBaseUrl, embApiKey) = _llmApp._manager.GetProviderAndModel($"Random:{provider.ProviderName}", LLMModelType.Embedding);
+                if (!string.IsNullOrEmpty(embId))
+                {
+                    options.EmbeddingModelId = embId;
+                    options.EmbeddingBaseUrl = embBaseUrl;
+                    options.EmbeddingApiKey = embApiKey;
+                }
+            }
 
             var fullContent = new System.Text.StringBuilder();
             var startTime = DateTime.UtcNow;
-            await foreach (var chunk in provider.StreamExecuteAsync(history, options))
+            await foreach (var chunk in provider!.StreamExecuteAsync(history, options))
             {
                 fullContent.Append(chunk);
                 yield return chunk;

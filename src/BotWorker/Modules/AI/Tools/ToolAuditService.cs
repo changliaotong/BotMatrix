@@ -1,17 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Modules.AI.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.AI.Tools
 {
     /// <summary>
     /// 工具调用审计日志
     /// </summary>
-    public class ToolAuditLog : MetaDataGuid<ToolAuditLog>
+    public class ToolAuditLog
     {
-        public override string TableName => "ToolAuditLogs";
-        public override string KeyField => "Id";
-
+        public long Id { get; set; }
+        public string Guid { get; set; } = string.Empty;
         public string TaskId { get; set; } = string.Empty;
         public string StaffId { get; set; } = string.Empty;
         public string ToolName { get; set; } = string.Empty;
@@ -37,21 +38,35 @@ namespace BotWorker.Modules.AI.Tools
 
     public class ToolAuditService : IToolAuditService
     {
+        private readonly IServiceProvider _serviceProvider;
+
+        public ToolAuditService(IServiceProvider serviceProvider)
+        {
+            _serviceProvider = serviceProvider;
+        }
+
+        private IToolAuditRepository GetRepository()
+        {
+            return _serviceProvider.GetRequiredService<IToolAuditRepository>();
+        }
+
         public async Task<string> LogCallAsync(string taskId, string staffId, string toolName, string input, ToolRiskLevel risk)
         {
             try
             {
                 var log = new ToolAuditLog
                 {
+                    Guid = Guid.NewGuid().ToString(),
                     TaskId = taskId,
                     StaffId = staffId,
                     ToolName = toolName,
                     InputArgs = input,
                     RiskLevel = risk,
-                    Status = "InProgress"
+                    Status = "InProgress",
+                    CreateTime = DateTime.Now
                 };
-                await log.InsertAsync();
-                return log.Guid.ToString();
+                await GetRepository().AddAsync(log);
+                return log.Guid;
             }
             catch (Exception ex)
             {
@@ -64,12 +79,13 @@ namespace BotWorker.Modules.AI.Tools
         {
             try
             {
-                var log = await ToolAuditLog.GetByGuidAsync(logId);
+                var repo = GetRepository();
+                var log = await repo.GetByGuidAsync(logId);
                 if (log != null)
                 {
                     log.OutputResult = output;
                     log.Status = status;
-                    await log.UpdateAsync();
+                    await repo.UpdateAsync(log);
                 }
             }
             catch (Exception ex)
@@ -80,43 +96,45 @@ namespace BotWorker.Modules.AI.Tools
 
         public async Task MarkAsPendingApprovalAsync(string logId)
         {
-            var log = await ToolAuditLog.GetByGuidAsync(logId);
+            var repo = GetRepository();
+            var log = await repo.GetByGuidAsync(logId);
             if (log != null)
             {
                 log.Status = "PendingApproval";
-                await log.UpdateAsync();
+                await repo.UpdateAsync(log);
             }
         }
 
         public async Task ApproveAsync(string logId, string approver)
         {
-            var log = await ToolAuditLog.GetByGuidAsync(logId);
+            var repo = GetRepository();
+            var log = await repo.GetByGuidAsync(logId);
             if (log != null)
             {
                 log.Status = "Approved";
                 log.ApprovedBy = approver;
                 log.ApprovedAt = DateTime.Now;
-                await log.UpdateAsync();
+                await repo.UpdateAsync(log);
             }
         }
 
         public async Task RejectAsync(string logId, string approver, string reason)
         {
-            var log = await ToolAuditLog.GetByGuidAsync(logId);
+            var repo = GetRepository();
+            var log = await repo.GetByGuidAsync(logId);
             if (log != null)
             {
                 log.Status = "Rejected";
                 log.ApprovedBy = approver;
                 log.RejectionReason = reason;
                 log.ApprovedAt = DateTime.Now;
-                await log.UpdateAsync();
+                await repo.UpdateAsync(log);
             }
         }
 
         public async Task<IEnumerable<ToolAuditLog>> GetPendingApprovalsAsync()
         {
-            // 假设有基于状态的查询方法，或者直接使用通用查询
-            return await ToolAuditLog.GetListAsync("WHERE Status = 'PendingApproval'");
+            return await GetRepository().GetPendingApprovalsAsync();
         }
     }
 }

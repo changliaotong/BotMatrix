@@ -16,22 +16,22 @@ namespace BotWorker.Infrastructure.Persistence.ORM
 
         public static bool UseCache { get; set; } = false;
 
-        public static bool IsPostgreSql => GlobalConfig.DbType == DatabaseType.PostgreSql;
+        public static bool IsPostgreSql => true;
 
-        public static string SqlTop(long n) => IsPostgreSql ? "" : $"TOP {n} ";
-        public static string SqlLimit(long n) => IsPostgreSql ? $" LIMIT {n}" : "";
+        public static string SqlTop(long n) => "";
+        public static string SqlLimit(long n) => $" LIMIT {n}";
 
-        public static string SqlIsNull(string field, string def) => IsPostgreSql ? $"COALESCE({field}, {def})" : $"ISNULL({field}, {def})";
+        public static string SqlIsNull(string field, string def) => $"COALESCE({field}, {def})";
 
-        public static string SqlRandomOrder => IsPostgreSql ? "RANDOM()" : "NEWID()";
+        public static string SqlRandomOrder => "RANDOM()";
 
-        public static string SqlRandomId => IsPostgreSql ? "gen_random_uuid()" : "NEWID()";
+        public static string SqlRandomId => "gen_random_uuid()";
 
-        public static string SqlDateTime => IsPostgreSql ? "CURRENT_TIMESTAMP" : "GETDATE()";
-        public static string SqlLen(string field) => IsPostgreSql ? $"LENGTH({field})" : $"LEN({field})";
+        public static string SqlDateTime => "CURRENT_TIMESTAMP";
+        public static string SqlLen(string field) => $"LENGTH({field})";
 
-        public static string SqlLockHint => IsPostgreSql ? "" : " WITH (UPDLOCK, ROWLOCK) ";
-        public static string SqlForUpdate => IsPostgreSql ? " FOR UPDATE" : "";
+        public static string SqlLockHint => "";
+        public static string SqlForUpdate => " FOR UPDATE";
 
         public static string SqlQuote(string identifier)
         {
@@ -39,7 +39,7 @@ namespace BotWorker.Infrastructure.Persistence.ORM
             if (identifier.Contains('.') || identifier.Contains('"') || identifier.Contains('[') || identifier.Contains(' '))
                 return identifier; // 已经引用过或者是复杂表达式，跳过
 
-            return IsPostgreSql ? $"\"{identifier.ToLower()}\"" : $"[{identifier}]";
+            return $"\"{identifier.ToLower()}\"";
         }
 
         /// <summary>

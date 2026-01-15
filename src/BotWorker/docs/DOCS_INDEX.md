@@ -1,6 +1,6 @@
-# BotWorker 目录文档索引
+# EarlyMeow Worker 目录文档索引
 
-为了更好地管理 BotWorker 项目的文档，我们将所有开发、架构和规划文档整理到了 `src/BotWorker/docs` 目录下。
+为了更好地管理 EarlyMeow Worker 项目的文档，我们将所有开发、架构和规划文档整理到了 `src/BotWorker/docs` 目录下。
 
 ## 📁 目录结构
 
@@ -14,7 +14,7 @@
   - [扩展功能手册 (插件)](./MANUAL_PLUGINS.md)
 
 ### 💻 开发者文档 (Developer Docs)
-- [**开发者指南**](./DEVELOPER_GUIDE.md) - 深入了解 BotWorker 架构与插件开发。
+- [**开发者指南**](./DEVELOPER_GUIDE.md) - 深入了解 EarlyMeow Worker 架构与插件开发。
 
 ### 🏛️ [架构设计 (Architecture)](./Arch/)
 - [DigitalStaff 架构设计](./Arch/DigitalStaff_Architecture.md) - 数字员工系统的核心架构。
@@ -25,7 +25,7 @@
 - [用户 AI 计划](./AI/USER_AI_PLAN.md) - 面向用户的 AI 功能规划。
 
 ### 📅 [计划与状态 (Plan & Status)](./Plan/)
-- [重构计划文档](./Plan/REFACTOR_PLAN.md) - BotWorker C# 重构的进度与路线图。
+- [重构计划文档](./Plan/REFACTOR_PLAN.md) - EarlyMeow Worker C# 重构的进度与路线图。
 - [DigitalStaff 开发状态](./Plan/DigitalStaff_Dev_Status.md) - 数字员工模块的当前开发进度。
 - [Robot 开发状态](./Plan/Robot_Dev_Status.md) - 机器人系统模块的当前开发进度。
 
@@ -37,5 +37,5 @@
 ---
 
 ## 📄 根目录说明
-- [README.md](../README.md) - BotWorker 项目总览与快速开始。
+- [README.md](../README.md) - EarlyMeow Worker 项目总览与快速开始。
 - [README_DEVELOPMENT.md](../README_DEVELOPMENT.md) - 开发相关的关键设计决策与技术细节。

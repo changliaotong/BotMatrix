@@ -22,7 +22,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 var botMsg = botMsgEvent.BotMessage;
                 Serilog.Log.Information("[AiMiddleware] Processing message: {MessageId}, Content: {Content}", botMsg.MsgId, botMsg.Message);
 
-                // 1. 尝试解析智能体呼?
+                // 1. 尝试解析智能体呼叫
                 await botMsg.TryParseAgentCall();
 
                 if (botMsg.IsCallAgent)
@@ -31,7 +31,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                     if (botMsg.CmdPara.Trim().IsNull())
                     {
                         // 仅切换智能体，不生成响应
-                        botMsg.Answer = UserInfo.SetValue("AgentId", botMsg.CurrentAgent.Id, botMsg.UserId) == -1
+                        botMsg.Answer = UserInfo.SetValue("AgentId", botMsg.CurrentAgent!.Id, botMsg.UserId) == -1
                             ? $"变身{RetryMsg}"
                             : $"【{botMsg.CurrentAgent.Name}】{botMsg.CurrentAgent.Info}";
                     }

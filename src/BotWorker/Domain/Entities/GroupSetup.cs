@@ -1,9 +1,12 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-using static BotWorker.Infrastructure.Persistence.ORM.MetaData;
+using System;
+using System.Threading.Tasks;
+using BotWorker.Common.Extensions;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Infrastructure.Persistence;
 
 namespace BotWorker.Domain.Entities
 {
-    public partial class GroupInfo : MetaDataGuid<GroupInfo>
+    public partial class GroupInfo
     {
         public static async Task<string> SetPowerOnOffAsync(long botUin, long groupId, long userId, string cmdName)
         {
@@ -34,7 +37,8 @@ namespace BotWorker.Domain.Entities
                     return powerOnMsg;
                 else if (await IsPowerOffAsync(groupId, wrapper.Transaction) && cmdName == "关机")
                     return powerOffMsg;
-                return await SetValueAsync("IsPowerOn", isPowerOn, groupId, null, wrapper.Transaction) == -1
+                
+                return await Repo.UpdateIsPowerOnAsync(groupId, isPowerOn, wrapper.Transaction) == -1
                     ? RetryMsg
                     : cmdName == "开机" ? powerOnMsg : powerOffMsg;
             });
@@ -60,7 +64,7 @@ namespace BotWorker.Domain.Entities
                 _ => 3
             };
 
-            return await SetValueAsync("AdminRight", adminRight, groupId) == -1
+            return await Repo.UpdateAdminRightAsync(groupId, adminRight) == -1
                 ? RetryMsg
                 : $"✅ 设置成功！\n当前状态：管理权限 {cmdPara}";
         }
@@ -86,7 +90,7 @@ namespace BotWorker.Domain.Entities
                 _ => 1
             };
 
-            return await SetValueAsync("UseRight", useRight, groupId) == -1
+            return await Repo.UpdateUseRightAsync(groupId, useRight) == -1
                 ? RetryMsg
                 : $"✅ 设置成功！\n当前状态：使用权限 {cmdPara}";
         }
@@ -110,7 +114,7 @@ namespace BotWorker.Domain.Entities
                 "主人" => 4,
                 _ => 1
             };
-            return await SetValueAsync("TeachRight", teachRight, groupId) == -1
+            return await Repo.UpdateTeachRightAsync(groupId, teachRight) == -1
                     ? RetryMsg
                     : $"✅ 设置成功！\n当前状态：教学权限 {cmdPara}";
         }
@@ -131,7 +135,7 @@ namespace BotWorker.Domain.Entities
             if (!blockMin.ToString().IsMatch(@"^\d?0+$"))
                 return "必须为10或100的整数倍";
 
-            return await SetValueAsync("BlockMin", blockMin, groupId) == -1
+            return await Repo.UpdateBlockMinAsync(groupId, blockMin) == -1
                ? RetryMsg
                : $"✅ 设置成功！\n本群最低积分：{blockMin}\n最低积分将用于：猜拳 猜数字 猜大小等游戏";
         }
@@ -168,7 +172,7 @@ namespace BotWorker.Domain.Entities
                 if (regex_request_join == "")
                     return "密码不能为空！";
             }
-            return await UpdateAsync($"IsAcceptNewMember={is_accept}, RejectMessage='{reject_message.Quotes()}', RegexRequestJoin='{regex_request_join.Quotes()}'", groupId) == -1
+            return await Repo.UpdateJoinGroupSettingsAsync(groupId, is_accept, reject_message.Quotes(), regex_request_join.Quotes()) == -1
                 ? RetryMsg
                 : "✅ 设置成功！当前状态：加群 {加群}";
         }
@@ -184,7 +188,7 @@ namespace BotWorker.Domain.Entities
             if (!cmdPara.In("提示", "不提示"))
                 return "参数错误！可选参数：提示/不提示";
 
-            return await SetValueAsync("IsChangeHint", cmdPara == "提示", groupId) == -1
+            return await Repo.UpdateIsChangeHintAsync(groupId, cmdPara == "提示") == -1
                 ? RetryMsg
                 : $"✅ 设置成功！\n当前状态：改名 {(cmdPara == "提示" ? cmdPara : "不提示")}";
         }
@@ -196,17 +200,17 @@ namespace BotWorker.Domain.Entities
         {
             //设置群欢迎语
             if (cmdPara == "")
-                return $"📌 设置欢迎语\n当前状态：{GetWelcomeRes(groupId)}\n欢迎语内容：\n{await GetValueAsync("WelcomeMessage", groupId)}";
+                return $"📌 设置欢迎语\n当前状态：{GetWelcomeRes(groupId)}\n欢迎语内容：\n{await Repo.GetValueAsync<string>("WelcomeMessage", groupId)}";
 
             if (cmdPara.In("发送", "不发送"))
             {
-                int is_send = cmdPara == "发送" ? 1 : 0;
-                if (await SetValueAsync("IsWelcomeHint", is_send, groupId) == -1)
+                bool is_send = cmdPara == "发送";
+                if (await Repo.UpdateIsWelcomeHintAsync(groupId, is_send) == -1)
                     return RetryMsg;
                 return $"✅ 设置成功\n当前状态：欢迎语 {cmdPara}";
             }
 
-            return await SetValueAsync("WelcomeMessage", cmdPara, groupId) == -1
+            return await Repo.UpdateWelcomeMessageAsync(groupId, cmdPara) == -1
                 ? RetryMsg
                 : "✅ 设置成功，测试请发 欢迎语";
         }
@@ -219,10 +223,10 @@ namespace BotWorker.Domain.Entities
             //设置系统提示词
             if (cmdPara == "")
             {
-                return GroupInfo.GetSystemPromptStatus(groupId);
+                return await Repo.GetSystemPromptStatusAsync(groupId);
             }
 
-            return await SetValueAsync("SystemPrompt", cmdPara, groupId) == -1
+            return await Repo.UpdateSystemPromptAsync(groupId, cmdPara) == -1
                 ? RetryMsg
                 : "✅ 设置成功";
         }
@@ -245,7 +249,7 @@ namespace BotWorker.Domain.Entities
                 _ => 0
             };
             modeReply = isOpen ? modeReply : 0;
-            int i = await SetValueAsync("ReplyMode", modeReply, groupId);
+            int i = await Repo.UpdateReplyModeAsync(groupId, modeReply);
             return i == -1
                 ? RetryMsg
                 : $"✅ {cmdPara}模式{cmdName}成功";
@@ -261,19 +265,19 @@ namespace BotWorker.Domain.Entities
             if (cmdName == "关闭" && cmdPara == "所有功能") cmdPara = "";
             if (cmdPara == "成语接龙") cmdPara = "接龙";
 
-            if (GroupInfo.GetBool("IsVip", groupId) || cmdName == "全局关闭")
+            if (GroupInfo.IsVip(groupId) || cmdName == "全局关闭")
             {
-                return await GroupInfo.SetIsOpenAsync(isOpen, groupId) == -1 ? RetryMsg : $"✅ {cmdName}成功！\n{GroupInfo.GetVipRes(groupId)}";
+                return await GroupInfo.SetIsOpen(isOpen, groupId) == -1 ? RetryMsg : $"✅ {cmdName}成功！\n{await Repo.GetVipResAsync(groupId)}";
             }
 
             if (cmdPara.In("开启", "关闭")) return "此功能不允许关闭";
 
             string res = "";
-            string cmdText = await QueryScalarAsync<string>($"SELECT TOP 1 CmdText FROM {BotCmd.FullName} WHERE CmdName = {cmdPara.Quotes()}") ?? "";
+            string cmdText = await BotCmd.GetCmdTextAsync(cmdPara);
             if (cmdText != "" | cmdPara == "所有功能")
             {
                 cmdText = cmdText.Replace("|", " ");
-                string closeRegex = await GetValueAsync("CloseRegex", groupId);
+                string closeRegex = await Repo.GetValueAsync<string>("CloseRegex", groupId) ?? "";
                 bool isClose = closeRegex.Contains(cmdText);
                 if (isOpen && !isClose || !isOpen && isClose)
                     res = cmdPara + "功能已" + cmdName;
@@ -291,7 +295,7 @@ namespace BotWorker.Domain.Entities
                     while (closeRegex.Contains("  ", StringComparison.CurrentCulture))
                         closeRegex = closeRegex.Replace("  ", " ");
 
-                    int i = await SetValueAsync("CloseRegex", closeRegex.Trim(), groupId);
+                    int i = await Repo.UpdateCloseRegexAsync(groupId, closeRegex.Trim());
                     if (i == -1)
                         return RetryMsg;
 

@@ -5,8 +5,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using BotWorker.Modules.AI.Providers.Configs;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.TextToImage;
+using BotWorker.Modules.AI.Plugins;
 using BotWorker.Modules.AI.Interfaces;
+using BotWorker.Modules.AI.Providers.Configs;
 
 namespace BotWorker.Modules.AI.Services
 {
@@ -14,16 +17,19 @@ namespace BotWorker.Modules.AI.Services
     {
         private readonly ILogger<ImageGenerationService> _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IAgentExecutor _agentExecutor;
+        private readonly ModelProviderManager _modelProviderManager;
 
         public ImageGenerationService(
             ILogger<ImageGenerationService> logger,
             IServiceProvider serviceProvider,
-            IHttpClientFactory httpClientFactory)
+            IAgentExecutor agentExecutor,
+            ModelProviderManager modelProviderManager)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
-            _httpClientFactory = httpClientFactory;
+            _agentExecutor = agentExecutor;
+            _modelProviderManager = modelProviderManager;
         }
 
         public async Task<string> GenerateImageAsync(string prompt, bool refinePrompt = false)
@@ -37,51 +43,16 @@ namespace BotWorker.Modules.AI.Services
                     _logger.LogInformation("[ImageGenerationService] Refined prompt: {RefinedPrompt}", finalPrompt);
                 }
 
-                var apiUrl = DoubaoTxt2Img.Url;
-                var requestData = new
+                // 从数据库获取生图模型
+                var (provider, modelId, _, _) = _modelProviderManager.GetProviderAndModel(null, LLMModelType.Image);
+                if (provider == null)
                 {
-                    req_key = "high_aes_general_v21_L",
-                    prompt = finalPrompt,
-                    model_version = "general_v2.1_L",
-                    req_schedule_conf = "general_v20_9B_pe",
-                    seed = -1,
-                    scale = 3.5,
-                    ddim_steps = 25,
-                    width = 512,
-                    height = 512,
-                    use_pre_llm = true,
-                    use_sr = true,
-                    return_url = true,
-                    logo_info = new
-                    {
-                        add_logo = false,
-                        position = 0,
-                        language = 0,
-                        opacity = 0.3,
-                        logo_text_content = ""
-                    }
-                };
-
-                var jsonRequest = JsonSerializer.Serialize(requestData);
-                using var httpClient = _httpClientFactory.CreateClient();
-                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {DoubaoTxt2Img.Secret}");
-
-                var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
-                var response = await httpClient.PostAsync(apiUrl, content);
-                var responseContent = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseData = JsonSerializer.Deserialize<ResponseData>(responseContent);
-                    if (responseData?.data?.image_urls != null && responseData.data.image_urls.Count > 0)
-                    {
-                        return responseData.data.image_urls[0];
-                    }
+                    _logger.LogError("[ImageGenerationService] No image generation provider found in database.");
+                    return string.Empty;
                 }
-                else
-                {
-                    _logger.LogError("[ImageGenerationService] API call failed: {StatusCode}, {Content}", response.StatusCode, responseContent);
-                }
+
+                // 直接调用 provider 的 GenerateImageAsync，它内部已经实现了 SK 逻辑
+                return await provider.GenerateImageAsync(finalPrompt, new ModelExecutionOptions { ModelId = modelId });
             }
             catch (Exception ex)
             {
@@ -93,7 +64,23 @@ namespace BotWorker.Modules.AI.Services
 
         public async Task<string> RefinePromptAsync(string prompt)
         {
-            var systemPrompt = @"你是一个专业的 AI 绘画提示词专家（ImagePromptRefinerAgent）。
+            try
+            {
+                // 优先尝试使用专门的“文生图提示词生成器”智能体
+                var refinedPrompt = await _agentExecutor.ExecuteByAgentGuidAsync(
+                    BotWorker.Modules.AI.Models.AgentInfos.DallEAgent.Guid, 
+                    prompt
+                );
+
+                if (!string.IsNullOrEmpty(refinedPrompt) && !refinedPrompt.StartsWith("❌"))
+                {
+                    return refinedPrompt.Trim();
+                }
+
+                // 如果智能体执行失败，则回退到内置的系统提示词逻辑
+                _logger.LogWarning("[ImageGenerationService] Agent refinement failed, falling back to built-in logic.");
+                
+                var systemPrompt = @"你是一个专业的 AI 绘画提示词专家（ImagePromptRefinerAgent）。
 你的任务是将用户简单的描述转化为详细、专业、具有电影感和艺术感的提示词。
 请通过以下步骤进行优化：
 1. 风格补全：根据用户描述，补全合适的艺术风格（如写实、插画、赛博朋克、吉卜力风等）。
@@ -103,15 +90,10 @@ namespace BotWorker.Modules.AI.Services
 
 请直接输出优化后的提示词，不要包含任何解释性文字。建议使用中文（豆包模型对中文支持极佳）。";
 
-            try
-            {
-                // 使用 IServiceProvider 延迟获取 IAIService，避免循环依赖
                 var aiService = _serviceProvider.GetRequiredService<IAIService>();
-                
-                // 使用 RawChatAsync 并带上系统提示词
                 var fullPrompt = $"{systemPrompt}\n\n用户原始描述：{prompt}\n\n请输出优化后的提示词：";
-                var refinedPrompt = await aiService.RawChatAsync(fullPrompt);
-                return string.IsNullOrEmpty(refinedPrompt) ? prompt : refinedPrompt.Trim();
+                var result = await aiService.RawChatAsync(fullPrompt);
+                return string.IsNullOrEmpty(result) ? prompt : result.Trim();
             }
             catch (Exception ex)
             {

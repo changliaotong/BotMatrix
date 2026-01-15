@@ -13,7 +13,7 @@ namespace BotWorker.Modules.AI.Providers.Helpers
         {
         }
 
-        protected override Kernel BuildKernel(ModelExecutionOptions options)
+        public override Kernel BuildKernel(ModelExecutionOptions options)
         {
             var builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(_defaultModelId, _url, _apiKey);

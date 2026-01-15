@@ -1,40 +1,26 @@
-namespace BotWorker.Domain.Entities;
-public partial class GroupOffical : MetaData<GroupOffical>
+using System;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BotWorker.Domain.Entities
 {
-    public override string TableName => "Group";
-    public override string KeyField => "GroupOpenid";
-
-    public const long MIN_GROUP_ID = 990000000000;
-    public const long MAX_GROUP_ID = 1000000000000;
-
-    public static (long groupId, bool isNew) GetGroupId(string groupOpenid, string groupName, long userId, long botUin = 0, string botName = "")
+    public class GroupOffical
     {
-        var groupId = GetTargetGroup(groupOpenid);
-        if (groupId != 0)
-            return (groupId, false);
+        private static IGroupOfficalRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGroupOfficalRepository>() 
+            ?? throw new InvalidOperationException("IGroupOfficalRepository not registered");
 
-        groupId = GetMaxGroupId();
-        int i = GroupInfo.Append(groupId, groupName, botUin, botName, userId, userId, groupOpenid);
-        return i == -1 ? (0, false) : (groupId, true);
-    }
+        public long GroupId { get; set; }
 
-    private static long GetMaxGroupId()
-    {
-        var groupId = GetWhere<long>("max(Id)", $"Id > {MIN_GROUP_ID} and Id < {MAX_GROUP_ID}");
-        return groupId <= MIN_GROUP_ID ? MIN_GROUP_ID + 1 : groupId + 1;
-    }
+        public static async Task<bool> IsOfficalAsync(long groupId)
+        {
+            return await Repository.IsOfficalAsync(groupId);
+        }
 
-    public static long GetTargetGroup(string groupOpenid)
-    {
-        return GetLong($"{SqlIsNull("TargetGroup", "Id")}", groupOpenid);
-    }
-
-    public static string GetGroupOpenid(long groupId, long botQQ)
-    {
-        var groupOpenid = GetValueAandB<string>("GroupOpenid", "TargetGroup", groupId, "BotUin", botQQ);
-        if (!groupOpenid.IsNull())
-            return groupOpenid;
-
-        return GetValueAandB<string>("GroupOpenid", "Id", groupId, "BotUin", botQQ);
+        public static bool IsOffical(long groupId)
+        {
+            return IsOfficalAsync(groupId).GetAwaiter().GetResult();
+        }
     }
 }

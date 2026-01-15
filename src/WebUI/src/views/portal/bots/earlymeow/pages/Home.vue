@@ -309,7 +309,7 @@ const digitalEmployees = computed(() => [
             </p>
           </div>
           <button 
-            @click="router.push('/meow/pricing')"
+            @click="router.push('/pricing')"
             class="px-8 py-4 rounded-2xl bg-[var(--matrix-color)]/10 border border-[var(--border-color)]/20 text-[var(--matrix-color)] font-bold hover:bg-[var(--matrix-color)] hover:text-white transition-all"
           >
             {{ tt('earlymeow.home.employees.view_all') }}

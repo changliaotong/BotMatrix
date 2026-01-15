@@ -4,11 +4,9 @@ using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Entities
 {
-    public partial class BotInfo : MetaData<BotInfo>
+    [Table("bot_info")]
+    public partial class BotInfo
     {
-        public override string TableName => "Member";
-        public override string KeyField => "BotUin";
-
         public const long AdminUin = 51437810;    //客服
         public const long AdminUin2 = 1653346663;  //客服
         public const long BotUinDef = 3889418604;
@@ -32,6 +30,7 @@ namespace BotWorker.Domain.Entities
         public static ConcurrentDictionary<string, string> DictTimes { get; set; } = [];
         public static DateTime HeartbetTime { get; set; } = DateTime.Now;
 
+        [ExplicitKey]
         public long BotUin { get; set; }
         public string Password { get; set; } = string.Empty;
         public string BotName { get; set; } = "早喵";
@@ -72,11 +71,11 @@ namespace BotWorker.Domain.Entities
 
 
         public static bool GetIsCredit(long botUin)
-            => GetIsCreditAsync(botUin).GetAwaiter().GetResult();
+            => BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetIsCreditAsync(botUin).GetAwaiter().GetResult();
 
         public static async Task<bool> GetIsCreditAsync(long botUin, IDbTransaction? trans = null)
         {
-            return await GetBoolAsync("IsCredit", botUin, null, trans);
+            return await BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetIsCreditAsync(botUin);
         }
 
         // 超级管理员
@@ -100,22 +99,22 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<long> GetRobotAdminAsync(long botUin)
         {
-            return await GetLongAsync("AdminId", botUin);
+            return await BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetRobotAdminAsync(botUin);
         }
 
         public static string GetBotGuid(long botUin)
         {
-            return GetValue("BotGuid", botUin);
+            return BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetBotGuidAsync(botUin).GetAwaiter().GetResult();
         }
 
         public static async Task<string> GetBotGuidAsync(long botUin, IDbTransaction? trans = null)
         {
-            return await GetValueAsync("BotGuid", botUin, null, trans);
+            return await BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetBotGuidAsync(botUin);
         }
 
         public static bool IsRobot(long qq)
         {
-            return !IsMonitorQQ(qq) && ExistsWhere($"valid not in (0,4,5) and {Key} = {qq}");
+            return !IsMonitorQQ(qq) && BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.IsRobotAsync(qq).GetAwaiter().GetResult();
         }
 
         public static bool IsMonitorQQ(long botUin)

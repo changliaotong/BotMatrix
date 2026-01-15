@@ -17,7 +17,9 @@ import {
   Users,
   CheckCircle,
   User,
-  Search
+  Search,
+  ChevronDown,
+  LayoutGrid
 } from 'lucide-vue-next';
 
 const route = useRoute();
@@ -166,6 +168,7 @@ const toggleKeyword = (field: string, typeName: string) => {
 };
 
 const groupSearchQuery = ref('');
+const showGroupDropdown = ref(false);
 
 const filteredGroups = computed(() => {
   if (!groupSearchQuery.value) return relatedGroups.value;
@@ -178,13 +181,14 @@ const filteredGroups = computed(() => {
 
 const fetchGroupData = async () => {
   const groupId = route.query.id;
-  // Use personal QQ from auth store as robot owner for filtering
-  const robotOwner = authStore.user?.qq || (route.query.robot_owner as string);
-  const groupOwner = undefined; 
+  // robot_owner is the bot's QQ, from query if available
+  const robotOwner = route.query.robot_owner as string;
+  // group_owner is the user's personal QQ from auth store
+  // Super admins can see all groups, others see only their own groups
+  const groupOwner = authStore.role === 'super' ? undefined : authStore.user?.qq; 
   
   loading.value = true;
   try {
-    // Call with robotOwner and groupOwner (personal QQ)
     const data = await botStore.fetchGroupSetup(robotOwner, groupOwner);
     if (data.success && data.data && data.data.groups) {
       const groups = data.data.groups;
@@ -194,13 +198,7 @@ const fetchGroupData = async () => {
         const current = groups.find((g: any) => g.id.toString() === groupId.toString());
         if (current) {
           groupInfo.value = { ...groupInfo.value, ...current };
-        } else if (groups.length > 0) {
-          groupInfo.value = { ...groupInfo.value, ...groups[0] };
-          router.replace({ query: { ...route.query, id: groups[0].id } });
         }
-      } else if (groups.length > 0) {
-        groupInfo.value = { ...groupInfo.value, ...groups[0] };
-        router.replace({ query: { ...route.query, id: groups[0].id } });
       }
     }
   } catch (error) {
@@ -232,11 +230,19 @@ watch(() => route.query.id, (newId) => {
     if (current) {
       groupInfo.value = { ...groupInfo.value, ...current };
     }
+  } else {
+    groupInfo.value = { id: 0 };
   }
 });
 
 watch(() => route.query.admin_id, () => {
   fetchGroupData();
+});
+
+watch(() => authStore.user?.qq, (newQQ) => {
+  if (newQQ) {
+    fetchGroupData();
+  }
 });
 </script>
 
@@ -250,16 +256,64 @@ watch(() => route.query.admin_id, () => {
       <div class="sticky top-[72px] z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 py-2 bg-[var(--bg-body)]/80 backdrop-blur-md border-b border-[var(--border-color)] mb-8 transition-all duration-300">
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <button @click="router.back()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+            <button @click="groupInfo.id ? router.push({ query: { ...route.query, id: undefined } }) : router.back()" class="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
               <ChevronLeft class="w-5 h-5 text-[var(--text-muted)]" />
             </button>
-            <div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-3">
-              <h1 class="text-base sm:text-xl font-black text-[var(--text-main)] tracking-tight flex items-center gap-2">
-                <Users class="w-5 h-5 text-[var(--matrix-color)]" /> {{ groupInfo.group_name || t('group_setup') }}
-              </h1>
-              <div class="flex items-center gap-2">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+              <div class="relative">
+                <button 
+                  @click="showGroupDropdown = !showGroupDropdown"
+                  class="flex items-center gap-2 group cursor-pointer"
+                >
+                  <h1 class="text-base sm:text-xl font-black text-[var(--text-main)] tracking-tight flex items-center gap-2 group-hover:text-[var(--matrix-color)] transition-colors">
+                    <Users class="w-5 h-5 text-[var(--matrix-color)]" /> 
+                    {{ groupInfo.id ? groupInfo.group_name : t('select_group') }}
+                    <ChevronDown v-if="relatedGroups.length > 0" class="w-4 h-4 text-[var(--text-muted)] transition-transform" :class="{ 'rotate-180': showGroupDropdown }" />
+                  </h1>
+                </button>
+                
+                <!-- Dropdown -->
+                <div 
+                  v-if="showGroupDropdown"
+                  class="absolute top-full left-0 mt-2 w-64 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                >
+                  <div class="p-2 border-b border-[var(--border-color)]">
+                    <div class="relative">
+                      <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
+                      <input 
+                        v-model="groupSearchQuery"
+                        type="text" 
+                        :placeholder="t('search_groups')"
+                        class="w-full pl-9 pr-4 py-2 bg-black/5 dark:bg-white/5 border border-[var(--border-color)] rounded-xl text-xs font-bold focus:outline-none focus:border-[var(--matrix-color)]/50 transition-all"
+                      >
+                    </div>
+                  </div>
+                  <div class="max-h-64 overflow-y-auto custom-scrollbar">
+                    <button 
+                      v-for="group in filteredGroups" 
+                      :key="group.id"
+                      @click="router.push({ query: { ...route.query, id: group.id } }); showGroupDropdown = false"
+                      class="w-full flex items-center gap-3 p-3 hover:bg-[var(--matrix-color)]/10 transition-all text-left group/item"
+                      :class="{ 'bg-[var(--matrix-color)]/5': String(group.id) === String(route.query.id) }"
+                    >
+                      <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center text-xs font-black shrink-0 group-hover/item:bg-[var(--matrix-color)]/20 transition-colors">
+                        {{ (group.group_name || 'G').substring(0, 1) }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-black text-[var(--text-main)] truncate group-hover/item:text-[var(--matrix-color)] transition-colors">{{ group.group_name || 'Unnamed Group' }}</p>
+                        <p class="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-tighter">{{ group.id }}</p>
+                      </div>
+                    </button>
+                    <div v-if="filteredGroups.length === 0" class="p-4 text-center">
+                      <p class="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">{{ t('no_groups_found') }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="groupInfo.id" class="flex items-center gap-2">
                 <p class="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest opacity-60">ID: {{ groupInfo.id }}</p>
-                <div v-if="authStore.user?.qq" class="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 rounded-full">
+                <div v-if="authStore.user?.qq" class="hidden sm:flex items-center gap-1.5 px-2 py-0.5 bg-[var(--matrix-color)]/10 border border-[var(--matrix-color)]/20 rounded-full">
                   <User class="w-3 h-3 text-[var(--matrix-color)]" />
                   <span class="text-[9px] font-black text-[var(--matrix-color)] uppercase tracking-widest">{{ authStore.user.qq }}</span>
                 </div>
@@ -268,6 +322,7 @@ watch(() => route.query.admin_id, () => {
           </div>
           <div class="flex items-center gap-3">
             <button 
+              v-if="groupInfo.id"
               @click="handleSave" 
               :disabled="saving"
               class="px-4 py-1.5 bg-[var(--matrix-color)] text-black font-black text-xs sm:text-sm uppercase tracking-widest rounded-lg hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[var(--matrix-color)]/20 disabled:opacity-50"
@@ -281,9 +336,9 @@ watch(() => route.query.admin_id, () => {
         </div>
       </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+    <div :class="groupInfo.id ? 'grid grid-cols-1 md:grid-cols-4 gap-6' : 'block'">
       <!-- Sidebar Tabs -->
-      <div class="md:sticky md:top-[140px] h-fit flex md:flex-col overflow-x-auto pb-2 md:pb-0 gap-2 md:col-span-1 no-scrollbar z-20">
+      <div v-if="groupInfo.id" class="md:sticky md:top-[140px] h-fit flex md:flex-col overflow-x-auto pb-2 md:pb-0 gap-2 md:col-span-1 no-scrollbar z-20">
         <button 
           v-for="tab in tabs" 
           :key="tab.id"
@@ -335,9 +390,64 @@ watch(() => route.query.admin_id, () => {
       </div>
 
       <!-- Content Area -->
-      <div class="md:col-span-3 space-y-6">
+      <div :class="groupInfo.id ? 'md:col-span-3' : 'w-full'" class="space-y-6">
         <div v-if="loading" class="space-y-6 animate-pulse">
           <div v-for="i in 3" :key="i" class="h-48 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)]"></div>
+        </div>
+
+        <div v-else-if="!groupInfo.id" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div class="flex flex-col items-center text-center space-y-4 max-w-2xl mx-auto pt-12 pb-8">
+            <div class="w-20 h-20 rounded-3xl bg-[var(--matrix-color)]/10 flex items-center justify-center border-2 border-[var(--matrix-color)]/20 shadow-2xl shadow-[var(--matrix-color)]/10">
+              <Users class="w-10 h-10 text-[var(--matrix-color)]" />
+            </div>
+            <h2 class="text-3xl font-black text-[var(--text-main)] uppercase tracking-tighter">{{ t('select_group_to_manage') }}</h2>
+            <p class="text-[var(--text-muted)] font-medium leading-relaxed">{{ t('select_group_desc') }}</p>
+          </div>
+
+          <!-- Group Grid Selector -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <button 
+              v-for="group in filteredGroups" 
+              :key="group.id"
+              @click="router.push({ query: { ...route.query, id: group.id } })"
+              class="group/card relative p-6 rounded-[2rem] bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[var(--matrix-color)]/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[var(--matrix-color)]/10 text-left overflow-hidden"
+            >
+              <div class="absolute inset-0 bg-gradient-to-br from-[var(--matrix-color)]/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity"></div>
+              
+              <div class="relative flex items-start gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-black/5 dark:bg-white/5 flex items-center justify-center text-xl font-black shrink-0 group-hover/card:bg-[var(--matrix-color)]/20 group-hover/card:text-[var(--matrix-color)] transition-all duration-300">
+                  {{ (group.group_name || 'G').substring(0, 1) }}
+                </div>
+                <div class="flex-1 min-w-0 pt-1">
+                  <h3 class="text-base font-black text-[var(--text-main)] truncate mb-1 group-hover/card:text-[var(--matrix-color)] transition-colors">
+                    {{ group.group_name || 'Unnamed Group' }}
+                  </h3>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest opacity-60">ID: {{ group.id }}</span>
+                    <div class="w-1 h-1 rounded-full bg-[var(--border-color)]"></div>
+                    <span class="text-[9px] font-black text-[var(--matrix-color)] uppercase tracking-widest">Active</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="mt-6 flex items-center justify-between">
+                <div class="flex -space-x-2">
+                  <div v-for="i in 3" :key="i" class="w-6 h-6 rounded-full border-2 border-[var(--bg-card)] bg-black/5 dark:bg-white/5 flex items-center justify-center">
+                    <User class="w-3 h-3 text-[var(--text-muted)]" />
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 text-[var(--matrix-color)] font-black text-[10px] uppercase tracking-widest opacity-0 group-hover/card:opacity-100 transition-all transform translate-x-2 group-hover/card:translate-x-0">
+                  Manage <ChevronLeft class="w-3 h-3 rotate-180" />
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <!-- Empty State -->
+          <div v-if="filteredGroups.length === 0" class="flex flex-col items-center py-20 bg-black/5 dark:bg-white/5 rounded-[2rem] border-2 border-dashed border-[var(--border-color)]">
+            <Search class="w-12 h-12 text-[var(--text-muted)] mb-4 opacity-20" />
+            <p class="text-sm font-black text-[var(--text-muted)] uppercase tracking-[0.2em]">{{ t('no_groups_found') }}</p>
+          </div>
         </div>
 
         <div v-else class="space-y-6">

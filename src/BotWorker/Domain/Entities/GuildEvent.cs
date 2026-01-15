@@ -1,11 +1,20 @@
-﻿namespace BotWorker.Domain.Entities
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using BotWorker.Common;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BotWorker.Domain.Entities
 {
-    public class GuildEvent : MetaData<GuildEvent>
+    [Table("GuildEvent")]
+    public class GuildEvent
     {
-        public override string TableName => "GuildEvent";
+        private static IGuildEventRepository Repository => GlobalConfig.ServiceProvider!.GetRequiredService<IGuildEventRepository>();
 
-        public override string KeyField => "Id";
-
+        [Key]
+        public long Id { get; set; }
         public long GroupId { get; set; }
         public string GroupName { get; set; } = string.Empty;
         public long BotUin { get; set; }
@@ -17,21 +26,10 @@
         public string EventInfo { get; set; } = string.Empty;
         public DateTime InsertDate { get; set; }
 
-        public static async Task<Dictionary<string, object>?> AppendAsync(GuildEvent @event, params string[] fields)
+        // Adjusted signature to be compatible with usage, but ignoring fields param effectively
+        public static async Task<int> AppendAsync(GuildEvent @event, params string[] fields)
         {
-            return await InsertReturnFieldsAsync(new
-            {
-                @event.GroupId,
-                @event.GroupName,
-                @event.BotUin,
-                @event.BotName,
-                @event.UserId,
-                @event.UserName,
-                @event.EventType,
-                @event.EventName,
-                @event.EventInfo,
-                @event.InsertDate
-            }, fields);
+            return await Repository.AddAsync(@event);
         }
     }
 }

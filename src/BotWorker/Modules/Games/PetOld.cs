@@ -3,9 +3,107 @@ using BotWorker.Domain.Entities;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
 using BotWorker.Infrastructure.Persistence.ORM;
+using BotWorker.Domain.Interfaces;
+using System.Text.RegularExpressions;
 
 namespace BotWorker.Modules.Games
 {
+    [BotPlugin(
+        Id = "game.pet.old",
+        Name = "经典宠物系统",
+        Version = "1.0.0",
+        Author = "Matrix",
+        Description = "经典的买卖宠物系统，支持身价排行、赎身等互动",
+        Category = "Games"
+    )]
+    public class PetOldPlugin : IPlugin
+    {
+        public async Task InitAsync(IRobot robot)
+        {
+            await robot.RegisterSkillAsync(new SkillCapability
+            {
+                Name = "经典宠物",
+                Commands = ["我的宠物", "身价榜", "我的身价", "买入", "赎身"],
+                Description = "经典宠物买卖系统"
+            }, HandlePetCommandAsync);
+        }
+
+        public Task StopAsync() => Task.CompletedTask;
+
+        private async Task<string> HandlePetCommandAsync(IPluginContext ctx, string[] args)
+        {
+            var cmd = ctx.RawMessage.Trim().Split(' ')[0];
+            var cmdPara = string.Join(" ", args);
+            var userId = long.Parse(ctx.UserId);
+            var groupId = long.Parse(ctx.GroupId ?? "0");
+            var botId = long.Parse(ctx.BotId);
+
+            if (cmd == "我的宠物")
+                return await PetOld.GetMyPetListAsync(groupId, groupId, userId);
+
+            if (cmd == "身价榜")
+                return await PetOld.GetPriceListAsync(groupId, groupId, userId);
+
+            if (cmd == "我的身价")
+                return await PetOld.GetMyPriceListAsync(groupId, groupId, userId);
+
+            if (cmd == "买入")
+            {
+                // 检查是否是买入宠物（参数包含QQ号或@）
+                if (Regex.IsMatch(cmdPara, Regexs.CreditParaAt) || 
+                    Regex.IsMatch(cmdPara, Regexs.CreditParaAt2) || 
+                    Regex.IsMatch(cmdPara, Regexs.CreditPara))
+                {
+                    // 如果参数包含“积分”或“禁言卡”，则不属于此插件处理
+                    if (cmdPara.Contains("积分") || cmdPara.Contains("禁言卡") || cmdPara.Contains("飞机票") || cmdPara.Contains("道具"))
+                        return string.Empty;
+
+                    return await PetOld.GetBuyPetAsync(botId, groupId, groupId, ctx.Group?.GroupName ?? "", userId, ctx.UserName, cmdPara);
+                }
+                return string.Empty;
+            }
+
+            if (cmd == "赎身")
+            {
+                if (ctx.Group == null || !ctx.Group.IsPet)
+                    return PetOld.InfoClosed;
+
+                // 以当前主人购买时的价格成交，对方只能得到80%，系统扣除20%
+                long currMaster = await PetOld.GetCurrMasterAsync(groupId, userId);
+                if (currMaster == userId || currMaster == 0)
+                    return "您已是自由身，无需赎身";
+
+                long buyPrice = await PetOld.GetBuyPriceAsync(groupId, userId);
+                long creditAdd = buyPrice;
+                long creditMinus = buyPrice * 12 / 10;
+                
+                if (ctx.User != null && ctx.User.IsSuper)
+                    creditMinus = creditMinus * 22 / 10;
+
+                long creditValue = await UserInfo.GetCreditAsync(botId, groupId, userId);
+                if (creditValue < creditMinus)
+                    return $"您的积分{creditValue}不足{creditMinus}";
+
+                if (!ctx.IsConfirm)
+                {
+                    if (ctx is PluginContext pluginCtx)
+                        return await pluginCtx.ConfirmMessage($"赎身需扣分：-{creditMinus}");
+                    return $"赎身需扣分：-{creditMinus}，请发送“确认”继续";
+                }
+
+                int res = await PetOld.DoFreeMeAsync(botId, groupId, ctx.Group.GroupName, userId, ctx.UserName, currMaster, creditMinus, creditAdd);
+                if (res == -1)
+                    return "操作失败，请重试";
+
+                long currentCredit = await UserInfo.GetCreditAsync(botId, groupId, userId);
+                long masterCredit = await UserInfo.GetCreditAsync(botId, groupId, currMaster);
+                return $"✅ 赎身成功！\n[@:{currMaster}]积分：+{creditAdd}，累计：{masterCredit}\n您的积分：-{creditMinus}，累计：{currentCredit}";
+            }
+
+            return string.Empty;
+        }
+    }
+
     public class PetOld : MetaData<PetOld>
     {
         public override string TableName => "BuyFriends";

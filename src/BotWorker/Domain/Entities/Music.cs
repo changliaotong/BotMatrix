@@ -1,14 +1,44 @@
-using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Web;
+using BotWorker.Common;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Entities
 {
-    public class Music : MetaData<Music>
+    [Table("Music")]
+    public class Music
     {
-        public override string TableName => "Music";
-        public override string KeyField => "Id";
+        private static IMusicRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IMusicRepository>() 
+            ?? throw new InvalidOperationException("IMusicRepository not registered");
+
+        [Key]
+        public long Id { get; set; }
+        public long GroupId { get; set; }
+        public long UserId { get; set; }
+        public string Kind { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Summary { get; set; } = string.Empty;
+        public string JumpUrl { get; set; } = string.Empty;
+        public string PictureUrl { get; set; } = string.Empty;
+        public string MusicUrl { get; set; } = string.Empty;
+        public string MusicUrl2 { get; set; } = string.Empty;
+        public string Brief { get; set; } = string.Empty;
+        public string SongId { get; set; } = string.Empty;
+        public string Payload { get; set; } = string.Empty;
+        public bool IsPayload { get; set; }
+        public DateTime PayloadDate { get; set; }
+        public bool IsVIP { get; set; }
+        public DateTime InsertDate { get; set; }
 
         // 忽略 SSL 证书错误（解决你的异常）
         private static readonly HttpClient _http = new(
@@ -28,7 +58,7 @@ namespace BotWorker.Domain.Entities
 
             // ① 搜索歌曲（使用稳定源：kuwo）
             var song = await SearchKuwoSongAsync(keyword);
-            if (song == null)
+            if (song == null || song.Count == 0)
                 return null;
 
             // ② 获取真实音频 URL（高音质）
@@ -56,23 +86,26 @@ namespace BotWorker.Domain.Entities
             var doc = JsonDocument.Parse(json);
 
             var arr = doc.RootElement;
-            if (arr.GetArrayLength() == 0)
+            if (arr.ValueKind == JsonValueKind.Array && arr.GetArrayLength() == 0)
                 return [];
 
             var items = new List<(string Id, string Name, string Artist, string PicId)>();
-            for (int i = 0; i < arr.GetArrayLength(); i++)
+            if (arr.ValueKind == JsonValueKind.Array)
             {
-                var item = arr[i];
-                items.Add(
-                    (
-                        Id: item.GetProperty("id").GetString()!,
-                        Name: item.GetProperty("name").GetString()!,
-                        Artist: string.Join("/", item.GetProperty("artist").EnumerateArray().Select(a => a.GetString())),
-                        PicId: item.GetProperty("pic_id").GetString()!
-                    )
-                );
+                for (int i = 0; i < arr.GetArrayLength(); i++)
+                {
+                    var item = arr[i];
+                    items.Add(
+                        (
+                            Id: item.GetProperty("id").GetString()!,
+                            Name: item.GetProperty("name").GetString()!,
+                            Artist: string.Join("/", item.GetProperty("artist").EnumerateArray().Select(a => a.GetString())),
+                            PicId: item.GetProperty("pic_id").GetString()!
+                        )
+                    );
+                }
             }
-
+            
             return items;
         }
 
@@ -86,7 +119,11 @@ namespace BotWorker.Domain.Entities
             string json = await _http.GetStringAsync(url);
             var doc = JsonDocument.Parse(json);
 
-            return doc.RootElement.GetProperty("url").GetString();
+            if (doc.RootElement.TryGetProperty("url", out var urlProp))
+            {
+                return urlProp.GetString();
+            }
+            return null;
         }
 
         // ------------------------------
@@ -99,26 +136,16 @@ namespace BotWorker.Domain.Entities
             string json = await _http.GetStringAsync(url);
             var doc = JsonDocument.Parse(json);
 
-            return doc.RootElement.GetProperty("url").GetString()!;
+            if (doc.RootElement.TryGetProperty("url", out var urlProp))
+            {
+                return urlProp.GetString()!;
+            }
+            return "";
         }
 
         public static BotWorker.Models.MusicShareMessage GetMusicShareMessage(long id)
         {
-            var msm = new BotWorker.Models.MusicShareMessage();
-            using (var dt = QueryDataset($"select {SqlTop(1)} * from {FullName} where Id = {id} {SqlLimit(1)}"))
-            {
-                foreach (DataRow dr in dt.Tables[0].Rows)
-                {
-                    msm.Title = dr["Title"]?.ToString() ?? "";
-                    msm.Brief = dr["Brief"]?.ToString() ?? "";
-                    msm.Summary = dr["Summary"]?.ToString() ?? "";
-                    msm.PictureUrl = dr["PictureUrl"]?.ToString() ?? "";
-                    msm.MusicUrl = (dr["IsVIP"].AsBool() ? dr["MusicUrl2"] : dr["MusicUrl"])?.ToString() ?? "";
-                    msm.JumpUrl = dr["JumpUrl"]?.ToString() ?? "";
-                    msm.Kind = dr["Kind"]?.ToString() ?? "";
-                }
-            }
-            return msm;
+            return Repository.GetMusicShareMessageAsync(id).GetAwaiter().GetResult() ?? new BotWorker.Models.MusicShareMessage();
         }
 
         public static string GetString(dynamic value)
@@ -152,14 +179,14 @@ namespace BotWorker.Domain.Entities
 
         public static string GetMusicSharePayload(long id)
         {
-            return GetValue("ISNULL(payload, JumpUrl)", id);
+            return Repository.GetPayloadAsync(id).GetAwaiter().GetResult();
         }
 
         public static long GetMusicId(Song song)
         {
             return song.Kind == MusicKind.ZMMusic 
                 ? song.SongId.AsLong() 
-                : GetWhere<long>("Id", $"Kind = {GetMusicKind(song.Kind).Quotes()} and SongId={song.SongId.Quotes()}", "");
+                : Repository.GetMusicIdAsync(GetMusicKind(song.Kind), song.SongId).GetAwaiter().GetResult();
         }
 
         public static string GetMusicKind(MusicKind mk)
@@ -187,7 +214,11 @@ namespace BotWorker.Domain.Entities
         public static bool ExistsSong(string jumpUrl, string musicUrl = "")
         {
             Song song = GetSong(jumpUrl, musicUrl);
-            return !song.SongId.IsNull() && ExistsAandB("Kind", GetMusicKind(song.Kind), "SongId", song.SongId);
+            if (song.SongId.IsNull()) return false;
+            
+            // Check existence via ID
+            long id = Repository.GetMusicIdAsync(GetMusicKind(song.Kind), song.SongId).GetAwaiter().GetResult();
+            return id > 0;
         }
 
         public static Song GetSong(string jumpUrl, string musicUrl = "")
@@ -213,12 +244,13 @@ namespace BotWorker.Domain.Entities
             {
                 song.Kind = MusicKind.KugouMusic;
                 if (musicUrl.IsNull())
-                    musicUrl = GetWhere("MusicUrl", $"JumpUrl = {jumpUrl.Quotes()}", "Id desc");
+                    musicUrl = Repository.GetMusicUrlByJumpUrlAsync(jumpUrl).GetAwaiter().GetResult();
+                
                 if (!musicUrl.IsNull())
                 {
                     var uri = new Uri(musicUrl);
                     var query = HttpUtility.ParseQueryString(uri.Query);
-                    song.SongId = query["album_audio_id"];
+                    song.SongId = query["album_audio_id"] ?? "";
                 }
             }
             else if (jumpUrl.IsMatch(Regexs.MusicIdZaomiao))
@@ -235,41 +267,39 @@ namespace BotWorker.Domain.Entities
 
         public static string GetSongUrl(Song song)
         {
-            string sql = $"select top 1 title, brief, summary, pictureurl, musicurl, kind from {FullName} where Kind = {GetMusicKind(song.Kind).Quotes()} and SongId = {song.SongId}";
-            return QueryRes(sql, "<a href=\"{4}\" target=\"_blank\">{2}:{0}<br /><img width=\"75\" src=\"{3}\"></a>");                         
+            return Repository.GetMusicUrlAsync(GetMusicKind(song.Kind), song.SongId).GetAwaiter().GetResult();
         }
 
         public static string GetSongUrlPublic(Song song)
         {
-            string sql = $"select top 1 title, brief, summary, pictureurl, musicurl, kind from {FullName} where Kind = {GetMusicKind(song.Kind).Quotes()} and SongId = {song.SongId}";
-            return QueryRes(sql, "✅ 点歌成功!\n<a href=\"{4}\">{2}:{0}\n点击此链接开始播放</a>");
+            return Repository.GetMusicUrlPublicAsync(GetMusicKind(song.Kind), song.SongId).GetAwaiter().GetResult();
         }
 
         public static long Append(string Kind, string Title, string Summary, string JumpUrl, string PictureUrl, string MusicUrl, string Brief, string SongId, long groupId, long userId, string payload)
         {
-            var covs = new List<Cov>
+            var music = new Music
             {
-                new("GroupId", groupId),
-                new("UserId", userId),
-                new("Kind", Kind),
-                new("Title", Title),
-                new("Summary", Summary),
-                new("JumpUrl", JumpUrl),
-                new("PictureUrl", PictureUrl),
-                new("MusicUrl", MusicUrl),
-                new("Brief", Brief),
-                new("SongId", SongId),
+                GroupId = groupId,
+                UserId = userId,
+                Kind = Kind,
+                Title = Title,
+                Summary = Summary,
+                JumpUrl = JumpUrl,
+                PictureUrl = PictureUrl,
+                MusicUrl = MusicUrl,
+                Brief = Brief,
+                SongId = SongId,
+                InsertDate = DateTime.Now
             };
 
             if (!payload.IsNull())
             {
-                covs.Add(new Cov("Payload", payload));
-                covs.Add(new Cov("IsPayload", true));
-                covs.Add(new Cov("PayloadDate", DateTime.MinValue));
+                music.Payload = payload;
+                music.IsPayload = true;
+                music.PayloadDate = DateTime.MinValue; // Default value logic?
             }
 
-            return Insert(covs) == -1 ? 0 : GetAutoId(FullName);
+            return Repository.AddAsync(music).GetAwaiter().GetResult();
         }
-
     }
 }

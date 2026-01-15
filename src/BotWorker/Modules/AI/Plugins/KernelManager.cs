@@ -1,6 +1,8 @@
 using System.Net;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.TextToImage;
 using BotWorker.Modules.AI.Providers.Configs;
+using BotWorker.Modules.AI.Providers.Helpers;
 
 namespace BotWorker.Modules.AI.Plugins
 {
@@ -20,10 +22,17 @@ namespace BotWorker.Modules.AI.Plugins
 
         public static ModelProvider GetProviderFromUrl(string url)
         {
-            if (url == Doubao.Url)
+            if (string.IsNullOrEmpty(url)) return ModelProvider.Unknown;
+            
+            if (url.Contains("volces.com", StringComparison.OrdinalIgnoreCase))
                 return ModelProvider.Doubao;
-            else if (url == QWen.Url)
+            else if (url.Contains("dashscope.aliyuncs.com", StringComparison.OrdinalIgnoreCase))
                 return ModelProvider.Qwen;
+            else if (url.Contains("openai.com", StringComparison.OrdinalIgnoreCase))
+                return ModelProvider.OpenAI;
+            else if (url.Contains("localhost") || url.Contains("127.0.0.1"))
+                return ModelProvider.Ollama;
+                
             return ModelProvider.Unknown;
         }
 
@@ -53,7 +62,8 @@ namespace BotWorker.Modules.AI.Plugins
                 MaxConnectionsPerServer = 100,
                 PooledConnectionLifetime = TimeSpan.FromMinutes(10),
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                EnableMultipleHttp2Connections = true
+                EnableMultipleHttp2Connections = true,
+                UseCookies = false // ✅ 禁用 Cookie，防止非 ASCII 字符导致的 Header 错误
             };
 
             return new HttpClient(handler)
@@ -88,7 +98,10 @@ namespace BotWorker.Modules.AI.Plugins
 
             var builder = Kernel.CreateBuilder()
                 .AddOpenAIChatCompletion(modelId, apiKey, httpClient: client) // ✅ 使用共享连接
-                .AddOpenAITextEmbeddingGeneration(modelId, apiKey, httpClient: client); // ✅ 同时也支持向量生成
+                .AddOpenAIEmbeddingGenerator(modelId, apiKey, httpClient: client); // ✅ 同时也支持向量生成
+
+            // 使用 SK 标准的 AddOpenAITextToImage 调用生图（基于 OpenAI 兼容性）
+            builder.AddOpenAITextToImage(modelId, apiKey, httpClient: client);
 
             foreach (var name in pluginNames)
             {

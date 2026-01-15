@@ -1,13 +1,24 @@
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.Threading.Tasks;
+using System.Linq;
+using System.Collections.Generic;
+using BotWorker.Domain.Repositories;
+using BotWorker.Domain.Models.BotMessages;
+using Microsoft.Extensions.DependencyInjection;
+using Dapper.Contrib.Extensions;
+using BotWorker.Infrastructure.Utils.Schema.Attributes;
+using BotWorker.Infrastructure.Extensions; // For IsNull, IsNum, AsInt
 
 namespace BotWorker.Infrastructure.Tools
 {
-    public class Todo : MetaData<Todo>
+    [Table("Todo")]
+    public class Todo
     {
-        public override string TableName => "Todo";
-        public override string KeyField => "Id";
+        private static ITodoRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ITodoRepository>() 
+            ?? throw new InvalidOperationException("ITodoRepository not registered");
 
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        [Key]
         public long Id { get; set; }
         public long GroupId { get; set; }
         public long UserId { get; set; }
@@ -21,28 +32,14 @@ namespace BotWorker.Infrastructure.Tools
         public DateTime? DueDate { get; set; } // 截止日期
         public DateTime InsertDate { get; set; } = DateTime.Now;
 
-        public static new async Task EnsureTableCreatedAsync()
+        public static async Task EnsureTableCreatedAsync()
         {
-            await MetaData<Todo>.EnsureTableCreatedAsync();
-
-            // 确保 Todo 表结构完整 (支持旧表升级)
-            await SQLConn.ExecAsync(@"
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Description')
-                    ALTER TABLE Todo ADD Description NVARCHAR(MAX) DEFAULT '' NOT NULL;
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Priority')
-                    ALTER TABLE Todo ADD Priority NVARCHAR(20) DEFAULT 'Medium' NOT NULL;
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Progress')
-                    ALTER TABLE Todo ADD Progress INT DEFAULT 0 NOT NULL;
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Status')
-                    ALTER TABLE Todo ADD Status NVARCHAR(50) DEFAULT 'Pending' NOT NULL;
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'Category')
-                    ALTER TABLE Todo ADD Category NVARCHAR(100) DEFAULT 'Todo' NOT NULL;
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Todo') AND name = 'DueDate')
-                    ALTER TABLE Todo ADD DueDate DATETIME NULL;
-            ");
+            // Removed legacy SQL migration
+            await Task.CompletedTask;
         }
 
         public const string format = "todo + 内容 [Dev/Test] [P1/P2/P3] 新增\ntodo - 数字 删除\ntodo #数字 [进度/done/P1/P2/P3/desc 内容] 更新\ntodo + #关键字 查询";
+        public static string RetryMsg = "操作失败，请重试";
 
         // todo
         public static async Task<string> GetTodoResAsync(long groupId, string groupName, long qq, string name, string cmdName, string cmdPara)
@@ -109,19 +106,26 @@ namespace BotWorker.Infrastructure.Tools
                 if (cmdPara.IsNum())
                 {
                     int todo_no = cmdPara.AsInt();
-                    string sWhere = $"UserId = {qq} and TodoNo = {todo_no}";
-                    if (!await ExistsWhereAsync(sWhere))
+                    var existing = await Repository.GetByNoAsync(qq, todo_no);
+                    if (existing == null)
                         return $"不存在#{todo_no}";
 
-                    return await DeleteWhereAsync(sWhere) == -1
+                    return await Repository.DeleteByNoAsync(qq, todo_no) == -1
                         ? RetryMsg
                         : $"成功删除#{todo_no}";
                 }
                 else if (cmdPara == "all")
                 {
-                    return await DeleteWhereAsync($"UserId = {qq}") == -1
-                        ? RetryMsg
-                        : $"真棒！全部完成！";
+                     // Delete all for user
+                     // I need to add DeleteAllAsync to repository or just execute sql
+                     // For now, I'll use simple implementation
+                     var all = await Repository.GetListAsync(qq);
+                     int count = 0;
+                     foreach(var t in all) {
+                         await Repository.DeleteAsync(t);
+                         count++;
+                     }
+                     return $"真棒！全部完成！";
                 }
                 else
                     return "删除参数只能是数字";
@@ -136,32 +140,46 @@ namespace BotWorker.Infrastructure.Tools
                     if (todoNoStr.IsNum())
                     {
                         int todo_no = todoNoStr.AsInt();
+                        var todo = await Repository.GetByNoAsync(qq, todo_no);
+                        if (todo == null) return $"不存在#{todo_no}";
+
                         string updateVal = parts[1].ToUpper();
 
                         if (updateVal == "DONE")
                         {
-                            return await UpdateWhereAsync(new { Progress = 100, Status = "Completed" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
-                                ? RetryMsg
-                                : $"待办#{todo_no}已完成！";
+                            todo.Progress = 100;
+                            todo.Status = "Completed";
+                            return await Repository.UpdateAsync(todo) ? $"待办#{todo_no}已完成！" : RetryMsg;
                         }
                         else if (updateVal == "DESC")
                         {
                             string desc = string.Join(" ", parts.Skip(2));
-                            return await UpdateWhereAsync(new { Description = desc }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
-                                ? RetryMsg
-                                : $"待办#{todo_no}描述已更新";
+                            todo.Description = desc;
+                            return await Repository.UpdateAsync(todo) ? $"待办#{todo_no}描述已更新" : RetryMsg;
                         }
-                        else if (updateVal == "P1") return await UpdateWhereAsync(new { Priority = "High" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 High";
-                        else if (updateVal == "P2") return await UpdateWhereAsync(new { Priority = "Medium" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 Medium";
-                        else if (updateVal == "P3") return await UpdateWhereAsync(new { Priority = "Low" }, $"UserId = {qq} and TodoNo = {todo_no}") == -1 ? RetryMsg : $"待办#{todo_no}优先级已更新为 Low";
+                        else if (updateVal == "P1") 
+                        { 
+                            todo.Priority = "High"; 
+                            return await Repository.UpdateAsync(todo) ? $"待办#{todo_no}优先级已更新为 High" : RetryMsg; 
+                        }
+                        else if (updateVal == "P2") 
+                        { 
+                            todo.Priority = "Medium"; 
+                            return await Repository.UpdateAsync(todo) ? $"待办#{todo_no}优先级已更新为 Medium" : RetryMsg; 
+                        }
+                        else if (updateVal == "P3") 
+                        { 
+                            todo.Priority = "Low"; 
+                            return await Repository.UpdateAsync(todo) ? $"待办#{todo_no}优先级已更新为 Low" : RetryMsg; 
+                        }
                         else if (updateVal.IsNum())
                         {
                             int progress = updateVal.AsInt();
                             progress = Math.Clamp(progress, 0, 100);
                             string status = progress == 100 ? "Completed" : (progress > 0 ? "InProgress" : "Pending");
-                            return await UpdateWhereAsync(new { Progress = progress, Status = status }, $"UserId = {qq} and TodoNo = {todo_no}") == -1
-                                ? RetryMsg
-                                : $"待办#{todo_no}进度已更新为 {progress}%";
+                            todo.Progress = progress;
+                            todo.Status = status;
+                            return await Repository.UpdateAsync(todo) ? $"待办#{todo_no}进度已更新为 {progress}%" : RetryMsg;
                         }
                     }
                 }
@@ -185,9 +203,8 @@ namespace BotWorker.Infrastructure.Tools
         // 新增todo
         public static async Task<(int Result, int TodoNo)> AppendAsync(long groupId, long qq, string cmdPara, string category, string priority)
         {
-            int todoNo = await QueryScalarAsync<int>($"select max(TodoNo)+1 from {FullName} where UserId = {qq}");
-            todoNo = todoNo == 0 ? 1 : todoNo;
-            var res = await InsertAsync(new
+            int todoNo = await Repository.GetMaxNoAsync(qq) + 1;
+            var res = await Repository.InsertAsync(new Todo
             {
                 GroupId = groupId,
                 UserId = qq,
@@ -211,7 +228,9 @@ namespace BotWorker.Infrastructure.Tools
         // todo 数量
         public static async Task<long> CountAsync(long qq)
         {
-            return await CountWhereAsync($"UserId = {qq}");
+            // Use GetListAsync to count (a bit inefficient but consistent with interface)
+            var list = await Repository.GetListAsync(qq);
+            return list.Count();
         }
 
         public static long Count(long qq)
@@ -220,8 +239,11 @@ namespace BotWorker.Infrastructure.Tools
         // 得到 todoNo 的 todo
         public static async Task<string> GetTodoAsync(long qq, int todoNo)
         {
-            string sql = $"select {SqlTop(1)} TodoNo, Category, Priority, Progress, Status, TodoTitle, Description from {FullName} where UserId = {qq} and TodoNo = {todoNo} {SqlLimit(1)}";
-            return await QueryResAsync(sql, "#{0} [{1}] [{2}] {3}% {4} {5}\n描述: {6}");
+            var todo = await Repository.GetByNoAsync(qq, todoNo);
+            if (todo == null) return "";
+            // "#{0} [{1}] [{2}] {3}% {4} {5}\n描述: {6}"
+            // TodoNo, Category, Priority, Progress, Status, TodoTitle, Description
+            return $"#{todo.TodoNo} [{todo.Category}] [{todo.Priority}] {todo.Progress}% {todo.Status} {todo.TodoTitle}\n描述: {todo.Description}";
         }
 
         public static string GetTodo(long qq, int todoNo)
@@ -230,18 +252,40 @@ namespace BotWorker.Infrastructure.Tools
         // todo 列表
         public static async Task<string> GetTodosAsync(long qq, string cmdPara, int topN = 5)
         {
-            string sWhere = $"UserId = {qq}";
+            // Filter is handled in Repository.GetListAsync partially (keyword)
+            // But repo method signature is GetListAsync(userId, keyword)
+            // Existing logic handles 'dev', 'test', 'p1' specially.
+            // I should update Repository to handle these or filter in memory.
+            // Since dataset is small per user, memory filter is fine.
+            
+            var list = await Repository.GetListAsync(qq); // Get all for user
+            
             if (!string.IsNullOrEmpty(cmdPara))
             {
-                if (cmdPara.Equals("dev", StringComparison.OrdinalIgnoreCase)) sWhere += " and Category = 'Dev'";
-                else if (cmdPara.Equals("test", StringComparison.OrdinalIgnoreCase)) sWhere += " and Category = 'Test'";
-                else if (cmdPara.Equals("p1", StringComparison.OrdinalIgnoreCase)) sWhere += " and Priority = 'High'";
-                else sWhere += $" and TodoTitle like '%{cmdPara}%'";
+                if (cmdPara.Equals("dev", StringComparison.OrdinalIgnoreCase)) list = list.Where(t => t.Category == "Dev");
+                else if (cmdPara.Equals("test", StringComparison.OrdinalIgnoreCase)) list = list.Where(t => t.Category == "Test");
+                else if (cmdPara.Equals("p1", StringComparison.OrdinalIgnoreCase)) list = list.Where(t => t.Priority == "High");
+                else list = list.Where(t => t.TodoTitle.Contains(cmdPara, StringComparison.OrdinalIgnoreCase));
             }
 
-            string columns = $"{SqlTop(topN)} TodoNo, Category, Priority, Progress, {SqlIsNull("substring(TodoTitle, 1, 20)", "''")}";
-            string res = await QueryWhereAsync(columns, sWhere, "TodoNo desc", "#{0} [{1}] [{2}] [{3}%] {4}\n", $"{{c}}/{await CountAsync(qq)}");
-            return res.IsNull() ? $"太好了，没有todo" : res;
+            var totalCount = await CountAsync(qq);
+            var displayList = list.Take(topN).ToList();
+
+            if (!displayList.Any()) return $"太好了，没有todo";
+
+            string result = "";
+            // Header: {c}/{total}
+            result += $"{displayList.Count}/{totalCount}\n";
+            
+            foreach (var t in displayList)
+            {
+                // "#{0} [{1}] [{2}] [{3}%] {4}\n"
+                // TodoNo, Category, Priority, Progress, TodoTitle(truncated 20)
+                string title = t.TodoTitle.Length > 20 ? t.TodoTitle.Substring(0, 20) : t.TodoTitle;
+                result += $"#{t.TodoNo} [{t.Category}] [{t.Priority}] [{t.Progress}%] {title}\n";
+            }
+
+            return result;
         }
 
         public static string GetTodos(long qq, string cmdPara, int topN = 5)

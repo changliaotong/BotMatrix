@@ -36,7 +36,7 @@ namespace BotWorker.Domain.Models.BotMessages
                     else
                     {
                         await wrapper.RollbackAsync();
-                        return $"请押积分，您的{积分类型}：{creditValue:N0}";
+                        return $"请押积分，您的积分：{creditValue:N0}";
                     }
                 }
 

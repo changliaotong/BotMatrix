@@ -1,11 +1,31 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using BotWorker.Common;
+using BotWorker.Common.Extensions;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    public class GroupWarn : MetaData<GroupWarn>
+    [Table("Warn")]
+    public class GroupWarn
     {
-        public override string TableName => "Warn";
-        public override string KeyField => "Id";
+        private static IGroupWarnRepository Repo => GlobalConfig.ServiceProvider!.GetRequiredService<IGroupWarnRepository>();
+        private static IGroupRepository GroupRepo => GlobalConfig.ServiceProvider!.GetRequiredService<IGroupRepository>();
+
+        [Key]
+        public long Id { get; set; }
+        public long BotUin { get; set; }
+        public long GroupId { get; set; }
+        public long UserId { get; set; }
+        public string WarnInfo { get; set; } = string.Empty;
+        public long InsertBy { get; set; }
+        public DateTime InsertDate { get; set; }
+
         public static string RegexCmdWarn => @"^[#＃﹟]?(撤回|扣分|警告|禁言|踢出|拉黑|加黑)词 *([＋－+-]*) *([\s\S]*)$";
         public const string regexParaKeyword = @"(?<keyword>[^ ]+[\s\S]*?[ $]*)";
         public const string regexQqImage = @"\[Image[\d\w {}-]*(.(jpg|png))*]";
@@ -44,7 +64,7 @@ namespace BotWorker.Domain.Entities
                 return "敏感词长度不能大于10";
 
             //增加敏感词
-            string keyword = await GroupInfo.GetValueAsync(fieldName, groupID);
+            string keyword = await GroupRepo.GetValueAsync<string>(fieldName, groupID) ?? "";
             if (cmdOper == "+")
             {
                 operName = "添加";
@@ -84,8 +104,8 @@ namespace BotWorker.Domain.Entities
             else
                 return "操作符不正确";
 
-            return await GroupInfo.SetValueAsync(fieldName, keyword, groupID) == -1
-                ? $"{operName}{cmdName}{RetryMsg}"
+            return await GroupRepo.SetValueAsync(fieldName, keyword, groupID) == -1
+                ? $"{operName}{cmdName}{Common.Common.RetryMsg}"
                 : $"{operName}{cmdName}结果：{res}";
         }
 
@@ -223,7 +243,7 @@ namespace BotWorker.Domain.Entities
             cmdPara = GetCmdPara(cmdPara);
             cmdPara2 = GetCmdPara(cmdPara2);
             string key_field = GetFieldName(cmdPara2);
-            string keyword = GroupInfo.GetValue(key_field, group_id);
+            string keyword = GroupRepo.GetValueAsync<string>(key_field, group_id).GetAwaiter().GetResult() ?? "";
             List<string> keys = [.. keyword.Split('|')];
             return keys.Contains(cmdPara);
         }
@@ -268,7 +288,7 @@ namespace BotWorker.Domain.Entities
             cmdPara = GetCmdPara(cmdPara);
             cmdPara2 = GetCmdPara(cmdPara2);
             string key_field = GetFieldName(cmdPara2);
-            string keyword = await GroupInfo.GetValueAsync(key_field, group_id);
+            string keyword = await GroupRepo.GetValueAsync<string>(key_field, group_id) ?? "";
             List<string> keys = [.. keyword.Split('|')];
             return keys.Contains(cmdPara);
         }
@@ -280,7 +300,7 @@ namespace BotWorker.Domain.Entities
                 return "格式不正确，请发送 清警告 + QQ";
 
             if (await ClearWarnAsync(groupId, cmdPara.GetAtUserId()) == -1)
-                return  RetryMsg;
+                return Common.Common.RetryMsg;
 
            return "该用户警告已清除！";
         }
@@ -298,7 +318,7 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<long> WarnCountAsync(long userId, long groupId)
         {
-            return await CountWhereAsync($"GroupId = {groupId} and UserId = {userId}");
+            return await Repo.CountByGroupAndUserAsync(groupId, userId);
         }
 
         public static int AppendWarn(long botUin, long userId, long groupId, string warnInfo, long insertBy) 
@@ -306,20 +326,23 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> AppendWarnAsync(long botUin, long userId, long groupId, string warnInfo, long insertBy)
         {
-            return await InsertAsync([
-                            new Cov("BotUin", botUin),
-                            new Cov("GroupId", groupId),
-                            new Cov("UserId", userId),
-                            new Cov("WarnInfo", warnInfo),
-                            new Cov("InsertBy", insertBy),
-                        ]);
+            var warn = new GroupWarn
+            {
+                BotUin = botUin,
+                GroupId = groupId,
+                UserId = userId,
+                WarnInfo = warnInfo,
+                InsertBy = insertBy,
+                InsertDate = DateTime.Now
+            };
+            return await Repo.AddAsync(warn);
         }
 
         public static int ClearWarn(long groupId, long qq) => ClearWarnAsync(groupId, qq).GetAwaiter().GetResult();
 
         public static async Task<int> ClearWarnAsync(long groupId, long qq)
         {
-            return await DeleteAsync(groupId, qq);
+            return await Repo.DeleteByGroupAndUserAsync(groupId, qq);
         }
 
     }

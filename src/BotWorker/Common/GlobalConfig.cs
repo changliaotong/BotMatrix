@@ -10,12 +10,15 @@ namespace BotWorker.Common
     {
         private static IConfiguration? _configuration;
 
+        public static IServiceProvider? ServiceProvider { get; set; }
+
         public static JwtSettings Jwt { get; private set; } = new();
         public static string ConnString { get; set; } = string.Empty;
         public static DatabaseType DbType { get; set; } = DatabaseType.SqlServer;
         public static string RedisConnection { get; set; } = string.Empty;
         public static string SignalRConnString { get; set; } = string.Empty;
         public static string KnowledgeBaseConnection { get; set; } = string.Empty;
+        public static string BaseInfoConnection { get; set; } = string.Empty;
 
         public static DatabaseType GetDatabaseType(string connectionString)
         {
@@ -39,9 +42,11 @@ namespace BotWorker.Common
             Jwt = config.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
             ConnString = config.GetConnectionString("DefaultConnection") ?? string.Empty;
             KnowledgeBaseConnection = config.GetConnectionString("KnowledgeBaseConnection") ?? string.Empty;
+            BaseInfoConnection = config.GetConnectionString("BaseInfoConnection") ?? string.Empty;
             
             Console.WriteLine($"[CONFIG INFO] Default DB connection string loaded. Length: {ConnString.Length}");
             Console.WriteLine($"[CONFIG INFO] KnowledgeBase connection string loaded. Length: {KnowledgeBaseConnection.Length}");
+            Console.WriteLine($"[CONFIG INFO] BaseInfo connection string loaded. Length: {BaseInfoConnection.Length}");
             
             if (ConnString.Length > 0)
             {

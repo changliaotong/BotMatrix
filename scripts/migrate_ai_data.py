@@ -43,7 +43,7 @@ def migrate():
             api_key = cred.ApiKey if cred else ''
             
             pg_cursor.execute(
-                "INSERT INTO ai_providers (id, name, base_url, type, api_key, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, base_url = EXCLUDED.base_url, api_key = EXCLUDED.api_key",
+                "INSERT INTO ai_providers (id, name, endpoint, type, api_key, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, endpoint = EXCLUDED.endpoint, api_key = EXCLUDED.api_key",
                 (p.Id, p.Name, p.BaseUrl, 'openai', api_key, datetime.datetime.now(), datetime.datetime.now())
             )
 
@@ -59,20 +59,35 @@ def migrate():
             if m.SupportsStreaming: capabilities.append("stream")
             capabilities_json = ",".join(capabilities)
             
+            # 确定模型类型
+            model_type = "chat"
+            if "embedding" in m.Name.lower():
+                model_type = "embedding"
+            elif "image" in m.Name.lower() or "dall-e" in m.Name.lower():
+                model_type = "image"
+            
+            # 确定 BaseUrl (如果是豆包)
+            base_url = None
+            if "doubao" in m.Name.lower():
+                base_url = "https://ark.cn-beijing.volces.com/api/v3"
+
             pg_cursor.execute(
                 """INSERT INTO ai_models (
-                    id, provider_id, model_id, model_name, context_size, capabilities, created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) 
+                    id, provider_id, name, api_model_id, context_window, capabilities, type, base_url, is_active, is_paused, created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
                 ON CONFLICT (id) DO UPDATE SET 
                     provider_id = EXCLUDED.provider_id,
-                    model_id = EXCLUDED.model_id,
-                    model_name = EXCLUDED.model_name,
-                    context_size = EXCLUDED.context_size,
+                    name = EXCLUDED.name,
+                    api_model_id = EXCLUDED.api_model_id,
+                    context_window = EXCLUDED.context_window,
                     capabilities = EXCLUDED.capabilities,
+                    type = EXCLUDED.type,
+                    base_url = EXCLUDED.base_url,
                     updated_at = EXCLUDED.updated_at""",
                 (
                     m.Id, m.ProviderId, m.Name, m.Name, 
                     m.ContextLength or 4096, capabilities_json,
+                    model_type, base_url, True, False,
                     datetime.datetime.now(), datetime.datetime.now()
                 )
             )

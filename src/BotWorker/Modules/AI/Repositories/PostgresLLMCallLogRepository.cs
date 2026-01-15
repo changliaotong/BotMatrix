@@ -5,6 +5,8 @@ using BotWorker.Modules.AI.Interfaces;
 using BotWorker.Modules.AI.Models;
 using Dapper;
 
+using BotWorker.Infrastructure.Persistence.Repositories;
+
 namespace BotWorker.Modules.AI.Repositories
 {
     public class PostgresLLMCallLogRepository : BasePostgresRepository<LLMCallLog>, ILLMCallLogRepository

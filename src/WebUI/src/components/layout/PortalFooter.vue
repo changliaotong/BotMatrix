@@ -16,8 +16,8 @@
               </div>
             </div>
             <div class="flex flex-col">
-              <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ tt('common.project_name') }}</span>
-              <span class="text-[8px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ tt('common.nexus_os') }}</span>
+              <span class="text-xl font-black tracking-tighter text-[var(--text-main)] leading-none uppercase">{{ isEarlyMeowPage ? '早喵机器人' : tt('common.project_name') }}</span>
+              <span class="text-[8px] uppercase tracking-[0.4em] font-bold text-[var(--text-muted)]">{{ isEarlyMeowPage ? 'EARLY MEOW' : tt('common.nexus_os') }}</span>
             </div>
           </div>
           <p class="text-[var(--text-muted)] max-w-sm leading-relaxed text-sm font-medium">
@@ -27,27 +27,27 @@
         <div>
           <h4 class="text-[12px] font-black uppercase tracking-[0.2em] mb-8 text-[var(--text-main)]">{{ tt('footer.zaomiao') }}</h4>
           <ul class="space-y-4 text-[var(--text-muted)] text-[12px] font-black uppercase tracking-widest">
-            <li><router-link to="/meow" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.home') }}</router-link></li>
-            <li><router-link to="/meow/tech" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.tech') }}</router-link></li>
-            <li><router-link to="/meow/ecosystem" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.ecosystem') }}</router-link></li>
-            <li><router-link to="/meow/pricing" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.pricing') }}</router-link></li>
+            <li><router-link to="/" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.home') }}</router-link></li>
+            <li><router-link to="/tech" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.tech') }}</router-link></li>
+            <li><router-link to="/ecosystem" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.ecosystem') }}</router-link></li>
+            <li><router-link to="/pricing" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.zaomiao.pricing') }}</router-link></li>
           </ul>
         </div>
         <div>
           <h4 class="text-[12px] font-black uppercase tracking-[0.2em] mb-8 text-[var(--text-main)]">{{ tt('footer.digital_staff') }}</h4>
           <ul class="space-y-4 text-[var(--text-muted)] text-[12px] font-black uppercase tracking-widest">
-            <li><router-link to="/bots/digital-employee#vision" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.vision') }}</router-link></li>
-            <li><router-link to="/bots/digital-employee#revolution" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.revolution') }}</router-link></li>
-            <li><router-link to="/bots/digital-employee#kpi" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.kpi') }}</router-link></li>
-            <li><router-link to="/bots/digital-employee#security" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.security') }}</router-link></li>
+            <li><router-link to="/digital-employee#vision" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.vision') }}</router-link></li>
+            <li><router-link to="/digital-employee#revolution" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.revolution') }}</router-link></li>
+            <li><router-link to="/digital-employee#kpi" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.kpi') }}</router-link></li>
+            <li><router-link to="/digital-employee#security" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.digital_staff.security') }}</router-link></li>
           </ul>
         </div>
         <div>
           <h4 class="text-[12px] font-black uppercase tracking-[0.2em] mb-8 text-[var(--text-main)]">{{ tt('footer.more') }}</h4>
           <ul class="space-y-4 text-[var(--text-muted)] text-[12px] font-black uppercase tracking-widest">
-            <li><router-link to="/docs" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.docs') }}</router-link></li>
-            <li><router-link to="/pricing" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.plans') }}</router-link></li>
-            <li><router-link to="/about" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.about') }}</router-link></li>
+            <li><router-link to="/botmatrix/docs" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.docs') }}</router-link></li>
+            <li><router-link to="/botmatrix/pricing" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.plans') }}</router-link></li>
+            <li><router-link to="/botmatrix/about" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.about') }}</router-link></li>
             <li><a href="#" class="hover:text-[var(--matrix-color)] transition-colors">{{ tt('footer.privacy') }}</a></li>
           </ul>
         </div>
@@ -76,6 +76,14 @@
 <script setup lang="ts">
 import { Github, Heart } from 'lucide-vue-next';
 import { useI18n } from '@/utils/i18n';
+import { useRoute } from 'vue-router';
+import { computed } from 'vue';
 
 const { t: tt } = useI18n();
+const route = useRoute();
+
+const earlyMeowPaths = ['/', '/guide-angel', '/manual', '/tech', '/ecosystem', '/pricing', '/console', '/digital-employee', '/digital-employee/dashboard'];
+const isEarlyMeowPage = computed(() => {
+  return earlyMeowPaths.includes(route.path);
+});
 </script>

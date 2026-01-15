@@ -27,6 +27,6 @@
 - **覆盖率监控**：AI 会监控代码覆盖率，主动提醒哪些模块缺乏测试保护。
 
 ## 4. 实施路径
-1. **基础设施建立**：搭建 `BotMatrix.Tests` 工程。
+1.30. **基础设施建立**：搭建 `EarlyMeow.Tests` 工程。
 2. **核心逻辑覆盖**：优先覆盖 `PluginManager`、`SessionManager` 和 `ORM`。
 3. **闭环建立**：将测试结果接入 `DigitalStaffService` 的 KPI 评价体系。

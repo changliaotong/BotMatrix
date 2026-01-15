@@ -188,7 +188,7 @@ public partial class BotMessage : MetaData<BotMessage>
             GetChatHistory();
 
             (ModelId, var providerName, var modelName) = LLMModel.GetModelInfo(CurrentAgent.ModelId);
-            var provider = LLMApp._manager.GetProvider(providerName ?? "Doubao");
+            var provider = LLMApp?._manager.GetProvider(providerName ?? "Doubao");
             if (provider != null)
             {
                 AnswerAI = await provider.ExecuteAsync(History, new ModelExecutionOptions { ModelId = modelName });

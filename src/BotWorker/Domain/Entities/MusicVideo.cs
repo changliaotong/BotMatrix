@@ -1,37 +1,54 @@
-using Mirai.Net.Data.Messages.Concretes;
+using System;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Mirai.Net.Data.Messages.Concretes;
+using BotWorker.Common;
+using System.Linq;
 
 namespace BotWorker.Domain.Entities
 {
-    public class MusicVideo : MetaData<MusicVideo>
+    [Table("MusicVideo")]
+    public class MusicVideo
     {
-        public override string TableName => "MusicVideo";
-        public override string KeyField => "Id";
+        private static IMusicVideoRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IMusicVideoRepository>() 
+            ?? throw new InvalidOperationException("IMusicVideoRepository not registered");
+
+        [Key]
+        public long Id { get; set; }
+        public string MvVid { get; set; } = string.Empty;
+        public string MvContent { get; set; } = string.Empty;
+        public long GroupId { get; set; }
+        public long UserId { get; set; }
+        public DateTime InsertDate { get; set; }
 
         // 通过MusicVideoID合成App消息
-        public static AppMessage GetAppMessage(string mvVid)
+        public static async Task<AppMessage> GetAppMessageAsync(string mvVid)
         {
             return new AppMessage
             {
-                Content = GetWhere("MvContent", $"MvVID='{mvVid}'")
+                Content = await Repository.GetContentByVidAsync(mvVid)
             }; 
         }
 
         // 收到MV分享消息时添加到MV库
-        public static int HandleApp(long botUin, long groupId, long userId, AppMessage message)
+        public static async Task<int> HandleAppAsync(long botUin, long groupId, long userId, AppMessage message)
         {
             // ShowMessage($"content:{message.Content}");
             int i = 0;
             string mv_vid = GetVid(message.Content);
             if (mv_vid != "")
             {
-                if (ExistsMv(message.Content))
+                if (await ExistsMvAsync(message.Content))
                 {
                     // ShowMessage("此MV已存在", ConsoleColor.DarkGreen);
                 }
                 else
                 {
-                    i = Append(mv_vid, message.Content, groupId, userId);
+                    i = await AppendAsync(mv_vid, message.Content, groupId, userId);
                     if (i == -1)
                         Logger.Error("添加MV失败");
                     else
@@ -39,32 +56,13 @@ namespace BotWorker.Domain.Entities
                         // ShowMessage($"✅ 添加MV成功！\nVID：{mv_vid}\nMV数量：{CountAsync}", ConsoleColor.DarkRed);
                     }
                 }
-                //if (Common.IsNum(mv_vid))
-                //{
-                //    //处理问答库
-                //    bool IsDj = message.Title.ToUpper().Contains("DJ");
-                //    string dj = IsDj ? "dj" : "";
-                //    string title = Regex.Replace(message.Title, @"[\(（][\s|\S]*?[\)）]?$", "");
-                //    AppendAnswer(group_id, userId, $"点歌{title}{dj}", song.SongId, message.JumpUrl);
-                //    AppendAnswer(group_id, userId, $"点歌{title}{message.Summary}{dj}", song.SongId, message.JumpUrl);
-                //    AppendAnswer(group_id, userId, $"点歌{message.Summary}{title}{dj}", song.SongId, message.JumpUrl);
-                //    var singers = message.Summary.Split("/");
-                //    if (singers.Length > 1)
-                //    {
-                //        foreach (var singer in singers)
-                //        {
-                //            AppendAnswer(group_id, userId, $"点歌{title}{singer}{dj}", song.SongId, message.JumpUrl);
-                //            AppendAnswer(group_id, userId, $"点歌{singer}{title}{dj}", song.SongId, message.JumpUrl);
-                //        }
-                //    }
-                //}
             }
             return i;
         }
 
-        public static bool ExistsMv(string content)
+        public static async Task<bool> ExistsMvAsync(string content)
         {
-            return ExistsField("MvVid", GetVid(content));
+            return await Repository.ExistsByVidAsync(GetVid(content));
         }
 
         public static string GetVid(string content)
@@ -83,14 +81,16 @@ namespace BotWorker.Domain.Entities
             return res;
         }
 
-        public static int Append(string mvVid, string mvContent, long groupId, long userId)
+        public static async Task<int> AppendAsync(string mvVid, string mvContent, long groupId, long userId)
         {
-            return Insert([
-                            new Cov("MvVid", mvVid),
-                            new Cov("MvContent", mvContent),
-                            new Cov("GroupId", groupId),
-                            new Cov("UserId", userId)
-                        ]);
+            return await Repository.AddAsync(new MusicVideo
+            {
+                MvVid = mvVid,
+                MvContent = mvContent,
+                GroupId = groupId,
+                UserId = userId,
+                InsertDate = DateTime.Now
+            });
         }
     }
 }

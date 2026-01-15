@@ -183,4 +183,54 @@ namespace BotWorker.Modules.AI.Skills
             return $"PlanSkill 不支持行动：{action}";
         }
     }
+
+    public class ReviewSkills : ISkill
+    {
+        private readonly IAIService _aiService;
+
+        public ReviewSkills(IAIService aiService)
+        {
+            _aiService = aiService;
+        }
+
+        public string Name => "ReviewTools";
+        public string Description => "代码/结果评审工具，支持 REVIEW";
+        public string[] SupportedActions => new[] { "REVIEW" };
+
+        public async Task<string> ExecuteAsync(string action, string target, string reason, Dictionary<string, string> metadata)
+        {
+            if (action.ToUpper() == "REVIEW")
+            {
+                var contentToReview = metadata.GetValueOrDefault("Content") ?? target;
+                var projectPath = metadata.GetValueOrDefault("ProjectPath");
+                
+                // 如果 target 是文件名且存在，读取文件内容
+                if (!string.IsNullOrEmpty(projectPath) && !string.IsNullOrEmpty(target) && File.Exists(Path.Combine(projectPath, target)))
+                {
+                    contentToReview = await File.ReadAllTextAsync(Path.Combine(projectPath, target));
+                }
+
+                var evalPrompt = $@"你现在是一名资深架构师和质量审计专家 (Reviewer)。
+请评审以下内容并提供改进建议。
+
+## 评审背景
+{reason}
+
+## 待评审内容 (目标: {target})
+{contentToReview}
+
+## 评审要求
+1. 指出逻辑错误、潜在 Bug 或性能瓶颈。
+2. 评价代码是否符合清洁代码原则 (Clean Code)。
+3. 如果是计划或文档，评审其完整性和可行性。
+
+## 输出格式
+请直接输出评审意见，如果是严重的错误，请明确指出。";
+
+                return await _aiService.ChatAsync(evalPrompt);
+            }
+
+            return $"ReviewSkill 不支持行动：{action}";
+        }
+    }
 }

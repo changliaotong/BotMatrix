@@ -1,6 +1,6 @@
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage: MetaData<BotMessage>
+public partial class BotMessage
 {
         public string GetHeadCQ() => IsQQ && IsGroup ? UserInfo.GetHeadCQ(UserId) : "";
 
@@ -19,14 +19,12 @@ public partial class BotMessage: MetaData<BotMessage>
 
         public bool IsRobotOwner() => Group.RobotOwner == UserId;
 
-        public int AddGroupMember(long groupCredit = 50, string confirmCode = "") => AddGroupMemberAsync(groupCredit, confirmCode).GetAwaiter().GetResult();
-
         public async Task<int> AddGroupMemberAsync(long groupCredit = 50, string confirmCode = "")
         {
             return await GroupMember.AppendAsync(GroupId, UserId, Name, DisplayName);
         }
 
-        public async Task<int> AddClientAsync(long qqRef)
+        public async Task<int> AddClientAsync(long qqRef = 0)
         {
             int i = await UserInfo.AppendAsync(SelfId, GroupId, UserId, Name, qqRef);
             if (i == -1)

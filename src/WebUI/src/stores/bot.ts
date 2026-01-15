@@ -593,7 +593,7 @@ export const useBotStore = defineStore('bot', {
     },
     async fetchManual() {
       try {
-        const { data } = await api.get('/api/admin/manual');
+        const { data } = await api.get('/api/manual');
         return data;
       } catch (err) {
         console.error('Failed to fetch manual:', err);

@@ -69,6 +69,7 @@ export const useSystemStore = defineStore('system', {
           titleKey: 'admin_menu',
           adminOnly: true,
           items: [
+            { id: 'global-dashboard', icon: 'Network', titleKey: 'global_dashboard' },
             { id: 'workers', icon: 'Cpu', titleKey: 'workers' },
             { id: 'users', icon: 'UserCog', titleKey: 'users' },
             { id: 'logs', icon: 'Terminal', titleKey: 'logs' },
