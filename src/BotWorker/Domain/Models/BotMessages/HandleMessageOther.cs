@@ -1,9 +1,9 @@
 ﻿using System.Text.Json.Nodes;
 
-namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public string HandleOtherMessage()
         {
             if (IsImage)

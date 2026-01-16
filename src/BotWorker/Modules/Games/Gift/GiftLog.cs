@@ -1,33 +1,40 @@
-using BotWorker.Domain.Entities;
-using BotWorker.Common.Extensions;
+using System;
 using System.Data;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games.Gift
 {
-    class GiftLog : MetaData<GiftLog>
+    [Table("GiftLog")]
+    public class GiftLog
     {
-        public override string TableName => "GiftLog";
-        public override string KeyField => "Id";
+        private static IGiftLogRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGiftLogRepository>() 
+            ?? throw new InvalidOperationException("IGiftLogRepository not registered");
 
-        public static (string, IDataParameter[]) SqlAppend(long botUin, long groupId, string groupName, long qq, string name, long robotOwner, string ownerName, long qqGift, string giftClientName,
-            long giftId, string giftName, int giftCount, long giftCredit)
+        [Key]
+        public long Id { get; set; }
+        public long BotUin { get; set; }
+        public long GroupId { get; set; }
+        public string GroupName { get; set; } = string.Empty;
+        public long UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public long RobotOwner { get; set; }
+        public string OwnerName { get; set; } = string.Empty;
+        public long GiftUserId { get; set; }
+        public string GiftUserName { get; set; } = string.Empty;
+        public long GiftId { get; set; }
+        public string GiftName { get; set; } = string.Empty;
+        public int GiftCount { get; set; }
+        public long GiftCredit { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
         {
-            return SqlInsert([
-                                new Cov("BotUin", botUin),
-                                new Cov("GroupId", groupId),
-                                new Cov("GroupName", groupName),
-                                new Cov("UserId", qq),
-                                new Cov("UserName", name),
-                                new Cov("RobotOwner", robotOwner),
-                                new Cov("OwnerName", ownerName),
-                                new Cov("GiftUserId", qqGift),
-                                new Cov("GiftUserName", giftClientName),
-                                new Cov("GiftId", giftId),
-                                new Cov("GiftName", giftName),
-                                new Cov("GiftCount", giftCount),
-                                new Cov("GiftCredit", giftCredit),
-                            ]);
+            return await Repository.InsertAsync(this, trans);
         }
     }
 }

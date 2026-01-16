@@ -1,5 +1,11 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-using System.Reflection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -33,8 +39,15 @@ namespace BotWorker.Modules.Games
 
     #region Domain Model
 
-    public class Pet : MetaDataGuid<Pet>
+    [Table("UserPets")]
+    public class Pet
     {
+        private static IPetRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IPetRepository>() 
+            ?? throw new InvalidOperationException("IPetRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public PetType Type { get; set; } = PetType.Cat;
@@ -54,9 +67,17 @@ namespace BotWorker.Modules.Games
         public int Level { get; set; } = 1;
         public double Experience { get; set; } = 0;
 
-        [DbIgnore] public double ExperienceToNextLevel => 100 * Math.Pow(Level, 1.2);
-        [DbIgnore] public int Age => (DateTime.Now - AdoptTime).Days;
-        [DbIgnore] public string PersonalityName => Personality switch
+        [Write(false)]
+        [Computed]
+        public double ExperienceToNextLevel => 100 * Math.Pow(Level, 1.2);
+
+        [Write(false)]
+        [Computed]
+        public int Age => (DateTime.Now - AdoptTime).Days;
+
+        [Write(false)]
+        [Computed]
+        public string PersonalityName => Personality switch
         {
             PetPersonality.Ordinary => "平凡",
             PetPersonality.Energetic => "精力充沛",
@@ -66,14 +87,23 @@ namespace BotWorker.Modules.Games
             _ => "未知"
         };
 
-        [DbIgnore] public List<string> Events { get; } = new();
-
-        public override string TableName => "UserPets";
-        public override string KeyField => "Id";
+        [Write(false)]
+        [Computed]
+        public List<string> Events { get; } = new();
 
         public static async Task<Pet?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetByUserIdAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
 
         public async Task UpdateStateByTimeAsync(PetConfig config)
@@ -172,23 +202,37 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    public class PetInventory : MetaDataGuid<PetInventory>
+    [Table("UserPetInventory")]
+    public class PetInventory
     {
+        private static IPetInventoryRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IPetInventoryRepository>() 
+            ?? throw new InvalidOperationException("IPetInventoryRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string ItemId { get; set; } = string.Empty;
-        public new int Count { get; set; } = 0;
-
-        public override string TableName => "UserPetInventory";
-        public override string KeyField => "Id";
+        public int Count { get; set; } = 0;
 
         public static async Task<List<PetInventory>> GetByUserAsync(string userId)
         {
-            return await QueryWhere("UserId = @p1 AND Count > 0", SqlParams(("@p1", userId)));
+            return await Repository.GetByUserAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
 
         public static async Task AddItemAsync(string userId, string itemId, int count)
         {
-            var item = (await QueryWhere("UserId = @p1 AND ItemId = @p2", SqlParams(("@p1", userId), ("@p2", itemId)))).FirstOrDefault();
+            var item = await Repository.GetItemAsync(userId, itemId);
             if (item == null)
             {
                 item = new PetInventory { UserId = userId, ItemId = itemId, Count = count };

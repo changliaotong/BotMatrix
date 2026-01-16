@@ -1,6 +1,5 @@
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Models;
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Infrastructure.Utils.Schema;
 using Microsoft.Extensions.Logging;
 using System;
@@ -10,87 +9,6 @@ using System.Threading.Tasks;
 
 namespace BotWorker.Modules.Games
 {
-    public enum StaffRole
-    {
-        ProductManager, // 需求分析与规划
-        Developer,      // 自动编程与系统升级
-        Tester,         // 自动化测试与质量控制
-        CustomerService,// 自动答疑与用户引导
-        Sales,          // 自动营销与流量变现
-        AfterSales      // 异常监测与系统维护
-    }
-
-    public class DigitalStaff : MetaDataGuid<DigitalStaff>
-    {
-        public override string TableName => "DigitalStaff";
-        public override string KeyField => "Id";
-
-        public string OwnerUserId { get; set; } = string.Empty;
-        public string StaffName { get; set; } = string.Empty;
-        public StaffRole Role { get; set; }
-        public int Level { get; set; } = 1;
-        public long TotalProfitGenerated { get; set; } = 0; // 累计创造收益
-        public long SalaryToken { get; set; } = 0;          // 已消耗的虚拟薪资(Token)
-        public long SalaryLimit { get; set; } = 1000000;    // 薪资上限
-        public double KpiScore { get; set; } = 100.0;       // 平均绩效评分
-        public string SystemPrompt { get; set; } = string.Empty; // 核心提示词
-        public DateTime HireDate { get; set; } = DateTime.Now;
-        public string CurrentStatus { get; set; } = "Idle"; // Idle, Working, Evolving
-        public string AssignedTaskId { get; set; } = string.Empty; // 当前分配的任务ID
-    }
-
-    /// <summary>
-    /// 认知记忆实体
-    /// </summary>
-    public class CognitiveMemory : MetaDataGuid<CognitiveMemory>
-    {
-        public override string TableName => "CognitiveMemories";
-        public override string KeyField => "Id";
-
-        public string StaffId { get; set; } = string.Empty; // 关联员工ID
-        public string UserId { get; set; } = string.Empty;  // 关联用户ID (若为角色记忆则为空)
-        public string Category { get; set; } = "General";   // 记忆类别
-        public string Content { get; set; } = string.Empty; // 记忆内容
-        public int Importance { get; set; } = 3;            // 重要程度 (1-5)
-        public string Embedding { get; set; } = string.Empty; // 向量表示 (JSON)
-        public DateTime LastSeen { get; set; } = DateTime.Now;
-        public DateTime CreateTime { get; set; } = DateTime.Now;
-    }
-
-    /// <summary>
-    /// 绩效考核记录
-    /// </summary>
-    public class StaffKpi : MetaDataGuid<StaffKpi>
-    {
-        public override string TableName => "StaffKpis";
-        public override string KeyField => "Id";
-
-        public string StaffId { get; set; } = string.Empty;
-        public string MetricName { get; set; } = string.Empty; // 考核指标
-        public double Score { get; set; } = 0;                 // 评分
-        public string Detail { get; set; } = string.Empty;     // 详情/反馈
-        public DateTime CreateTime { get; set; } = DateTime.Now;
-    }
-
-    /// <summary>
-    /// 员工任务实体
-    /// </summary>
-    public class StaffTask : MetaDataGuid<StaffTask>
-    {
-        public override string TableName => "StaffTasks";
-        public override string KeyField => "Id";
-
-        public string Title { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public string TaskType { get; set; } = string.Empty; // Dev, Test, CS, Sales
-        public string Status { get; set; } = "Pending"; // Pending, InProgress, Completed, Failed
-        public string CreatorUserId { get; set; } = string.Empty;
-        public string ExecutorStaffId { get; set; } = string.Empty;
-        public string Result { get; set; } = string.Empty;
-        public DateTime CreateTime { get; set; } = DateTime.Now;
-        public DateTime? CompleteTime { get; set; }
-    }
-
     [BotPlugin(
         Id = "core.digital_staff",
         Name = "数字员工管理系统",
@@ -102,11 +20,23 @@ namespace BotWorker.Modules.Games
     public class DigitalStaffService : IPlugin
     {
         private readonly ILogger<DigitalStaffService>? _logger;
+        private readonly IDigitalStaffRepository _staffRepo;
+        private readonly IStaffTaskRepository _taskRepo;
+        private readonly ICognitiveMemoryRepository _memoryRepo;
+        private readonly IStaffKpiRepository _kpiRepo;
         private IRobot? _robot;
 
-        public DigitalStaffService() { }
-        public DigitalStaffService(ILogger<DigitalStaffService> logger)
+        public DigitalStaffService(
+            IDigitalStaffRepository staffRepo,
+            IStaffTaskRepository taskRepo,
+            ICognitiveMemoryRepository memoryRepo,
+            IStaffKpiRepository kpiRepo,
+            ILogger<DigitalStaffService> logger)
         {
+            _staffRepo = staffRepo;
+            _taskRepo = taskRepo;
+            _memoryRepo = memoryRepo;
+            _kpiRepo = kpiRepo;
             _logger = logger;
         }
 
@@ -119,7 +49,6 @@ namespace BotWorker.Modules.Games
         public async Task InitAsync(IRobot robot)
         {
             _robot = robot;
-            await EnsureTablesCreatedAsync();
 
             await robot.RegisterSkillAsync(new SkillCapability
             {
@@ -143,14 +72,6 @@ namespace BotWorker.Modules.Games
         {
             _logger?.LogInformation("数字员工服务已停止");
             await Task.CompletedTask;
-        }
-
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await DigitalStaff.EnsureTableCreatedAsync();
-            await StaffTask.EnsureTableCreatedAsync();
-            await CognitiveMemory.EnsureTableCreatedAsync();
-            await StaffKpi.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HireStaffAsync(IPluginContext ctx, string[] args)
@@ -181,7 +102,7 @@ namespace BotWorker.Modules.Games
 
             try
             {
-                await staff.InsertAsync();
+                await _staffRepo.InsertAsync(staff);
                 return $"🎉 恭喜！您已成功雇佣【{name}】（职位：{role}）。现在可以尝试【派单】了。";
             }
             catch (Exception ex)
@@ -219,40 +140,40 @@ namespace BotWorker.Modules.Games
                 Status = "Pending"
             };
 
-            await task.InsertAsync();
+            await _taskRepo.InsertAsync(task);
             return $"✅ 任务【{task.Title}】已发布。空闲员工将自动尝试【认领】。";
         }
 
         private async Task<string> ClaimTaskAsync(IPluginContext ctx, string[] args)
         {
-            var freeStaff = await DigitalStaff.QueryWhere("OwnerUserId = @p1 AND CurrentStatus = 'Idle'", DigitalStaff.SqlParams(("@p1", ctx.UserId)));
+            var freeStaff = await _staffRepo.GetByOwnerAsync(ctx.UserId, "Idle");
             var staff = freeStaff.FirstOrDefault();
 
             if (staff == null) return "❌ 您当前没有空闲的员工。";
 
-            var pendingTasks = await StaffTask.QueryWhere("Status = 'Pending' ORDER BY CreateTime ASC");
+            var pendingTasks = await _taskRepo.GetPendingTasksAsync();
             var task = pendingTasks.FirstOrDefault();
 
             if (task == null) return "📭 任务池目前是空的。";
 
             staff.CurrentStatus = "Working";
             staff.AssignedTaskId = task.Guid.ToString();
-            await staff.UpdateAsync();
+            await _staffRepo.UpdateAsync(staff);
 
             task.Status = "InProgress";
             task.ExecutorStaffId = staff.Guid.ToString();
-            await task.UpdateAsync();
+            await _taskRepo.UpdateAsync(task);
 
             return $"💼 员工【{staff.StaffName}】已认领任务：{task.Title}，开始投入生产。";
         }
 
         private async Task ProcessStaffTasksAsync()
         {
-            var workingStaff = await DigitalStaff.QueryWhere("CurrentStatus = 'Working'");
-            foreach (var staff in workingStaff)
+            var workingStaff = await _staffRepo.GetAllAsync(); // TODO: Add GetByStatusAsync to IDigitalStaffRepository if needed, or use GetByOwnerAsync with null owner
+            foreach (var staff in workingStaff.Where(s => s.CurrentStatus == "Working"))
             {
                 if (!Guid.TryParse(staff.AssignedTaskId, out var taskGuid)) continue;
-                var task = await StaffTask.LoadAsync(taskGuid);
+                var task = await _taskRepo.GetByGuidAsync(taskGuid);
                 if (task == null || task.Status != "InProgress") continue;
 
                 // 模拟工作进度与真实产出
@@ -284,11 +205,11 @@ namespace BotWorker.Modules.Games
                 task.Status = "Completed";
                 task.Result = oracleResponse?.ToString() ?? "先知暂未回应。";
                 task.CompleteTime = DateTime.Now;
-                await task.UpdateAsync();
+                await _taskRepo.UpdateAsync(task);
 
                 staff.CurrentStatus = "Idle";
                 staff.AssignedTaskId = string.Empty;
-                await staff.UpdateAsync();
+                await _staffRepo.UpdateAsync(staff);
 
                 await _robot.SendMessageAsync("system", "bot", null, staff.OwnerUserId, 
                     $"🎧 客服员工【{staff.StaffName}】已为您获取答案：\n\n{task.Result}");
@@ -301,11 +222,11 @@ namespace BotWorker.Modules.Games
             task.Status = "Completed";
             task.Result = "已完成系统例行检查，清理了冗余的临时数据。";
             task.CompleteTime = DateTime.Now;
-            await task.UpdateAsync();
+            await _taskRepo.UpdateAsync(task);
 
             staff.CurrentStatus = "Idle";
             staff.AssignedTaskId = string.Empty;
-            await staff.UpdateAsync();
+            await _staffRepo.UpdateAsync(staff);
 
             if (_robot != null)
             {
@@ -393,11 +314,11 @@ namespace BotWorker.Modules.Games
             task.Status = "Completed";
             task.Result = result;
             task.CompleteTime = DateTime.Now;
-            await task.UpdateAsync();
+            await _taskRepo.UpdateAsync(task);
 
             staff.CurrentStatus = "Idle";
             staff.AssignedTaskId = string.Empty;
-            await staff.UpdateAsync();
+            await _staffRepo.UpdateAsync(staff);
 
             // AI 自动审计绩效
             await AuditTaskAsync(staff, task);
@@ -416,15 +337,15 @@ namespace BotWorker.Modules.Games
                 Detail = detail,
                 CreateTime = DateTime.Now
             };
-            await kpi.InsertAsync();
+            await _kpiRepo.InsertAsync(kpi);
 
             // 更新员工平均分
-            var staff = await DigitalStaff.LoadAsync(new Guid(staffId));
+            var staff = await _staffRepo.GetByGuidAsync(new Guid(staffId));
             if (staff != null)
             { 
-                var kpis = await StaffKpi.QueryWhere("StaffId = @p1", StaffKpi.SqlParams(("@p1", staffId)));
+                var kpis = await _kpiRepo.GetByStaffAsync(staffId);
                 staff.KpiScore = kpis.Average(k => k.Score);
-                await staff.UpdateAsync();
+                await _staffRepo.UpdateAsync(staff);
 
                 // 检查是否触发自动进化
                 if (staff.KpiScore > 95.0 && kpis.Count() % 5 == 0)
@@ -442,25 +363,19 @@ namespace BotWorker.Modules.Games
             if (staff.CurrentStatus == "Evolving" || _robot?.AI == null) return;
 
             staff.CurrentStatus = "Evolving";
-            await staff.UpdateAsync();
+            await _staffRepo.UpdateAsync(staff);
 
             try
             {
-                var kpis = await StaffKpi.QueryListAsync(new QueryOptions 
-                { 
-                    FilterSql = "StaffId = @p1", 
-                    OrderBy = "CreateTime DESC", 
-                    Top = 10, 
-                    Parameters = StaffKpi.SqlParams(("@p1", staff.Guid.ToString())) 
-                });
+                var kpis = await _kpiRepo.GetByStaffAsync(staff.Guid.ToString());
                 if (!kpis.Any())
                 {
                     staff.CurrentStatus = "Idle";
-                    await staff.UpdateAsync();
+                    await _staffRepo.UpdateAsync(staff);
                     return;
                 }
 
-                string feedback = string.Join("\n", kpis.Where(k => !string.IsNullOrEmpty(k.Detail)).Select(k => $"- [{k.CreateTime:yyyy-MM-dd}] {k.MetricName}: {k.Detail}"));
+                string feedback = string.Join("\n", kpis.Take(10).Where(k => !string.IsNullOrEmpty(k.Detail)).Select(k => $"- [{k.CreateTime:yyyy-MM-dd}] {k.MetricName}: {k.Detail}"));
                 
                 string systemPromptTemplate = @"你是一个资深的 AI 提示词架构师。你的任务是根据数字员工的当前系统提示词和最近的 KPI 绩效反馈，优化其提示词。
 数字员工信息：
@@ -495,7 +410,7 @@ namespace BotWorker.Modules.Games
                 }
 
                 staff.CurrentStatus = "Idle";
-                await staff.UpdateAsync();
+                await _staffRepo.UpdateAsync(staff);
 
                 // 记录进化记录
                 await RecordKpiAsync(staff.Guid.ToString(), "auto_evolution", staff.KpiScore, $"提示词已自动优化。旧评分: {staff.KpiScore:F2}。反馈摘要: {kpis.Count()} 条记录已处理。");
@@ -504,7 +419,7 @@ namespace BotWorker.Modules.Games
             {
                 _logger?.LogError(ex, $"员工 {staff.StaffName} 进化失败");
                 staff.CurrentStatus = "Idle";
-                await staff.UpdateAsync();
+                await _staffRepo.UpdateAsync(staff);
             }
         }
 
@@ -515,7 +430,7 @@ namespace BotWorker.Modules.Games
         {
             if (_robot?.AI == null) return;
 
-            var memories = await CognitiveMemory.QueryWhere("StaffId = @p1 ORDER BY Category, CreateTime ASC", CognitiveMemory.SqlParams(("@p1", staffId)));
+            var memories = await _memoryRepo.GetByStaffAsync(staffId);
             if (memories.Count() < 10) return;
 
             string prompt = "你是一个记忆管理专家。以下是碎片化记忆片段。请将这些记忆进行逻辑合并、去重并提炼。\n" +
@@ -547,14 +462,24 @@ namespace BotWorker.Modules.Games
             if (newMemories.Any())
             {
                 // 使用事务替换记忆
-                var sqls = new List<string> { $"DELETE FROM CognitiveMemories WHERE StaffId = '{staffId}'" };
-                foreach (var m in newMemories)
+                using var conn = _memoryRepo.CreateConnection();
+                conn.Open();
+                using var trans = conn.BeginTransaction();
+                try
                 {
-                    sqls.Add($"INSERT INTO CognitiveMemories (Id, StaffId, Category, Content, Importance, CreateTime, LastSeen) " +
-                             $"VALUES ('{Guid.NewGuid()}', '{staffId}', '{m.Category}', '{m.Content}', {m.Importance}, '{m.CreateTime:yyyy-MM-dd HH:mm:ss}', '{m.LastSeen:yyyy-MM-dd HH:mm:ss}')");
+                    await _memoryRepo.DeleteByStaffAsync(staffId, trans);
+                    foreach (var m in newMemories)
+                    {
+                        await _memoryRepo.InsertAsync(m, trans);
+                    }
+                    trans.Commit();
+                    _logger?.LogInformation($"员工 {staffId} 记忆提炼完成，新增 {newMemories.Count} 条记忆。");
                 }
-                await BotWorker.Infrastructure.Persistence.Database.SQLConn.ExecTransAsync(sqls.ToArray());
-                _logger?.LogInformation($"员工 {staffId} 记忆提炼完成，新增 {newMemories.Count} 条记忆。");
+                catch (Exception ex)
+                {
+                    trans.Rollback();
+                    _logger?.LogError(ex, $"员工 {staffId} 记忆提炼事务失败");
+                }
             }
         }
 
@@ -579,15 +504,15 @@ namespace BotWorker.Modules.Games
             task.Status = "Completed";
             task.Result = result;
             task.CompleteTime = DateTime.Now;
-            await task.UpdateAsync();
+            await _taskRepo.UpdateAsync(task);
 
             staff.CurrentStatus = "Idle";
             staff.AssignedTaskId = string.Empty;
-            await staff.UpdateAsync();
+            await _staffRepo.UpdateAsync(staff);
 
             // 销售任务可能会产生虚拟收益
             staff.TotalProfitGenerated += 500; 
-            await staff.UpdateAsync();
+            await _staffRepo.UpdateAsync(staff);
 
             // AI 自动审计绩效
             await AuditTaskAsync(staff, task);
@@ -598,7 +523,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetCompanyBoardAsync(string userId)
         {
-            var staffs = await DigitalStaff.QueryWhere("OwnerUserId = @p1", DigitalStaff.SqlParams(("@p1", userId)));
+            var staffs = await _staffRepo.GetByOwnerAsync(userId);
             if (!staffs.Any()) return "🏢 您目前还没有组建团队。使用【雇佣】来开始运营吧！";
 
             var sb = new System.Text.StringBuilder();
@@ -610,7 +535,7 @@ namespace BotWorker.Modules.Games
                 sb.AppendLine($"┃ {icon} {s.StaffName.PadRight(10)} | Lv.{s.Level} | {status}");
             }
             sb.AppendLine("┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫");
-            var pending = await StaffTask.QueryAsync("WHERE Status = 'Pending'");
+            var pending = await _taskRepo.GetPendingTasksAsync();
             sb.AppendLine($"┃ � 待处理任务: {pending.Count()} 个");
             sb.AppendLine("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛");
             return sb.ToString();

@@ -3,7 +3,7 @@ using BotWorker.Common.Utily;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         private const int MaxDepth = 5;
 

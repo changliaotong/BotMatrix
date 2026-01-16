@@ -1,13 +1,24 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-using System.Reflection;
+using System;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
     #region 结婚系统数据模型
 
-    public class UserMarriage : MetaData<UserMarriage>
+    [Table("UserMarriages")]
+    public class UserMarriage
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IUserMarriageRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IUserMarriageRepository>() 
+            ?? throw new InvalidOperationException("IUserMarriageRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string SpouseId { get; set; } = string.Empty;
@@ -20,29 +31,50 @@ namespace BotWorker.Modules.Games
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "UserMarriages";
-        public override string KeyField => "Id";
-
         public static async Task<UserMarriage?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere($"{Quote("UserId")} = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetByUserIdAsync(userId);
         }
 
         public static async Task<UserMarriage> GetOrCreateAsync(string userId)
         {
-            var m = await GetByUserIdAsync(userId);
-            if (m == null)
-            {
-                m = new UserMarriage { UserId = userId, Status = "single" };
-                await m.InsertAsync();
-            }
-            return m;
+            return await Repository.GetOrCreateAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
+        }
+
+        public static async Task<BotWorker.Infrastructure.Persistence.TransactionWrapper> BeginTransactionAsync()
+        {
+            return await Repository.BeginTransactionAsync();
+        }
+
+        public static async Task UpdateMarriageStatusAsync(string userId, string spouseId, string status, DateTime marriageDate, IDbTransaction? trans = null)
+        {
+            await Repository.UpdateMarriageStatusAsync(userId, spouseId, status, marriageDate, trans);
+        }
+
+        public static async Task DivorceAsync(string userId, string spouseId, DateTime divorceDate, IDbTransaction? trans = null)
+        {
+            await Repository.DivorceAsync(userId, spouseId, divorceDate, trans);
         }
     }
 
-    public class MarriageProposal : MetaData<MarriageProposal>
+    [Table("MarriageProposals")]
+    public class MarriageProposal
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IMarriageProposalRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IMarriageProposalRepository>() 
+            ?? throw new InvalidOperationException("IMarriageProposalRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string ProposerId { get; set; } = string.Empty;
         public string RecipientId { get; set; } = string.Empty;
@@ -50,18 +82,35 @@ namespace BotWorker.Modules.Games
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "MarriageProposals";
-        public override string KeyField => "Id";
-
         public static async Task<MarriageProposal?> GetPendingAsync(string recipientId)
         {
-            return (await QueryWhere($"{Quote("RecipientId")} = @p1 AND {Quote("Status")} = 'pending' ORDER BY {Quote("CreatedAt")} DESC", SqlParams(("@p1", recipientId)))).FirstOrDefault();
+            return await Repository.GetPendingAsync(recipientId);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
+        }
+
+        public static async Task UpdateStatusAsync(Guid id, string status, IDbTransaction? trans = null)
+        {
+            await Repository.UpdateStatusAsync(id, status, trans);
         }
     }
 
-    public class WeddingItem : MetaData<WeddingItem>
+    [Table("WeddingItems")]
+    public class WeddingItem
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IWeddingItemRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IWeddingItemRepository>() 
+            ?? throw new InvalidOperationException("IWeddingItemRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string ItemType { get; set; } = string.Empty; // dress, ring
@@ -69,21 +118,30 @@ namespace BotWorker.Modules.Games
         public int Price { get; set; } = 0;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "WeddingItems";
-        public override string KeyField => "Id";
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
     }
 
-    public class SweetHeart : MetaData<SweetHeart>
+    [Table("SweetHearts")]
+    public class SweetHeart
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static ISweetHeartRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ISweetHeartRepository>() 
+            ?? throw new InvalidOperationException("ISweetHeartRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string SenderId { get; set; } = string.Empty;
         public string RecipientId { get; set; } = string.Empty;
         public int Amount { get; set; } = 0;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "SweetHearts";
-        public override string KeyField => "Id";
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
     }
 
     #endregion

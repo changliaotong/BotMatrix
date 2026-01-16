@@ -1,7 +1,7 @@
-namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         //💎金币 👢踢我 　猜拳    礼物 活动 私链 群链 📜对联 👤升级 👤客服  农历 流水 🔁换群 🚪秒进群 🤔猜谜 📊发言榜 🎮逗你玩  
         public static async Task<string> GetMenuTextAsync()
         {

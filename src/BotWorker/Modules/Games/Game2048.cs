@@ -1,9 +1,12 @@
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Entities;
 using BotWorker.Domain.Interfaces;
-using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.Games
 {
@@ -17,6 +20,13 @@ namespace BotWorker.Modules.Games
     )]
     public class Game2048Plugin : IPlugin
     {
+        private readonly IGroupRepository _groupRepo;
+
+        public Game2048Plugin(IGroupRepository groupRepo)
+        {
+            _groupRepo = groupRepo;
+        }
+
         public async Task InitAsync(IRobot robot)
         {
             await robot.RegisterSkillAsync(new SkillCapability
@@ -40,45 +50,42 @@ namespace BotWorker.Modules.Games
                 cmdPara = ""; // 触发进入游戏
             }
 
-            return await Game2048.GetGameResAsync(groupId, userId, cmdPara);
+            return await Game2048.GetGameResAsync(_groupRepo, groupId, userId, cmdPara);
         }
     }
 
     /// <summary>
     /// 2048游戏
     /// </summary>
-    internal class Game2048 : MetaData<Game2048>
+    internal class Game2048
     {
-        public override string TableName => "Group";
-        public override string KeyField => "Id";
-
         public static Dictionary<long, bool> dict = new();
 
-        public static async Task<string> GetGameResAsync(long groupId, long qq, string cmdPara)
+        public static async Task<string> GetGameResAsync(IGroupRepository repository, long groupId, long qq, string cmdPara)
         {
-            if (cmdPara.IsNull())
+            if (string.IsNullOrEmpty(cmdPara))
             {
                 int i = await UserInfo.SetStateAsync(UserInfo.States.G2048, qq);
                 return i == -1
-                    ? RetryMsg
+                    ? "系统繁忙，请稍后再试"
                     : "发【开始】，发送【上下左右】或【wsad】控制游戏";
             }
             else if (cmdPara == "结束")
             {
                 int i = await UserInfo.SetStateAsync(UserInfo.States.Chat, qq);
                 return i == -1
-                    ? RetryMsg
+                    ? "系统繁忙，请稍后再试"
                     : "2048游戏结束";
             }
 
-            int[,] tiles = await GetTilesAsync(groupId);
-            if (cmdPara.In("上", "w", "8"))
+            int[,] tiles = await GetTilesAsync(repository, groupId);
+            if (new[] { "上", "w", "8" }.Contains(cmdPara))
                 TurnTo(tiles, Direct.Left);
 
-            if (cmdPara.In("下", "s", "2"))
+            if (new[] { "下", "s", "2" }.Contains(cmdPara))
                 TurnTo(tiles, Direct.Right);
 
-            if (cmdPara.In("左", "a", "4"))
+            if (new[] { "左", "a", "4" }.Contains(cmdPara))
             {
                 if (dict.ContainsKey(groupId))
                     dict[groupId] = true;
@@ -88,7 +95,7 @@ namespace BotWorker.Modules.Games
                 TurnTo(tiles, Direct.Up);
             }
 
-            if (cmdPara.In("右", "d", "6"))
+            if (new[] { "右", "d", "6" }.Contains(cmdPara))
             {
                 if (dict.ContainsKey(groupId))
                     dict[groupId] = false;
@@ -106,13 +113,8 @@ namespace BotWorker.Modules.Games
             string res = PrintTiles(groupId, tiles);
             if (IsGameOver(tiles))
                 res += "Game Over!";
-            await SaveTilesAsync(groupId, tiles);
+            await SaveTilesAsync(repository, groupId, tiles);
             return res;
-        }
-
-        public static string GetGameRes(long groupId, long qq, string cmdPara)
-        {
-            return GetGameResAsync(groupId, qq, cmdPara).GetAwaiter().GetResult();
         }
 
         public enum Direct
@@ -148,7 +150,7 @@ namespace BotWorker.Modules.Games
             }            
         }
 
-        public static async Task SaveTilesAsync(long groupId, int[,] tiles)
+        public static async Task SaveTilesAsync(IGroupRepository repository, long groupId, int[,] tiles)
         {
             string res = "";
             for (int i = 0; i < 4; i++)
@@ -158,41 +160,34 @@ namespace BotWorker.Modules.Games
                     res += $" {tiles[i, j]}";
                 }
             }
-            await SetValueAsync("game_2048", res.Trim(), groupId);
+            await repository.SetValueAsync("game_2048", res.Trim(), groupId);
         }
 
-        public static void SaveTiles(long groupId, int[,] tiles)
-        {
-            SaveTilesAsync(groupId, tiles).GetAwaiter().GetResult();
-        }
-
-        public static async Task<int[,]> GetTilesAsync(long groupId)
+        public static async Task<int[,]> GetTilesAsync(IGroupRepository repository, long groupId)
         {
             int[,] tiles = new int[4, 4];
-            string res = await GetValueAsync("game_2048", groupId);
-            if (res.IsNull())
+            string res = await repository.GetValueAsync("game_2048", groupId);
+            if (string.IsNullOrEmpty(res))
             {
                 InitTiles(tiles);
             }
             else
             {
-                var items = res.Split(" ");
+                var items = res.Split(" ", StringSplitOptions.RemoveEmptyEntries);
                 int k = 0;
                 for (int i = 0; i <= 3; i++)
                 {
                     for (int j = 0; j <= 3; j++)
                     {
-                        tiles[i, j] = items[k].AsInt();
+                        if (k < items.Length)
+                        {
+                            int.TryParse(items[k], out tiles[i, j]);
+                        }
                         k++;
                     }
                 }
             }
             return tiles;
-        }
-
-        public static int[,] GetTiles(long groupId)
-        {
-            return GetTilesAsync(groupId).GetAwaiter().GetResult();
         }
 
         // 最大值
@@ -256,8 +251,10 @@ namespace BotWorker.Modules.Games
         {
             //0的数量
             int zeroCount = ZeroCount(tiles);
+            if (zeroCount == 0) return 0;
+
             //随机位置赋值2或4
-            int posRandom = RandomInt(1, zeroCount);
+            int posRandom = Random.Shared.Next(1, zeroCount + 1);
             int k = 0;
             for (int i = 0; i <= 3; i++)
             {
@@ -268,11 +265,12 @@ namespace BotWorker.Modules.Games
                         k++;
                         if (k == posRandom)
                         {
-                            tiles[i, j] = RandomInt(1, 9) == 4 ? 4 : 2;
+                            tiles[i, j] = Random.Shared.Next(1, 10) == 4 ? 4 : 2;
                             break;
                         }
                     }
                 }
+                if (k == posRandom) break;
             }
             if (count == 2)
             {

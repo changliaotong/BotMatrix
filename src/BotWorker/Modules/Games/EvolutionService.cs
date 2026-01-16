@@ -1,12 +1,12 @@
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Models;
-using BotWorker.Infrastructure.Utils.Schema;
-using BotWorker.Infrastructure.Persistence.ORM;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Modules.Games
 {
@@ -37,9 +37,6 @@ namespace BotWorker.Modules.Games
         {
             _robot = robot;
 
-            // 自动同步表结构
-            await EnsureTablesCreatedAsync();
-
             // 注册指令
             await robot.RegisterSkillAsync(new SkillCapability
             {
@@ -62,11 +59,6 @@ namespace BotWorker.Modules.Games
             _robot?.Events.Unsubscribe<PointTransactionEvent>(OnPointTransactionAsync);
             _robot?.Events.Unsubscribe<SystemInteractionEvent>(OnSystemInteractionAsync);
             return Task.CompletedTask;
-        }
-
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await UserLevel.EnsureTableCreatedAsync();
         }
 
         private async Task OnPointTransactionAsync(PointTransactionEvent ev)
@@ -254,29 +246,39 @@ namespace BotWorker.Modules.Games
     /// <summary>
     /// 用户等级数据模型
     /// </summary>
-    public class UserLevel : MetaDataGuid<UserLevel>
+    [Table("UserLevels")]
+    public class UserLevel
     {
+        private static IUserLevelRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IUserLevelRepository>() 
+            ?? throw new InvalidOperationException("IUserLevelRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
-
         public int Level { get; set; } = 1;
-
         public long Experience { get; set; } = 0;
-
         public string Medals { get; set; } = string.Empty; // 以逗号分隔的勋章列表
-
         public DateTime LastUpdateTime { get; set; } = DateTime.Now;
-
-        public override string TableName => "UserLevels";
-        public override string KeyField => "Id";
 
         public static async Task<UserLevel?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetByUserIdAsync(userId);
         }
 
         public static async Task<List<UserLevel>> GetTopRankingsAsync(int limit = 10)
         {
-            return await GetListAsync($"SELECT TOP {limit} * FROM {FullName} ORDER BY Experience DESC");
+            return await Repository.GetTopRankingsAsync(limit);
+        }
+
+        public async Task InsertAsync()
+        {
+            await Repository.InsertAsync(this);
+        }
+
+        public async Task UpdateAsync()
+        {
+            await Repository.UpdateAsync(this);
         }
     }
 }

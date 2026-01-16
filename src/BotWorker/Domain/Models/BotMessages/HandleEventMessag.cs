@@ -1,7 +1,7 @@
-namespace BotWorker.Domain.Models.BotMessages
-{
-    public partial class BotMessage : MetaData<BotMessage>
-    {        
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
+{        
         public async Task HandleEventAsync()
         {
             if (EventType == "meta_event") return;

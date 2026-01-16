@@ -10,7 +10,7 @@ using BotWorker.Application.Messaging.Pipeline;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
     [JsonIgnore]
     public static PluginManager? PluginManager { get; set; }

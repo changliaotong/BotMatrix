@@ -4,7 +4,7 @@ using BotWorker.Modules.AI.Models;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         // 接收客户端的问题并处理
         public async Task StartStreamChatAsync(CancellationToken cts)

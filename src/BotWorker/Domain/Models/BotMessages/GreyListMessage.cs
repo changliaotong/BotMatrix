@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace BotWorker.Domain.Models.BotMessages;
 
 // 灰名单 greylist
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         // 解除灰名单
         public string GetCancelGrey(long userId)

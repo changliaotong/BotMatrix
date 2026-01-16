@@ -1,4 +1,10 @@
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -25,8 +31,15 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    public class SongOrder : MetaDataGuid<SongOrder>
+    [Table("UserSongOrders")]
+    public class SongOrder
     {
+        private static ISongOrderRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ISongOrderRepository>() 
+            ?? throw new InvalidOperationException("ISongOrderRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string FromUserId { get; set; } = string.Empty;
         public string FromNickname { get; set; } = string.Empty;
         public string ToUserId { get; set; } = string.Empty; // 如果是点给自己，则与 FromUserId 相同
@@ -38,12 +51,14 @@ namespace BotWorker.Modules.Games
         
         public DateTime OrderTime { get; set; } = DateTime.Now;
 
-        public override string TableName => "UserSongOrders";
-        public override string KeyField => "Id";
-
         public static async Task<List<SongOrder>> GetHistoryAsync(string userId)
         {
-            return await QueryWhere("FromUserId = @p1 OR ToUserId = @p1 ORDER BY OrderTime DESC", SqlParams(("@p1", userId)));
+            return await Repository.GetHistoryAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync()
+        {
+            return await Repository.InsertAsync(this);
         }
     }
 }

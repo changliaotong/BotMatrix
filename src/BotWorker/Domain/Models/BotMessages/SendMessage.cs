@@ -1,9 +1,9 @@
 using Newtonsoft.Json;
 
-namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         private static readonly object consoleLock = new();
 
         public async Task SendOfficalShareAsync()

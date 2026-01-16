@@ -1,7 +1,7 @@
-namespace BotWorker.Domain.Models.BotMessages
-{
-    public partial class BotMessage : MetaData<BotMessage>
-    {        
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
+{        
         
         // 是否允许加入群 同意返回“1”，不同意返回：“0:拒绝原因”
         public (int, string) GetRequestJoinGroup()

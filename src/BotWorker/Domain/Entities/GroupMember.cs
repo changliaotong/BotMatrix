@@ -147,13 +147,13 @@ namespace BotWorker.Domain.Entities
                 }
 
                 // 3. 执行业务操作
-                var res1 = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
+                var res1 = await UserRepository.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
                 var res2 = await AddCoinsAsync(botUin, groupId, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
 
                 await wrapper.CommitAsync();
 
                 // 同步缓存
-                await UserInfo.SyncCreditCacheAsync(botUin, credit_group, qq, res1.CreditValue);
+                await UserRepository.SyncCreditCacheAsync(botUin, credit_group, qq, res1.CreditValue);
                 await SyncCacheFieldAsync(groupId, coins_qq, CoinsLog.conisFields[coins_type], res2.CoinsValue);
 
                 return $"{cmdName}{cmdPara}：{Math.Abs(coins_oper)}成功！\n[@:{coins_qq}]{cmdPara}:{res2.CoinsValue}\n您：{-minus_credit}分，累计：{res1.CreditValue}";
@@ -225,13 +225,13 @@ namespace BotWorker.Domain.Entities
                 }
 
                 // 3. 执行业务操作
-                var res1 = await UserInfo.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
+                var res1 = await UserRepository.AddCreditAsync(botUin, credit_group, groupName, qq, name, -minus_credit, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
                 var res2 = await AddCoinsAsync(botUin, groupId, coins_qq, "", coins_type, coins_oper, $"{cmdName}{cmdPara}*{coins_oper}", wrapper.Transaction);
 
                 await wrapper.CommitAsync();
 
                 // 同步缓存
-                await UserInfo.SyncCreditCacheAsync(botUin, credit_group, qq, res1.CreditValue);
+                await UserRepository.SyncCreditCacheAsync(botUin, credit_group, qq, res1.CreditValue);
                 await SyncCacheFieldAsync(groupId, coins_qq, CoinsLog.conisFields[coins_type], res2.CoinsValue);
 
                 return $"{cmdName}{cmdPara}：{Math.Abs(coins_oper)}成功！\n[@:{coins_qq}]{cmdPara}:{res2.CoinsValue}\n您：{-minus_credit}分，累计：{res1.CreditValue}";
@@ -371,8 +371,8 @@ namespace BotWorker.Domain.Entities
                 string secondName = secondId == qq ? name : await UserRepository.GetValueAsync<string>("Name", secondId, trans: wrapper.Transaction);
 
                 long ownerId = await GroupRepository.GetGroupOwnerAsync(groupId, 0, wrapper.Transaction);
-                await UserInfo.AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
-                await UserInfo.AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
+                await UserRepository.AppendAsync(botUin, groupId, firstId, firstName, ownerId, trans: wrapper.Transaction);
+                await UserRepository.AppendAsync(botUin, groupId, secondId, secondName, ownerId, trans: wrapper.Transaction);
 
                 // 2. 统一加锁顺序，防止 GroupMember 表死锁 (按 ID 从小到大锁定)
                 if (firstId == qq)
@@ -490,8 +490,8 @@ namespace BotWorker.Domain.Entities
                         creditAdd = -creditAdd;
                     }
 
-                    var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, creditQQ, "", creditAdd, cmdName, wrapper.Transaction);
-                    if (res.Result == -1)
+                    var res = await UserRepository.AddCreditAsync(botUin, groupId, groupName, creditQQ, "", creditAdd, cmdName, wrapper.Transaction);
+                    if (!res.Success)
                     {
                         await wrapper.RollbackAsync();
                         return RetryMsg;
@@ -499,7 +499,7 @@ namespace BotWorker.Domain.Entities
 
                     await wrapper.CommitAsync();
 
-                    await UserInfo.SyncCreditCacheAsync(botUin, groupId, creditQQ, res.CreditValue);
+                    await UserRepository.SyncCreditCacheAsync(botUin, groupId, creditQQ, res.CreditValue);
 
                     return $"[@:{creditQQ}] {cmdName}成功！\n积分：{Math.Abs(creditAdd)}，累计：{res.CreditValue}";
                 }
@@ -535,7 +535,7 @@ namespace BotWorker.Domain.Entities
             try
             {
                 // 1. 获取积分并加锁
-                long creditValue = await UserInfo.GetCreditForUpdateAsync(botUin, groupId, userId, wrapper.Transaction);
+                long creditValue = await UserRepository.GetCreditForUpdateAsync(botUin, groupId, userId, wrapper.Transaction);
                 if (creditValue < withdrawAmount)
                 {
                     await wrapper.RollbackAsync();
@@ -543,17 +543,17 @@ namespace BotWorker.Domain.Entities
                 }
 
                 // 2. 扣除积分
-                var res = await UserInfo.AddCreditAsync(botUin, groupId, groupName, userId, name, -withdrawAmount, "积分提现", wrapper.Transaction);
-                if (res.Result == -1) throw new Exception("扣除积分失败");
+                var res = await UserRepository.AddCreditAsync(botUin, groupId, groupName, userId, name, -withdrawAmount, "积分提现", wrapper.Transaction);
+                if (!res.Success) throw new Exception("扣除积分失败");
 
                 // 3. 增加余额
-                await UserInfo.IncrementValueAsync("Balance", (decimal)withdrawAmount / 100, userId, wrapper.Transaction);
+                await UserRepository.IncrementValueAsync("Balance", (decimal)withdrawAmount / 100, userId, wrapper.Transaction);
 
                 await wrapper.CommitAsync();
                 
                 // 4. 同步缓存
-                await UserInfo.SyncCreditCacheAsync(botUin, groupId, userId, res.CreditValue);
-                UserInfo.SyncCacheField(userId, "Balance", await UserInfo.GetBalanceAsync(userId));
+                await UserRepository.SyncCreditCacheAsync(botUin, groupId, userId, res.CreditValue);
+                await UserRepository.SyncCacheFieldAsync(userId, "Balance", await UserRepository.GetBalanceAsync(userId));
 
                 return $"✅ 提现成功！\n提现积分：{withdrawAmount}\n到账余额：{(decimal)withdrawAmount / 100:N2}\n剩余积分：{res.CreditValue}";
             }

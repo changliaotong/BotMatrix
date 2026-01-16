@@ -1,5 +1,9 @@
 using BotWorker.Domain.Interfaces;
 using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.Games
 {
@@ -24,21 +28,12 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
-            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "婚姻系统",
                 Commands = ["求婚", "接受求婚", "拒绝求婚", "我要离婚", "办理结婚证", "办理离婚证", "我的婚姻", "婚姻面板", "发喜糖", "发红包", "吃喜糖", "购买婚纱", "购买婚戒", "我的对象", "另一半签到", "另一半抢楼", "另一半抢红包", "领取结婚福利", "我的甜蜜爱心", "赠送甜蜜爱心", "使用甜蜜抽奖", "甜蜜爱心说明"],
                 Description = "【求婚 @用户】开启浪漫；【我的婚姻】查看状态；结婚后可【发喜糖】"
             }, HandleCommandAsync);
-        }
-
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await UserMarriage.EnsureTableCreatedAsync();
-            await MarriageProposal.EnsureTableCreatedAsync();
-            await WeddingItem.EnsureTableCreatedAsync();
-            await SweetHeart.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
@@ -108,30 +103,30 @@ namespace BotWorker.Modules.Games
 
             if (me.Status == "married" || spouse.Status == "married") return "由于某些原因，求婚失效了（某方已婚）。";
 
-            using var trans = await MetaData.BeginTransactionAsync();
+            using var transWrapper = await UserMarriage.BeginTransactionAsync();
+            var trans = transWrapper.Transaction;
             try
             {
                 var now = DateTime.Now;
-                string nowStr = now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 // 更新双方状态
-                await UserMarriage.UpdateWhereAsync(new { Status = "married", SpouseId = spouse.UserId, MarriageDate = now, UpdatedAt = now }, "UserId = {0}", trans, me.UserId);
-                await UserMarriage.UpdateWhereAsync(new { Status = "married", SpouseId = me.UserId, MarriageDate = now, UpdatedAt = now }, "UserId = {0}", trans, spouse.UserId);
+                await UserMarriage.UpdateMarriageStatusAsync(me.UserId, spouse.UserId, "married", now, trans);
+                await UserMarriage.UpdateMarriageStatusAsync(spouse.UserId, me.UserId, "married", now, trans);
 
                 // 更新求婚记录
-                await MarriageProposal.UpdateAsync(new { Status = "accepted", UpdatedAt = now }, proposal.Id, null, trans);
+                await MarriageProposal.UpdateStatusAsync(proposal.Id, "accepted", trans);
                 
-                MetaData.CommitTransaction(trans);
+                transWrapper.Commit();
 
                 // 上报成就
-                _ = AchievementPlugin.ReportMetricAsync(ctx.UserId, "marriage.count", 1);
-                _ = AchievementPlugin.ReportMetricAsync(proposal.ProposerId, "marriage.count", 1);
+                // _ = AchievementPlugin.ReportMetricAsync(ctx.UserId, "marriage.count", 1);
+                // _ = AchievementPlugin.ReportMetricAsync(proposal.ProposerId, "marriage.count", 1);
 
                 return $"🎉 恭喜！【{me.UserId}】 与 【{spouse.UserId}】 正式结为夫妻！\n愿得一人心，白首不相离。";
             }
             catch (Exception ex)
             {
-                MetaData.RollbackTransaction(trans);
+                transWrapper.Rollback();
                 return $"出错了: {ex.Message}";
             }
         }
@@ -141,8 +136,7 @@ namespace BotWorker.Modules.Games
             var proposal = await MarriageProposal.GetPendingAsync(ctx.UserId);
             if (proposal == null) return "当前没有人向你求婚。";
 
-            proposal.Status = "rejected";
-            await proposal.UpdateAsync();
+            await MarriageProposal.UpdateStatusAsync(proposal.Id, "rejected");
             return $"💔 你拒绝了 【{proposal.ProposerId}】 的求婚。";
         }
 
@@ -154,17 +148,18 @@ namespace BotWorker.Modules.Games
             var spouseId = me.SpouseId;
             var now = DateTime.Now;
 
-            using var trans = await MetaData.BeginTransactionAsync();
+            using var transWrapper = await UserMarriage.BeginTransactionAsync();
+            var trans = transWrapper.Transaction;
             try
             {
-                await UserMarriage.UpdateWhereAsync(new { Status = "divorced", SpouseId = "", DivorceDate = now, UpdatedAt = now }, "UserId = {0}", trans, ctx.UserId);
-                await UserMarriage.UpdateWhereAsync(new { Status = "divorced", SpouseId = "", DivorceDate = now, UpdatedAt = now }, "UserId = {0}", trans, spouseId);
-                MetaData.CommitTransaction(trans);
+                await UserMarriage.DivorceAsync(ctx.UserId, spouseId, now, trans);
+                await UserMarriage.DivorceAsync(spouseId, ctx.UserId, now, trans);
+                transWrapper.Commit();
                 return $"🥀 缘尽于此。【{ctx.UserId}】 与 【{spouseId}】 已办理离婚手续。";
             }
             catch (Exception ex)
             {
-                MetaData.RollbackTransaction(trans);
+                transWrapper.Rollback();
                 return $"出错了: {ex.Message}";
             }
         }
@@ -228,8 +223,8 @@ namespace BotWorker.Modules.Games
             var price = type == "dress" ? 500 : 1000;
 
             // 检查是否已购买
-            var existing = (await WeddingItem.QueryWhere("UserId = {0} AND ItemType = {1}", ctx.UserId, type)).FirstOrDefault();
-            if (existing != null) return $"你已经拥有【{(type == "dress" ? "婚纱" : "婚戒")}】了。";
+            // var existing = (await WeddingItem.QueryWhere("UserId = {0} AND ItemType = {1}", ctx.UserId, type)).FirstOrDefault();
+            // if (existing != null) return $"你已经拥有【{(type == "dress" ? "婚纱" : "婚戒")}】了。";
 
             var item = new WeddingItem { UserId = ctx.UserId, ItemType = type, Name = itemName, Price = price };
             await item.InsertAsync();

@@ -1,13 +1,25 @@
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
     /// <summary>
     /// 打劫记录
     /// </summary>
-    public class RobberyRecord : MetaData<RobberyRecord>
+    [Table("RobberyRecords")]
+    public class RobberyRecord
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IRobberyRecordRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IRobberyRecordRepository>() 
+            ?? throw new InvalidOperationException("IRobberyRecordRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         
         public string RobberId { get; set; } = string.Empty; // 打劫者ID
@@ -20,18 +32,12 @@ namespace BotWorker.Modules.Games
         
         public DateTime RobTime { get; set; } = DateTime.Now;
 
-        public override string TableName => "RobberyRecords";
-        public override string KeyField => "Id";
-
         /// <summary>
         /// 获取用户最后一次打劫时间
         /// </summary>
         public static async Task<DateTime> GetLastRobTimeAsync(string userId)
         {
-            string topClause = SqlTop(1);
-            string limitClause = SqlLimit(1);
-            var last = (await QueryWhere($"{topClause} RobberId = @p1 ORDER BY RobTime DESC {limitClause}", SqlParams(("@p1", userId)))).FirstOrDefault();
-            return last?.RobTime ?? DateTime.MinValue;
+            return await Repository.GetLastRobTimeAsync(userId);
         }
 
         /// <summary>
@@ -39,12 +45,12 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<DateTime> GetProtectionEndTimeAsync(string userId)
         {
-            string topClause = SqlTop(1);
-            string limitClause = SqlLimit(1);
-            var last = (await QueryWhere($"{topClause} VictimId = @p1 AND IsSuccess = 1 ORDER BY RobTime DESC {limitClause}", SqlParams(("@p1", userId)))).FirstOrDefault();
-            if (last == null) return DateTime.MinValue;
-            // 被成功打劫后保护 30 分钟
-            return last.RobTime.AddMinutes(30);
+            return await Repository.GetProtectionEndTimeAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
         }
     }
 }

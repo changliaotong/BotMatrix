@@ -1,7 +1,7 @@
-namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         //禁言
         public async Task<string> GetMuteResAsync()
         {

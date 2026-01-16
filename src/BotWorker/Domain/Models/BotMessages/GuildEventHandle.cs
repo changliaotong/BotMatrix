@@ -1,6 +1,6 @@
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         private async Task LogGuildEventAsync(string eventName)
         {

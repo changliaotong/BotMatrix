@@ -87,4 +87,19 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             return await conn.ExecuteScalarAsync<string>(sql, new { jumpUrl }) ?? "";
         }
     }
+
+    public class SongOrderRepository : BaseRepository<BotWorker.Modules.Games.SongOrder>, ISongOrderRepository
+    {
+        public SongOrderRepository(string? connectionString = null) : base("UserSongOrders", connectionString)
+        {
+        }
+
+        public async Task<List<BotWorker.Modules.Games.SongOrder>> GetHistoryAsync(string userId)
+        {
+            using var conn = CreateConnection();
+            string sql = $"SELECT * FROM {_tableName} WHERE \"FromUserId\" = @userId OR \"ToUserId\" = @userId ORDER BY \"OrderTime\" DESC";
+            var results = await conn.QueryAsync<BotWorker.Modules.Games.SongOrder>(sql, new { userId });
+            return results.ToList();
+        }
+    }
 }

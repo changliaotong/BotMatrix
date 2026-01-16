@@ -3,11 +3,15 @@ using System.Diagnostics;
 using BotWorker.Domain.Entities;
 using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Modules.AI.Models;
+using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
+[Table("SendMessage")]
 public partial class BotMessage
 {        
+        [ExplicitKey]
+        public string MsgId { get; set; } = string.Empty;
         public string MsgGuid { get; set; } = Guid.NewGuid().ToString();
         public long SelfId => SelfInfo.BotUin;
         public string SelfName => SelfInfo.BotName;
@@ -30,7 +34,6 @@ public partial class BotMessage
         public string Title { get; set; } = string.Empty;
         public string UserOpenId => User.UserOpenId;
         public string DisplayName { get; set; } = string.Empty;
-        public string MsgId { get; set; } = string.Empty;
         public long Time { get; set; } = 0;
         public bool IsSuperAdmin => BotInfo.IsSuperAdmin(UserId);
         public bool IsAtMe { get; set; } = false;

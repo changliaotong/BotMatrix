@@ -1,64 +1,35 @@
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace BotWorker.Modules.Games
 {
     #region 数据模型
 
-    public class UserMetric : MetaData<UserMetric>
-    {
-        public override string TableName => "UserMetrics";
-        public override string KeyField => "Id";
-
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+    [Dapper.Contrib.Extensions.Table("UserMetrics")]
+    public class UserMetric
+    { 
+        [Dapper.Contrib.Extensions.ExplicitKey]
         public string Id { get; set; } = string.Empty; // Format: UserId_MetricKey
         public string UserId { get; set; } = string.Empty;
         public string MetricKey { get; set; } = string.Empty;
         public double Value { get; set; } = 0;
         public DateTime LastUpdateTime { get; set; } = DateTime.Now;
-
-        public static async Task<UserMetric> GetOrCreateAsync(string userId, string key)
-        {
-            string id = $"{userId}_{key}";
-            try
-            {
-                var metric = await GetSingleAsync(id);
-                if (metric == null)
-                {
-                    metric = new UserMetric { Id = id, UserId = userId, MetricKey = key, Value = 0 };
-                    await InsertAsync([
-                        new Cov("Id", id),
-                        new Cov("UserId", userId),
-                        new Cov("MetricKey", key),
-                        new Cov("Value", 0),
-                        new Cov("LastUpdateTime", DateTime.Now)
-                    ]);
-                }
-                return metric;
-            }
-            catch (Exception ex) when (ex.Message.Contains("Duplicate entry") || ex.Message.Contains("Violation of PRIMARY KEY constraint"))
-            {
-                return await GetSingleAsync(id) ?? throw new Exception("Failed to retrieve existing metric after duplicate key error.", ex);
-            }
-        }
     }
 
-    public class UserAchievement : MetaData<UserAchievement>
+    [Dapper.Contrib.Extensions.Table("UserAchievements")]
+    public class UserAchievement
     {
-        public override string TableName => "UserAchievements";
-        public override string KeyField => "Id";
-
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        [Dapper.Contrib.Extensions.ExplicitKey]
         public string Id { get; set; } = string.Empty; // Format: UserId_AchievementId
         public string UserId { get; set; } = string.Empty;
         public string AchievementId { get; set; } = string.Empty;
         public DateTime UnlockTime { get; set; } = DateTime.Now;
-
-        public static async Task<bool> IsUnlockedAsync(string userId, string achievementId)
-        {
-            return await GetSingleAsync($"{userId}_{achievementId}") != null;
-        }
     }
 
     public class AchievementDef
@@ -84,6 +55,15 @@ namespace BotWorker.Modules.Games
     )]
     public class AchievementPlugin : IPlugin
     {
+        private readonly IUserMetricRepository _metricRepo;
+        private readonly IUserAchievementRepository _achievementRepo;
+
+        public AchievementPlugin(IUserMetricRepository metricRepo, IUserAchievementRepository achievementRepo)
+        {
+            _metricRepo = metricRepo;
+            _achievementRepo = achievementRepo;
+        }
+
         public static List<AchievementDef> Definitions = new()
         {
             // 钓鱼成就
@@ -105,36 +85,19 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
-            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "我的成就",
-                Commands = ["我的成就", "成就排行", "成就详情"],
-                Description = "查看已解锁的成就与进度"
-            }, HandleCommandAsync);
+                Commands = ["成就", "我的成就", "勋章"],
+                Description = "查看已解锁的成就与勋章"
+            }, async (ctx, args) => await GetUserAchievementsAsync(ctx.UserId));
         }
 
         public Task StopAsync() => Task.CompletedTask;
 
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await UserMetric.EnsureTableCreatedAsync();
-            await UserAchievement.EnsureTableCreatedAsync();
-        }
-
-        private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
-        {
-            var cmd = ctx.RawMessage.Trim().Split(' ')[0];
-            return cmd switch
-            {
-                "我的成就" => await GetUserAchievementsAsync(ctx.UserId),
-                _ => "未知成就指令"
-            };
-        }
-
         private async Task<string> GetUserAchievementsAsync(string userId)
         {
-            var unlocked = await UserAchievement.QueryWhere("UserId = @p1", UserAchievement.SqlParams(("@p1", userId)));
+            var unlocked = await _achievementRepo.GetByUserIdAsync(userId);
             var unlockedIds = unlocked.Select(a => a.AchievementId).ToHashSet();
 
             var sb = new StringBuilder();
@@ -151,7 +114,7 @@ namespace BotWorker.Modules.Games
                     sb.AppendLine($"{icon} {def.Name}: {def.Description}");
                     if (!isDone)
                     {
-                        var metric = await UserMetric.GetOrCreateAsync(userId, def.MetricKey);
+                        var metric = await _metricRepo.GetOrCreateAsync(userId, def.MetricKey);
                         sb.AppendLine($"   进度: {metric.Value}/{def.Threshold}");
                     }
                 }
@@ -165,11 +128,16 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<List<string>> ReportMetricAsync(string userId, string key, double delta, bool isAbsolute = false)
         {
-            var metric = await UserMetric.GetOrCreateAsync(userId, key);
+            var metricRepo = BotMessage.ServiceProvider?.GetRequiredService<IUserMetricRepository>() 
+                ?? throw new InvalidOperationException("IUserMetricRepository not registered");
+            var achievementRepo = BotMessage.ServiceProvider?.GetRequiredService<IUserAchievementRepository>() 
+                ?? throw new InvalidOperationException("IUserAchievementRepository not registered");
+
+            var metric = await metricRepo.GetOrCreateAsync(userId, key);
             if (isAbsolute) metric.Value = delta;
             else metric.Value += delta;
             metric.LastUpdateTime = DateTime.Now;
-            await metric.UpdateAsync();
+            await metricRepo.UpdateAsync(metric);
 
             var newUnlocks = new List<string>();
             var relatedAchievements = Definitions.Where(d => d.MetricKey == key);
@@ -178,15 +146,15 @@ namespace BotWorker.Modules.Games
             {
                 if (metric.Value >= def.Threshold)
                 {
-                    if (!await UserAchievement.IsUnlockedAsync(userId, def.Id))
+                    if (!await achievementRepo.IsUnlockedAsync(userId, def.Id))
                     {
-                        await new UserAchievement 
+                        await achievementRepo.InsertAsync(new UserAchievement 
                         { 
                             Id = $"{userId}_{def.Id}", 
                             UserId = userId, 
                             AchievementId = def.Id,
                             UnlockTime = DateTime.Now 
-                        }.InsertAsync();
+                        });
                         newUnlocks.Add(def.Name);
                     }
                 }

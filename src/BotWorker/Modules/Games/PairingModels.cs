@@ -1,5 +1,12 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-using System.Reflection;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -8,9 +15,14 @@ namespace BotWorker.Modules.Games
     /// <summary>
     /// 用户社交资料
     /// </summary>
-    public class UserPairingProfile : MetaData<UserPairingProfile>
+    [Table("UserPairingProfiles")]
+    public class UserPairingProfile
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IUserPairingProfileRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IUserPairingProfileRepository>() 
+            ?? throw new InvalidOperationException("IUserPairingProfileRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string Nickname { get; set; } = string.Empty;
@@ -21,40 +33,57 @@ namespace BotWorker.Modules.Games
         public DateTime LastActive { get; set; } = DateTime.Now;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "UserPairingProfiles";
-        public override string KeyField => "Id";
-
         public static async Task<UserPairingProfile?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetByUserIdAsync(userId);
         }
 
         public static async Task<List<UserPairingProfile>> GetActiveSeekersAsync(int limit = 10)
         {
-            string topClause = SqlTop(limit);
-            string limitClause = SqlLimit(limit);
-            return await QueryWhere($"{topClause} IsLooking = 1 ORDER BY LastActive DESC {limitClause}", SqlParams());
+            return await Repository.GetActiveSeekersAsync(limit);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
     }
 
     /// <summary>
     /// 配对记录 (CP记录)
     /// </summary>
-    public class PairingRecord : MetaData<PairingRecord>
+    [Table("PairingRecords")]
+    public class PairingRecord
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IPairingRecordRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IPairingRecordRepository>() 
+            ?? throw new InvalidOperationException("IPairingRecordRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string User1Id { get; set; } = string.Empty;
         public string User2Id { get; set; } = string.Empty;
         public string Status { get; set; } = "pairing"; // pairing (匹配中), coupled (已成对), broken (已解绑)
         public DateTime PairDate { get; set; } = DateTime.Now;
 
-        public override string TableName => "PairingRecords";
-        public override string KeyField => "Id";
-
         public static async Task<PairingRecord?> GetCurrentPairAsync(string userId)
         {
-            return (await QueryWhere("(User1Id = @p1 OR User2Id = @p1) AND Status = 'coupled'", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetCurrentPairAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
     }
 

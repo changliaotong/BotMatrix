@@ -1,47 +1,45 @@
-using BotWorker.Domain.Entities;
-using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games.Gift
 {
-
-    class Gift : MetaData<Gift>
+    [Table("Gift")]
+    public class Gift
     {
-        public override string TableName => "Gift";
-        public override string KeyField => "Id";
+        private static IGiftRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGiftRepository>() 
+            ?? throw new InvalidOperationException("IGiftRepository not registered");
 
-        // 礼物ID
-        static public long GetGiftId(string giftName)
-            => GetGiftIdAsync(giftName).GetAwaiter().GetResult();
+        [Key]
+        public long Id { get; set; }
+        public string GiftName { get; set; } = string.Empty;
+        public long GiftCredit { get; set; }
+        public bool IsValid { get; set; } = true;
 
-        static public async Task<long> GetGiftIdAsync(string giftName)
+        public static async Task<long> GetGiftIdAsync(string giftName)
         {
-            return (await GetWhereAsync("Id", $"GiftName={giftName.Quotes()}")).AsLong();
+            return await Repository.GetGiftIdAsync(giftName);
         }
-
-        // 随机一个礼物
-        public static long GetRandomGift(long botUin, long groupId, long qq)
-            => GetRandomGiftAsync(botUin, groupId, qq).GetAwaiter().GetResult();
 
         public static async Task<long> GetRandomGiftAsync(long botUin, long groupId, long qq)
         {
-            return (await QueryAsync($"select top 1 Id from {FullName} where GiftCredit < {await UserInfo.GetCreditAsync(botUin, groupId, qq)} order by newid()")).AsLong();
+            return await Repository.GetRandomGiftAsync(botUin, groupId, qq);
         }
-
-        // 礼物列表
-        public static string GetGiftList(long botUin, long groupId, long qq)
-            => GetGiftListAsync(botUin, groupId, qq).GetAwaiter().GetResult();
 
         public static async Task<string> GetGiftListAsync(long botUin, long groupId, long qq)
         {
-            long credit = await UserInfo.GetCreditAsync(botUin, groupId, qq);
-            string res = await QueryResAsync($"select top 5 Id, GiftName, GiftCredit from {FullName} where IsValid = 1 and GiftCredit <= {credit} order by newid()", "{1}={2}分\n");
-            if (res == "")
-                res = await QueryResAsync($"select top 5 Id, GiftName, GiftCredit from {FullName}  where IsValid = 1 and GiftCredit < 10000 order by newid()", "{1}={2}分\n");
-            return res;
+            return await Repository.GetGiftListAsync(botUin, groupId, qq);
+        }
+
+        public static async Task<Gift?> GetAsync(long id)
+        {
+            return await Repository.GetByIdAsync(id);
         }
     }
-
-    
-
 }

@@ -1,5 +1,11 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -33,8 +39,15 @@ namespace BotWorker.Modules.Games
 
     #region Domain Model
 
-    public class Vehicle : MetaDataGuid<Vehicle>
+    [Table("UserVehicles")]
+    public class Vehicle
     {
+        private static IVehicleRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IVehicleRepository>() 
+            ?? throw new InvalidOperationException("IVehicleRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string TemplateId { get; set; } = string.Empty;
@@ -55,9 +68,13 @@ namespace BotWorker.Modules.Games
         public DateTime LastActionTime { get; set; } = DateTime.Now;
         public DateTime CreateTime { get; set; } = DateTime.Now;
 
-        [DbIgnore] public double ExpToNextLevel => 100 * Math.Pow(Level, 1.6) * ((int)Rarity + 1);
+        [Write(false)]
+        [Computed]
+        public double ExpToNextLevel => 100 * Math.Pow(Level, 1.6) * ((int)Rarity + 1);
         
-        [DbIgnore] public string RarityName => Rarity switch
+        [Write(false)]
+        [Computed]
+        public string RarityName => Rarity switch
         {
             VehicleRarity.Common => "⚪ 经济型",
             VehicleRarity.Rare => "🔵 舒适型",
@@ -67,17 +84,24 @@ namespace BotWorker.Modules.Games
             _ => "未知"
         };
 
-        public override string TableName => "UserVehicles";
-        public override string KeyField => "Id";
-
         public static async Task<Vehicle?> GetActiveVehicleAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1 AND Status = @p2", SqlParams(("@p1", userId), ("@p2", (int)VehicleStatus.Driving)))).FirstOrDefault();
+            return await Repository.GetActiveVehicleAsync(userId);
         }
 
         public static async Task<List<Vehicle>> GetUserVehiclesAsync(string userId)
         {
-            return await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)));
+            return await Repository.GetUserVehiclesAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
 
         public void GainExp(double exp)
@@ -110,7 +134,9 @@ namespace BotWorker.Modules.Games
         public double BaseHandling { get; set; }
         public double BaseTech { get; set; }
 
-        [DbIgnore] public string RarityName => Rarity switch
+        [Write(false)]
+        [Computed]
+        public string RarityName => Rarity switch
         {
             VehicleRarity.Common => "⚪ 经济型",
             VehicleRarity.Rare => "🔵 舒适型",

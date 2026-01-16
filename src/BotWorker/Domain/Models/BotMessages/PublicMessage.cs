@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace BotWorker.Domain.Models.BotMessages
 {
-    public partial class BotMessage : MetaData<BotMessage>
+    public partial class BotMessage
     {
         // 处理公众号消息
         public async Task<string> HandlePublicMessage(string robotKey, string clientKey, bool isVoice = false)

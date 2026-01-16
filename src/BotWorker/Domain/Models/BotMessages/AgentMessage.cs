@@ -5,7 +5,7 @@ using BotWorker.Modules.AI.Models;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         public static long MinTokens => -300000;
         public static long MaxTokensDay => 30000;

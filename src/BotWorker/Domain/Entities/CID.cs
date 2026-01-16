@@ -1,14 +1,21 @@
+using System;
 using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Common;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    public class CID : MetaData<CID>
+    public class CID
     {
-        public override string DataBase => "BaseInfo";
-        public override string TableName => "IDC";
-        public override string KeyField => "Id";
+        private static IIDCRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IIDCRepository>() 
+            ?? throw new InvalidOperationException("IIDCRepository not registered");
 
-        public static string GetCidRes(BotWorker.Domain.Models.BotMessages.BotMessage msg)
+        public static string GetCidRes(BotMessage msg)
         {
             string cid = msg.CurrentMessage;
             if (!CheckIDCard(cid)) return "身份证号码格式不正确";
@@ -25,7 +32,6 @@ namespace BotWorker.Domain.Entities
                 _ => false
             };
         }
-        #region 身份证号码验证
 
         // 验证18位身份证号
         private static bool CheckIDCard18(string id, bool isCheckValid = true)
@@ -70,9 +76,7 @@ namespace BotWorker.Domain.Entities
 
             return true; // 符合15位身份证标准
         }
-        #endregion
 
-        /// 身份证信息
         public static string GetCidRes(string text)
         {
             var id = text;
@@ -89,14 +93,13 @@ namespace BotWorker.Domain.Entities
             }
             else
             {
-
                 if (!CheckIDCard(id))
                     return "身份证号不正确";
 
                 result = $"身份证号：{id}\n" +
                          $"地区：{GetAreaName(id[..6])}\n" +
                          $"生日：{id[6..10]}年{id[10..12]}月{id[12..14]}日\n" +
-                         $"性别：{(id[14..17].AsInt() % 2 == 0 ? "女" : "男")} 年龄：{DateTime.Now.Year - id[6..10].AsInt()}";
+                         $"性别：{(int.Parse(id[14..17]) % 2 == 0 ? "女" : "男")} 年龄：{DateTime.Now.Year - int.Parse(id[6..10])}";
             }
             return result;
         }
@@ -133,36 +136,32 @@ namespace BotWorker.Domain.Entities
 
         public static string GenerateRandomID(string dq = "")
         {
-            string sql = $"SELECT TOP 1 bm FROM {FullName} {(dq.IsNullOrEmpty() ? "" : $"WHERE DQ LIKE '%{dq}%'")} ORDER BY NEWID()";
-            dq = QueryScalar<string>(sql) ?? "";
-            if (dq.IsNullOrEmpty())
-                return GenerateRandomID("");
+            string areaCode = Repository.GetRandomBmAsync(dq).GetAwaiter().GetResult() ?? "110101";
 
-            int year = RandomInt(1920, DateTime.Now.Year);
-            int month = RandomInt(1, 12);
-            int day = RandomInt(1, DateTime.DaysInMonth(year, month));
-            int order = RandomInt(1, 200);
+            Random rnd = new Random();
+            int year = rnd.Next(1920, DateTime.Now.Year);
+            int month = rnd.Next(1, 13);
+            int day = rnd.Next(1, DateTime.DaysInMonth(year, month) + 1);
+            int order = rnd.Next(1, 1000);
 
-            string id = $"{dq}{year}{month:D2}{day:D2}{order:D3}";
+            string id = $"{areaCode}{year}{month:D2}{day:D2}{order:D3}";
 
+            int[] factors = { 7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2 };
             int sum = 0;
-            string factors = "7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2";
             for (int i = 0; i < 17; i++)
             {
-                sum += int.Parse(factors.Split(',')[i]) * int.Parse(id.Remove(17).ToCharArray()[i].ToString());
+                sum += factors[i] * int.Parse(id[i].ToString());
             }
-            Math.DivRem(sum, 11, out int mod);
+            int mod = sum % 11;
             string[] checkCodes = { "1", "0", "X", "9", "8", "7", "6", "5", "4", "3", "2" };
 
-            string checkCode = checkCodes[mod];
-            return $"{id}{checkCode}";
+            return $"{id}{checkCodes[mod]}";
         }
 
         // 身份证归属地
         public static string GetAreaName(string areaCode)
         {
-            return GetWhere("dq", $"bm = {areaCode}");
+            return Repository.GetAreaNameAsync(areaCode).GetAwaiter().GetResult() ?? "未知";
         }
     }
 }
-

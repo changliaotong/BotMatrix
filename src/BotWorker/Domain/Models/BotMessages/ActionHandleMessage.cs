@@ -2,13 +2,8 @@ using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
-        [JsonIgnore]
-        public override string TableName => "SendMessage";
-        [JsonIgnore]
-        public override string KeyField => "MsgId";
-
         public void OnMuteAll()
         {
             //还要考虑官机的权限问题

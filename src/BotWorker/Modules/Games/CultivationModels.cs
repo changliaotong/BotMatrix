@@ -1,11 +1,23 @@
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Infrastructure.Utils.Schema.Attributes;
-using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
-    public class CultivationProfile : MetaDataGuid<CultivationProfile>
+    [Table("CultivationProfiles")]
+    public class CultivationProfile
     {
+        private static ICultivationProfileRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ICultivationProfileRepository>() 
+            ?? throw new InvalidOperationException("ICultivationProfileRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
 
         public int Level { get; set; } = 1;
@@ -18,19 +30,24 @@ namespace BotWorker.Modules.Games
 
         public DateTime LastCultivateTime { get; set; } = DateTime.MinValue;
 
-        public override string TableName => "CultivationProfiles";
-        public override string KeyField => "Id";
-
         public static async Task<CultivationProfile?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetByUserIdAsync(userId);
         }
 
         public static async Task<List<CultivationProfile>> GetTopCultivatorsAsync(int limit = 10)
         {
-            string topClause = SqlTop(limit);
-            string limitClause = SqlLimit(limit);
-            return await QueryWhere($"{topClause} 1=1 ORDER BY Level DESC, Exp DESC {limitClause}", SqlParams());
+            return await Repository.GetTopCultivatorsAsync(limit);
+        }
+
+        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
 
         public string GetStageName()
@@ -57,8 +74,15 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    public class CultivationRecord : MetaDataGuid<CultivationRecord>
+    [Table("CultivationRecords")]
+    public class CultivationRecord
     {
+        private static ICultivationRecordRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ICultivationRecordRepository>() 
+            ?? throw new InvalidOperationException("ICultivationRecordRepository not registered");
+
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
 
         public string ActionType { get; set; } = string.Empty; // 修炼, 突破, 走火入魔
@@ -67,7 +91,9 @@ namespace BotWorker.Modules.Games
 
         public DateTime CreateTime { get; set; } = DateTime.Now;
 
-        public override string TableName => "CultivationRecords";
-        public override string KeyField => "Id";
+        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
     }
 }

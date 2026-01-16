@@ -1,7 +1,12 @@
-﻿namespace BotWorker.Domain.Entities
+using Dapper.Contrib.Extensions;
+
+namespace BotWorker.Domain.Entities
 {
-    public class HandleQuestion :MetaData<HandleQuestion>
+    [Table("HandleQuestion")]
+    public class HandleQuestion
     {
+        [Key]
+        public long Id { get; set; }
         public long Qid { get; set; }
         public string Question { get; set; } = "";
         public long? Qid2 { get; set; }
@@ -11,9 +16,5 @@
         public int UsedTimes2 { get; set; }
         public int CAnswerAll { get; set; }
         public string Answers { get; set; } = "";
-
-        public override string TableName => "HandleQuestion";
-
-        public override string KeyField => "Id";
     }
 }

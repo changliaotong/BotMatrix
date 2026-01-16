@@ -3,7 +3,7 @@ using BotWorker.Infrastructure.Communication;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
     private IRobotClient RobotClient => RobotClientFactory.Get(Platform == Platforms.Mirai ? Platforms.Mirai : Platforms.Worker);
 

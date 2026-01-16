@@ -1,9 +1,9 @@
 ﻿using BotWorker.Infrastructure.Persistence.ORM;
 
-namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
         public string HandleFileMessage()
         {
             if (IsGuild)

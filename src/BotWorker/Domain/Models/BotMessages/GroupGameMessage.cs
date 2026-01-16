@@ -1,6 +1,6 @@
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         public const string ErrorFormat = "命令格式：开盲盒 + 数字1-6\n例如：\n开盲盒 3\nKMH 6";
 

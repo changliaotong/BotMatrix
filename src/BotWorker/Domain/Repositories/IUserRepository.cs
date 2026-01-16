@@ -13,7 +13,7 @@ namespace BotWorker.Domain.Repositories
         Task<bool> UpdateAsync(UserInfo user);
         
         Task<long> GetCreditAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null);
-        Task<bool> AddCreditAsync(long botUin, long groupId, long qq, long amount, string reason, IDbTransaction? trans = null);
+        Task<(bool Success, long CreditValue)> AddCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long amount, string reason, IDbTransaction? trans = null);
         Task<long> GetCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null);
         
         Task<long> GetTokensAsync(long qq);
@@ -49,6 +49,7 @@ namespace BotWorker.Domain.Repositories
         Task<string> GetRankAsync(long groupId, long qq);
         
         Task SyncCacheFieldAsync(long userId, string field, object value);
+        Task SyncCreditCacheAsync(long botUin, long groupId, long qq, long newValue);
         
         Task<int> AppendAsync(long botUin, long groupId, long qq, string name, long ownerId, IDbTransaction? trans = null);
     }

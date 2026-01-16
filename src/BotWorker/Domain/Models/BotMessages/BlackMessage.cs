@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace BotWorker.Domain.Models.BotMessages;
 
 //黑名单 blacklist
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {        
         // 解除黑名单
         public async Task<string> GetCancelBlackAsync(long userId)

@@ -1,6 +1,5 @@
 using BotWorker.Domain.Entities;
 using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Models.BotMessages;
 using System.Threading.Tasks;

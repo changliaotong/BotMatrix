@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
 
         // 改名

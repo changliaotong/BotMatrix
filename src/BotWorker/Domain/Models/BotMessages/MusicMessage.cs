@@ -1,9 +1,9 @@
 using OneBotSharp.Objs.Message;
 
-namespace BotWorker.Domain.Models.BotMessages
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
 {
-    public partial class BotMessage : MetaData<BotMessage>
-    {
 
 
         //收到音乐分享消息时添加到音乐库

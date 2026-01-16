@@ -2,7 +2,6 @@ using System.Data;
 using BotWorker.Domain.Entities;
 using BotWorker.Common;
 using BotWorker.Common.Extensions;
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Domain.Interfaces;
 using System.Text.RegularExpressions;
 
@@ -39,13 +38,13 @@ namespace BotWorker.Modules.Games
             var botId = long.Parse(ctx.BotId);
 
             if (cmd == "我的宠物")
-                return await PetOld.GetMyPetListAsync(groupId, groupId, userId);
+                return await BuyFriends.GetMyPetListAsync(groupId, groupId, userId);
 
             if (cmd == "身价榜")
-                return await PetOld.GetPriceListAsync(groupId, groupId, userId);
+                return await BuyFriends.GetPriceListAsync(groupId, groupId, userId);
 
             if (cmd == "我的身价")
-                return await PetOld.GetMyPriceListAsync(groupId, groupId, userId);
+                return await BuyFriends.GetMyPriceListAsync(groupId, groupId, userId);
 
             if (cmd == "买入")
             {
@@ -58,7 +57,7 @@ namespace BotWorker.Modules.Games
                     if (cmdPara.Contains("积分") || cmdPara.Contains("禁言卡") || cmdPara.Contains("飞机票") || cmdPara.Contains("道具"))
                         return string.Empty;
 
-                    return await PetOld.GetBuyPetAsync(botId, groupId, groupId, ctx.Group?.GroupName ?? "", userId, ctx.UserName, cmdPara);
+                    return await BuyFriends.GetBuyPetAsync(botId, groupId, groupId, ctx.Group?.GroupName ?? "", userId, ctx.UserName, cmdPara);
                 }
                 return string.Empty;
             }
@@ -66,14 +65,14 @@ namespace BotWorker.Modules.Games
             if (cmd == "赎身")
             {
                 if (ctx.Group == null || !ctx.Group.IsPet)
-                    return PetOld.InfoClosed;
+                    return BuyFriends.InfoClosed;
 
                 // 以当前主人购买时的价格成交，对方只能得到80%，系统扣除20%
-                long currMaster = await PetOld.GetCurrMasterAsync(groupId, userId);
+                long currMaster = await BuyFriends.GetCurrMasterAsync(groupId, userId);
                 if (currMaster == userId || currMaster == 0)
                     return "您已是自由身，无需赎身";
 
-                long buyPrice = await PetOld.GetBuyPriceAsync(groupId, userId);
+                long buyPrice = await BuyFriends.GetBuyPriceAsync(groupId, userId);
                 long creditAdd = buyPrice;
                 long creditMinus = buyPrice * 12 / 10;
                 
@@ -91,7 +90,7 @@ namespace BotWorker.Modules.Games
                     return $"赎身需扣分：-{creditMinus}，请发送“确认”继续";
                 }
 
-                int res = await PetOld.DoFreeMeAsync(botId, groupId, ctx.Group.GroupName, userId, ctx.UserName, currMaster, creditMinus, creditAdd);
+                int res = await BuyFriends.DoFreeMeAsync(botId, groupId, ctx.Group.GroupName, userId, ctx.UserName, currMaster, creditMinus, creditAdd);
                 if (res == -1)
                     return "操作失败，请重试";
 
@@ -104,10 +103,27 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    public class PetOld : MetaData<PetOld>
+    [Table("BuyFriends")]
+    public class BuyFriends
     {
-        public override string TableName => "BuyFriends";
-        public override string KeyField => "Id";
+        private static IBuyFriendsRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBuyFriendsRepository>() 
+            ?? throw new InvalidOperationException("IBuyFriendsRepository not registered");
+
+        [ExplicitKey]
+        public int Id { get; set; }
+        public int PrevId { get; set; }
+        public long BotUin { get; set; }
+        public long GroupId { get; set; }
+        public long UserId { get; set; }
+        public long FriendId { get; set; }
+        public long Fromid { get; set; }
+        public long BuyPrice { get; set; }
+        public long SellPrice { get; set; }
+        public int IsValid { get; set; }
+        public DateTime InsertDate { get; set; } = DateTime.Now;
+        public DateTime? SellDate { get; set; }
+        public long? SellTo { get; set; }
 
         public const string InfoClosed = "宠物系统已关闭";
 
@@ -157,7 +173,7 @@ namespace BotWorker.Modules.Games
 
             int i = await DoBuyPetAsync(botQQ, groupId, groupName, qq, name, fromQQ, friendQQ, sellPrice, buyCredit);
             if (i == -1)
-                return RetryMsg;
+                return "操作失败，请重试";
 
             long creditSell = buyCredit * 8 / 10;
             long creditFriendGet = buyCredit / 10;
@@ -168,8 +184,7 @@ namespace BotWorker.Modules.Games
         // 宠物主人
         public static async Task<long> GetCurrMasterAsync(long group_id, long friend_qq)
         {
-            string res = await GetWhereAsync<string>("UserId", $"GroupId = {group_id} and FriendId = {friend_qq} and IsValid = 1") ?? "";
-            return res.AsLong();
+            return await Repository.GetCurrMasterAsync(group_id, friend_qq);
         }
 
         public static long GetCurrMaster(long group_id, long friend_qq)
@@ -180,12 +195,7 @@ namespace BotWorker.Modules.Games
         /// 得到某人的当前市场价格
         public static async Task<long> GetSellPriceAsync(long groupId, long friendId)
         {
-            long minPrice = 100;
-            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
-            string res = await QueryScalarAsync<string>($"SELECT {func}(SellPrice, InsertDate) AS res FROM {FullName} " +
-                               $"WHERE GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1") ?? "";
-            long sellPrice = res == "" ? minPrice : res.AsLong();
-            return sellPrice < minPrice ? minPrice : sellPrice;
+            return await Repository.GetSellPriceAsync(groupId, friendId);
         }
 
         public static long GetSellPrice(long groupId, long friendId)
@@ -196,7 +206,7 @@ namespace BotWorker.Modules.Games
         // 得到某人购买价格
         public static async Task<long> GetBuyPriceAsync(long groupId, long friendId)
         {
-            return (await GetWhereAsync<string>("BuyPrice", $"GroupId = {groupId} AND FriendId = {friendId} AND IsValid = 1")).AsLong();
+            return await Repository.GetBuyPriceAsync(groupId, friendId);
         }
 
         public static long GetBuyPrice(long groupId, long friendId)
@@ -207,7 +217,7 @@ namespace BotWorker.Modules.Games
         // 得到buyid
         public static async Task<int> GetBuyIdAsync(long groupId, long friendQQ)
         {
-            return (await GetWhereAsync<string>(SqlIsNull("Id", "0"), $"GroupId = {groupId} AND FriendId = {friendQQ} AND IsValid = 1")).AsInt();
+            return await Repository.GetBuyIdAsync(groupId, friendQQ);
         }
 
         public static int GetBuyId(long groupId, long friendQQ)
@@ -218,7 +228,7 @@ namespace BotWorker.Modules.Games
         // 宠物数量
         public static async Task<long> GetPetCountAsync(long groupId, long qq)
         {
-            return await CountWhereAsync($"GroupId = {groupId} AND UserId = {qq} AND IsValid = 1");
+            return await Repository.GetPetCountAsync(groupId, qq);
         }
 
         public static long GetPetCount(long groupId, long qq)
@@ -237,10 +247,13 @@ namespace BotWorker.Modules.Games
             if (!await GroupInfo.GetIsPetAsync(groupId))
                 return InfoClosed;
 
-            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
-            string res = await QueryResAsync($"SELECT {SqlTop(topN)} FriendId, {func}(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
-                                  $"where GroupId = {groupId} and IsValid = 1 order by SellPrice desc {SqlLimit(topN)}", 
-                                  "【第{i}名】 [@:{0}] 身价：{1}\n");
+            var list = await Repository.GetPriceListAsync(groupId, topN);
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < list.Count; i++)
+            {
+                sb.Append($"【第{i + 1}名】 [@:{list[i].FriendId}] 身价：{list[i].SellPrice}\n");
+            }
+            string res = sb.ToString();
             if (!res.Contains(userId.ToString()))
                 res += "{身价排名}";
             return res;
@@ -258,14 +271,22 @@ namespace BotWorker.Modules.Games
                 return InfoClosed;
 
             long myPirce = await GetSellPriceAsync(groupId, userId);
-            string sql = $"SELECT COUNT(*)+1 AS res FROM {FullName} WHERE GroupId = {groupId} AND IsValid = 1 AND SellPrice > {myPirce}";
-
-            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
-            return groupId == 0
-                ?  await QueryResAsync($"SELECT {SqlTop(topN)} GroupId, {func}(SellPrice, InsertDate) AS SellPrice " +
-                    $"FROM {FullName} WHERE IsValid = 1 AND FriendId = {userId} ORDER BY SellPrice DESC {SqlLimit(topN)}",
-                    "【{i}】 群：{0} 身价：{1}\n")
-                : $"【第{await QueryAsync(sql)}名】 [@:{userId}] 身价：{myPirce}";
+            
+            if (groupId == 0)
+            {
+                var list = await Repository.GetMyPriceListAsync(userId, topN);
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    sb.Append($"【{i + 1}】 群：{list[i].GroupId} 身价：{list[i].SellPrice}\n");
+                }
+                return sb.ToString();
+            }
+            else
+            {
+                int rank = await Repository.GetRankAsync(groupId, myPirce);
+                return $"【第{rank}名】 [@:{userId}] 身价：{myPirce}";
+            }
         }
 
         // 买入宠物
@@ -275,7 +296,9 @@ namespace BotWorker.Modules.Games
             if (!await UserInfo.ExistsAsync(friendQQ))
                 await UserInfo.AppendUserAsync(botUin, groupId, friendQQ, "");
 
-            using var trans = await BeginTransactionAsync();
+            using var conn = Repository.CreateConnection();
+            conn.Open();
+            using var trans = conn.BeginTransaction();
             try
             {
                 var res1 = await UserInfo.AddCreditAsync(botUin, groupId, groupName, qq, name, -buyCredit, $"购买：{friendQQ}", trans);
@@ -287,13 +310,35 @@ namespace BotWorker.Modules.Games
                 var res3 = await UserInfo.AddCreditAsync(botUin, groupId, groupName, friendQQ, "", sellPrice * 1 / 10, $"被转卖：{fromQQ}->{qq}", trans);
                 if (res3.Result == -1) throw new Exception("宠物加分失败");
 
-                var (sql7, paras7) = SqlPetHis(botUin, prev_id, groupId, qq, friendQQ, fromQQ, sellPrice, buyCredit * 2, 1);
-                await ExecAsync(sql7, trans, paras7);
+                var petHis = new BuyFriends
+                {
+                    PrevId = prev_id,
+                    BotUin = botUin,
+                    GroupId = groupId,
+                    UserId = qq,
+                    FriendId = friendQQ,
+                    Fromid = fromQQ,
+                    BuyPrice = sellPrice, // buyPrice is actually sellPrice in the original code logic
+                    SellPrice = buyCredit * 2,
+                    IsValid = 1,
+                    InsertDate = DateTime.Now
+                };
+                await Repository.InsertAsync(petHis, trans);
 
-                var (sql8, paras8) = SqlUpdSellInfo(qq, sellPrice, prev_id);
-                await ExecAsync(sql8, trans, paras8);
+                if (prev_id > 0)
+                {
+                    var prev = await Repository.GetByIdAsync(prev_id, trans);
+                    if (prev != null)
+                    {
+                        prev.SellDate = DateTime.Now;
+                        prev.SellTo = qq;
+                        prev.SellPrice = sellPrice;
+                        prev.IsValid = 0;
+                        await Repository.UpdateAsync(prev, trans);
+                    }
+                }
 
-                await trans.CommitAsync();
+                trans.Commit();
 
                 UserInfo.SyncCacheField(qq, groupId, "Credit", res1.CreditValue);
                 UserInfo.SyncCacheField(fromQQ, groupId, "Credit", res2.CreditValue);
@@ -303,7 +348,7 @@ namespace BotWorker.Modules.Games
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                trans.Rollback();
                 Console.WriteLine($"[DoBuyPet Error] {ex.Message}");
                 return -1;
             }
@@ -319,7 +364,9 @@ namespace BotWorker.Modules.Games
         public static async Task<int> DoFreeMeAsync(long botUin, long groupId, string groupName, long qq, string name, long fromQQ, long creditMinus, long creditAdd)
         {
             int prev_id = await GetBuyIdAsync(groupId, qq);
-            using var trans = await BeginTransactionAsync();
+            using var conn = Repository.CreateConnection();
+            conn.Open();
+            using var trans = conn.BeginTransaction();
             try
             {
                 var res1 = await UserInfo.AddCreditAsync(botUin, groupId, groupName, qq, name, -creditMinus, $"赎身：{fromQQ}", trans);
@@ -328,13 +375,35 @@ namespace BotWorker.Modules.Games
                 var res2 = await UserInfo.AddCreditAsync(botUin, groupId, groupName, fromQQ, "", creditAdd, $"赎身：{qq}", trans);
                 if (res2.Result == -1) throw new Exception("赎身卖家加分失败");
 
-                var (sql5, paras5) = SqlPetHis(botUin, prev_id, groupId, qq, qq, fromQQ, creditAdd);
-                await ExecAsync(sql5, trans, paras5);
+                var petHis = new BuyFriends
+                {
+                    PrevId = prev_id,
+                    BotUin = botUin,
+                    GroupId = groupId,
+                    UserId = qq,
+                    FriendId = qq,
+                    Fromid = fromQQ,
+                    BuyPrice = creditAdd,
+                    SellPrice = 0,
+                    IsValid = 0,
+                    InsertDate = DateTime.Now
+                };
+                await Repository.InsertAsync(petHis, trans);
 
-                var (sql6, paras6) = SqlUpdSellInfo(qq, creditAdd, prev_id);
-                await ExecAsync(sql6, trans, paras6);
+                if (prev_id > 0)
+                {
+                    var prev = await Repository.GetByIdAsync(prev_id, trans);
+                    if (prev != null)
+                    {
+                        prev.SellDate = DateTime.Now;
+                        prev.SellTo = qq;
+                        prev.SellPrice = creditAdd;
+                        prev.IsValid = 0;
+                        await Repository.UpdateAsync(prev, trans);
+                    }
+                }
 
-                await trans.CommitAsync();
+                trans.Commit();
 
                 UserInfo.SyncCacheField(qq, groupId, "Credit", res1.CreditValue);
                 UserInfo.SyncCacheField(fromQQ, groupId, "Credit", res2.CreditValue);
@@ -343,7 +412,7 @@ namespace BotWorker.Modules.Games
             }
             catch (Exception ex)
             {
-                await trans.RollbackAsync();
+                trans.Rollback();
                 Console.WriteLine($"[DoFreeMe Error] {ex.Message}");
                 return -1;
             }
@@ -355,28 +424,6 @@ namespace BotWorker.Modules.Games
             return DoFreeMeAsync(botUin, groupId, groupName, qq, name, fromQQ, creditMinus, creditAdd).GetAwaiter().GetResult();
         }
 
-        // 宠物his sql
-        public static (string, IDataParameter[]) SqlPetHis(long botUin, long prevId, long groupId, long qq, long friendQQ, long fromQQ, long buyPrice, long sellPrice = 0, int isValid = 0)
-        {
-            return SqlInsert([
-                new Cov("PrevId", prevId),
-                new Cov("BotUin", botUin),
-                new Cov("GroupId", groupId),
-                new Cov("UserId", qq),
-                new Cov("FriendId", friendQQ),
-                new Cov("Fromid", fromQQ),
-                new Cov("BuyPrice", buyPrice),
-                new Cov("SellPrice", sellPrice),
-                new Cov("IsValid", isValid),
-            ]);
-        }
-
-        // 更新卖出信息
-        public static (string, IDataParameter[]) SqlUpdSellInfo(long sellTO, long sellPrice, long buyId)
-        {
-            return SqlSetValues($"SellDate = {SqlDateTime}, SellTo = {sellTO}, SellPrice = {sellPrice}, IsValid = 0", buyId);
-        }
-
         // 我的宠物列表
         public static string GetMyPetList(long _groupId, long groupId, long qq, int topN = 3)
             => GetMyPetListAsync(_groupId, groupId, qq, topN).GetAwaiter().GetResult();
@@ -386,10 +433,13 @@ namespace BotWorker.Modules.Games
             if (_groupId != 0 & !await GroupInfo.GetIsPetAsync(groupId))
                 return InfoClosed;
 
-            string func = IsPostgreSql ? "get_sell_price" : $"{DbName}.dbo.get_sell_price";
-            string sql = $"SELECT {SqlTop(topN)} FriendId, {func}(SellPrice, InsertDate) AS SellPrice FROM {FullName} " +
-                         $"WHERE GroupId = {groupId} AND UserId = {qq} AND IsValid = 1 ORDER BY SellPrice DESC {SqlLimit(topN)}";
-            string res = await QueryResAsync(sql, "【第{i}名】 [@:{0}] 身价：{1}\n");
+            var list = await Repository.GetMyPetListAsync(groupId, qq, topN);
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < list.Count; i++)
+            {
+                sb.Append($"【第{i + 1}名】 [@:{list[i].FriendId}] 身价：{list[i].SellPrice}\n");
+            }
+            string res = sb.ToString();
             return $"{res}当前宠物状态：您买入的宠物数量：{await GetPetCountAsync(groupId, qq)}";
         }
     }

@@ -1,7 +1,7 @@
-namespace BotWorker.Domain.Models.BotMessages
-{
-    public partial class BotMessage : MetaData<BotMessage>
-    {        
+namespace BotWorker.Domain.Models.BotMessages;
+
+public partial class BotMessage
+{        
         //防撤回（已失效）
         public async Task OnGroupRecallAsync()
         {

@@ -1,7 +1,7 @@
 namespace BotWorker.Domain.Models.BotMessages
 {
     //红和蓝
-    public partial class BotMessage : MetaData<BotMessage>
+    public partial class BotMessage
     {
         public async Task<string> GetRedBlueResAsync(bool isDetail = true)
         {

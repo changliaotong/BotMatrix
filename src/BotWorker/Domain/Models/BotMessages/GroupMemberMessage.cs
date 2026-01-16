@@ -1,6 +1,6 @@
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         // 兑换本群积分/金币/紫币等
         public async Task<string> ExchangeCoinsAsync(string cmdPara, string cmdPara2)

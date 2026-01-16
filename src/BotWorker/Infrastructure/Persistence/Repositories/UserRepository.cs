@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Threading.Tasks;
 using BotWorker.Infrastructure.Persistence.Repositories;
 using BotWorker.Domain.Repositories;
 using BotWorker.Domain.Entities;
 using Dapper;
 using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Infrastructure.Persistence.Repositories
 {
@@ -46,9 +48,17 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             return await GetValueAsync<long>("credit", qq, trans);
         }
 
-        public async Task<bool> AddCreditAsync(long botUin, long groupId, long qq, long amount, string reason, IDbTransaction? trans = null)
+        public async Task<(bool Success, long CreditValue)> AddCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long amount, string reason, IDbTransaction? trans = null)
         {
-            return await IncrementValueAsync("credit", amount, qq, trans) > 0;
+            var creditValue = await GetCreditForUpdateAsync(botUin, groupId, qq, trans);
+            var success = await IncrementValueAsync("credit", amount, qq, trans) > 0;
+            var newValue = creditValue + amount;
+
+            var creditLogRepository = BotMessage.ServiceProvider?.GetRequiredService<ICreditLogRepository>();
+            if (creditLogRepository != null)
+                await creditLogRepository.AddLogAsync(botUin, groupId, groupName, qq, name, amount, creditValue, reason, trans);
+
+            return (success, newValue);
         }
 
         public async Task<long> GetCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
@@ -332,6 +342,29 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             // 如果有字段级缓存需求，可以根据 field 处理
             string fieldCacheKey = $"MetaData:{fullName}:Id:{userId}_{field}";
             await MetaData.CacheService.SetAsync(fieldCacheKey, value, TimeSpan.FromMinutes(1));
+        }
+
+        public async Task SyncCreditCacheAsync(long botUin, long groupId, long qq, long newValue)
+        {
+            var groupRepository = BotMessage.ServiceProvider?.GetRequiredService<IGroupRepository>();
+            var botRepository = BotMessage.ServiceProvider?.GetRequiredService<IBotRepository>();
+
+            if (groupRepository != null && await groupRepository.GetIsCreditAsync(groupId))
+            {
+                var groupMemberRepository = BotMessage.ServiceProvider?.GetRequiredService<IGroupMemberRepository>();
+                if (groupMemberRepository != null)
+                    await groupMemberRepository.SyncCacheFieldAsync(groupId, qq, "group_credit", newValue);
+            }
+            else if (botRepository != null && await botRepository.GetIsCreditAsync(botUin))
+            {
+                var friendRepository = BotMessage.ServiceProvider?.GetRequiredService<IFriendRepository>();
+                if (friendRepository != null)
+                    await friendRepository.SyncCacheFieldAsync(botUin, qq, "credit", newValue);
+            }
+            else
+            {
+                await SyncCacheFieldAsync(qq, "credit", newValue);
+            }
         }
 
         public async Task<int> AppendAsync(long botUin, long groupId, long qq, string name, long ownerId, IDbTransaction? trans = null)

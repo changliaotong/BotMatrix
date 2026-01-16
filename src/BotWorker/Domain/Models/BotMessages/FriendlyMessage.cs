@@ -1,9 +1,9 @@
 using System.Text.RegularExpressions;
 
-namespace BotWorker.Domain.Models.BotMessages;
-
-public partial class BotMessage : MetaData<BotMessage>
+namespace BotWorker.Domain.Models.BotMessages
 {
+    public partial class BotMessage
+    {
         public static bool IsUrlWhiteListed(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;

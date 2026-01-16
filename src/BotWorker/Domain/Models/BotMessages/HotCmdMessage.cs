@@ -1,6 +1,6 @@
 namespace BotWorker.Domain.Models.BotMessages
 {
-    public partial class BotMessage : MetaData<BotMessage>
+    public partial class BotMessage
     {
 
         // 是否快捷命令

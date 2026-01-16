@@ -1,10 +1,22 @@
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
-    public class Baby : MetaData<Baby>
+    [Table("Babies")]
+    public class Baby
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IBabyRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBabyRepository>() 
+            ?? throw new InvalidOperationException("IBabyRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
@@ -18,48 +30,68 @@ namespace BotWorker.Modules.Games
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
         public DateTime LastDailyUpdate { get; set; } = DateTime.MinValue;
 
-        public override string TableName => "Babies";
-        public override string KeyField => "Id";
-
         public static async Task<Baby?> GetByUserIdAsync(string userId)
         {
-            return (await QueryWhere("UserId = @p1 AND Status = 'active'", SqlParams(("@p1", userId)))).FirstOrDefault();
+            return await Repository.GetByUserIdAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
     }
 
-    public class BabyEvent : MetaData<BabyEvent>
+    [Table("BabyEvents")]
+    public class BabyEvent
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IBabyEventRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBabyEventRepository>() 
+            ?? throw new InvalidOperationException("IBabyEventRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public Guid BabyId { get; set; }
         public string EventType { get; set; } = string.Empty; // birthday, learn, work, interact
         public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "BabyEvents";
-        public override string KeyField => "Id";
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
     }
 
-    public class BabyConfig : MetaData<BabyConfig>
+    [Table("BabyConfig")]
+    public class BabyConfig
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IBabyConfigRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBabyConfigRepository>() 
+            ?? throw new InvalidOperationException("IBabyConfigRepository not registered");
+
+        [ExplicitKey]
         public int Id { get; set; } = 1;
         public bool IsEnabled { get; set; } = true;
         public int GrowthRate { get; set; } = 1000;
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
-        public override string TableName => "BabyConfig";
-        public override string KeyField => "Id";
-
         public static async Task<BabyConfig> GetAsync()
         {
-            var config = (await QueryWhere("Id = 1")).FirstOrDefault();
-            if (config == null)
-            {
-                config = new BabyConfig();
-                await config.InsertAsync();
-            }
-            return config;
+            return await Repository.GetAsync();
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
+        }
+
+        public async Task<bool> UpdateAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.UpdateAsync(this, trans);
         }
     }
 }

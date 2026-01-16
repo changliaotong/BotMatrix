@@ -1,24 +1,43 @@
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Models;
-using BotWorker.Infrastructure.Utils.Schema;
-using BotWorker.Infrastructure.Persistence.ORM;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Modules.Games
 {
-    public class UserModuleAccess : MetaDataGuid<UserModuleAccess>
+    [Table("UserModuleAccess")]
+    public class UserModuleAccess
     {
-        public override string TableName => "UserModuleAccess";
-        public override string KeyField => "Id";
+        private static IUserModuleAccessRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IUserModuleAccessRepository>() 
+            ?? throw new InvalidOperationException("IUserModuleAccessRepository not registered");
 
+        [ExplicitKey]
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string ModuleId { get; set; } = string.Empty;
         public DateTime UnlockTime { get; set; }
         public int Level { get; set; } = 1;
+
+        public static async Task<List<UserModuleAccess>> GetByUserIdAsync(string userId)
+        {
+            return await Repository.GetByUserIdAsync(userId);
+        }
+
+        public static async Task<UserModuleAccess?> GetAsync(string userId, string moduleId)
+        {
+            return await Repository.GetAsync(userId, moduleId);
+        }
+
+        public async Task InsertAsync()
+        {
+            await Repository.InsertAsync(this);
+        }
     }
 
     public class MarketModule
@@ -69,7 +88,6 @@ namespace BotWorker.Modules.Games
         public async Task InitAsync(IRobot robot)
         {
             _robot = robot;
-            await EnsureTablesCreatedAsync();
 
             var capability = new SkillCapability
             {
@@ -87,11 +105,6 @@ namespace BotWorker.Modules.Games
         }
 
         public Task StopAsync() => Task.CompletedTask;
-
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await UserModuleAccess.EnsureTableCreatedAsync();
-        }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
         {
@@ -112,7 +125,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetMarketDisplayAsync(string userId)
         {
-            var userAccess = await UserModuleAccess.QueryWhere("UserId = @p1", UserModuleAccess.SqlParams(("@p1", userId)));
+            var userAccess = await UserModuleAccess.GetByUserIdAsync(userId);
             var unlockedIds = userAccess.Select(a => a.ModuleId).ToHashSet();
 
             var sb = new System.Text.StringBuilder();
@@ -144,8 +157,8 @@ namespace BotWorker.Modules.Games
             if (module == null) return $"❌ 错误：在矩阵记录中未找到名为“{moduleName}”的系统。";
 
             // 检查是否已激活
-            var existing = await UserModuleAccess.QueryWhere("UserId = @p1 AND ModuleId = @p2", UserModuleAccess.SqlParams(("@p1", userId), ("@p2", module.Id)));
-            if (existing.Any()) return $"✨ 系统提示：“{module.Name}”已处于激活状态，无需重复接入。";
+            var existing = await UserModuleAccess.GetAsync(userId, module.Id);
+            if (existing != null) return $"✨ 系统提示：“{module.Name}”已处于激活状态，无需重复接入。";
 
             // 检查等级 (调用 EvolutionService)
             // 这里我们通过数据库直接查，解耦插件调用

@@ -2,7 +2,7 @@ using System.Data;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         //卖出积分
         public async Task<string> GetSellCreditAsync()

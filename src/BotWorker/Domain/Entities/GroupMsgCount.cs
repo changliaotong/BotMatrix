@@ -1,27 +1,41 @@
+using System;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace BotWorker.Domain.Entities
 {
-    public class GroupMsgCount : MetaData<GroupMsgCount>
-    {        
-        public override string TableName => "MsgCount";
-        public override string KeyField => "GroupId";
-        public override string KeyField2 => "UserId";
+    [Table("msgcount")]
+    public class GroupMsgCount
+    {
+        private static IGroupMsgCountRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGroupMsgCountRepository>() 
+            ?? throw new InvalidOperationException("IGroupMsgCountRepository not registered");
+
+        private static IGroupRepository GroupRepository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGroupRepository>() 
+            ?? throw new InvalidOperationException("IGroupRepository not registered");
+
+        [Key]
+        public long Id { get; set; }
+        public long BotUin { get; set; }
+        public long GroupId { get; set; }
+        public string GroupName { get; set; } = "";
+        public long UserId { get; set; }
+        public string UserName { get; set; } = "";
+        public DateTime CDate { get; set; }
+        public DateTime MsgDate { get; set; }
+        public int CMsg { get; set; }
 
         public static async Task<bool> ExistTodayAsync(long groupId, long userId)
         {
-            return await ExistsWhereAsync($"GroupId = {groupId} AND UserId = {userId} AND CDate = {SqlDate}");
+            return await Repository.ExistTodayAsync(groupId, userId);
         }
 
         public static async Task<int> AppendAsync(long botUin, long groupId, string groupName, long userId, string name)
         {
-            return await InsertAsync([
-                            new Cov("BotUin", botUin),
-                            new Cov("GroupId", groupId),
-                            new Cov("GroupName", groupName),
-                            new Cov("UserId", userId),
-                            new Cov("UserName", name),
-                            new Cov("CDate", DateTime.Today),
-                            new Cov("MsgDate", DateTime.Now),
-                        ]);
+            return await Repository.AppendAsync(botUin, groupId, groupName, userId, name);
         }
 
         public static int Update(long botUin, long groupId, string groupName, long userId, string name)
@@ -29,52 +43,46 @@ namespace BotWorker.Domain.Entities
 
         public static async Task<int> UpdateAsync(long botUin, long groupId, string groupName, long userId, string name)
         {
-            if (!await ExistTodayAsync(groupId, userId))
-                return await AppendAsync(botUin, groupId, groupName, userId, name);
-            else
-                return await UpdateWhereAsync($"MsgDate = {SqlDateTime}, CMsg = CMsg+1", $"GroupId = {groupId} AND UserId = {userId} AND CDate = {SqlDate}");
+            return await Repository.UpdateAsync(botUin, groupId, groupName, userId, name);
         }
 
         // 今日发言次数
         public static async Task<int> GetMsgCountAsync(long groupId, long qq)
         {
-            return (await GetWhereAsync("CMsg", $"GroupId = {groupId} and UserId = {qq} and CDate = {SqlDate}")).AsInt();
+            return await Repository.GetMsgCountAsync(groupId, qq);
         }
 
         // 昨日发言次数
         public static async Task<int> GetMsgCountYAsync(long groupId, long qq)
         {
-            return (await GetWhereAsync("CMsg", $"GroupId = {groupId} and UserId = {qq} and CDate = {SqlYesterday}")).AsInt();
+            return await Repository.GetMsgCountAsync(groupId, qq, true);
         }
 
         // 今日发言排名
         public static async Task<int> GetCountOrderAsync(long groupId, long userId)
         {
-            return await QueryScalarAsync<int>($"select count(Id)+1 as res  from {FullName} " +
-                            $"where GroupId = {groupId} and CDate = {SqlDate} " +
-                            $"and CMsg > (select {SqlTop(1)}CMsg from {FullName} " +
-                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlDate}{SqlLimit(1)})");
+            return await Repository.GetCountOrderAsync(groupId, userId);
         }
 
         /// 昨日发言排名
         public static async Task<int> GetCountOrderYAsync(long groupId, long userId)
         {
-            return await QueryScalarAsync<int>($"select count(Id)+1 from {FullName} " +
-                            $"where GroupId = {groupId} and CDate = {SqlYesterday} " +
-                            $"and CMsg > (select {SqlTop(1)}CMsg from {FullName} " +
-                            $"where GroupId = {groupId} and UserId = {userId} and CDate = {SqlYesterday}{SqlLimit(1)})");
+            return await Repository.GetCountOrderAsync(groupId, userId, true);
         }
 
         // 今日发言榜前N名
         public static async Task<string> GetCountListAsync(long botUin, long groupId, long userId, long top)
         {
-            if (!await GroupInfo.IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
-                return OwnerOnlyMsg;
-            string res = await QueryResAsync($"select {SqlTop(top)}UserId, CMsg from {FullName} " +
-                                  $"where GroupId = {groupId} and CDate = {SqlDate} order by CMsg desc{SqlLimit(top)}",
-                                  "【第{i}名】 [@:{0}] 发言：{1}\n");
+            if (!await GroupRepository.IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
+                return "此命令仅限管理员使用";
+
+            string res = await Repository.GetCountListAsync(groupId, false, top);
             if (!res.Contains(userId.ToString()))
-                res += $"【第{{今日发言排名}}名】 {{你2}} 发言：{{今日发言次数}}";
+            {
+                int order = await GetCountOrderAsync(groupId, userId);
+                int count = await GetMsgCountAsync(groupId, userId);
+                res += $"【第{order}名】 你 发言：{count}";
+            }
             res += "\n进入 后台 查看更多内容";
             return res;
         }
@@ -82,13 +90,16 @@ namespace BotWorker.Domain.Entities
         // 昨日发言榜前N名
         public static async Task<string> GetCountListYAsync(long botUin, long groupId, long userId, long top)
         {
-            if (!await GroupInfo.IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
-                return OwnerOnlyMsg;
-            string res = await QueryResAsync($"select {SqlTop(top)}UserId, CMsg from {FullName} " +
-                                  $"where GroupId = {groupId} and CDate = {SqlYesterday} order by CMsg desc{SqlLimit(top)}",
-                                  "【第{i}名】 [@:{0}] 发言：{1}\n");
+            if (!await GroupRepository.IsOwnerAsync(groupId, userId) && !BotInfo.IsAdmin(botUin, userId))
+                return "此命令仅限管理员使用";
+
+            string res = await Repository.GetCountListAsync(groupId, true, top);
             if (!res.Contains(userId.ToString()))
-                res += "【第{{昨日发言排名}}名】 {{你2}} 发言：{{昨日发言次数}}";
+            {
+                int order = await GetCountOrderYAsync(groupId, userId);
+                int count = await GetMsgCountYAsync(groupId, userId);
+                res += $"【第{order}名】 你 发言：{count}";
+            }
             res += "\n进入 后台 查看更多内容";
             return res;
         }

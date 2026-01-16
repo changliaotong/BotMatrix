@@ -1,12 +1,18 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using System.Reflection;
-
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Modules.Plugins;
-using BotWorker.Domain.Interfaces;
+using System.Threading.Tasks;
 using BotWorker.Domain.Entities;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using BotWorker.Modules.Plugins;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -24,16 +30,10 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
-            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(
                 new SkillCapability("红蓝博弈", ["红", "蓝", "和"]),
                 HandleRedBlueAsync
             );
-        }
-
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await ShuffledDeck.EnsureTableCreatedAsync();
         }
 
         public Task StopAsync() => Task.CompletedTask;
@@ -46,6 +46,7 @@ namespace BotWorker.Modules.Games
 
             var userId = long.Parse(ctx.UserId);
             var groupId = long.Parse(ctx.GroupId ?? "0");
+            var botId = long.Parse(ctx.BotId);
             var cmdName = ctx.RawMessage.Trim().Split(' ')[0];
             var cmdPara = args.Length > 0 ? args[0] : "";
 
@@ -53,7 +54,7 @@ namespace BotWorker.Modules.Games
             try
             {
                 // 1. 获取积分并锁定用户
-                long creditValue = await UserInfo.GetCreditForUpdateAsync(long.Parse(ctx.BotId), groupId, userId, wrapper.Transaction);
+                long creditValue = await UserInfo.GetCreditForUpdateAsync(botId, groupId, userId, wrapper.Transaction);
 
                 if (string.IsNullOrEmpty(cmdPara))
                 {
@@ -99,154 +100,90 @@ namespace BotWorker.Modules.Games
                 string result;
                 int payout;
 
-                // 判断是否出现自然赢
-                bool isNatural = RedBlue.HasNatural(playerHand) || RedBlue.HasNatural(bankerHand);
-                if (!isNatural)
+                // 检查天牌
+                if (RedBlue.HasNatural(playerHand) || RedBlue.HasNatural(bankerHand))
                 {
-                    int playerTotal = RedBlue.CalculateTotal(playerHand);
-                    int bankerTotal = RedBlue.CalculateTotal(bankerHand);
-                    int playerThirdCard = -1;
-
-                    // 蓝方补牌
-                    if (playerTotal <= 5)
-                    {
-                        playerHand.Add(deck[4]);
-                        playerThirdCard = RedBlue.CalculatePoint(deck[4]);
-                        playerTotal = RedBlue.CalculateTotal(playerHand);
-                    }
-
-                    // 红方补牌
-                    bool bankerDrawCard = false;
-                    if (playerThirdCard != -1)
-                    {
-                        if (bankerTotal <= 2) bankerDrawCard = true;
-                        else if (bankerTotal == 3 && playerThirdCard != 8) bankerDrawCard = true;
-                        else if (bankerTotal == 4 && (playerThirdCard >= 2 && playerThirdCard <= 7)) bankerDrawCard = true;
-                        else if (bankerTotal == 5 && (playerThirdCard >= 4 && playerThirdCard <= 7)) bankerDrawCard = true;
-                        else if (bankerTotal == 6 && (playerThirdCard == 6 || playerThirdCard == 7)) bankerDrawCard = true;
-                    }
-                    else if (bankerTotal <= 5)
-                    {
-                        bankerDrawCard = true;
-                    }
-
-                    if (bankerDrawCard)
-                        bankerHand.Add(deck[5]);
+                    result = RedBlue.CalculateResult(playerHand, bankerHand);
+                    payout = RedBlue.CalculatePayout(result);
                 }
-
-                // 结算
-                result = RedBlue.CalculateResult(playerHand, bankerHand);
-                payout = RedBlue.CalculatePayout(result);
-
-                // 批量清除已使用的牌
-                var usedCardIds = playerHand.Concat(bankerHand).Select(c => c.Id).ToList();
-                await ShuffledDeck.ClearShuffledDeckAsync(groupId, usedCardIds, wrapper.Transaction);
-
-                var sb = new StringBuilder();
-                sb.AppendLine($"蓝：{string.Join(" ", playerHand.Select(c => c.Suit + c.Rank))}【{RedBlue.CalculateTotal(playerHand)}】");
-                sb.AppendLine($"红：{string.Join(" ", bankerHand.Select(c => c.Suit + c.Rank))}【{RedBlue.CalculateTotal(bankerHand)}】");
-                sb.AppendLine($"结果：{result}");
-
-                bool isWin = result.Contains(cmdName);
-                long creditAdd = 0;
-                if (isWin)
-                {
-                    if (cmdName == "红" && RedBlue.CalculateTotal(bankerHand) == 6)
-                        creditAdd = blockCredit / 2;
-                    else
-                        creditAdd = blockCredit * payout;
-                }
-                else if (result == "和")
-                    creditAdd = 0;
                 else
-                    creditAdd = -blockCredit;
-
-                if (creditAdd != 0)
                 {
-                    var addRes = await UserInfo.AddCreditAsync(long.Parse(ctx.BotId), groupId, ctx.Group.GroupName, userId, ctx.User?.Name ?? "", creditAdd, "红和蓝得分", wrapper.Transaction);
-                    if (addRes.Result == -1)
-                    {
-                        await wrapper.RollbackAsync();
-                        return "操作失败，请稍后重试";
-                    }
-                    creditValue = addRes.CreditValue;
+                    // 补牌逻辑（简化版）
+                    if (RedBlue.CalculateTotal(playerHand) <= 5)
+                        playerHand.Add(deck[4]);
+                    
+                    if (RedBlue.CalculateTotal(bankerHand) <= 5)
+                        bankerHand.Add(deck[5]);
+
+                    result = RedBlue.CalculateResult(playerHand, bankerHand);
+                    payout = RedBlue.CalculatePayout(result);
                 }
+
+                // 3. 计算收益并更新积分
+                bool isWin = (cmdName == "蓝" && result == "蓝赢") || 
+                             (cmdName == "红" && result == "红赢") || 
+                             (cmdName == "和" && result == "和");
+
+                long profit = isWin ? blockCredit * payout : -blockCredit;
+                
+                var addRes = await UserInfo.AddCreditAsync(botId, groupId, ctx.GroupName ?? "", userId, ctx.UserName, profit, $"红蓝博弈:{cmdName}", wrapper.Transaction);
+                
+                // 4. 移除已使用的牌
+                List<int> usedIds = playerHand.Concat(bankerHand).Select(c => c.Id).ToList();
+                await ShuffledDeck.ClearShuffledDeckAsync(groupId, usedIds, wrapper.Transaction);
 
                 await wrapper.CommitAsync();
 
-                // 同步缓存
-                await UserInfo.SyncCreditCacheAsync(long.Parse(ctx.BotId), groupId, userId, creditValue);
-
-                sb.Append($"✅ 得分：{(isWin ? blockCredit + creditAdd : (result == "和" ? blockCredit : 0)):N0}，累计：{creditValue:N0}");
+                // 5. 构建响应消息
+                StringBuilder sb = new();
+                sb.AppendLine($"【红蓝博弈】结果：{result}");
+                sb.AppendLine($"蓝方：{string.Join(" ", playerHand.Select(c => $"[{c.Suit}{c.Rank}]"))} ({RedBlue.CalculateTotal(playerHand)}点)");
+                sb.AppendLine($"红方：{string.Join(" ", bankerHand.Select(c => $"[{c.Suit}{c.Rank}]"))} ({RedBlue.CalculateTotal(bankerHand)}点)");
+                sb.AppendLine("------------------");
+                sb.AppendLine(isWin ? $"💰 恭喜！您赢得了 {profit:N0} 积分" : $"💸 很遗憾，您输掉了 {blockCredit:N0} 积分");
+                sb.Append($"当前积分：{addRes.CreditValue:N0}");
 
                 return sb.ToString();
             }
             catch (Exception ex)
             {
                 await wrapper.RollbackAsync();
-                return "游戏出错，请稍后重试";
+                return $"❌ 游戏发生异常：{ex.Message}";
             }
         }
     }
 
     public static class RedBlue
     {
-        //static readonly string[] suits = { "红桃", "方块", "梅花", "黑桃" };
-        static readonly string[] suits = { "♥️", "♦️", "♣", "♠" };
-        static readonly string[] ranks = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
-
-
-        public static string ComputeNextGameHash(List<Card> deck)
-        {
-            StringBuilder data = new();
-            foreach (var card in deck)
-            {
-                data.Append(card.Rank).Append(card.Suit);
-            }
-            byte[] hashBytes = SHA384.HashData(Encoding.UTF8.GetBytes(data.ToString()));
-            return BitConverter.ToString(hashBytes).Replace("-", "");
-        }
-
         public static List<Card> InitializeDeck()
         {
+            string[] suits = ["♠", "♥", "♣", "♦"];
+            string[] ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
             List<Card> deck = [];
-
-            int j = 0;
+            int id = 0;
             foreach (var suit in suits)
             {
                 foreach (var rank in ranks)
                 {
-                    for (int i = 0; i < 8; i++) // 循环8次
-                    {
-                        j++;
-                        deck.Add(new Card(j, rank, suit));
-                    }
+                    deck.Add(new Card(++id, rank, suit));
                 }
             }
-
             return deck;
         }
 
         public static void ShuffleDeck(List<Card> deck)
         {
-            Random rng = new();
-            int n = deck.Count;
-            while (n > 1)
+            for (int i = deck.Count - 1; i > 0; i--)
             {
-                n--;
-                int k = rng.Next(n + 1);
-                (deck[n], deck[k]) = (deck[k], deck[n]);
+                int j = RandomNumberGenerator.GetInt32(i + 1);
+                (deck[i], deck[j]) = (deck[j], deck[i]);
             }
         }
 
         public static int CalculateTotal(List<Card> hand)
         {
-            int total = 0;
-            foreach (var card in hand)
-            {
-                total += CalculatePoint(card);
-            }
-            return total % 10; // 只保留个位数
+            int total = hand.Sum(CalculatePoint);
+            return total % 10;
         }
 
         public static int CalculatePoint(Card card)
@@ -257,7 +194,7 @@ namespace BotWorker.Modules.Games
             }
             else if (card.Rank == "A")
             {
-                return 1; // A先算1点
+                return 1;
             }
             else
             {
@@ -276,73 +213,50 @@ namespace BotWorker.Modules.Games
             int playerTotal = CalculateTotal(playerHand);
             int bankerTotal = CalculateTotal(bankerHand);
 
-            if (playerTotal > bankerTotal)
-            {
-                return "蓝赢";
-            }
-            else if (playerTotal < bankerTotal)
-            {
-                return "红赢";
-            }
-            else
-            {
-                return "和";
-            }
+            if (playerTotal > bankerTotal) return "蓝赢";
+            if (playerTotal < bankerTotal) return "红赢";
+            return "和";
         }
 
         public static int CalculatePayout(string result)
         {
-            if (result == "蓝赢" || result == "红赢")
-            {
-                return 1; // 1倍
-            }
-            else
-            {
-                return 8; // 8倍
-            }
+            return result == "和" ? 8 : 1;
         }
-
     }
 
     public class Card(int id, string rank, string suit)
     {
         public int Id { get; set; } = id;
-        public string Rank { get; } = rank;
-        public string Suit { get; } = suit;
+        public string Rank { get; set; } = rank;
+        public string Suit { get; set; } = suit;
     }
 
-    class ShuffledDeck : MetaData<ShuffledDeck>
+    [Table("ShuffledDeck")]
+    public class ShuffledDeck
     {
-        public override string TableName => "ShuffledDeck";
-        public override string KeyField => "DeckId";
+        private static IShuffledDeckRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IShuffledDeckRepository>() 
+            ?? throw new InvalidOperationException("IShuffledDeckRepository not registered");
 
-        public static void ClearShuffledDeck(long groupId)
-            => ClearShuffledDeckAsync(groupId).GetAwaiter().GetResult();
+        [ExplicitKey]
+        public long GroupId { get; set; }
+        [ExplicitKey]
+        public int Id { get; set; }
+        public string Rank { get; set; } = string.Empty;
+        public string Suit { get; set; } = string.Empty;
+        public int DeckOrder { get; set; }
+
+        public static async Task<TransactionWrapper> BeginTransactionAsync() => await Repository.BeginTransactionAsync();
 
         public static async Task ClearShuffledDeckAsync(long groupId, IDbTransaction? trans = null)
         {
-            string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId}";
-            await ExecAsync(sql, trans);
-        }
-
-        public static void ClearShuffledDeck(long groupId, long id)
-            => ClearShuffledDeckAsync(groupId, id).GetAwaiter().GetResult();
-
-        public static async Task ClearShuffledDeckAsync(long groupId, long id, IDbTransaction? trans = null)
-        {
-            string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId} and Id = {id}";
-            await ExecAsync(sql, trans);
+            await Repository.ClearShuffledDeckAsync(groupId, trans);
         }
 
         public static async Task ClearShuffledDeckAsync(long groupId, List<int> ids, IDbTransaction? trans = null)
         {
-            if (ids == null || ids.Count == 0) return;
-            string sql = $"DELETE FROM {FullName} WHERE GroupId = {groupId} AND Id IN ({string.Join(",", ids)})";
-            await ExecAsync(sql, trans);
+            await Repository.ClearShuffledDeckAsync(groupId, ids, trans);
         }
-
-        public static void SaveShuffledDeck(long groupId, List<Card> deck)
-            => SaveShuffledDeckAsync(groupId, deck).GetAwaiter().GetResult();
 
         public static async Task SaveShuffledDeckAsync(long groupId, List<Card> deck, IDbTransaction? trans = null)
         {
@@ -371,46 +285,26 @@ namespace BotWorker.Modules.Games
             await ClearShuffledDeckAsync(groupId, trans);
             foreach (var (card, i) in deck.Select((c, i) => (c, i)))
             {
-                await InsertAsync([
-                    new Cov("GroupId", groupId),
-                    new Cov("Id", card.Id),
-                    new Cov("Rank", card.Rank),
-                    new Cov("Suit", card.Suit),
-                    new Cov("DeckOrder", i),
-                ], trans);
+                var item = new ShuffledDeck
+                {
+                    GroupId = groupId,
+                    Id = card.Id,
+                    Rank = card.Rank,
+                    Suit = card.Suit,
+                    DeckOrder = i
+                };
+                await trans.Connection.InsertAsync(item, trans);
             }
         }
-
-        public static bool IsShuffledDeckExists(long groupId)
-            => IsShuffledDeckExistsAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<bool> IsShuffledDeckExistsAsync(long groupId, IDbTransaction? trans = null)
         {
-            return await CountWhereAsync($"groupId = {groupId}", trans) >= 6;
+            return await Repository.IsShuffledDeckExistsAsync(groupId, trans);
         }
-
-        public static List<Card> ReadShuffledDeck(long groupId)
-            => ReadShuffledDeckAsync(groupId).GetAwaiter().GetResult();
 
         public static async Task<List<Card>> ReadShuffledDeckAsync(long groupId, IDbTransaction? trans = null, bool lockRow = false)
         {
-            List<Card> deck = [];
-            string lockSql = lockRow ? " WITH (UPDLOCK, ROWLOCK) " : "";
-            string query = $"SELECT Id, Rank, Suit FROM {FullName}{lockSql} WHERE groupId = @groupId ORDER BY DeckOrder";
-
-            var ds = await QueryDatasetAsync(query, trans, [CreateParameter("@groupId", groupId)]);
-            if (ds != null && ds.Tables.Count > 0)
-            {
-                foreach (DataRow row in ds.Tables[0].Rows)
-                {
-                    deck.Add(new Card(
-                        Convert.ToInt32(row[0]),
-                        row[1].ToString() ?? "",
-                        row[2].ToString() ?? ""
-                    ));
-                }
-            }
-            return deck;
+            return await Repository.ReadShuffledDeckAsync(groupId, trans, lockRow);
         }
     }
 }

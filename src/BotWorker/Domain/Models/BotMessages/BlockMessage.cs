@@ -3,8 +3,7 @@ using System.Threading.Tasks;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-//猜大小
-public partial class BotMessage : MetaData<BotMessage>
+public partial class BotMessage
 {
         public async Task<string> GetAllInAsync()
         {

@@ -1,13 +1,26 @@
-using BotWorker.Infrastructure.Persistence.ORM;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
     /// <summary>
     /// 闷砖记录
     /// </summary>
-    public class BrickRecord : MetaData<BrickRecord>
+    [Table("BrickRecords")]
+    public class BrickRecord
     {
-        [BotWorker.Infrastructure.Utils.Schema.Attributes.PrimaryKey]
+        private static IBrickRecordRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IBrickRecordRepository>() 
+            ?? throw new InvalidOperationException("IBrickRecordRepository not registered");
+
+        [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         
         public string AttackerId { get; set; } = string.Empty; // 拍砖人ID
@@ -20,21 +33,15 @@ namespace BotWorker.Modules.Games
         
         public DateTime ActionTime { get; set; } = DateTime.Now;
 
-        [DbIgnore] public string RankUserId { get; set; } = string.Empty;
-        [DbIgnore] public int RankCount { get; set; }
-
-        public override string TableName => "BrickRecords";
-        public override string KeyField => "Id";
+        [Write(false)] public string RankUserId { get; set; } = string.Empty;
+        [Write(false)] public int RankCount { get; set; }
 
         /// <summary>
         /// 获取用户最后一次拍砖时间
         /// </summary>
         public static async Task<DateTime> GetLastActionTimeAsync(string userId)
         {
-            string topClause = SqlTop(1);
-            string limitClause = SqlLimit(1);
-            var last = (await QueryWhere($"{topClause} AttackerId = @p1 ORDER BY ActionTime DESC {limitClause}", SqlParams(("@p1", userId)))).FirstOrDefault();
-            return last?.ActionTime ?? DateTime.MinValue;
+            return await Repository.GetLastActionTimeAsync(userId);
         }
 
         /// <summary>
@@ -42,11 +49,12 @@ namespace BotWorker.Modules.Games
         /// </summary>
         public static async Task<List<(string UserId, int Count)>> GetTopAttackersAsync(int limit = 10)
         {
-            string topClause = SqlTop(limit);
-            string limitClause = SqlLimit(limit);
-            string sql = $"SELECT {topClause} AttackerId as RankUserId, COUNT(*) as RankCount FROM BrickRecords WHERE IsSuccess = 1 GROUP BY AttackerId ORDER BY RankCount DESC {limitClause}";
-            var results = await QueryAsync(sql);
-            return results.Select(r => (r.RankUserId, r.RankCount)).ToList();
+            return await Repository.GetTopAttackersAsync(limit);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
         }
     }
 }

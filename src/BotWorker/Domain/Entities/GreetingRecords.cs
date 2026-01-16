@@ -1,51 +1,60 @@
+using System;
+using System.Threading.Tasks;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    public class GreetingRecords : MetaData<GreetingRecords>
+    [Table("GreetingRecords")]
+    public class GreetingRecords
     {
-        public override string TableName => "GreetingRecords";
-        public override string KeyField => "Id";
+        private static IGreetingRecordsRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<IGreetingRecordsRepository>() 
+            ?? throw new InvalidOperationException("IGreetingRecordsRepository not registered");
 
-        public static int Append(long botQQ, long groupId, string groupName, long qq, string name, int greetingType = 0) => AppendAsync(botQQ, groupId, groupName, qq, name, greetingType).GetAwaiter().GetResult();
+        [Key]
+        public long Id { get; set; }
+        public long BotQQ { get; set; }
+        public long GroupId { get; set; }
+        public string GroupName { get; set; } = string.Empty;
+        public long QQ { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int GreetingType { get; set; }
+        public DateTime LogicalDate { get; set; }
+
+        public static int Append(long botQQ, long groupId, string groupName, long qq, string name, int greetingType = 0) => 
+            AppendAsync(botQQ, groupId, groupName, qq, name, greetingType).GetAwaiter().GetResult();
 
         public static async Task<int> AppendAsync(long botQQ, long groupId, string groupName, long qq, string name, int greetingType = 0)
         {
-            return await InsertAsync([ 
-                            new Cov("BotQQ", botQQ),
-                            new Cov("GroupId", groupId),
-                            new Cov("GroupName", groupName),
-                            new Cov("QQ", qq),
-                            new Cov("Name", name),
-                            new Cov("GreetingType", greetingType),
-                            new Cov("LogicalDate", await QueryScalarAsync<DateTime>($"SELECT CONVERT(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))")),
-                        ]);
+            return await Repository.AppendAsync(botQQ, groupId, groupName, qq, name, greetingType);
         }
 
-        public static bool Exists(long groupId, long qq, int greetingType = 0) => ExistsAsync(groupId, qq, greetingType).GetAwaiter().GetResult();
+        public static bool Exists(long groupId, long qq, int greetingType = 0) => 
+            ExistsAsync(groupId, qq, greetingType).GetAwaiter().GetResult();
 
         public static async Task<bool> ExistsAsync(long groupId, long qq, int greetingType = 0)
         {
-            var sql = $"SELECT TOP 1 1 FROM {FullName} WHERE GroupId = {groupId} AND QQ = {qq} AND GreetingType = {greetingType} AND LogicalDate = Convert(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))";
-            return (await QueryScalarAsync<int>(sql)).AsBool();
+            return await Repository.ExistsAsync(groupId, qq, greetingType);
         }
 
         //全服第x位起床用户
-        public static int GetCount(int greetingType = 0) => GetCountAsync(greetingType).GetAwaiter().GetResult();
+        public static int GetCount(int greetingType = 0) => 
+            GetCountAsync(greetingType).GetAwaiter().GetResult();
 
         public static async Task<int> GetCountAsync(int greetingType = 0)
         {
-            var minus = greetingType == 0 ? -3 : -5;
-            var sql = $"SELECT COUNT(Id)+1 FROM {FullName} WHERE GreetingType = {greetingType} AND LogicalDate = Convert(date, DATEADD(HOUR, {(greetingType == 0 ? -3 : -5)}, GETDATE()))";
-            return await QueryScalarAsync<int>(sql);
+            return await Repository.GetCountAsync(greetingType);
         }
 
         //本群第x位起床用户
-        public static int GetCount(long groupId, int greetingType = 0) => GetCountAsync(groupId, greetingType).GetAwaiter().GetResult();
+        public static int GetCount(long groupId, int greetingType = 0) => 
+            GetCountAsync(groupId, greetingType).GetAwaiter().GetResult();
 
         public static async Task<int> GetCountAsync(long groupId, int greetingType = 0)
         {
-            var sql = $"SELECT COUNT(Id)+1 FROM {FullName} WHERE GroupId = {groupId} AND GreetingType = {greetingType} AND LogicalDate = Convert(date, DATEADD(HOUR,{(greetingType == 0 ? -3 : -5)}, GETDATE()))";
-            return await QueryScalarAsync<int>(sql);
+            return await Repository.GetCountAsync(groupId, greetingType);
         }
     }
 }

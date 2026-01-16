@@ -1,8 +1,12 @@
-
-using BotWorker.Infrastructure.Persistence.ORM;
-using BotWorker.Domain.Interfaces;
+using System;
+using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
-using System.Reflection;
+using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Models.BotMessages;
+using BotWorker.Domain.Repositories;
+using Dapper.Contrib.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -18,18 +22,12 @@ namespace BotWorker.Modules.Games
     {
         public async Task InitAsync(IRobot robot)
         {
-            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "暗恋系统",
                 Commands = ["暗恋", "我的暗恋", "谁暗恋我"],
-                Description = "登记：暗恋 @某人；查询：我的暗恋 / 谁暗恋我"
+                Description = "登记：暗恋 @某人；查询：我的暗恋 /谁暗恋我"
             }, HandleLoveAsync);
-        }
-
-        private async Task EnsureTablesCreatedAsync()
-        {
-            await SecretLove.EnsureTableCreatedAsync();
         }
 
         public Task StopAsync() => Task.CompletedTask;
@@ -52,7 +50,14 @@ namespace BotWorker.Modules.Games
 
                 if (loveId == userId) return "不能暗恋自己哦";
 
-                await SecretLove.AppendAsync(botId, groupId, userId, loveId);
+                var love = new SecretLove
+                {
+                    UserId = userId,
+                    LoveId = loveId,
+                    GroupId = groupId,
+                    BotUin = botId
+                };
+                await love.InsertAsync();
                 
                 if (await SecretLove.IsLoveEachotherAsync(userId, loveId))
                 {
@@ -76,42 +81,43 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    class SecretLove : MetaData<SecretLove>
+    [Table("Love")]
+    public class SecretLove
     {
-        public override string TableName => "Love";
-        public override string KeyField => "UserId";
-        public override string KeyField2 => "LoveId";
+        private static ISecretLoveRepository Repository => 
+            BotMessage.ServiceProvider?.GetRequiredService<ISecretLoveRepository>() 
+            ?? throw new InvalidOperationException("ISecretLoveRepository not registered");
+
+        [ExplicitKey]
+        public long UserId { get; set; }
+        [ExplicitKey]
+        public long LoveId { get; set; }
+        public long GroupId { get; set; }
+        public long BotUin { get; set; }
 
         public static async Task<string> GetLoveStatusAsync()
         {
-            string sql = $"SELECT COUNT(DISTINCT UserId), COUNT(LoveId) FROM {FullName}";
-            return await QueryResAsync(sql, "已有{0}人登记暗恋对象{1}个。");
-        }
-
-        public static async Task<int> AppendAsync(long botUin, long groupId, long qq, long loveQQ)
-        {
-            return await InsertAsync([
-                            new Cov("UserId", qq),
-                            new Cov("LoveId", loveQQ),
-                            new Cov("GroupId", groupId),
-                            new Cov("BotUin", botUin)
-                        ]);
-        }
-
-        public static async Task<long> GetCountLoveMeAsync(long userId)
-        {
-            return await CountWhereAsync($"LoveId={userId}");
-        }
-
-        public static async Task<long> GetCountLoveAsync(long userId)
-        {
-            return await CountWhereAsync($"UserId={userId}");
+            return await Repository.GetLoveStatusAsync();
         }
 
         public static async Task<bool> IsLoveEachotherAsync(long userId, long loveId)
         {
-            return await ExistsAsync(userId, loveId) && await ExistsAsync(loveId, userId);
+            return await Repository.IsLoveEachotherAsync(userId, loveId);
+        }
+
+        public static async Task<int> GetCountLoveAsync(long userId)
+        {
+            return await Repository.GetCountLoveAsync(userId);
+        }
+
+        public static async Task<int> GetCountLoveMeAsync(long userId)
+        {
+            return await Repository.GetCountLoveMeAsync(userId);
+        }
+
+        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
+        {
+            return await Repository.InsertAsync(this, trans);
         }
     }
-
 }

@@ -13,4 +13,9 @@ namespace BotWorker.Domain.Repositories
         Task<long> GetMusicIdAsync(string kind, string songId);
         Task<string> GetMusicUrlByJumpUrlAsync(string jumpUrl);
     }
+
+    public interface ISongOrderRepository : IBaseRepository<BotWorker.Modules.Games.SongOrder>
+    {
+        Task<List<BotWorker.Modules.Games.SongOrder>> GetHistoryAsync(string userId);
+    }
 }
