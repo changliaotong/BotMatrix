@@ -11,7 +11,7 @@ using BotWorker.Infrastructure.Extensions; // For IsNull, IsNum, AsInt
 
 namespace BotWorker.Infrastructure.Tools
 {
-    [Table("Todo")]
+    [Table("todo")]
     public class Todo
     {
         private static ITodoRepository Repository => 

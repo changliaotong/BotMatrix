@@ -1,4 +1,6 @@
-﻿namespace BotWorker.Domain.Models.BotMessages;
+using BotWorker.Modules.Games;
+
+namespace BotWorker.Domain.Models.BotMessages;
 
 public partial class BotMessage
 {
@@ -8,7 +10,7 @@ public partial class BotMessage
             var checkResult = await CheckFreeMeAsync();
             if (checkResult.Error != null) return checkResult.Error;
 
-            int res = await PetOld.DoFreeMeAsync(SelfId, GroupId, GroupName, UserId, Name, checkResult.CurrMaster, checkResult.CreditMinus, checkResult.CreditAdd);
+            int res = await PetService.DoFreeMeAsync(SelfId, GroupId, GroupName, UserId, Name, checkResult.CurrMaster, checkResult.CreditMinus, checkResult.CreditAdd);
             if (res == -1)
                 return RetryMsg;
 
@@ -20,14 +22,14 @@ public partial class BotMessage
         private async Task<(string? Error, long CurrMaster, long CreditAdd, long CreditMinus)> CheckFreeMeAsync()
         {
             if (!Group.IsPet)
-                return (PetOld.InfoClosed, 0, 0, 0);
+                return (BuyFriends.InfoClosed, 0, 0, 0);
 
             //以当前主人购买时的价格成交，对方只能得到80%，系统扣除20%
-            long currMaster = PetOld.GetCurrMaster(Group.Id, UserId);
-            if (currMaster == UserId)
+            long currMaster = await PetService.GetCurrMasterAsync(Group.Id, UserId);
+            if (currMaster == UserId || currMaster == 0)
                 return ("您已是自由身，无需赎身", 0, 0, 0);
 
-            long buyPrice = PetOld.GetBuyPrice(Group.Id, UserId);
+            long buyPrice = await PetService.GetBuyPriceAsync(Group.Id, UserId);
             long creditAdd = buyPrice;
             long creditMinus = buyPrice * 12 / 10;
             if (User.IsSuper)

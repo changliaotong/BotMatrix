@@ -2,7 +2,7 @@ using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("HandleQuestion")]
+    [Table("handle_question")]
     public class HandleQuestion
     {
         [Key]

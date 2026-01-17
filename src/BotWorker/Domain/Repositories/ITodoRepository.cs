@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using BotWorker.Infrastructure.Tools;
+using BotWorker.Domain.Entities;
 
 namespace BotWorker.Domain.Repositories
 {

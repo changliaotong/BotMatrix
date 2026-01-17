@@ -30,41 +30,5 @@ namespace BotWorker.Modules.AI.Models
         public string? Messages { get; set; }
         public decimal Credit { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        public static async Task<long> AppendAsync(BotMessage bm)
-        {
-            await Agent.UsedTimesIncrementAsync(bm.AgentId);
-            
-            var log = new AgentLog
-            {
-                UserId = bm.UserId,
-                AgentId = bm.AgentId,
-                ModelName = bm.ModelId.ToString(), // Or resolve name if possible
-                InputTokens = bm.InputTokens,
-                OutputTokens = bm.OutputTokens,
-                DurationMs = (int)((bm.CurrentStopwatch?.Elapsed.TotalSeconds ?? 0) * 1000),
-                Status = string.IsNullOrEmpty(bm.AnswerAI) ? "failed" : "success",
-                Guid = bm.MsgId, // Assuming MsgId can be used as Guid if not provided
-                GroupId = bm.RealGroupId,
-                GroupName = bm.GroupName,
-                UserName = bm.Name,
-                MsgId = bm.MsgId,
-                Question = bm.Message,
-                Answer = bm.AnswerAI,
-                Messages = BotWorker.Infrastructure.Extensions.Text.JsonExtensions.ToJsonString(bm.History),
-                Credit = (decimal)bm.TokensMinus,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            using var scope = LLMApp.ServiceProvider!.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<IAgentLogRepository>();
-            return await repo.AddAsync(log);
-        }
-
-        public static long Append(BotMessage bm)
-        {
-            // Sync version - usually better to use Async but keeping for compatibility
-            return AppendAsync(bm).GetAwaiter().GetResult();
-        }
     }
 }

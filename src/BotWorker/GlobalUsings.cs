@@ -9,7 +9,7 @@ global using BotWorker.Common.Extensions;
 global using BotWorker.Domain.Entities;
 global using BotWorker.Domain.Interfaces;
 global using BotWorker.Domain.Models.BotMessages;
-global using BotWorker.Infrastructure.Persistence.ORM;
+global using BotWorker.Infrastructure.Persistence;
 global using BotWorker.Infrastructure.Utils;
 global using BotWorker.Infrastructure.Caching;
 global using BotWorker.Infrastructure.Persistence.Database;
@@ -23,4 +23,5 @@ global using BotWorker.Modules.Games;
 global using BotWorker.Modules.Games.Gift;
 global using BotWorker.Modules.Office;
 global using BotWorker.Modules.Plugins;
+global using BotWorker.Modules.Tools;
 

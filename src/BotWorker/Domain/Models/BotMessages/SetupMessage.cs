@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using BotWorker.Domain.Entities;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
@@ -100,7 +101,7 @@ public partial class BotMessage
                                   + @"))[ \\/+]*(?<cmdPara>[\s\S]*)";
         public async Task<string> SetupResAsync()
         {            
-            var (cmdName, cmdPara) = GetCmdPara(CmdPara, RegexCmdPara);
+            var (cmdName, cmdPara) = await GetCmdParaAsync(CmdPara, RegexCmdPara);
             string res;
 
             if (cmdName == "")
@@ -147,7 +148,7 @@ public partial class BotMessage
                 return GetTurnOn(cmdName, cmdPara);
 
             if (cmdName.In("城市", "默认城市", "mrcs", "cs"))
-                return GroupInfo.GetSetCity(UserId, cmdPara);
+                return await GroupService.GetSetCityAsync(UserId, cmdPara);
 
             if (cmdName.In("私链", "sl"))
                 return cmdPara.In("开启", "关闭")
@@ -155,7 +156,7 @@ public partial class BotMessage
                     : "私链开关：{私链开关}\n设置格式：\n开启 私链\n关闭 私链";
 
             if (cmdName.In("群", "默认群", "mrq", "q"))
-                return SetDefaultGroup(cmdPara);
+                return await GroupService.SetDefaultGroupAsync(UserId, GroupId, IsGroup, cmdPara, BotInfo.GroupCrm.ToString());
 
             //前面为个人设置，后面群设置需要权限
             res = SetupPrivate(true, false);
@@ -166,37 +167,37 @@ public partial class BotMessage
                 return await SetGroupVoiceAsync(cmdPara);
 
             if (cmdName.In("欢迎语", "hhy"))
-                return GroupInfo.SetWelcomeMsg(GroupId, cmdPara);
+                return await GroupService.SetWelcomeMsgAsync(GroupId, cmdPara);
 
             if (cmdName.In("ai", "tsc", "提示词", "ai提示词", "系统提示词", "ai系统提示词"))
-                return GroupInfo.SetSystemPrompt(GroupId, cmdPara);
+                return await GroupService.SetSystemPromptAsync(GroupId, cmdPara);
 
             if (cmdName.In("管理权限", "glqx"))
-                return GroupInfo.SetAdminRight(GroupId, cmdPara);
+                return await GroupService.SetAdminRightAsync(GroupId, cmdPara);
 
             if (cmdName.In("使用权限", "syqx"))
-                return GroupInfo.SetRight(GroupId, cmdPara);
+                return await GroupService.SetRightAsync(GroupId, cmdPara);
 
             if (cmdName.In("调教权限", "教学权限", "tjqx", "jxqx"))
-                return GroupInfo.SetTeachRight(GroupId, cmdPara);
+                return await GroupService.SetTeachRightAsync(GroupId, cmdPara);
 
             if (cmdName.In("聊天模式", "问答", "聊天", "问答模式", "wd", "lt", "wdms", "ltms"))
-                return SetCloudAnswer(GroupId, UserId, cmdPara);
+                return await GroupService.SetCloudAnswerAsync(GroupId, cmdPara);
 
             if (cmdName.In("最低积分", "zdjf"))
-                return GroupInfo.SetBlockMin(GroupId, cmdPara);
+                return await GroupService.SetBlockMinAsync(GroupId, cmdPara);
 
             if (cmdName.In("加群", "jq"))
-                return GroupInfo.SetJoinGroup(GroupId, cmdPara);
+                return await GroupService.SetJoinGroupAsync(GroupId, cmdPara);
 
             if (cmdName.In("退群", "tq"))
-                return SetExitGroup(GroupId, cmdPara);
+                return await GroupService.SetExitGroupAsync(GroupId, cmdPara, Group);
 
             if (cmdName.In("被踢", "踢出", "bt", "tc"))
-                return SetKickBlack(GroupId, cmdPara);
+                return await GroupService.SetKickBlackAsync(GroupId, cmdPara, Group);
 
             if (cmdName.In("改名", "gm"))
-                return GroupInfo.SetChangHint(GroupId, cmdPara);
+                return await GroupService.SetChangHintAsync(GroupId, cmdPara);
 
             if (cmdName.In("群链", "ql"))
                 return (cmdPara.Trim() == "")
@@ -257,7 +258,7 @@ public partial class BotMessage
 
         private async Task<string> SaveVoice(string voiceId, string voiceName)
         {
-            int i = GroupInfo.SetValue("VoiceId", voiceId, GroupId);
+            int i = await GroupService.SetValueAsync("VoiceId", voiceId, GroupId);
             if (i == -1) return RetryMsg;
 
             if (IsQQ)
@@ -275,201 +276,11 @@ public partial class BotMessage
                     .SelectMany(cat => cat.Items)
                     .FirstOrDefault(v => v.Id == voiceId)?.PreviewUrl ?? "";
 
-                Answer = $"[CQ:music,type=custom,url={url},title={voiceName},content={categoryName},audio={url},image={UserInfo.GetHead(UserId)}]";
+                Answer = $"[CQ:music,type=custom,url={url},title={voiceName},content={categoryName},audio={url},image={await UserService.GetHeadAsync(UserId)}]";
                 await SendMessageAsync();
             }
 
             return $"✅ 设置成功！{voiceName}";
-        }
-
-        public string SetExitGroup(long groupId, string cmdPara)
-        {
-            if (cmdPara == "")
-                return "📌 设置退群\n当前状态：{退群提示} {退群拉黑}\n设置退群 提示/不提示/拉黑/不拉黑";
-
-            cmdPara = cmdPara.Replace("加黑", "拉黑");
-
-            if (!("提示 不提示 拉黑 不拉黑".Split(' ').Any(p => cmdPara.Contains(p))))
-                return "参数不正确！可选参数 提示/不提示/拉黑/不拉黑";
-            
-            if (GroupInfo.SetValue("IsExitHint", Group.IsExitHint = cmdPara.Contains("提示") && !cmdPara.Contains("不提示"), groupId) == -1
-             || GroupInfo.SetValue("IsBlackExit", Group.IsBlackExit = cmdPara.Contains("拉黑") && !cmdPara.Contains("不拉黑"), groupId) == -1)
-                return RetryMsg;
-
-            return "✅ 设置成功！\n当前状态：有人退群时 {退群提示} {退群拉黑}";
-        }
-
-        public string SetKickBlack(long groupId, string cmdPara)
-        {
-            if (cmdPara == "")
-                return "📌 设置被踢\n当前状态：{被踢提示} {被踢拉黑}\n设置被踢：提示/不提示/拉黑/不拉黑";
-
-            cmdPara = cmdPara.Replace("加黑", "拉黑");
-
-            if (!("提示 不提示 拉黑 不拉黑".Split(' ').Any(p => cmdPara.Contains(p))))
-                return "参数不正确！可选参数 提示/不提示/拉黑/不拉黑";
-
-            if (GroupInfo.SetValue("IsExitHint", Group.IsKickHint = cmdPara.Contains("提示") && !cmdPara.Contains("不提示"), groupId) == -1
-             || GroupInfo.SetValue("IsBlackExit", Group.IsBlackKick = cmdPara.Contains("拉黑") && !cmdPara.Contains("不拉黑"), groupId) == -1)
-                return RetryMsg;
-
-            return "✅ 设置成功！\n当前状态：有人被踢时 {被踢提示} {被踢拉黑}";
-        }
-
-
-        public string SetDefaultGroup(string cmdPara)
-        {
-            if (cmdPara == "")
-            {
-                if (IsGroup)
-                    cmdPara = GroupId.ToString();
-                else
-                {
-                    //私聊不加群号时显示该用户名下的所有群供参考
-                    string res = QueryRes($"SELECT TOP 5 GroupId, GroupName FROM {FullName} WHERE GroupOwner = {UserId} and Valid = 1 ORDER BY GroupName",
-                                           "\n{1}({0})");
-                    if (res != "")
-                        res = $"您是主人的群：{res}";
-
-                    return $"设置群 + 群号 例如：\n设置群 {User.DefaultGroup}\n{res}";
-                }
-            }
-
-            //设置默认群
-            if (!cmdPara.IsNum())
-                return $"群号不正确\n设置群 + 群号 例如：\n设置群 {User.DefaultGroup}";
-
-            string defaultGroup = cmdPara;
-            if (defaultGroup == BotInfo.GroupCrm.ToString())
-                defaultGroup = "null";
-
-            return (UserInfo.SetValue("DefaultGroup", defaultGroup, UserId) == -1)
-                ? RetryMsg
-                : $"✅ 您的群设置为：{cmdPara}\n默认群用于私聊时：\n设置 教学 闲聊 逗你玩";
-        }
-
-        //聊天模式设置
-        public string SetCloudAnswer(long GroupId, long qq, string cmdPara)
-        {
-            if (cmdPara == "")
-                return "💬 当前模式：{聊天模式}\n📌 可选模式：闭嘴/本群/官方/话唠/终极/AI/纯血AI\n💡 切换方法：开启 {聊天模式}";
-
-            if (!cmdPara.In("闭嘴", "本群", "官方", "话唠", "话痨", "终极", "AI", "纯血AI"))
-                return "模式不正确！\n可选模式：闭嘴/本群/官方/话唠/终极/AI/纯血AI";
-
-            int isCloud = cmdPara.ToUpper() switch
-            {
-                "闭嘴" => 0,
-                "本群" => 1,
-                "官方" => 2,
-                "话痨" => 3,
-                "话唠" => 3,
-                "终极" => 4,
-                "AI" => 5,
-                "纯血AI" => 6,
-                _ => 0
-            };
-
-            if (isCloud >= 4 && !IsGuild && SystemSetting.IsCloudLimited && !GroupVip.IsForever(GroupId))
-                return "非永久版不能使用终极模式";
-
-            int i = GroupInfo.SetValue("IsCloudAnswer", isCloud, GroupId);
-            if (i == -1)
-                return RetryMsg;
-            
-            var res = $"✅ 设置成功！当前设置：{cmdPara.ToUpper()}";
-            if (!IsGuild)
-            {
-                if (isCloud == 3 && !GroupVip.IsYearVIP(GroupId))
-                    res += "\n本群只能体验【话唠模式】至凌晨4点，长期使用需升级为年费版";
-                else if (isCloud == 4 && !GroupVip.IsForever(GroupId))
-                    res += "\n本群只能体验【终极模式】至凌晨4点，长期使用需升级为永久版";
-                if (isCloud == 5 && !GroupVip.IsForever(GroupId))
-                    res += "\n本群只能体验【AI模式】至凌晨4点，长期使用需升级为永久版";
-                else if (isCloud == 6 && !GroupVip.IsForever(GroupId))
-                    res += "\n本群只能体验【纯血AI模式】至凌晨4点，长期使用需升级为永久版";
-            }
-            else if (GroupId > GroupOffical.MIN_GROUP_ID)
-            {
-                res += $"\n📌 本机器人需 @ 使用，如需免艾特权限，请联系客服升级";
-            }
-
-            return res;
-        }
-
-        public async Task GetShortcutSetAsync()
-        {
-            var cmdPara = CmdPara;
-            if (CmdPara == "猜拳")
-            {
-                List<string> cmds = ["剪刀", "石头", "布"];
-                foreach (var cmd in cmds)
-                {
-                    CmdPara = cmd;
-                    await GetCmdResAsync();
-                }
-                Answer = $"✅ {cmdPara}已{CmdName}";
-                return;
-            }
-            else if (CmdPara == "猜大小")
-            {                
-                List<string> cmds = ["押大", "押小", "押单", "押双", "押全围", "押点", "押对"];
-                foreach (var cmd in cmds)
-                {
-                    CmdPara = cmd;
-                    await GetCmdResAsync();
-                }
-                Answer = $"✅ {cmdPara}已{CmdName}";
-                return;
-            }
-
-            CmdPara = CmdPara.Replace("话痨", "话唠").Replace("模式", "");
-
-            int isOpen = -1;
-            if (CmdName == "开启")
-                isOpen = 1;
-
-            if (isOpen == -1)
-            {
-                switch (CmdPara)
-                {
-                    case "聊天":
-                        CmdPara = "问答闭嘴";
-                        break;
-
-                    default:
-                        var downgradeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                        {
-                            { "纯血AI", "问答AI" },
-                            { "AI", "问答终极" },
-                            { "终极", "问答话唠" },
-                            { "话唠", "问答官方" },
-                            { "官方", "问答本群" },
-                            { "本群", "问答闭嘴" },
-                            { "闭嘴", "问答话唠" }
-                        };
-
-                        if (downgradeMap.TryGetValue(CmdPara, out var newCmd))
-                        {
-                            CmdPara = newCmd;
-                        }
-                        else
-                        {
-                            CmdPara += "关闭";
-                        }
-                        break;
-                }
-            }
-            else if (isOpen == 1)
-            {
-                if (CmdPara.In("闭嘴", "本群", "官方", "话唠", "终极", "AI", "纯血AI"))
-                    CmdPara = "问答" + CmdPara;
-                else
-                    CmdPara += "开启";
-            }
-            CmdName = "设置";
-            CurrentMessage = $"{CmdName}{CmdPara}";
-            await GetCmdResAsync();
         }
 
         public async Task<string> GetWarnSetupAsync(string regexCmd)
@@ -480,7 +291,7 @@ public partial class BotMessage
             }
             string cmdName = Message.RegexGetValue(regexCmd, "CmdName");
             _ = Message.RegexGetValue(regexCmd, "cmdPara");
-            cmdName = GroupWarn.GetCmdName(cmdName);
+            cmdName = GroupWarnRepository.GetCmdName(cmdName);
             regexCmd = Regexs.WarnPara;
             if (Message.IsMatch(regexCmd))
             {
@@ -489,7 +300,7 @@ public partial class BotMessage
                 {
                     string cmdPara = match.Groups["cmdPara"].Value;
                     string cmdPara2 = match.Groups["cmdPara2"].Value;
-                    cmdPara = GroupWarn.GetCmdPara(cmdPara);
+                    cmdPara = GroupWarnRepository.GetCmdPara(cmdPara);
                     regexCmd = Regexs.WarnPara2;
                     if (cmdPara2.IsMatch(regexCmd))
                     {
@@ -497,7 +308,7 @@ public partial class BotMessage
                         foreach (var match2 in matches2.Cast<Match>())
                         {
                             cmdPara2 = match2.Groups["cmdPara2"].Value;
-                            cmdPara2 = GroupWarn.GetCmdPara(cmdPara2);
+                            cmdPara2 = GroupWarnRepository.GetCmdPara(cmdPara2);
                             Answer += "\n" + await GetTurnOnAsync(cmdName, cmdPara, cmdPara2);
                         }
                     }

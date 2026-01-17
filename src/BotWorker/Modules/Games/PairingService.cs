@@ -1,5 +1,7 @@
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Entities.Zodiac;
+using BotWorker.Domain.Repositories;
+using BotWorker.Modules.Zodiac;
 using System.Text;
 
 namespace BotWorker.Modules.Games
@@ -14,6 +16,15 @@ namespace BotWorker.Modules.Games
     )]
     public class PairingService : IPlugin
     {
+        private readonly IUserPairingProfileRepository _profileRepo;
+        private readonly IPairingRecordRepository _pairingRepo;
+
+        public PairingService(IUserPairingProfileRepository profileRepo, IPairingRecordRepository pairingRepo)
+        {
+            _profileRepo = profileRepo;
+            _pairingRepo = pairingRepo;
+        }
+
         public List<Intent> Intents => [
             new() { Name = "注册配对", Keywords = ["注册配对", "设置资料"] },
             new() { Name = "我的资料", Keywords = ["我的资料", "配对资料"] },
@@ -37,8 +48,8 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            await UserPairingProfile.EnsureTableCreatedAsync();
-            await PairingRecord.EnsureTableCreatedAsync();
+            await _profileRepo.EnsureTableCreatedAsync();
+            await _pairingRepo.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
@@ -65,9 +76,11 @@ namespace BotWorker.Modules.Games
 
             if (!zodiac.EndsWith("座")) zodiac += "座";
 
-            var profile = await UserPairingProfile.GetByUserIdAsync(ctx.UserId);
+            var profile = await _profileRepo.GetByUserIdAsync(ctx.UserId);
+            bool isNew = false;
             if (profile == null)
             {
+                isNew = true;
                 profile = new UserPairingProfile
                 {
                     UserId = ctx.UserId,
@@ -81,20 +94,20 @@ namespace BotWorker.Modules.Games
             profile.LastActive = DateTime.Now;
             profile.IsLooking = true;
 
-            if (profile.Id == Guid.Empty || (await UserPairingProfile.GetByUserIdAsync(ctx.UserId)) == null)
-                await profile.InsertAsync();
+            if (isNew)
+                await _profileRepo.InsertAsync(profile);
             else
-                await profile.UpdateAsync();
+                await _profileRepo.UpdateAsync(profile);
 
             return $"✅ 资料注册成功！你已加入配对广场。\n🎭 昵称：{profile.Nickname}\n🚻 性别：{profile.Gender}\n✨ 星座：{profile.Zodiac}\n📝 简介：{profile.Intro}";
         }
 
         private async Task<string> GetMyProfileAsync(IPluginContext ctx)
         {
-            var profile = await UserPairingProfile.GetByUserIdAsync(ctx.UserId);
+            var profile = await _profileRepo.GetByUserIdAsync(ctx.UserId);
             if (profile == null) return "你还没有注册配对资料，请输入【注册配对】。";
 
-            var pair = await PairingRecord.GetCurrentPairAsync(ctx.UserId);
+            var pair = await _pairingRepo.GetCurrentPairAsync(ctx.UserId);
             var pairStatus = pair != null ? $"💞 已与 【{(pair.User1Id == ctx.UserId ? pair.User2Id : pair.User1Id)}】 配对" : "🍃 目前单身";
 
             var sb = new StringBuilder();
@@ -106,25 +119,26 @@ namespace BotWorker.Modules.Games
             sb.AppendLine($"💓 状态：{pairStatus}");
             sb.AppendLine($"🕒 最后活跃：{profile.LastActive:yyyy-MM-dd HH:mm}");
             sb.AppendLine($"━━━━━━━━━━━━━━");
+
             return sb.ToString();
         }
 
         private async Task<string> MatchAsync(IPluginContext ctx)
         {
-            var me = await UserPairingProfile.GetByUserIdAsync(ctx.UserId);
+            var me = await _profileRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null) return "请先【注册配对】后再寻找缘分！";
 
-            var currentPair = await PairingRecord.GetCurrentPairAsync(ctx.UserId);
+            var currentPair = await _pairingRepo.GetCurrentPairAsync(ctx.UserId);
             if (currentPair != null) return "你已经有配对对象了，请先【解除配对】再寻找新缘分。";
 
             // 寻找活跃的单身用户 (排除自己)
-            var seekers = await UserPairingProfile.GetActiveSeekersAsync(50);
-            seekers = seekers.Where(s => s.UserId != ctx.UserId).ToList();
+            var seekers = await _profileRepo.GetActiveSeekersAsync(50);
+            var filteredSeekers = seekers.Where(s => s.UserId != ctx.UserId).ToList();
 
-            if (seekers.Count == 0) return "哎呀，广场上暂时没有其他正在寻找配对的人，请稍后再试。";
+            if (filteredSeekers.Count == 0) return "哎呀，广场上暂时没有其他正在寻找配对的人，请稍后再试。";
 
             // 随机选一个
-            var target = seekers[Random.Shared.Next(seekers.Count)];
+            var target = filteredSeekers[Random.Shared.Next(filteredSeekers.Count)];
 
             // 计算星座契合度
             var matchInfo = ZodiacMatcher.GetMatchInfo(me.Zodiac, target.Zodiac);
@@ -137,13 +151,13 @@ namespace BotWorker.Modules.Games
                 Status = "coupled",
                 PairDate = DateTime.Now
             };
-            await record.InsertAsync();
+            await _pairingRepo.InsertAsync(record);
 
             // 更新双方状态
             me.IsLooking = false;
-            await me.UpdateAsync();
+            await _profileRepo.UpdateAsync(me);
             target.IsLooking = false;
-            await target.UpdateAsync();
+            await _profileRepo.UpdateAsync(target);
 
             var sb = new StringBuilder();
             sb.AppendLine("💘 【缘分降临】 💘");
@@ -159,7 +173,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetSquareAsync(IPluginContext ctx)
         {
-            var seekers = await UserPairingProfile.GetActiveSeekersAsync(10);
+            var seekers = await _profileRepo.GetActiveSeekersAsync(10);
             if (seekers.Count == 0) return "配对广场目前空空如也，快来【注册配对】成为第一个吧！";
 
             var sb = new StringBuilder();
@@ -172,24 +186,25 @@ namespace BotWorker.Modules.Games
             }
             sb.AppendLine($"━━━━━━━━━━━━━━");
             sb.Append("💬 输入【寻找配对】开始随机匹配缘分！");
+
             return sb.ToString();
         }
 
         private async Task<string> BreakPairAsync(IPluginContext ctx)
         {
-            var pair = await PairingRecord.GetCurrentPairAsync(ctx.UserId);
+            var pair = await _pairingRepo.GetCurrentPairAsync(ctx.UserId);
             if (pair == null) return "你目前没有配对对象。";
 
             pair.Status = "broken";
-            await pair.UpdateAsync();
+            await _pairingRepo.UpdateAsync(pair);
 
             // 恢复单身状态
-            var me = await UserPairingProfile.GetByUserIdAsync(ctx.UserId);
-            if (me != null) { me.IsLooking = true; await me.UpdateAsync(); }
+            var me = await _profileRepo.GetByUserIdAsync(ctx.UserId);
+            if (me != null) { me.IsLooking = true; await _profileRepo.UpdateAsync(me); }
 
             var otherId = pair.User1Id == ctx.UserId ? pair.User2Id : pair.User1Id;
-            var other = await UserPairingProfile.GetByUserIdAsync(otherId);
-            if (other != null) { other.IsLooking = true; await other.UpdateAsync(); }
+            var other = await _profileRepo.GetByUserIdAsync(otherId);
+            if (other != null) { other.IsLooking = true; await _profileRepo.UpdateAsync(other); }
 
             return "💔 缘尽于此。你已恢复单身状态，资料重新进入配对广场。";
         }

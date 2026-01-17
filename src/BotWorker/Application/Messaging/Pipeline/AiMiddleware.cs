@@ -9,10 +9,14 @@ namespace BotWorker.Application.Messaging.Pipeline
     public class AiMiddleware : IMiddleware
     {
         private readonly IAgentExecutor _agentExecutor;
+        private readonly IAgentService _agentService;
+        private readonly IUserRepository _userRepository;
 
-        public AiMiddleware(IAgentExecutor agentExecutor)
+        public AiMiddleware(IAgentExecutor agentExecutor, IAgentService agentService, IUserRepository userRepository)
         {
             _agentExecutor = agentExecutor;
+            _agentService = agentService;
+            _userRepository = userRepository;
         }
 
         public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
@@ -23,7 +27,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 Serilog.Log.Information("[AiMiddleware] Processing message: {MessageId}, Content: {Content}", botMsg.MsgId, botMsg.Message);
 
                 // 1. 尝试解析智能体呼叫
-                await botMsg.TryParseAgentCall();
+                await _agentService.TryParseAgentCallAsync(botMsg);
 
                 if (botMsg.IsCallAgent)
                 {
@@ -31,9 +35,9 @@ namespace BotWorker.Application.Messaging.Pipeline
                     if (botMsg.CmdPara.Trim().IsNull())
                     {
                         // 仅切换智能体，不生成响应
-                        botMsg.Answer = UserInfo.SetValue("AgentId", botMsg.CurrentAgent!.Id, botMsg.UserId) == -1
-                            ? $"变身{RetryMsg}"
-                            : $"【{botMsg.CurrentAgent.Name}】{botMsg.CurrentAgent.Info}";
+                        botMsg.Answer = await _userRepository.SetValueAsync("AgentId", botMsg.CurrentAgent!.Id, botMsg.UserId) == -1
+                            ? $"变身失败，请稍后重试"
+                            : $"🤖【{botMsg.CurrentAgent.Name}】{botMsg.CurrentAgent.Info}\n退出与智能体{botMsg.CurrentAgent.Name}对话请发送【结束】";
                     }
                     else if (!botMsg.IsWeb)
                     {
@@ -49,17 +53,17 @@ namespace BotWorker.Application.Messaging.Pipeline
                         else
                         {
                             Serilog.Log.Information("[AiMiddleware] Calling GetAgentResAsync for agent: {AgentName}", botMsg.CurrentAgent?.Name);
-                            await botMsg.GetAgentResAsync();
+                            await _agentService.GetAgentResAsync(botMsg);
                         }
                     }
                     return; // 拦截，由 AI 负责后续处理
                 }
 
                 // 2. 检查用户当前状态是否为 AI 模式，或者是否需要 AI 兜底
-                var userStateRes = UserInfo.GetStateRes(botMsg.User.State);
+                var userStateRes = await _userRepository.GetStateResAsync(botMsg.User.State);
                 if (userStateRes == "AI")
                 {
-                    await botMsg.GetAgentResAsync();
+                    await _agentService.GetAgentResAsync(botMsg);
                     return; // 拦截
                 }
 
@@ -70,7 +74,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                     
                     if ((botMsg.IsAgent || botMsg.IsCallAgent || botMsg.IsAtMe || botMsg.IsGuild || !botMsg.IsGroup || botMsg.IsPublic || (cloud >= 5 && !botMsg.IsAtOthers)) && !botMsg.IsWeb)
                     {
-                        await botMsg.GetAgentResAsync();
+                        await _agentService.GetAgentResAsync(botMsg);
                         if (!string.IsNullOrEmpty(botMsg.Answer))
                         {
                             return; // 如果 AI 生成了回答，则拦截

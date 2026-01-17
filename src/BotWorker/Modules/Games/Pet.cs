@@ -1,4 +1,5 @@
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Repositories;
 using BotWorker.Modules.Plugins;
 using Microsoft.Extensions.Logging;
 using System.Text;
@@ -18,16 +19,17 @@ namespace BotWorker.Modules.Games
     public class PetPlugin : IPlugin
     {
         private readonly ILogger<PetPlugin> _logger;
-        private readonly IServiceProvider _serviceProvider;
-        private PetService? _service;
+        private readonly PetService _service;
+        private readonly IPetRepository _petRepo;
         private PetConfig? _config;
 
         public IModuleMetadata Metadata => typeof(PetPlugin).GetCustomAttribute<BotPluginAttribute>()!;
 
-        public PetPlugin(ILogger<PetPlugin> logger, IServiceProvider serviceProvider)
+        public PetPlugin(ILogger<PetPlugin> logger, PetService service, IPetRepository petRepo)
         {
             _logger = logger;
-            _serviceProvider = serviceProvider;
+            _service = service;
+            _petRepo = petRepo;
         }
 
         public async Task StopAsync() => await Task.CompletedTask;
@@ -37,13 +39,10 @@ namespace BotWorker.Modules.Games
             // 1. 加载配置
             _config = await LoadConfigAsync();
 
-            // 2. 初始化服务
-            _service = new PetService(robot, _logger, _config);
-
-            // 3. 注册指令
+            // 2. 注册指令
             robot.RegisterSkill(new SkillCapability("宠物系统", GetCommandAliases()), DispatchCommandAsync);
 
-            // 4. 注册通用事件钩子：用户发言增加亲密度
+            // 3. 注册通用事件钩子：用户发言增加亲密度
             await robot.RegisterEventAsync("message", HandleUserMessageAsync);
 
             _logger?.LogInformation("{PluginName} v{Version} 已启动。", Metadata.Name, Metadata.Version);
@@ -55,15 +54,18 @@ namespace BotWorker.Modules.Games
             if (GetCommandAliases().Any(a => ctx.RawMessage.StartsWith(a, StringComparison.OrdinalIgnoreCase)))
                 return;
 
-            var pet = await Pet.GetByUserIdAsync(ctx.UserId);
+            var pet = await _petRepo.GetByUserIdAsync(ctx.UserId);
             if (pet == null) return;
 
             // 只有闲逛状态且精力充足才增加亲密度
             if (pet.CurrentState == PetState.Idle && pet.Energy > 10)
             {
+                // 先更新时间状态
+                await _service.UpdateStateByTimeAsync(pet);
+
                 pet.Intimacy += 0.1 * _config!.IntimacyGainRate;
                 pet.Experience += 0.5;
-                await pet.UpdateAsync();
+                await _petRepo.UpdateAsync(pet);
             }
         }
 

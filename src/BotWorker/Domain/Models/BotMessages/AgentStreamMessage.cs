@@ -26,14 +26,14 @@ public partial class BotMessage
             }
 
             if (!IsCallAgent)
-                CurrentAgent = await Agent.LoadAsync(AgentId) ?? new();
+                CurrentAgent = await AgentRepository.GetByIdAsync(AgentId) ?? new();
 
             CmdPara = Message;
 
             if (IsAgent && CmdPara == "结束")
             {
                 Answer = $"✅ 已结束与智能体【{CurrentAgent.Name}】的对话";
-                UserInfo.SetValue("AgentId", AgentInfos.DefaultAgent.Id, UserId);
+                await UserRepository.SetValueAsync("AgentId", AgentInfos.DefaultAgent.Id, UserId);
                 await SendMessageAsync();
                 return;
             }
@@ -63,8 +63,14 @@ public partial class BotMessage
 
             try
             {
-                (ModelId, var providerName, var modelId) = LLMModel.GetModelInfo(CurrentAgent.ModelId);
-                var provider = LLMApp?._manager.GetProvider(providerName ?? "Doubao");
+                var model = await LLMRepository.GetModelByIdAsync(CurrentAgent.ModelId);
+                var providerObj = model != null ? await LLMRepository.GetProviderByIdAsync(model.ProviderId) : null;
+                
+                ModelId = model?.Id ?? 0;
+                var providerName = providerObj?.Name ?? "Doubao";
+                var modelId = model?.Name;
+
+                var provider = LLMApp?._manager.GetProvider(providerName);
                 if (provider == null)
                 {
                     Answer = "模型提供者不存在";
@@ -141,14 +147,14 @@ public partial class BotMessage
             CurrentStopwatch?.Stop();
             CostTime = CurrentStopwatch is null ? 0 : CurrentStopwatch.Elapsed.TotalSeconds;
 
-            GroupSendMessage.Append(this);
+            await AppendGroupSendMessageAsync();
         }
 
         private async Task SendMessageAsync()
         {
             if (Answer.IsNull()) return;         
             await GetFriendlyResAsync();
-            GroupSendMessage.Append(this);
+            await AppendGroupSendMessageAsync();
             if (ReplyMessageAsync == null) return;
             await ReplyMessageAsync();
         }

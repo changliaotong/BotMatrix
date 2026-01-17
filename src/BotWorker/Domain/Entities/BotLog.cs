@@ -11,10 +11,6 @@ namespace BotWorker.Domain.Entities
     [Table("bot_logs")]
     public class BotLog
     {
-        private static IBotLogRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IBotLogRepository>() 
-            ?? throw new InvalidOperationException("IBotLogRepository not registered");
-
         [Key]
         public long Id { get; set; }
         public string MsgGuid { get; set; } = string.Empty;
@@ -72,11 +68,5 @@ namespace BotWorker.Domain.Entities
         public bool Accept { get; set; }
         public string Reason { get; set; } = string.Empty;
         public bool IsSet { get; set; }
-
-        public static int Log(string info, string memo, BotMessage? bm = default)
-        {
-            if (bm == null) return -1;
-            return Repository.LogAsync(info, memo, bm).GetAwaiter().GetResult();
-        }
     }
 }

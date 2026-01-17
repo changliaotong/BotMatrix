@@ -17,7 +17,7 @@ public partial class BotMessage
 
             if (!IsGuild)
             {
-                await UserInfo.AppendUserAsync(SelfId, GroupId, UserId, Name);
+                await UserRepository.AppendAsync(SelfId, GroupId, UserId, Name);
                 if (IsAnotherRobot() && EventType.In("FriendMessageEvent", "GroupMessageEvent")) return;
 
                 if (UserId.In(BotInfo.NimingUin, BotInfo.NimingUin2))
@@ -27,29 +27,29 @@ public partial class BotMessage
                 }
             }
 
-            User = await UserInfo.LoadAsync(UserId) ?? new();
+            User = await UserRepository.GetByIdAsync(UserId) ?? new();
             
             if (IsGroup)
-                GroupInfo.Append(GroupId, GroupName, SelfId, SelfName, UserId, UserId);
+                await GroupRepository.AppendAsync(GroupId, GroupName, SelfId, SelfName, UserId, UserId);
 
             RealGroupId = Group.Id;
             RealGroupName = Group.GroupName;
-            Group = await GroupInfo.LoadAsync(!IsGroup ? User.DefaultGroup : GroupId) ?? new();
+            Group = await GroupRepository.GetByIdAsync(!IsGroup ? User.DefaultGroup : GroupId) ?? new();
             if (Group.ParentGroup != 0)            
-                ParentGroup = await GroupInfo.LoadAsync(Group.ParentGroup);            
+                ParentGroup = await GroupRepository.GetByIdAsync(Group.ParentGroup);            
 
             IsProxy = IsGroup && !IsGuild && Group.IsProxy;
             CurrentMessage = Message ?? "";
 
-            if (User.IsLog) BotLog.Log($"{GroupName}({GroupId}) {Name}({UserId}) {EventType}：\n{CurrentMessage}", "处理前", this);
+            if (User.IsLog) await BotLogRepository.LogAsync($"{GroupName}({GroupId}) {Name}({UserId}) {EventType}：\n{CurrentMessage}", "处理前", this);
 
             if (IsGroup)
             {
-                IsVip = GroupVip.IsVip(GroupId);
+                IsVip = await GroupVipRepository.IsVipAsync(GroupId);
 
-                if ((IsMirai || IsQQ || IsWeixin || IsWorker) && !Group.IsValid && !GroupInfo.IsCanTrial(GroupId))
+                if ((IsMirai || IsQQ || IsWeixin || IsWorker) && !Group.IsValid && !await GroupRepository.IsCanTrialAsync(GroupId))
                 {
-                    Answer = $"{(GroupVip.IsVipOnce(GroupId) ? "已过期" : "体验期已过")}退群";
+                    Answer = $"{(await GroupVipRepository.IsVipOnceAsync(GroupId) ? "已过期" : "体验期已过")}退群";
                     IsCancelProxy = true;
                     await SendMessageAsync();
                     await LeaveAsync(SelfId, RealGroupId);
@@ -58,13 +58,13 @@ public partial class BotMessage
             }
             
             CurrentMessage = CurrentMessage.Trim();   
-            IsRobot = BotInfo.IsRobot(UserId);
+            IsRobot = await BotRepository.IsRobotAsync(UserId);
             //IsSystemWhite = WhiteList.IsSystemWhite(UserId);         
-            IsBlackSystem = BlackList.IsSystemBlack(UserId);
-            IsGreySystem = GreyList.IsSystemGrey(UserId);            
-            IsWhite = WhiteList.Exists(GroupId, UserId);
-            IsBlack = !IsRobot && !IsWhite && ((IsBlackSystem && Group.IsCloudBlack) || BlackList.Exists(GroupId, UserId));
-            IsGrey = !IsRobot && !IsWhite && GreyList.Exists(GroupId, UserId);
+            IsBlackSystem = await BlackListRepository.IsSystemBlackAsync(UserId);
+            IsGreySystem = (await GreyListRepository.GetSystemGreyListAsync()).Contains(UserId);            
+            IsWhite = await WhiteListRepository.IsExistsAsync(GroupId, UserId);
+            IsBlack = !IsRobot && !IsWhite && ((IsBlackSystem && Group.IsCloudBlack) || await BlackListRepository.IsExistsAsync(GroupId, UserId));
+            IsGrey = !IsRobot && !IsWhite && await GreyListRepository.IsExistsAsync(GroupId, UserId);
 
             if (SelfInfo.BotType == 8 && !EventType.In("EventNoticeGroupIncrease")) return;
 
@@ -270,7 +270,7 @@ public partial class BotMessage
             if (GroupId == BotInfo.MusicGroup && UserId == 2976260341 && IsLightApp)
                 return false;
             
-            var isRobot = BotInfo.IsRobot(UserId);
+            var isRobot = await BotRepository.IsRobotAsync(UserId);
             if (isRobot) 
                 Reason += "[机器人]";
 

@@ -6,33 +6,39 @@ namespace BotWorker.Domain.Models.BotMessages;
 public partial class BotMessage
 {
         // 解除灰名单
-        public string GetCancelGrey(long userId)
+        public async Task<string> GetCancelGreyAsync(long userId)
         {
             string res;
 
-            if (GreyList.Exists(GroupId, userId))
-                res = GreyList.Delete(GroupId, userId) == -1
+            if (await GreyListRepository.IsExistsAsync(GroupId, userId))
+                res = await GreyListRepository.DeleteAsync(GroupId, userId) == -1
                     ? $"[@:{userId}]{RetryMsg}\n"
                     : $"[@:{userId}]已移出灰名单\n";
             else
                 res = $"[@:{userId}]不在灰名单，无需移除\n";
 
-            if (GreyList.IsSystemGrey(userId))
+            if (await GreyListRepository.IsExistsAsync(BotInfo.GroupIdDef, userId))
                 res += $"[@:{userId}]已被列入官方灰名单\n";
 
             return res;
         }
 
+        public string GetCancelGrey(long userId) => GetCancelGreyAsync(userId).GetAwaiter().GetResult();
+
         // 灰名单列表
-        public string GetGroupGreyList()
+        public async Task<string> GetGroupGreyListAsync()
         {
-            return QueryRes(
-                       $"SELECT TOP 10 GreyId FROM {GreyList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC",
+            string res = await QueryResAsync(
+                       $"SELECT GreyId FROM grey_list WHERE GroupId = {GroupId} ORDER BY Id DESC limit 10",
                        "{i} {0}\n"
-                   ) +
-                   "灰名单人数：" + GreyList.CountWhere($"GroupId = {GroupId}") +
+                   );
+            
+            return res +
+                   "灰名单人数：" + await GreyListRepository.CountAsync($"WHERE group_id = {GroupId}") +
                    "\n拉灰 + QQ\n删灰 + QQ";
         }
+
+        public string GetGroupGreyList() => GetGroupGreyListAsync().GetAwaiter().GetResult();
 
         // 添加灰名单/取消灰名单
         public async Task<string> GetGreyRes()
@@ -68,24 +74,24 @@ public partial class BotMessage
             if (!IsRobotOwner())
                 return $"您无权清空灰名单";
 
-            long greyCount = GreyList.CountKey2(GroupId.ToString());
+            long greyCount = await GreyListRepository.CountAsync($"WHERE group_id = {GroupId}");
             if (greyCount == 0)
                 return "灰名单已为空，无需清空";
 
             if (!IsConfirm && greyCount >= 7)
                 return await ConfirmMessage($"清空灰名单 人数{greyCount}");
 
-            return GreyList.DeleteAll(GroupId) == -1
+            return await GreyListRepository.DeleteAsync($"WHERE group_id = {GroupId}") == -1
                 ? RetryMsg
                 : "✅ 灰名单已清空";
         }
 
         // 加入灰名单
-        public string GetAddGrey(long qqGrey)
+        public async Task<string> GetAddGreyAsync(long qqGrey)
         {
             string res = "";
 
-            if (GreyList.Exists(GroupId, qqGrey))
+            if (await GreyListRepository.IsExistsAsync(GroupId, qqGrey))
                 return $"[@:{qqGrey}] 已在灰名单，无需再次加入\n";
 
             if (qqGrey == UserId)
@@ -97,26 +103,55 @@ public partial class BotMessage
             if (Group.RobotOwner == qqGrey)
                 return "不能把我主人加入灰名单";
 
-            if (WhiteList.Exists(GroupId, qqGrey))
+            if (await WhiteListRepository.IsExistsAsync(GroupId, qqGrey))
             {
                 if (Group.RobotOwner != UserId && !BotInfo.IsAdmin(SelfId, UserId))
                     return $"您无权操作白名单成员";
 
-                res += WhiteList.Delete(GroupId, qqGrey) == -1
+                res += await WhiteListRepository.DeleteAsync(GroupId, qqGrey) == -1
                     ? $"未能将[@:{qqGrey}]从白名单删除"
                     : $"✅ 已将[@:{qqGrey}]从白名单删除！\n";
             }
 
-            res += GreyList.AddGreyList(SelfId, GroupId, GroupName, UserId, Name, qqGrey, "") == -1
+            var greyList = new GreyList
+            {
+                BotUin = SelfId,
+                GroupId = GroupId,
+                GroupName = GroupName,
+                UserId = UserId,
+                UserName = Name,
+                GreyId = qqGrey,
+                GreyInfo = ""
+            };
+
+            res += await GreyListRepository.AddAsync(greyList) == -1
                 ? $"[@:{qqGrey}]{RetryMsg}"
                 : $"✅ 已加入灰名单！";
 
             return res;
         }
 
+        public string GetAddGrey(long qqGrey) => GetAddGreyAsync(qqGrey).GetAwaiter().GetResult();
+
         // 加入灰名单（外部调用）
-        public int AddGrey(long greyQQ, string greyInfo)
+        public async Task<int> AddGreyAsync(long greyQQ, string greyInfo)
         {
-            return GreyList.AddGreyList(SelfId, GroupId, GroupName, UserId, Name, greyQQ, greyInfo);
+            if (await GreyListRepository.IsExistsAsync(GroupId, greyQQ))
+                return 0;
+
+            var greyList = new GreyList
+            {
+                BotUin = SelfId,
+                GroupId = GroupId,
+                GroupName = GroupName,
+                UserId = UserId,
+                UserName = Name,
+                GreyId = greyQQ,
+                GreyInfo = greyInfo
+            };
+
+            return await GreyListRepository.AddAsync(greyList);
         }
+
+        public int AddGrey(long greyQQ, string greyInfo) => AddGreyAsync(greyQQ, greyInfo).GetAwaiter().GetResult();
 }

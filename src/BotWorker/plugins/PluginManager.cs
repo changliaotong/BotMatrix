@@ -247,7 +247,7 @@ namespace BotWorker.Modules.Plugins
 
             if (keywords.Count > 0)
             {
-                Domain.Entities.BotCmd.RegisterExtraCommands(keywords);
+                _serviceProvider.GetRequiredService<IBotCmdService>().RegisterExtraCommands(keywords);
             }
 
             _logger.LogInformation("Skill registered: {Name} (Plugin: {PluginId}, Commands: {Commands}, Keywords: {Keywords})", 

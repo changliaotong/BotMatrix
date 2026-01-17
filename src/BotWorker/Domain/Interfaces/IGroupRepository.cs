@@ -84,5 +84,12 @@ namespace BotWorker.Domain.Interfaces
         Task<int> UpdateSystemPromptAsync(long groupId, string systemPrompt);
         Task<int> UpdateReplyModeAsync(long groupId, int modeReply);
         Task<int> UpdateCloseRegexAsync(long groupId, string closeRegex);
+        Task<int> UpdateIsCloudAnswerAsync(long groupId, int isCloudAnswer);
+        Task<int> UpdateExitGroupSettingsAsync(long groupId, bool isExitHint, bool isBlackExit);
+        Task<int> UpdateKickBlackSettingsAsync(long groupId, bool isKickHint, bool isBlackKick);
+        Task<IEnumerable<(long GroupId, string GroupName)>> GetOwnedGroupsAsync(long userId, int top = 5);
+        Task<int> GetBlockMinAsync(long groupId);
+        Task<string> GetIsChangeHintResAsync(long groupId);
+        Task<string> GetReplyModeResAsync(long groupId);
     }
 }

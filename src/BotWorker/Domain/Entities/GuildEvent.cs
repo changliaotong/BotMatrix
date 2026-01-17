@@ -8,11 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("GuildEvent")]
+    [Table("guild_event")]
     public class GuildEvent
     {
-        private static IGuildEventRepository Repository => GlobalConfig.ServiceProvider!.GetRequiredService<IGuildEventRepository>();
-
         [Key]
         public long Id { get; set; }
         public long GroupId { get; set; }
@@ -27,9 +25,9 @@ namespace BotWorker.Domain.Entities
         public DateTime InsertDate { get; set; }
 
         // Adjusted signature to be compatible with usage, but ignoring fields param effectively
-        public static async Task<int> AppendAsync(GuildEvent @event, params string[] fields)
+        public static async Task<int> AppendAsync(BotMessage bm, GuildEvent @event, params string[] fields)
         {
-            return await Repository.AddAsync(@event);
+            return await bm.GuildEventRepository.AddAsync(@event);
         }
     }
 }

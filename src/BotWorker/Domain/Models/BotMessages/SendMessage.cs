@@ -44,7 +44,7 @@ public partial class BotMessage
             if (!isDup)
             {
                 await GetFriendlyResAsync();
-                GroupSendMessage.Append(this);
+                await AppendGroupSendMessageAsync();
             }
 
             if (!string.IsNullOrEmpty(Answer))
@@ -87,6 +87,45 @@ public partial class BotMessage
                 await ReplyBotMessageAsync(json);
                 IsSent = true;
             }            
+        }
+
+        private async Task<int> AppendGroupSendMessageAsync()
+        {
+            if (User.IsLog) await BotLogRepository.LogAsync($"{GroupName}({GroupId}) {Name}({UserId}) {EventType}：\n{Message}", "处理后", this);
+            if (IsBlackSystem && EventType.In("EventPrivateMessage", "EventGroupMessage", "TempMessageEvent")) return 0;
+
+            var entity = new GroupSendMessage
+            {
+                MsgGuid = MsgGuid,
+                BotUin = SelfId,
+                GroupId = RealGroupId,
+                GroupName = RealGroupName,
+                UserId = UserId,
+                UserName = Name,
+                MsgId = MsgId,
+                Question = Message.IsNull() ? EventType : Message,
+                Message = IsSend && IsRealProxy && !IsAI && AnswerId == 0 ? $"@{Card.ReplaceInvalid().RemoveUserIds().ReplaceSensitive(Regexs.OfficalRejectWords)}:{Answer}" : Answer,
+                AnswerAi = AnswerAI,
+                AnswerId = AnswerId,
+                IsAI = IsAI,
+                AgentId = AgentId,
+                AgentName = AgentName,
+                IsSend = IsSend,
+                IsRealProxy = IsRealProxy,
+                Reason = Reason,
+                IsCmd = IsCmd,
+                InputTokens = InputTokens,
+                OutputTokens = OutputTokens,
+                TokensMinus = TokensMinus,
+                IsVoiceReply = IsVoiceReply,
+                VoiceName = VoiceName,
+                CostTime = (int?)CostTime,
+                IsRecall = IsRecall,
+                ReCallAfterMs = RecallAfterMs,
+                InsertDate = DateTime.Now
+            };
+
+            return await GroupSendMessageRepository.AppendAsync(entity);
         }
     }
 }

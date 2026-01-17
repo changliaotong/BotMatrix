@@ -7,6 +7,7 @@ using BotWorker.Modules.AI.Repositories;
 using BotWorker.Modules.AI.Services;
 using BotWorker.Modules.AI.Skills;
 using BotWorker.Modules.AI.Tools;
+using BotWorker.Modules.Tools;
 using BotWorker.Infrastructure.Communication.OneBot;
 using Npgsql;
 using Dapper;
@@ -18,6 +19,9 @@ using BotWorker.Domain.Repositories;
 using BotWorker.Infrastructure.Persistence.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Dapper Snake_Case Mapping
+DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 // 初始化静态配置
 GlobalConfig.Initialize(builder.Configuration);
@@ -100,40 +104,45 @@ builder.Services.AddSingleton<IWalletRepository, PostgresWalletRepository>();
 builder.Services.AddSingleton<ILeaseResourceRepository, PostgresLeaseResourceRepository>();
 
 // 注册 BaseInfo 存储层 (Dapper)
-builder.Services.AddSingleton<IBotHintsRepository, BotHintsRepository>();
-builder.Services.AddSingleton<IChengyuRepository, ChengyuRepository>();
-builder.Services.AddSingleton<ICidianRepository, CidianRepository>();
-builder.Services.AddSingleton<ICityRepository, CityRepository>();
-builder.Services.AddSingleton<ITokensLogRepository, TokensLogRepository>();
 builder.Services.AddSingleton<ILeaseContractRepository, PostgresLeaseContractRepository>();
 builder.Services.AddSingleton<IBillingTransactionRepository, PostgresBillingTransactionRepository>();
 
 // 注册 BaseInfo 存储层
-builder.Services.AddSingleton<IChengyuRepository, PostgresChengyuRepository>();
-builder.Services.AddSingleton<ICidianRepository, PostgresCidianRepository>();
-builder.Services.AddSingleton<ICityRepository, PostgresCityRepository>();
-builder.Services.AddSingleton<IUserRepository, PostgresUserRepository>();
-builder.Services.AddSingleton<IGroupRepository, PostgresGroupRepository>();
-builder.Services.AddSingleton<IGroupMemberRepository, PostgresGroupMemberRepository>();
-builder.Services.AddSingleton<ICoinsLogRepository, PostgresCoinsLogRepository>();
-builder.Services.AddSingleton<ICreditLogRepository, PostgresCreditLogRepository>();
+builder.Services.AddSingleton<IBotRepository, BotRepository>();
+builder.Services.AddSingleton<IChengyuRepository, ChengyuRepository>();
+builder.Services.AddSingleton<ICidianRepository, CidianRepository>();
+builder.Services.AddSingleton<ICityRepository, CityRepository>();
+builder.Services.AddSingleton<IUserRepository, UserRepository>();
+builder.Services.AddSingleton<IGroupRepository, GroupRepository>();
+builder.Services.AddSingleton<IGroupMemberRepository, GroupMemberRepository>();
+builder.Services.AddSingleton<ICoinsLogRepository, CoinsLogRepository>();
+builder.Services.AddSingleton<ICreditLogRepository, CreditLogRepository>();
 builder.Services.AddSingleton<IBalanceLogRepository, BalanceLogRepository>();
-builder.Services.AddSingleton<ITokensLogRepository, PostgresTokensLogRepository>();
-builder.Services.AddSingleton<IBotLogRepository, PostgresBotLogRepository>();
-builder.Services.AddSingleton<IBlackListRepository, PostgresBlackListRepository>();
-builder.Services.AddSingleton<IWhiteListRepository, PostgresWhiteListRepository>();
-builder.Services.AddSingleton<IGreyListRepository, PostgresGreyListRepository>();
-builder.Services.AddSingleton<IBugRepository, PostgresBugRepository>();
-builder.Services.AddSingleton<IBotHintsRepository, PostgresBotHintsRepository>();
-builder.Services.AddSingleton<ITokenRepository, PostgresTokenRepository>();
-builder.Services.AddSingleton<IGroupOfficalRepository, PostgresGroupOfficalRepository>();
-builder.Services.AddSingleton<IGroupEventRepository, PostgresGroupEventRepository>();
-builder.Services.AddSingleton<IFriendRepository, PostgresFriendRepository>();
+builder.Services.AddSingleton<ITokensLogRepository, TokenLogRepository>();
+builder.Services.AddSingleton<IBotLogRepository, BotLogRepository>();
+builder.Services.AddSingleton<IBlackListRepository, BlackListRepository>();
+builder.Services.AddSingleton<IWhiteListRepository, WhiteListRepository>();
+builder.Services.AddSingleton<IGreyListRepository, GreyListRepository>();
+builder.Services.AddSingleton<IBugRepository, BugRepository>();
+builder.Services.AddSingleton<IBotHintsRepository, BotHintsRepository>();
+builder.Services.AddSingleton<ITokenRepository, TokenRepository>();
+builder.Services.AddSingleton<IGroupOfficalRepository, GroupOfficalRepository>();
+builder.Services.AddSingleton<IGroupEventRepository, GroupEventRepository>();
+builder.Services.AddSingleton<IFriendRepository, FriendRepository>();
+builder.Services.AddSingleton<IPartnerRepository, PartnerRepository>();
+builder.Services.AddSingleton<IPriceRepository, PriceRepository>();
+builder.Services.AddSingleton<IWeatherRepository, WeatherRepository>();
+builder.Services.AddSingleton<ISchemaRepository, SchemaRepository>();
+builder.Services.AddSingleton<IToolService, ToolService>();
+builder.Services.AddSingleton<IRmbDaxieService, RmbDaxieService>();
+builder.Services.AddSingleton<IPinyinService, PinyinService>();
+builder.Services.AddSingleton<IEncryptService, EncryptService>();
 builder.Services.AddSingleton<IJielongRepository, JielongRepository>();
 builder.Services.AddSingleton<IFishingUserRepository, FishingUserRepository>();
 builder.Services.AddSingleton<IFishingBagRepository, FishingBagRepository>();
 builder.Services.AddSingleton<IIncomeRepository, IncomeRepository>();
 builder.Services.AddSingleton<IGroupVipRepository, GroupVipRepository>();
+builder.Services.AddSingleton<IGroupWarnRepository, GroupWarnRepository>();
 builder.Services.AddSingleton<IQuestionInfoRepository, QuestionInfoRepository>();
 builder.Services.AddSingleton<IBotCmdRepository, BotCmdRepository>();
 builder.Services.AddSingleton<ITodoRepository, TodoRepository>();
@@ -157,7 +166,6 @@ builder.Services.AddSingleton<ISweetHeartRepository, SweetHeartRepository>();
 builder.Services.AddSingleton<IBabyRepository, BabyRepository>();
 builder.Services.AddSingleton<IBabyEventRepository, BabyEventRepository>();
 builder.Services.AddSingleton<IBabyConfigRepository, BabyConfigRepository>();
-builder.Services.AddSingleton<IGroupRepository, GroupRepository>();
 builder.Services.AddSingleton<IRobberyRecordRepository, RobberyRecordRepository>();
 builder.Services.AddSingleton<IUserPairingProfileRepository, UserPairingProfileRepository>();
 builder.Services.AddSingleton<IPairingRecordRepository, PairingRecordRepository>();
@@ -197,6 +205,28 @@ builder.Services.AddSingleton<IAIService, AIService>();
 builder.Services.AddSingleton<ICodeRunnerService, CodeRunnerService>();
 builder.Services.AddSingleton<IImageGenerationService, ImageGenerationService>();
 builder.Services.AddSingleton<IJobService, JobService>();
+builder.Services.AddSingleton<IUserService, BotWorker.Application.Services.UserService>();
+builder.Services.AddSingleton<BotWorker.Application.Services.IPartnerService, BotWorker.Modules.Office.PartnerService>();
+builder.Services.AddSingleton<ISimpleGameService, SimpleGameService>();
+builder.Services.AddSingleton<IGame2048Service, Game2048Service>();
+builder.Services.AddSingleton<IBlockService, BlockService>();
+builder.Services.AddSingleton<IGroupGiftService, GroupGiftService>();
+builder.Services.AddSingleton<IGroupMemberService, GroupMemberService>();
+builder.Services.AddSingleton<IGoodsTransService, GoodsTransService>();
+builder.Services.AddSingleton<IGroupPropsService, GroupPropsService>();
+builder.Services.AddSingleton<IGroupWarnService, GroupWarnService>();
+builder.Services.AddSingleton<IQuestionInfoService, QuestionInfoService>();
+builder.Services.AddSingleton<IGroupMsgCountService, GroupMsgCountService>();
+builder.Services.AddSingleton<IGroupService, GroupService>();
+builder.Services.AddSingleton<IBotCmdService, BotCmdService>();
+builder.Services.AddSingleton<IJielongService, JielongService>();
+builder.Services.AddSingleton<IFishingService, FishingService>();
+builder.Services.AddSingleton<IRedBlueService, RedBlueService>();
+builder.Services.AddSingleton<IMenuService, MenuService>();
+builder.Services.AddSingleton<IChengyuService, ChengyuService>();
+builder.Services.AddSingleton<IAchievementService, AchievementService>();
+builder.Services.AddSingleton<IAgentService, AgentService>();
+builder.Services.AddSingleton<PetService>();
 
 // 注册工具/技能系统
 builder.Services.AddSingleton<ISkill, FileSkills>();
@@ -300,16 +330,12 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// 初始化 MetaData 缓存
-MetaData.CacheService = app.Services.GetRequiredService<ICacheService>();
+// 初始化 SqlHelper 缓存
+SqlHelper.CacheService = app.Services.GetRequiredService<ICacheService>();
 
-// 注入插件管理器到 BotMessage
-BotMessage.LLMApp = app.Services.GetRequiredService<LLMApp>();
-BotMessage.Pipeline = app.Services.GetRequiredService<MessagePipeline>();
-BotMessage.ServiceProvider = app.Services;
+// 全局静态配置注入 (保留必要的)
 GlobalConfig.ServiceProvider = app.Services;
 LLMApp.ServiceProvider = app.Services;
-BotMessage.PluginManager = app.Services.GetRequiredService<PluginManager>();
 
 // 配置 HTTP 请求管道
 if (app.Environment.IsDevelopment())
@@ -324,17 +350,18 @@ app.MapControllers();
 app.Run();
 
 // 简单的启动加载器
-public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp, ILLMRepository llmRepository) : BackgroundService
+public class StartupLoader(IServiceProvider serviceProvider, IPluginLoaderService loaderService, LLMApp llmApp, ILLMRepository llmRepository) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         Log.Information("[Startup] Starting StartupLoader...");
-        // 0. 确保内置指令存在 (这些目前还在用旧 ORM)
-        // await BotCmd.EnsureTableCreatedAsync(); // Removed after refactoring to POCO
+        // 0. 确保内置指令存在
         await BotWorker.Infrastructure.Tools.Todo.EnsureTableCreatedAsync();
         
+        var jobService = serviceProvider.GetRequiredService<IJobService>();
+        var botCmdService = serviceProvider.GetRequiredService<IBotCmdService>();
+        
         // 注入初始岗位
-        var jobService = BotMessage.ServiceProvider!.GetRequiredService<IJobService>();
         await jobService.SeedJobsAsync();
 
         // 注入初始 AI 模型
@@ -342,21 +369,21 @@ public class StartupLoader(IPluginLoaderService loaderService, LLMApp llmApp, IL
 
         // [TEST] 验证动态技能
         try {
-            var skillService = BotMessage.ServiceProvider!.GetRequiredService<ISkillService>();
+            var skillService = serviceProvider.GetRequiredService<ISkillService>();
             var testResult = await skillService.ExecuteSkillAsync("PYTEST", "HelloTarget", "Testing dynamic python skill", new Dictionary<string, string>());
             Log.Information("[TEST] Dynamic Skill Output: \n{Result}", testResult);
         } catch (Exception ex) {
             Log.Error(ex, "[TEST] Dynamic Skill Execution Failed");
         }
 
-        await BotCmd.EnsureCommandExistsAsync("设置Key", "设置Key");
-        await BotCmd.EnsureCommandExistsAsync("岗位任务", "岗位任务");
-        await BotCmd.EnsureCommandExistsAsync("自动开发", "自动开发");
-        await BotCmd.EnsureCommandExistsAsync("开启租赁", "开启租赁");
-        await BotCmd.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
-        await BotCmd.EnsureCommandExistsAsync("我的Key", "我的Key");
-        await BotCmd.EnsureCommandExistsAsync("积分榜", "积分榜");
-        await BotCmd.EnsureCommandExistsAsync("后台", "后台");
+        await botCmdService.EnsureCommandExistsAsync("设置Key", "设置Key");
+        await botCmdService.EnsureCommandExistsAsync("岗位任务", "岗位任务");
+        await botCmdService.EnsureCommandExistsAsync("自动开发", "自动开发");
+        await botCmdService.EnsureCommandExistsAsync("开启租赁", "开启租赁");
+        await botCmdService.EnsureCommandExistsAsync("关闭租赁", "关闭租赁");
+        await botCmdService.EnsureCommandExistsAsync("我的Key", "我的Key");
+        await botCmdService.EnsureCommandExistsAsync("积分榜", "积分榜");
+        await botCmdService.EnsureCommandExistsAsync("后台", "后台");
         
         Log.Information("[Startup] Initializing AI App...");
         // 1. 初始化 AI 提供商

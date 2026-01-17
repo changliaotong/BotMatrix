@@ -69,57 +69,10 @@ namespace BotWorker.Domain.Entities
         public bool IsVip { get; set; }
         public static ConcurrentDictionary<long, bool> IsActive { get; set; } = [];
 
-
-        public static bool GetIsCredit(long botUin)
-            => BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetIsCreditAsync(botUin).GetAwaiter().GetResult();
-
-        public static async Task<bool> GetIsCreditAsync(long botUin, IDbTransaction? trans = null)
-        {
-            return await BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetIsCreditAsync(botUin);
-        }
-
         // 超级管理员
         public static bool IsSuperAdmin(long user)
         {
-            return user.In(AdminUin, AdminUin2);
-        }
-
-        // 是否机器人管理员
-        public static bool IsAdmin(long botUin, long userId)
-            => IsAdminAsync(botUin, userId).GetAwaiter().GetResult();
-
-        public static async Task<bool> IsAdminAsync(long botUin, long userId)
-        {
-            return IsSuperAdmin(userId) || await GetRobotAdminAsync(botUin) == userId;
-        }
-
-        // 小号机器人 同主人并且使用该小号的群 可以使用终极模式。
-        public static long GetRobotAdmin(long botUin)
-            => GetRobotAdminAsync(botUin).GetAwaiter().GetResult();
-
-        public static async Task<long> GetRobotAdminAsync(long botUin)
-        {
-            return await BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetRobotAdminAsync(botUin);
-        }
-
-        public static string GetBotGuid(long botUin)
-        {
-            return BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetBotGuidAsync(botUin).GetAwaiter().GetResult();
-        }
-
-        public static async Task<string> GetBotGuidAsync(long botUin, IDbTransaction? trans = null)
-        {
-            return await BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.GetBotGuidAsync(botUin);
-        }
-
-        public static bool IsRobot(long qq)
-        {
-            return !IsMonitorQQ(qq) && BotWorker.Domain.Models.BotMessages.BotMessage.BotRepository.IsRobotAsync(qq).GetAwaiter().GetResult();
-        }
-
-        public static bool IsMonitorQQ(long botUin)
-        {
-            return botUin == MonitorUin;
+            return user == AdminUin || user == AdminUin2;
         }
     }
 }

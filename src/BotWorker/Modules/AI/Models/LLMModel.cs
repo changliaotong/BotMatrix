@@ -32,16 +32,5 @@ namespace BotWorker.Modules.AI.Models
         public bool IsPaused { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-        public static (long ModelId, string? ProviderName, string? ModelName) GetModelInfo(long modelId)
-        {
-            using var scope = LLMApp.ServiceProvider!.CreateScope();
-            var repo = scope.ServiceProvider.GetRequiredService<ILLMRepository>();
-            var model = repo.GetModelByIdAsync(modelId).GetAwaiter().GetResult();
-            if (model == null) return (0, null, null);
-
-            var provider = repo.GetProviderByIdAsync(model.ProviderId).GetAwaiter().GetResult();
-            return (model.Id, provider?.Name, model.Name);
-        }
     }
 }

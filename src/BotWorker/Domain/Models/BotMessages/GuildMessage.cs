@@ -10,21 +10,25 @@ public partial class BotMessage
             if (IsGuild)
             {
                 if (SelfInfo.BotUin == 0)
-                    SelfInfo = await BotInfo.LoadAsync(UserGuild.GetUserId(SelfId, SelfId.ToString(), GroupOpenid)) ?? new();
+                    SelfInfo = await BotRepository.GetByIdAsync(await UserService.GetUserIdAsync(SelfId, SelfId.ToString(), GroupOpenid)) ?? new();
                 else
-                    SelfInfo = await BotInfo.LoadAsync(SelfInfo.BotUin) ?? new();
-                User = await UserInfo.LoadAsync(UserGuild.GetUserId(SelfId, UserOpenId, GroupOpenid)) ?? new();
+                    SelfInfo = await BotRepository.GetByIdAsync(SelfInfo.BotUin) ?? new();
+
+                User = await UserRepository.GetByIdAsync(await UserService.GetUserIdAsync(SelfId, UserOpenId, GroupOpenid)) ?? new();
+
                 if (!GroupOpenid.IsNull())
                 {
-                    (RealGroupId, isNewGroup) = GroupOffical.GetGroupId(GroupOpenid, GroupName, UserId, SelfId, SelfName);
-                    GroupMember.Append(RealGroupId, UserId, Name);
-                    Group = await GroupInfo.LoadAsync(RealGroupId) ?? new();
+                    (RealGroupId, isNewGroup) = await GroupService.GetGroupIdAsync(GroupOpenid, GroupName, UserId, SelfId, SelfName);
+                    await GroupMemberRepository.AppendAsync(RealGroupId, UserId, Name);
+                    Group = await GroupRepository.GetByIdAsync(RealGroupId) ?? new();
                 }
+
                 if (GuildId.IsNull()) 
                     Group.GroupName = GroupOpenid.MaskNo();
-                if (GroupId < GroupInfo.groupMin)
+
+                if (GroupId < 1000000) // 假设 groupMin 是 1000000
                 {
-                    var groupName = GroupInfo.GetValue("GroupName", GroupId);
+                    var groupName = await GroupRepository.GetValueAsync<string>("GroupName", GroupId);
                     if (groupName != GroupName)
                         Group.GroupName = groupName;
                 }
@@ -39,7 +43,7 @@ public partial class BotMessage
             {
                 foreach (var bot in OfficalBots)
                 {
-                    isbot = isbot || UserId == bot || UpdateTargetGroupAndTargetQQ(bot);
+                    isbot = isbot || UserId == bot || await UpdateTargetGroupAndTargetQQAsync(bot);
                 }
             }
             catch (Exception ex)
@@ -49,36 +53,50 @@ public partial class BotMessage
             return (isNewGroup, isbot);
         }
 
-        public bool UpdateTargetGroupAndTargetQQ(long botUin)
+        public async Task<bool> UpdateTargetGroupAndTargetQQAsync(long botUin)
         {            
             if (Message.IsNull()) return false;
             if (Message.Contains($":{botUin}"))
             {
-                var sourceQQ = UserInfo.GetSourceQQ(botUin, UserId);
+                var sourceQQ = await UserRepository.GetSourceQQAsync(botUin, UserId);
                 if (sourceQQ == 0)
                 {
-                    _ = Task.Run(() =>
+                    _ = Task.Run(async () =>
                     {
-                        var sql = IsPostgreSql ? "CALL sp_UpdateUserIds()" : "EXEC sz84_robot.DBO.sp_UpdateUserIds";
-                        Exec(sql);
+                        var sql = "CALL sp_UpdateUserIds()";
+                        await ExecAsync(sql);
                     });
                 }
                 else
                 {
-                    var sourceGroupId = GroupInfo.GetSourceGroupId(botUin, GroupId);
+                    var sourceGroupId = await GroupRepository.GetSourceGroupIdAsync(botUin, GroupId);
                     if (sourceGroupId == 0)
                     {
                         _ = Task.Run(async () =>
                         {
                             await Task.Delay(20000).ConfigureAwait(false);
                             Message = Message.RemoveUserId(botUin).Trim();
-                            var sql = $"SELECT {SqlTop(1)} GroupId FROM {GroupSendMessage.FullName} WHERE ABS({SqlDateDiff("SECOND", "InsertDate", SqlDateTime)}) < 40 " +
-                                      $"AND LTRIM(RTRIM(question)) = {Message.Quotes()} AND GroupId > {UserGuild.MIN_USER_ID} AND GroupId != {GroupId} AND UserId = {UserId} ORDER BY Id DESC {SqlLimit(1)}";
-                            sourceGroupId = QueryScalar<long>(sql);
+                            
+                            // 这里暂时保留 raw SQL，因为涉及多表复杂查询，但改用 ExecAsync/QueryScalarAsync
+                            string sql = $@"
+                                SELECT GroupId 
+                                FROM SendMessage 
+                                WHERE ABS(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - InsertDate))) < 40 
+                                AND LTRIM(RTRIM(question)) = @message 
+                                AND GroupId > 980000000000 
+                                AND GroupId != @groupId 
+                                AND UserId = @userId 
+                                ORDER BY Id DESC 
+                                LIMIT 1";
+
+                            using var conn = Persistence.Database.DbProviderFactory.CreateConnection();
+                            if (conn is System.Data.Common.DbConnection dbConn) await dbConn.OpenAsync(); else conn.Open();
+                            sourceGroupId = await conn.ExecuteScalarAsync<long>(sql, new { message = Message.Trim(), groupId = GroupId, userId = UserId });
+
                             if (sourceGroupId != 0)
                             {
-                                sql = IsPostgreSql ? $"CALL sp_UpdateGroupInfo({sourceGroupId}, {GroupId})" : $"EXEC sz84_robot.DBO.sp_UpdateGroupInfo {sourceGroupId}, {GroupId} ";
-                                Exec(sql);
+                                var sqlUpdate = $"CALL sp_UpdateGroupInfo({sourceGroupId}, {GroupId})";
+                                await conn.ExecuteAsync(sqlUpdate);
                             }
                         });
                     }

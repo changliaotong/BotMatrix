@@ -1,3 +1,5 @@
+using BotWorker.Domain.Enums;
+
 namespace BotWorker.Domain.Models.BotMessages;
 
 public partial class BotMessage
@@ -60,7 +62,7 @@ public partial class BotMessage
             using var wrapper = await BeginTransactionAsync();
             try
             {
-                long creditValue = await UserInfo.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
+                long creditValue = await UserService.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
                 if (creditValue < blockCredit)
                 {
                     await wrapper.RollbackAsync();
@@ -96,7 +98,7 @@ public partial class BotMessage
                     strWin = "输";
                 }
 
-                var (res, newCreditValue, logId) = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, bonus - blockCredit, "猜拳得分", wrapper.Transaction);
+                var (res, newCreditValue, logId) = await UserService.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, bonus - blockCredit, "猜拳得分", wrapper.Transaction);
                 
                 if (res == -1)
                 {
@@ -449,14 +451,14 @@ public partial class BotMessage
                 return "请私聊使用此功能";
 
             if (CmdPara.Trim() == "结束")
-                return await UserInfo.SetStateAsync(UserInfo.States.Chat, UserId) == -1
+                return await UserService.SetStateAsync((int)UserStates.Chat, UserId) == -1
                     ? RetryMsg
                     : "✅ 逗你玩结束";
 
             //切换到逗你玩状态
             if (CmdPara == "")
             {
-                await UserInfo.SetStateAsync(UserInfo.States.Douniwan, UserId);
+                await UserService.SetStateAsync((int)UserStates.Douniwan, UserId);
                 res = "发消息逗群【{默认群}】的人玩吧～\n每条-10分，脏话或广告-50分或-100分";
             }
             else

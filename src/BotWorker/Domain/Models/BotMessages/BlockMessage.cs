@@ -46,7 +46,11 @@ public partial class BotMessage
 
             if (IsTooFast()) return RetryMsgTooFast;
 
-            CmdName = await Block.GetCmdAsync(CmdName, UserId);
+            var blockService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IBlockService>();
+            var blockTypeRepo = ServiceProvider!.GetRequiredService<BotWorker.Domain.Repositories.IBlockTypeRepository>();
+            var userCreditService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IUserCreditService>();
+
+            CmdName = await blockService.GetCmdAsync(CmdName, UserId);
 
             if (CmdName.In("押大", "押小", "押单", "押双", "押围", "押全围") && !CmdPara.IsNum())
                 return "请押积分，您的{{积分类型}}：{{积分}}";
@@ -85,18 +89,18 @@ public partial class BotMessage
             if (blockCredit < Group.BlockMin)
                 return $"至少押{Group.BlockMin}分";
 
-            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long creditValue = await userCreditService.GetCreditAsync(SelfId, GroupId, UserId);
             if (creditValue < blockCredit)
                 return $"您只有{{积分}}分";
 
-            int typeId = await BlockType.GetTypeIdAsync(CmdName);
-            blockNum = await Block.GetNumAsync(SelfId, GroupId, GroupName, UserId, Name);
-            bool isWin = await Block.IsWinAsync(typeId, CmdName, blockNum);
+            int typeId = await blockTypeRepo.GetTypeIdAsync(CmdName);
+            blockNum = await blockService.GetNumAsync(SelfId, GroupId, GroupName, UserId, Name);
+            bool isWin = await blockService.IsWinAsync(typeId, CmdName, blockNum);
             long creditGet = 0;
             long creditAdd;
             if (isWin)
             {
-                decimal odds = await Block.GetOddsAsync(typeId, CmdName, blockNum);
+                decimal odds = await blockService.GetOddsAsync(typeId, CmdName, blockNum);
                 creditAdd = (long)(blockCredit * odds);
                 creditGet = (long)(blockCredit * (odds + 1));
             }
@@ -109,7 +113,7 @@ public partial class BotMessage
             try
             {
                 // 1. 获取并锁定积分
-                creditValue = await UserInfo.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
+                creditValue = await userCreditService.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
                 if (creditValue < blockCredit)
                 {
                     wrapper.Rollback();
@@ -117,24 +121,43 @@ public partial class BotMessage
                 }
 
                 // 2. 通用加积分函数（含日志记录）
-                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分", wrapper.Transaction);
+                var addRes = await userCreditService.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分", wrapper.Transaction);
                 if (addRes.Result == -1) throw new Exception("更新积分失败");
                 creditValue = addRes.CreditValue;
 
                 // 3. 记录游戏记录
-                var resStr = $"{Block.FormatNum(blockNum)} {Block.Sum(blockNum)} {Block.GetBlockRes(blockNum)}\n得分：{creditGet:N0}，累计：{creditValue:N0}";
+                var resStr = $"{blockService.FormatNum(blockNum)} {blockService.Sum(blockNum)} {blockService.GetBlockRes(blockNum)}\n得分：{creditGet:N0}，累计：{creditValue:N0}";
                 var blockRes = Message + "\n" + resStr;
-                var (sql3, sql4) = await Block.SqlAppendAsync(SelfId, GroupId, GroupName, UserId, Name, blockRes, wrapper.Transaction);
-                await ExecAsync(sql3.sql, wrapper.Transaction, sql3.paras);
-                await ExecAsync(sql4.sql, wrapper.Transaction, sql4.paras);
+                
+                long prevId = await blockService.GetIdAsync(GroupId, UserId, wrapper.Transaction);
+                string prevHash = prevId == 0 
+                    ? (GroupId == 0 ? GetGuidAlgorithmic(UserId).AsString().Sha256() : GetGuidAlgorithmic(GroupId).AsString().Sha256())
+                    : await blockService.GetHashAsync(prevId, wrapper.Transaction);
+                
+                string hashRobot = GetGuidAlgorithmic(SelfId).AsString().Sha256();
+                string hashRoom = GroupId == 0 ? "" : GetGuidAlgorithmic(GroupId).AsString().Sha256();            
+                string hashClient = GetGuidAlgorithmic(UserId).AsString().Sha256();
+                string blockRand = Guid.NewGuid().ToString().Sha256();
+                string blockTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                string blockInfo = $"上局HASH:{prevHash}\n上局结果:{blockRes}\n时间节点:{blockTime}\n机器HASH:{hashRobot}\n群组HASH:{hashRoom}\n玩家HASH:{hashClient}\n";
+                string blockSecret = $"本局数据:{blockService.FormatNum(blockNum)} {blockService.Sum(blockNum)} {blockService.GetBlockRes(blockNum)}\n随机密码:{blockRand}";
+                string hashBlock = (blockInfo + blockSecret).Sha256();
+
+                var (sql3, paras3) = blockService.SqlAppend(SelfId, GroupId, GroupName, UserId, Name, blockRes, blockService.GetBlockRes(blockNum), blockRand, blockInfo, hashBlock, prevId);
+                var (sql4, paras4) = blockService.SqlUpdateOpen(SelfId, UserId, Name, prevId);
+                
+                await wrapper.Connection.ExecuteAsync(sql3, paras3, wrapper.Transaction);
+                if (prevId > 0)
+                    await wrapper.Connection.ExecuteAsync(sql4, paras4, wrapper.Transaction);
 
                 wrapper.Commit();
 
                 // 4. 同步缓存
-                await UserInfo.SyncCreditCacheAsync(SelfId, GroupId, UserId, creditValue);
+                await userCreditService.SyncCreditCacheAsync(SelfId, GroupId, UserId, creditValue);
 
                 if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
-                    resStr = $"{resStr}\n{(IsGroup ? "群链" : "私链")}：{(await Block.GetHashAsync(GroupId, UserId, wrapper.Transaction))[7..23]}";
+                    resStr = $"{resStr}\n{(IsGroup ? "群链" : "私链")}：{(await blockService.GetHashAsync(GroupId, UserId, wrapper.Transaction))[7..23]}";
 
                 return resStr;
             }
@@ -144,11 +167,15 @@ public partial class BotMessage
                 Logger.Error($"[GetBlockRes Error] {ex.Message}");
                 return RetryMsg;
             }
-    }
+        }
 
     public async Task<string> GetMultAsync()
         {
             if (IsTooFast()) return RetryMsgTooFast;
+
+            var blockService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IBlockService>();
+            var blockTypeRepo = ServiceProvider!.GetRequiredService<BotWorker.Domain.Repositories.IBlockTypeRepository>();
+            var userCreditService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IUserCreditService>();
 
             long blockCredit;
             string cmdPara;
@@ -163,12 +190,12 @@ public partial class BotMessage
                     return $"至少押{Group.BlockMin}分";
                 sumCredit += blockCredit;
             }
-            long creditValue = await UserInfo.GetCreditAsync(GroupId, UserId);
+            long creditValue = await userCreditService.GetCreditAsync(SelfId, GroupId, UserId);
             if (creditValue < sumCredit)
                 return $"您只有{creditValue}分";
 
             //生成结果
-            int blockNum = await Block.GetNumAsync(SelfId, GroupId, GroupName, UserId, Name);
+            int blockNum = await blockService.GetNumAsync(SelfId, GroupId, GroupName, UserId, Name);
             sumCredit = 0;
             long creditAdd = 0;
             string res = "";
@@ -176,13 +203,13 @@ public partial class BotMessage
             {
                 string cmdName = match.Groups["CmdName"].Value;
                 cmdPara = match.Groups["cmdPara"].Value;
-                cmdName = await Block.GetCmdAsync(cmdName, UserId);
+                cmdName = await blockService.GetCmdAsync(cmdName, UserId);
                 blockCredit = cmdPara.AsInt();
-                int typeId = await BlockType.GetTypeIdAsync(cmdName);
-                bool isWin = await Block.IsWinAsync(typeId, cmdName, blockNum);
+                int typeId = await blockTypeRepo.GetTypeIdAsync(cmdName);
+                bool isWin = await blockService.IsWinAsync(typeId, cmdName, blockNum);
                 if (isWin)
                 {
-                    decimal betOdds = await Block.GetOddsAsync(typeId, cmdName, blockNum);
+                    decimal betOdds = await blockService.GetOddsAsync(typeId, cmdName, blockNum);
                     creditAdd += (long)(blockCredit * betOdds);
                     sumCredit += (long)(blockCredit * (betOdds + 1));
                     res += $"{cmdName.Replace("押", "").Replace("全", "")} 得分：{blockCredit * (betOdds + 1):N0}\n";
@@ -196,7 +223,7 @@ public partial class BotMessage
             try
             {
                 // 1. 获取并锁定积分
-                creditValue = await UserInfo.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
+                creditValue = await userCreditService.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
                 if (creditValue < sumCredit)
                 {
                     wrapper.Rollback();
@@ -204,24 +231,43 @@ public partial class BotMessage
                 }
 
                 // 2. 通用加积分函数（含日志记录）
-                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分", wrapper.Transaction);
+                var addRes = await userCreditService.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, creditAdd, "猜大小得分", wrapper.Transaction);
                 if (addRes.Result == -1) throw new Exception("更新积分失败");
                 creditValue = addRes.CreditValue;
 
                 // 3. 记录游戏记录
-                res = $"{Block.FormatNum(blockNum)} {Block.Sum(blockNum)} {Block.GetBlockRes(blockNum)}\n{res}总得分：{sumCredit:N0} 累计：{creditValue:N0}";
+                res = $"{blockService.FormatNum(blockNum)} {blockService.Sum(blockNum)} {blockService.GetBlockRes(blockNum)}\n{res}总得分：{sumCredit:N0} 累计：{creditValue:N0}";
                 string block_res = Message + "\n" + res;
-                var (sql3, sql4) = await Block.SqlAppendAsync(SelfId, GroupId, GroupName, UserId, Name, block_res, wrapper.Transaction);
-                await ExecAsync(sql3.sql, wrapper.Transaction, sql3.paras);
-                await ExecAsync(sql4.sql, wrapper.Transaction, sql4.paras);
+                
+                long prevId = await blockService.GetIdAsync(GroupId, UserId, wrapper.Transaction);
+                string prevHash = prevId == 0 
+                    ? (GroupId == 0 ? GetGuidAlgorithmic(UserId).AsString().Sha256() : GetGuidAlgorithmic(GroupId).AsString().Sha256())
+                    : await blockService.GetHashAsync(prevId, wrapper.Transaction);
+                
+                string hashRobot = GetGuidAlgorithmic(SelfId).AsString().Sha256();
+                string hashRoom = GroupId == 0 ? "" : GetGuidAlgorithmic(GroupId).AsString().Sha256();            
+                string hashClient = GetGuidAlgorithmic(UserId).AsString().Sha256();
+                string blockRand = Guid.NewGuid().ToString().Sha256();
+                string blockTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                string blockInfo = $"上局HASH:{prevHash}\n上局结果:{block_res}\n时间节点:{blockTime}\n机器HASH:{hashRobot}\n群组HASH:{hashRoom}\n玩家HASH:{hashClient}\n";
+                string blockSecret = $"本局数据:{blockService.FormatNum(blockNum)} {blockService.Sum(blockNum)} {blockService.GetBlockRes(blockNum)}\n随机密码:{blockRand}";
+                string hashBlock = (blockInfo + blockSecret).Sha256();
+
+                var (sql3, paras3) = blockService.SqlAppend(SelfId, GroupId, GroupName, UserId, Name, block_res, blockService.GetBlockRes(blockNum), blockRand, blockInfo, hashBlock, prevId);
+                var (sql4, paras4) = blockService.SqlUpdateOpen(SelfId, UserId, Name, prevId);
+                
+                await wrapper.Connection.ExecuteAsync(sql3, paras3, wrapper.Transaction);
+                if (prevId > 0)
+                    await wrapper.Connection.ExecuteAsync(sql4, paras4, wrapper.Transaction);
 
                 wrapper.Commit();
 
                 // 4. 同步缓存
-                await UserInfo.SyncCreditCacheAsync(SelfId, GroupId, UserId, creditValue);
+                await userCreditService.SyncCreditCacheAsync(SelfId, GroupId, UserId, creditValue);
 
                 if ((IsGroup && Group.IsBlock) || (!IsGroup && User.IsBlock))
-                    res = $"{res}\n{(IsGroup ? "群链" : "私链")}：{(await Block.GetHashAsync(GroupId, UserId, wrapper.Transaction))[7..23]}";
+                    res = $"{res}\n{(IsGroup ? "群链" : "私链")}：{(await blockService.GetHashAsync(GroupId, UserId, wrapper.Transaction))[7..23]}";
 
                 return res;
             }

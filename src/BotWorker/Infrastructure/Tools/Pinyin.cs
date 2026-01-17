@@ -1,8 +1,13 @@
-﻿using System.Text;
+using System.Text;
 
 namespace BotWorker.Infrastructure.Tools
 {
-    public static class Pinyin
+    public interface IPinyinService
+    {
+        string GetPinyinRes(string text);
+    }
+
+    public class PinyinService : IPinyinService
     {
 
         /// <summary>
@@ -10,7 +15,7 @@ namespace BotWorker.Infrastructure.Tools
         /// </summary>
         /// <param name="text"></param>
         /// <returns></returns>
-        public static string GetPinyinRes(string text)
+        public string GetPinyinRes(string text)
         {
             string? res = Convert(text);
             return res == null ? "" : res;
@@ -497,7 +502,7 @@ new string[]{"Zuo","做岝岞怍侳祚胙唑阼袏左葄蓙飵座稓糳撮咗昨
         #endregion
 
         #region 将汉字转换为拼音
-        public static string? Convert(string str)
+        public string? Convert(string str)
         {
             if (str == null)
                 return null;

@@ -18,13 +18,27 @@ namespace BotWorker.Modules.Games
         private const int PROTECTION_MINUTES = 30;   // 被打劫保护时间
         private const double BASE_SUCCESS_RATE = 0.4; // 基础成功率
 
+        private readonly IRobberyRecordRepository _robberyRepo;
+        private readonly IUserCreditService _creditService;
+        private readonly ILogger<RobberyService> _logger;
+
+        public RobberyService(
+            IRobberyRecordRepository robberyRepo, 
+            IUserCreditService creditService,
+            ILogger<RobberyService> logger)
+        {
+            _robberyRepo = robberyRepo;
+            _creditService = creditService;
+            _logger = logger;
+        }
+
         public List<Intent> Intents => [
             new() { Name = "打劫", Keywords = ["打劫", "rob"] }
         ];
 
         public async Task InitAsync(IRobot robot)
         {
-            await RobberyRecord.EnsureTableCreatedAsync();
+            await _robberyRepo.EnsureTableCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "江湖打劫",
@@ -51,7 +65,7 @@ namespace BotWorker.Modules.Games
             long groupId = long.Parse(ctx.GroupId);
 
             // 1. 检查打劫者 CD
-            var lastRobTime = await RobberyRecord.GetLastRobTimeAsync(ctx.UserId);
+            var lastRobTime = await _robberyRepo.GetLastRobTimeAsync(ctx.UserId);
             var nextRobTime = lastRobTime.AddMinutes(ROB_COOLDOWN_MINUTES);
             if (DateTime.Now < nextRobTime)
             {
@@ -60,7 +74,7 @@ namespace BotWorker.Modules.Games
             }
 
             // 2. 检查被劫者保护期
-            var protectionEnd = await RobberyRecord.GetProtectionEndTimeAsync(target.UserId);
+            var protectionEnd = await _robberyRepo.GetProtectionEndTimeAsync(target.UserId);
             if (DateTime.Now < protectionEnd)
             {
                 var protectMin = (int)(protectionEnd - DateTime.Now).TotalMinutes;
@@ -68,10 +82,10 @@ namespace BotWorker.Modules.Games
             }
 
             // 3. 获取双方积分
-            long victimCredit = await UserInfo.GetCreditAsync(botId, groupId, victimId);
+            long victimCredit = await _creditService.GetCreditAsync(botId, groupId, victimId);
             if (victimCredit < 100) return $"❌ 【{target.Name}】太穷了（积分不足100），连土匪都看不上他。";
 
-            long robberCredit = await UserInfo.GetCreditAsync(botId, groupId, robberId);
+            long robberCredit = await _creditService.GetCreditAsync(botId, groupId, robberId);
 
             // 4. 计算打劫金额 (抢夺 5% - 15%)
             double percent = Random.Shared.Next(5, 16) / 100.0;
@@ -95,7 +109,7 @@ namespace BotWorker.Modules.Games
             if (isSuccess)
             {
                 // 打劫成功：积分转移
-                var transRes = await UserInfo.TransferCreditAsync(
+                var transRes = await _creditService.TransferCreditAsync(
                     botId, groupId, ctx.GroupName ?? "江湖",
                     victimId, target.Name,
                     robberId, ctx.UserName,
@@ -120,7 +134,7 @@ namespace BotWorker.Modules.Games
 
                 if (penalty > 0)
                 {
-                    var transRes = await UserInfo.TransferCreditAsync(
+                    var transRes = await _creditService.TransferCreditAsync(
                         botId, groupId, ctx.GroupName ?? "江湖",
                         robberId, ctx.UserName,
                         victimId, target.Name,
@@ -136,7 +150,7 @@ namespace BotWorker.Modules.Games
             }
 
             record.ResultMessage = sb.ToString();
-            await record.InsertAsync();
+            await _robberyRepo.InsertAsync(record);
 
             return sb.ToString();
         }

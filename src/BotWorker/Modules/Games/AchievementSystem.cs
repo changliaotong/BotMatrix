@@ -57,11 +57,16 @@ namespace BotWorker.Modules.Games
     {
         private readonly IUserMetricRepository _metricRepo;
         private readonly IUserAchievementRepository _achievementRepo;
+        private readonly IAchievementService _achievementService;
 
-        public AchievementPlugin(IUserMetricRepository metricRepo, IUserAchievementRepository achievementRepo)
+        public AchievementPlugin(
+            IUserMetricRepository metricRepo, 
+            IUserAchievementRepository achievementRepo,
+            IAchievementService achievementService)
         {
             _metricRepo = metricRepo;
             _achievementRepo = achievementRepo;
+            _achievementService = achievementService;
         }
 
         public static List<AchievementDef> Definitions = new()
@@ -123,43 +128,5 @@ namespace BotWorker.Modules.Games
             return sb.ToString();
         }
 
-        /// <summary>
-        /// 报告指标并检查成就
-        /// </summary>
-        public static async Task<List<string>> ReportMetricAsync(string userId, string key, double delta, bool isAbsolute = false)
-        {
-            var metricRepo = BotMessage.ServiceProvider?.GetRequiredService<IUserMetricRepository>() 
-                ?? throw new InvalidOperationException("IUserMetricRepository not registered");
-            var achievementRepo = BotMessage.ServiceProvider?.GetRequiredService<IUserAchievementRepository>() 
-                ?? throw new InvalidOperationException("IUserAchievementRepository not registered");
-
-            var metric = await metricRepo.GetOrCreateAsync(userId, key);
-            if (isAbsolute) metric.Value = delta;
-            else metric.Value += delta;
-            metric.LastUpdateTime = DateTime.Now;
-            await metricRepo.UpdateAsync(metric);
-
-            var newUnlocks = new List<string>();
-            var relatedAchievements = Definitions.Where(d => d.MetricKey == key);
-
-            foreach (var def in relatedAchievements)
-            {
-                if (metric.Value >= def.Threshold)
-                {
-                    if (!await achievementRepo.IsUnlockedAsync(userId, def.Id))
-                    {
-                        await achievementRepo.InsertAsync(new UserAchievement 
-                        { 
-                            Id = $"{userId}_{def.Id}", 
-                            UserId = userId, 
-                            AchievementId = def.Id,
-                            UnlockTime = DateTime.Now 
-                        });
-                        newUnlocks.Add(def.Name);
-                    }
-                }
-            }
-            return newUnlocks;
-        }
     }
 }

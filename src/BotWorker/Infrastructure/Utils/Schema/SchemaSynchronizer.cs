@@ -45,7 +45,7 @@ public static class SchemaSynchronizer
             if (isPrimaryKey)
             {
                 // 如果是 SQL Server 且是数字类型，添加 IDENTITY
-                var isSqlServer = !BotWorker.Infrastructure.Persistence.ORM.MetaData.IsPostgreSql;
+                var isSqlServer = !BotWorker.Infrastructure.Persistence.SqlHelper.IsPostgreSql;
                 var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
                 if (isSqlServer && (propType == typeof(int) || propType == typeof(long)))
                 {

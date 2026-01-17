@@ -4,7 +4,7 @@ public partial class BotMessage
 {        
         
         // 是否允许加入群 同意返回“1”，不同意返回：“0:拒绝原因”
-        public (int, string) GetRequestJoinGroup()
+        public async Task<(int, string)> GetRequestJoinGroupAsync()
         {
             if (IsBlack)
                 return (0, "黑名单禁入");
@@ -12,57 +12,63 @@ public partial class BotMessage
             {
                 if (GroupId.In(28981482, 81741884, 184705328))
                 {
-                    return GroupVip.IsClientVip(UserId) ? (1, "") : (0, "非VIP禁入");
+                    return await GroupVipRepository.IsClientVipAsync(UserId) ? (1, "") : (0, "非VIP禁入");
                 }
                 else
                 {
-                    int res = GroupInfo.GetInt("IsAcceptNewmember", GroupId); // 0-拒绝 1-通过 2-忽略 3-密码验证
+                    int res = await GroupRepository.GetIntAsync("IsAcceptNewmember", GroupId); // 0-拒绝 1-通过 2-忽略 3-密码验证
                     return res == 3
-                        ? Message.IsMatch(GroupInfo.GetValue("RegexRequestJoin", GroupId)) ? (1, "") : (0, "密码错误")
-                        : (res, GroupInfo.GetValue("RejectMessage", GroupId));
+                        ? Message.IsMatch(await GroupRepository.GetValueAsync<string>("RegexRequestJoin", GroupId)) ? (1, "") : (0, "密码错误")
+                        : (res, await GroupRepository.GetValueAsync<string>("RejectMessage", GroupId));
                 }
             }
         } 
 
+        public (int, string) GetRequestJoinGroup() => GetRequestJoinGroupAsync().GetAwaiter().GetResult();
+
         //退群或被踢时减邀请人数
-        public void SubInviteCount()
+        public async Task SubInviteCountAsync()
         {
-            long InvitorUserId = GroupMember.GetLong("InvitorUserId", GroupId, UserId);
+            long InvitorUserId = await GroupMemberRepository.GetLongAsync("InvitorUserId", GroupId, UserId);
             if (InvitorUserId > 0)
-                GroupMember.Plus("InviteExitCount", 1, GroupId, InvitorUserId);
+                await GroupMemberRepository.IncrementValueAsync("InviteExitCount", 1, GroupId, InvitorUserId);
         }
 
+        public void SubInviteCount() => SubInviteCountAsync().GetAwaiter().GetResult();
+
         // 机器人加群成功
-        public void GetJoinedRes()
+        public async Task GetJoinedResAsync()
         {
             //处理加入群的信息
-            GroupInfo.Append(GroupId, GroupName, SelfId, SelfName, InvitorQQ);
+            await GroupRepository.AppendAsync(GroupId, GroupName, SelfId, SelfName, InvitorQQ);
 
-            BotEventLog.Append(SelfId, "加群成功", GroupId, GroupName, SelfId, SelfName);
+            await BotEventLogRepository.AppendAsync(SelfId, "加群成功", GroupId, GroupName, SelfId, SelfName);
 
             Answer = "我来了";
 
             if (Group.IsValid || IsGuild)
             {
                 //自动开机
-                GroupInfo.SetPowerOn(GroupId);
+                await GroupRepository.SetPowerOnAsync(GroupId);
 
                 //关闭状态自动开启
                 if (Group.IsOpen)
-                    GroupInfo.SetValue("IsOpen", true, GroupId);
+                    await GroupRepository.SetValueAsync("IsOpen", true, GroupId);
 
                 //加群后提示设置管理员
-                if (!GroupVip.IsVip(GroupId) && Group.IsSz84)
+                if (!await GroupVipRepository.IsVipAsync(GroupId) && Group.IsSz84)
                     Answer = "我来了，设置我为管理开启功能";
             }
             else
             {
-                Answer = GroupVip.IsVipOnce(GroupId)
-                    ? $"本群机器人已过期，如需继续使用请联系客服续费。客服QQ：{{客服QQ}}"
-                    : $"本群机器人已过体验期，如需继续使用请联系客服购买。客服QQ：{{客服QQ}}";
+                Answer = await GroupVipRepository.IsVipOnceAsync(GroupId)
+                    ? $"本群机器人已过期，如需继续使用请联系客服续费。客服QQ：{GlobalConfig.KefuQQ}"
+                    : $"本群机器人已过体验期，如需继续使用请联系客服购买。客服QQ：{GlobalConfig.KefuQQ}";
             }
             IsCancelProxy = true;
         }
+
+        public void GetJoinedRes() => GetJoinedResAsync().GetAwaiter().GetResult();
 
         // 获取欢迎语
         public string GetWelcomeRes(string para = "")
@@ -128,9 +134,9 @@ public partial class BotMessage
                 IsCancelProxy = true;
                 //欢迎语为空、其它机器人、短期大量进群的不发送
                 Answer = GetWelcomeRes();
-                IsSend = SelfInfo.BotType == 8 || (!BotInfo.IsRobot(UserId) && GroupInfo.GetLastHintTime(GroupId) >= 10);
+                IsSend = SelfInfo.BotType == 8 || (!await BotRepository.IsRobotAsync(UserId) && await GroupRepository.GetLastHintTimeAsync(GroupId) >= 10);
                 if (IsSend) 
-                    GroupInfo.SetHintDate(GroupId);
+                    await GroupRepository.SetHintDateAsync(GroupId);
             }
 
             if (SelfInfo.BotType == 8) return;
@@ -167,40 +173,34 @@ public partial class BotMessage
             {
                 try
                 {
-                    int i = await UserInfo.AppendUserAsync(SelfId, GroupId, UserId, Name);
-                    int j = await UserInfo.AppendUserAsync(SelfId, GroupId, InvitorQQ, InvitorName);
+                    int i = await UserService.AppendUserAsync(SelfId, GroupId, UserId, Name, 0);
+                    int j = await UserService.AppendUserAsync(SelfId, GroupId, InvitorQQ, InvitorName, 0);
                     if (i >= 0 && j >= 0)
                     {
                         using var wrapper = await BeginTransactionAsync();
                         try
                         {
                             // 1. 更新邀请信息
-                            var (sql1, paras1) = GroupMember.SqlUpdate("InvitorUserId", InvitorQQ, GroupId, UserId);
-                            await ExecAsync(sql1, wrapper.Transaction, paras1);
-
-                            var (sql2, paras2) = GroupMember.SqlPlus("InviteCount", 1, GroupId, InvitorQQ);
-                            await ExecAsync(sql2, wrapper.Transaction, paras2);
+                            await GroupMemberRepository.SetValueAsync("InvitorUserId", InvitorQQ, GroupId, UserId, wrapper.Transaction);
+                            await GroupMemberRepository.IncrementValueAsync("InviteCount", 1, GroupId, InvitorQQ, wrapper.Transaction);
 
                             // 2. 扣除群主积分 (邀人奖励由群主支付)
                             long currentInviteCredit = Group.InviteCredit;
                             if (currentInviteCredit > 50)
                             {
                                 long minusCredit = currentInviteCredit - 50;
-                                long ownerCredit = await UserInfo.GetCreditForUpdateAsync(SelfId, GroupId, Group.RobotOwner, wrapper.Transaction);
+                                long ownerCredit = await UserService.GetCreditForUpdateAsync(SelfId, GroupId, Group.RobotOwner, wrapper.Transaction);
                                 if (ownerCredit >= minusCredit)
                                 {
-                                    var resOwner = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, Group.RobotOwner, Group.RobotOwnerName, -minusCredit, $"邀人送分:{InvitorQQ}邀请{UserId}", wrapper.Transaction);
+                                    var resOwner = await UserService.AddCreditAsync(SelfId, GroupId, GroupName, Group.RobotOwner, Group.RobotOwnerName, -minusCredit, $"邀人送分:{InvitorQQ}邀请{UserId}", wrapper.Transaction);
                                     if (resOwner.Result == -1) throw new Exception("扣除群主积分失败");
-                                    
-                                    // 提交后同步群主积分缓存
-                                    // 注意：这里先记录同步任务，提交后再执行
                                 }
                                 else
                                     currentInviteCredit = 50;
                             }
 
                             // 3. 给邀请人加分
-                            var resInvitor = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, InvitorQQ, InvitorName, currentInviteCredit, $"邀人送分:邀请{UserId}进群{GroupId}", wrapper.Transaction);
+                            var resInvitor = await UserService.AddCreditAsync(SelfId, GroupId, GroupName, InvitorQQ, InvitorName, currentInviteCredit, $"邀人送分:邀请{UserId}进群{GroupId}", wrapper.Transaction);
                             if (resInvitor.Result == -1) throw new Exception("增加邀请人积分失败");
 
                             wrapper.Commit();
@@ -208,12 +208,12 @@ public partial class BotMessage
                             // 4. 同步缓存
                             if (Group.InviteCredit > 50)
                             {
-                                long ownerCreditFinal = await UserInfo.GetCreditAsync(SelfId, GroupId, Group.RobotOwner);
-                                await UserInfo.SyncCreditCacheAsync(SelfId, GroupId, Group.RobotOwner, ownerCreditFinal);
+                                long ownerCreditFinal = await UserService.GetCreditAsync(SelfId, GroupId, Group.RobotOwner);
+                                await UserRepository.SyncCreditCacheAsync(SelfId, GroupId, Group.RobotOwner, ownerCreditFinal);
                             }
-                            await UserInfo.SyncCreditCacheAsync(SelfId, GroupId, InvitorQQ, resInvitor.CreditValue);
+                            await UserRepository.SyncCreditCacheAsync(SelfId, GroupId, InvitorQQ, resInvitor.CreditValue);
 
-                            Answer = $"[@:{InvitorQQ}] 邀请 [@:{UserId}]进群\n累计已邀请{GroupMember.GetInt("InviteCount", GroupId, InvitorQQ)}人";
+                            Answer = $"[@:{InvitorQQ}] 邀请 [@:{UserId}]进群\n累计已邀请{await GroupMemberRepository.GetIntAsync("InviteCount", GroupId, InvitorQQ)}人";
                             Answer += $"\n积分：+{currentInviteCredit}，累计：{resInvitor.CreditValue}";
 
                             IsSend = Group.IsInvite;

@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 
+using BotWorker.Domain.Enums;
+
 namespace BotWorker.Domain.Models.BotMessages;
 
 public partial class BotMessage
@@ -7,18 +9,19 @@ public partial class BotMessage
         public async Task GetCmdResAsync()
         {
             // 已关闭的功能处理
-            if (BotCmd.IsClosedCmd(GroupId, CmdName))
+            if (await BotCmdService.IsClosedCmdAsync(GroupId, CmdName))
             {
                 switch (CmdName)
                 {
                     case "闲聊":
-                        if (!QuestionInfo.GetIsSystem(QuestionInfo.GetQId(CmdPara)))
+                        long qid = await QuestionInfoService.GetIdByQuestionAsync(CmdPara);
+                        if (!await QuestionInfoService.IsSystemAsync(qid))
                             return;
                         break;
                     default:
-                        if (CmdName == UserInfo.GetStateRes(User.State))
-                            UserInfo.SetState(UserInfo.States.Chat, UserId);
-                        if (GroupInfo.GetBool("IsHintClose", GroupId))
+                        if (CmdName == await UserService.GetStateResAsync(User.State))
+                            await UserService.SetStateAsync((int)UserStates.Chat, UserId);
+                        if (await GroupService.GetBoolAsync("IsHintClose", GroupId))
                         {
                             if (CmdName.In("剪刀", "石头", "布", "抽奖", "三公") && !CmdPara.IsNum())
                                 return;
@@ -63,11 +66,15 @@ public partial class BotMessage
             else if (CmdName == "天气")
                 Answer = await GetWeatherResAsync(CmdPara);
             else if (CmdName.In("接龙"))
-                Answer = await GetJielongRes();
+            {
+                Answer = await JielongService.GetJielongResAsync(this, CmdPara);
+            }
             else if (CmdName == "翻译")
                 Answer = await GetTranslateAsync();
             else if (CmdName == "成语")
-                Answer = (await Chengyu.GetCyResAsync(this)).ReplaceInvalid();
+            {
+                Answer = (await ChengyuService.GetCyResAsync(this, CmdPara)).ReplaceInvalid();
+            }
             else if (CmdName == "爱群主")
                 Answer = await GetLampRes();
             else if (CmdName == "爱早喵")
@@ -96,9 +103,8 @@ public partial class BotMessage
                 Answer = await ChangeAgentAsync();
             else if (CmdName == "自动开发")
             {
-                var devManager = ServiceProvider!.GetRequiredService<BotWorker.Modules.AI.Interfaces.IDevWorkflowManager>();
                 var projectPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GeneratedProjects", Guid.NewGuid().ToString("N"));
-                var success = await devManager.StartDevProjectAsync(CmdPara, projectPath);
+                var success = await DevWorkflowManager.StartDevProjectAsync(CmdPara, projectPath);
                 Answer = success ? $"✅ 自动化开发任务已完成！项目路径：{projectPath}" : "❌ 自动化开发任务执行失败，请检查日志。";
             }
             else if (CmdName.In("画图", "生图", "生成图片"))
@@ -110,21 +116,23 @@ public partial class BotMessage
             else if (CmdName == "dj")
                 await GetMusicResAsync("dj");
             else if (CmdName == "计算")
-                Answer = await Calc.GetJsRes(CmdPara);
+                Answer = await ToolService.CalculateAsync(CmdPara);
             else if (CmdName == "我的宠物")
-                Answer = await PetOld.GetMyPetListAsync(GroupId, GroupId, UserId);
+                Answer = await PetService.GetMyPetListAsync(GroupId, GroupId, UserId);
             else if (CmdName == "拍砖")
                 Answer = await Brick.GetBrickResAsync(this);
             else if (CmdName == "添加待办")
-                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, "+", CmdPara);
+                Answer = await TodoService.GetTodoResAsync(GroupId, GroupName, UserId, Name, "+", CmdPara);
             else if (CmdName == "我的待办")
-                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, "todo", CmdPara);
+                Answer = await TodoService.GetTodoResAsync(GroupId, GroupName, UserId, Name, "todo", CmdPara);
             else if (CmdName.In("钓鱼", "抛竿", "收竿"))
-                Answer = await Fishing.GetFishing(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
+            {
+                Answer = await FishingService.HandleFishingAsync(UserId, Name, CmdName);
+            }
             else if (CmdName == "大写")
-                Answer = RmbDaxie.GetDaxieRes(CmdPara);
+                Answer = RmbDaxieService.GetDaxieRes(CmdPara);
             else if (CmdName == "小写")
-                Answer = RmbDaxie.GetXiaoxieRes(CmdPara);
+                Answer = RmbDaxieService.GetXiaoxieRes(CmdPara);
             else if (CmdName == "打赏")
                 Answer = await GetRewardCreditAsync();
             else if (CmdName == "三公")
@@ -134,11 +142,13 @@ public partial class BotMessage
             else if (CmdName == "ai")
                 await GetAgentResAsync();
             else if (CmdName == "拼音")
-                Answer = Pinyin.GetPinyinRes(CmdPara);
+                Answer = PinyinService.GetPinyinRes(CmdPara);
             else if (CmdName == "反查")
-                Answer = (await Chengyu.GetFanChaResAsync(this)).ReplaceInvalid();
+            {
+                Answer = (await ChengyuService.GetFanChaResAsync(this, CmdPara)).ReplaceInvalid();
+            }
             else if (CmdName == "身份证")
-                Answer = CID.GetCidRes(this);
+                Answer = await ToolService.GetCidResAsync(this);
             else if (CmdName == "简体")
                 Answer = CmdPara.AsJianti().ReplaceInvalid();
             else if (CmdName == "繁体")
@@ -154,11 +164,11 @@ public partial class BotMessage
             else if (CmdName == "后台")
                 Answer = await GetSetupUrlAsync();
             else if (CmdName == "加密")
-                Answer = Encrypt.GetEncryptRes(UserInfo.GetGuid(UserId).AsString(), CmdName, CmdPara);
+                Answer = EncryptService.GetEncryptRes((await UserService.GetGuidAsync(UserId)).AsString(), CmdName, CmdPara);
             else if (CmdName == "解密")
-                Answer = Encrypt.GetEncryptRes(UserInfo.GetGuid(UserId).AsString(), CmdName, CmdPara).ReplaceInvalid();
+                Answer = EncryptService.GetEncryptRes((await UserService.GetGuidAsync(UserId)).AsString(), CmdName, CmdPara).ReplaceInvalid();
             else if (CmdName == "转账")
-                Answer = UserInfo.GetTransferBalance(SelfId, GroupId, GroupName, UserId, Name, CmdPara);
+                Answer = await UserService.GetTransferBalanceResAsync(SelfId, GroupId, GroupName, UserId, Name, CmdPara);
             else if (CmdName == "续费")
                 Answer = await GetBuyRobotAsync();
             else if (CmdName == "升级")
@@ -166,7 +176,7 @@ public partial class BotMessage
             else if (CmdName == "降级")
                 Answer = await GetCancelSuperAsync();
             else if (CmdName == "结算")
-                Answer = await Partner.GetSettleResAsync(SelfId, GroupId, GroupName, UserId, Name);
+                Answer = await PartnerService.GetSettleResAsync(SelfId, GroupId, GroupName, UserId, Name);
             else if (CmdName == "兑换礼品")
                 Answer = await GetGoodsCreditAsync();
             else if (CmdName == "买入")
@@ -174,7 +184,7 @@ public partial class BotMessage
             else if (CmdName == "赎身")
                 Answer = await GetFreeMeAsync();
             else if (CmdName == "买分")
-                Answer = await UserInfo.GetBuyCreditAsync(this, SelfId, GroupId, GroupName, UserId, Name, CmdPara);
+                Answer = await UserService.GetBuyCreditResAsync(this, SelfId, GroupId, GroupName, UserId, Name, CmdPara);
             else if (CmdName == "卖分")
                 Answer = await GetSellCreditAsync();
             else if (CmdName == "加团")
@@ -198,16 +208,17 @@ public partial class BotMessage
             else if (CmdName.In("猜数字", "我猜"))
                 Answer = await GetGuessNumAsync();
             else if (CmdName == "todo")
-                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
+                Answer = await TodoService.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
             else if (CmdName == "报时" || CmdName == "积分榜")
             {
                 await GetAnswerAsync();
                 if (string.IsNullOrEmpty(Answer))
                     Answer = $"{{{CmdName}}}";
             }
-            else if (CmdName == "倒计时")
-                Answer = await CountDown.GetCountDownAsync();
-            else if (CmdName == "点歌")
+      else if (CmdName == "倒计时")
+            {
+                Answer = await ToolService.GetCountDownAsync();
+            }else if (CmdName == "点歌")
                 await GetMusicResAsync();
             else if (CmdName.In("生图", "画图", "生成图片"))
                 await GetImageResAsync();
@@ -280,7 +291,9 @@ public partial class BotMessage
                     }
                     else if (CmdPara.In("本群积分"))
                     {
-                        Answer = IsRobotOwner() || BotInfo.IsAdmin(SelfId, UserId)
+                        var botRepo = ServiceProvider!.GetRequiredService<BotWorker.Domain.Repositories.IBotRepository>();
+                        bool isAdmin = await botRepo.GetRobotAdminAsync(SelfId) == UserId || (UserId == 51437810 || UserId == 1653346663);
+                        Answer = IsRobotOwner() || isAdmin
                             ? await GetTurnOnAsync(CmdName, CmdPara)
                             : OwnerOnlyMsg;
                     }
@@ -288,7 +301,10 @@ public partial class BotMessage
                         Answer = await GroupInfo.GetSetRobotOpenAsync(GroupId, CmdName, CmdPara);
                 }
                 else if (CmdName.In("上分", "下分"))
-                    Answer = await GroupMember.GetShangFenAsync(SelfId, GroupId, GroupName, UserId, CmdName, CmdPara);
+                {
+                    var groupMemberService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IGroupMemberService>();
+                    Answer = await groupMemberService.GetShangFenAsync(SelfId, GroupId, GroupName, UserId, CmdName, CmdPara);
+                }
                 else if (CmdName.In("拉黑", "取消拉黑", "清空黑名单"))
                     Answer = await GetBlackRes();
                 else if (CmdName.In("拉灰", "取消拉灰", "清空灰名单"))
@@ -319,23 +335,23 @@ public partial class BotMessage
                     }
                 }
             }
-
-            long credit = UserInfo.GetCredit(GroupId, UserId);
+            
+            long credit = await UserCreditService.GetCreditAsync(SelfId, GroupId, UserId);
             if (credit <= -5000)
             {
-                if (CmdName == "闲聊" || User.State == (int)UserInfo.States.Chat && IsGroup)                
+                if (CmdName == "闲聊" || User.State == (int)UserStates.Chat && IsGroup)                
                     IsSend = false;               
                 else if (CmdName != "签到")
                     Answer = credit < -10000 ? "" : $"你已负分{credit}，不能再发命令";
                 //自动切换回闲聊状态；
-                if (User.State != (int)UserInfo.States.Chat)
-                    UserInfo.SetState(UserInfo.States.Chat, UserId);
+                if (User.State != (int)UserStates.Chat)
+                    await UserService.SetStateAsync((int)UserStates.Chat, UserId);
             }
             return;
         }
 
         //得到命令类型及参数
-        public static (string, string) GetCmdPara(string text, string regex)
+        public async Task<(string, string)> GetCmdParaAsync(string text, string regex)
         {
             //去掉通讯工具附加的广告信息
             text = text.RemoveQqTail();
@@ -354,8 +370,8 @@ public partial class BotMessage
                 }
 
                 cmdName = cmdName.AsNarrow().ToLower();
-                if (regex == BotCmd.GetRegexCmd())
-                    cmdName = BotCmd.GetCmdName(cmdName);
+                if (regex == await BotCmdService.GetRegexCmdAsync())
+                    cmdName = await BotCmdService.GetCmdNameAsync(cmdName);
             }
             return (cmdName, cmdPara);
         }

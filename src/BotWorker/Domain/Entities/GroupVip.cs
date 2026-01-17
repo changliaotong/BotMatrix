@@ -8,13 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("VIP")]
+    [Table("vip")]
     public class GroupVip
     {
-        private static IGroupVipRepository Repository => 
-            GlobalConfig.ServiceProvider?.GetRequiredService<IGroupVipRepository>() 
-            ?? throw new InvalidOperationException("IGroupVipRepository not registered");
-
         [ExplicitKey]
         public long GroupId { get; set; }
         public string GroupName { get; set; } = string.Empty;
@@ -28,49 +24,49 @@ namespace BotWorker.Domain.Entities
         public int InsertBy { get; set; }
         public int? IsGoon { get; set; }
 
-        public static async Task<int> BuyRobotAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy)
+        public static async Task<int> BuyRobotAsync(BotMessage bm, long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy)
         {
-            return await Repository.BuyRobotAsync(botUin, groupId, groupName, qqBuyer, buyerName, month, payMoney, payMethod, trade, memo, insertBy);
+            return await bm.GroupVipRepository.BuyRobotAsync(botUin, groupId, groupName, qqBuyer, buyerName, month, payMoney, payMethod, trade, memo, insertBy);
         }
 
-        public static async Task<int> ChangeGroupAsync(long groupId, long newGroupId, long qq)
+        public static async Task<int> ChangeGroupAsync(BotMessage bm, long groupId, long newGroupId, long qq)
         {
-            return await Repository.ChangeGroupAsync(groupId, newGroupId, qq);
+            return await bm.GroupVipRepository.ChangeGroupAsync(groupId, newGroupId, qq);
         }
 
-        public static async Task<int> RestDaysAsync(long groupId)
+        public static async Task<int> RestDaysAsync(BotMessage bm, long groupId)
         {
-            return await Repository.RestDaysAsync(groupId);
+            return await bm.GroupVipRepository.RestDaysAsync(groupId);
         }
 
-        public static async Task<int> RestMonthsAsync(long groupId)
+        public static async Task<int> RestMonthsAsync(BotMessage bm, long groupId)
         {
-            return await Repository.RestMonthsAsync(groupId);
+            return await bm.GroupVipRepository.RestMonthsAsync(groupId);
         }
 
-        public static async Task<bool> IsYearVIPAsync(long groupId)
+        public static async Task<bool> IsYearVIPAsync(BotMessage bm, long groupId)
         {
-            return await Repository.IsYearVIPAsync(groupId);
+            return await bm.GroupVipRepository.IsYearVIPAsync(groupId);
         }
 
-        public static async Task<bool> IsVipAsync(long groupId)
+        public static async Task<bool> IsVipAsync(BotMessage bm, long groupId)
         {
-            return await Repository.IsVipAsync(groupId);
+            return await bm.GroupVipRepository.IsVipAsync(groupId);
         }
 
-        public static async Task<bool> IsForeverAsync(long groupId)
+        public static async Task<bool> IsForeverAsync(BotMessage bm, long groupId)
         {
-            return await Repository.IsForeverAsync(groupId);
+            return await bm.GroupVipRepository.IsForeverAsync(groupId);
         }
 
-        public static async Task<bool> IsVipOnceAsync(long groupId)
+        public static async Task<bool> IsVipOnceAsync(BotMessage bm, long groupId)
         {
-            return await Repository.IsVipOnceAsync(groupId);
+            return await bm.GroupVipRepository.IsVipOnceAsync(groupId);
         }
 
-        public static async Task<bool> IsClientVipAsync(long qq)
+        public static async Task<bool> IsClientVipAsync(BotMessage bm, long qq)
         {
-            return await Repository.IsClientVipAsync(qq);
+            return await bm.GroupVipRepository.IsClientVipAsync(qq);
         }
     }
 }

@@ -5,7 +5,7 @@ public partial class BotMessage
         // 处理消息
         public async Task HandleMessageAsync()
         {
-            if (await UserInfo.StartWith285or300Async(UserId))
+            if (await UserService.StartWith285or300Async(UserId))
             {
                 Reason += "[同行]";
                 return;
@@ -30,7 +30,7 @@ public partial class BotMessage
                     Answer = "你已被列入灰名单";
                 else if (!Group.IsPowerOn && !IsGuild)
                     Answer = "机器人已关机，请先开机";
-                else if (ClientPublic.SubscribeCompayPublic(UserId))
+                else if (await PublicUserRepository.IsSubscribedToOfficialPublicAsync(UserId))
                     Answer = "✅ 你已确认身份";
                 else
                     Answer = "微信搜【早喵AI】公众号，关注后留言【领积分】可领5000积分并完成身份确认";
@@ -54,7 +54,8 @@ public partial class BotMessage
             }
 
             var isHot = IsHot();
-            var isCmdMsg = CurrentMessage.IsMatch(BotCmd.GetRegexCmd());
+            var regexCmd = await BotCmdService.GetRegexCmdAsync();
+            var isCmdMsg = CurrentMessage.IsMatch(regexCmd);
             IsCmd = isHot || isCmdMsg;
 
             if (IsProxy && ProxyBotUin == 0)
@@ -93,7 +94,7 @@ public partial class BotMessage
             //发言次数统计
             if (GroupId != BotInfo.MonitorGroupUin)
             {
-                if (GroupMsgCount.Update(SelfId, GroupId, GroupName, UserId, Name) == -1)
+                if (await GroupMsgCountService.UpdateAsync(SelfId, GroupId, GroupName, UserId, Name) == -1)
                     Logger.Error("更新发言统计数据时出错。");
             }
 
@@ -201,7 +202,7 @@ public partial class BotMessage
                 //拉黑
                 if (isCmdBlack)
                 {
-                    (CmdName, CmdPara) = GetCmdPara(CurrentMessage, BlackList.regexBlack);
+                    (CmdName, CmdPara) = await GetCmdParaAsync(CurrentMessage, BlackList.regexBlack);
                     CmdName = CmdName.Replace("黑名单", "拉黑").Replace("加黑", "拉黑").Replace("删黑","取消拉黑");
                     Answer = await GetBlackRes();
                     Answer += !IsGroup ? "\n设置群 {默认群}" : "";
@@ -291,7 +292,7 @@ public partial class BotMessage
 
             //避免与其它命令和聊天冲突
             if (isCmdMsg) 
-                (CmdName, CmdPara) = GetCmdPara(CurrentMessage, BotCmd.GetRegexCmd());
+                (CmdName, CmdPara) = await GetCmdParaAsync(CurrentMessage, await BotCmdService.GetRegexCmdAsync());
             else
                 CmdPara = CurrentMessage;
 
@@ -347,7 +348,7 @@ public partial class BotMessage
                     if (CmdPara.Trim().IsNull())
                     {
                         //如果参数为空，直接切换到该智能体
-                        Answer = UserInfo.SetValue("AgentId", CurrentAgent.Id, UserId) == -1
+                        Answer = await UserService.SetUserFieldAsync("AgentId", CurrentAgent.Id, UserId) == -1
                             ? $"变身{RetryMsg}"
                             : $"【{CurrentAgent.Name}】{CurrentAgent.Info}";
                         return;
@@ -363,7 +364,7 @@ public partial class BotMessage
                 if (Answer != "") return;
 
                 //默认功能：聊天/问路/翻译/逗你玩/成语接龙 群聊时不能逗你玩与自己成语接龙
-                CmdName = UserInfo.GetStateRes(User.State);
+                CmdName = await UserService.GetStateResAsync(User.State);
                 if (IsGroup && CmdName.In("逗你玩", "接龙"))
                     CmdName = "闲聊"; 
                 else if (CmdName == "AI")

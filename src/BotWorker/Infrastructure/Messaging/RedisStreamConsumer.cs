@@ -15,6 +15,7 @@ namespace BotWorker.Infrastructure.Messaging
         private readonly IConnectionMultiplexer _redis;
         private readonly MessagePipeline _pipeline;
         private readonly IOneBotApiClient _apiClient;
+        private readonly IBotMessageMapper _messageMapper;
         private readonly string _streamName;
         private readonly string _groupName;
         private readonly string _consumerName;
@@ -27,6 +28,7 @@ namespace BotWorker.Infrastructure.Messaging
             IConnectionMultiplexer redis,
             MessagePipeline pipeline,
             IOneBotApiClient apiClient,
+            IBotMessageMapper messageMapper,
             IConfiguration configuration)
         {
             Console.WriteLine("DEBUG: RedisStreamConsumer constructor started");
@@ -34,6 +36,7 @@ namespace BotWorker.Infrastructure.Messaging
             _redis = redis;
             _pipeline = pipeline;
             _apiClient = apiClient;
+            _messageMapper = messageMapper;
 
             var workerId = configuration["BotWorker:WorkerID"] ?? "csharp-worker";
             _streamName = configuration["Redis:Streams:Default"] ?? "botmatrix:queue:default";
@@ -127,7 +130,7 @@ namespace BotWorker.Infrastructure.Messaging
                                 string payloadStr = payload.ToString();
                                 Log.Information("Processing message {MsgId}. Payload length: {Length}", msg.Id, payloadStr.Length);
 
-                                var botMessage = await BotMessageMapper.MapToOneBotEventAsync(payloadStr, _apiClient);
+                                var botMessage = await _messageMapper.MapToOneBotEventAsync(payloadStr, _apiClient);
                                 if (botMessage != null)
                                 {
                                     Log.Information("Mapped message: {MsgId}, Type: {EventType}, From: {UserId}, Group: {GroupId}", 

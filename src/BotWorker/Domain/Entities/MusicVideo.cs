@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("MusicVideo")]
+    [Table("music_video")]
     public class MusicVideo
     {
         private static IMusicVideoRepository Repository => 

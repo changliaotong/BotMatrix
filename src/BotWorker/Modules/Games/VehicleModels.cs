@@ -39,13 +39,9 @@ namespace BotWorker.Modules.Games
 
     #region Domain Model
 
-    [Table("UserVehicles")]
+    [Table("user_vehicles")]
     public class Vehicle
     {
-        private static IVehicleRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IVehicleRepository>() 
-            ?? throw new InvalidOperationException("IVehicleRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
@@ -83,26 +79,6 @@ namespace BotWorker.Modules.Games
             VehicleRarity.Mythic => "🔴 未来概念",
             _ => "未知"
         };
-
-        public static async Task<Vehicle?> GetActiveVehicleAsync(string userId)
-        {
-            return await Repository.GetActiveVehicleAsync(userId);
-        }
-
-        public static async Task<List<Vehicle>> GetUserVehiclesAsync(string userId)
-        {
-            return await Repository.GetUserVehiclesAsync(userId);
-        }
-
-        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
-
-        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.UpdateAsync(this, trans);
-        }
 
         public void GainExp(double exp)
         {

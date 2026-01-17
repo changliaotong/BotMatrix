@@ -16,6 +16,10 @@ namespace BotWorker.Domain.Repositories
         Task<(bool Success, long CreditValue)> AddCreditAsync(long botUin, long groupId, string groupName, long qq, string name, long amount, string reason, IDbTransaction? trans = null);
         Task<long> GetCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null);
         
+        Task<long> GetSaveCreditAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null);
+        Task<long> GetSaveCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null);
+        Task<bool> AddSaveCreditAsync(long botUin, long groupId, long qq, long amount, IDbTransaction? trans = null);
+
         Task<long> GetTokensAsync(long qq);
         Task<long> GetTokensForUpdateAsync(long qq, IDbTransaction? trans = null);
         Task<bool> AddTokensAsync(long qq, long amount, IDbTransaction? trans = null);
@@ -32,6 +36,10 @@ namespace BotWorker.Domain.Repositories
         Task<bool> UpdateCszGameAsync(long qq, int cszRes, long cszCredit, int cszTimes);
         
         Task<long> GetCoinsAsync(long userId);
+        Task<string> GetCoinsListAllAsync(long qq, int top);
+        Task<string> GetCoinsListAsync(long groupId, long userId, int top);
+        Task<long> GetCoinsRankingAsync(long groupId, long qq);
+        Task<long> GetCoinsRankingAllAsync(long qq);
         
         Task<long> GetBotUinByOpenidAsync(string userOpenid);
         Task<long> GetTargetUserIdAsync(string userOpenid);

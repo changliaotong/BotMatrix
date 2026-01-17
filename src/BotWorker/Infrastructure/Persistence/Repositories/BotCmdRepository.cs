@@ -94,5 +94,11 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
                 await AddAsync(cmd);
             }
         }
+
+        public async Task<int> SetCmdCloseAllAsync(string cmdName, int isClose)
+        {
+            string sql = "UPDATE \"Cmd\" SET \"IsClose\" = @isClose WHERE \"CmdName\" = @cmdName";
+            return await Connection.ExecuteAsync(sql, new { isClose, cmdName });
+        }
     }
 }

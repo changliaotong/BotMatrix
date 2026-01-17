@@ -13,5 +13,8 @@ namespace BotWorker.Modules.AI.Interfaces
         Task<bool> IncrementUsedTimesAsync(long id, int increment = 1);
         Task<bool> IncrementSubscriptionCountAsync(long id, int increment = 1);
         Task<bool> ExistsByNameAndUserAsync(string name, long userId);
+        Task<string> GetNamesByTagAsync(int tagId, string format = " {0}");
+        Task<Guid> GetGuidAsync(long id);
+        Task<string> GetValueAsync(string field, long id);
     }
 }

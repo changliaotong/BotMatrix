@@ -11,10 +11,6 @@ namespace BotWorker.Domain.Entities
     [Dapper.Contrib.Extensions.Table("Answer")]
     public partial class AnswerInfo
     {
-        private static IAnswerRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IAnswerRepository>() 
-            ?? throw new InvalidOperationException("IAnswerRepository not registered");
-
         [ExplicitKey]
         public long Id { get; set; }
         public long QuestionId { get; set; }

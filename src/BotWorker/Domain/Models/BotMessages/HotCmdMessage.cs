@@ -64,12 +64,12 @@ namespace BotWorker.Domain.Models.BotMessages
             //微信公众号绑定QQ
             regexCmd = Regexs.BindToken;
             if (Regex.IsMatch(CurrentMessage, regexCmd))
-                Answer += await ClientPublic.GetBindTokenAsync(this, Message.RegexGetValue(regexCmd, "token_type"), CurrentMessage.RegexGetValue(regexCmd, "bind_token"));
+                Answer += await GetBindTokenAsync(Message.RegexGetValue(regexCmd, "token_type"), CurrentMessage.RegexGetValue(regexCmd, "bind_token"));
 
             //宠物
             regexCmd = Regexs.BuyBet;
             if (Regex.IsMatch(CurrentMessage, regexCmd))
-                Answer += await PetOld.GetBuyPetAsync(SelfId, GroupId, GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(regexCmd, "UserId"));
+                Answer += await PetService.GetBuyPetAsync(SelfId, GroupId, GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(regexCmd, "UserId"));
 
             //需要@机器人参数的放在前面，不需要的放后面 ===============================================================================================================
             CurrentMessage = CurrentMessage.RemoveUserId(SelfId);
@@ -85,9 +85,9 @@ namespace BotWorker.Domain.Models.BotMessages
 
             // 数学表达式
             else if (CurrentMessage.IsMatch(Regexs.Formula))
-                Answer = await Calc.GetJsRes(CurrentMessage.RegexGetValue(Regexs.Formula, "formula"));
+                Answer = await ToolService.CalculateAsync(CurrentMessage.RegexGetValue(Regexs.Formula, "formula"));
             else if (CurrentMessage.IsMatch(Regexs.WarnCmd))//开启关闭 内置敏感词            
-                GetWarnSetup(Regexs.WarnCmd);
+                await GetWarnSetupAsync(Regexs.WarnCmd);
 
             regexCmd = Regexs.Todo;
             if (CurrentMessage.IsMatch(regexCmd))
@@ -100,7 +100,7 @@ namespace BotWorker.Domain.Models.BotMessages
                 // 如果 cmd_oper 不为空 (如 + 或 -)，则将其作为 cmdName 传递
                 CmdName = string.IsNullOrEmpty(cmdOper) ? cmdName : cmdOper;
                 
-                Answer = await Todo.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
+                Answer = await TodoService.GetTodoResAsync(GroupId, GroupName, UserId, Name, CmdName, CmdPara);
             }
             else if (CurrentMessage.IsMatch(Regexs.LeaveGroup) && IsSuperAdmin) //退群
             {
@@ -115,26 +115,29 @@ namespace BotWorker.Domain.Models.BotMessages
             }
 
             else if (CurrentMessage.IsMatch(Regexs.Fishing))//钓鱼
-                Answer = await Fishing.GetFishing(GroupId, GroupName, UserId, Name, CurrentMessage.RegexGetValue(Regexs.Fishing, "CmdName"), "");
+            {
+                var fishingService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IFishingService>();
+                Answer = await fishingService.HandleFishingAsync(UserId, Name, CurrentMessage.RegexGetValue(Regexs.Fishing, "CmdName"));
+            }
 
             else if (CurrentMessage.IsMatch(Regexs.AddMinus)) //充值 扣除 积分、金币/紫币/游戏币等
-                Answer = await GroupMember.AddCoinsResAsync(this);
+                Answer = await GroupMemberService.AddCoinsResAsync(SelfId, GroupId, GroupName, UserId, Name, CmdName, CmdPara, CmdPara, CmdPara);
 
             else if (CurrentMessage.IsMatch(Regexs.ExchangeCoins)) //兑换/购买 金币/紫币/游戏币等
                 Answer = await ExchangeCoinsAsync(CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara"), CurrentMessage.RegexGetValue(Regexs.ExchangeCoins, "cmdPara2"));
             
             else if (CurrentMessage.IsMatch(Regexs.Caiquan))//猜拳
             {
-                string cmdName = Block.GetCmd(CurrentMessage.RegexGetValue(Regexs.Caiquan, "CmdName"), UserId);
+                string cmdName = BlockService.GetCmd(CurrentMessage.RegexGetValue(Regexs.Caiquan, "CmdName"), UserId);
                 string cmdPara = CurrentMessage.RegexGetValue(Regexs.Caiquan, "cmdPara");
                 CurrentMessage = $"{cmdName} {cmdPara}";
                 await GetCmdResAsync();
             }
-            else if (CurrentMessage.IsMatch(regexCmd))//身价
+            else if (CurrentMessage.IsMatch(Regexs.PetPrice))//身价
             {
                 long friend_qq = CurrentMessage.RegexGetValue(Regexs.PetPrice, "UserId").AsLong();
-                Answer = $"[@:{friend_qq}]的身价：{PetOld.GetSellPrice(GroupId, friend_qq)}";
-                if (BlackList.IsSystemBlack(friend_qq))
+                Answer = $"[@:{friend_qq}]的身价：{await PetService.GetSellPriceAsync(GroupId, friend_qq)}";
+                if (await BlackListRepository.IsSystemBlackAsync(friend_qq))
                     Answer += "\n{BlackListMsg}";
             }
             else if (CurrentMessage.IsMatch(Regexs.CreditUserId) || CurrentMessage.IsMatch(Regexs.CreditUserId2))//积分
@@ -142,30 +145,30 @@ namespace BotWorker.Domain.Models.BotMessages
                 regexCmd = CurrentMessage.IsMatch(Regexs.CreditUserId) ? Regexs.CreditUserId : Regexs.CreditUserId2;
                 long credit_qq = CurrentMessage.RegexGetValue(regexCmd, "UserId").AsLong();
                 Answer = $"[@:{credit_qq}]的{{积分类型}}：{{积分}}";
-                if (BlackList.IsSystemBlack(credit_qq))
+                if (await BlackListRepository.IsSystemBlackAsync(credit_qq))
                     Answer += "\n{BlackListMsg}";
             }
             else if (CurrentMessage.IsMatch(Regexs.CoinsUserId)) //金币
             {
                 regexCmd = Regexs.CoinsUserId;
                 long coins_qq = CurrentMessage.RegexGetValue(regexCmd, "UserId").AsLong();
-                Answer = $"[@:{coins_qq}]的金币：{await GroupMember.GetCoinsAsync((int)CoinsLog.CoinsType.goldCoins, GroupId, UserId):#0.00}";
-                if (BlackList.IsSystemBlack(coins_qq))
+                Answer = $"[@:{coins_qq}]的金币：{await GroupMemberService.GetCoinsAsync((int)CoinsLog.CoinsType.goldCoins, GroupId, UserId):#0.00}";
+                if (await BlackListRepository.IsSystemBlackAsync(coins_qq))
                     Answer += "\n{BlackListMsg}";
             }
 
             // 查询block_info16
             else if (CurrentMessage.IsMatch(Regexs.BlockHash16))
-                Answer = Block.GetBlockInfo16(CurrentMessage.RegexGetValue(Regexs.BlockHash16, "block_hash"));
+                Answer = BlockService.GetBlockInfo16(CurrentMessage.RegexGetValue(Regexs.BlockHash16, "block_hash"));
 
             // 查询block_info
             else if (CurrentMessage.IsMatch(Regexs.BlockHash))
-                Answer = Block.GetBlockInfo16(CurrentMessage.RegexGetValue(Regexs.BlockHash, "block_hash"));
+                Answer = BlockService.GetBlockInfo16(CurrentMessage.RegexGetValue(Regexs.BlockHash, "block_hash"));
 
             // 猜大小
             else if (CurrentMessage.IsMatch(Regexs.BlockCmd))
             {
-                CmdName = $"{Block.GetCmd(CurrentMessage.RegexGetValue(Regexs.BlockCmd, "CmdName"), UserId)}";
+                CmdName = $"{BlockService.GetCmd(CurrentMessage.RegexGetValue(Regexs.BlockCmd, "CmdName"), UserId)}";
                 CmdPara = $"{CurrentMessage.RegexGetValue(Regexs.BlockCmd, "cmdPara")}";
                 Answer = await GetBlockResAsync();
             }
@@ -184,7 +187,7 @@ namespace BotWorker.Domain.Models.BotMessages
                     Answer = "请私聊使用此功能";
                     return;
                 }
-                Answer = await UserInfo.GetBuyCreditAsync(SelfId, GroupId, GroupName, UserId, Name,
+                Answer = await UserService.GetBuyCreditAdminResAsync(SelfId, GroupId, GroupName, UserId, MsgId,
                     CurrentMessage.RegexGetValue(Regexs.BuyCredit, "buy_qq").AsLong(),
                     CurrentMessage.RegexGetValue(Regexs.BuyCredit, "income_money").AsDecimal(),
                     CurrentMessage.RegexGetValue(Regexs.BuyCredit, "pay_method"));
@@ -198,7 +201,7 @@ namespace BotWorker.Domain.Models.BotMessages
             if (CurrentMessage.IsMatch(Regexs.Cid))//身份证号
             {
                 CurrentMessage = CurrentMessage.RegexGetValue(Regexs.Cid, "cid");
-                Answer = CID.GetCidRes(this);
+                Answer = await ToolService.GetCidResAsync(this);
             }
 
             return;

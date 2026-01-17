@@ -1,9 +1,17 @@
+using BotWorker.Domain.Interfaces;
+
 namespace BotWorker.Infrastructure.Tools
 {
-    public class RmbDaxie
+    public interface IRmbDaxieService
     {
+        string GetRmbDaxie(decimal number);
+        string GetDaxieRes(string text);
+        string GetXiaoxieRes(string text);
+    }
 
-        public static string GetRmbDaxie(decimal number)
+    public class RmbDaxieService : IRmbDaxieService
+    {
+        public string GetRmbDaxie(decimal number)
         {            
             var s = number.ToString("#L#E#D#C#K#E#D#C#J#E#D#C#I#E#D#C#H#E#D#C#G#E#D#C#F#E#D#C#.0B0A");
             var d = s.RegexReplace(@"((?<=-|^)[^1-9]*)|((?'z'0)[0A-E]*((?=[1-9])|(?'-z'(?=[F-L\.]|$))))|((?'b'[F-L])(?'z'0)[0A-L]*((?=[1-9])|(?'-z'(?=[\.]|$))))", "${b}${z}");
@@ -12,7 +20,7 @@ namespace BotWorker.Infrastructure.Tools
         }
 
         // 人民币大写
-        public static string GetDaxieRes(string text)
+        public string GetDaxieRes(string text)
         {
             string res;
             if (text.IsDecimal())
@@ -29,7 +37,7 @@ namespace BotWorker.Infrastructure.Tools
             return res;
         }
 
-        public static string GetXiaoxieRes(string text)
+        public string GetXiaoxieRes(string text)
         {
             return text.ToLower();
         }

@@ -21,12 +21,13 @@ namespace BotWorker.Modules.Games
     public class EvolutionService : IPlugin
     {
         private readonly ILogger<EvolutionService>? _logger;
+        private readonly IUserLevelRepository _userLevelRepo;
         private IRobot? _robot;
 
-        public EvolutionService() { }
-        public EvolutionService(ILogger<EvolutionService> logger)
+        public EvolutionService(ILogger<EvolutionService> logger, IUserLevelRepository userLevelRepo)
         {
             _logger = logger;
+            _userLevelRepo = userLevelRepo;
         }
 
         public List<Intent> Intents => [
@@ -93,7 +94,7 @@ namespace BotWorker.Modules.Games
                 if (newLevel > oldLevel || medalsChanged)
                 {
                     userLevel.Level = newLevel;
-                    await userLevel.UpdateAsync();
+                    await _userLevelRepo.UpdateEntityAsync(userLevel);
                     
                     if (newLevel > oldLevel)
                     {
@@ -117,7 +118,7 @@ namespace BotWorker.Modules.Games
                 }
                 else
                 {
-                    await userLevel.UpdateAsync();
+                    await _userLevelRepo.UpdateEntityAsync(userLevel);
                 }
             }
             catch (Exception ex)
@@ -141,7 +142,7 @@ namespace BotWorker.Modules.Games
                     // 奖励 50 经验
                     userLevel.Experience += 50;
                     CheckAndAwardMedals(userLevel);
-                    await userLevel.UpdateAsync();
+                    await _userLevelRepo.UpdateEntityAsync(userLevel);
 
                     // 发送通知消息（如果可能）
                     if (_robot != null)
@@ -207,7 +208,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<UserLevel> GetOrCreateLevelAsync(string userId)
         {
-            var level = await UserLevel.GetByUserIdAsync(userId);
+            var level = await _userLevelRepo.GetByUserIdAsync(userId);
             if (level == null)
             {
                 level = new UserLevel
@@ -217,7 +218,7 @@ namespace BotWorker.Modules.Games
                     Experience = 0,
                     LastUpdateTime = DateTime.Now
                 };
-                await level.InsertAsync();
+                await _userLevelRepo.InsertAsync(level);
             }
             return level;
         }
@@ -246,13 +247,9 @@ namespace BotWorker.Modules.Games
     /// <summary>
     /// 用户等级数据模型
     /// </summary>
-    [Table("UserLevels")]
+    [Table("user_levels")]
     public class UserLevel
     {
-        private static IUserLevelRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IUserLevelRepository>() 
-            ?? throw new InvalidOperationException("IUserLevelRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
@@ -260,25 +257,5 @@ namespace BotWorker.Modules.Games
         public long Experience { get; set; } = 0;
         public string Medals { get; set; } = string.Empty; // 以逗号分隔的勋章列表
         public DateTime LastUpdateTime { get; set; } = DateTime.Now;
-
-        public static async Task<UserLevel?> GetByUserIdAsync(string userId)
-        {
-            return await Repository.GetByUserIdAsync(userId);
-        }
-
-        public static async Task<List<UserLevel>> GetTopRankingsAsync(int limit = 10)
-        {
-            return await Repository.GetTopRankingsAsync(limit);
-        }
-
-        public async Task InsertAsync()
-        {
-            await Repository.InsertAsync(this);
-        }
-
-        public async Task UpdateAsync()
-        {
-            await Repository.UpdateAsync(this);
-        }
     }
 }

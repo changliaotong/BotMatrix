@@ -20,23 +20,30 @@ namespace BotWorker.Modules.Games
     )]
     public class PointsService : IPlugin
     {
-        private readonly ILogger<PointsService>? _logger;
+        private readonly IUserCreditService _creditService;
+        private readonly IUserRepository _userRepo;
+        private readonly IUserLevelRepository _userLevelRepo;
         private IRobot? _robot;
         private const string SYSTEM_RESERVE = "0"; // 系统发行账户 (使用原有数据库保留ID)
         private const string SYSTEM_REVENUE = "1"; // 系统回收账户 (使用原有数据库保留ID)
+
+        public PointsService(
+            ILogger<PointsService> logger,
+            IUserCreditService creditService,
+            IUserRepository userRepo,
+            IUserLevelRepository userLevelRepo)
+        {
+            _logger = logger;
+            _creditService = creditService;
+            _userRepo = userRepo;
+            _userLevelRepo = userLevelRepo;
+        }
 
         private string NormalizeAccountId(string accountId)
         {
             if (accountId == "SYSTEM_RESERVE") return SYSTEM_RESERVE;
             if (accountId == "SYSTEM_REVENUE") return SYSTEM_REVENUE;
             return accountId;
-        }
-
-        public PointsService() { }
-
-        public PointsService(ILogger<PointsService> logger)
-        {
-            _logger = logger;
         }
 
         public List<Intent> Intents => [
@@ -124,7 +131,7 @@ namespace BotWorker.Modules.Games
                 // 1. 检查付款方余额 (系统发行方除外)
                 if (creditId != SYSTEM_RESERVE)
                 {                    
-                    long currentBalance = await UserInfo.GetCreditAsync(botUin, groupId, creditQQ);
+                    long currentBalance = await _creditService.GetCreditAsync(botUin, groupId, creditQQ);
                     if (currentBalance < amount)
                     {
                         _logger?.LogWarning($"转账失败：账户 {creditId} 余额不足 ({currentBalance} < {amount})");
@@ -133,7 +140,7 @@ namespace BotWorker.Modules.Games
                 }
 
                 // 2. 使用原有事务逻辑执行转账
-                var result = await UserInfo.TransferCreditAsync(
+                var result = await _creditService.TransferCreditAsync(
                     botUin, groupId, groupName,
                     creditQQ, creditName,
                     debitQQ, debitName,
@@ -195,7 +202,7 @@ namespace BotWorker.Modules.Games
         private async Task<string> SignMsgAsync(IPluginContext ctx)
         {
             // 获取用户等级以计算加成
-            var userLevel = await UserLevel.GetByUserIdAsync(ctx.UserId);
+            var userLevel = await _userLevelRepo.GetByUserIdAsync(ctx.UserId);
             int level = userLevel?.Level ?? 1;
             
             long baseReward = 100;
@@ -209,7 +216,7 @@ namespace BotWorker.Modules.Games
             {
                 long groupId = !string.IsNullOrEmpty(ctx.GroupId) ? long.Parse(ctx.GroupId) : 0;
                 long botUin = long.Parse(ctx.BotId);
-                long balance = await UserInfo.GetCreditAsync(botUin, groupId, long.Parse(ctx.UserId));
+                long balance = await _creditService.GetCreditAsync(botUin, groupId, long.Parse(ctx.UserId));
                 string planeInfo = userLevel != null ? $" [{GetPlaneName(level)}]" : "";
                 string buffNotice = globalBuff > 1.0 ? $"🔥 全服翻倍 x{globalBuff:F1}\n" : "";
                 return $"✅ 签到成功！\n" +
@@ -234,8 +241,8 @@ namespace BotWorker.Modules.Games
         private async Task<string> GetSystemReportMsgAsync(IPluginContext ctx)
         {
             long botUin = long.Parse(ctx.BotId);
-            long reserveBalance = await UserInfo.GetCreditAsync(botUin, 0, long.Parse(SYSTEM_RESERVE));
-            long revenueBalance = await UserInfo.GetCreditAsync(botUin, 0, long.Parse(SYSTEM_REVENUE));
+            long reserveBalance = await _creditService.GetCreditAsync(botUin, 0, long.Parse(SYSTEM_RESERVE));
+            long revenueBalance = await _creditService.GetCreditAsync(botUin, 0, long.Parse(SYSTEM_REVENUE));
             
             return $"📊 系统财务简报 (原有数据库)：\n" +
                    $"----------------\n" +
@@ -253,7 +260,8 @@ namespace BotWorker.Modules.Games
         private async Task EnsureSystemAccountAsync(string accountId, string name)
         {
             long qq = long.Parse(accountId);
-            if (!await UserInfo.ExistsAsync(qq))
+            var existing = await _userRepo.GetByIdAsync(qq);
+            if (existing == null)
             {
                 var user = new UserInfo
                 {
@@ -262,7 +270,7 @@ namespace BotWorker.Modules.Games
                     Credit = 0,
                     InsertDate = DateTime.Now
                 };
-                await user.InsertAsync();
+                await _userRepo.InsertAsync(user);
             }
         }
 
@@ -285,7 +293,7 @@ namespace BotWorker.Modules.Games
         {
             if (args is string userId)
             {
-                return await UserInfo.GetCreditAsync(long.Parse(userId));
+                return await _creditService.GetCreditAsync(0, 0, long.Parse(userId));
             }
             return 0L;
         }

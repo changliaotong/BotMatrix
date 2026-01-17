@@ -470,7 +470,12 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
 
         public async Task<int> StartCyGameAsync(long groupId)
         {
-            return await SetValueAsync("IsCyGame", true, groupId);
+            return await SetValueAsync("IsInGame", 1, groupId);
+        }
+
+        public async Task<int> GetIntAsync(string field, long groupId, System.Data.IDbTransaction? trans = null)
+        {
+            return await GetValueAsync<int>(field, groupId, trans);
         }
 
         public async Task<int> UpdateIsPowerOnAsync(long groupId, bool isPowerOn, System.Data.IDbTransaction? trans = null)
@@ -533,6 +538,60 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
         public async Task<int> UpdateCloseRegexAsync(long groupId, string closeRegex)
         {
             return await SetValueAsync("CloseRegex", closeRegex, groupId);
+        }
+
+        public async Task<int> UpdateIsCloudAnswerAsync(long groupId, int isCloudAnswer)
+        {
+            return await SetValueAsync("IsCloudAnswer", isCloudAnswer, groupId);
+        }
+
+        public async Task<int> UpdateExitGroupSettingsAsync(long groupId, bool isExitHint, bool isBlackExit)
+        {
+            string sql = $"UPDATE {_tableName} SET is_exit_hint = @isExitHint, is_black_exit = @isBlackExit WHERE id = @groupId";
+            using var conn = CreateConnection();
+            return await conn.ExecuteAsync(sql, new { isExitHint, isBlackExit, groupId });
+        }
+
+        public async Task<int> UpdateKickBlackSettingsAsync(long groupId, bool isKickHint, bool isBlackKick)
+        {
+            string sql = $"UPDATE {_tableName} SET is_kick_hint = @isKickHint, is_black_kick = @isBlackKick WHERE id = @groupId";
+            using var conn = CreateConnection();
+            return await conn.ExecuteAsync(sql, new { isKickHint, isBlackKick, groupId });
+        }
+
+        public async Task<IEnumerable<(long GroupId, string GroupName)>> GetOwnedGroupsAsync(long userId, int top = 5)
+        {
+            string sql = $"SELECT id as GroupId, group_name as GroupName FROM {_tableName} WHERE group_owner = @userId AND is_valid = true ORDER BY group_name LIMIT @top";
+            using var conn = CreateConnection();
+            var results = await conn.QueryAsync<dynamic>(sql, new { userId, top });
+            var list = new List<(long GroupId, string GroupName)>();
+            foreach (var item in results)
+            {
+                list.Add(((long)item.GroupId, (string)item.GroupName));
+            }
+            return list;
+        }
+
+        public async Task<int> GetBlockMinAsync(long groupId)
+        {
+            return await GetValueAsync<int>("BlockMin", groupId);
+        }
+
+        public async Task<string> GetIsChangeHintResAsync(long groupId)
+        {
+            return await GetValueAsync<bool>("IsChangeHint", groupId) ? "提示" : "不提示";
+        }
+
+        public async Task<string> GetReplyModeResAsync(long groupId)
+        {
+            int mode = await GetValueAsync<int>("ReplyMode", groupId);
+            return mode switch
+            {
+                0 => "文字",
+                1 => "图片",
+                2 => "语音",
+                _ => "文字"
+            };
         }
     }
 }

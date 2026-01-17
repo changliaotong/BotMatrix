@@ -12,13 +12,9 @@ namespace BotWorker.Modules.Games
     /// <summary>
     /// 打劫记录
     /// </summary>
-    [Table("RobberyRecords")]
+    [Table("robbery_records")]
     public class RobberyRecord
     {
-        private static IRobberyRecordRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IRobberyRecordRepository>() 
-            ?? throw new InvalidOperationException("IRobberyRecordRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         
@@ -31,26 +27,5 @@ namespace BotWorker.Modules.Games
         public string ResultMessage { get; set; } = string.Empty; // 结果描述
         
         public DateTime RobTime { get; set; } = DateTime.Now;
-
-        /// <summary>
-        /// 获取用户最后一次打劫时间
-        /// </summary>
-        public static async Task<DateTime> GetLastRobTimeAsync(string userId)
-        {
-            return await Repository.GetLastRobTimeAsync(userId);
-        }
-
-        /// <summary>
-        /// 获取用户被打劫后的保护到期时间
-        /// </summary>
-        public static async Task<DateTime> GetProtectionEndTimeAsync(string userId)
-        {
-            return await Repository.GetProtectionEndTimeAsync(userId);
-        }
-
-        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
     }
 }

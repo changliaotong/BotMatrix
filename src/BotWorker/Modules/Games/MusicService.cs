@@ -1,4 +1,5 @@
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Web;
@@ -18,7 +19,8 @@ namespace BotWorker.Modules.Games
     public class MusicService : IPlugin
     {
         private IRobot? _robot;
-        private ILogger? _logger;
+        private readonly ILogger<MusicService> _logger;
+        private readonly ISongOrderRepository _orderRepo;
         private static readonly HttpClient _http = new(new HttpClientHandler
         {
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
@@ -32,11 +34,10 @@ namespace BotWorker.Modules.Games
             new() { Name = "点歌历史", Keywords = ["点歌历史", "musiclog"] }
         ];
 
-        public MusicService() { }
-
-        public MusicService(ILogger<MusicService> logger)
+        public MusicService(ILogger<MusicService> logger, ISongOrderRepository orderRepo)
         {
             _logger = logger;
+            _orderRepo = orderRepo;
         }
 
         public async Task InitAsync(IRobot robot)
@@ -55,7 +56,7 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            await SongOrder.EnsureTableCreatedAsync();
+            await _orderRepo.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleMusicCommandAsync(IPluginContext ctx, string[] args)
@@ -100,18 +101,22 @@ namespace BotWorker.Modules.Games
                 var target = ctx.MentionedUsers[0];
                 targetUserId = target.UserId;
                 targetNickname = target.Name;
-                startIndex = 1;
+                startIndex = 1; // 跳过 @提及
             }
             else
             {
-                return "请在指令中 @ 你想送歌的好友！";
+                // 可能是文字提及或需要解析
+                return "请 @ 一个你想送歌的好友！";
             }
 
-            var songKeyword = args[startIndex];
-            var message = args.Length > startIndex + 1 ? string.Join(" ", args.Skip(startIndex + 1)) : "送你一首歌，祝你开心每一天！";
+            var songArgs = args.Skip(startIndex).ToList();
+            if (songArgs.Count == 0) return "你想送什么歌？请输入歌名。";
 
-            var song = await SearchSongInternalAsync(songKeyword);
-            if (song == null) return "❌ 没找到这首歌，无法送出。";
+            var keyword = songArgs[0];
+            var message = songArgs.Count > 1 ? string.Join(" ", songArgs.Skip(1)) : "愿这首歌带给你好心情！";
+
+            var song = await SearchSongInternalAsync(keyword);
+            if (song == null) return "❌ 没找到这首歌，换个关键词试试吧。";
 
             // 保存记录
             var order = new SongOrder
@@ -122,37 +127,30 @@ namespace BotWorker.Modules.Games
                 ToNickname = targetNickname,
                 SongName = song.Name,
                 Artist = song.Artist,
-                Message = message,
-                OrderTime = DateTime.Now
+                Message = message
             };
-            await order.InsertAsync();
+            await _orderRepo.InsertAsync(order);
 
-            // 发送通知给目标
+            // 发送通知给目标用户 (如果是群聊，可能需要 @TA)
             await ctx.SendMusicAsync(song.Name, song.Artist, song.AudioUrl, song.Cover, song.AudioUrl);
 
-            var sb = new StringBuilder();
-            sb.AppendLine($"🎁 送歌成功！");
-            sb.AppendLine($"来自 {ctx.UserName} 的礼物已送达给 {targetNickname}。");
-            sb.AppendLine($"💬 寄语：{message}");
-            return sb.ToString();
+            return $"💌 成功送出心意！\n🎁 送给：{targetNickname}\n🎵 歌曲：{song.Name}\n📝 寄语：{message}";
         }
 
         private async Task<string> GetMusicLogAsync(IPluginContext ctx)
         {
-            var logs = await SongOrder.GetHistoryAsync(ctx.UserId);
-            if (logs.Count == 0) return "你还没有点歌或收到歌的历史记录。";
+            var logs = await _orderRepo.GetHistoryAsync(ctx.UserId);
+            if (logs.Count == 0) return "📭 你还没有点过歌，或者还没有收到过别人的赠歌。";
 
             var sb = new StringBuilder();
-            sb.AppendLine("📜 【点歌历史】");
-            sb.AppendLine("━━━━━━━━━━━━━━");
+            sb.AppendLine("📜 【最近点歌/收歌记录】");
             foreach (var log in logs.Take(10))
             {
-                var type = log.FromUserId == ctx.UserId ? "📤 送出" : "📥 收到";
-                var partner = log.FromUserId == ctx.UserId ? log.ToNickname : log.FromNickname;
-                sb.AppendLine($"{log.OrderTime:MM-dd HH:mm} {type} {partner}");
-                sb.AppendLine($"   🎵 {log.SongName} - {log.Artist}");
+                var role = log.FromUserId == ctx.UserId ? "送给" : "收到";
+                var other = log.FromUserId == ctx.UserId ? log.ToNickname : log.FromNickname;
+                sb.AppendLine($"[{log.OrderTime:MM-dd}] {role} {other}: 《{log.SongName}》");
             }
-            sb.AppendLine("━━━━━━━━━━━━━━");
+
             return sb.ToString();
         }
 
@@ -160,42 +158,14 @@ namespace BotWorker.Modules.Games
         {
             try
             {
-                string searchUrl = $"{Api}?types=search&source=kuwo&name={HttpUtility.UrlEncode(keyword)}&count=1&pages=1";
-                string json = await _http.GetStringAsync(searchUrl);
-                using var doc = JsonDocument.Parse(json);
-                var arr = doc.RootElement;
-                if (arr.GetArrayLength() == 0) return null;
-
-                var item = arr[0];
-                var id = item.GetProperty("id").GetString()!;
-                var name = item.GetProperty("name").GetString()!;
-                var artist = string.Join("/", item.GetProperty("artist").EnumerateArray().Select(a => a.GetString()));
-                var picId = item.GetProperty("pic_id").GetString()!;
-
-                // 获取 URL
-                string urlReq = $"{Api}?types=url&source=kuwo&id={id}&br=320";
-                string urlJson = await _http.GetStringAsync(urlReq);
-                using var urlDoc = JsonDocument.Parse(urlJson);
-                var audioUrl = urlDoc.RootElement.GetProperty("url").GetString();
-
-                // 获取封面
-                string picReq = $"{Api}?types=pic&source=kuwo&id={picId}";
-                string picJson = await _http.GetStringAsync(picReq);
-                using var picDoc = JsonDocument.Parse(picJson);
-                var cover = picDoc.RootElement.GetProperty("url").GetString();
-
-                return new SongResult
-                {
-                    Name = name,
-                    Artist = artist,
-                    AudioUrl = audioUrl ?? "",
-                    Cover = cover ?? "",
-                    Source = "kuwo"
-                };
+                var url = $"{Api}?msg={HttpUtility.UrlEncode(keyword)}&type=json";
+                var json = await _http.GetStringAsync(url);
+                var result = JsonSerializer.Deserialize<SongResult>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return result;
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "搜歌失败: {Keyword}", keyword);
+                _logger.LogError(ex, "Search song failed for keyword: {Keyword}", keyword);
                 return null;
             }
         }

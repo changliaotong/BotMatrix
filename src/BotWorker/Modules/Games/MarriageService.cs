@@ -17,6 +17,24 @@ namespace BotWorker.Modules.Games
     )]
     public class MarriageService : IPlugin
     {
+        private readonly IUserMarriageRepository _userMarriageRepo;
+        private readonly IMarriageProposalRepository _proposalRepo;
+        private readonly IWeddingItemRepository _weddingItemRepo;
+        private readonly ISweetHeartRepository _sweetHeartRepo;
+        private IRobot? _robot;
+
+        public MarriageService(
+            IUserMarriageRepository userMarriageRepo,
+            IMarriageProposalRepository proposalRepo,
+            IWeddingItemRepository weddingItemRepo,
+            ISweetHeartRepository sweetHeartRepo)
+        {
+            _userMarriageRepo = userMarriageRepo;
+            _proposalRepo = proposalRepo;
+            _weddingItemRepo = weddingItemRepo;
+            _sweetHeartRepo = sweetHeartRepo;
+        }
+
         public List<Intent> Intents => [
             new() { Name = "求婚", Keywords = ["求婚"] },
             new() { Name = "结婚", Keywords = ["接受求婚", "拒绝求婚"] },
@@ -28,12 +46,22 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
+            _robot = robot;
+            await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "婚姻系统",
                 Commands = ["求婚", "接受求婚", "拒绝求婚", "我要离婚", "办理结婚证", "办理离婚证", "我的婚姻", "婚姻面板", "发喜糖", "发红包", "吃喜糖", "购买婚纱", "购买婚戒", "我的对象", "另一半签到", "另一半抢楼", "另一半抢红包", "领取结婚福利", "我的甜蜜爱心", "赠送甜蜜爱心", "使用甜蜜抽奖", "甜蜜爱心说明"],
                 Description = "【求婚 @用户】开启浪漫；【我的婚姻】查看状态；结婚后可【发喜糖】"
             }, HandleCommandAsync);
+        }
+
+        private async Task EnsureTablesCreatedAsync()
+        {
+            await _userMarriageRepo.EnsureTableCreatedAsync();
+            await _proposalRepo.EnsureTableCreatedAsync();
+            await _weddingItemRepo.EnsureTableCreatedAsync();
+            await _sweetHeartRepo.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleCommandAsync(IPluginContext ctx, string[] args)
@@ -75,7 +103,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> ProposeAsync(IPluginContext ctx, string[] args)
         {
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
             if (me.Status == "married") return "你已经结婚了，请先保持忠诚！";
 
             // 解析被求婚者 (简单处理：假设第一个参数是被求婚者的UserId或通过Ctx获取提到的人)
@@ -84,43 +112,39 @@ namespace BotWorker.Modules.Games
 
             if (targetId == ctx.UserId) return "你不能向自己求婚。";
 
-            var target = await UserMarriage.GetOrCreateAsync(targetId);
+            var target = await _userMarriageRepo.GetOrCreateAsync(targetId);
             if (target.Status == "married") return "对方已经名花/草有主了。";
 
             var proposal = new MarriageProposal { ProposerId = ctx.UserId, RecipientId = targetId };
-            await proposal.InsertAsync();
+            await _proposalRepo.InsertAsync(proposal);
 
             return $"💍 【{ctx.UserId}】 向 【{targetId}】 发起了浪漫求婚！\n请输入【接受求婚】或【拒绝求婚】。";
         }
 
         private async Task<string> AcceptProposalAsync(IPluginContext ctx)
         {
-            var proposal = await MarriageProposal.GetPendingAsync(ctx.UserId);
+            var proposal = await _proposalRepo.GetPendingAsync(ctx.UserId);
             if (proposal == null) return "当前没有人向你求婚。";
 
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
-            var spouse = await UserMarriage.GetOrCreateAsync(proposal.ProposerId);
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
+            var spouse = await _userMarriageRepo.GetOrCreateAsync(proposal.ProposerId);
 
             if (me.Status == "married" || spouse.Status == "married") return "由于某些原因，求婚失效了（某方已婚）。";
 
-            using var transWrapper = await UserMarriage.BeginTransactionAsync();
+            using var transWrapper = await _userMarriageRepo.BeginTransactionAsync();
             var trans = transWrapper.Transaction;
             try
             {
                 var now = DateTime.Now;
 
                 // 更新双方状态
-                await UserMarriage.UpdateMarriageStatusAsync(me.UserId, spouse.UserId, "married", now, trans);
-                await UserMarriage.UpdateMarriageStatusAsync(spouse.UserId, me.UserId, "married", now, trans);
+                await _userMarriageRepo.UpdateMarriageStatusAsync(me.UserId, spouse.UserId, "married", now, trans);
+                await _userMarriageRepo.UpdateMarriageStatusAsync(spouse.UserId, me.UserId, "married", now, trans);
 
                 // 更新求婚记录
-                await MarriageProposal.UpdateStatusAsync(proposal.Id, "accepted", trans);
-                
-                transWrapper.Commit();
+                await _proposalRepo.UpdateStatusAsync(proposal.Id, "accepted", trans);
 
-                // 上报成就
-                // _ = AchievementPlugin.ReportMetricAsync(ctx.UserId, "marriage.count", 1);
-                // _ = AchievementPlugin.ReportMetricAsync(proposal.ProposerId, "marriage.count", 1);
+                transWrapper.Commit();
 
                 return $"🎉 恭喜！【{me.UserId}】 与 【{spouse.UserId}】 正式结为夫妻！\n愿得一人心，白首不相离。";
             }
@@ -133,27 +157,27 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> RejectProposalAsync(IPluginContext ctx)
         {
-            var proposal = await MarriageProposal.GetPendingAsync(ctx.UserId);
+            var proposal = await _proposalRepo.GetPendingAsync(ctx.UserId);
             if (proposal == null) return "当前没有人向你求婚。";
 
-            await MarriageProposal.UpdateStatusAsync(proposal.Id, "rejected");
+            await _proposalRepo.UpdateStatusAsync(proposal.Id, "rejected");
             return $"💔 你拒绝了 【{proposal.ProposerId}】 的求婚。";
         }
 
         private async Task<string> DivorceAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status != "married") return "你目前还是单身呢。";
 
             var spouseId = me.SpouseId;
             var now = DateTime.Now;
 
-            using var transWrapper = await UserMarriage.BeginTransactionAsync();
+            using var transWrapper = await _userMarriageRepo.BeginTransactionAsync();
             var trans = transWrapper.Transaction;
             try
             {
-                await UserMarriage.DivorceAsync(ctx.UserId, spouseId, now, trans);
-                await UserMarriage.DivorceAsync(spouseId, ctx.UserId, now, trans);
+                await _userMarriageRepo.DivorceAsync(ctx.UserId, spouseId, now, trans);
+                await _userMarriageRepo.DivorceAsync(spouseId, ctx.UserId, now, trans);
                 transWrapper.Commit();
                 return $"🥀 缘尽于此。【{ctx.UserId}】 与 【{spouseId}】 已办理离婚手续。";
             }
@@ -166,7 +190,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetMarriageStatusAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status == "single") return "👤 你目前是单身贵族。";
 
             var sb = new StringBuilder();
@@ -183,29 +207,29 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> SendSweetsAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status != "married") return "只有结婚后才能发喜糖哦。";
 
             me.SweetsCount++;
             me.SweetHearts += 5;
-            await me.UpdateAsync();
+            await _userMarriageRepo.UpdateAsync(me);
             return $"🍬 【{ctx.UserId}】 撒了一大把喜糖！大家快来抢啊！(甜蜜+5)";
         }
 
         private async Task<string> SendRedPacketAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status != "married") return "只有结婚后才能发红包哦。";
 
             me.RedPacketsCount++;
             me.SweetHearts += 10;
-            await me.UpdateAsync();
+            await _userMarriageRepo.UpdateAsync(me);
             return $"🧧 【{ctx.UserId}】 发了一个超大红包！恭喜发财！(甜蜜+10)";
         }
 
         private async Task<string> EatSweetsAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
             // 简单模拟抢喜糖
             var lucky = new Random().Next(1, 100);
             if (lucky > 50)
@@ -218,23 +242,23 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> BuyWeddingItemAsync(IPluginContext ctx, string type)
         {
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
             var itemName = type == "dress" ? "婚纱" : "婚戒";
             var price = type == "dress" ? 500 : 1000;
 
             // 检查是否已购买
-            // var existing = (await WeddingItem.QueryWhere("UserId = {0} AND ItemType = {1}", ctx.UserId, type)).FirstOrDefault();
-            // if (existing != null) return $"你已经拥有【{(type == "dress" ? "婚纱" : "婚戒")}】了。";
+            var existing = await _weddingItemRepo.GetByUserAndTypeAsync(ctx.UserId, type);
+            if (existing != null) return $"你已经拥有【{(type == "dress" ? "婚纱" : "婚戒")}】了。";
 
             var item = new WeddingItem { UserId = ctx.UserId, ItemType = type, Name = itemName, Price = price };
-            await item.InsertAsync();
+            await _weddingItemRepo.InsertAsync(item);
 
             return $"🛍️ 购买成功！你获得了一件浪漫的【{itemName}】。";
         }
 
         private async Task<string> GetSpouseInfoAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status != "married") return "你目前还没有对象。";
 
             return $"❤️ 你的另一半是：【{me.SpouseId}】\n💕 你们已经相爱 { (DateTime.Now - me.MarriageDate).Days } 天了。";
@@ -242,67 +266,67 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> SpouseActionAsync(IPluginContext ctx, string action)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status != "married") return "只有结婚后才能为另一半操作。";
 
-            var spouse = await UserMarriage.GetByUserIdAsync(me.SpouseId);
+            var spouse = await _userMarriageRepo.GetByUserIdAsync(me.SpouseId);
             if (spouse == null) return "找不到配偶信息。";
 
             spouse.SweetHearts += 2;
-            await spouse.UpdateAsync();
+            await _userMarriageRepo.UpdateAsync(spouse);
             return $"💞 你为 【{me.SpouseId}】 进行了【{action}】，对方获得了 2 点甜蜜爱心！";
         }
 
         private async Task<string> GetMarriageWelfareAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetByUserIdAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetByUserIdAsync(ctx.UserId);
             if (me == null || me.Status != "married") return "只有已婚人士才能领取福利。";
 
             var days = (DateTime.Now - me.MarriageDate).Days;
             var reward = 100 + (days * 2); // 结婚时间越长福利越高
 
             me.SweetHearts += 5;
-            await me.UpdateAsync();
+            await _userMarriageRepo.UpdateAsync(me);
 
             return $"🎁 领取成功！作为已婚人士，你获得了 {reward} 积分和 5 点甜蜜爱心。";
         }
 
         private async Task<string> GetSweetHeartsAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
             return $"💖 你当前拥有 {me.SweetHearts} 点甜蜜爱心。";
         }
 
         private async Task<string> GiftSweetHeartsAsync(IPluginContext ctx, string[] args)
         {
             if (args.Length == 0) return "请输入要赠送的对象和数量，例如：赠送甜蜜爱心 @用户 10";
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
 
             var targetId = args[0].Replace("@", "").Trim();
             if (!int.TryParse(args.Length > 1 ? args[1] : "1", out var amount) || amount <= 0) return "请输入正确的赠送数量。";
 
             if (me.SweetHearts < amount) return $"❌ 你的甜蜜爱心不足，当前只有 {me.SweetHearts} 点。";
 
-            var target = await UserMarriage.GetOrCreateAsync(targetId);
+            var target = await _userMarriageRepo.GetOrCreateAsync(targetId);
 
             me.SweetHearts -= amount;
             target.SweetHearts += amount;
 
-            await me.UpdateAsync();
-            await target.UpdateAsync();
+            await _userMarriageRepo.UpdateAsync(me);
+            await _userMarriageRepo.UpdateAsync(target);
 
-            await new SweetHeart { SenderId = ctx.UserId, RecipientId = targetId, Amount = amount }.InsertAsync();
+            await _sweetHeartRepo.InsertAsync(new SweetHeart { SenderId = ctx.UserId, RecipientId = targetId, Amount = amount });
 
             return $"💝 赠送成功！你向 【{targetId}】 赠送了 {amount} 点甜蜜爱心。";
         }
 
         private async Task<string> SweetHeartLuckyDrawAsync(IPluginContext ctx)
         {
-            var me = await UserMarriage.GetOrCreateAsync(ctx.UserId);
-            if (me.SweetHearts < 10) return "❌ 抽奖需要 10 点甜蜜爱心，你当前只有 {me.SweetHearts} 点。";
+            var me = await _userMarriageRepo.GetOrCreateAsync(ctx.UserId);
+            if (me.SweetHearts < 10) return $"❌ 抽奖需要 10 点甜蜜爱心，你当前只有 {me.SweetHearts} 点。";
 
             me.SweetHearts -= 10;
-            await me.UpdateAsync();
+            await _userMarriageRepo.UpdateAsync(me);
 
             var lucky = new Random().Next(1, 100);
             var prize = lucky switch

@@ -1,5 +1,6 @@
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Entities;
+using BotWorker.Domain.Repositories;
 using System.Text;
 
 namespace BotWorker.Modules.Games
@@ -14,8 +15,21 @@ namespace BotWorker.Modules.Games
     )]
     public class CultivationService : IPlugin
     {
+        private readonly ICultivationProfileRepository _profileRepo;
+        private readonly ICultivationRecordRepository _recordRepo;
+        private readonly IUserRepository _userRepo;
         private const int CULTIVATE_COOLDOWN_MINUTES = 10;
         private const double BASE_BREAKTHROUGH_RATE = 0.95;
+
+        public CultivationService(
+            ICultivationProfileRepository profileRepo, 
+            ICultivationRecordRepository recordRepo,
+            IUserRepository userRepo)
+        {
+            _profileRepo = profileRepo;
+            _recordRepo = recordRepo;
+            _userRepo = userRepo;
+        }
 
         public List<Intent> Intents => [
             new() { Name = "修炼", Keywords = ["修炼", "修行", "cultivate"] },
@@ -26,8 +40,8 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
-            await CultivationProfile.EnsureTableCreatedAsync();
-            await CultivationRecord.EnsureTableCreatedAsync();
+            await _profileRepo.EnsureTableCreatedAsync();
+            await _recordRepo.EnsureTableCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "玄幻修炼",
@@ -65,14 +79,14 @@ namespace BotWorker.Modules.Games
             int gain = Random.Shared.Next(profile.CultivationSpeed, profile.CultivationSpeed * 2);
             profile.Exp += gain;
             profile.LastCultivateTime = DateTime.Now;
-            await profile.UpdateAsync();
+            await _profileRepo.UpdateEntityAsync(profile);
 
-            await new CultivationRecord
+            await _recordRepo.InsertAsync(new CultivationRecord
             {
                 UserId = ctx.UserId,
                 ActionType = "修炼",
                 Detail = $"获得灵气 {gain}"
-            }.InsertAsync();
+            });
 
             var sb = new StringBuilder();
             sb.AppendLine($"✨ 你盘膝而坐，运转功法，引天地灵气入体。");
@@ -105,14 +119,14 @@ namespace BotWorker.Modules.Games
                 profile.Exp = 0;
                 profile.MaxExp = CalculateMaxExp(profile.Level);
                 profile.CultivationSpeed = 10 + (profile.Level / 5) * 5; // 每5级提升基础速度
-                await profile.UpdateAsync();
+                await _profileRepo.UpdateEntityAsync(profile);
 
-                await new CultivationRecord
+                await _recordRepo.InsertAsync(new CultivationRecord
                 {
                     UserId = ctx.UserId,
                     ActionType = "突破",
                     Detail = $"成功突破至 {profile.GetRankDescription()}"
-                }.InsertAsync();
+                });
 
                 return $"🎉 恭喜！你成功冲破玄关，晋升至 【{profile.GetRankDescription()}】！灵觉大增，修炼速度提升。";
             }
@@ -121,16 +135,16 @@ namespace BotWorker.Modules.Games
                 // 失败扣除一部分修为
                 long loss = (long)(profile.MaxExp * 0.2);
                 profile.Exp = Math.Max(0, profile.Exp - loss);
-                await profile.UpdateAsync();
+                await _profileRepo.UpdateEntityAsync(profile);
 
-                await new CultivationRecord
+                await _recordRepo.InsertAsync(new CultivationRecord
                 {
                     UserId = ctx.UserId,
                     ActionType = "走火入魔",
                     Detail = $"突破失败，损失修为 {loss}"
-                }.InsertAsync();
+                });
 
-                return $"💥 哎呀！突破时气息不稳导致走火入魔，损失了 {loss} 点修为。莫要灰心，再接再厉！";
+                return $"💥 哎呀！突破时气息不稳导致走火入魔，损失了 {loss} 点修为. 莫要灰心，再接再厉！";
             }
         }
 
@@ -159,7 +173,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetRankAsync(IPluginContext ctx)
         {
-            var top = await CultivationProfile.GetTopCultivatorsAsync(10);
+            var top = await _profileRepo.GetTopCultivatorsAsync(10);
             if (top.Count == 0) return "暂时还没有修仙者出世。";
 
             var sb = new StringBuilder();
@@ -170,7 +184,7 @@ namespace BotWorker.Modules.Games
                 string name = "神秘修仙者";
                 if (long.TryParse(p.UserId, out long uid))
                 {
-                    var user = await UserInfo.LoadAsync(uid);
+                    var user = await _userRepo.GetByIdAsync(uid);
                     if (user != null) name = user.Name;
                 }
                 sb.AppendLine($"{i + 1}. {name} - {p.GetRankDescription()} (Lv.{p.Level})");
@@ -180,11 +194,11 @@ namespace BotWorker.Modules.Games
 
         private async Task<CultivationProfile> GetOrCreateProfileAsync(string userId)
         {
-            var profile = await CultivationProfile.GetByUserIdAsync(userId);
+            var profile = await _profileRepo.GetByUserIdAsync(userId);
             if (profile == null)
             {
                 profile = new CultivationProfile { UserId = userId };
-                await profile.InsertAsync();
+                await _profileRepo.InsertAsync(profile);
             }
             return profile;
         }

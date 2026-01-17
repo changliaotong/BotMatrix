@@ -14,20 +14,22 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
     {
         private readonly IGroupRepository _groupRepository;
         private readonly IIncomeRepository _incomeRepository;
+        private readonly IUserRepository _userRepository;
 
-        public GroupVipRepository(IGroupRepository groupRepository, IIncomeRepository incomeRepository, string? connectionString = null)
+        public GroupVipRepository(IGroupRepository groupRepository, IIncomeRepository incomeRepository, IUserRepository userRepository, string? connectionString = null)
             : base("VIP", connectionString ?? GlobalConfig.BaseInfoConnection)
         {
             _groupRepository = groupRepository;
             _incomeRepository = incomeRepository;
+            _userRepository = userRepository;
         }
 
         public override string KeyField => "GroupId";
 
-        public async Task<int> BuyRobotAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy)
+        public async Task<int> BuyRobotAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy, IDbTransaction? trans = null)
         {
-            await _groupRepository.AppendAsync(groupId, groupName, BotInfo.BotUinDef, BotInfo.BotNameDef);
-            await UserInfo.AppendUserAsync(botUin, groupId, qqBuyer, buyerName);
+            await _groupRepository.AppendAsync(groupId, groupName, BotInfo.BotUinDef, BotInfo.BotNameDef, trans: trans);
+            await _userRepository.AppendAsync(botUin, groupId, qqBuyer, buyerName, 0, trans);
 
             var income = new Income
             {
@@ -43,14 +45,12 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
                 IncomeDate = DateTime.Now
             };
 
-            using var conn = CreateConnection();
-            conn.Open();
-            using var trans = conn.BeginTransaction();
+            using var wrapper = await BeginTransactionAsync(trans);
             try
             {
-                await _incomeRepository.AddAsync(income, trans);
+                await _incomeRepository.AddAsync(income, wrapper.Transaction);
 
-                var vip = await GetByIdAsync(groupId, trans);
+                var vip = await GetByIdAsync(groupId, wrapper.Transaction);
                 bool exists = vip != null;
                 
                 int isYearVip = 0;
@@ -89,7 +89,7 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
                     vip.InsertBy = insertBy;
                     vip.IsGoon = null; // Reset IsGoon? SQL said IsGoon = null
                     
-                    await UpdateEntityAsync(vip, trans);
+                    await UpdateEntityAsync(vip, wrapper.Transaction);
                 }
                 else
                 {
@@ -99,34 +99,25 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
                         GroupId = groupId,
                         GroupName = groupName,
                         FirstPay = payMoney,
-                        StartDate = DateTime.Now, // SQL said DateTime.MinValue? No, SQL said DateTime.MinValue for StartDate? 
-                        // SQL: new Cov("StartDate", DateTime.MinValue)
-                        // Wait, why MinValue? Maybe to indicate no start date tracked?
-                        // I'll stick to logic.
-                        // Actually I'll use DateTime.Now if it's a new VIP.
-                        // But if I want to match legacy:
-                        // new Cov("StartDate", DateTime.MinValue)
-                        
+                        StartDate = DateTime.MinValue,
                         EndDate = DateTime.Now.AddMonths((int)month),
-                        VipInfo = memo, // SQL used `vipInfo` param which was passed as `memo` from BuyRobotAsync
+                        VipInfo = memo,
                         UserId = qqBuyer,
                         IncomeDay = month > 0 ? payMoney / month : 0,
                         IsYearVip = isYearVip,
                         InsertBy = insertBy
                     };
-                    // Legacy code set StartDate to MinValue.
-                    newVip.StartDate = DateTime.MinValue; 
                     
-                    await InsertAsync(newVip, trans);
+                    await InsertAsync(newVip, wrapper.Transaction);
                 }
 
-                trans.Commit();
+                await wrapper.CommitAsync();
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"BuyRobotAsync error: {ex.Message}");
-                trans.Rollback();
+                await wrapper.RollbackAsync();
+                Console.WriteLine($"[BuyRobot Error] {ex.Message}");
                 return -1;
             }
         }
@@ -255,6 +246,28 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             string sql = $"SELECT count(*) FROM {_tableName} WHERE UserId = @qq";
             using var conn = CreateConnection();
             return await conn.ExecuteScalarAsync<int>(sql, new { qq }) > 0;
+        }
+
+        public async Task<string> GetVipListByUserIdAsync(long userId)
+        {
+            // Original SQL: select {SqlTop(5)} GroupId, abs({SqlDateDiff("day", SqlDateTime, "EndDate")}) as res from VIP where UserId = {UserId} order by EndDate {SqlLimit(5)}
+            // Since we use Postgres/Npgsql, we'll use Postgres syntax
+            string sql = $@"
+                SELECT GroupId, ABS(EXTRACT(DAY FROM EndDate - CURRENT_TIMESTAMP))::int as RestDays 
+                FROM {_tableName} 
+                WHERE UserId = @userId 
+                ORDER BY EndDate 
+                LIMIT 5";
+
+            using var conn = CreateConnection();
+            var results = await conn.QueryAsync(sql, new { userId });
+            
+            var sb = new System.Text.StringBuilder();
+            foreach (var item in results)
+            {
+                sb.AppendFormat("{0} 有效期：{1}天\n", item.GroupId, item.RestDays);
+            }
+            return sb.ToString();
         }
     }
 }

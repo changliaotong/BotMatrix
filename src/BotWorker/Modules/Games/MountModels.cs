@@ -1,11 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using BotWorker.Domain.Models.BotMessages;
-using BotWorker.Domain.Repositories;
 using Dapper.Contrib.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -39,13 +34,9 @@ namespace BotWorker.Modules.Games
 
     #region Domain Model
 
-    [Table("UserMounts")]
+    [Table("user_mounts")]
     public class Mount
     {
-        private static IMountRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IMountRepository>() 
-            ?? throw new InvalidOperationException("IMountRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
@@ -83,26 +74,6 @@ namespace BotWorker.Modules.Games
             MountRarity.Mythic => "🔴 神话",
             _ => "未知"
         };
-
-        public static async Task<Mount?> GetActiveMountAsync(string userId)
-        {
-            return await Repository.GetActiveMountAsync(userId);
-        }
-
-        public static async Task<List<Mount>> GetUserMountsAsync(string userId)
-        {
-            return await Repository.GetUserMountsAsync(userId);
-        }
-
-        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
-
-        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.UpdateAsync(this, trans);
-        }
 
         public void GainExp(double exp)
         {

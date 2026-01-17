@@ -1,21 +1,11 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using BotWorker.Domain.Models.BotMessages;
-using BotWorker.Domain.Repositories;
 using Dapper.Contrib.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
-    [Table("CultivationProfiles")]
+    [Table("cultivation_profiles")]
     public class CultivationProfile
     {
-        private static ICultivationProfileRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<ICultivationProfileRepository>() 
-            ?? throw new InvalidOperationException("ICultivationProfileRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
@@ -29,26 +19,6 @@ namespace BotWorker.Modules.Games
         public int CultivationSpeed { get; set; } = 10;
 
         public DateTime LastCultivateTime { get; set; } = DateTime.MinValue;
-
-        public static async Task<CultivationProfile?> GetByUserIdAsync(string userId)
-        {
-            return await Repository.GetByUserIdAsync(userId);
-        }
-
-        public static async Task<List<CultivationProfile>> GetTopCultivatorsAsync(int limit = 10)
-        {
-            return await Repository.GetTopCultivatorsAsync(limit);
-        }
-
-        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
-
-        public async Task<bool> UpdateAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.UpdateAsync(this, trans);
-        }
 
         public string GetStageName()
         {
@@ -74,13 +44,9 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    [Table("CultivationRecords")]
+    [Table("cultivation_records")]
     public class CultivationRecord
     {
-        private static ICultivationRecordRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<ICultivationRecordRepository>() 
-            ?? throw new InvalidOperationException("ICultivationRecordRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
@@ -90,10 +56,5 @@ namespace BotWorker.Modules.Games
         public string Detail { get; set; } = string.Empty;
 
         public DateTime CreateTime { get; set; } = DateTime.Now;
-
-        public async Task<bool> InsertAsync(System.Data.IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
     }
 }

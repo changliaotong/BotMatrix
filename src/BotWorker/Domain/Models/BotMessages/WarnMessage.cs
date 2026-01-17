@@ -51,18 +51,18 @@ public partial class BotMessage
 
             long qqWarn = CmdPara.GetAtUserId();
 
-            if (await GroupWarn.AppendWarnAsync(SelfId, qqWarn, GroupId, "", UserId) == -1)
+            if (await GroupWarnRepository.AppendWarnAsync(SelfId, qqWarn, GroupId, "", UserId) == -1)
                 return RetryMsg;
 
-            long countWarn = await GroupWarn.WarnCountAsync(qqWarn, GroupId);
+            long countWarn = await GroupWarnRepository.CountByGroupAndUserAsync(GroupId, qqWarn);
             IsCancelProxy = true;
             if (countWarn >= Group.BlackCount)
             {
-                int i = await BlackList.AddBlackListAsync(SelfId, GroupId, GroupName, UserId, Name, qqWarn, "警告超限拉黑");
+                int i = await BlackListRepository.AddBlackListAsync(SelfId, GroupId, GroupName, UserId, Name, qqWarn, "警告超限拉黑");
                 if (i == -1)
                     return RetryMsg;
 
-                i = await GroupWarn.ClearWarnAsync(GroupId, qqWarn);
+                i = await GroupWarnRepository.DeleteByGroupAndUserAsync(GroupId, qqWarn);
                 if (i == -1)
                     Logger.Error($"清空警告{RetryMsg}");
 
@@ -84,7 +84,7 @@ public partial class BotMessage
             if (SelfPerm == 2 || UserPerm < 2)
                 return false;
 
-            if (IsWhiteList(UserId))
+            if (await WhiteListRepository.IsExistsAsync(GroupId, UserId))
                 return false;
 
             //包含非官方网址的==广告
@@ -110,7 +110,7 @@ public partial class BotMessage
             //message  行数，字数，
             int c_row = message.Split('\n').Length - 1;
             int c_text = message.Length;
-            int c_days = GroupMember.GetInt("ABS(DATEDIFF(DAY, GETDATE(), InsertDate))", GroupId, UserId);
+            int c_days = await GroupMemberRepository.GetIntAsync("ABS(DATEDIFF(DAY, GETDATE(), InsertDate))", GroupId, UserId);
 
             if (message.IsMatch(Regexs.AdWords))
             {
@@ -126,7 +126,7 @@ public partial class BotMessage
             await Task.Yield();
 
             //机器人/客户/群号，所有机器人号码
-            if (num == SelfId || num == GroupId || num == UserId || BotInfo.IsRobot(num))
+            if (num == SelfId || num == GroupId || num == UserId || await BotRepository.IsRobotAsync(num))
                 return false;
 
             //号码在群里
@@ -134,7 +134,7 @@ public partial class BotMessage
                 return false;
 
             //白名单
-            if (IsWhiteList(num))
+            if (await IsWhiteListAsync(num))
                 return false;
 
             return true;
@@ -145,30 +145,30 @@ public partial class BotMessage
             regexKey = regexKey.ReplaceRegex();
             if ("广告".IsMatch(regexKey))
             {
-                isMatch = await IsAdInfoAsync();
-                regexKey = GroupWarn.RegexRemove(regexKey, "广告");
+                isMatch = isMatch || await IsAdInfoAsync();
+                regexKey = GroupWarnService.RegexRemove(regexKey, "广告");
             }
             if ("图片".IsMatch(regexKey))
             {
                 isMatch = isMatch || IsImage;
-                regexKey = GroupWarn.RegexRemove(regexKey, "图片");
+                regexKey = GroupWarnService.RegexRemove(regexKey, "图片");
             }
             if ("推荐群".IsMatch(regexKey))
             {
                 isMatch = isMatch || IsContactGroup;
-                regexKey = GroupWarn.RegexRemove(regexKey, "推荐群");
+                regexKey = GroupWarnService.RegexRemove(regexKey, "推荐群");
             }
             if ("推荐好友".IsMatch(regexKey))
             {
                 isMatch = isMatch || IsContactFriend;
-                regexKey = GroupWarn.RegexRemove(regexKey, "推荐好友");
+                regexKey = GroupWarnService.RegexRemove(regexKey, "推荐好友");
             }
             if ("合并转发".IsMatch(regexKey))
             {
                 isMatch = isMatch || IsForward;
-                regexKey = GroupWarn.RegexRemove(regexKey, "合并转发");
+                regexKey = GroupWarnService.RegexRemove(regexKey, "合并转发");
             }
-            regexKey = GroupWarn.RegexReplaceKeyword(regexKey);
+            regexKey = GroupWarnService.RegexReplaceKeyword(regexKey);
             isMatch = isMatch || (regexKey != "" && CurrentMessage.RemoveQqFace().RemoveQqImage().IsMatch(regexKey));
             return (isMatch, regexKey);
         }
@@ -177,7 +177,7 @@ public partial class BotMessage
         public async Task GetKeywordWarnAsync()
         {
             //白名单、QQ管家、没有权限
-            if (IsWhiteList() || UserId == 2854196310 || SelfPerm >= UserPerm)
+            if (await IsWhiteListAsync() || UserId == 2854196310 || SelfPerm >= UserPerm)
                 return;
 
             var message = CurrentMessage.RemoveQqAds();
@@ -193,12 +193,12 @@ public partial class BotMessage
                 (isMatch, regexKey) = await GetMatchAsync(isMatch, regexKey);
                 if (isMatch)
                 {
-                    await BlackList.AddBlackListAsync(SelfId, GroupId, GroupName, SelfId, SelfName, UserId, "敏感词拉黑");
-                    await GroupWarn.ClearWarnAsync(GroupId, UserId);
+                    await BlackListRepository.AddBlackListAsync(SelfId, GroupId, GroupName, SelfId, SelfName, UserId, "敏感词拉黑");
+                    await GroupWarnRepository.DeleteByGroupAndUserAsync(GroupId, UserId);
                     await RecallAsync(SelfId, RealGroupId, MsgId);
                     await KickOutAsync(SelfId, RealGroupId, UserId);
                     Answer = $"[@:{UserId}] 发言违规已拉黑";
-                    GroupEvent.Append(this, $"拉黑", $"敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
+                    await GroupEvent.AppendAsync(this, $"拉黑", $"敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
                     return;
                 }
             }
@@ -210,11 +210,11 @@ public partial class BotMessage
                 (isMatch, regexKey) = await GetMatchAsync(isMatch, regexKey);
                 if (isMatch)
                 {
-                    await GroupWarn.AppendWarnAsync(SelfId, UserId, GroupId, Message, SelfId);
+                    await GroupWarnRepository.AppendWarnAsync(SelfId, UserId, GroupId, Message, SelfId);
                     await RecallAsync(SelfId, RealGroupId, MsgId);
                     await KickOutAsync(SelfId, RealGroupId, UserId);
                     Answer = $"[@:{UserId}] 发言违规将被T飞！\n警告次数+1";
-                    GroupEvent.Append(this, $"踢出", $"敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
+                    await GroupEvent.AppendAsync(this, $"踢出", $"敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
                     return;
                 }
             }
@@ -232,7 +232,7 @@ public partial class BotMessage
                         await RecallAsync(SelfId, RealGroupId, MsgId);
                         await MuteAsync(SelfId, RealGroupId, UserId, time * 60);                        
                         Answer = $"[@:{UserId}] 发言违规将被禁言{time}分钟！";
-                        GroupEvent.Append(this, $"禁言", $"时长：{time}分钟 敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
+                        await GroupEvent.AppendAsync(this, $"禁言", $"时长：{time}分钟 敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
                         return;
                     }
                 }
@@ -250,7 +250,7 @@ public partial class BotMessage
                     (int i, long creditValue) = await MinusCreditAsync(100, "敏感词扣分");
                     if (i != -1)
                         Answer += $"\n积分：-100，累计：{creditValue}";
-                    GroupEvent.Append(this, $"扣分", $"扣分：-100 敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
+                    await GroupEvent.AppendAsync(this, $"扣分", $"扣分：-100 敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
                     return;
                 }
             }
@@ -264,7 +264,7 @@ public partial class BotMessage
                 {
                     await RecallAsync(SelfId, RealGroupId, MsgId);
                     Answer = await AddWarn(UserId, Name, SelfId);
-                    GroupEvent.Append(this, $"警告", $"敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
+                    await GroupEvent.AppendAsync(this, $"警告", $"敏感词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
                     return;
                 }
             }
@@ -278,7 +278,7 @@ public partial class BotMessage
                 {
                     await RecallAsync(SelfId, RealGroupId, MsgId);
                     Answer = $"[@:{{UserId}}] 发言违规已撤回";
-                    GroupEvent.Append(this, $"撤回", $"撤回词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
+                    await GroupEvent.AppendAsync(this, $"撤回", $"撤回词：{Regex.Match(message, regexKey).Value}\n正则：{regexKey}");
                     return;
                 }
             }
@@ -290,14 +290,14 @@ public partial class BotMessage
 
         public async Task<string> AddWarn(long TargetId, string targetName, long UserId)
         {
-            if (await GroupWarn.AppendWarnAsync(SelfId, TargetId, GroupId, Message, SelfId) == -1)
+            if (await GroupWarnRepository.AppendWarnAsync(SelfId, TargetId, GroupId, Message, SelfId) == -1)
                 return RetryMsg;
 
-            long countWarn = await GroupWarn.WarnCountAsync(TargetId, ParentGroup?.Id ?? 0);
+            long countWarn = await GroupWarnRepository.CountByGroupAndUserAsync(GroupId, TargetId);
             if (countWarn >= Group.BlackCount)
             {
                 await KickOutAsync(SelfId, RealGroupId, TargetId);
-                return AddBlack(TargetId, "警告超限拉黑") == -1
+                return await BlackListRepository.AddBlackListAsync(SelfId, GroupId, GroupName, SelfId, SelfName, TargetId, "警告超限拉黑") == -1
                     ? RetryMsg
                     : $"已警告{Group.KickCount}次，{TargetId}({targetName})已拉黑!";
             }

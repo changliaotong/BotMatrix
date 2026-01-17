@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("Music")]
+    [Table("music")]
     public class Music
     {
         private static IMusicRepository Repository => 

@@ -1,10 +1,9 @@
-﻿namespace BotWorker.Domain.Constants.AppsInfo
+namespace BotWorker.Domain.Constants.AppsInfo
 {
-    public class MenuInfo : MetaData<MenuInfo>
+    public class MenuInfo
     {
-        public override string DataBase => "apps";
-        public override string TableName => "menu_info";
-        public override string KeyField => "menu_id";
+        public int MenuId { get; set; }
+        public string MenuName { get; set; } = string.Empty;
     }
 }
 

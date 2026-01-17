@@ -81,43 +81,14 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    [Table("Love")]
+    [Table("love")]
     public class SecretLove
     {
-        private static ISecretLoveRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<ISecretLoveRepository>() 
-            ?? throw new InvalidOperationException("ISecretLoveRepository not registered");
-
         [ExplicitKey]
         public long UserId { get; set; }
         [ExplicitKey]
         public long LoveId { get; set; }
         public long GroupId { get; set; }
         public long BotUin { get; set; }
-
-        public static async Task<string> GetLoveStatusAsync()
-        {
-            return await Repository.GetLoveStatusAsync();
-        }
-
-        public static async Task<bool> IsLoveEachotherAsync(long userId, long loveId)
-        {
-            return await Repository.IsLoveEachotherAsync(userId, loveId);
-        }
-
-        public static async Task<int> GetCountLoveAsync(long userId)
-        {
-            return await Repository.GetCountLoveAsync(userId);
-        }
-
-        public static async Task<int> GetCountLoveMeAsync(long userId)
-        {
-            return await Repository.GetCountLoveMeAsync(userId);
-        }
-
-        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
     }
 }

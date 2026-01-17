@@ -1,16 +1,10 @@
-﻿namespace BotWorker.Domain.Constants.AppsInfo
+namespace BotWorker.Domain.Constants.AppsInfo
 {
-    public class ReportField : MetaData<ReportField>
+    public class ReportField
     {
-        public override string DataBase => "apps";
-        public override string TableName => "report_field_info";
-        public override string KeyField => "rpt_id";
-        public override string KeyField2 => "field_name";
-
-        public static string GetFieldCaption(string RptId, string FieldName)
-        {
-            return GetDef("field_caption", RptId, FieldName, FieldName);
-        }
+        public string RptId { get; set; } = string.Empty;
+        public string FieldName { get; set; } = string.Empty;
+        public string FieldCaption { get; set; } = string.Empty;
     }
 }
 

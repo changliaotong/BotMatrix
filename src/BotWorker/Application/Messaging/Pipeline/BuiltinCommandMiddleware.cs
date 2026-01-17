@@ -22,14 +22,15 @@ namespace BotWorker.Application.Messaging.Pipeline
                 
                 // 处理内置指令 (复刻自 CommandMessage.cs)
                 var isHot = botMsg.IsHot();
-                var isCmdMsg = botMsg.CurrentMessage.IsMatch(BotCmd.GetRegexCmd());
+                var regexCmd = await botMsg.BotCmdService.GetRegexCmdAsync();
+                var isCmdMsg = botMsg.CurrentMessage.IsMatch(regexCmd);
                 botMsg.IsCmd = isHot || isCmdMsg;
 
                 if (botMsg.IsCmd)
                 {
                     if (isCmdMsg)
                     {
-                        (botMsg.CmdName, botMsg.CmdPara) = BotMessage.GetCmdPara(botMsg.CurrentMessage, BotCmd.GetRegexCmd());
+                        (botMsg.CmdName, botMsg.CmdPara) = await botMsg.GetCmdParaAsync(botMsg.CurrentMessage, regexCmd);
                         context.Logger?.LogInformation("[BuiltinCommand] Identified command: {CmdName} for message {MessageId}", botMsg.CmdName, context.EventId);
                     }
                     else

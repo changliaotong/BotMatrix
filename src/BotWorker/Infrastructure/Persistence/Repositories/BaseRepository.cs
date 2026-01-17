@@ -33,9 +33,35 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
 
         protected IDbConnection CreateConnection() => new NpgsqlConnection(_connectionString);
 
-        public virtual async Task<TransactionWrapper> BeginTransactionAsync(IDbTransaction? existingTrans = null)
+        private bool _isTableChecked = false;
+        public virtual async Task EnsureTableCreatedAsync()
         {
-            return await TransactionWrapper.BeginTransactionAsync(existingTrans);
+            if (_isTableChecked) return;
+            try
+            {
+                using var conn = CreateConnection();
+                // 简单的 PGSQL 检查，如果连接字符串包含 Host= 则认为是 PG
+                string sqlCheck = _connectionString.Contains("Host=")
+                    ? $"SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename = '{_tableName.ToLower()}'"
+                    : $"SELECT COUNT(*) FROM sys.tables WHERE name = '{_tableName}'";
+
+                var count = await conn.ExecuteScalarAsync<int>(sqlCheck);
+                if (count == 0)
+                {
+                    var sqlCreate = BotWorker.Infrastructure.Utils.Schema.SchemaSynchronizer.GenerateCreateTableSql<T>();
+                    await conn.ExecuteAsync(sqlCreate);
+                }
+                _isTableChecked = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ORM] Error ensuring table {_tableName} exists: {ex.Message}");
+            }
+        }
+
+        public virtual async Task<SqlHelper.TransactionWrapper> BeginTransactionAsync(IDbTransaction? existingTrans = null)
+        {
+            return await SqlHelper.BeginTransactionAsync(existingTrans);
         }
 
         public virtual async Task<T?> GetByIdAsync(long id)
@@ -86,7 +112,7 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             return await conn.QueryFirstOrDefaultAsync<T>(sql, parameters);
         }
 
-        public virtual async Task<int> CountAsync(string? conditions = null, object? parameters = null, IDbTransaction? trans = null)
+        public virtual async Task<long> CountAsync(string? conditions = null, object? parameters = null, IDbTransaction? trans = null)
         {
             string sql = $"SELECT COUNT(1) FROM {_tableName}";
             if (!string.IsNullOrEmpty(conditions))
@@ -95,10 +121,10 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             }
             if (trans != null)
             {
-                return await trans.Connection.ExecuteScalarAsync<int>(sql, parameters, trans);
+                return await trans.Connection.ExecuteScalarAsync<long>(sql, parameters, trans);
             }
             using var conn = CreateConnection();
-            return await conn.ExecuteScalarAsync<int>(sql, parameters);
+            return await conn.ExecuteScalarAsync<long>(sql, parameters);
         }
 
         public virtual async Task<long> InsertAsync(T entity, IDbTransaction? trans = null)
@@ -186,6 +212,25 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             var startUnderscore = input.StartsWith("_");
             var res = System.Text.RegularExpressions.Regex.Replace(input, @"([a-z0-9])([A-Z])", "$1_$2").ToLower();
             return startUnderscore ? "_" + res : res;
+        }
+
+        public virtual async Task<TValue> GetValueAsync<TValue>(string field, object keyValue, string keyField, IDbTransaction? trans = null)
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(field, @"^[a-zA-Z0-9_]+$"))
+                throw new ArgumentException("Invalid field name");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(keyField, @"^[a-zA-Z0-9_]+$"))
+                throw new ArgumentException("Invalid key field name");
+
+            string dbField = field.Contains("(") ? field : ToSnakeCase(field);
+            string dbKeyField = ToSnakeCase(keyField);
+            string sql = $"SELECT {dbField} FROM {_tableName} WHERE {dbKeyField} = @keyValue";
+            
+            if (trans != null)
+            {
+                return await trans.Connection.ExecuteScalarAsync<TValue>(sql, new { keyValue }, trans);
+            }
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<TValue>(sql, new { keyValue });
         }
 
         public virtual async Task<TValue> GetValueAsync<TValue>(string field, string conditions, object? parameters = null, IDbTransaction? trans = null)
@@ -299,6 +344,28 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             }
             using var conn = CreateConnection();
             return await conn.ExecuteAsync(sql, new { value, id });
+        }
+
+        public virtual async Task<int> UpdateAsync(string fieldsSql, long id, IDbTransaction? trans = null)
+        {
+            string sql = $"UPDATE {_tableName} SET {fieldsSql}, updated_at = CURRENT_TIMESTAMP WHERE {KeyField} = @id";
+            if (trans != null)
+            {
+                return await trans.Connection.ExecuteAsync(sql, new { id }, trans);
+            }
+            using var conn = CreateConnection();
+            return await conn.ExecuteAsync(sql, new { id });
+        }
+
+        public virtual async Task<int> UpdateAsync(string fieldsSql, string conditions, object? parameters = null, IDbTransaction? trans = null)
+        {
+            string sql = $"UPDATE {_tableName} SET {fieldsSql}, updated_at = CURRENT_TIMESTAMP {conditions}";
+            if (trans != null)
+            {
+                return await trans.Connection.ExecuteAsync(sql, parameters, trans);
+            }
+            using var conn = CreateConnection();
+            return await conn.ExecuteAsync(sql, parameters);
         }
     }
 }

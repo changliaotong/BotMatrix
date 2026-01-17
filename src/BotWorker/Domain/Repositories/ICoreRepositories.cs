@@ -40,7 +40,64 @@ namespace BotWorker.Domain.Repositories
         Task<long> GetTargetUserIdAsync(string userOpenid);
         Task<long> GetMaxIdInRangeAsync(long min, long max);
         Task<string> GetUserOpenidAsync(long botUin, long userId);
+        Task<long> GetSourceQQAsync(long botUin, long userId);
         Task SyncCacheFieldAsync(long userId, string field, object value);
+        Task<string> GetCreditRankingAsync(long groupId, int top, string format);
+    }
+
+    public interface IPartnerRepository : IBaseRepository<BotWorker.Modules.Office.Partner>
+    {
+        Task<bool> IsPartnerAsync(long userId);
+        Task<bool> IsNotPartnerAsync(long userId);
+        Task<int> AppendAsync(long userId, long refUserId = 0);
+        Task<long> GetUnsettledCreditAsync(long userId);
+        Task<int> SettleAsync(long userId, IDbTransaction? trans = null);
+        Task<string> GetCreditListAsync(long userId);
+        Task<string> GetCreditTodayAsync(long userId);
+    }
+
+    public interface IPriceRepository : IBaseRepository<BotWorker.Modules.Office.Price>
+    {
+        Task<decimal> GetRobotPriceAsync(long month);
+    }
+
+    public interface IWeatherRepository : IBaseRepository<BotWorker.Domain.Entities.Weather>
+    {
+        Task<string?> GetRecentWeatherAsync(string cityName, int hours);
+    }
+
+    public interface ISchemaRepository
+    {
+        Task<string> GetFieldCaptionAsync(string tableId, string fieldName);
+        Task<string> GetReportFieldCaptionAsync(string rptId, string fieldName);
+        Task<BotWorker.Domain.Constants.AppsInfo.TableInfo?> GetTableInfoAsync(int tableId);
+    }
+
+    public interface IToolService
+    {
+        Task<Dictionary<string, string>> GetWeatherAsync(IEnumerable<string> cities);
+        Task<string> GetCountDownAsync();
+        string GetMonthRes(DateTime dt, bool isYinli = false, int spaceCount = 3, int spaceCount2 = 1);
+        Task<string> GetTranslateAsync(string text);
+        Task<string> CalculateAsync(string expression);
+        Task<string> GetCidResAsync(BotWorker.Domain.Models.BotMessages.BotMessage msg, bool isMinus = true);
+        Task<string> GetAreaNameAsync(string areaCode);
+    }
+
+    public interface IPropRepository : IBaseRepository<BotWorker.Domain.Entities.Prop>
+    {
+        Task<int> GetPropPriceAsync(long propId);
+        Task<long> GetIdAsync(string name);
+        Task<string> GetPropListAsync();
+    }
+
+    public interface IGroupPropsRepository : IBaseRepository<BotWorker.Domain.Entities.GroupProps>
+    {
+        Task<long> GetIdAsync(long groupId, long qq, long propId);
+        Task<bool> HavePropAsync(long groupId, long userId, long propId);
+        Task<int> UsePropAsync(long groupId, long userId, long propId, long qqProp);
+        Task<string> GetMyPropListAsync(long groupId, long userId);
+        Task<int> InsertAsync(long groupId, long qq, long propId, IDbTransaction? trans = null);
     }
 
     public interface IGroupRepository : IBaseRepository<GroupInfo>
@@ -106,11 +163,14 @@ namespace BotWorker.Domain.Repositories
         Task<string> GetSystemPromptStatusAsync(long groupId);
         Task<string> GetVipResAsync(long groupId);
         Task<int> StartCyGameAsync(long groupId);
+        Task<T> GetValueAsync<T>(string field, long groupId, IDbTransaction? trans = null);
+        Task<int> GetIntAsync(string field, long groupId, IDbTransaction? trans = null);
+        Task<int> SetValueAsync(string field, object value, long groupId, IDbTransaction? trans = null);
     }
 
     public interface IGroupVipRepository : IBaseRepository<GroupVip>
     {
-        Task<int> BuyRobotAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy);
+        Task<int> BuyRobotAsync(long botUin, long groupId, string groupName, long qqBuyer, string buyerName, long month, decimal payMoney, string payMethod, string trade, string memo, int insertBy, IDbTransaction? trans = null);
         Task<int> ChangeGroupAsync(long groupId, long newGroupId, long qq, IDbTransaction? trans = null);
         Task<int> RestDaysAsync(long groupId);
         Task<int> RestMonthsAsync(long groupId);
@@ -119,6 +179,7 @@ namespace BotWorker.Domain.Repositories
         Task<bool> IsForeverAsync(long groupId);
         Task<bool> IsVipOnceAsync(long groupId);
         Task<bool> IsClientVipAsync(long qq);
+        Task<string> GetVipListByUserIdAsync(long userId);
     }
 
     public interface IGroupMemberRepository : IBaseRepository<GroupMember>
@@ -142,6 +203,7 @@ namespace BotWorker.Domain.Repositories
         Task<long> GetCoinsRankingAsync(long groupId, long userId);
         Task<long> GetCoinsRankingAllAsync(long userId);
         Task<int> GetIntAsync(string field, long groupId, long userId, IDbTransaction? trans = null);
+        Task<string> GetCreditRankingAsync(long groupId, int top, string format);
     }
 
     public interface IJielongRepository : IBaseRepository<BotWorker.Modules.Games.Jielong>
@@ -163,6 +225,8 @@ namespace BotWorker.Domain.Repositories
         Task<IEnumerable<long>> GetSystemBlackListAsync();
         Task<bool> IsExistsAsync(long groupId, long userId);
         Task<int> AddAsync(BlackList blackList);
+        Task<int> AddBlackListAsync(long botUin, long groupId, string groupName, long qq, string name, long blackQQ, string blackInfo);
+        Task<bool> IsSystemBlackAsync(long userId);
         Task<int> DeleteAsync(long groupId, long userId);
         Task<int> ClearGroupAsync(long groupId);
     }
@@ -207,6 +271,9 @@ namespace BotWorker.Domain.Repositories
     public interface IGroupOfficalRepository : IBaseRepository<GroupOffical>
     {
         Task<bool> IsOfficalAsync(long groupId);
+        Task<long> GetTargetGroupAsync(string groupOpenid);
+        Task<long> GetMaxGroupIdAsync();
+        Task<string> GetGroupOpenidAsync(long botUin, long groupId);
     }
 
     public interface IGroupEventRepository : IBaseRepository<GroupEvent>
@@ -217,6 +284,10 @@ namespace BotWorker.Domain.Repositories
     public interface IFriendRepository : IBaseRepository<Friend>
     {
         Task<int> AddAsync(Friend friend);
+        Task<int> AppendAsync(long botUin, long friendId, string friendName);
+        Task<string> GetCreditRankingAsync(long botUin, long groupId, int top, string format);
+        Task<bool> UpdateCreditAsync(long botUin, long friendId, long credit);
+        Task<bool> UpdateSaveCreditAsync(long botUin, long friendId, long saveCredit);
     }
 
     public interface IFishingUserRepository : IBaseRepository<BotWorker.Modules.Games.FishingUser>
@@ -262,5 +333,35 @@ namespace BotWorker.Domain.Repositories
         Task<string> GetLevelListAsync(long groupId);
         Task<string> GetLeverOrderAsync(long groupId, long userId);
         Task<string> GetStatAsync(string range);
+    }
+
+    public interface IBotRepository : IBaseRepository<BotInfo>
+    {
+        Task<BotInfo?> GetByBotUinAsync(long botUin);
+        Task<bool> IsRobotAsync(long userId);
+    }
+
+    public interface IBotPublicRepository : IBaseRepository<BotPublic>
+    {
+        Task<BotPublic?> GetByPublicKeyAsync(string publicKey);
+        Task<long> GetRobotQQAsync(string botKey);
+        Task<long> GetGroupIdAsync(string botKey);
+        Task<string> GetBotNameAsync(string botKey);
+    }
+
+    public interface IPublicUserRepository : IBaseRepository<PublicUser>
+    {
+        Task<long> GetUserIdAsync(string botKey, string userKey);
+        Task<bool> IsBindAsync(long userId);
+        Task<bool> IsSubscribedToOfficialPublicAsync(long userId);
+        Task<string> GetBindTokenAsync(string botKey, string userKey);
+        Task<string> GetInviteCodeAsync(string botKey, string userKey);
+        Task<string> GetRecResAsync(long botUin, long groupId, string groupName, long userId, string name, string botKey, string clientKey, string message);
+        Task<string> GetBindTokenResAsync(BotMessage bm, string tokenType, string bindToken);
+    }
+
+    public interface IFaceRepository
+    {
+        string ConvertFacesBack(string text);
     }
 }

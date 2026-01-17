@@ -15,19 +15,15 @@ namespace BotWorker.Modules.Games
     public class VehicleService : IPlugin
     {
         private IRobot? _robot;
-        private ILogger? _logger;
+        private readonly ILogger<VehicleService> _logger;
+        private readonly IVehicleRepository _vehicleRepo;
         private readonly VehicleConfig _config;
 
-        public VehicleService()
+        public VehicleService(IVehicleRepository vehicleRepo, ILogger<VehicleService> logger)
         {
-            _config = new VehicleConfig();
-        }
-
-        public VehicleService(IRobot robot, ILogger logger, VehicleConfig config)
-        {
-            _robot = robot;
+            _vehicleRepo = vehicleRepo;
             _logger = logger;
-            _config = config;
+            _config = new VehicleConfig();
         }
 
         public List<Intent> Intents => [
@@ -54,7 +50,7 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            await Vehicle.EnsureTableCreatedAsync();
+            await _vehicleRepo.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleVehicleCommandAsync(IPluginContext ctx, string[] args)
@@ -73,7 +69,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetMyVehiclesAsync(IPluginContext ctx)
         {
-            var vehicles = await Vehicle.GetUserVehiclesAsync(ctx.UserId);
+            var vehicles = await _vehicleRepo.GetUserVehiclesAsync(ctx.UserId);
             if (vehicles.Count == 0) return "你名下还没有任何座驾。输入【购买座驾】去车展看看吧！";
 
             var sb = new StringBuilder();
@@ -96,7 +92,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> DriveVehicleAsync(IPluginContext ctx, string[] args)
         {
-            var vehicles = await Vehicle.GetUserVehiclesAsync(ctx.UserId);
+            var vehicles = await _vehicleRepo.GetUserVehiclesAsync(ctx.UserId);
             if (vehicles.Count == 0) return "你还没有座驾，请先【购买座驾】！";
 
             // 逻辑简化：如果有驾驶中的，先停掉
@@ -104,7 +100,7 @@ namespace BotWorker.Modules.Games
             if (active != null && (args.Length == 0 || active.Name != args[0]))
             {
                 active.Status = VehicleStatus.Idle;
-                await active.UpdateAsync();
+                await _vehicleRepo.UpdateAsync(active);
             }
 
             var target = args.Length > 0 
@@ -116,7 +112,7 @@ namespace BotWorker.Modules.Games
 
             target.Status = VehicleStatus.Driving;
             target.LastActionTime = DateTime.Now;
-            await target.UpdateAsync();
+            await _vehicleRepo.UpdateAsync(target);
 
             return $"🏎️ 引擎轰鸣！你发动了 {target.Name}，开始在城市中巡逻！\n{VehicleTemplate.All.GetValueOrDefault(target.TemplateId)?.AsciiArt}";
         }
@@ -139,7 +135,7 @@ namespace BotWorker.Modules.Games
             var template = VehicleTemplate.All.Values.FirstOrDefault(t => t.Name == args[0]);
             if (template == null) return "展厅里没有这辆车。";
 
-            var myVehicles = await Vehicle.GetUserVehiclesAsync(ctx.UserId);
+            var myVehicles = await _vehicleRepo.GetUserVehiclesAsync(ctx.UserId);
             if (myVehicles.Count >= _config.MaxVehicleCount) return $"你的车库已满（上限 {_config.MaxVehicleCount} 辆）！";
 
             var vehicle = new Vehicle
@@ -153,14 +149,14 @@ namespace BotWorker.Modules.Games
                 Tech = template.BaseTech,
                 Status = VehicleStatus.Idle
             };
-            await vehicle.InsertAsync();
+            await _vehicleRepo.InsertAsync(vehicle);
 
             return $"🎊 恭喜！你成功购买了 {template.Name}，已送往你的车库！";
         }
 
         private async Task<string> TuneVehicleAsync(IPluginContext ctx, string[] args)
         {
-            var active = await Vehicle.GetActiveVehicleAsync(ctx.UserId);
+            var active = await _vehicleRepo.GetActiveVehicleAsync(ctx.UserId);
             if (active == null) return "你必须先【驾驶座驾】才能进行改装！";
 
             if (DateTime.Now - active.LastActionTime < TimeSpan.FromMinutes(5))
@@ -175,7 +171,7 @@ namespace BotWorker.Modules.Games
                 var oldLevel = active.Level;
                 active.GainExp(expGain);
                 active.ModificationLevel++;
-                await active.UpdateAsync();
+                await _vehicleRepo.UpdateAsync(active);
 
                 var sb = new StringBuilder();
                 sb.AppendLine($"🛠️ 改装成功！{active.Name} 的性能得到了提升！");
@@ -186,22 +182,22 @@ namespace BotWorker.Modules.Games
             else
             {
                 active.Fuel -= 10;
-                await active.UpdateAsync();
+                await _vehicleRepo.UpdateAsync(active);
                 return $"💥 改装失败！虽然浪费了一些燃料，但你积累了宝贵的失败经验。";
             }
         }
 
         private async Task<string> RepairVehicleAsync(IPluginContext ctx)
         {
-            var vehicles = await Vehicle.GetUserVehiclesAsync(ctx.UserId);
+            var vehicles = await _vehicleRepo.GetUserVehiclesAsync(ctx.UserId);
             var toRepair = vehicles.FirstOrDefault(v => v.Fuel < 100);
             if (toRepair == null) return "你的所有座驾都状态良好，无需维修或加油。";
 
             toRepair.Fuel = 100;
             toRepair.Status = VehicleStatus.Idle;
-            await toRepair.UpdateAsync();
+            await _vehicleRepo.UpdateAsync(toRepair);
 
-            return $"🔧 经过一番整备，{toRepair.Name} 已恢复至最佳状态！燃料已加满。";
+            return $"🔧 维修/加油完成！{toRepair.Name} 已恢复至最佳状态。";
         }
     }
 }

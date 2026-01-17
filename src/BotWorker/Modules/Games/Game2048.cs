@@ -3,6 +3,7 @@ using BotWorker.Common.Extensions;
 using BotWorker.Domain.Entities;
 using BotWorker.Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,15 +21,20 @@ namespace BotWorker.Modules.Games
     )]
     public class Game2048Plugin : IPlugin
     {
-        private readonly IGroupRepository _groupRepo;
+        private readonly IGame2048Service _game2048Service;
+        private readonly ILogger<Game2048Plugin> _logger;
 
-        public Game2048Plugin(IGroupRepository groupRepo)
+        public Game2048Plugin(
+            IGame2048Service game2048Service,
+            ILogger<Game2048Plugin> logger)
         {
-            _groupRepo = groupRepo;
+            _game2048Service = game2048Service;
+            _logger = logger;
         }
 
         public async Task InitAsync(IRobot robot)
         {
+            _logger.LogInformation("Initializing Game2048Plugin...");
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "2048游戏",
@@ -50,35 +56,43 @@ namespace BotWorker.Modules.Games
                 cmdPara = ""; // 触发进入游戏
             }
 
-            return await Game2048.GetGameResAsync(_groupRepo, groupId, userId, cmdPara);
+            return await _game2048Service.GetGameResAsync(groupId, userId, cmdPara);
         }
     }
 
     /// <summary>
-    /// 2048游戏
+    /// 2048游戏服务实现
     /// </summary>
-    internal class Game2048
+    public class Game2048Service : IGame2048Service
     {
-        public static Dictionary<long, bool> dict = new();
+        private readonly IGroupRepository _groupRepo;
+        private readonly IUserRepository _userRepo;
+        private readonly Dictionary<long, bool> _dict = new();
 
-        public static async Task<string> GetGameResAsync(IGroupRepository repository, long groupId, long qq, string cmdPara)
+        public Game2048Service(IGroupRepository groupRepo, IUserRepository userRepo)
+        {
+            _groupRepo = groupRepo;
+            _userRepo = userRepo;
+        }
+
+        public async Task<string> GetGameResAsync(long groupId, long qq, string cmdPara)
         {
             if (string.IsNullOrEmpty(cmdPara))
             {
-                int i = await UserInfo.SetStateAsync(UserInfo.States.G2048, qq);
+                int i = await _userRepo.SetValueAsync("state", (int)UserStates.G2048, qq);
                 return i == -1
                     ? "系统繁忙，请稍后再试"
                     : "发【开始】，发送【上下左右】或【wsad】控制游戏";
             }
             else if (cmdPara == "结束")
             {
-                int i = await UserInfo.SetStateAsync(UserInfo.States.Chat, qq);
+                int i = await _userRepo.SetValueAsync("state", (int)UserStates.Chat, qq);
                 return i == -1
                     ? "系统繁忙，请稍后再试"
                     : "2048游戏结束";
             }
 
-            int[,] tiles = await GetTilesAsync(repository, groupId);
+            int[,] tiles = await GetTilesAsync(groupId);
             if (new[] { "上", "w", "8" }.Contains(cmdPara))
                 TurnTo(tiles, Direct.Left);
 
@@ -87,20 +101,20 @@ namespace BotWorker.Modules.Games
 
             if (new[] { "左", "a", "4" }.Contains(cmdPara))
             {
-                if (dict.ContainsKey(groupId))
-                    dict[groupId] = true;
+                if (_dict.ContainsKey(groupId))
+                    _dict[groupId] = true;
                 else
-                    dict.Add(groupId, true);
+                    _dict.Add(groupId, true);
 
                 TurnTo(tiles, Direct.Up);
             }
 
             if (new[] { "右", "d", "6" }.Contains(cmdPara))
             {
-                if (dict.ContainsKey(groupId))
-                    dict[groupId] = false;
+                if (_dict.ContainsKey(groupId))
+                    _dict[groupId] = false;
                 else
-                    dict.Add(groupId, false);
+                    _dict.Add(groupId, false);
                 TurnTo(tiles, Direct.Down);
             }
 
@@ -108,12 +122,12 @@ namespace BotWorker.Modules.Games
             {
                 InitTiles(tiles);
                 RandomValue(tiles, 2);
-            }                                         
-            
+            }
+
             string res = PrintTiles(groupId, tiles);
             if (IsGameOver(tiles))
                 res += "Game Over!";
-            await SaveTilesAsync(repository, groupId, tiles);
+            await SaveTilesAsync(groupId, tiles);
             return res;
         }
 
@@ -126,7 +140,7 @@ namespace BotWorker.Modules.Games
             Other
         }
 
-        public static int TurnTo(int[,] tiles, Direct direct)
+        private int TurnTo(int[,] tiles, Direct direct)
         {
             int res = Slide(tiles, (int)direct, out _, out _);
             Console.WriteLine("direct:" + direct.ToString());
@@ -135,11 +149,11 @@ namespace BotWorker.Modules.Games
             {
                 RandomValue(tiles);
             }
-            
+
             return res;
         }
 
-        public static void InitTiles(int[,] tiles)
+        private void InitTiles(int[,] tiles)
         {
             for (int i = 0; i < 4; i++)
             {
@@ -147,10 +161,10 @@ namespace BotWorker.Modules.Games
                 {
                     tiles[i, j] = 0;
                 }
-            }            
+            }
         }
 
-        public static async Task SaveTilesAsync(IGroupRepository repository, long groupId, int[,] tiles)
+        private async Task SaveTilesAsync(long groupId, int[,] tiles)
         {
             string res = "";
             for (int i = 0; i < 4; i++)
@@ -160,13 +174,13 @@ namespace BotWorker.Modules.Games
                     res += $" {tiles[i, j]}";
                 }
             }
-            await repository.SetValueAsync("game_2048", res.Trim(), groupId);
+            await _groupRepo.SetValueAsync("game_2048", res.Trim(), groupId);
         }
 
-        public static async Task<int[,]> GetTilesAsync(IGroupRepository repository, long groupId)
+        private async Task<int[,]> GetTilesAsync(long groupId)
         {
             int[,] tiles = new int[4, 4];
-            string res = await repository.GetValueAsync("game_2048", groupId);
+            string res = await _groupRepo.GetValueAsync("game_2048", groupId);
             if (string.IsNullOrEmpty(res))
             {
                 InitTiles(tiles);
@@ -191,7 +205,7 @@ namespace BotWorker.Modules.Games
         }
 
         // 最大值
-        public static int GetMax(int[,] tiles, out int x, out int y)
+        private int GetMax(int[,] tiles, out int x, out int y)
         {
             int max = 0;
             x = 0;
@@ -211,7 +225,7 @@ namespace BotWorker.Modules.Games
             return max;
         }
 
-        public static string PrintTiles(long groupId, int[,] tiles)
+        private string PrintTiles(long groupId, int[,] tiles)
         {
             int max = GetMax(tiles, out _, out _);
             string res = string.Empty;
@@ -226,7 +240,7 @@ namespace BotWorker.Modules.Games
                     else
                     {
                         bool leftAlign = true;
-                        if (dict.TryGetValue(groupId, out bool val))
+                        if (_dict.TryGetValue(groupId, out bool val))
                         {
                             leftAlign = val;
                         }
@@ -247,7 +261,7 @@ namespace BotWorker.Modules.Games
             return res;
         }
 
-        public static int RandomValue(int[,] tiles, int count = 1)
+        private int RandomValue(int[,] tiles, int count = 1)
         {
             //0的数量
             int zeroCount = ZeroCount(tiles);
@@ -279,7 +293,7 @@ namespace BotWorker.Modules.Games
             return k;
         }
 
-        public static int ZeroCount(int[,] tiles)
+        private int ZeroCount(int[,] tiles)
         {
             int res = 0;
             for (int i = 0; i <= 3; i++)
@@ -293,7 +307,7 @@ namespace BotWorker.Modules.Games
             return res;
         }
 
-        public static int Slide(int[,] tiles, int direct, out int slide, out int merge)
+        private int Slide(int[,] tiles, int direct, out int slide, out int merge)
         {
             if (direct > 0)
             {
@@ -340,13 +354,13 @@ namespace BotWorker.Modules.Games
         }
 
         // Game over 
-        public static bool IsGameOver(int[,] tiles)
+        private bool IsGameOver(int[,] tiles)
         {
             if (tiles == null)
                 return false;
 
             foreach (int tile in tiles)
-            {                
+            {
                 if (tile == 0)
                     return false;
             }
@@ -364,7 +378,7 @@ namespace BotWorker.Modules.Games
         }
 
         // i,j 点周围是否有相同数值的格子
-        public static bool IsHaveSame(int[,] tiles, int i, int j)
+        private bool IsHaveSame(int[,] tiles, int i, int j)
         {
             return i - 1 >= 0 && tiles[i, j] == tiles[i - 1, j] ||
                    i + 1 <= 3 && tiles[i, j] == tiles[i + 1, j] ||
@@ -375,14 +389,14 @@ namespace BotWorker.Modules.Games
         /// <summary>
         /// 右转90度
         /// </summary>
-        public static void Rotating(int[,] tiles)
+        private void Rotating(int[,] tiles)
         {
             int n = tiles.GetLength(0);
             for (int i = 0; i < n / 2; i++)
             {
                 for (int j = i; j < n - i - 1; j++)
                 {
-                    int top =  tiles[i, j]; 
+                    int top = tiles[i, j];
 
                     //向左移动到顶部
                     tiles[i, j] = tiles[n - 1 - j, i];
@@ -398,16 +412,5 @@ namespace BotWorker.Modules.Games
                 }
             }
         }
-        /// <summary>
-        /// 右转90度
-        /// </summary>
-        public static void RotatingIt(int[,] tiles)
-        {
-            //for (int i = 0; i <= 2; i++)
-            //{
-                Rotating(tiles);
-            //}
-        }
-
     }
 }

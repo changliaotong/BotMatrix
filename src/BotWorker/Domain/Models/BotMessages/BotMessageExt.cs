@@ -13,11 +13,11 @@ namespace BotWorker.Domain.Models.BotMessages;
 public partial class BotMessage
 {
     [JsonIgnore]
-    public static PluginManager? PluginManager { get; set; }
+    public PluginManager? PluginManager { get; set; }
     [JsonIgnore]
-    public static MessagePipeline? Pipeline { get; set; }
+    public MessagePipeline? Pipeline { get; set; }
     [JsonIgnore]
-    public static IServiceProvider? ServiceProvider { get; set; }
+    public IServiceProvider? ServiceProvider { get; set; }
 
     [JsonIgnore]
     public KnowledgeBaseService? KbService;
@@ -47,7 +47,7 @@ public partial class BotMessage
     [JsonIgnore]
     public Func<Task>? ReplyMessageAsync { get; set; }
     [JsonIgnore]
-    public static LLMApp? LLMApp { get; set; }
+    public LLMApp? LLMApp { get; set; }
     [JsonIgnore]
     public ChatHistory History { get; set; } = [];
     [JsonIgnore]
@@ -82,7 +82,7 @@ public partial class BotMessage
 
     public bool IsEnough() => IsEnoughAsync().GetAwaiter().GetResult();
     public string BatchInsertAgent() => BatchInsertAgentAsync().GetAwaiter().GetResult();
-    public async Task<long> GetCreditAsync() => await UserInfo.GetCreditAsync(SelfId, GroupId, UserId);
+    public async Task<long> GetCreditAsync() => await UserService.GetCreditAsync(SelfId, GroupId, UserId);
     public string MinusCreditRes(long creditMinus, string creditInfo) => MinusCreditResAsync(creditMinus, creditInfo).GetAwaiter().GetResult();
     public bool IsTooFast() => IsTooFastAsync().GetAwaiter().GetResult();
     public string GetCaiquan() => GetCaiquanAsync().GetAwaiter().GetResult();
@@ -101,6 +101,7 @@ public partial class BotMessage
         var matchCount = System.Text.RegularExpressions.Regex.Match(cmdPara, @"\s+(\d+)$");
         if (matchCount.Success) giftCount = int.Parse(matchCount.Value);
 
-        return await GroupGift.GetGiftResAsync(SelfId, GroupId, GroupName, UserId, Name, qqGift, giftName, giftCount);
+        var groupGiftService = ServiceProvider!.GetRequiredService<BotWorker.Domain.Interfaces.IGroupGiftService>();
+        return await groupGiftService.GetGiftResAsync(SelfId, GroupId, GroupName, UserId, Name, qqGift, giftName, giftCount);
     }
 }

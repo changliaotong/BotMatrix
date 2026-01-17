@@ -97,6 +97,14 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
     {
         public WeddingItemRepository() : base("WeddingItems") { }
         protected override string KeyField => "Id";
+
+        public async Task<WeddingItem?> GetByUserAndTypeAsync(string userId, string type, IDbTransaction? trans = null)
+        {
+            const string sql = "SELECT * FROM WeddingItems WHERE UserId = @userId AND ItemType = @type LIMIT 1";
+            if (trans != null) return await trans.Connection.QueryFirstOrDefaultAsync<WeddingItem>(sql, new { userId, type }, trans);
+            using var conn = CreateConnection();
+            return await conn.QueryFirstOrDefaultAsync<WeddingItem>(sql, new { userId, type });
+        }
     }
 
     public class SweetHeartRepository : BaseRepository<SweetHeart>, ISweetHeartRepository
@@ -339,7 +347,7 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
         }
     }
 
-    public class GiftLogRepository : BaseRepository<GiftLog>, IGiftLogRepository
+    public class GiftLogRepository : BaseRepository<GiftRecord>, IGiftLogRepository
     {
         public GiftLogRepository() : base("GiftLog") { }
         protected override string KeyField => "Id";

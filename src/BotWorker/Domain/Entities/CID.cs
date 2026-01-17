@@ -11,13 +11,9 @@ namespace BotWorker.Domain.Entities
 {
     public class CID
     {
-        private static IIDCRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IIDCRepository>() 
-            ?? throw new InvalidOperationException("IIDCRepository not registered");
-
         public static string GetCidRes(BotMessage msg)
         {
-            string cid = msg.CurrentMessage;
+            string cid = msg.Message;
             if (!CheckIDCard(cid)) return "身份证号码格式不正确";
             return $"身份证号码：{cid}\n查询结果：校验通过，格式合法。";
         }
@@ -77,11 +73,11 @@ namespace BotWorker.Domain.Entities
             return true; // 符合15位身份证标准
         }
 
-        public static string GetCidRes(string text)
+        public static string GetCidRes(string text, IIDCRepository repository)
         {
             var id = text;
             if (id.Length != 18)
-                return $"命令格式：身份证 + 18位号码\n例如：\n身份证 {GenerateRandomID(id)}";
+                return $"命令格式：身份证 + 18位号码\n例如：\n身份证 {GenerateRandomID(repository, id)}";
             string ymd = id[6..14];
 
             string result;
@@ -97,7 +93,7 @@ namespace BotWorker.Domain.Entities
                     return "身份证号不正确";
 
                 result = $"身份证号：{id}\n" +
-                         $"地区：{GetAreaName(id[..6])}\n" +
+                         $"地区：{GetAreaName(repository, id[..6])}\n" +
                          $"生日：{id[6..10]}年{id[10..12]}月{id[12..14]}日\n" +
                          $"性别：{(int.Parse(id[14..17]) % 2 == 0 ? "女" : "男")} 年龄：{DateTime.Now.Year - int.Parse(id[6..10])}";
             }
@@ -106,7 +102,7 @@ namespace BotWorker.Domain.Entities
 
         public static string GetCidRes(BotMessage bm, bool isMinus = true)
         {
-            var res = GetCidRes(bm.Message);
+            var res = GetCidRes(bm.Message, bm.IDCRepository);
             if (isMinus)            
                 res += bm.MinusCreditRes(10, "查身份证扣分");
             return res;
@@ -134,9 +130,9 @@ namespace BotWorker.Domain.Entities
             return res;
         }
 
-        public static string GenerateRandomID(string dq = "")
+        public static string GenerateRandomID(IIDCRepository repository, string dq = "")
         {
-            string areaCode = Repository.GetRandomBmAsync(dq).GetAwaiter().GetResult() ?? "110101";
+            string areaCode = repository.GetRandomBmAsync(dq).GetAwaiter().GetResult() ?? "110101";
 
             Random rnd = new Random();
             int year = rnd.Next(1920, DateTime.Now.Year);
@@ -159,9 +155,9 @@ namespace BotWorker.Domain.Entities
         }
 
         // 身份证归属地
-        public static string GetAreaName(string areaCode)
+        public static string GetAreaName(IIDCRepository repository, string areaCode)
         {
-            return Repository.GetAreaNameAsync(areaCode).GetAwaiter().GetResult() ?? "未知";
+            return repository.GetAreaNameAsync(areaCode).GetAwaiter().GetResult() ?? "未知";
         }
     }
 }

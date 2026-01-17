@@ -19,15 +19,27 @@ namespace BotWorker.Modules.Games
         Description = "支持全系统插件自动发现、多级分类聚合、动态技能映射的智能菜单中心。",
         Category = "System"
     )]
-    public class MenuService : IPlugin
+    public class MenuService : IPlugin, IMenuService
     {
         private readonly ILogger<MenuService>? _logger;
+        private readonly IUserRepository _userRepo;
+        private readonly IUserLevelRepository _userLevelRepo;
+        private readonly IUserModuleAccessRepository _userAccessRepo;
         private static readonly ConcurrentDictionary<string, MenuSession> _sessions = new();
         private MenuNode _rootMenu = null!;
         private IRobot? _robot;
 
-        public MenuService() { }
-        public MenuService(ILogger<MenuService> logger) => _logger = logger;
+        public MenuService(
+            ILogger<MenuService> logger,
+            IUserRepository userRepo,
+            IUserLevelRepository userLevelRepo,
+            IUserModuleAccessRepository userAccessRepo)
+        {
+            _logger = logger;
+            _userRepo = userRepo;
+            _userLevelRepo = userLevelRepo;
+            _userAccessRepo = userAccessRepo;
+        }
 
         public List<Intent> Intents => [
             new() { Name = "主菜单", Keywords = ["菜单", "menu", "help", "帮助"] }
@@ -260,8 +272,8 @@ namespace BotWorker.Modules.Games
                     // 检查是否是需要激活的系统
                     if (selected.Id.StartsWith("game."))
                     {
-                        var access = await UserModuleAccess.QueryWhere("UserId = @p1 AND ModuleId = @p2", UserModuleAccess.SqlParams(("@p1", ctx.UserId), ("@p2", selected.Id)));
-                        if (!access.Any())
+                        var access = await _userAccessRepo.GetAsync(ctx.UserId, selected.Id);
+                        if (access == null)
                         {
                             return $"🔒 访问受限：系统检测到您尚未接入“{selected.Title}”。\n\n💡 请前往【🌌 矩阵资源中心】获取接入权限。";
                         }
@@ -321,7 +333,7 @@ namespace BotWorker.Modules.Games
             
             if (session.CurrentMenuId == "root")
             {
-                var userLevel = await UserLevel.GetByUserIdAsync(session.UserId);
+                var userLevel = await _userLevelRepo.GetByUserIdAsync(session.UserId);
                 string plane = "原质";
                 int level = 1;
                 if (userLevel != null)
@@ -331,7 +343,7 @@ namespace BotWorker.Modules.Games
                 }
 
                 // 尝试获取用户积分
-                long credit = await UserInfo.GetCreditAsync(long.Parse(session.UserId));
+                long credit = await _userRepo.GetCreditAsync(long.Parse(session.UserId));
 
                 sb.AppendLine($"┃ 👤 账户: {session.UserId}");
                 sb.AppendLine($"┃ 🆙 等级: Lv.{level} ({plane})");
@@ -344,7 +356,7 @@ namespace BotWorker.Modules.Games
                 {
                     sb.AppendLine("┃ ━━━━━━━━━━━━━━━━━━");
                     if (expBuff > 1.0) sb.AppendLine($"┃ 🔥 经验加成: {expBuff}x");
-                    if (pointsBuff > 1.0) sb.AppendLine($"┃ � 积分加成: {pointsBuff}x");
+                    if (pointsBuff > 1.0) sb.AppendLine($"┃  积分加成: {pointsBuff}x");
                 }
             }
 
@@ -352,7 +364,7 @@ namespace BotWorker.Modules.Games
             sb.AppendLine($"┃ 📝 {node.Description}");
             sb.AppendLine("┃");
             
-            var userAccess = await UserModuleAccess.QueryWhere("UserId = @p1", UserModuleAccess.SqlParams(("@p1", session.UserId)));
+            var userAccess = await _userAccessRepo.GetByUserIdAsync(session.UserId);
             var unlockedIds = userAccess.Select(a => a.ModuleId).ToHashSet();
 
             for (int i = 0; i < node.Children.Count; i++)
@@ -394,7 +406,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetRankingsDisplayAsync()
         {
-            var topList = await UserLevel.GetTopRankingsAsync(10);
+            var topList = await _userLevelRepo.GetTopRankingsAsync(10);
             var sb = new StringBuilder();
             sb.AppendLine("🏆 【BotMatrix 进化荣耀榜】 🏆");
             sb.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using BotWorker.Domain.Repositories;
 using Dapper.Contrib.Extensions;
@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("GoodsOrder")]
+    [Table("goods_order")]
     public class GoodsOrder
     {
         private static IGoodsOrderRepository Repository => 

@@ -1,33 +1,29 @@
 using BotWorker.Domain.Interfaces;
+using BotWorker.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace BotWorker.Modules.Games
 {
-    [BotPlugin(
-        Id = "game.pet.v2",
-        Name = "宠物养成",
-        Version = "2.0.0",
-        Author = "Matrix",
-        Description = "深度宠物养成系统：领养、打工、冒险、进化、多样互动",
-        Category = "Games"
-    )]
-    public class PetService : IPlugin
+    public class PetService
     {
-        private IRobot? _robot;
-        private ILogger? _logger;
+        private readonly ILogger<PetService> _logger;
+        private readonly IPetRepository _petRepo;
+        private readonly IPetInventoryRepository _inventoryRepo;
+        private readonly IAchievementService _achievementService;
         private readonly PetConfig _config;
 
-        public PetService() 
+        public PetService(
+            ILogger<PetService> logger, 
+            IPetRepository petRepo, 
+            IPetInventoryRepository inventoryRepo,
+            IAchievementService achievementService)
         {
-            _config = new PetConfig();
-        }
-
-        public PetService(IRobot robot, ILogger logger, PetConfig config)
-        {
-            _robot = robot;
             _logger = logger;
-            _config = config;
+            _petRepo = petRepo;
+            _inventoryRepo = inventoryRepo;
+            _achievementService = achievementService;
+            _config = new PetConfig();
         }
 
         public List<Intent> Intents => [
@@ -40,6 +36,7 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
+            _robot = robot;
             await EnsureTablesCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
@@ -51,8 +48,8 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            await Pet.EnsureTableCreatedAsync();
-            await PetInventory.EnsureTableCreatedAsync();
+            await _petRepo.EnsureTableCreatedAsync();
+            await _inventoryRepo.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandlePetCommandAsync(IPluginContext ctx, string[] args)
@@ -79,6 +76,7 @@ namespace BotWorker.Modules.Games
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Pet service command error");
                 return $"❌ 宠物中心系统故障：{ex.Message}";
             }
         }
@@ -86,7 +84,7 @@ namespace BotWorker.Modules.Games
         [PetCommand(["领养宠物", "adopt"], "开始领养你的第一个伙伴", 1)]
         public async Task<string> AdoptAsync(IPluginContext ctx, string[] args)
         {
-            var existing = await Pet.GetByUserIdAsync(ctx.UserId);
+            var existing = await _petRepo.GetByUserIdAsync(ctx.UserId);
             if (existing != null) return $"你已经有一只名为 {existing.Name} 的宠物了！";
 
             var name = args.Length > 0 ? args[0] : _config.DefaultPetName;
@@ -99,10 +97,10 @@ namespace BotWorker.Modules.Games
                 LastUpdateTime = DateTime.Now
             };
 
-            await pet.InsertAsync();
+            await _petRepo.InsertAsync(pet);
 
             // 上报成就
-            _ = AchievementPlugin.ReportMetricAsync(ctx.UserId, "pet.adopt_count", 1);
+            _ = _achievementService.ReportMetricAsync(ctx.UserId, "pet.adopt_count", 1);
 
             return $"🎊 领养成功！欢迎新成员 {name}！";
         }
@@ -110,10 +108,10 @@ namespace BotWorker.Modules.Games
         [PetCommand(["我的宠物", "status", "pet"], "查看宠物的详细状态面板", 2)]
         public async Task<string> GetStatusAsync(IPluginContext ctx, string[] args)
         {
-            var pet = await Pet.GetByUserIdAsync(ctx.UserId);
+            var pet = await _petRepo.GetByUserIdAsync(ctx.UserId);
             if (pet == null) return "你还没有宠物，快去【领养宠物】吧！";
 
-            await pet.UpdateStateByTimeAsync(_config);
+            await UpdateStateByTimeAsync(pet);
 
             var sb = new StringBuilder();
             sb.AppendLine(GetPetAscii(pet.Type));
@@ -147,7 +145,7 @@ namespace BotWorker.Modules.Games
             {
                 PetType.Cat => "  /\\_/\\\n ( o.o )\n  > ^ <",
                 PetType.Dog => "  __      _\n /  \\____/ |\n <_  ____  |\n   \\/    \\/ ",
-                PetType.Slime => "  _____\n /     \\\n(  o o  )\n \\_____/",
+                PetType.Bird => "  _____\n /     \\\n(  o o  )\n \\_____/",
                 PetType.Dragon => "  ^__^\n  (oo)\\_______\n  (__)\\       )\\/\\\n      ||----w |\n      ||     ||",
                 _ => " (•‿•) "
             };
@@ -156,23 +154,31 @@ namespace BotWorker.Modules.Games
         [PetCommand(["喂食", "feed"], "给宠物喂食（需消耗小面包或肉块）", 3)]
         public async Task<string> FeedAsync(IPluginContext ctx, string[] args)
         {
-            var pet = await Pet.GetByUserIdAsync(ctx.UserId);
+            var pet = await _petRepo.GetByUserIdAsync(ctx.UserId);
             if (pet == null) return "你还没有宠物。";
 
-            var inv = await PetInventory.GetByUserAsync(ctx.UserId);
+            var inv = await _inventoryRepo.GetUserInventoryAsync(ctx.UserId);
             var food = inv.FirstOrDefault(i => i.ItemId.StartsWith("food_"));
             if (food == null) return "你的背包里没有食物了，快去【宠物商店】看看吧！";
 
-            if (!PetItem.All.TryGetValue(food.ItemId, out var item) || item == null) return "该食物项已失效。";
-            if (pet == null) return "宠物不存在。";
-            if (_config == null) return "宠物系统配置未加载。";
-            await pet.UpdateStateByTimeAsync(_config);
-            item.Effect?.Invoke(pet);
-            food.Count--;
-            await food.UpdateAsync();
-            await pet.UpdateAsync();
+            // 简单逻辑复刻
+            double restore = food.ItemId == "food_meat" ? 50 : 20;
+            string itemName = food.ItemId == "food_meat" ? "美味大肉块" : "小面包";
+            string desc = food.ItemId == "food_meat" ? "恢复50点饱食度" : "恢复20点饱食度";
 
-            return $"🍖 你给 {pet.Name} 喂了 {item.Name}，{item.Description}。";
+            await UpdateStateByTimeAsync(pet);
+            
+            pet.Hunger = Math.Max(pet.Hunger - restore, 0);
+            pet.Health = Math.Min(pet.Health + 2, 100);
+            pet.Intimacy = Math.Min(pet.Intimacy + 1, 1000);
+
+            food.Count--;
+            if (food.Count <= 0) await _inventoryRepo.DeleteAsync(food);
+            else await _inventoryRepo.UpdateAsync(food);
+            
+            await _petRepo.UpdateAsync(pet);
+
+            return $"🍖 你给 {pet.Name} 喂了 {itemName}，{desc}。";
         }
 
         [PetCommand(["宠物商店", "shop"], "购买各种宠物道具", 6)]
@@ -181,10 +187,8 @@ namespace BotWorker.Modules.Games
             var sb = new StringBuilder();
             sb.AppendLine("🏪 【宠物商店】清单");
             sb.AppendLine("------------------");
-            foreach (var item in PetItem.All.Values)
-            {
-                sb.AppendLine($"• {item.Name} ({item.Price}金币) - {item.Description}");
-            }
+            sb.AppendLine("• 小面包 (10金币) - 恢复20点饱食度");
+            sb.AppendLine("• 美味大肉块 (30金币) - 恢复50点饱食度");
             sb.AppendLine("------------------");
             sb.Append("使用【购买 [商品名]】进行购买");
             return sb.ToString();
@@ -194,26 +198,42 @@ namespace BotWorker.Modules.Games
         public async Task<string> BuyAsync(IPluginContext ctx, string[] args)
         {
             if (args.Length == 0) return "请输入要购买的商品名称。";
-            var pet = await Pet.GetByUserIdAsync(ctx.UserId);
+            var pet = await _petRepo.GetByUserIdAsync(ctx.UserId);
             if (pet == null) return "你还没有宠物，买来也没法用。";
 
             var itemName = args[0];
-            var item = PetItem.All.Values.FirstOrDefault(i => i.Name == itemName);
-            if (item == null) return $"商店里没有名为 {itemName} 的商品。";
+            string itemId = "";
+            int price = 0;
 
-            if (pet.Gold < item.Price) return $"金币不足！你需要 {item.Price} 金币，但目前只有 {pet.Gold}。";
+            if (itemName == "小面包") { itemId = "food_bread"; price = 10; }
+            else if (itemName == "美味大肉块") { itemId = "food_meat"; price = 30; }
+            else return $"商店里没有名为 {itemName} 的商品。";
 
-            pet.Gold -= item.Price;
-            await pet.UpdateAsync();
-            await PetInventory.AddItemAsync(ctx.UserId, item.Id, 1);
+            if (pet.Gold < price) return $"金币不足！你需要 {price} 金币，但目前只有 {pet.Gold}。";
 
-            return $"🛒 购买成功！获得了 {item.Name}，消耗了 {item.Price} 金币。";
+            pet.Gold -= price;
+            await _petRepo.UpdateAsync(pet);
+            
+            var inv = await _inventoryRepo.GetUserInventoryAsync(ctx.UserId);
+            var item = inv.FirstOrDefault(i => i.ItemId == itemId);
+            if (item == null)
+            {
+                item = new PetItem { UserId = ctx.UserId, ItemId = itemId, Count = 1 };
+                await _inventoryRepo.InsertAsync(item);
+            }
+            else
+            {
+                item.Count++;
+                await _inventoryRepo.UpdateAsync(item);
+            }
+
+            return $"🛒 购买成功！获得了 {itemName}，消耗了 {price} 金币。";
         }
 
         [PetCommand(["宠物背包", "bag"], "查看你拥有的宠物道具", 10)]
         public async Task<string> BagAsync(IPluginContext ctx, string[] args)
         {
-            var inv = await PetInventory.GetByUserAsync(ctx.UserId);
+            var inv = await _inventoryRepo.GetUserInventoryAsync(ctx.UserId);
             if (inv.Count == 0) return "你的背包空空如也。";
 
             var sb = new StringBuilder();
@@ -221,10 +241,9 @@ namespace BotWorker.Modules.Games
             sb.AppendLine("------------------");
             foreach (var pi in inv)
             {
-                if (PetItem.All.TryGetValue(pi.ItemId, out var item))
-                {
-                    sb.AppendLine($"• {item.Name} x{pi.Count} - {item.Description}");
-                }
+                string name = pi.ItemId == "food_meat" ? "美味大肉块" : "小面包";
+                string desc = pi.ItemId == "food_meat" ? "恢复50点饱食度" : "恢复20点饱食度";
+                sb.AppendLine($"• {name} x{pi.Count} - {desc}");
             }
             sb.AppendLine("------------------");
             sb.Append("使用【喂食】会自动消耗食物类道具。");
@@ -242,7 +261,7 @@ namespace BotWorker.Modules.Games
                 p.StateEndTime = DateTime.Now.AddHours(2);
                 p.Energy -= 30;
                 p.Gold += 50;
-                p.GainExp(20);
+                GainExp(p, 20);
                 return $"💼 {p.Name} 去外面打工了，预计2小时后回来，将带回50金币。";
             });
         }
@@ -250,7 +269,7 @@ namespace BotWorker.Modules.Games
         [PetCommand(["宠物排行", "top"], "查看最强的宠物们", 11)]
         public async Task<string> GetTopAsync(IPluginContext ctx, string[] args)
         {
-            var pets = (await Pet.QueryAsync("ORDER BY Level DESC, Experience DESC LIMIT 10", null)).ToList();
+            var pets = (await _petRepo.QueryAsync("ORDER BY Level DESC, Experience DESC LIMIT 10", null)).ToList();
             if (pets.Count == 0) return "目前还没有宠物。";
 
             var sb = new StringBuilder();
@@ -271,10 +290,10 @@ namespace BotWorker.Modules.Games
                 if (p.CurrentState != PetState.Idle) return $"{p.Name} 正在忙着呢。";
                 if (p.Energy < 50) return $"{p.Name} 精力不足，没法去冒险。";
 
-                p.CurrentState = PetState.Adventuring;
+                p.CurrentState = PetState.Exploring;
                 p.StateEndTime = DateTime.Now.AddHours(4);
                 p.Energy -= 50;
-                p.GainExp(100);
+                GainExp(p, 100);
                 return $"⚔️ {p.Name} 踏上了冒险之旅，预计4小时后归来。";
             });
         }
@@ -284,7 +303,7 @@ namespace BotWorker.Modules.Games
         {
             return await ExecuteInteraction(ctx.UserId, p => {
                 if (p.CurrentState != PetState.Idle) return $"{p.Name} 正在忙着呢。";
-                p.CurrentState = PetState.Resting;
+                p.CurrentState = PetState.Sleeping;
                 p.StateEndTime = DateTime.Now.AddHours(1);
                 return $"💤 {p.Name} 趴在垫子上睡着了，1小时后将恢复大量精力。";
             });
@@ -297,7 +316,7 @@ namespace BotWorker.Modules.Games
                 if (p.CurrentState != PetState.Idle) return $"{p.Name} 正在忙着呢。";
                 if (p.Energy < 10) return $"{p.Name} 太累了，不想理你。";
                 
-                p.Play(20, _config.ExpMultiplier);
+                Play(p, 20, _config.ExpMultiplier);
                 return $"✨ 你和 {p.Name} 玩了一会，它看起来开心多了！(亲密+2, 快乐+20)";
             });
         }
@@ -306,12 +325,12 @@ namespace BotWorker.Modules.Games
         public async Task<string> RenameAsync(IPluginContext ctx, string[] args)
         {
             if (args.Length == 0) return "请输入新的名字。";
-            var pet = await Pet.GetByUserIdAsync(ctx.UserId);
+            var pet = await _petRepo.GetByUserIdAsync(ctx.UserId);
             if (pet == null) return "你还没有宠物。";
 
             var oldName = pet.Name;
             pet.Name = args[0];
-            await pet.UpdateAsync();
+            await _petRepo.UpdateAsync(pet);
             return $"📝 改名成功！{oldName} 现在叫做 {pet.Name} 了。";
         }
 
@@ -322,9 +341,9 @@ namespace BotWorker.Modules.Games
             var timeStr = remaining.TotalMinutes > 0 ? $" (剩余 {remaining.TotalMinutes:F0} 分钟)" : "";
             return p.CurrentState switch
             {
-                PetState.Resting => "休息中" + timeStr,
+                PetState.Sleeping => "休息中" + timeStr,
                 PetState.Working => "打工中" + timeStr,
-                PetState.Adventuring => "冒险中" + timeStr,
+                PetState.Exploring => "冒险中" + timeStr,
                 _ => "未知"
             };
         }
@@ -339,15 +358,15 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> ExecuteInteraction(string userId, Func<Pet, string> action)
         {
-            var pet = await Pet.GetByUserIdAsync(userId);
+            var pet = await _petRepo.GetByUserIdAsync(userId);
             if (pet == null) return "你还没有宠物。";
 
-            await pet.UpdateStateByTimeAsync(_config);
+            await UpdateStateByTimeAsync(pet);
             var result = action(pet);
-            await pet.UpdateAsync();
+            await _petRepo.UpdateAsync(pet);
 
             // 统一上报宠物等级指标
-            _ = AchievementPlugin.ReportMetricAsync(userId, "pet.max_level", pet.Level, true);
+            _ = _achievementService.ReportMetricAsync(userId, "pet.max_level", pet.Level, true);
 
             return result;
         }
@@ -357,6 +376,72 @@ namespace BotWorker.Modules.Games
             const int length = 10;
             int filled = (int)Math.Clamp(value / 10, 0, length);
             return $"[{new string('■', filled).PadRight(length, '□')}]";
+        }
+
+        public async Task UpdateStateByTimeAsync(Pet pet)
+        {
+            var now = DateTime.Now;
+            var hours = (now - pet.LastUpdateTime).TotalHours;
+            if (hours < 0.01) return;
+
+            // 检查状态是否结束
+            if (pet.CurrentState != PetState.Idle && now >= pet.StateEndTime)
+            {
+                if (pet.CurrentState == PetState.Exploring)
+                {
+                    pet.Events.Add("🌟 冒险归来：你的宠物在野外发现了一些好东西！");
+                    // 逻辑简化，实际可加物品
+                }
+                else if (pet.CurrentState == PetState.Working)
+                {
+                    pet.Events.Add("💰 打工结束：你的宠物辛勤劳动，带回了酬劳。");
+                }
+                pet.CurrentState = PetState.Idle;
+                pet.StateEndTime = DateTime.MinValue;
+            }
+
+            // 性格对衰减的影响
+            double hungerMod = 1.0, energyMod = 1.0, happinessMod = 1.0;
+            switch (pet.Personality)
+            {
+                case PetPersonality.Energetic: energyMod = 0.8; hungerMod = 1.2; break;
+                case PetPersonality.Lazy: energyMod = 1.2; hungerMod = 0.8; happinessMod = 0.5; break;
+                case PetPersonality.Aggressive: happinessMod = 1.5; break;
+                case PetPersonality.Gentle: happinessMod = 0.8; break;
+            }
+
+            pet.Hunger = Math.Min(pet.Hunger + hours * _config.HungerRate * hungerMod, 100);
+            
+            if (pet.CurrentState == PetState.Sleeping)
+                pet.Energy = Math.Min(pet.Energy + hours * _config.EnergyRecoveryRate * 2 * energyMod, 100);
+            else
+                pet.Energy = Math.Max(pet.Energy - hours * 2 * energyMod, 0);
+
+            pet.Happiness = Math.Max(pet.Happiness - hours * 1.5 * happinessMod, 0);
+
+            if (pet.Hunger > 80) pet.Health = Math.Max(pet.Health - (pet.Hunger - 80) * 0.1 * hours, 0);
+            if (pet.Energy < 10) pet.Health = Math.Max(pet.Health - (10 - pet.Energy) * 0.05 * hours, 0);
+
+            pet.LastUpdateTime = now;
+            await _petRepo.UpdateAsync(pet);
+        }
+
+        private void GainExp(Pet pet, double exp)
+        {
+            pet.Experience += exp;
+            while (pet.Experience >= pet.ExperienceToNextLevel)
+            {
+                pet.Experience -= pet.ExperienceToNextLevel;
+                pet.Level++;
+            }
+        }
+
+        private void Play(Pet pet, double fun, double expMul)
+        {
+            pet.Happiness = Math.Min(pet.Happiness + fun, 100);
+            pet.Energy = Math.Max(pet.Energy - 15, 0);
+            pet.Intimacy = Math.Min(pet.Intimacy + 2, 1000);
+            GainExp(pet, fun * 2 * expMul);
         }
     }
 }

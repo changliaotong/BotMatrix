@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("GreetingRecords")]
+    [Table("greeting_records")]
     public class GreetingRecords
     {
         private static IGreetingRecordsRepository Repository => 

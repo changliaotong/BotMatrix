@@ -1,3 +1,5 @@
+using BotWorker.Infrastructure.Persistence;
+
 namespace BotWorker.Domain.Models.BotMessages;
 
 public partial class BotMessage
@@ -7,9 +9,9 @@ public partial class BotMessage
             string res = "";
             if (!Group.IsConfirmNew) return res;
 
-            if (!GroupMember.GetBool("IsConfirm", RealGroupId, UserId))
+            if (!await GroupMemberRepository.GetValueAsync<bool>("IsConfirm", RealGroupId, UserId))
             {
-                string confirmCode = GroupMember.GetValue("ConfirmCode", RealGroupId, UserId);
+                string confirmCode = await GroupMemberRepository.GetValueAsync<string>("ConfirmCode", RealGroupId, UserId);
                 if (confirmCode.IsNull())
                 {
                     confirmCode = RandomInt(100, 999).ToString();
@@ -19,14 +21,15 @@ public partial class BotMessage
                 }
                 else if (confirmCode == Message.Trim())
                 {
-                    return GroupMember.SetValue("IsConfirm", true, RealGroupId, UserId) == -1
+                    return await GroupMemberRepository.SetValueAsync("IsConfirm", true, RealGroupId, UserId) == -1
                         ? RetryMsg
                         : $"[@:{UserId}]\n✅ 确认真人身份成功";
                 }
                 if (SelfPerm < UserPerm && SelfPerm < 2)
                 {
                     //超过15分钟未确认的踢人
-                    if (GroupMember.GetInt("ISNULL(ABS(DATEDIFF(MINUTE, GETDATE(), ConfirmDate)), 0)", RealGroupId, UserId) > 15)
+                    var diffSql = SqlHelper.SqlIsNull($"ABS({SqlHelper.SqlDateDiff("MINUTE", "confirm_date", SqlHelper.SqlDateTime)})", "0");
+                    if (await GroupMemberRepository.GetIntAsync(diffSql, RealGroupId, UserId) > 15)
                     {
                         await KickOutAsync(SelfId, GroupId, UserId);
                         return $"[@:{UserId}] 超过15分钟未确认，将被踢出群";

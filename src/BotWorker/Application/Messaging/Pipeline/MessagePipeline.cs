@@ -28,6 +28,12 @@ namespace BotWorker.Application.Messaging.Pipeline
         /// </summary>
         public async Task<bool> ExecuteAsync(BotMessage context)
         {
+            // 注入实例依赖，消除对静态属性的依赖
+            context.ServiceProvider = _serviceProvider;
+            context.Pipeline = this;
+            context.LLMApp = _serviceProvider.GetRequiredService<BotWorker.Modules.AI.Providers.LLMApp>();
+            context.PluginManager = _serviceProvider.GetRequiredService<BotWorker.Modules.Plugins.PluginManager>();
+
             if (!_middlewares.Any()) return true;
 
             var aiService = _serviceProvider.GetRequiredService<IAIService>();

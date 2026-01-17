@@ -1,5 +1,6 @@
 using BotWorker.Domain.Interfaces;
 using BotWorker.Domain.Entities;
+using BotWorker.Domain.Repositories;
 using System.Text;
 
 namespace BotWorker.Modules.Games
@@ -15,9 +16,22 @@ namespace BotWorker.Modules.Games
     public class BrickService : IPlugin
     {
         private IRobot? _robot;
+        private readonly IBrickRecordRepository _brickRepo;
+        private readonly IUserCreditService _creditService;
+        private readonly ILogger<BrickService> _logger;
         private const int BRICK_COST = 50;           // 拍一次砖消耗50积分
         private const int ACTION_COOLDOWN_SEC = 300; // 冷却5分钟
         private const double SUCCESS_RATE = 0.65;    // 基础成功率
+
+        public BrickService(
+            IBrickRecordRepository brickRepo,
+            IUserCreditService creditService,
+            ILogger<BrickService> logger)
+        {
+            _brickRepo = brickRepo;
+            _creditService = creditService;
+            _logger = logger;
+        }
 
         public List<Intent> Intents => [
             new() { Name = "闷砖", Keywords = ["闷砖", "拍砖", "brick"] },
@@ -27,7 +41,7 @@ namespace BotWorker.Modules.Games
         public async Task InitAsync(IRobot robot)
         {
             _robot = robot;
-            await BrickRecord.EnsureTableCreatedAsync();
+            await _brickRepo.EnsureTableCreatedAsync();
             await robot.RegisterSkillAsync(new SkillCapability
             {
                 Name = "江湖闷砖",
@@ -57,7 +71,7 @@ namespace BotWorker.Modules.Games
             long groupId = long.Parse(ctx.GroupId);
 
             // 1. 检查冷却
-            var lastTime = await BrickRecord.GetLastActionTimeAsync(ctx.UserId);
+            var lastTime = await _brickRepo.GetLastActionTimeAsync(ctx.UserId);
             if (DateTime.Now < lastTime.AddSeconds(ACTION_COOLDOWN_SEC))
             {
                 var remain = (int)(lastTime.AddSeconds(ACTION_COOLDOWN_SEC) - DateTime.Now).TotalSeconds;
@@ -65,11 +79,11 @@ namespace BotWorker.Modules.Games
             }
 
             // 2. 检查积分是否足够
-            long myCredit = await UserInfo.GetCreditAsync(botId, groupId, attackerId);
+            long myCredit = await _creditService.GetCreditAsync(botId, groupId, attackerId);
             if (myCredit < BRICK_COST) return $"❌ 拍砖需要消耗 {BRICK_COST} 积分，你太穷了，连搬砖的力气都没有。";
 
             // 3. 执行扣分 (买砖头)
-            await UserInfo.AddCreditAsync(botId, groupId, ctx.GroupName ?? "江湖", attackerId, ctx.UserName, -BRICK_COST, "购买板砖");
+            await _creditService.AddCreditAsync(botId, groupId, ctx.GroupName ?? "江湖", attackerId, ctx.UserName, -BRICK_COST, "购买板砖");
 
             // 4. 判定结果
             bool isSuccess = Random.Shared.NextDouble() < SUCCESS_RATE;
@@ -89,7 +103,7 @@ namespace BotWorker.Modules.Games
             if (isSuccess)
             {
                 // 成功：抢分 + 禁言
-                var transRes = await UserInfo.TransferCreditAsync(
+                var transRes = await _creditService.TransferCreditAsync(
                     botId, groupId, ctx.GroupName ?? "江湖",
                     victimId, target.Name,
                     attackerId, ctx.UserName,
@@ -127,7 +141,7 @@ namespace BotWorker.Modules.Games
                 if (backfire)
                 {
                     sb.AppendLine($"🙈 【{ctx.UserName}】试图偷袭 【{target.Name}】，结果脚下一滑，砖头脱手飞出砸到了自己！");
-                    await UserInfo.AddCreditAsync(botId, groupId, ctx.GroupName ?? "江湖", attackerId, ctx.UserName, -stolenCredit, "拍砖反噬罚款");
+                    await _creditService.AddCreditAsync(botId, groupId, ctx.GroupName ?? "江湖", attackerId, ctx.UserName, -stolenCredit, "拍砖反噬罚款");
                     sb.AppendLine($"💸 你不仅没拍到人，还因为医药费损失了 {stolenCredit} 积分。");
                     
                     if (_robot != null)
@@ -138,19 +152,19 @@ namespace BotWorker.Modules.Games
                 }
                 else
                 {
-                    sb.AppendLine($"🛡️ 【{target.Name}】背后长了眼睛，一个闪身躲过了 【{ctx.UserName}】 的板砖。砖头碎了一地！");
+                    sb.AppendLine($"🛡️ 【{target.Name}】背后长了眼睛，一个闪身躲过了 【{ctx.UserName}】 的板砖. 砖头碎了一地！");
                 }
             }
 
             record.IsSuccess = isSuccess;
-            await record.InsertAsync();
+            await _brickRepo.InsertAsync(record);
 
             return sb.ToString();
         }
 
         private async Task<string> GetRankAsync()
         {
-            var tops = await BrickRecord.GetTopAttackersAsync();
+            var tops = await _brickRepo.GetTopAttackersAsync();
             if (tops.Count == 0) return "🏮 江湖一片祥和，还没有人开始拍砖。";
 
             var sb = new StringBuilder();

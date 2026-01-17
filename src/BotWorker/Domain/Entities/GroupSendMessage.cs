@@ -8,11 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("SendMessage")]
+    [Table("send_message")]
     public class GroupSendMessage
     {
-        private static IGroupSendMessageRepository Repo => GlobalConfig.ServiceProvider!.GetRequiredService<IGroupSendMessageRepository>();
-
         [Key]
         public int Id { get; set; }
         
@@ -46,53 +44,5 @@ namespace BotWorker.Domain.Entities
         public int? CostTime { get; set; }
         public bool? IsRecall { get; set; }
         public int? ReCallAfterMs { get; set; }
-
-        public static async Task<int> UserCountAsync(long groupId)
-        {
-            return await Repo.UserCountAsync(groupId);
-        }
-
-        public static int UserCount(long groupId) => UserCountAsync(groupId).GetAwaiter().GetResult();
-
-        public static async Task<int> AppendAsync(BotMessage bm)
-        {
-            if (bm.User.IsLog) BotLog.Log($"{bm.GroupName}({bm.GroupId}) {bm.Name}({bm.UserId}) {bm.EventType}：\n{bm.Message}", "处理后", bm);
-            if (bm.IsBlackSystem && bm.EventType.In("EventPrivateMessage", "EventGroupMessage", "TempMessageEvent")) return 0;
-
-            var entity = new GroupSendMessage
-            {
-                MsgGuid = bm.MsgGuid,
-                BotUin = bm.SelfId,
-                GroupId = bm.RealGroupId,
-                GroupName = bm.RealGroupName,
-                UserId = bm.UserId,
-                UserName = bm.Name,
-                MsgId = bm.MsgId,
-                Question = bm.Message.IsNull() ? bm.EventType : bm.Message,
-                Message = bm.IsSend && bm.IsRealProxy && !bm.IsAI && bm.AnswerId == 0 ? $"@{bm.Card.ReplaceInvalid().RemoveUserIds().ReplaceSensitive(Regexs.OfficalRejectWords)}:{bm.Answer}" : bm.Answer,
-                AnswerAi = bm.AnswerAI,
-                AnswerId = bm.AnswerId,
-                IsAI = bm.IsAI,
-                AgentId = bm.AgentId,
-                AgentName = bm.AgentName,
-                IsSend = bm.IsSend,
-                IsRealProxy = bm.IsRealProxy,
-                Reason = bm.Reason,
-                IsCmd = bm.IsCmd,
-                InputTokens = bm.InputTokens,
-                OutputTokens = bm.OutputTokens,
-                TokensMinus = bm.TokensMinus,
-                IsVoiceReply = bm.IsVoiceReply,
-                VoiceName = bm.VoiceName,
-                CostTime = bm.CostTime,
-                IsRecall = bm.IsRecall,
-                ReCallAfterMs = bm.RecallAfterMs,
-                InsertDate = DateTime.Now
-            };
-
-            return await Repo.AppendAsync(entity);
-        }
-
-        public static int Append(BotMessage bm) => AppendAsync(bm).GetAwaiter().GetResult();
     }
 }

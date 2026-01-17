@@ -19,12 +19,12 @@ public partial class BotMessage
         {
             if (trans != null)
             {
-                var res = await UserInfo.AddTokensAsync(SelfId, GroupId, GroupName, UserId, Name, tokensAdd, tokensInfo, trans);
+                var res = await UserService.AddTokensAsync(SelfId, GroupId, GroupName, UserId, Name, tokensAdd, tokensInfo, trans);
                 return (res.Result, res.TokensValue);
             }
             else
             {
-                var res = await UserInfo.AddTokensTransAsync(SelfId, GroupId, GroupName, UserId, Name, tokensAdd, tokensInfo);
+                var res = await UserService.AddTokensTransAsync(SelfId, GroupId, GroupName, UserId, Name, tokensAdd, tokensInfo);
                 return (res.Result, res.TokensValue);
             }
         }
@@ -42,11 +42,11 @@ public partial class BotMessage
         public async Task<bool> IsEnoughAsync()
         {
             if (Group.IsOwnerPay)            
-                return await UserInfo.GetTokensAsync(Group.RobotOwner) >  MinTokens;            
+                return await UserRepository.GetTokensAsync(Group.RobotOwner) >  MinTokens;            
             else
             {
-                var tokens = await UserInfo.GetTokensAsync(UserId);
-                return (tokens > MinTokens || await UserInfo.GetDayTokensGroupAsync(GroupId, UserId) > -MaxTokensDay) && tokens > MaxTokens;
+                var tokens = await UserRepository.GetTokensAsync(UserId);
+                return (tokens > MinTokens || await UserRepository.GetDayTokensGroupAsync(GroupId, UserId) > -MaxTokensDay) && tokens > MaxTokens;
             }
         }
 
@@ -61,11 +61,11 @@ public partial class BotMessage
             var agentName = match.Groups[1].Value.Trim();
             var cmdPara = match.Groups[2].Success ? match.Groups[2].Value.Trim() : "";
 
-            var agentGuid = Agent.GetWhere<Guid>("Guid", $"Name = {agentName.Quotes()} and private <> 2");
-            if (agentGuid == Guid.Empty)
+            var agent = await AgentRepository.GetByNameAsync(agentName);
+            if (agent == null)
                 return false;
 
-            CurrentAgent = await Agent.LoadAsync(agentGuid) ?? new();
+            CurrentAgent = agent;
             IsCallAgent = true;        
             CmdPara = cmdPara;
             return true;
@@ -75,17 +75,20 @@ public partial class BotMessage
         public async Task<string> ChangeAgentAsync()
         {
             IsCancelProxy = true;
-            CurrentAgent = await Agent.LoadAsync(User.AgentId) ?? new();            
+            CurrentAgent = await AgentRepository.GetByIdAsync(User.AgentId == 0 ? AgentInfos.DefaultAgent.Id : User.AgentId) ?? new();            
             var agentName = CurrentAgent.Name == "早喵" ? "" : $"【{CurrentAgent.Name}】";
             if (CmdPara == "")            
-                return $"🤖 {agentName}可变身的智能体有:\n{Agent.QueryWhere("Name", $"Id in (select AgentId from {AgentTags.FullName} WHERE TagId = 1)", "usedtimes desc", " {0}")}";
+            {
+                var names = await AgentRepository.GetNamesByTagAsync(1);
+                return $"🤖 {agentName}可变身的智能体有:\n{names}";
+            }
             
-            var agentId = Agent.GetIdByName(CmdPara);
-            if (agentId != 0)
+            var targetAgent = await AgentRepository.GetByNameAsync(CmdPara);
+            if (targetAgent != null)
             {
                 IsCallAgent = true;               
-                CurrentAgent = await Agent.LoadAsync(agentId) ?? new();                
-                return UserInfo.SetValue("AgentId", agentId, UserId) == -1 
+                CurrentAgent = targetAgent;                
+                return await UserRepository.SetValueAsync("AgentId", targetAgent.Id, UserId) == -1 
                     ? $"变身{RetryMsg}" 
                     : $"🤖【{CurrentAgent.Name}】{CurrentAgent.Info}\n退出与智能体{CurrentAgent.Name}对话请发送【结束】";
             }
@@ -174,21 +177,27 @@ public partial class BotMessage
                 return;
             }
             
-            CurrentAgent = await Agent.LoadAsync(User.AgentId == 0 ? AgentInfos.DefaultAgent.Id : User.AgentId) ?? new();
+            CurrentAgent = await AgentRepository.GetByIdAsync(User.AgentId == 0 ? AgentInfos.DefaultAgent.Id : User.AgentId) ?? new();
 
             if (IsAgent && CmdPara == "结束")
             {               
                 Answer = $"✅ 已结束与智能体【{CurrentAgent.Name}】的对话";
-                UserInfo.SetValue("AgentId", AgentInfos.DefaultAgent.Id, UserId);
+                await UserRepository.SetValueAsync("AgentId", AgentInfos.DefaultAgent.Id, UserId);
                 return;
             }
 
             IsAI = true;            
 
-            GetChatHistory();
+            await GetChatHistoryAsync();
 
-            (ModelId, var providerName, var modelName) = LLMModel.GetModelInfo(CurrentAgent.ModelId);
-            var provider = LLMApp?._manager.GetProvider(providerName ?? "Doubao");
+            var model = await LLMRepository.GetModelByIdAsync(CurrentAgent.ModelId);
+            var providerObj = model != null ? await LLMRepository.GetProviderByIdAsync(model.ProviderId) : null;
+            
+            ModelId = model?.Id ?? 0;
+            var providerName = providerObj?.Name ?? "Doubao";
+            var modelName = model?.Name;
+
+            var provider = LLMApp?._manager.GetProvider(providerName);
             if (provider != null)
             {
                 AnswerAI = await provider.ExecuteAsync(History, new ModelExecutionOptions { ModelId = modelName });
@@ -294,13 +303,14 @@ public partial class BotMessage
             if (IsGuild && IsGroup && !User.IsAI)
             {
                 var credit = TokensMinus;
-                await UserInfo.MinusCreditAsync(SelfId, GroupId, GroupName, UserId, Name, credit, "使用AI");
+                await UserService.AddCreditTransAsync(SelfId, GroupId, GroupName, UserId, Name, -credit, "使用AI");
             }
         }
 
         public async Task<string> MinusTokensResAsync(string tokensInfo)
         {
-            return await UserInfo.MinusTokensResAsync(SelfId, GroupId, GroupName, Group.IsOwnerPay ? Group.RobotOwner : UserId, Name, TokensMinus, $"{tokensInfo} {(Group.IsOwnerPay ? $" 群主付(QQ:{UserId})" : "")}");
+            var res = await UserService.AddTokensTransAsync(SelfId, GroupId, GroupName, Group.IsOwnerPay ? Group.RobotOwner : UserId, Name, -TokensMinus, $"{tokensInfo} {(Group.IsOwnerPay ? $" 群主付(QQ:{UserId})" : "")}");
+            return res.Result == -1 ? "" : "";
         }
 
         public async Task<string> BatchInsertAgentAsync()
@@ -337,7 +347,7 @@ public partial class BotMessage
             return systemPrompt;
         }
 
-        public void GetChatHistory(int his = 3)
+        public async Task GetChatHistoryAsync(int his = 3)
         {
             var systemPrompt = GetSystemPrompt();
 
@@ -349,37 +359,31 @@ public partial class BotMessage
 
             if (context > 0)
             {
-                var query = $"SELECT {SqlTop(context)} Question, CASE WHEN IsAI = 1 THEN AnswerAI ELSE Message END AS Answer, UserName FROM {GroupSendMessage.FullName} " +
-                            $"WHERE (AnswerId <> 0 or IsAI = 1) AND GroupId = {GroupId} {(Group.IsMultAI ? "" : $"AND UserId = {UserId}")} " +
-                            $"AND ABS({SqlDateDiff("HOUR", SqlDateTime, "InsertDate")}) <= 24 ORDER BY Id DESC {SqlLimit(context)}";
-                DataSet ds = QueryDataset(query);
+                var historyItems = await GroupSendMessageRepository.GetChatHistoryAsync(GroupId, UserId, Group.IsMultAI, context);
 
-                if (ds != null)
+                foreach (var item in historyItems)
                 {
-                    foreach (DataRow dr in ds.Tables[0].Rows)
+                    var question = item.Question.RemoveUserId(SelfId);
+                    var re = await BotCmdService.GetRegexCmdAsync();
+
+                    if (question.IsMatch(re))
+                        (_, question) = await GetCmdParaAsync(question, re);
+
+                    questions += question + "\n";
+
+                    var answer = item.Answer.RegexReplace(@"\n积分：.*?累计：.*", "");
+                    answer = answer.RegexReplace(@"^【\w*】", "");
+                    long tokenCount = (question + answer).GetTokensCount();
+
+                    if (InputTokens + tokenCount < CurrentAgent.tokensLimit - CurrentAgent.tokensOutputLimit)
                     {
-                        var question = dr["question"].AsString().RemoveUserId(SelfId);
-                        var re = BotCmd.GetRegexCmd();
-
-                        if (question.IsMatch(re))
-                            (_, question) = GetCmdPara(question, re);
-
-                        questions += question + "\n";
-
-                        var answer = dr["answer"].AsString().RegexReplace(@"\n积分：.*?累计：.*", "");
-                        answer = answer.RegexReplace(@"^【\w*】", "");
-                        long tokenCount = (question + answer).GetTokensCount();
-
-                        if (InputTokens + tokenCount < CurrentAgent.tokensLimit - CurrentAgent.tokensOutputLimit)
-                        {
-                            History.AddAssistantMessage(answer);
-                            History.AddUserMessage(question);
-                            InputTokens += tokenCount + 4;
-                        }
-                        else break;
+                        History.AddAssistantMessage(answer);
+                        History.AddUserMessage(question);
+                        InputTokens += tokenCount + 4;
                     }
-                    InputTokens += 2;
+                    else break;
                 }
+                InputTokens += 2;
             }
 
             systemPrompt += $"\n当前时间: {GetTimeStamp()}";

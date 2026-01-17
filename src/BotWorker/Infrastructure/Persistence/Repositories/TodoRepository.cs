@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using BotWorker.Domain.Repositories;
-using BotWorker.Infrastructure.Tools;
+using BotWorker.Domain.Entities;
 using Dapper;
 
 namespace BotWorker.Infrastructure.Persistence.Repositories

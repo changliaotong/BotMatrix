@@ -1,5 +1,3 @@
-﻿using BotWorker.Infrastructure.Persistence.ORM;
-
 namespace BotWorker.Domain.Models.BotMessages;
 
 public partial class BotMessage

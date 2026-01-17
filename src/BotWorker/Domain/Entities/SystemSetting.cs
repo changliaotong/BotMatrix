@@ -6,19 +6,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Domain.Entities
 {
-    [Table("SystemSetting")]
+    [Table("system_setting")]
     public class SystemSetting
     {
         [ExplicitKey]
         public string Key { get; set; }
         public string Value { get; set; }
 
-        private static ISystemSettingRepository Repo => GlobalConfig.ServiceProvider!.GetRequiredService<ISystemSettingRepository>();
+        public static async Task<bool> IsCloudLimitedAsync(BotMessage bm) => await GetBoolAsync(bm, "IsCloudLimited");
 
-        public static bool IsCloudLimited => GetBool("IsCloudLimited");
+        public static async Task<bool> IsPrefixNameProxyAsync(BotMessage bm) => await GetBoolAsync(bm, "IsPrefixNameProxy");
 
-        public static bool IsPrefixNameProxy => GetBool("IsPrefixNameProxy");
-
-        private static bool GetBool(string key) => Repo.GetBoolAsync(key).GetAwaiter().GetResult();
+        private static async Task<bool> GetBoolAsync(BotMessage bm, string key) => await bm.SystemSettingRepository.GetBoolAsync(key);
     }
 }

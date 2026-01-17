@@ -3,7 +3,7 @@ using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Domain.Entities;
 
-[Table("Balance")]
+[Table("balance")]
 public class BalanceLog
 {
     [Key]

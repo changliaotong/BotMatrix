@@ -70,7 +70,7 @@ public partial class BotMessage
             => GetTurnOnAsync(cmdName, cmdPara).GetAwaiter().GetResult();
 
         //全局开启关闭机器人某项功能
-        public string GetCloseAll()
+        public async Task<string> GetCloseAllAsync()
         {
             string res = "";
 
@@ -89,10 +89,10 @@ public partial class BotMessage
                     CmdPara = "接龙";
 
                 //判断参数是否有效
-                CmdPara = BotCmd.GetCmdName(CmdPara);
+                CmdPara = await BotCmdService.GetCmdNameAsync(CmdPara);
                 if (CmdPara != "")
                 {
-                    bool is_cmd_close = BotCmd.IsCmdCloseAll(CmdPara);
+                    bool is_cmd_close = await BotCmdService.IsCmdCloseAllAsync(CmdPara);
                     if (((CmdName == "全局开启") & (!is_cmd_close)) | ((CmdName == "全局关闭") & is_cmd_close))
                         res = CmdPara + "功能已" + CmdName;
                     else
@@ -100,14 +100,16 @@ public partial class BotMessage
                         int set_close = 0;
                         if (CmdName == "全局关闭")
                             set_close = 1;
-                        _ = BotCmd.SetCmdCloseAll(CmdPara, set_close);
+                        _ = await BotCmdService.SetCmdCloseAllAsync(CmdPara, set_close);
                         res = CmdPara + "功能" + CmdName + "成功\n";
                     }
                 }
             }
 
-            return res + "\n已全局关闭：\n" + BotCmd.GetClosedCmd();
+            return res + "\n已全局关闭：\n" + await BotCmdService.GetClosedCmdAsync();
         }
+
+        public string GetCloseAll() => GetCloseAllAsync().GetAwaiter().GetResult();
 
 
         // 开启关闭 刷屏/图片/网址/脏话/广告

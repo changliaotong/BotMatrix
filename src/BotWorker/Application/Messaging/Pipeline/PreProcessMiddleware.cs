@@ -12,6 +12,13 @@ namespace BotWorker.Application.Messaging.Pipeline
     /// </summary>
     public class PreProcessMiddleware : IMiddleware
     {
+        private readonly IUserService _userService;
+
+        public PreProcessMiddleware(IUserService userService)
+        {
+            _userService = userService;
+        }
+
         public async Task InvokeAsync(IPluginContext context, RequestDelegate next)
         {
             if (context is PluginContext pluginCtx && pluginCtx.Event is BotMessageEvent botMsgEvent)
@@ -19,7 +26,7 @@ namespace BotWorker.Application.Messaging.Pipeline
                 var botMsg = botMsgEvent.BotMessage;
 
                 // 1. 同行过滤
-                if (await UserInfo.StartWith285or300Async(botMsg.UserId))
+                if (await _userService.StartWith285or300Async(botMsg.UserId))
                 {
                     botMsg.Reason += "[同行]";
                     context.Logger?.LogInformation("[PreProcess] Filtered: Peer user {UserId} for message {MessageId}", botMsg.UserId, context.EventId);

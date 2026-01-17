@@ -1,13 +1,12 @@
 using System.Reflection;
 using System.Diagnostics;
 using BotWorker.Domain.Entities;
-using BotWorker.Infrastructure.Persistence.ORM;
 using BotWorker.Modules.AI.Models;
 using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Domain.Models.BotMessages;
 
-[Table("SendMessage")]
+[Table("send_message")]
 public partial class BotMessage
 {        
         [ExplicitKey]

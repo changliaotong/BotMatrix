@@ -3,9 +3,22 @@ using BotWorker.Infrastructure.Communication.OneBot;
 
 namespace BotWorker.Infrastructure.Messaging
 {
-    public class BotMessageMapper
+    public class BotMessageMapper : IBotMessageMapper
     {
-        public static async Task<BotMessage?> MapToOneBotEventAsync(string json, IOneBotApiClient? apiClient = null)
+        private readonly IBotRepository _botRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly IGroupRepository _groupRepository;
+        private readonly IServiceProvider _serviceProvider;
+
+        public BotMessageMapper(IBotRepository botRepository, IUserRepository userRepository, IGroupRepository groupRepository, IServiceProvider serviceProvider)
+        {
+            _botRepository = botRepository;
+            _userRepository = userRepository;
+            _groupRepository = groupRepository;
+            _serviceProvider = serviceProvider;
+        }
+
+        public async Task<BotMessage?> MapToOneBotEventAsync(string json, IOneBotApiClient? apiClient = null)
         {
             var options = new JsonSerializerOptions
             {
@@ -19,8 +32,7 @@ namespace BotWorker.Infrastructure.Messaging
             }
             catch (Exception ex)
             {
-                // 可以考虑在这里加日志，但 MapToOneBotEventAsync 是静态方法，没注入 ILogger
-                // 只能通过抛出异常让调用者处理
+                // 可以考虑在这里加日志
                 throw new JsonException($"Failed to deserialize OneBotEvent: {ex.Message}", ex);
             }
 
@@ -28,6 +40,7 @@ namespace BotWorker.Infrastructure.Messaging
 
             var bm = new BotMessage
              {
+                 ServiceProvider = _serviceProvider, // 注入 ServiceProvider
                  MsgId = ev.MessageId.ToString(),
                  Time = ev.Time,
                  EventType = ev.MessageType switch
@@ -55,7 +68,7 @@ namespace BotWorker.Infrastructure.Messaging
              // 非元事件，尝试加载 Bot 信息
              try
              {
-                 var botInfo = await BotInfo.GetSingleAsync(ev.SelfId);
+                 var botInfo = await _botRepository.GetByIdAsync(ev.SelfId);
                  if (botInfo != null)
                  {
                      bm.SelfInfo = botInfo;
@@ -71,7 +84,7 @@ namespace BotWorker.Infrastructure.Messaging
              {
                  try
                  {
-                     var userInfo = await UserInfo.GetSingleAsync(ev.UserIdLong);
+                     var userInfo = await _userRepository.GetByIdAsync(ev.UserIdLong);
                      if (userInfo != null)
                      {
                          bm.User = userInfo;
@@ -114,10 +127,10 @@ namespace BotWorker.Infrastructure.Messaging
                         {
                             try
                             {
-                                var group = await GroupInfo.GetSingleAsync(ev.GroupIdLong);
+                                var group = await _groupRepository.GetByIdAsync(ev.GroupIdLong);
                                 if (group != null && group.GroupOwner != ev.UserIdLong)
                                 {
-                                    await GroupInfo.SetValueAsync("GroupOwner", ev.UserIdLong, ev.GroupIdLong);
+                                    await _groupRepository.SetValueAsync("GroupOwner", ev.UserIdLong, ev.GroupIdLong);
                                 }
                             }
                             catch { /* Ignore */ }
@@ -157,7 +170,7 @@ namespace BotWorker.Infrastructure.Messaging
             {
                 try
                 {
-                    var groupInfo = await GroupInfo.GetSingleAsync(groupIdToLoad);
+                    var groupInfo = await _groupRepository.GetByIdAsync(groupIdToLoad);
                     if (groupInfo != null)
                     {
                         bm.Group = groupInfo;
@@ -184,7 +197,7 @@ namespace BotWorker.Infrastructure.Messaging
 
                                             if (ownerId != 0)
                                             {
-                                                await GroupInfo.SetValueAsync("GroupOwner", ownerId, groupIdToLoad);
+                                                await _groupRepository.SetValueAsync("GroupOwner", ownerId, groupIdToLoad);
                                             }
                                         }
                                     }
@@ -217,7 +230,7 @@ namespace BotWorker.Infrastructure.Messaging
                         {
                             _ = Task.Run(async () =>
                             {
-                                try { await GroupInfo.SetValueAsync("GroupOwner", bm.SelfId, groupIdToLoad); } catch { }
+                                try { await _groupRepository.SetValueAsync("GroupOwner", bm.SelfId, groupIdToLoad); } catch { }
                             });
                         }
                     }

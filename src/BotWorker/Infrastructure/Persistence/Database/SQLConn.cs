@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using System.Data.Common;
 using Microsoft.Data.SqlClient;
 using Npgsql;
+using BotWorker.Infrastructure.Persistence;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
@@ -34,6 +35,11 @@ namespace BotWorker.Infrastructure.Persistence.Database
         private static IDataParameter CreateParameter(string name, object value)
         {
             return DbProviderFactory.CreateParameter(name, value);
+        }
+
+        private static IDbTransaction? Unwrap(IDbTransaction? trans)
+        {
+            return SqlHelper.Unwrap(trans);
         }
 
 
@@ -102,7 +108,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 LogSql(sql, parameters);
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
-                cmd.Transaction = ORM.MetaData.Unwrap(trans);
+                cmd.Transaction = Unwrap(trans);
                 cmd.CommandTimeout = 60;
                 if (parameters != null && parameters.Length > 0)
                 {
@@ -339,7 +345,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
-                command.Transaction = ORM.MetaData.Unwrap(trans);
+                command.Transaction = Unwrap(trans);
                 command.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
@@ -386,7 +392,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
-                command.Transaction = ORM.MetaData.Unwrap(trans);
+                command.Transaction = Unwrap(trans);
                 command.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)
@@ -533,7 +539,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                 LogSql(sql, parameters);
                 using var command = conn.CreateCommand();
                 command.CommandText = sql;
-                command.Transaction = ORM.MetaData.Unwrap(trans);
+                command.Transaction = Unwrap(trans);
                 command.CommandTimeout = 60;
                 var processedParameters = ProcessParameters(parameters);
                 if (processedParameters != null)

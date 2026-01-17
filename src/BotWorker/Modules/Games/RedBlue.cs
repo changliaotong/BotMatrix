@@ -26,6 +26,20 @@ namespace BotWorker.Modules.Games
     )]
     public class RedBluePlugin : IPlugin
     {
+        private readonly IUserCreditService _creditService;
+        private readonly IShuffledDeckRepository _shuffledDeckRepo;
+        private readonly ILogger<RedBluePlugin> _logger;
+
+        public RedBluePlugin(
+            IUserCreditService creditService, 
+            IShuffledDeckRepository shuffledDeckRepo,
+            ILogger<RedBluePlugin> logger)
+        {
+            _creditService = creditService;
+            _shuffledDeckRepo = shuffledDeckRepo;
+            _logger = logger;
+        }
+
         public BotPluginAttribute Metadata => GetType().GetCustomAttribute<BotPluginAttribute>()!;
 
         public async Task InitAsync(IRobot robot)
@@ -50,11 +64,11 @@ namespace BotWorker.Modules.Games
             var cmdName = ctx.RawMessage.Trim().Split(' ')[0];
             var cmdPara = args.Length > 0 ? args[0] : "";
 
-            using var wrapper = await ShuffledDeck.BeginTransactionAsync();
+            using var wrapper = await _shuffledDeckRepo.BeginTransactionAsync();
             try
             {
                 // 1. 获取积分并锁定用户
-                long creditValue = await UserInfo.GetCreditForUpdateAsync(botId, groupId, userId, wrapper.Transaction);
+                long creditValue = await _creditService.GetCreditForUpdateAsync(botId, groupId, userId, wrapper.Transaction);
 
                 if (string.IsNullOrEmpty(cmdPara))
                 {
@@ -84,13 +98,13 @@ namespace BotWorker.Modules.Games
                 }
 
                 // 2. 加载并锁定牌堆
-                List<Card> deck = await ShuffledDeck.ReadShuffledDeckAsync(groupId, wrapper.Transaction, true);
+                List<Card> deck = await _shuffledDeckRepo.ReadShuffledDeckAsync(groupId, wrapper.Transaction, true);
 
                 if (deck.Count < 6)
                 {
                     deck = RedBlue.InitializeDeck();
                     RedBlue.ShuffleDeck(deck);
-                    await ShuffledDeck.SaveShuffledDeckAsync(groupId, deck, wrapper.Transaction);
+                    await SaveShuffledDeckAsync(groupId, deck, wrapper.Transaction);
                 }
 
                 // 发牌
@@ -126,11 +140,11 @@ namespace BotWorker.Modules.Games
 
                 long profit = isWin ? blockCredit * payout : -blockCredit;
                 
-                var addRes = await UserInfo.AddCreditAsync(botId, groupId, ctx.GroupName ?? "", userId, ctx.UserName, profit, $"红蓝博弈:{cmdName}", wrapper.Transaction);
+                var addRes = await _creditService.AddCreditAsync(botId, groupId, ctx.GroupName ?? "", userId, ctx.UserName, profit, $"红蓝博弈:{cmdName}", wrapper.Transaction);
                 
                 // 4. 移除已使用的牌
                 List<int> usedIds = playerHand.Concat(bankerHand).Select(c => c.Id).ToList();
-                await ShuffledDeck.ClearShuffledDeckAsync(groupId, usedIds, wrapper.Transaction);
+                await _shuffledDeckRepo.ClearShuffledDeckAsync(groupId, usedIds, wrapper.Transaction);
 
                 await wrapper.CommitAsync();
 
@@ -148,7 +162,25 @@ namespace BotWorker.Modules.Games
             catch (Exception ex)
             {
                 await wrapper.RollbackAsync();
+                _logger.LogError(ex, "红蓝博弈发生异常");
                 return $"❌ 游戏发生异常：{ex.Message}";
+            }
+        }
+
+        private async Task SaveShuffledDeckAsync(long groupId, List<Card> deck, IDbTransaction trans)
+        {
+            await _shuffledDeckRepo.ClearShuffledDeckAsync(groupId, trans);
+            foreach (var (card, i) in deck.Select((c, i) => (c, i)))
+            {
+                var item = new ShuffledDeck
+                {
+                    GroupId = groupId,
+                    Id = card.Id,
+                    Rank = card.Rank,
+                    Suit = card.Suit,
+                    DeckOrder = i
+                };
+                await trans.Connection.InsertAsync(item, trans);
             }
         }
     }
@@ -231,13 +263,9 @@ namespace BotWorker.Modules.Games
         public string Suit { get; set; } = suit;
     }
 
-    [Table("ShuffledDeck")]
+    [Table("shuffled_deck")]
     public class ShuffledDeck
     {
-        private static IShuffledDeckRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IShuffledDeckRepository>() 
-            ?? throw new InvalidOperationException("IShuffledDeckRepository not registered");
-
         [ExplicitKey]
         public long GroupId { get; set; }
         [ExplicitKey]
@@ -245,66 +273,5 @@ namespace BotWorker.Modules.Games
         public string Rank { get; set; } = string.Empty;
         public string Suit { get; set; } = string.Empty;
         public int DeckOrder { get; set; }
-
-        public static async Task<TransactionWrapper> BeginTransactionAsync() => await Repository.BeginTransactionAsync();
-
-        public static async Task ClearShuffledDeckAsync(long groupId, IDbTransaction? trans = null)
-        {
-            await Repository.ClearShuffledDeckAsync(groupId, trans);
-        }
-
-        public static async Task ClearShuffledDeckAsync(long groupId, List<int> ids, IDbTransaction? trans = null)
-        {
-            await Repository.ClearShuffledDeckAsync(groupId, ids, trans);
-        }
-
-        public static async Task SaveShuffledDeckAsync(long groupId, List<Card> deck, IDbTransaction? trans = null)
-        {
-            if (trans != null)
-            {
-                await SaveShuffledDeckInternalAsync(groupId, deck, trans);
-            }
-            else
-            {
-                using var wrapper = await BeginTransactionAsync();
-                try
-                {
-                    await SaveShuffledDeckInternalAsync(groupId, deck, wrapper.Transaction);
-                    await wrapper.CommitAsync();
-                }
-                catch
-                {
-                    await wrapper.RollbackAsync();
-                    throw;
-                }
-            }
-        }
-
-        private static async Task SaveShuffledDeckInternalAsync(long groupId, List<Card> deck, IDbTransaction trans)
-        {
-            await ClearShuffledDeckAsync(groupId, trans);
-            foreach (var (card, i) in deck.Select((c, i) => (c, i)))
-            {
-                var item = new ShuffledDeck
-                {
-                    GroupId = groupId,
-                    Id = card.Id,
-                    Rank = card.Rank,
-                    Suit = card.Suit,
-                    DeckOrder = i
-                };
-                await trans.Connection.InsertAsync(item, trans);
-            }
-        }
-
-        public static async Task<bool> IsShuffledDeckExistsAsync(long groupId, IDbTransaction? trans = null)
-        {
-            return await Repository.IsShuffledDeckExistsAsync(groupId, trans);
-        }
-
-        public static async Task<List<Card>> ReadShuffledDeckAsync(long groupId, IDbTransaction? trans = null, bool lockRow = false)
-        {
-            return await Repository.ReadShuffledDeckAsync(groupId, trans, lockRow);
-        }
     }
 }

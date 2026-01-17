@@ -22,6 +22,26 @@ namespace BotWorker.Modules.Games
     )]
     public class GiftService : IPlugin
     {
+        private readonly IGiftStoreItemRepository _storeItemRepo;
+        private readonly IGiftBackpackRepository _backpackRepo;
+        private readonly IGiftLogRepository _giftLogRepo;
+        private readonly IUserCreditService _creditService;
+        private readonly IUserRepository _userRepo;
+
+        public GiftService(
+            IGiftStoreItemRepository storeItemRepo,
+            IGiftBackpackRepository backpackRepo,
+            IGiftLogRepository giftLogRepo,
+            IUserCreditService creditService,
+            IUserRepository userRepo)
+        {
+            _storeItemRepo = storeItemRepo;
+            _backpackRepo = backpackRepo;
+            _giftLogRepo = giftLogRepo;
+            _creditService = creditService;
+            _userRepo = userRepo;
+        }
+
         public List<Intent> Intents => [
             new() { Name = "礼物商店", Keywords = ["礼物商店", "礼物列表", "gift shop"] },
             new() { Name = "购买礼物", Keywords = ["购买礼物", "buy gift"] },
@@ -32,12 +52,12 @@ namespace BotWorker.Modules.Games
 
         public async Task InitAsync(IRobot robot)
         {
-            await GiftStoreItem.EnsureTableCreatedAsync();
-            await GiftBackpack.EnsureTableCreatedAsync();
-            await GiftRecord.EnsureTableCreatedAsync();
+            await _storeItemRepo.EnsureTableCreatedAsync();
+            await _backpackRepo.EnsureTableCreatedAsync();
+            await _giftLogRepo.EnsureTableCreatedAsync();
 
             // 初始化默认礼物
-                long count = await GiftStoreItem.CountAsync();
+                long count = await _storeItemRepo.CountAsync();
                 Console.WriteLine($"[礼物系统] 当前礼物数量: {count}");
                 if (count == 0)
                 {
@@ -51,7 +71,7 @@ namespace BotWorker.Modules.Games
                     };
                     foreach (var item in defaults)
                     {
-                        await item.InsertAsync();
+                        await _storeItemRepo.InsertAsync(item);
                         Console.WriteLine($"[礼物系统] 插入默认礼物: {item.GiftName}");
                     }
                     Console.WriteLine($"[礼物系统] 已初始化 {defaults.Count} 个默认礼物。");
@@ -79,7 +99,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetShopListAsync()
         {
-            var gifts = await GiftStoreItem.GetValidGiftsAsync();
+            var gifts = await _storeItemRepo.GetValidGiftsAsync();
             if (gifts.Count == 0) return "商店目前空空如也。";
 
             var sb = new StringBuilder();
@@ -100,36 +120,36 @@ namespace BotWorker.Modules.Games
             int count = 1;
             if (args.Length > 1 && int.TryParse(args[1], out int c)) count = Math.Max(1, c);
 
-            var gift = await GiftStoreItem.GetByNameAsync(giftName);
+            var gift = await _storeItemRepo.GetByNameAsync(giftName);
             if (gift == null) return $"找不到礼物【{giftName}】。";
 
             long totalCost = gift.GiftCredit * count;
             long botUin = long.TryParse(ctx.BotId, out var b) ? b : 0;
             long groupId = long.TryParse(ctx.GroupId, out var g) ? g : 0;
             long userId = long.TryParse(ctx.UserId, out var u) ? u : 0;
-
-            long userCredit = await UserInfo.GetCreditAsync(botUin, groupId, userId);
-
+ 
+            long userCredit = await _creditService.GetCreditAsync(botUin, groupId, userId);
+ 
             if (userCredit < totalCost)
                 return $"您的积分不足。购买 {count} 个【{gift.GiftName}】需要 {totalCost} 积分，您当前只有 {userCredit} 积分。";
-
+ 
             // 扣除积分
-            var user = await UserInfo.LoadAsync(userId);
-            var minusRes = await UserInfo.AddCreditAsync(botUin, groupId, ctx.GroupName ?? "", userId, user?.Name ?? "", -totalCost, $"购买礼物：{gift.GiftName}*{count}");
+            var user = await _userRepo.GetByIdAsync(userId);
+            var minusRes = await _creditService.AddCreditAsync(botUin, groupId, ctx.GroupName ?? "", userId, user?.Name ?? "", -totalCost, $"购买礼物：{gift.GiftName}*{count}");
             
             if (minusRes.Result == -1) return "购买失败，请稍后再试。";
 
             // 加入背包
-            var backpackItem = await GiftBackpack.GetItemAsync(ctx.UserId, gift.Id);
+            var backpackItem = await _backpackRepo.GetItemAsync(ctx.UserId, gift.Id);
             if (backpackItem == null)
             {
                 backpackItem = new GiftBackpack { UserId = ctx.UserId, GiftId = gift.Id, ItemCount = count };
-                await backpackItem.InsertAsync();
+                await _backpackRepo.InsertAsync(backpackItem);
             }
             else
             {
                 backpackItem.ItemCount += count;
-                await backpackItem.UpdateAsync();
+                await _backpackRepo.UpdateAsync(backpackItem);
             }
 
             return $"🛍️ 购买成功！获得【{gift.GiftName}】x{count}，消耗 {totalCost} 积分。剩余积分：{minusRes.CreditValue}";
@@ -137,14 +157,14 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetBackpackAsync(IPluginContext ctx)
         {
-            var items = await GiftBackpack.GetUserBackpackAsync(ctx.UserId);
+            var items = await _backpackRepo.GetUserBackpackAsync(ctx.UserId);
             if (items.Count == 0) return "您的背包里还没有任何礼物，快去商店看看吧！";
 
             var sb = new StringBuilder();
             sb.AppendLine("🎒 【我的礼物背包】");
             foreach (var item in items)
             {
-                var gift = (await GiftStoreItem.QueryWhere($"Id = {item.GiftId}", (System.Data.IDbTransaction?)null)).FirstOrDefault();
+                var gift = (await _storeItemRepo.QueryWhere($"Id = '{item.GiftId}'", (System.Data.IDbTransaction?)null)).FirstOrDefault();
                 if (gift != null)
                 {
                     sb.AppendLine($"- {gift.GiftName} x{item.ItemCount}");
@@ -199,11 +219,11 @@ namespace BotWorker.Modules.Games
             if (targetUserId == ctx.UserId) return "不能给自己送礼物哦。";
             if (string.IsNullOrEmpty(giftName)) return "请输入要赠送的礼物名称。";
 
-            var gift = await GiftStoreItem.GetByNameAsync(giftName);
+            var gift = await _storeItemRepo.GetByNameAsync(giftName);
             if (gift == null) return $"找不到礼物【{giftName}】。";
 
             // 检查背包
-            var backpackItem = await GiftBackpack.GetItemAsync(ctx.UserId, gift.Id);
+            var backpackItem = await _backpackRepo.GetItemAsync(ctx.UserId, gift.Id);
             if (backpackItem == null || backpackItem.ItemCount < count)
             {
                 return $"您的背包里没有足够的【{giftName}】。当前拥有：{(backpackItem?.ItemCount ?? 0)}";
@@ -211,7 +231,7 @@ namespace BotWorker.Modules.Games
 
             // 执行赠送
             backpackItem.ItemCount -= count;
-            await backpackItem.UpdateAsync();
+            await _backpackRepo.UpdateAsync(backpackItem);
 
             // 记录日志
             long botUin = long.TryParse(ctx.BotId, out var b) ? b : 0;
@@ -219,8 +239,8 @@ namespace BotWorker.Modules.Games
             long userId = long.TryParse(ctx.UserId, out var u) ? u : 0;
             long targetUid = long.TryParse(targetUserId, out var tu) ? tu : 0;
 
-            var sender = await UserInfo.LoadAsync(userId);
-            var receiver = await UserInfo.LoadAsync(targetUid);
+            var sender = await _userRepo.GetByIdAsync(userId);
+            var receiver = await _userRepo.GetByIdAsync(targetUid);
             
             var record = new GiftRecord
             {
@@ -234,21 +254,22 @@ namespace BotWorker.Modules.Games
                 GiftId = gift.Id,
                 GiftName = gift.GiftName,
                 GiftCount = count,
-                GiftCredit = gift.GiftCredit
+                GiftCredit = gift.GiftCredit,
+                InsertDate = DateTime.Now
             };
-            await record.InsertAsync();
+            await _giftLogRepo.InsertAsync(record);
 
             // 给对方加分 (可选逻辑，根据原系统，赠送会给对方加分)
             long creditAdd = (gift.GiftCredit * count) / 2;
-            await UserInfo.AddCreditAsync(botUin, groupId, ctx.GroupName ?? "", targetUid, receiver?.Name ?? "", creditAdd, $"收到礼物：{gift.GiftName}*{count}");
+            await _creditService.AddCreditAsync(botUin, groupId, ctx.GroupName ?? "", targetUid, receiver?.Name ?? "", creditAdd, $"收到礼物：{gift.GiftName}*{count}");
 
             return $"🎁 赠送成功！你向 {receiver?.Name ?? targetUserId} 赠送了【{gift.GiftName}】x{count}。";
         }
 
         private async Task<string> GetGiftLogsAsync(IPluginContext ctx)
         {
-            var logs = await GiftRecord.QueryWhere("UserId = @p1 OR GiftUserId = @p1 ORDER BY InsertDate DESC", (System.Data.IDbTransaction?)null, GiftRecord.SqlParams(("@p1", ctx.UserId)));
-            if (logs.Count == 0) return "暂无礼物往来记录。";
+            var logs = await _giftLogRepo.QueryWhere("UserId = @p1 OR GiftUserId = @p1 ORDER BY InsertDate DESC", (System.Data.IDbTransaction?)null, new { p1 = ctx.UserId });
+            if (!logs.Any()) return "暂无礼物往来记录。";
 
             var sb = new StringBuilder();
             sb.AppendLine("📜 【近期礼物记录】");

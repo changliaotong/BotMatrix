@@ -6,7 +6,7 @@ public partial class BotMessage
 {
         public async Task<bool> IsWhiteListAsync(long userId)
         {
-            return await WhiteList.ExistsAsync(GroupId, userId)
+            return await WhiteListRepository.IsExistsAsync(GroupId, userId)
                 || UserPerm == 0
                 || Group.RobotOwner == userId
                 || (Group.IsWhite && UserId == userId && UserPerm < 2);
@@ -24,7 +24,7 @@ public partial class BotMessage
         // 白名单人数
         public async Task<long> CountWhiteListAsync()
         {
-            return await WhiteList.CountWhereAsync($"GroupId = {GroupId}");
+            return await WhiteListRepository.CountAsync($"WHERE group_id = {GroupId}");
         }
 
         public long CountWhiteList() => CountWhiteListAsync().GetAwaiter().GetResult();
@@ -38,7 +38,7 @@ public partial class BotMessage
         // 白名单列表
         public async Task<string> GetGroupWhiteListAsync()
         {
-            string res = await QueryResAsync($"select top 9 WhiteId from {WhiteList.FullName} where GroupId = {GroupId} order by Id desc", "{i}    [@:{0}]\n");
+            string res = await QueryResAsync($"select top 9 white_id from white_list where group_id = {GroupId} order by id desc", "{i}    [@:{0}]\n");
             return $"{(res.IsNull() ? "" : $"{res}\n")}白名单人数：{await CountWhiteListAsync()}\n白名单 + QQ\n取消白名单 + QQ{IsWhiteListRes()}";
         }
 
@@ -46,7 +46,16 @@ public partial class BotMessage
 
         public async Task<int> AddWhiteAsync(long userId)
         {
-            return await WhiteList.AppendWhiteListAsync(SelfId, GroupId, GroupName, UserId, Name, userId);
+            var whiteList = new WhiteList
+            {
+                BotUin = SelfId,
+                GroupId = GroupId,
+                GroupName = GroupName,
+                UserId = UserId,
+                UserName = Name,
+                WhiteId = userId
+            };
+            return await WhiteListRepository.AddAsync(whiteList);
         }
 
         public int AddWhite(long userId) => AddWhiteAsync(userId).GetAwaiter().GetResult();
@@ -69,7 +78,7 @@ public partial class BotMessage
             {
                 var isWhite = CmdName == "白名单";
 
-                if (await GroupInfo.SetValueAsync("IsWhite", isWhite, GroupId) == -1)
+                if (await GroupRepository.SetValueAsync("IsWhite", isWhite, GroupId) == -1)
                     return RetryMsg;
 
                 return isWhite
@@ -83,12 +92,12 @@ public partial class BotMessage
                 var qqWhite = match.Groups["UserId"].Value.AsLong();
                 if (CmdName == "白名单")
                 {
-                    if (await BlackList.ExistsAsync(GroupId, qqWhite))
-                        res += await BlackList.DeleteAsync(GroupId, qqWhite) == -1
+                    if (await BlackListRepository.IsExistsAsync(GroupId, qqWhite))
+                        res += await BlackListRepository.DeleteAsync(GroupId, qqWhite) == -1
                             ? $"将[@:{qqWhite}]从黑名单删除{RetryMsg}\n"
                             : $"✅ 已成功将[@:{qqWhite}]从黑名单删除！\n";
 
-                    res += await WhiteList.ExistsAsync(GroupId, qqWhite)
+                    res += await WhiteListRepository.IsExistsAsync(GroupId, qqWhite)
                         ? $"[@:{qqWhite}]已经在白名单里，无需再次加入。\n"
                         : await AddWhiteAsync(qqWhite) == -1
                             ? $"[@:{qqWhite}]加入白名单{RetryMsg}\n"
@@ -102,9 +111,9 @@ public partial class BotMessage
                         continue;
                     }
 
-                    res += !await WhiteList.ExistsAsync(GroupId, qqWhite)
+                    res += !await WhiteListRepository.IsExistsAsync(GroupId, qqWhite)
                         ? $"[@:{qqWhite}]不在白名单中，无需删除!\n"
-                        : await WhiteList.DeleteAsync(GroupId, qqWhite) == -1
+                        : await WhiteListRepository.DeleteAsync(GroupId, qqWhite) == -1
                             ? $"[@:{qqWhite}]{RetryMsg}\n"
                             : $"✅ [@:{qqWhite}]已经从白名单中删除!\n";
                 }
@@ -121,10 +130,13 @@ public partial class BotMessage
                 return OwnerOnlyMsg;
 
             var whiteCount = await CountWhiteListAsync();
+            if (whiteCount == 0)
+                return "✅ 白名单本就是空的";
+
             if (whiteCount > 10 && !IsConfirm)
                 return await ConfirmMessage($"清空群{GroupId}白名单 数量：{whiteCount}");
 
-            return await WhiteList.DeleteAllAsync(GroupId) == -1
+            return await WhiteListRepository.DeleteAsync($"WHERE group_id = {GroupId}") == -1
                 ? RetryMsg
                 : "✅ 白名单已清空";
         }

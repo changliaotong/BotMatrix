@@ -8,13 +8,13 @@ public partial class BotMessage
         // 解除黑名单
         public async Task<string> GetCancelBlackAsync(long userId)
         {
-            if (await BlackList.ExistsAsync(GroupId, userId))
+            if (await BlackListRepository.IsExistsAsync(GroupId, userId))
             {
-                var res = await BlackList.DeleteAsync(GroupId, userId) == -1
+                var res = await BlackListRepository.DeleteAsync(GroupId, userId) == -1
                     ? $"[@:{userId}]{RetryMsg}\n"
                     : $"[@:{userId}]已解除拉黑\n";
 
-                if (await BlackList.IsSystemBlackAsync(userId))
+                if (await BlackListRepository.IsSystemBlackAsync(userId))
                     res += $"[@:{userId}]已被列入官方黑名单\n";
                 return res;
             }
@@ -27,10 +27,10 @@ public partial class BotMessage
         // 黑名单列表
         public async Task<string> GetGroupBlackListAsync()
         {
-            var list = await QueryResAsync($"SELECT {SqlTop(10)} BlackId FROM {BlackList.FullName} WHERE GroupId = {GroupId} ORDER BY Id DESC {SqlLimit(10)}",
+            var list = await QueryResAsync($"SELECT {SqlTop(10)} black_id FROM black_list WHERE group_id = {GroupId} ORDER BY id DESC {SqlLimit(10)}",
                             "{i} {0}\n");
             
-            var count = await BlackList.CountWhereAsync($"GroupId = {GroupId}");
+            var count = await BlackListRepository.CountAsync($"WHERE group_id = {GroupId}");
             
             return (string.IsNullOrEmpty(list) ? "🌑 黑名单暂无记录\n" : $"🌑 黑名单列表 (前10):\n{list}") +
                    $"👥 已拉黑人数：{count}\n" +
@@ -76,14 +76,14 @@ public partial class BotMessage
             if (!IsRobotOwner())
                 return OwnerOnlyMsg;
 
-            long blackCount = await BlackList.CountKey2Async(GroupId.ToString());
+            long blackCount = await BlackListRepository.CountAsync($"WHERE group_id = {GroupId}");
             if (blackCount == 0)
                 return "黑名单已为空，无需清空";
 
             if (!IsConfirm && blackCount > 10)
                 return await ConfirmMessage($"清空黑名单 人数{blackCount}");
 
-            return await BlackList.DeleteAllAsync(GroupId) == -1
+            return await BlackListRepository.ClearGroupAsync(GroupId) == -1
                 ? RetryMsg
                 : "✅ 黑名单已清空";
         }
@@ -92,7 +92,7 @@ public partial class BotMessage
         public async Task<string> GetAddBlackAsync(long qqBlack)
         {
             //加入黑名单
-            if (await BlackList.ExistsAsync(GroupId, qqBlack))           
+            if (await BlackListRepository.IsExistsAsync(GroupId, qqBlack))           
                 return $"[@:{qqBlack}] 已被拉黑，无需再次加入\n";            
 
             if (qqBlack == UserId)
@@ -105,15 +105,15 @@ public partial class BotMessage
                 return "不能拉黑我主人";
 
             string res = "";
-            if (await WhiteList.ExistsAsync(GroupId, qqBlack))
+            if (await WhiteListRepository.IsExistsAsync(GroupId, qqBlack))
             {
                 if (Group.RobotOwner != UserId && !BotInfo.IsAdmin(SelfId, UserId))
                     return $"您无权拉黑白名单成员";
-                res += await WhiteList.DeleteAsync(GroupId, qqBlack) == -1 
+                res += await WhiteListRepository.DeleteAsync(GroupId, qqBlack) == -1 
                     ? $"未能将[@:{qqBlack}]从白名单删除" 
                     : $"✅ 已将[@:{qqBlack}]从白名单删除！\n";
             }
-            res += await BlackList.AddBlackListAsync(SelfId, GroupId, GroupName, UserId, Name, qqBlack, "") == -1
+            res += await BlackListRepository.AddBlackListAsync(SelfId, GroupId, GroupName, UserId, Name, qqBlack, "") == -1
                 ? $"[@:{qqBlack}]{RetryMsg}"
                 : $"✅ 已拉黑！";
             return res;
@@ -124,7 +124,7 @@ public partial class BotMessage
         // 加入黑名单
         public async Task<int> AddBlackAsync(long blackQQ, string blackInfo)
         {
-            return await BlackList.AddBlackListAsync(SelfId, GroupId, GroupName, UserId, Name, blackQQ, blackInfo);
+            return await BlackListRepository.AddBlackListAsync(SelfId, GroupId, GroupName, UserId, Name, blackQQ, blackInfo);
         }
 
         public int AddBlack(long blackQQ, string blackInfo) => AddBlackAsync(blackQQ, blackInfo).GetAwaiter().GetResult();

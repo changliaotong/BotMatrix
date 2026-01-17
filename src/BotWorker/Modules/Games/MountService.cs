@@ -15,19 +15,15 @@ namespace BotWorker.Modules.Games
     public class MountService : IPlugin
     {
         private IRobot? _robot;
-        private ILogger? _logger;
+        private readonly ILogger<MountService>? _logger;
+        private readonly IMountRepository _mountRepo;
         private readonly MountConfig _config;
 
-        public MountService()
+        public MountService(IMountRepository mountRepo, ILogger<MountService> logger)
         {
-            _config = new MountConfig();
-        }
-
-        public MountService(IRobot robot, ILogger logger, MountConfig config)
-        {
-            _robot = robot;
+            _mountRepo = mountRepo;
             _logger = logger;
-            _config = config;
+            _config = new MountConfig();
         }
 
         public List<Intent> Intents => [
@@ -52,7 +48,7 @@ namespace BotWorker.Modules.Games
 
         private async Task EnsureTablesCreatedAsync()
         {
-            await Mount.EnsureTableCreatedAsync();
+            await _mountRepo.EnsureTableCreatedAsync();
         }
 
         private async Task<string> HandleMountCommandAsync(IPluginContext ctx, string[] args)
@@ -70,7 +66,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> GetMyMountsAsync(IPluginContext ctx)
         {
-            var mounts = await Mount.GetUserMountsAsync(ctx.UserId);
+            var mounts = await _mountRepo.GetUserMountsAsync(ctx.UserId);
             if (mounts.Count == 0) return "你名下暂无坐骑，快去【寻找坐骑】吧！";
 
             var sb = new StringBuilder();
@@ -93,7 +89,7 @@ namespace BotWorker.Modules.Games
             if (args.Length == 0) return "请输入你想召唤的坐骑名称！";
             var targetName = args[0];
 
-            var mounts = await Mount.GetUserMountsAsync(ctx.UserId);
+            var mounts = await _mountRepo.GetUserMountsAsync(ctx.UserId);
             var target = mounts.FirstOrDefault(m => m.Name == targetName);
             if (target == null) return $"你马厩里没有叫 {targetName} 的坐骑。";
 
@@ -101,11 +97,11 @@ namespace BotWorker.Modules.Games
             foreach (var m in mounts.Where(x => x.Status == MountStatus.Riding))
             {
                 m.Status = MountStatus.Idle;
-                await m.UpdateAsync();
+                await _mountRepo.UpdateAsync(m);
             }
 
             target.Status = MountStatus.Riding;
-            await target.UpdateAsync();
+            await _mountRepo.UpdateAsync(target);
 
             var template = MountTemplate.All.GetValueOrDefault(target.TemplateId);
             var sb = new StringBuilder();
@@ -117,7 +113,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> CaptureMountAsync(IPluginContext ctx)
         {
-            var mounts = await Mount.GetUserMountsAsync(ctx.UserId);
+            var mounts = await _mountRepo.GetUserMountsAsync(ctx.UserId);
             if (mounts.Count >= _config.MaxMountCount) return "你的马厩已经满了，无法容纳更多坐骑！";
 
             // 简单的随机逻辑
@@ -142,7 +138,7 @@ namespace BotWorker.Modules.Games
                 CreateTime = DateTime.Now
             };
 
-            await newMount.InsertAsync();
+            await _mountRepo.InsertAsync(newMount);
 
             var sb = new StringBuilder();
             sb.AppendLine("🌲 你在野外探险时...");
@@ -153,7 +149,7 @@ namespace BotWorker.Modules.Games
 
         private async Task<string> TrainMountAsync(IPluginContext ctx, string[] args)
         {
-            var active = await Mount.GetActiveMountAsync(ctx.UserId);
+            var active = await _mountRepo.GetActiveMountAsync(ctx.UserId);
             if (active == null) return "你必须先【召唤坐骑】才能进行训练！";
 
             if (DateTime.Now - active.LastActionTime < TimeSpan.FromMinutes(10))
@@ -163,7 +159,7 @@ namespace BotWorker.Modules.Games
             var oldLevel = active.Level;
             active.GainExp(expGain);
             active.LastActionTime = DateTime.Now;
-            await active.UpdateAsync();
+            await _mountRepo.UpdateAsync(active);
 
             var sb = new StringBuilder();
             sb.AppendLine($"💪 经过一番艰苦的训练，{active.Name} 获得了 {expGain:F0} 点经验！");

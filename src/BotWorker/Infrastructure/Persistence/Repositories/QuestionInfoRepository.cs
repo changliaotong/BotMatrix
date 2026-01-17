@@ -15,13 +15,13 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
 
         public async Task<bool> ExistsByQuestionAsync(string question)
         {
-            var cleanQuestion = QuestionInfo.GetNew(question);
+            var cleanQuestion = QuestionStringUtil.GetNew(question);
             return await CountAsync("WHERE question = @question", new { question = cleanQuestion }) > 0;
         }
 
         public async Task<long> AddQuestionAsync(long botUin, long groupId, long userId, string question)
         {
-            var cleanQuestion = QuestionInfo.GetNew(question);
+            var cleanQuestion = QuestionStringUtil.GetNew(question);
             if (string.IsNullOrEmpty(cleanQuestion) || cleanQuestion.Length > 200)
                 return 0;
 

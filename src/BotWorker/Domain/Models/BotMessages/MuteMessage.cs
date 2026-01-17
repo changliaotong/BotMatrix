@@ -22,7 +22,7 @@ public partial class BotMessage
                 if (Group.IsProp)
                     return "您无权使用此命令";
 
-                if (!await GroupProps.HavePropAsync(GroupId, UserId, 1))
+                if (!await GroupPropsService.HavePropAsync(GroupId, UserId, 1))
                     return "您没有【禁言卡】无权禁言";
                 else
                     isUseProp = true;
@@ -47,7 +47,7 @@ public partial class BotMessage
                     if (isUseProp)
                     {
                         dissayTime = 10 * 60;
-                        int i = await GroupProps.UsePropAsync(GroupId, UserId, 1, targetUin);
+                        int i = await GroupPropsService.UsePropAsync(GroupId, UserId, 1, targetUin);
                         if (i == -1)
                             return "使用【禁言卡】道具失败，请稍后重试";
                         else

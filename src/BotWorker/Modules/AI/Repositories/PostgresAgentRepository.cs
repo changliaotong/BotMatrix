@@ -101,6 +101,43 @@ namespace BotWorker.Modules.AI.Repositories
                 new { name, ownerId }) > 0;
         }
 
+        public async Task<string> GetNamesByTagAsync(int tagId, string format = " {0}")
+        {
+            using var conn = CreateConnection();
+            var sql = @"
+                SELECT a.name 
+                FROM ai_agents a
+                JOIN ai_agent_tags t ON a.id = t.agent_id
+                WHERE t.tag_id = @tagId
+                ORDER BY a.used_times DESC";
+            
+            var names = await conn.QueryAsync<string>(sql, new { tagId });
+            return string.Join("", names.Select(n => string.Format(format, n)));
+        }
+
+        public async Task<Guid> GetGuidAsync(long id)
+        {
+            using var conn = CreateConnection();
+            var sql = $"SELECT guid FROM {_tableName} WHERE id = @id";
+            return await conn.QueryFirstOrDefaultAsync<Guid>(sql, new { id });
+        }
+
+        public async Task<string> GetValueAsync(string field, long id)
+        {
+            var columnName = field.ToLower() switch
+            {
+                "info" => "info",
+                "name" => "name",
+                "systemprompt" => "system_prompt",
+                _ => field.ToLower()
+            };
+            
+            using var conn = CreateConnection();
+            var sql = $"SELECT {columnName} FROM {_tableName} WHERE id = @id";
+            var result = await conn.ExecuteScalarAsync<object>(sql, new { id });
+            return result?.ToString() ?? string.Empty;
+        }
+
         private Agent? MapAgent(Agent? agent)
         {
             return agent;

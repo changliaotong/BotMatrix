@@ -13,9 +13,20 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
 {
     public class UserRepository : BaseRepository<UserInfo>, IUserRepository
     {
-        public UserRepository(string? connectionString = null) 
+        private readonly ICreditLogRepository _creditLogRepository;
+        private readonly ITokensLogRepository _tokensLogRepository;
+        private readonly BotWorker.Infrastructure.Caching.ICacheService? _cacheService;
+
+        public UserRepository(
+            ICreditLogRepository creditLogRepository, 
+            ITokensLogRepository tokensLogRepository, 
+            BotWorker.Infrastructure.Caching.ICacheService? cacheService = null,
+            string? connectionString = null) 
             : base("user_info", connectionString ?? GlobalConfig.BaseInfoConnection)
         {
+            _creditLogRepository = creditLogRepository;
+            _tokensLogRepository = tokensLogRepository;
+            _cacheService = cacheService;
         }
 
         public async Task<UserInfo?> GetByOpenIdAsync(string openId, long botUin)
@@ -54,9 +65,7 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             var success = await IncrementValueAsync("credit", amount, qq, trans) > 0;
             var newValue = creditValue + amount;
 
-            var creditLogRepository = BotMessage.ServiceProvider?.GetRequiredService<ICreditLogRepository>();
-            if (creditLogRepository != null)
-                await creditLogRepository.AddLogAsync(botUin, groupId, groupName, qq, name, amount, creditValue, reason, trans);
+            await _creditLogRepository.AddLogAsync(botUin, groupId, groupName, qq, name, amount, creditValue, reason, trans);
 
             return (success, newValue);
         }
@@ -66,6 +75,23 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             string sql = $"SELECT credit FROM {_tableName} WHERE id = @qq FOR UPDATE";
             var conn = trans?.Connection ?? CreateConnection();
             return await conn.ExecuteScalarAsync<long>(sql, new { qq }, trans);
+        }
+
+        public async Task<long> GetSaveCreditAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
+        {
+            return await GetValueAsync<long>("save_credit", qq, trans);
+        }
+
+        public async Task<long> GetSaveCreditForUpdateAsync(long botUin, long groupId, long qq, IDbTransaction? trans = null)
+        {
+            string sql = $"SELECT save_credit FROM {_tableName} WHERE id = @qq FOR UPDATE";
+            var conn = trans?.Connection ?? CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { qq }, trans);
+        }
+
+        public async Task<bool> AddSaveCreditAsync(long botUin, long groupId, long qq, long amount, IDbTransaction? trans = null)
+        {
+            return await IncrementValueAsync("save_credit", amount, qq, trans) > 0;
         }
 
         public async Task<long> GetTokensAsync(long qq)
@@ -85,18 +111,14 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             return await IncrementValueAsync("tokens", amount, qq, trans) > 0;
         }
 
-        private static ITokensLogRepository TokensLogRepository => 
-            BotMessage.ServiceProvider?.GetRequiredService<ITokensLogRepository>() 
-            ?? throw new InvalidOperationException("ITokensLogRepository not registered");
-
         public async Task<long> GetDayTokensGroupAsync(long groupId, long userId)
         {
-            return await TokensLogRepository.GetDayTokensGroupAsync(groupId, userId);
+            return await _tokensLogRepository.GetDayTokensGroupAsync(groupId, userId);
         }
 
         public async Task<long> GetDayTokensAsync(long userId)
         {
-            return await TokensLogRepository.GetDayTokensAsync(userId);
+            return await _tokensLogRepository.GetDayTokensAsync(userId);
         }
 
         public async Task<string> GetTokensListAsync(long groupId, int top)
@@ -220,6 +242,13 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             return await conn.ExecuteScalarAsync<string>(sql, new { userId, botUin });
         }
 
+        public async Task<long> GetSourceQQAsync(long botUin, long userId)
+        {
+            string sql = $"SELECT id FROM {_tableName} WHERE target_user_id = @userId AND bot_uin = @botUin";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { userId, botUin });
+        }
+
         public async Task<decimal> GetBalanceAsync(long qq, IDbTransaction? trans = null)
         {
             return await GetValueAsync<decimal>("balance", qq, trans);
@@ -329,19 +358,17 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
 
         public async Task SyncCacheFieldAsync(long userId, string field, object value)
         {
-            if (MetaData.CacheService == null || !MetaData.UseCache) return;
+            if (_cacheService == null) return;
             
-            // 模拟 MetaData 的缓存键生成逻辑
+            // 模拟旧版的缓存键生成逻辑以保持兼容性
             string fullName = typeof(UserInfo).FullName ?? "BotWorker.Domain.Entities.UserInfo";
-            string cacheKey = $"MetaData:{fullName}:Id:{userId}";
+            string cacheKey = $"Entity:{fullName}:Id:{userId}";
             
-            // 注意：MetaData 的 SyncCacheField 逻辑是失效行级缓存并设置字段级缓存（如果支持）
-            // 这里我们主要处理失效行级缓存，因为 Repository 模式下通常倾向于整体缓存或按需加载
-            await MetaData.CacheService.RemoveAsync(cacheKey);
+            // 这里主要处理失效行级缓存
+            await _cacheService.RemoveAsync(cacheKey);
             
-            // 如果有字段级缓存需求，可以根据 field 处理
-            string fieldCacheKey = $"MetaData:{fullName}:Id:{userId}_{field}";
-            await MetaData.CacheService.SetAsync(fieldCacheKey, value, TimeSpan.FromMinutes(1));
+            string fieldCacheKey = $"Entity:{fullName}:Id:{userId}_{field}";
+            await _cacheService.SetAsync(fieldCacheKey, value, TimeSpan.FromMinutes(1));
         }
 
         public async Task SyncCreditCacheAsync(long botUin, long groupId, long qq, long newValue)
@@ -398,6 +425,109 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
                 }
                 return 0;
             }
+        }
+
+        public async Task<string> GetCoinsListAllAsync(long qq, int top)
+        {
+            string sql = $@"SELECT id, coins FROM {_tableName} ORDER BY coins DESC LIMIT @top";
+            using var conn = CreateConnection();
+            var list = await conn.QueryAsync<(long Id, long Coins)>(sql, new { top });
+
+            var sb = new System.Text.StringBuilder();
+            int i = 1;
+            bool foundMe = false;
+            foreach (var item in list)
+            {
+                sb.Append($"{i} [@:{item.Id}]：{item.Coins:N0}\n");
+                if (item.Id == qq) foundMe = true;
+                i++;
+            }
+
+            if (!foundMe)
+            {
+                sb.Append($"{{金币总排名}} {qq}：{{金币}}\n");
+            }
+            return sb.ToString();
+        }
+
+        public async Task<string> GetCoinsListAsync(long groupId, long userId, int top)
+        {
+            string sql = $@"
+                SELECT id, coins 
+                FROM {_tableName} 
+                WHERE id IN (SELECT user_id FROM coins WHERE group_id = @groupId)
+                ORDER BY coins DESC 
+                LIMIT @top";
+
+            using var conn = CreateConnection();
+            var list = await conn.QueryAsync<(long Id, long Coins)>(sql, new { groupId, top });
+
+            var sb = new System.Text.StringBuilder();
+            int i = 1;
+            bool foundMe = false;
+            foreach (var item in list)
+            {
+                sb.Append($"第{i}名[@:{item.Id}] 💰{item.Coins:N0}\n");
+                if (item.Id == userId) foundMe = true;
+                i++;
+            }
+
+            if (!foundMe)
+            {
+                sb.Append($"{{金币排名}} [@:{userId}] 💰{{金币}}\n");
+            }
+            return sb.ToString();
+        }
+
+        public async Task<long> GetCoinsRankingAsync(long groupId, long qq)
+        {
+            var myCoins = await GetCoinsAsync(qq);
+            string sql = $@"
+                SELECT COUNT(*) + 1 
+                FROM {_tableName} 
+                WHERE coins > @myCoins 
+                AND id IN (SELECT user_id FROM group_member WHERE group_id = @groupId)";
+
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { myCoins, groupId });
+        }
+
+        public async Task<long> GetCoinsRankingAllAsync(long qq)
+        {
+            var myCoins = await GetCoinsAsync(qq);
+            string sql = $@"
+                SELECT COUNT(*) + 1 
+                FROM {_tableName} 
+                WHERE coins > @myCoins";
+
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { myCoins });
+        }
+
+        public async Task<string> GetCreditRankingAsync(long groupId, int top, string format)
+        {
+            // query: select top {top} Id, Credit from UserInfo where Id in (select UserId from CreditLog where GroupId = {GroupId}) order by credit desc
+            string sql = $@"
+                SELECT id, credit 
+                FROM {_tableName} 
+                WHERE id IN (SELECT user_id FROM credit_log WHERE group_id = @groupId) 
+                ORDER BY credit DESC 
+                LIMIT @top";
+
+            using var conn = CreateConnection();
+            var list = await conn.QueryAsync<(long Id, long Credit)>(sql, new { groupId, top });
+
+            var sb = new System.Text.StringBuilder();
+            int i = 1;
+            foreach (var item in list)
+            {
+                // format: "第{i}名{0} 💎{1:N0}\n"
+                string line = format.Replace("{i}", i.ToString());
+                line = string.Format(line, item.Id, item.Credit);
+                sb.Append(line);
+                i++;
+            }
+            return sb.ToString();
         }
     }
 }

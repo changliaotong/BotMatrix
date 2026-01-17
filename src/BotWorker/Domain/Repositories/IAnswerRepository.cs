@@ -12,5 +12,18 @@ namespace BotWorker.Domain.Repositories
         Task<long> CountAnswerAsync(long questionId);
         Task<int> IncrementUsedTimesAsync(long answerId);
         Task<int> AuditAsync(long answerId, int audit, long qq);
+        Task<long> GetGroupAnswerIdAsync(long groupId, long questionId, int length = 0);
+        Task<long> GetDefaultAnswerIdAsync(long questionId, long robotId, int length = 0);
+        Task<long> GetDefaultAnswerAtIdAsync(long questionId, int length = 0);
+        Task<long> GetAllAnswerAuditIdAsync(long questionId, int length = 0);
+        Task<long> GetAllAnswerNotAuditIdAsync(long questionId, int length = 0);
+        Task<long> GetAllAnswerIdAsync(long questionId, int length = 0);
+        Task<long> GetStoryIdAsync();
+        Task<long> GetGhostStoryIdAsync();
+        Task<long> GetCoupletsIdAsync();
+        Task<long> GetChouqianIdAsync();
+        Task<long> GetJieqianAnswerIdAsync(long groupId, long userId);
+        Task<long> GetAnswerIdByParentAsync(long parentId);
+        Task<long> GetDatiIdAsync(string keyword);
     }
 }

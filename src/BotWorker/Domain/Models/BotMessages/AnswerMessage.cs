@@ -19,17 +19,17 @@ public partial class BotMessage
 
             try
             {
-                CmdPara = QuestionInfo.GetNew(question);
-                long qid = await QuestionInfo.GetQIdAsync(CmdPara);
+                CmdPara = QuestionInfoService.GetNew(question);
+                long qid = await QuestionInfoService.GetIdByQuestionAsync(CmdPara);
 
                 if (qid == 0) return string.Empty;
 
-                await QuestionInfo.PlusUsedTimesAsync(qid);
+                await QuestionInfoService.IncrementUsedTimesAsync(qid);
 
                 int cloud = !IsGroup || IsGuild ? 5 : !User.IsShutup ? Group.IsCloudAnswer : 0;
                 long ansId = 0;
 
-                if (await QuestionInfo.GetIsSystemAsync(qid))
+                if (await QuestionInfoService.IsSystemAsync(qid))
                 {
                     ansId = await GetDefaultAnswerAtAsync(qid);
                 }
@@ -53,7 +53,7 @@ public partial class BotMessage
                 if (ansId == 0) return string.Empty;
 
                 AnswerId = ansId;
-                Answer = await AnswerInfo.GetValueAsync("answer", ansId);
+                Answer = await AnswerRepository.GetValueAsync<string>("answer", ansId);
                 await ResolveAnswerRefsAsync();
                 
                 string result = Answer;
@@ -127,7 +127,7 @@ public partial class BotMessage
                 if (IsAtMe)
                 {
                     Answer = IsAgent || IsCallAgent
-                        ? BotWorker.Modules.AI.Models.Agent.GetValue("Info", AgentId)
+                        ? await AgentRepository.GetValueAsync("Info", AgentId)
                         : "我在~";
                     IsCancelProxy = true;
                     return;
@@ -143,13 +143,13 @@ public partial class BotMessage
                 }
             }            
 
-            CmdPara = QuestionInfo.GetNew(CmdPara);
-            long qid = IsAtOthers ? 0 : await QuestionInfo.GetQIdAsync(CmdPara);                     
+            CmdPara = QuestionInfoService.GetNew(CmdPara);
+            long qid = IsAtOthers ? 0 : await QuestionInfoService.GetIdByQuestionAsync(CmdPara);                     
 
             if (qid == 0)
             {
                 if ((!IsGroup || IsPublic || IsAtMe) && CmdPara.Length < 30)                
-                    await QuestionInfo.AppendAsync(SelfId, RealGroupId, UserId, CmdPara);
+                    await QuestionInfoService.AddQuestionAsync(SelfId, RealGroupId, UserId, CmdPara);
 
                 if (IsAtOthers && !IsAtMe)
                 {
@@ -160,9 +160,9 @@ public partial class BotMessage
 
             if (qid != 0)
             {
-                await QuestionInfo.PlusUsedTimesAsync(qid);
+                await QuestionInfoService.IncrementUsedTimesAsync(qid);
 
-                if (await QuestionInfo.GetIsSystemAsync(qid))
+                if (await QuestionInfoService.IsSystemAsync(qid))
                     {
                         IsCmd = true;
                         AnswerId = await GetDefaultAnswerAtAsync(qid);
@@ -239,7 +239,7 @@ public partial class BotMessage
                     }
                 }
 
-                Answer = await AnswerInfo.GetValueAsync("answer", AnswerId);
+                Answer = await AnswerRepository.GetValueAsync<string>("answer", AnswerId);
 
                 // 递归引用 例如：{{客服QQ}}
                 await ResolveAnswerRefsAsync();
@@ -262,34 +262,30 @@ public partial class BotMessage
         {
             //本群 及 系统级答案（audit2=3）
             return group == BotInfo.GroupIdDef
-                ? await GetDefaultAnswerAsync(question)
-                : (await AnswerInfo.GetWhereAsync("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND ((RobotId = {group} AND audit2 <> -4) OR audit2 = 3) {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder)).AsLong();
+                ? await GetDefaultAnswerAsync(question, length)
+                : await AnswerRepository.GetGroupAnswerIdAsync(group, question, length);
         }
 
         // 官方 
         public async Task<long> GetDefaultAnswerAsync(long question, int length = 0) =>
-            (await AnswerInfo.GetWhereAsync("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND RobotId = {GroupId} AND audit2 >= 0 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder)).AsLong();
+            await AnswerRepository.GetDefaultAnswerIdAsync(question, GroupId, length);
 
         // 话痨(官方群+审核升级到默认群内容) audit2 >= 1 (1,2,3) 
         public async Task<long> GetDefaultAnswerAtAsync(long question, int length = 0)
         {
-            var sql = $"QuestionId = {question} AND ABS(audit) = 1 ";
-            sql += $"AND (Id IN (SELECT {SqlTop(20)} ID FROM {AnswerInfo.FullName} WHERE QuestionId = {question} AND Audit2 >= 1 ORDER BY (({SqlIsNull("GoonTimes", "0")} + 1)/({SqlIsNull("UsedTimes", "0")} + 1)) DESC {SqlLimit(20)})";
-            sql += $"OR Id IN (SELECT {SqlTop(10)} Id FROM {AnswerInfo.FullName} WHERE QuestionId = {question} AND Audit2 >= 1 AND UsedTimes < 100 ORDER BY UsedTimes DESC {SqlLimit(10)})) {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}";
-            var res = (await AnswerInfo.GetWhereAsync("Id", sql, SqlRandomOrder)).AsLong();
-            return res;
+            return await AnswerRepository.GetDefaultAnswerAtIdAsync(question, length);
         }
 
         //终极
         public async Task<long> GetAllAnswerAuditAsync(long question, int length = 0) =>
-            (await AnswerInfo.GetWhereAsync("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= 0 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder)).AsLong();
+            await AnswerRepository.GetAllAnswerAuditIdAsync(question, length);
 
         //终极+1 
         public async Task<long> GetAllAnswerNotAuditAsync(long question, int length = 0) =>
-            (await AnswerInfo.GetWhereAsync("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= -1 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder)).AsLong();
+            await AnswerRepository.GetAllAnswerNotAuditIdAsync(question, length);
 
         public async Task<long> GetAllAnswerAsync(long question, int length = 0) =>
-            (await AnswerInfo.GetWhereAsync("Id", $"QuestionId = {question} AND ABS(audit) = 1 AND audit2 >= -2 {(length > 0 ? $" AND {SqlLen("answer")} >= {length}" : "")}", SqlRandomOrder)).AsLong();
+            await AnswerRepository.GetAllAnswerIdAsync(question, length);
 
         public async Task ResolveAnswerRefsAsync(int depth = 0)
         {
@@ -319,7 +315,7 @@ public partial class BotMessage
 
                     string resolved = Answer;
 
-                    await AnswerInfo.CountUsedPlusAsync(AnswerId);
+                    await AnswerRepository.IncrementUsedTimesAsync(AnswerId);
 
                     CmdPara = oldCmdPara;
                     Answer = answerBackup;
@@ -359,14 +355,14 @@ public partial class BotMessage
             if (ans == "")
                 return "答案不能为空（图片无效）";
 
-            long questionId = await QuestionInfo.AppendAsync(SelfId, RealGroupId, UserId, que);
+            long questionId = await QuestionInfoService.AddQuestionAsync(SelfId, RealGroupId, UserId, que);
             if (questionId == 0)
                 return "问题不能为空（图片无效）";
 
             string refInfo = "";
             if (!IsSuperAdmin)
             {
-                if (await QuestionInfo.GetIsSystemAsync(questionId) || await QuestionInfo.GetBoolAsync("IsLock", questionId))
+                if (await QuestionInfoService.IsSystemAsync(questionId) || await QuestionInfoRepository.GetValueAsync<bool>("IsLock", questionId))
                     return AnswerExists;
 
                 if (que.Length > 30)
@@ -380,21 +376,21 @@ public partial class BotMessage
                 if (ans.StartsWith('#'))
                 {
                     ans = ans[1..];
-                    var refId = await QuestionInfo.GetQIdAsync(ans);
-                    var countAnswer = await QuestionInfo.GetIntAsync("CAnswer", refId);
+                    var refId = await QuestionInfoService.GetIdByQuestionAsync(ans);
+                    var countAnswer = await QuestionInfoRepository.GetValueAsync<int>("CAnswer", refId);
 
                     if (countAnswer > 0)
-                        await QuestionInfo.SetValueAsync("audit2", 1, refId);
+                        await QuestionInfoRepository.SetValueAsync("audit2", 1, refId);
 
-                    refInfo = $"{ans} 答案数：{countAnswer}/{await QuestionInfo.GetIntAsync("CAnswerAll", refId)}";
+                    refInfo = $"{ans} 答案数：{countAnswer}/{await QuestionInfoRepository.GetValueAsync<int>("CAnswerAll", refId)}";
                     ans = $"{{{{{ans}}}}}";
 
-                    if (await AnswerInfo.ExistsAandBAsync("QuestionId", questionId, "answer", ans))
+                    if (await AnswerRepository.CountAsync($"QuestionId = {questionId} AND answer = @ans", new { ans }) > 0)
                         return $"{AnswerExists}\n{refInfo}";
                 }
             }
 
-            if (await AnswerInfo.ExistsAsync(questionId, ans, GroupId))
+            if (await AnswerRepository.ExistsAsync(questionId, ans, GroupId))
                 return AnswerExists;
 
             (int audit, int audit2, int minus, res) = await GetAuditAsync(questionId, que, ans);
@@ -403,7 +399,7 @@ public partial class BotMessage
             try
             {
                 // 1. 获取并锁定积分
-                creditValue = await UserInfo.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
+                creditValue = await UserRepository.GetCreditForUpdateAsync(SelfId, GroupId, UserId, wrapper.Transaction);
                 if (creditValue < 0)
                 {
                     await wrapper.RollbackAsync();
@@ -411,23 +407,22 @@ public partial class BotMessage
                 }
 
                 // 2. 添加答案记录
-                var (sql1, paras1) = AnswerInfo.SqlAppend(SelfId, RealGroupId, UserId, GroupId, questionId, que, ans, audit, -minus, audit2, "");
-                await ExecAsync(sql1, wrapper.Transaction, paras1);
+                await AnswerRepository.AppendAsync(SelfId, RealGroupId, UserId, GroupId, questionId, que, ans, audit, -minus, audit2, "", wrapper.Transaction);
 
                 // 3. 通用加积分函数 (含日志记录)
-                var addRes = await UserInfo.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, -minus, minus < 0 ? "教学加分" : "教学扣分", wrapper.Transaction);
+                var addRes = await UserService.AddCreditAsync(SelfId, GroupId, GroupName, UserId, Name, -minus, minus < 0 ? "教学加分" : "教学扣分", wrapper.Transaction);
                 if (addRes.Result == -1) throw new Exception("更新积分失败");
                 creditValue = addRes.CreditValue;
 
                 await wrapper.CommitAsync();
 
                 // 4. 同步缓存
-                await UserInfo.SyncCreditCacheAsync(SelfId, GroupId, UserId, creditValue);
+                await UserRepository.SyncCreditCacheAsync(SelfId, GroupId, UserId, creditValue);
 
                 if (!IsGroup)
                     res += $"\n默认群：{GroupId}";
 
-                await QuestionInfo.UpdateAsync($"CAnswer = CAnswer + 1, CAnswerAll = CAnswerAll + 1", questionId);
+                await QuestionInfoRepository.UpdateAsync($"CAnswer = CAnswer + 1, CAnswerAll = CAnswerAll + 1", questionId);
 
                 return $"{res}\n💎 积分：{-minus}, 累计：{creditValue}\n{refInfo}";
             }
@@ -475,14 +470,14 @@ public partial class BotMessage
                 audit2 = 2;
             }
 
-            if (audit2 > -3 && await AnswerInfo.ExistsAsync(SelfId, questionId, textAnswer))
+            if (audit2 > -3 && await AnswerRepository.ExistsAsync(SelfId, questionId, textAnswer))
             {
                 audit2 = -3;
             }
 
-            int c_answer = await QuestionInfo.GetIntAsync("CAnswer", questionId);
-            int c_answer_all = await QuestionInfo.GetIntAsync("CAnswerAll", questionId);
-            int c_used = await QuestionInfo.GetIntAsync("CUsed", questionId);
+            int c_answer = await QuestionInfoRepository.GetValueAsync<int>("CAnswer", questionId);
+            int c_answer_all = await QuestionInfoRepository.GetValueAsync<int>("CAnswerAll", questionId);
+            int c_used = await QuestionInfoRepository.GetValueAsync<int>("CUsed", questionId);
 
             if (audit2 > -3 && c_used > 1 && c_answer <= 2 && c_answer_all < 20 && textQuestion.Length < 10 && textAnswer.Length < 20 && textQuestion != textAnswer)
             {
@@ -499,35 +494,37 @@ public partial class BotMessage
         {
             if (AnswerId == 0) return;
 
-            var lastId = await UserInfo.GetLongAsync("AnswerId", UserId);
+            var lastId = await UserRepository.GetValueAsync<long>("AnswerId", UserId);
 
             if (AnswerId != lastId)
             {
-                await AnswerInfo.CountUsedPlusAsync(AnswerId);
+                await AnswerRepository.IncrementUsedTimesAsync(AnswerId);
 
-                if (await UserInfo.GetIntAsync($"ABS({SqlDateDiff("MINUTE", SqlDateTime, "AnswerDate")})", UserId) <= 5)
-                    await AnswerInfo.PlusAsync("GoonTimes", 1, lastId);
+                var timeDiff = await UserRepository.ExecuteScalarAsync<int>($"SELECT ABS({SqlDateDiff("MINUTE", SqlDateTime, "AnswerDate")}) FROM {UserRepository.TableName} WHERE Id = @id", new { id = UserId });
+                if (timeDiff <= 5)
+                    await AnswerRepository.IncrementValueAsync("GoonTimes", 1, lastId);
 
-                await UserInfo.UpdateAsync($"AnswerId = {AnswerId}, AnswerDate = {SqlDateTime}", UserId);
+                await UserRepository.UpdateAsync($"AnswerId = {AnswerId}, AnswerDate = {SqlDateTime}", UserId);
             }
 
-            lastId = await GroupInfo.GetLongAsync("LastAnswerId", GroupId);
+            lastId = await GroupRepository.GetValueAsync<long>("LastAnswerId", GroupId);
 
             if (AnswerId != lastId)
             {
-                await AnswerInfo.PlusAsync("UsedTimesGroup", 1, AnswerId);
+                await AnswerRepository.IncrementValueAsync("UsedTimesGroup", 1, AnswerId);
 
-                if (await GroupInfo.GetIntAsync($"ABS({SqlDateDiff("MINUTE", SqlDateTime, "LastAnswerDate")})", GroupId) <= 5)
-                    await AnswerInfo.PlusAsync("GoonTimesGroup", 1, lastId);
+                var timeDiffGroup = await GroupRepository.ExecuteScalarAsync<int>($"SELECT ABS({SqlDateDiff("MINUTE", SqlDateTime, "LastAnswerDate")}) FROM {GroupRepository.TableName} WHERE Id = @id", new { id = GroupId });
+                if (timeDiffGroup <= 5)
+                    await AnswerRepository.IncrementValueAsync("GoonTimesGroup", 1, lastId);
 
-                await GroupInfo.UpdateAsync($"LastAnswerId = {AnswerId}, LastAnswer = {Answer.Quotes()}, LastAnswerDate = {SqlDateTime}", GroupId);
+                await GroupRepository.UpdateAsync($"LastAnswerId = {AnswerId}, LastAnswer = {Answer.Quotes()}, LastAnswerDate = {SqlDateTime}", GroupId);
             }
         }
 
         public async Task GetAnswerAsync(long answerId = 0)
         {
             if (answerId != 0) AnswerId = answerId;
-            Answer = await AnswerInfo.GetValueAsync("answer", AnswerId);
+            Answer = await AnswerRepository.GetValueAsync<string>("answer", AnswerId);
             await UpdateCountUsedAsync();
         }
 
@@ -541,16 +538,14 @@ public partial class BotMessage
         //故事
         public async Task GetStoryAsync()
         {
-            AnswerId = (await AnswerInfo.GetWhereAsync("Id", $"QuestionId IN (50701, 545) AND {SqlLen("answer")} > 40 AND ABS(audit) = 1 AND audit2 >= 0 ", SqlRandomOrder)).AsLong();
+            AnswerId = await AnswerRepository.GetStoryIdAsync();
             await GetAnswerAsync();
         }
 
         //鬼故事
         public async Task GetGhostStoryAsync()
         {
-            AnswerId = (await AnswerInfo.GetWhereAsync("Id",
-                $"QuestionId IN (SELECT Id FROM {QuestionInfo.FullName} WHERE question like '鬼故事%') " +
-                $"AND {SqlLen("answer")} > 40 AND ABS(audit) = 1 AND audit2 > -3", SqlRandomOrder)).AsLong();
+            AnswerId = await AnswerRepository.GetGhostStoryIdAsync();
             await GetAnswerAsync();
             await ResolveAnswerRefsAsync();
             if (!string.IsNullOrEmpty(Answer))
@@ -562,8 +557,7 @@ public partial class BotMessage
         // 对联
         public async Task GetCoupletsAsync()
         {
-            AnswerId = (await AnswerInfo.GetWhereAsync("Id", $"QuestionId IN (SELECT Id FROM {QuestionInfo.FullName} WHERE question LIKE '%对联%') " +
-                                   $"AND {SqlLen("answer")} > 12 AND ABS(audit) = 1 AND audit2 > -3 ", SqlRandomOrder)).AsLong();
+            AnswerId = await AnswerRepository.GetCoupletsIdAsync();
             await GetAnswerAsync();
             await ResolveAnswerRefsAsync();
             if (!string.IsNullOrEmpty(Answer))
@@ -575,9 +569,7 @@ public partial class BotMessage
         /// 抽签
         public async Task GetChouqianAsync()
         {
-            var sql = $"SELECT {SqlTop(1)} Id FROM {AnswerInfo.FullName} WHERE RobotId = 286946883 and QuestionId = 225781 AND AUDIT2 > 0 " +
-                      $"ORDER BY {SqlRandomOrder} {SqlLimit(1)}";
-            AnswerId = await QueryScalarAsync<long>(sql);
+            AnswerId = await AnswerRepository.GetChouqianIdAsync();
             await GetAnswerAsync();
             await ResolveAnswerRefsAsync();
             if (!string.IsNullOrEmpty(Answer))
@@ -589,14 +581,10 @@ public partial class BotMessage
         /// 解签
         public async Task GetJieqianAsync()
         {
-            var sql = $"SELECT {SqlTop(1)} AnswerId FROM {GroupSendMessage.FullName} " +
-                      $"WHERE GroupId = {GroupId} AND UserId = {UserId} " +
-                      $"AND AnswerId IN (SELECT Id FROM {AnswerInfo.FullName} WHERE RobotId = 286946883 and QuestionId = 225781) " +
-                      $"ORDER BY Id DESC {SqlLimit(1)}";
-            var answerId = await QueryScalarAsync<long>(sql);
+            var answerId = await AnswerRepository.GetJieqianAnswerIdAsync(GroupId, UserId);
             if (answerId != 0)
             {
-                AnswerId = (await AnswerInfo.GetWhereAsync("Id", $"parentanswer = {answerId}")).AsLong();
+                AnswerId = await AnswerRepository.GetAnswerIdByParentAsync(answerId);
                 await GetAnswerAsync();
                 await ResolveAnswerRefsAsync();
                 if (!string.IsNullOrEmpty(Answer))
@@ -613,8 +601,8 @@ public partial class BotMessage
         {
             if (bm.CmdName == "答案")
             {
-                long answerId = await UserInfo.GetLongAsync("AnswerId", bm.UserId);
-                string question = await AnswerInfo.GetValueAsync("question", answerId);
+                long answerId = await UserRepository.GetValueAsync<long>("AnswerId", bm.UserId);
+                string question = await AnswerRepository.GetValueAsync<string>("question", answerId);
                 if (question.IsMatch(Regexs.Dati.Replace("$", "\\d*答案")))
                 {
                     bm.AnswerId = answerId;
@@ -634,10 +622,10 @@ public partial class BotMessage
             }
             else
             {
-                long answerId = (await AnswerInfo.GetWhereAsync("Id", $"RobotId = {group_dati} AND question LIKE '%{bm.CmdName}%' AND question NOT LIKE '%答案%' AND ABS(audit) = 1 AND audit2 <> -4", "NEWID()")).AsLong();
+                long answerId = await AnswerRepository.GetDatiIdAsync(bm.CmdName);
                 bm.AnswerId = answerId;
                 await bm.GetAnswerAsync();
-                bm.Answer = $"{bm.Answer} ——查答案发送【{await GetValueAsync("question", answerId)}答案】或【答案】";
+                bm.Answer = $"{bm.Answer} ——查答案发送【{await AnswerRepository.GetValueAsync<string>("question", answerId)}答案】或【答案】";
             }
             return bm;
         }

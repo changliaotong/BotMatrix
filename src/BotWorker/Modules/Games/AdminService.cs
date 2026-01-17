@@ -18,6 +18,23 @@ namespace BotWorker.Modules.Games
     )]
     public class AdminService : IPlugin
     {
+        private readonly IGroupService _groupService;
+        private readonly IBlackListRepository _blackListRepository;
+        private readonly IGroupWarnRepository _groupWarnRepository;
+        private readonly IBotRepository _botRepository;
+
+        public AdminService(
+            IGroupService groupService, 
+            IBlackListRepository blackListRepository,
+            IGroupWarnRepository groupWarnRepository,
+            IBotRepository botRepository)
+        {
+            _groupService = groupService;
+            _blackListRepository = blackListRepository;
+            _groupWarnRepository = groupWarnRepository;
+            _botRepository = botRepository;
+        }
+
         public List<Intent> Intents => [
             new() { Name = "基础管理", Keywords = ["踢", "禁言", "取消禁言", "设置头衔"] },
             new() { Name = "群组配置", Keywords = ["开机", "关机", "设置欢迎语", "改名提示", "设置管理权限", "设置使用权限"] },
@@ -62,10 +79,10 @@ namespace BotWorker.Modules.Games
 
             return cmd switch
             {
-                // 1. 核心开关逻辑 (复用 GroupInfo)
-                "开机" or "关机" => await GroupInfo.SetPowerOnOffAsync(botId, groupId, userId, cmd),
-                "设置欢迎语" or "欢迎语" => await GroupInfo.SetWelcomeMsgAsync(groupId, cmdPara),
-                "改名提示" => await GroupInfo.SetChangHintAsync(groupId, cmdPara),
+                // 1. 核心开关逻辑 (使用 GroupService)
+                "开机" or "关机" => await _groupService.SetPowerOnOffAsync(botId, groupId, userId, cmd),
+                "设置欢迎语" or "欢迎语" => await _groupService.SetWelcomeMsgAsync(groupId, cmdPara),
+                "改名提示" => await _groupService.SetChangHintAsync(groupId, cmdPara),
 
                 // 2. 自动化策略开关
                 "被踢拉黑" or "退群拉黑" or "敏感词系统" => await HandlePolicyToggleAsync(groupId, cmd, cmdPara),
@@ -73,7 +90,7 @@ namespace BotWorker.Modules.Games
                 // 3. 高级治理 (直接复用系统内置的 WarnSetup 逻辑)
                 "治理设置" => await HandleMenuAsync(ctx),
                 "刷屏" or "脏话" or "广告" or "图片" or "网址" or "推荐群" or "推荐好友" or "合并转发" or "设置" or "开启" or "关闭" => await HandleAdvancedWarnAsync(ctx),
-                "撤回词" or "扣分词" or "警告词" or "禁言词" or "踢出词" or "拉黑词" => await GroupWarn.GetEditKeywordAsync(groupId, ctx.RawMessage),
+                "撤回词" or "扣分词" or "警告词" or "禁言词" or "踢出词" or "拉黑词" => await _groupWarnRepository.GetEditKeywordAsync(groupId, ctx.RawMessage),
 
                 // 4. 帮助指令
                 "帮助" => "【超级群管】提供全方位的群组管理功能。\n指令列表：开机/关机、欢迎语、拉黑/取消拉黑、踢/禁言、被踢拉黑等。",
@@ -87,8 +104,8 @@ namespace BotWorker.Modules.Games
                 "取消禁言" => await HandleMuteAsync(ctx, args, false),
                 "设置头衔" => await HandleSetTitleAsync(ctx, args),
 
-                "设置管理权限" => await GroupInfo.SetAdminRightAsync(groupId, cmdPara),
-                "设置使用权限" => await GroupInfo.SetRightAsync(groupId, cmdPara),
+                "设置管理权限" => await _groupService.SetAdminRightAsync(groupId, cmdPara),
+                "设置使用权限" => await _groupService.SetRightAsync(groupId, cmdPara),
                 
                 _ => "未知管理指令"
             };
@@ -144,7 +161,7 @@ namespace BotWorker.Modules.Games
             // 权限检查：机器人主人或系统管理员
             var botId = long.Parse(ctx.BotId ?? "0");
             var userId = long.Parse(ctx.UserId ?? "0");
-            if (botId != userId && !BotInfo.IsAdmin(botId, userId))
+            if (botId != userId && !await _botRepository.IsAdminAsync(botId, userId))
             {
                 return "❌ 只有机器人主人或系统管理员可以执行此操作。";
             }
@@ -178,11 +195,11 @@ namespace BotWorker.Modules.Games
 
             if (targetStatus == null)
             {
-                var current = await GroupInfo.GetBoolAsync(field, groupId);
+                var current = await _groupService.GetBoolAsync(field, groupId);
                 return $"📌 {cmd} 当前状态：{(current ? "开启" : "关闭")}\n使用“{cmd} 开启/关闭”来设置。";
             }
 
-            int res = await GroupInfo.SetValueAsync(field, targetStatus.Value, groupId);
+            int res = await _groupService.SetValueAsync(field, targetStatus.Value, groupId);
             return res == -1 ? "❌ 设置失败，请稍后重试" : $"✅ {cmd} 已{(targetStatus.Value ? "开启" : "关闭")}";
         }
 
@@ -193,14 +210,14 @@ namespace BotWorker.Modules.Games
                 // 权限检查
                 var botId = long.Parse(ctx.BotId);
                 var userId = long.Parse(ctx.UserId);
-                if (botId != userId && !BotInfo.IsAdmin(botId, userId))
+                if (botId != userId && !await _botRepository.IsAdminAsync(botId, userId))
                 {
                     return "❌ 只有机器人主人或系统管理员可以清空黑名单。";
                 }
 
                 if (ctx.RawMessage.Trim() == (string?)ctx.SessionData)
                 {
-                    int res = await BlackList.ClearGroupBlacklistAsync(long.Parse(ctx.GroupId ?? "0"));
+                    int res = await _blackListRepository.ClearGroupAsync(long.Parse(ctx.GroupId ?? "0"));
                     return res >= 0 ? $"✅ 已成功清空本群黑名单（共影响 {res} 条记录）。" : "❌ 清空失败，请稍后重试。";
                 }
                 else
@@ -219,7 +236,7 @@ namespace BotWorker.Modules.Games
 
             if (cmd == "拉黑")
             {
-                int res = await BlackList.AddBlackListAsync(
+                int res = await _blackListRepository.AddBlackListAsync(
                     long.Parse(ctx.BotId ?? "0"), 
                     long.Parse(ctx.GroupId ?? "0"), 
                     ctx.GroupName ?? string.Empty, 
@@ -231,7 +248,7 @@ namespace BotWorker.Modules.Games
             }
             else if (cmd == "取消拉黑")
             {
-                int res = await BlackList.DeleteAsync(long.Parse(ctx.GroupId ?? "0"), targetId);
+                int res = await _blackListRepository.DeleteAsync(long.Parse(ctx.GroupId ?? "0"), targetId);
                 return res > 0 ? $"✅ 已将 {targetId} 移出黑名单" : "该用户不在黑名单中或操作失败";
             }
             

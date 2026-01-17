@@ -69,5 +69,122 @@ namespace BotWorker.Infrastructure.Persistence.Repositories
             using var conn = CreateConnection();
             return await conn.ExecuteAsync(sql, new { audit, qq, answerId });
         }
+
+        public async Task<long> GetGroupAnswerIdAsync(long groupId, long questionId, int length = 0)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId = @questionId AND ABS(audit) = 1 AND ((RobotId = @groupId AND audit2 <> -4) OR audit2 = 3)";
+            if (length > 0) sql += " AND LENGTH(answer) >= @length";
+            sql += " ORDER BY RANDOM() LIMIT 1";
+            
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { questionId, groupId, length });
+        }
+
+        public async Task<long> GetDefaultAnswerIdAsync(long questionId, long robotId, int length = 0)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId = @questionId AND ABS(audit) = 1 AND RobotId = @robotId AND audit2 >= 0";
+            if (length > 0) sql += " AND LENGTH(answer) >= @length";
+            sql += " ORDER BY RANDOM() LIMIT 1";
+            
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { questionId, robotId, length });
+        }
+
+        public async Task<long> GetDefaultAnswerAtIdAsync(long questionId, int length = 0)
+        {
+            var sql = $@"SELECT Id FROM {_tableName} 
+                        WHERE QuestionId = @questionId AND ABS(audit) = 1
+                        AND (
+                            Id IN (SELECT Id FROM {_tableName} WHERE QuestionId = @questionId AND Audit2 >= 1 ORDER BY ((COALESCE(GoonTimes, 0) + 1)/(COALESCE(UsedTimes, 0) + 1)) DESC LIMIT 20)
+                            OR 
+                            Id IN (SELECT Id FROM {_tableName} WHERE QuestionId = @questionId AND Audit2 >= 1 AND UsedTimes < 100 ORDER BY UsedTimes DESC LIMIT 10)
+                        )
+                        ORDER BY RANDOM() LIMIT 1";
+            
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { questionId, length });
+        }
+
+        public async Task<long> GetAllAnswerAuditIdAsync(long questionId, int length = 0)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId = @questionId AND ABS(audit) = 1 AND audit2 = 0";
+            if (length > 0) sql += " AND LENGTH(answer) >= @length";
+            sql += " ORDER BY RANDOM() LIMIT 1";
+            
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { questionId, length });
+        }
+
+        public async Task<long> GetAllAnswerNotAuditIdAsync(long questionId, int length = 0)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId = @questionId AND ABS(audit) = 0";
+            if (length > 0) sql += " AND LENGTH(answer) >= @length";
+            sql += " ORDER BY RANDOM() LIMIT 1";
+            
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { questionId, length });
+        }
+
+        public async Task<long> GetAllAnswerIdAsync(long questionId, int length = 0)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId = @questionId";
+            if (length > 0) sql += " AND LENGTH(answer) >= @length";
+            sql += " ORDER BY RANDOM() LIMIT 1";
+            
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { questionId, length });
+        }
+
+        public async Task<long> GetStoryIdAsync()
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId IN (50701, 545) AND LENGTH(answer) > 40 AND ABS(audit) = 1 AND audit2 >= 0 ORDER BY RANDOM() LIMIT 1";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql);
+        }
+
+        public async Task<long> GetGhostStoryIdAsync()
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId IN (SELECT Id FROM Question WHERE question like '鬼故事%') AND LENGTH(answer) > 40 AND ABS(audit) = 1 AND audit2 > -3 ORDER BY RANDOM() LIMIT 1";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql);
+        }
+
+        public async Task<long> GetCoupletsIdAsync()
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE QuestionId IN (SELECT Id FROM Question WHERE question LIKE '%对联%') AND LENGTH(answer) > 12 AND ABS(audit) = 1 AND audit2 > -3 ORDER BY RANDOM() LIMIT 1";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql);
+        }
+
+        public async Task<long> GetChouqianIdAsync()
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE RobotId = 286946883 and QuestionId = 225781 AND AUDIT2 > 0 ORDER BY RANDOM() LIMIT 1";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql);
+        }
+
+        public async Task<long> GetJieqianAnswerIdAsync(long groupId, long userId)
+        {
+            var sql = $@"SELECT AnswerId FROM SendMessage 
+                        WHERE GroupId = @groupId AND UserId = @userId 
+                        AND AnswerId IN (SELECT Id FROM {_tableName} WHERE RobotId = 286946883 and QuestionId = 225781) 
+                        ORDER BY Id DESC LIMIT 1";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { groupId, userId });
+        }
+
+        public async Task<long> GetAnswerIdByParentAsync(long parentId)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE parentanswer = @parentId";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { parentId });
+        }
+
+        public async Task<long> GetDatiIdAsync(string keyword)
+        {
+            var sql = $"SELECT Id FROM {_tableName} WHERE RobotId = 453174086 AND question LIKE @keywordPattern AND question NOT LIKE '%答案%' AND ABS(audit) = 1 AND audit2 <> -4 ORDER BY RANDOM() LIMIT 1";
+            using var conn = CreateConnection();
+            return await conn.ExecuteScalarAsync<long>(sql, new { keywordPattern = $"%{keyword}%" });
+        }
     }
 }

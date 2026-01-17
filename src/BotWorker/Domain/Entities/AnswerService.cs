@@ -1,38 +1,38 @@
 using System.Threading.Tasks;
-using BotWorker.Domain.Repositories;
+using BotWorker.Domain.Models.BotMessages;
 
 namespace BotWorker.Domain.Entities
 {
     public partial class AnswerInfo
     {
-        public static int Append(long botUin, long groupId, long qq, long robotId, long questionId, string textQuestion, string textAnswer,
+        public static int Append(BotMessage bm, long botUin, long groupId, long qq, long robotId, long questionId, string textQuestion, string textAnswer,
             int audit, long credit, int audit2, string audit2Info)
         {
-            return AppendAsync(botUin, groupId, qq, robotId, questionId, textQuestion, textAnswer, audit, credit, audit2, audit2Info).GetAwaiter().GetResult();
+            return AppendAsync(bm, botUin, groupId, qq, robotId, questionId, textQuestion, textAnswer, audit, credit, audit2, audit2Info).GetAwaiter().GetResult();
         }
 
-        public static async Task<int> AppendAsync(long botUin, long groupId, long qq, long robotId, long questionId, string textQuestion, string textAnswer,
+        public static async Task<int> AppendAsync(BotMessage bm, long botUin, long groupId, long qq, long robotId, long questionId, string textQuestion, string textAnswer,
             int audit, long credit, int audit2, string audit2Info)
         {
-            await Repository.AppendAsync(botUin, groupId, qq, robotId, questionId, textQuestion, textAnswer, audit, credit, audit2, audit2Info);
+            await bm.AnswerRepository.AppendAsync(botUin, groupId, qq, robotId, questionId, textQuestion, textAnswer, audit, credit, audit2, audit2Info);
             return 1;
         }
 
-        public static async Task<bool> ExistsAsync(long questionId, string textAnswer, long groupId)
+        public static async Task<bool> ExistsAsync(BotMessage bm, long questionId, string textAnswer, long groupId)
         {
-            return await Repository.ExistsAsync(questionId, textAnswer, groupId);
+            return await bm.AnswerRepository.ExistsAsync(questionId, textAnswer, groupId);
         }
 
-        public static async Task<bool> ExistsAsync(long qqRobot, long questionId, string answer)
+        public static async Task<bool> ExistsAsync(BotMessage bm, long qqRobot, long questionId, string answer)
         {
-            return await Repository.ExistsAsync(qqRobot, questionId, answer);
+            return await bm.AnswerRepository.ExistsAsync(qqRobot, questionId, answer);
         }
 
-        public static long CountAnswer(long questionId) => CountAnswerAsync(questionId).GetAwaiter().GetResult();
-        public static async Task<long> CountAnswerAsync(long questionId) => await Repository.CountAnswerAsync(questionId);
+        public static long CountAnswer(BotMessage bm, long questionId) => CountAnswerAsync(bm, questionId).GetAwaiter().GetResult();
+        public static async Task<long> CountAnswerAsync(BotMessage bm, long questionId) => await bm.AnswerRepository.CountAnswerAsync(questionId);
 
-        public static async Task<int> CountUsedPlusAsync(long answerId) => await Repository.IncrementUsedTimesAsync(answerId);
+        public static async Task<int> CountUsedPlusAsync(BotMessage bm, long answerId) => await bm.AnswerRepository.IncrementUsedTimesAsync(answerId);
 
-        public static async Task<int> AuditItAsync(long answerId, int audit, long qq) => await Repository.AuditAsync(answerId, audit, qq);
+        public static async Task<int> AuditItAsync(BotMessage bm, long answerId, int audit, long qq) => await bm.AnswerRepository.AuditAsync(answerId, audit, qq);
     }
 }

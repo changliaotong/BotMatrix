@@ -12,5 +12,6 @@ namespace BotWorker.Domain.Repositories
         Task<bool> IsCmdCloseAllAsync(string cmdName);
         Task<string> GetCmdTextAsync(string cmdName);
         Task EnsureCommandExistsAsync(string name, string text);
+        Task<int> SetCmdCloseAllAsync(string cmdName, int isClose);
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
@@ -6,11 +6,13 @@ using BotWorker.Common;
 
 namespace BotWorker.Infrastructure.Utils
 {
-    public static class Encrypt
+    public interface IEncryptService
     {
-        public const string RsaPublicKey = $"<RSAKeyValue><Modulus>v3YlM8/BZ/nC+Ix3W0CtWUoOhkkN2XTbrXTwYlppxbTHVtWkZ9Mm+E4ZIbaaxja18LxmcOjvo0rHRZbD++/XK98fwTtfJPIKMKSaJR8WsrDyntQUB2rdfCRNmx3O17ds6PGVnjefHWUc4Yichdl/E//ITyJ6XXUqPLO8IWCT86E=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
+        string GetEncryptRes(string guid, string cmdName, string cmdPara);
+    }
 
-
+    public class EncryptService : IEncryptService
+    {
         /// <summary>
         /// 机器人加密解密
         /// </summary>
@@ -18,7 +20,7 @@ namespace BotWorker.Infrastructure.Utils
         /// <param name="cmdName"></param>
         /// <param name="cmdPara"></param>
         /// <returns></returns>
-        public static string GetEncryptRes(string guid, string cmdName, string cmdPara)
+        public string GetEncryptRes(string guid, string cmdName, string cmdPara)
         {
             string key = guid.MD5().Substring(1, 24);
             if (cmdName == "加密")
@@ -26,6 +28,12 @@ namespace BotWorker.Infrastructure.Utils
             else
                 return cmdPara.Decrypt3DES(key);
         }
+    }
+
+    public static class Encrypt
+    {
+        public const string RsaPublicKey = $"<RSAKeyValue><Modulus>v3YlM8/BZ/nC+Ix3W0CtWUoOhkkN2XTbrXTwYlppxbTHVtWkZ9Mm+E4ZIbaaxja18LxmcOjvo0rHRZbD++/XK98fwTtfJPIKMKSaJR8WsrDyntQUB2rdfCRNmx3O17ds6PGVnjefHWUc4Yichdl/E//ITyJ6XXUqPLO8IWCT86E=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
+
 
         #region DES
 

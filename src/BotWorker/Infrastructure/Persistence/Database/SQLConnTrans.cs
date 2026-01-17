@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using BotWorker.Infrastructure.Extensions;
+using BotWorker.Infrastructure.Persistence;
 
 namespace BotWorker.Infrastructure.Persistence.Database
 {
@@ -23,7 +24,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             if (processedSqls.Count == 0) return 0;
 
-            using var wrapper = await MetaData.BeginTransactionAsync();
+            using var wrapper = await SqlHelper.BeginTransactionAsync();
             var trans = wrapper.Transaction;
             var conn = trans.Connection;
 
@@ -40,7 +41,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                         throw new NotSupportedException("Command must be a DbCommand to support async operations.");
 
                     cmd.CommandText = sql;
-                    var unwrappedTrans = MetaData.Unwrap(trans);
+                    var unwrappedTrans = Unwrap(trans);
                     if (unwrappedTrans == null)
                         throw new InvalidOperationException("Could not unwrap transaction.");
                     cmd.Transaction = (DbTransaction)unwrappedTrans;
@@ -85,7 +86,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             var validSqls = sqls.Where(s => !s.IsNull()).ToList();
             if (validSqls.Count == 0) return 0;
 
-            using var wrapper = await MetaData.BeginTransactionAsync();
+            using var wrapper = await SqlHelper.BeginTransactionAsync();
             var trans = wrapper.Transaction;
             var conn = trans.Connection;
 
@@ -102,7 +103,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                         throw new NotSupportedException("Command must be a DbCommand to support async operations.");
 
                     cmd.CommandText = sql;
-                    var unwrappedTrans = MetaData.Unwrap(trans);
+                    var unwrappedTrans = Unwrap(trans);
                     if (unwrappedTrans == null)
                         throw new InvalidOperationException("Could not unwrap transaction.");
                     cmd.Transaction = (DbTransaction)unwrappedTrans;
@@ -147,7 +148,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             if (processedSqls.Count == 0) return 0;
 
-            using var wrapper = await MetaData.BeginTransactionAsync();
+            using var wrapper = await SqlHelper.BeginTransactionAsync();
             var trans = wrapper.Transaction;
             var conn = trans.Connection;
 
@@ -164,7 +165,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                         throw new NotSupportedException("Command must be a DbCommand to support async operations.");
 
                     cmd.CommandText = sql;
-                    var unwrappedTrans = MetaData.Unwrap(trans);
+                    var unwrappedTrans = Unwrap(trans);
                     if (unwrappedTrans == null)
                         throw new InvalidOperationException("Could not unwrap transaction.");
                     cmd.Transaction = (DbTransaction)unwrappedTrans;
@@ -225,7 +226,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             if (processedSqls.Count == 0) return 0;
 
-            using var wrapper = MetaData.BeginTransaction();
+            using var wrapper = SqlHelper.BeginTransaction();
             var trans = wrapper.Transaction;
             var conn = trans.Connection;
 
@@ -239,7 +240,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                     LogSql(sql, parameters);
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = sql;
-                    cmd.Transaction = MetaData.Unwrap(trans);
+                    cmd.Transaction = Unwrap(trans);
 
                     if (parameters != null)
                     {
@@ -282,7 +283,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
             var validSqls = sqls.Where(s => !s.IsNull()).ToList();
             if (validSqls.Count == 0) return 0;
 
-            using var wrapper = MetaData.BeginTransaction();
+            using var wrapper = SqlHelper.BeginTransaction();
             var trans = wrapper.Transaction;
             var conn = trans.Connection;
 
@@ -296,7 +297,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                     LogSql(sql, null);
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = sql;
-                    cmd.Transaction = MetaData.Unwrap(trans);
+                    cmd.Transaction = Unwrap(trans);
                     
                     try
                     {
@@ -338,7 +339,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
 
             if (processedSqls.Count == 0) return 0;
 
-            using var wrapper = MetaData.BeginTransaction();
+            using var wrapper = SqlHelper.BeginTransaction();
             var trans = wrapper.Transaction;
             var conn = trans.Connection;
 
@@ -352,7 +353,7 @@ namespace BotWorker.Infrastructure.Persistence.Database
                     LogSql(sql, parameters);
                     using var cmd = conn.CreateCommand();
                     cmd.CommandText = sql;
-                    cmd.Transaction = MetaData.Unwrap(trans);
+                    cmd.Transaction = SqlHelper.Unwrap(trans);
 
                     if (parameters != null)
                     {

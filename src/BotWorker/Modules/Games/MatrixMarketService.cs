@@ -10,34 +10,15 @@ using Dapper.Contrib.Extensions;
 
 namespace BotWorker.Modules.Games
 {
-    [Table("UserModuleAccess")]
+    [Table("user_module_access")]
     public class UserModuleAccess
     {
-        private static IUserModuleAccessRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IUserModuleAccessRepository>() 
-            ?? throw new InvalidOperationException("IUserModuleAccessRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string UserId { get; set; } = string.Empty;
         public string ModuleId { get; set; } = string.Empty;
         public DateTime UnlockTime { get; set; }
         public int Level { get; set; } = 1;
-
-        public static async Task<List<UserModuleAccess>> GetByUserIdAsync(string userId)
-        {
-            return await Repository.GetByUserIdAsync(userId);
-        }
-
-        public static async Task<UserModuleAccess?> GetAsync(string userId, string moduleId)
-        {
-            return await Repository.GetAsync(userId, moduleId);
-        }
-
-        public async Task InsertAsync()
-        {
-            await Repository.InsertAsync(this);
-        }
     }
 
     public class MarketModule
@@ -59,9 +40,11 @@ namespace BotWorker.Modules.Games
         Description = "管理全服功能系统的开启与资源调度，将插件封装为用户可感知的系统模块。",
         Category = "Core"
     )]
-    public class MatrixMarketService : IPlugin
+    public class MatrixMarketService : IPlugin, IMatrixMarketService
     {
         private readonly ILogger<MatrixMarketService>? _logger;
+        private readonly IUserModuleAccessRepository _userAccessRepo;
+        private readonly IUserLevelRepository _userLevelRepo;
         private IRobot? _robot;
 
         private readonly List<MarketModule> _modules = new()
@@ -74,10 +57,11 @@ namespace BotWorker.Modules.Games
             new MarketModule { Id = "core.digital_staff", Name = "数字员工系统", Description = "组建自动化团队，雇佣 AI 员工为您自动开发系统或赚取积分。", Category = "Core", UnlockCost = 50000, RequiredLevel = 15, Icon = "💼" }
         };
 
-        public MatrixMarketService() { }
-        public MatrixMarketService(ILogger<MatrixMarketService> logger)
+        public MatrixMarketService(ILogger<MatrixMarketService> logger, IUserModuleAccessRepository userAccessRepo, IUserLevelRepository userLevelRepo)
         {
             _logger = logger;
+            _userAccessRepo = userAccessRepo;
+            _userLevelRepo = userLevelRepo;
         }
 
         public List<Intent> Intents => [
@@ -123,9 +107,14 @@ namespace BotWorker.Modules.Games
             return "💡 请输入【资源中心】查看可用系统，或【激活 系统名】进行开启。";
         }
 
-        private async Task<string> GetMarketDisplayAsync(string userId)
+        public async Task<List<UserModuleAccess>> GetUserAccessAsync(string userId)
         {
-            var userAccess = await UserModuleAccess.GetByUserIdAsync(userId);
+            return await _userAccessRepo.GetByUserIdAsync(userId);
+        }
+
+        public async Task<string> GetMarketDisplayAsync(string userId)
+        {
+            var userAccess = await _userAccessRepo.GetByUserIdAsync(userId);
             var unlockedIds = userAccess.Select(a => a.ModuleId).ToHashSet();
 
             var sb = new System.Text.StringBuilder();
@@ -150,19 +139,19 @@ namespace BotWorker.Modules.Games
             return sb.ToString();
         }
 
-        private async Task<string> UnlockModuleAsync(IPluginContext ctx, string moduleName)
+        public async Task<string> UnlockModuleAsync(IPluginContext ctx, string moduleName)
         {
             var userId = ctx.UserId;
             var module = _modules.FirstOrDefault(m => m.Name == moduleName || m.Id.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
             if (module == null) return $"❌ 错误：在矩阵记录中未找到名为“{moduleName}”的系统。";
 
             // 检查是否已激活
-            var existing = await UserModuleAccess.GetAsync(userId, module.Id);
+            var existing = await _userAccessRepo.GetAsync(userId, module.Id);
             if (existing != null) return $"✨ 系统提示：“{module.Name}”已处于激活状态，无需重复接入。";
 
             // 检查等级 (调用 EvolutionService)
             // 这里我们通过数据库直接查，解耦插件调用
-            var levelData = await UserLevel.GetByUserIdAsync(userId);
+            var levelData = await _userLevelRepo.GetByUserIdAsync(userId);
             var currentLevel = levelData?.Level ?? 1;
             if (currentLevel < module.RequiredLevel)
             { 
@@ -185,7 +174,7 @@ namespace BotWorker.Modules.Games
                         UnlockTime = DateTime.Now,
                         Level = 1
                     };
-                    await access.InsertAsync();
+                    await _userAccessRepo.InsertAsync(access);
 
                     // 发布审计事件
                     await _robot.Events.PublishAsync(new SystemAuditEvent

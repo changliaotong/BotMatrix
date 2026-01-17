@@ -1,10 +1,9 @@
-﻿namespace BotWorker.Domain.Constants.AppsInfo
+namespace BotWorker.Domain.Constants.AppsInfo
 {
-    public class ReportInfo : MetaData<ReportInfo>
+    public class ReportInfo
     {
-        public override string DataBase => "apps";
-        public override string TableName => "report_info";
-        public override string KeyField => "rpt_id";
+        public int RptId { get; set; }
+        public string RptName { get; set; } = string.Empty;
     }
 }
 

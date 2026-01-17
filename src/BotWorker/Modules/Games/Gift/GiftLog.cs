@@ -8,13 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games.Gift
 {
-    [Table("GiftLog")]
+    [Table("gift_log")]
     public class GiftLog
     {
-        private static IGiftLogRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<IGiftLogRepository>() 
-            ?? throw new InvalidOperationException("IGiftLogRepository not registered");
-
         [Key]
         public long Id { get; set; }
         public long BotUin { get; set; }
@@ -31,10 +27,5 @@ namespace BotWorker.Modules.Games.Gift
         public int GiftCount { get; set; }
         public long GiftCredit { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
-
-        public async Task<bool> InsertAsync(IDbTransaction? trans = null)
-        {
-            return await Repository.InsertAsync(this, trans);
-        }
     }
 }

@@ -1,3 +1,5 @@
+using BotWorker.Domain.Enums;
+
 namespace BotWorker.Domain.Models.BotMessages;
 
 public partial class BotMessage
@@ -15,10 +17,8 @@ public partial class BotMessage
             string? _city_name = cityName.RegexReplace(Regexs.Province, "");
             cityName = _city_name == "" ? cityName : _city_name;
 
-            string res = await Weather.GetWeatherAsync(cityName);
-            if (res != Weather.GetWhere("WeatherInfo", $"cityName = {cityName.Quotes()}", "Id desc"))
-                Weather.Append(cityName, res);
-            return res;
+            var weatherRes = await ToolService.GetWeatherAsync(new[] { cityName });
+            return weatherRes.TryGetValue(cityName, out var res) ? res : "获取天气失败";
         }
 
         // 翻译
@@ -29,7 +29,7 @@ public partial class BotMessage
 
             if (CmdPara == "结束")
             {
-                return await UserInfo.SetStateAsync(UserInfo.States.Chat, UserId) == -1
+                return await UserService.SetStateAsync((int)UserStates.Chat, UserId) == -1
                     ? RetryMsg
                     : "✅ 翻译服务结束！";
             }
@@ -38,7 +38,7 @@ public partial class BotMessage
             {
                 if (RealGroupId == 0 || IsPublic)
                 {
-                    int i = await UserInfo.SetStateAsync(UserInfo.States.Translate, UserId);
+                    int i = await UserService.SetStateAsync((int)UserStates.Translate, UserId);
                     return i == -1
                         ? RetryMsg
                         : "✅ 我已变身翻译，支持英日韩法俄西->中文 中文->英语";
@@ -47,7 +47,7 @@ public partial class BotMessage
             }
 
             if (res.IsNull())
-                res = await Translate.GetAzureResAsync(CmdPara);
+                res = await ToolService.GetTranslateAsync(CmdPara);
 
             res = res.ReplaceInvalid();
 

@@ -1,10 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using BotWorker.Domain.Models.BotMessages;
-using BotWorker.Domain.Repositories;
 using Dapper.Contrib.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace BotWorker.Modules.Games
 {
@@ -31,13 +26,9 @@ namespace BotWorker.Modules.Games
         }
     }
 
-    [Table("UserSongOrders")]
+    [Table("user_song_orders")]
     public class SongOrder
     {
-        private static ISongOrderRepository Repository => 
-            BotMessage.ServiceProvider?.GetRequiredService<ISongOrderRepository>() 
-            ?? throw new InvalidOperationException("ISongOrderRepository not registered");
-
         [ExplicitKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public string FromUserId { get; set; } = string.Empty;
@@ -50,15 +41,5 @@ namespace BotWorker.Modules.Games
         public string Message { get; set; } = string.Empty; // 寄语
         
         public DateTime OrderTime { get; set; } = DateTime.Now;
-
-        public static async Task<List<SongOrder>> GetHistoryAsync(string userId)
-        {
-            return await Repository.GetHistoryAsync(userId);
-        }
-
-        public async Task<bool> InsertAsync()
-        {
-            return await Repository.InsertAsync(this);
-        }
     }
 }

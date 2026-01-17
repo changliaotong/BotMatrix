@@ -13,7 +13,7 @@ namespace BotWorker.Modules.Games
         AfterSales      // 异常监测与系统维护
     }
 
-    [Table("DigitalStaff")]
+    [Table("digital_staff")]
     public class DigitalStaff
     {
         [Key]
@@ -49,7 +49,7 @@ namespace BotWorker.Modules.Games
         public DateTime CreateTime { get; set; } = DateTime.Now;
     }
 
-    [Table("StaffKpis")]
+    [Table("staff_kpis")]
     public class StaffKpi
     {
         [Key]
@@ -62,7 +62,7 @@ namespace BotWorker.Modules.Games
         public DateTime CreateTime { get; set; } = DateTime.Now;
     }
 
-    [Table("StaffTasks")]
+    [Table("staff_tasks")]
     public class StaffTask
     {
         [Key]

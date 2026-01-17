@@ -8,6 +8,7 @@ namespace BotWorker.Domain.Repositories
     {
         Task<bool> GetIsCreditAsync(long botUin);
         Task<long> GetRobotAdminAsync(long botUin);
+        Task<bool> IsAdminAsync(long botUin, long userId);
         Task<string> GetBotGuidAsync(long botUin);
         Task<bool> IsRobotAsync(long qq);
     }
